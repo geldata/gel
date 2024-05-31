@@ -947,6 +947,7 @@ class CallArg(ImmutableBase):
     multiplicity: qltypes.Multiplicity = qltypes.Multiplicity.UNKNOWN
     is_default: bool = False
     param_typemod: qltypes.TypeModifier
+    polymorphism: qltypes.Polymorphism = qltypes.Polymorphism.NotUsed
 
 
 class Call(ImmutableExpr):
@@ -997,6 +998,11 @@ class Call(ImmutableExpr):
 
     # If this is a set of call but is allowed in singleton expressions.
     is_singleton_set_of: typing.Optional[bool] = None
+
+    # The polymorphism of the return type
+    # This is used to identify cases where polymorphism needs to be handled in
+    # a specialized way (eg. arrays of arrays).
+    return_polymorphism: qltypes.Polymorphism = qltypes.Polymorphism.NotUsed
 
 
 class FunctionCall(Call):
