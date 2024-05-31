@@ -311,10 +311,14 @@ def compile_IndexIndirection(
         subj = dispatch.compile(expr.expr, ctx=subctx)
         index = dispatch.compile(expr.index, ctx=subctx)
 
-    result = pgast.FuncCall(
+    result: pgast.BaseExpr = pgast.FuncCall(
         name=astutils.edgedb_func('_index', ctx=ctx),
         args=[subj, index, span]
     )
+
+    if irtyputils.is_array(expr.typeref):
+        # Unwrap the nested array from its tuple
+        result = astutils.array_get_inner_array(result, expr.typeref)
 
     return result
 
@@ -343,7 +347,8 @@ def compile_SliceIndirection(
 
         typ = expr.expr.typeref
         inline_array_slicing = irtyputils.is_array(typ) and any(
-            irtyputils.is_tuple(st) for st in typ.subtypes
+            irtyputils.is_tuple(st) or irtyputils.is_array(st)
+            for st in typ.subtypes
         )
 
         if inline_array_slicing:
