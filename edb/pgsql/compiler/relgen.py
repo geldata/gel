@@ -2318,11 +2318,26 @@ def process_set_as_const_set(
 def process_set_as_oper_expr(
     ir_set: irast.SetE[irast.OperatorCall], *, ctx: context.CompilerContextLevel
 ) -> SetRVars:
+    has_array_polymorphic_arg = any(
+        ir_arg.polymorphism == qltypes.Polymorphism.Array
+        for ir_arg in ir_set.expr.args.values()
+    )
+    unwrap_array_return = (
+        has_array_polymorphic_arg
+        and ir_set.expr.return_polymorphism == qltypes.Polymorphism.Simple
+        and irtyputils.is_array(ir_set.expr.typeref)
+    )
+
     # XXX: do we need a subrel?
     with ctx.new() as newctx:
         newctx.expr_exposed = False
         args = _compile_call_args(ir_set, ctx=newctx)
         oper_expr = exprcomp.compile_operator(ir_set.expr, args, ctx=newctx)
+
+        if unwrap_array_return:
+            oper_expr = astutils.array_get_inner_array(
+                oper_expr, ir_set.expr.typeref
+            )
 
     pathctx.put_path_value_var_if_not_exists(
         ctx.rel, ir_set.path_id, oper_expr
@@ -3253,10 +3268,13 @@ def _process_set_func_with_ordinality(
 
 
 def _process_set_func(
-        ir_set: irast.Set, *,
-        func_name: Tuple[str, ...],
-        args: List[pgast.BaseExpr],
-        ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
+    ir_set: irast.Set,
+    *,
+    func_name: Tuple[str, ...],
+    args: List[pgast.BaseExpr],
+    ctx: context.CompilerContextLevel,
+    unwrap_array_return: bool
+) -> pgast.BaseExpr:
     expr = ir_set.expr
     assert isinstance(expr, irast.FunctionCall)
 
@@ -3282,6 +3300,16 @@ def _process_set_func(
         colnames = list(subtypes)
     else:
         colnames = [ctx.env.aliases.get('v')]
+
+        if unwrap_array_return:
+            coldeflist = [
+                pgast.ColumnDef(
+                    name='v',
+                    typename=pgast.TypeName(
+                        name=pg_types.pg_type_from_ir_typeref(expr.typeref)
+                    )
+                )
+            ]
 
     if (
         # SQL functions declared with OUT params or returning
@@ -3425,6 +3453,15 @@ def _compile_call_args(
     expr = ir_set.expr
     assert isinstance(expr, irast.Call)
 
+    has_array_polymorphic_arg = any(
+        ir_arg.polymorphism == qltypes.Polymorphism.Array
+        for ir_arg in expr.args.values()
+    )
+    wrap_single_polymorphic_args = (
+        has_array_polymorphic_arg
+        or expr.return_polymorphism == qltypes.Polymorphism.Array
+    )
+
     args = []
 
     if isinstance(expr, irast.FunctionCall) and expr.global_args:
@@ -3461,6 +3498,14 @@ def _compile_call_args(
         else:
             arg_ref = dispatch.compile(ir_arg.expr, ctx=ctx)
             arg_ref = output.output_as_value(arg_ref, env=ctx.env)
+
+        if (
+            wrap_single_polymorphic_args
+            and ir_arg.polymorphism == qltypes.Polymorphism.Simple
+            and irtyputils.is_array(ir_arg.expr.typeref)
+        ):
+            arg_ref = pgast.RowExpr(args=[arg_ref])
+
         args.append(arg_ref)
         _compile_arg_null_check(expr, ir_arg, arg_ref, typemod, ctx=ctx)
 
@@ -3644,6 +3689,16 @@ def process_set_as_func_expr(
     expr = ir_set.expr
     assert isinstance(expr, irast.FunctionCall)
 
+    has_array_polymorphic_arg = any(
+        ir_arg.polymorphism == qltypes.Polymorphism.Array
+        for ir_arg in expr.args.values()
+    )
+    unwrap_array_return = (
+        has_array_polymorphic_arg
+        and expr.return_polymorphism == qltypes.Polymorphism.Simple
+        and irtyputils.is_array(expr.typeref)
+    )
+
     with ctx.subrel() as newctx:
         newctx.expr_exposed = False
 
@@ -3658,6 +3713,11 @@ def process_set_as_func_expr(
                 newctx.rel, ir_set.path_id, expr.body.path_id
             )
 
+            if unwrap_array_return:
+                set_expr = astutils.array_get_inner_array(
+                    set_expr, expr.typeref
+                )
+
         else:
             args = _compile_call_args(ir_set, ctx=newctx)
 
@@ -3665,9 +3725,20 @@ def process_set_as_func_expr(
 
             if expr.typemod is qltypes.TypeModifier.SetOfType:
                 set_expr = _process_set_func(
-                    ir_set, func_name=name, args=args, ctx=newctx)
+                    ir_set,
+                    func_name=name,
+                    args=args,
+                    ctx=newctx,
+                    unwrap_array_return=unwrap_array_return,
+                )
+
             else:
                 set_expr = pgast.FuncCall(name=name, args=args)
+
+                if unwrap_array_return:
+                    set_expr = astutils.array_get_inner_array(
+                        set_expr, expr.typeref
+                    )
 
         if expr.error_on_null_result:
             set_expr = pgast.FuncCall(
@@ -3716,6 +3787,20 @@ def process_set_as_agg_expr_inner(
     expr = ir_set.expr
     assert isinstance(expr, irast.FunctionCall)
     stmt = ctx.rel
+
+    has_array_polymorphic_arg = any(
+        ir_arg.polymorphism == qltypes.Polymorphism.Array
+        for ir_arg in expr.args.values()
+    )
+    wrap_single_polymorphic_args = (
+        has_array_polymorphic_arg
+        or expr.return_polymorphism == qltypes.Polymorphism.Array
+    )
+    unwrap_array_return = (
+        has_array_polymorphic_arg
+        and expr.return_polymorphism == qltypes.Polymorphism.Simple
+        and irtyputils.is_array(expr.typeref)
+    )
 
     set_expr: pgast.BaseExpr
 
@@ -3838,6 +3923,14 @@ def process_set_as_agg_expr_inner(
 
                         query.sort_clause = []
 
+                if (
+                    wrap_single_polymorphic_args
+                    and ir_call_arg.polymorphism == qltypes.Polymorphism.Simple
+                    and irtyputils.is_array(ir_arg.expr.typeref)
+                ):
+                    # Wrap aggregated arrays in a tuple
+                    arg_ref = pgast.RowExpr(args=[arg_ref])
+
                 args.append(arg_ref)
 
         name = exprcomp.get_func_call_backend_name(expr, ctx=newctx)
@@ -3845,6 +3938,11 @@ def process_set_as_agg_expr_inner(
         set_expr = pgast.FuncCall(
             name=name, args=args, agg_order=agg_sort, agg_filter=agg_filter,
             ser_safe=serialization_safe and all(x.ser_safe for x in args))
+
+        if unwrap_array_return:
+            set_expr = astutils.array_get_inner_array(
+                set_expr, expr.typeref
+            )
 
         if for_group_by and not expr.impl_is_strict:
             # If we are doing this for a GROUP BY, and the function is not
