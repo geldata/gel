@@ -109,6 +109,8 @@ def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
     query.ctes.extend(ctx.ctes_buffer)
     ctx.ctes_buffer.clear()
 
+    _validate_no_params(ctx)
+
     return pgast.CopyStmt(
         relation=None,
         colnames=None,
@@ -119,6 +121,38 @@ def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
         # TODO: forbid some options?
         options=stmt.options,
         where_clause=where,
+    )
+
+
+def _validate_no_params(ctx: Context):
+    if len(ctx.query_params) == 0:
+        return
+    has_globals = any(
+        isinstance(p, dbstate.SQLParamGlobal) and not p.is_permission
+        for p in ctx.query_params
+    )
+    has_permissions = any(
+        isinstance(p, dbstate.SQLParamGlobal) and p.is_permission
+        for p in ctx.query_params
+    )
+    hint: str | None
+    if has_globals or has_permissions:
+        if has_globals and has_permissions:
+            offender = "globals or permissions"
+        elif has_globals:
+            offender = "globals"
+        elif has_permissions:
+            offender = "permissions"
+        offender += " in computed properties and access policies"
+        hint = "To disable policies, set apply_access_policies_pg := false"
+    else:
+        offender = "query parameters"
+        hint = None
+
+    raise errors.QueryError(
+        f"COPY cannot use {offender}",
+        pgext_code=pgerror.ERROR_FEATURE_NOT_SUPPORTED,
+        hint=hint,
     )
 
 
