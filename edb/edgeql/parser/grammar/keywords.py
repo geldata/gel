@@ -61,7 +61,7 @@ def tok_name(keyword):
     if _dunder_re.match(keyword):
         return f'DUNDER{keyword[2:-2].upper()}'
     else:
-        return keyword.upper()
+        return keyword.replace(" ", "").upper()
 
 
 edgeql_keywords = {k: (tok_name(k), UNRESERVED_KEYWORD)

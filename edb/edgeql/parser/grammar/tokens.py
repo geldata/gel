@@ -216,22 +216,6 @@ class T_PIPE(Token, lextoken='|'):
     pass
 
 
-class T_NAMEDONLY(Token, lextoken='named only'):
-    pass
-
-
-class T_SETTYPE(Token, lextoken='set type'):
-    pass
-
-
-class T_EXTENSIONPACKAGE(Token, lextoken='extension package'):
-    pass
-
-
-class T_ORDERBY(Token, lextoken='order by'):
-    pass
-
-
 class T_ICONST(Token):
     pass
 
@@ -298,8 +282,11 @@ def _gen_keyword_tokens():
         return ns
 
     for token, _ in keywords.edgeql_keywords.values():
-        clsname = 'T_{}'.format(token)
-        clskwds = dict(token=token)
+        fused_token = token.replace(" ", "")
+        clsname = 'T_{}'.format(fused_token)
+        clskwds = dict(token=fused_token)
+        if fused_token != token:
+            clskwds["lextoken"] = token.lower()
         cls = types.new_class(clsname, (Token,), clskwds, clsexec)
         setattr(mod, clsname, cls)
 

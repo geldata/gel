@@ -226,8 +226,7 @@ class SimpleSelect(Nonterm):
     val: qlast.SelectQuery
 
     def reduce_Select(self, *kids):
-        r"%reduce SELECT OptionallyAliasedExpr \
-                  OptFilterClause OptSortClause OptSelectLimit"
+        r"%reduce SELECT OptionallyAliasedExpr"
 
         offset, limit = kids[4].val
 
@@ -316,7 +315,6 @@ class InternalGroup(Nonterm):
                   ByClause \
                   IN Identifier OptGroupingAlias \
                   UNION OptionallyAliasedExpr \
-                  OptFilterClause OptSortClause \
         "
         self.val = qlast.InternalGroupQuery(
             subject=kids[2].val.expr,
@@ -393,7 +391,7 @@ class SimpleUpdate(Nonterm):
     val: qlast.UpdateQuery
 
     def reduce_Update(self, *kids):
-        "%reduce UPDATE Expr OptFilterClause SET Shape"
+        "%reduce UPDATE Expr SET Shape"
         self.val = qlast.UpdateQuery(
             subject=kids[1].val,
             where=kids[2].val,
@@ -405,8 +403,7 @@ class SimpleDelete(Nonterm):
     val: qlast.DeleteQuery
 
     def reduce_Delete(self, *kids):
-        r"%reduce DELETE Expr \
-                  OptFilterClause OptSortClause OptSelectLimit"
+        r"%reduce DELETE Expr"
         self.val = qlast.DeleteQuery(
             subject=kids[1].val,
             where=kids[2].val,
@@ -480,7 +477,7 @@ class OptAnySubShape(Nonterm):
 class ShapeElement(Nonterm):
     def reduce_ShapeElementWithSubShape(self, *kids):
         r"""%reduce ShapePointer \
-             OptAnySubShape OptFilterClause OptSortClause OptSelectLimit \
+             OptAnySubShape OptFilterClause OptOrderbyClause OptSelectLimit
         """
         self.val = kids[0].val
         self.val.elements = kids[1].val
@@ -1062,31 +1059,70 @@ class OptFilterClause(Nonterm):
         self.val = None
 
 
-class SortClause(Nonterm):
-    @parsing.inline(1)
-    def reduce_ORDERBY_OrderbyList(self, *kids):
-        pass
+class Direction(Nonterm):
+    def reduce_ASC(self, *kids):
+        self.val = qlast.SortAsc
+
+    def reduce_DESC(self, *kids):
+        self.val = qlast.SortDesc
 
 
-class OptSortClause(Nonterm):
+class NonesOrder(Nonterm):
+    def reduce_EMPTYFIRST(self, *kids):
+        self.val = qlast.NonesFirst
+
+    def reduce_EMPTYLAST(self, *kids):
+        self.val = qlast.NonesLast
+
+
+class OrderbyDirection(Nonterm):
+    def reduce_Direction(self, *kids):
+        self.val = (kids[0].val, None)
+
+    def reduce_Direction_NonesOrder(self, *kids):
+        self.val = (kids[0].val, kids[1].val)
+
+
+class OrderbyExprChain(Nonterm):
+    def reduce_THEN_Expr(self, *kids):
+        self.val = [kids[1].val]
+
+    def reduce_THEN_Expr_OrderbyDirection(self, *kids):
+        self.val = [kids[1].val]
+
+    def reduce_THEN_Expr_OrderbyExprChain(self, *kids):
+        self.val = [kids[1].val] + kids[2].val
+
+    def reduce_THEN_Expr_OrderbyDirection_OrderbyExprChain(self, *kids):
+        self.val = [kids[1].val] + kids[2].val
+
+
+class OrderbyClause(Nonterm):
+    def reduce_ORDERBY_Expr(self, *kids):
+        self.val = qlast.BinOp(
+            left=kids[0].val,
+            op="ORDERBY",
+            right=kids[2].val,
+        )
+
+    def reduce_ORDERBY_Expr_OrderbyDirection(self, *kids):
+        self.val = qlast.BinOp(
+            left=kids[0].val,
+            op="ORDERBY",
+            right=kids[2].val,
+        )
+
+    def reduce_ORDERBY_Expr_OrderbyExprChain(self, *kids):
+        self.val = kids[0].val
+
+
+class OptOrderbyClause(Nonterm):
     @parsing.inline(0)
-    def reduce_SortClause(self, *kids):
+    def reduce_OrderbyClause(self, *kids):
         pass
 
-    def reduce_empty(self, *kids):
-        self.val = []
-
-
-class OrderbyExpr(Nonterm):
-    def reduce_Expr_OptDirection_OptNonesOrder(self, *kids):
-        self.val = qlast.SortExpr(path=kids[0].val,
-                                  direction=kids[1].val,
-                                  nones_order=kids[2].val)
-
-
-class OrderbyList(ListNonterm, element=OrderbyExpr,
-                  separator=tokens.T_THEN):
-    pass
+    def reduce_empty(self):
+        pass
 
 
 class OptSelectLimit(Nonterm):
@@ -1119,28 +1155,6 @@ class LimitClause(Nonterm):
     @parsing.inline(1)
     def reduce_LIMIT_Expr(self, *kids):
         pass
-
-
-class OptDirection(Nonterm):
-    def reduce_ASC(self, *kids):
-        self.val = qlast.SortAsc
-
-    def reduce_DESC(self, *kids):
-        self.val = qlast.SortDesc
-
-    def reduce_empty(self, *kids):
-        self.val = qlast.SortDefault
-
-
-class OptNonesOrder(Nonterm):
-    def reduce_EMPTY_FIRST(self, *kids):
-        self.val = qlast.NonesFirst
-
-    def reduce_EMPTY_LAST(self, *kids):
-        self.val = qlast.NonesLast
-
-    def reduce_empty(self, *kids):
-        self.val = None
 
 
 class IndirectionEl(Nonterm):
@@ -1278,6 +1292,34 @@ class Expr(Nonterm):
     @parsing.inline(0)
     def reduce_Path(self, *kids):
         pass
+
+    def reduce_Expr_FILTER_Expr(self, *kids):
+        self.val = qlast.BinOp(
+            left=kids[0].val,
+            op="FILTER",
+            right=kids[2].val,
+        )
+
+    def reduce_Expr_LIMIT_Expr(self, *kids):
+        self.val = qlast.BinOp(
+            left=kids[0].val,
+            op="LIMIT",
+            right=kids[2].val,
+        )
+
+    def reduce_Expr_OFFSET_Expr(self, *kids):
+        self.val = qlast.BinOp(
+            left=kids[0].val,
+            op="OFFSET",
+            right=kids[2].val,
+        )
+
+    def reduce_Expr_OrderbyClause(self, *kids):
+        self.val = qlast.BinOp(
+            left=kids[0].val,
+            op="ORDERBY",
+            right=kids[2].val,
+        )
 
     def reduce_Expr_Shape(self, *kids):
         self.val = qlast.Shape(expr=kids[0].val, elements=kids[1].val)
@@ -1863,7 +1905,7 @@ class FuncCallArgExpr(Nonterm):
 
 
 class FuncCallArg(Nonterm):
-    def reduce_FuncCallArgExpr_OptFilterClause_OptSortClause(self, *kids):
+    def reduce_FuncCallArgExpr(self, *kids):
         self.val = kids[0].val
 
         if kids[1].val or kids[2].val:
@@ -1891,7 +1933,7 @@ class OptFuncArgList(Nonterm):
 
 
 class PosCallArg(Nonterm):
-    def reduce_Expr_OptFilterClause_OptSortClause(self, *kids):
+    def reduce_Expr(self, *kids):
         self.val = kids[0].val
         if kids[1].val or kids[2].val:
             self.val = qlast.SelectQuery(

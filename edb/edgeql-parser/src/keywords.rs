@@ -113,7 +113,14 @@ pub const UNRESERVED_KEYWORDS: phf::Set<&str> = phf_set!(
     "write",
 );
 
-pub const PARTIAL_RESERVED_KEYWORDS: phf::Set<&str> = phf_set!("except", "intersect", "union",);
+pub const PARTIAL_RESERVED_KEYWORDS: phf::Set<&str> = phf_set!(
+    "emptyfirst",
+    "emptylast",
+    "except",
+    "intersect",
+    "orderby",
+    "union",
+);
 
 pub const FUTURE_RESERVED_KEYWORDS: phf::Set<&str> = phf_set!(
     "anyarray",
@@ -179,6 +186,7 @@ pub const CURRENT_RESERVED_KEYWORDS: phf::Set<&str> = phf_set!(
     "else",
     "exists",
     "extending",
+    "extensionpackage",
     "false",
     "filter",
     "for",
@@ -192,6 +200,7 @@ pub const CURRENT_RESERVED_KEYWORDS: phf::Set<&str> = phf_set!(
     "like",
     "limit",
     "module",
+    "namedonly",
     "not",
     "offset",
     "optional",
@@ -199,20 +208,14 @@ pub const CURRENT_RESERVED_KEYWORDS: phf::Set<&str> = phf_set!(
     "rollback",
     "select",
     "set",
+    "setannotation",
+    "settype",
     "start",
     "true",
     "typeof",
     "update",
     "variadic",
     "with",
-);
-
-pub const COMBINED_KEYWORDS: phf::Set<&str> = phf_set!(
-    "named only",
-    "set annotation",
-    "set type",
-    "extension package",
-    "order by",
 );
 
 pub fn lookup(s: &str) -> Option<Keyword> {
@@ -224,8 +227,7 @@ pub fn lookup(s: &str) -> Option<Keyword> {
 
 pub fn lookup_all(s: &str) -> Option<Keyword> {
     lookup(s).or_else(|| {
-        None.or_else(|| COMBINED_KEYWORDS.get_key(s))
-            .or_else(|| UNRESERVED_KEYWORDS.get_key(s))
+        None.or_else(|| UNRESERVED_KEYWORDS.get_key(s))
             .map(|x| Keyword(x))
     })
 }
@@ -237,7 +239,8 @@ pub struct Keyword(pub &'static str);
 
 impl Keyword {
     pub fn is_reserved(&self) -> bool {
-        FUTURE_RESERVED_KEYWORDS.contains(self.0) || CURRENT_RESERVED_KEYWORDS.contains(self.0)
+        FUTURE_RESERVED_KEYWORDS.contains(self.0)
+        || CURRENT_RESERVED_KEYWORDS.contains(self.0)
     }
 }
 

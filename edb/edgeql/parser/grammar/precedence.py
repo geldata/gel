@@ -26,6 +26,26 @@ class Precedence(parsing.Precedence, assoc='fail', is_internal=True):
     pass
 
 
+class P_OFFSET(Precedence, assoc='left', tokens=('OFFSET',)):
+    pass
+
+
+class P_LIMIT(Precedence, assoc='left', tokens=('LIMIT',), rel_to_last='='):
+    pass
+
+
+class P_ORDERBY(Precedence, assoc='left', tokens=('ORDERBY',), rel_to_last='='):
+    pass
+
+
+class P_FILTER(Precedence, assoc='left', tokens=('FILTER',), rel_to_last='='):
+    pass
+
+
+class P_THEN(Precedence, assoc='left', tokens=('THEN',)):
+    pass
+
+
 class P_UNION(Precedence, assoc='left', tokens=('UNION', 'EXCEPT',)):
     pass
 
@@ -140,6 +160,10 @@ class P_BRACE(Precedence, assoc='left', tokens=('LBRACE', 'RBRACE')):
 
 
 class P_BRACKET(Precedence, assoc='left', tokens=('LBRACKET', 'RBRACKET')):
+    pass
+
+
+class P_ASCDESC(Precedence, assoc='right', tokens=('ASC', 'DESC')):
     pass
 
 
