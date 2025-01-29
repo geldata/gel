@@ -32,7 +32,6 @@ from typing import (
 
 import asyncio
 import copy
-import functools
 import hashlib
 import json
 import logging
@@ -49,6 +48,7 @@ import urllib.parse
 
 from edb import buildmeta
 from edb import errors
+from edb.common import lru
 from edb.common import supervisor
 from edb.common import uuidgen
 
@@ -929,7 +929,7 @@ class RemoteCluster(BaseCluster):
         if self._ha_backend is not None:
             self._ha_backend.stop_watching()
 
-    @functools.cache
+    @lru.method_cache
     def get_client_id(self) -> int:
         tenant_id = self._instance_params.tenant_id
         if self._ha_backend is not None:
