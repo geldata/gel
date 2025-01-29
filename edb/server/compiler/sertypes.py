@@ -43,8 +43,9 @@ import immutables
 
 from edb import errors
 from edb.common import binwrapper
-from edb.common import value_dispatch
+from edb.common import lru
 from edb.common import uuidgen
+from edb.common import value_dispatch
 
 from edb.protocol import enums as p_enums
 from edb.server import config
@@ -1898,7 +1899,7 @@ class StateSerializer(InputShapeSerializer):
 
 
 class CompilationConfigSerializer(InputShapeSerializer):
-    @functools.lru_cache(64)
+    @lru.lru_method_cache(64)
     def encode_configs(
         self, *configs: immutables.Map[str, config.SettingValue] | None
     ) -> bytes:
