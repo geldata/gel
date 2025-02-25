@@ -342,11 +342,10 @@ Using the built-in RAG
           -H 'accept: application/json'
 
 
-.. edb:split-section::
 
-    Congratulations! We've now implemented AI features in our flashcards app.
-    Of course, there's more to learn when it comes to using the AI extension.
-    Make sure to check out the :ref:`Reference manual
-    <ref_ai_python_reference>`, or build an LLM-powered search bot from the
-    ground up with the :ref:`FastAPI Gel AI tutorial
-    <ref_guide_fastapi_gelai_searchbot>`.
+Congratulations! We've now implemented AI features in our flashcards app.
+Of course, there's more to learn when it comes to using the AI extension.
+Make sure to check out the :ref:`Reference manual
+<ref_ai_python_reference>`, or build an LLM-powered search bot from the
+ground up with the :ref:`FastAPI Gel AI tutorial
+<ref_guide_fastapi_gelai_searchbot>`.
