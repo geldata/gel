@@ -52,5 +52,5 @@ to. For specifying the connection target see :ref:`connection options
 :cli:synopsis:`--dev-mode`
     Apply the current schema changes on top of the current migration history,
     without having created a new migration. This works the same way as
-    :ref:`ref_cli_gel_watch` but without starting a long-running watch
-    task.
+    :ref:`gel watch --migrate <ref_cli_gel_watch>` but without starting a
+    long-running watch task.

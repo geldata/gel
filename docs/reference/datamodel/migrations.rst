@@ -73,8 +73,8 @@ Sometimes when you're prototyping something new you don't want to spend
 time worrying about migrations. There's no data to lose and not much code
 that depends on the schema just yet.
 
-For this use case you can use the :gelcmd:`watch` command, which will
-monitor your |.gel| files and automatically create and apply migrations
+For this use case you can use the :gelcmd:`watch --migrate` command, which
+will monitor your |.gel| files and automatically create and apply migrations
 for you in the background.
 
 .. _ref_eql_ddl:

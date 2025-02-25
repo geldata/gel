@@ -16,13 +16,21 @@ new instance and some empty schema files to get you started.
 ------------------------------
 
 The easiest way to work with your schema in development is by running
-:gelcmd:`watch`. This long-running task will monitor your schema files and
+:gelcmd:`watch --migrate`. This long-running task will monitor your schema files and
 automatically apply schema changes in your database as you work.
 
 .. code-block:: bash
 
-    $ gel watch
-    Initialized. Monitoring "/projects/my-gel-project".
+    $ gel watch --migrate
+    Hint: --migrate will apply any changes from your schema files to the database.
+    When ready to commit your changes, use:
+    1) `gel migration create` to write those changes to a migration file,
+    2) `gel migrate --dev-mode` to replace all synced changes with the migration.
+
+    Monitoring /home/instancename for changes in:
+
+      --migrate: gel migration apply --dev-mode
+
 
 If you get output similar to the output above, you're ready to get started!
 
