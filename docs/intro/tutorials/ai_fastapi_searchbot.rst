@@ -719,12 +719,10 @@ declaratively. The :gelcmd:`project init` command has created a file called
           }
       };
 
-    Type now ``EOF`` on a new line to save the file.
-
 
 .. edb:split-section::
 
-  Let's now execute the queries from this file using the CLI:
+  Type ``EOF`` on a new line to save the file. Now, let's execute the queries using the CLI.
 
   .. code-block:: bash
 
@@ -1379,7 +1377,7 @@ working on our query rather than rewriting it from scratch every time.
         }'
 
 
-6. Use Gel's advanced features to create a RAG
+1. Use Gel's advanced features to create a RAG
 ==============================================
 
 At this point we have a decent search bot that can refine a search query over
