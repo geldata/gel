@@ -374,7 +374,7 @@
     steps:
     - uses: actions/checkout@v4
       with:
-        repository: edgedb/edgedb-docker
+        repository: geldata/gel-docker
         ref: master
         path: dockerfile
 
@@ -386,7 +386,7 @@
       run: |
         set -e
 
-        url='https://registry.hub.docker.com/v2/repositories/edgedb/edgedb/tags?page_size=100'
+        url='https://registry.hub.docker.com/v2/repositories/geldata/gel/tags?page_size=100'
         repo_tags=$(
           while [ -n "$url" ]; do
             resp=$(curl -L -s "$url")
@@ -452,7 +452,7 @@
         tags: "${{ steps.tags.outputs.tags }}"
         <%- endif %>
         workdir: dockerfile
-        buildargs: version=${{ << pub_outputs >>.version-slot }},exact_version=${{ << pub_outputs >>.version-core }}<% if subdist != "" %>,subdist=<< subdist >><% endif %>
+        buildargs: branding=gel,version=${{ << pub_outputs >>.version-slot }},exact_version=${{ << pub_outputs >>.version-core }}<% if subdist != "" %>,subdist=<< subdist >><% endif %>
         platforms: << docker_tgts|map(attribute="docker_arch")|join(",") >>
 <%- endif %>
 
