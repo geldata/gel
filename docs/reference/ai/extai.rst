@@ -367,6 +367,7 @@ Anthropic (`documentation <https://docs.anthropic.com/claude/docs/models-overvie
     Abstract base type for AI models.
 
     Annotations:
+
     * ``model_name`` - Model identifier
     * ``model_provider`` - Provider identifier
 
@@ -377,8 +378,9 @@ Anthropic (`documentation <https://docs.anthropic.com/claude/docs/models-overvie
     Abstract type for embedding models.
 
     Annotations:
+
     * ``embedding_model_max_input_tokens`` - Maximum tokens per input
-    * ``embedding_model_max_batch_tokens`` - Maximum tokens per batch
+    * ``embedding_model_max_batch_tokens`` - Maximum tokens per batch. Default: ``'8191'``.
     * ``embedding_model_max_output_dimensions`` - Maximum embedding dimensions
     * ``embedding_model_supports_shortening`` - Input shortening support flag
 
@@ -391,6 +393,7 @@ Anthropic (`documentation <https://docs.anthropic.com/claude/docs/models-overvie
     Abstract type for text generation models.
 
     Annotations:
+
     * ``text_gen_model_context_window`` - Model's context window size
 
 
@@ -474,6 +477,7 @@ Example custom prompt configuration:
     Type for chat prompt messages.
 
     Properties:
+
     * ``participant_role``: ChatParticipantRole (Required)
     * ``participant_name``: str (Optional)
     * ``content``: str (Required)
@@ -485,6 +489,7 @@ Example custom prompt configuration:
     Type for chat prompt configuration.
 
     Properties:
+
     * ``name``: str (Required)
     * ``messages``: set of ChatPromptMessage (Required)
 
