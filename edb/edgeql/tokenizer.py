@@ -153,13 +153,17 @@ def inflate_span(
     (start, end) = span
     source_bytes = source.encode('utf-8')
 
-    [start_sp] = ql_parser.SourcePoint.from_offsets(source_bytes, [start])
-
+    points = [start]
     if end is not None:
-        [end_sp] = ql_parser.SourcePoint.from_offsets(source_bytes, [end])
+        points.append(start)
+
+    points_sp = ql_parser.SourcePoint.from_offsets(source_bytes, points)
+
+    start_sp = points_sp[0]
+    if end is not None:
+        end_sp = points_sp[1]
     else:
         end_sp = None
-
     return (start_sp, end_sp)
 
 
