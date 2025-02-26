@@ -637,9 +637,12 @@ declaratively. The :gelcmd:`project init` command has created a file called
       $ mkdir app/sample_data && cat << 'EOF' > app/sample_data/inserts.edgeql
 
 
+.. edb:split-section::
+
   After running the command, the terminal will wait for you to input text. Anything you type will be written into ``app/sample_data/inserts.edgeql`` until you type ``EOF`` on a new line. Copy and paste the following text into the terminal:
 
   .. code-block:: edgeql
+      :class: collapsible
 
       # Create users first
       insert User {
