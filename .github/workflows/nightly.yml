@@ -2845,7 +2845,7 @@ jobs:
       run: |
         set -e
 
-        url='https://registry.hub.docker.com/v2/repositories/edgedb/edgedb/tags?page_size=100'
+        url='https://registry.hub.docker.com/v2/repositories/geldata/gel/tags?page_size=100'
         repo_tags=$(
           while [ -n "$url" ]; do
             resp=$(curl -L -s "$url")
