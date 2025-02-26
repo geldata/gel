@@ -26,13 +26,14 @@ class TestEdgeQLFilter(tb.QueryTestCase):
     """The test DB is designed to test certain non-trivial FILTER clauses.
     """
 
+    NO_FACTOR = True
+
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 
     SETUP = os.path.join(os.path.dirname(__file__), 'schemas',
                          'issues_filter_setup.edgeql')
 
-    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_filter_two_scalar_conditions01(self):
         await self.assert_query_result(
             r'''
@@ -40,10 +41,12 @@ class TestEdgeQLFilter(tb.QueryTestCase):
                 # time_estimate > 9000 and due_date on 2020/01/15.
                 SELECT User{name}
                 FILTER
-                    User.<owner[IS Issue].time_estimate > 9000
-                    AND
-                    User.<owner[IS Issue].due_date =
-                        <datetime>'2020-01-15T00:00:00+00:00'
+                    any((
+                      for issue in User.<owner[IS Issue]
+                      select issue.time_estimate > 9000
+                      AND
+                      issue.due_date = <datetime>'2020-01-15T00:00:00+00:00'
+                    ))
                 ORDER BY User.name;
             ''',
             # Only one Issue satisfies this and its owner is Yury.
@@ -100,34 +103,6 @@ class TestEdgeQLFilter(tb.QueryTestCase):
                                     <datetime>'2020-01-15T00:00:00+00:00'
                             )
                     )
-                ORDER BY User.name;
-            ''',
-            # Only one Issue satisfies this and its owner is Yury.
-            [{'name': 'Yury'}],
-        )
-
-    @tb.ignore_warnings('more than one.* in a FILTER clause')
-    async def test_edgeql_filter_two_scalar_conditions04(self):
-        await self.assert_query_result(
-            r'''
-                # NOTE: semantically same as and01, but using OR,
-                #       separate roots and explicit joining
-                #
-                # Find Users who own at least one Issue with simultaneously
-                # time_estimate > 9000 and due_date on 2020/01/15.
-                WITH
-                    U2 := User
-                SELECT User{name}
-                FILTER
-                    NOT (
-                        NOT EXISTS (User.<owner[IS Issue].time_estimate > 9000)
-                        OR
-                        NOT EXISTS (U2.<owner[IS Issue].due_date =
-                            <datetime>'2020-01-15T00:00:00+00:00')
-                    )
-                    AND
-                    # making sure it's the same Issue in both sub-clauses
-                    User.<owner[IS Issue] = U2.<owner[IS Issue]
                 ORDER BY User.name;
             ''',
             # Only one Issue satisfies this and its owner is Yury.
@@ -194,9 +169,11 @@ class TestEdgeQLFilter(tb.QueryTestCase):
                 FILTER
                     EXISTS User.<owner[IS Issue]
                     AND
-                    NOT EXISTS U2.<owner[IS Issue].time_estimate
-                    AND
-                    User.<owner[IS Issue] = U2.<owner[IS Issue]
+                    (FOR lol IN U2.<owner[IS Issue]
+                    SELECT
+                      NOT EXISTS lol.time_estimate
+                      AND
+                      User.<owner[IS Issue] = lol)
                 ORDER BY User.name;
             ''',
             # Elvis and Yury have Issues without time_estimate.
@@ -243,33 +220,6 @@ class TestEdgeQLFilter(tb.QueryTestCase):
                                 NOT EXISTS I.due_date
                             )
                     )
-                ORDER BY User.name;
-            ''',
-            # Only one Issue satisfies this and its owner is Yury.
-            [{'name': 'Yury'}],
-        )
-
-    @tb.ignore_warnings('more than one.* in a FILTER clause')
-    async def test_edgeql_filter_two_scalar_exists03(self):
-        await self.assert_query_result(
-            r'''
-                # NOTE: same as above, but using OR,
-                #       separate roots and explicit joining
-                #
-                # Find Users who own at least one Issue with simultaneously
-                # time_estimate > 9000 and due_date on 2020/01/15.
-                WITH
-                    U2 := User
-                SELECT User{name}
-                FILTER
-                    NOT (
-                        NOT EXISTS User.<owner[IS Issue].time_estimate
-                        OR
-                        NOT EXISTS U2.<owner[IS Issue].due_date
-                    )
-                    AND
-                    # making sure it's the same Issue in both sub-clauses
-                    User.<owner[IS Issue] = U2.<owner[IS Issue]
                 ORDER BY User.name;
             ''',
             # Only one Issue satisfies this and its owner is Yury.

@@ -28,6 +28,8 @@ from edb.tools import test
 
 
 class TestUpdate(tb.QueryTestCase):
+    NO_FACTOR = True
+
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'updates.esdl')
 
@@ -2166,7 +2168,7 @@ class TestUpdate(tb.QueryTestCase):
     async def test_edgeql_update_correlated_bad_01(self):
         with self.assertRaisesRegex(
                 edgedb.QueryError,
-                "cannot reference correlated set 'Status' here"):
+                "possibly more than one element"):
             await self.con.execute(r'''
                 SELECT (
                     Status,
@@ -2179,7 +2181,7 @@ class TestUpdate(tb.QueryTestCase):
     async def test_edgeql_update_correlated_bad_02(self):
         with self.assertRaisesRegex(
                 edgedb.QueryError,
-                "cannot reference correlated set 'Status' here"):
+                "possibly more than one element"):
             await self.con.execute(r'''
                 SELECT (
                     (UPDATE UpdateTest SET {
@@ -2192,7 +2194,7 @@ class TestUpdate(tb.QueryTestCase):
     async def test_edgeql_update_correlated_bad_03(self):
         with self.assertRaisesRegex(
                 edgedb.QueryError,
-                "cannot reference correlated set 'UpdateTest' here"):
+                "can not take cross product of volatile operation"):
             await self.con.execute(r'''
                 SELECT (
                     UpdateTest,

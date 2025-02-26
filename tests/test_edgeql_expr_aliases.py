@@ -29,6 +29,8 @@ import edgedb
 class TestEdgeQLExprAliases(tb.QueryTestCase):
     '''The scope is to test expression aliases.'''
 
+    NO_FACTOR = True
+
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'cards.esdl')
 
@@ -117,7 +119,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
         await self.assert_query_result(
             r'''
                 SELECT <tuple<str, int64, int64>>scores
-                ORDER BY scores.name;
+                ORDER BY .0;
             ''',
             [
                 ['Alice', 100, 10],
@@ -130,7 +132,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
         await self.assert_query_result(
             r'''
                 SELECT <tuple<name: str, points: int64, plays: int64>>scores
-                ORDER BY scores.name;
+                ORDER BY .name;
             ''',
             [
                 {'name': 'Alice', 'points': 100, 'plays': 10},
@@ -537,7 +539,10 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             r"""
                 # working with singletons
                 SELECT
-                    _ := 'ok' IF User.deck_cost < 19 ELSE User.deck.name
+                    _ := (
+                      for u in User
+                      select 'ok' IF u.deck_cost < 19 ELSE u.deck.name
+                    )
                 ORDER BY _;
             """,
             [
@@ -558,8 +563,11 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             r"""
                 # either result is a set, but the condition is a singleton
                 SELECT
-                    _ := User.deck.element IF User.deck_cost < 19
-                         ELSE User.deck.name
+                    _ := (
+                        for u in User
+                         select u.deck.element IF u.deck_cost < 19
+                                ELSE u.deck.name
+                    )
                 ORDER BY _;
             """,
             [
@@ -639,6 +647,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
     async def test_edgeql_aliases_if_else_04(self):
         await self.assert_query_result(
             r"""
+                FOR User in User
                 SELECT
                     1   IF User.name[0] = 'A' ELSE
                     10  IF User.name[0] = 'B' ELSE
@@ -650,14 +659,16 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
 
         await self.assert_query_result(
             r"""
+                FOR User in User
                 SELECT (
                     User.name,
-                    sum(
-                        1   IF User.friends.name[0] = 'A' ELSE
-                        10  IF User.friends.name[0] = 'B' ELSE
-                        100 IF User.friends.name[0] = 'C' ELSE
+                    sum((
+                        FOR f in User.friends SELECT
+                        1   IF f.name[0] = 'A' ELSE
+                        10  IF f.name[0] = 'B' ELSE
+                        100 IF f.name[0] = 'C' ELSE
                         0
-                    ),
+                    )),
                 ) ORDER BY .0;
             """,
             [['Alice', 110], ['Bob', 0], ['Carol', 0], ['Dave', 10]],
@@ -666,8 +677,11 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
     async def test_edgeql_aliases_if_else_05(self):
         await self.assert_query_result(
             r"""
+                SELECT (
+                FOR Card in Card
                 SELECT
                     (Card.name, 'yes' IF Card.cost > 4 ELSE 'no')
+                )
                 ORDER BY .0;
             """,
             [
@@ -685,8 +699,11 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
 
         await self.assert_query_result(
             r"""
+                SELECT (
+                FOR Card in Card
                 SELECT
                     (Card.name, 'yes') IF Card.cost > 4 ELSE (Card.name, 'no')
+                )
                 ORDER BY .0;
             """,
             [
@@ -991,7 +1008,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
                     (EarthOrFireCard.name)
                 ))
             """,
-            [4]
+            [16]
         )
 
     async def test_edgeql_aliases_subqueries_02(self):
@@ -1002,7 +1019,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
                     (SELECT EarthOrFireCard.name)
                 ))
             """,
-            [4]
+            [16]
         )
 
     async def test_edgeql_aliases_subqueries_03(self):
@@ -1013,7 +1030,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
                     (EarthOrFireCard.name)
                 ))
             """,
-            [4]
+            [16]
         )
 
     async def test_edgeql_aliases_subqueries_04(self):
