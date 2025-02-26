@@ -29,6 +29,8 @@ from edb.tools import test
 class TestEdgeQLScope(tb.QueryTestCase):
     '''This tests the scoping rules.'''
 
+    NO_FACTOR = True
+
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'cards.esdl')
 
@@ -98,560 +100,6 @@ class TestEdgeQLScope(tb.QueryTestCase):
             ]
         )
 
-    async def test_edgeql_scope_tuple_01(self):
-        await self.assert_query_result(
-            r'''
-                WITH
-                    A := {1, 2}
-                SELECT _ := (User{name, a := A}, A)
-                ORDER BY _.1 THEN _.0.name;
-            ''',
-            [
-                [{'a': 1, 'name': 'Alice'}, 1],
-                [{'a': 1, 'name': 'Bob'}, 1],
-                [{'a': 1, 'name': 'Carol'}, 1],
-                [{'a': 1, 'name': 'Dave'}, 1],
-                [{'a': 2, 'name': 'Alice'}, 2],
-                [{'a': 2, 'name': 'Bob'}, 2],
-                [{'a': 2, 'name': 'Carol'}, 2],
-                [{'a': 2, 'name': 'Dave'}, 2],
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_02(self):
-        await self.assert_query_result(
-            r'''
-                WITH
-                    A := {1, 2}
-                SELECT _ := (A, User{name, a := A})
-                ORDER BY _.0 THEN _.1.name;
-            ''',
-            [
-                [1, {'a': 1, 'name': 'Alice'}],
-                [1, {'a': 1, 'name': 'Bob'}],
-                [1, {'a': 1, 'name': 'Carol'}],
-                [1, {'a': 1, 'name': 'Dave'}],
-                [2, {'a': 2, 'name': 'Alice'}],
-                [2, {'a': 2, 'name': 'Bob'}],
-                [2, {'a': 2, 'name': 'Carol'}],
-                [2, {'a': 2, 'name': 'Dave'}],
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_03(self):
-        # get the User names and ids
-        res = await self.con.query(r'''
-            SELECT User {
-                name,
-                id
-            }
-            ORDER BY User.name;
-        ''')
-
-        await self.assert_query_result(
-            r'''
-                SELECT _ := (User { name }, User { id })
-                ORDER BY _.0.name;
-            ''',
-            [
-                [{'name': user.name}, {'id': str(user.id)}]
-                for user in res
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_04a(self):
-        query = r'''
-            SELECT _ := (
-                # User.friends is a common path, so it refers to the
-                # SAME object in both tuple elements. In particular
-                # that means that in the User shape there will always
-                # be a single object appearing in friends link
-                # (although it's a ** link).
-                User {
-                    name,
-                    friends: {
-                        @nickname
-                    }
-                },
-                User.friends {name}
-            )
-            ORDER BY _.0.name THEN _.1.name;
-        '''
-
-        res = [
-            [
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Swampy'}],
-                },
-                {
-                    'name': 'Bob',
-                },
-            ],
-            [
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Firefighter'}],
-                },
-                {
-                    'name': 'Carol',
-                },
-            ],
-            [
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Grumpy'}],
-                },
-                {
-                    'name': 'Dave',
-                },
-            ],
-            [
-                {
-                    'name': 'Dave',
-                    'friends': [{'@nickname': None}],
-                },
-                {
-                    'name': 'Bob',
-                },
-            ],
-        ]
-
-        await self.assert_query_result(query, res)
-        await self.assert_query_result(query, res, implicit_limit=100)
-
-    async def test_edgeql_scope_tuple_04b(self):
-        query = r'''
-            SELECT _ := (
-                User.friends {name},
-                # User.friends is a common path, so it refers to the
-                # SAME object in both tuple elements. In particular
-                # that means that in the User shape there will always
-                # be a single object appearing in friends link
-                # (although it's a ** link).
-                User {
-                    name,
-                    friends: {
-                        @nickname
-                    }
-                },
-            )
-            ORDER BY _.1.name THEN _.0.name;
-        '''
-        res = [
-            [
-                {
-                    'name': 'Bob',
-                },
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Swampy'}],
-                },
-            ],
-            [
-                {
-                    'name': 'Carol',
-                },
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Firefighter'}],
-                },
-            ],
-            [
-                {
-                    'name': 'Dave',
-                },
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Grumpy'}],
-                },
-            ],
-            [
-                {
-                    'name': 'Bob',
-                },
-                {
-                    'name': 'Dave',
-                    'friends': [{'@nickname': None}],
-                },
-            ],
-        ]
-
-        await self.assert_query_result(query, res)
-        await self.assert_query_result(query, res, implicit_limit=100)
-
-    async def test_edgeql_scope_tuple_04c(self):
-        query = r'''
-            SELECT _ := (
-                # User.friends is a common path, so it refers to the
-                # SAME object in both tuple elements. In particular
-                # that means that in the User shape there will always
-                # be a single object appearing in friends link
-                # (although it's a ** link).
-                User {
-                    name,
-                    friends: {
-                        @nickname
-                    }
-                    # We filter out one of the friends but it ought to still
-                    # show up in the correlated set
-                    FILTER @nickname ?!= "Firefighter"
-                },
-                User.friends {name}
-            )
-            ORDER BY _.0.name THEN _.1.name;
-        '''
-
-        res = [
-            [
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Swampy'}],
-                },
-                {
-                    'name': 'Bob',
-                },
-            ],
-            [
-                {
-                    'name': 'Alice',
-                    'friends': [],
-                },
-                {
-                    'name': 'Carol',
-                },
-            ],
-            [
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Grumpy'}],
-                },
-                {
-                    'name': 'Dave',
-                },
-            ],
-            [
-                {
-                    'name': 'Dave',
-                    'friends': [{'@nickname': None}],
-                },
-                {
-                    'name': 'Bob',
-                },
-            ],
-        ]
-
-        await self.assert_query_result(query, res)
-        await self.assert_query_result(query, res, implicit_limit=100)
-
-    async def test_edgeql_scope_tuple_04d(self):
-        query = r'''
-            SELECT _ := (
-                # User.friends is a common path, so it refers to the
-                # SAME object in both tuple elements. In particular
-                # that means that in the User shape there will always
-                # be a single object appearing in friends link
-                # (although it's a ** link).
-                User {
-                    name,
-                    friends: {
-                        @nickname
-                    } LIMIT 10
-                },
-                User.friends {name}
-            )
-            ORDER BY _.0.name THEN _.1.name;
-        '''
-
-        res = [
-            [
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Swampy'}],
-                },
-                {
-                    'name': 'Bob',
-                },
-            ],
-            [
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Firefighter'}],
-                },
-                {
-                    'name': 'Carol',
-                },
-            ],
-            [
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Grumpy'}],
-                },
-                {
-                    'name': 'Dave',
-                },
-            ],
-            [
-                {
-                    'name': 'Dave', 'friends': [{'@nickname': None}],
-                },
-                {
-                    'name': 'Bob',
-                },
-            ],
-        ]
-
-        await self.assert_query_result(query, res)
-        await self.assert_query_result(query, res, implicit_limit=100)
-
-    async def test_edgeql_scope_tuple_04e(self):
-        # Basically the same as the above sequence of things, but
-        # with a computable link
-        query = r'''
-            SELECT _ := (
-                Card {
-                    name,
-                    owners: {
-                        name
-                    }
-                },
-                Card.owners {name}
-            )
-            FILTER _.0.name = 'Sprite'
-            ORDER BY _.0.name THEN _.1.name;
-        '''
-
-        res = [
-            [{"name": "Sprite",
-              "owners": [{"name": "Carol"}]}, {"name": "Carol"}],
-            [{"name": "Sprite",
-              "owners": [{"name": "Dave"}]}, {"name": "Dave"}]
-        ]
-
-        await self.assert_query_result(query, res)
-        await self.assert_query_result(query, res, implicit_limit=100)
-
-    async def test_edgeql_scope_tuple_04f(self):
-        # Similar to above tests, but forcing use of eta-expansion
-        query = r'''
-            SELECT _ := [(
-                User.friends {name},
-                User {
-                    name,
-                    friends: {
-                        @nickname
-                    }
-                },
-            )][0]
-            ORDER BY _.1.name THEN _.0.name;
-        '''
-        res = [
-            [
-                {
-                    'name': 'Bob',
-                },
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Swampy'}],
-                },
-            ],
-            [
-                {
-                    'name': 'Carol',
-                },
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Firefighter'}],
-                },
-            ],
-            [
-                {
-                    'name': 'Dave',
-                },
-                {
-                    'name': 'Alice',
-                    'friends': [{'@nickname': 'Grumpy'}],
-                },
-            ],
-            [
-                {
-                    'name': 'Bob',
-                },
-                {
-                    'name': 'Dave',
-                    'friends': [{'@nickname': None}],
-                },
-            ],
-        ]
-
-        await self.assert_query_result(query, res)
-        await self.assert_query_result(query, res, implicit_limit=100)
-
-    async def test_edgeql_scope_tuple_05a(self):
-        await self.assert_query_result(
-            r'''
-                # Same as above, but with a computable instead of real
-                # "friends"
-                SELECT _ := (
-                    User {
-                        name,
-                        fr := User.friends {
-                            @nickname
-                        }
-                    },
-                    User.friends {name}
-                )
-                ORDER BY _.0.name THEN _.1.name;
-            ''',
-            [
-                [
-                    {
-                        'name': 'Alice',
-                        'fr': {'@nickname': 'Swampy'},
-                    },
-                    {
-                        'name': 'Bob',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Alice',
-                        'fr': {'@nickname': 'Firefighter'},
-                    },
-                    {
-                        'name': 'Carol',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Alice',
-                        'fr': {'@nickname': 'Grumpy'},
-                    },
-                    {
-                        'name': 'Dave',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Dave',
-                        'fr': {'@nickname': None},
-                    },
-                    {
-                        'name': 'Bob',
-                    },
-                ],
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_05b(self):
-        # Similar to above tests, but forcing use of eta-expansion
-        await self.assert_query_result(
-            r'''
-                # Same as above, but with a computable instead of real
-                # "friends"
-                SELECT _ := [(
-                    User {
-                        name,
-                        fr := User.friends {
-                            @nickname
-                        }
-                    },
-                    User.friends {name}
-                )][0]
-                ORDER BY _.0.name THEN _.1.name;
-            ''',
-            [
-                [
-                    {
-                        'name': 'Alice',
-                        'fr': {'@nickname': 'Swampy'},
-                    },
-                    {
-                        'name': 'Bob',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Alice',
-                        'fr': {'@nickname': 'Firefighter'},
-                    },
-                    {
-                        'name': 'Carol',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Alice',
-                        'fr': {'@nickname': 'Grumpy'},
-                    },
-                    {
-                        'name': 'Dave',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Dave',
-                        'fr': {'@nickname': None},
-                    },
-                    {
-                        'name': 'Bob',
-                    },
-                ],
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_06(self):
-        await self.assert_query_result(
-            r'''
-                WITH
-                    U2 := User
-                SELECT x := (
-                    User {name, foo := U2 {name}},
-                    U2 { name }
-                )
-                FILTER x.1.name = 'Alice'
-                ORDER BY x.0.name THEN x.1.name;
-            ''',
-            [
-                [
-                    {
-                        'name': 'Alice',
-                        'foo': {'name': 'Alice'},
-                    },
-                    {
-                        'name': 'Alice',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Bob',
-                        'foo': {'name': 'Alice'},
-                    },
-                    {
-                        'name': 'Alice',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Carol',
-                        'foo': {'name': 'Alice'},
-                    },
-                    {
-                        'name': 'Alice',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Dave',
-                        'foo': {'name': 'Alice'},
-                    },
-                    {
-                        'name': 'Alice',
-                    },
-                ],
-            ]
-        )
-
     async def test_edgeql_scope_tuple_07(self):
         await self.assert_query_result(
             r'''
@@ -685,152 +133,15 @@ class TestEdgeQLScope(tb.QueryTestCase):
             ]
         )
 
-    async def test_edgeql_scope_tuple_08(self):
-        await self.assert_query_result(
-            r'''
-                # compare to test_edgeql_scope_filter_03 to see how it
-                # works out without tuples
-                WITH
-                    U2 := User
-                SELECT (
-                    User {
-                        name,
-                        friends_of_others := (
-                            SELECT U2.friends {name}
-                            FILTER
-                                # not me
-                                U2.friends != User
-                                AND
-                                # not one of my friends
-                                U2.friends NOT IN User.friends
-                            ORDER BY U2.friends.name
-                        )
-                    },
-                    U2.friends {
-                        name
-                    }
-                )
-                FILTER U2.friends.name = 'Bob'
-                ORDER BY User.name THEN U2.friends.name;
-            ''',
-            [
-                [
-                    {
-                        'name': 'Alice',
-                        'friends_of_others': None,  # Bob is a direct friend
-                    },
-                    {
-                        'name': 'Bob',
-                    }
-                ],
-                [
-                    {
-                        'name': 'Bob',
-                        'friends_of_others': None,  # this is Bob
-                    },
-                    {
-                        'name': 'Bob',
-                    }
-                ],
-                [
-                    {
-                        'name': 'Carol',
-                        'friends_of_others': {'name': 'Bob'},
-                    },
-                    {
-                        'name': 'Bob',
-                    }
-                ],
-                [
-                    {
-                        'name': 'Dave',
-                        'friends_of_others': None,  # Bob is a direct friend
-                    },
-                    {
-                        'name': 'Bob',
-                    }
-                ],
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_09(self):
-        await self.assert_query_result(
-            r'''
-                # compare to test_edgeql_scope_filter_03 to see how it
-                # works out without tuples
-                WITH
-                    U2 := User
-                SELECT _ := (
-                    User {
-                        name,
-                        friends_of_others := (
-                            # similar to previous test, but refactored
-                            WITH F := (
-                                SELECT U2.friends
-                                FILTER
-                                    # not me
-                                    U2.friends != User
-                                    AND
-                                    # not one of my friends
-                                    U2.friends NOT IN User.friends
-                            )
-                            SELECT F {name}
-                            ORDER BY F.name
-                        )
-                    },
-                    U2.friends {
-                        name
-                    }
-                )
-                FILTER _.1.name = 'Bob'
-                ORDER BY _.0.name THEN _.1;
-            ''',
-            [
-                [
-                    {
-                        'name': 'Alice',
-                        'friends_of_others': None,  # Bob is a direct friend
-                    },
-                    {
-                        'name': 'Bob',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Bob',
-                        'friends_of_others': None,  # this is Bob
-                    },
-                    {
-                        'name': 'Bob',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Carol',
-                        'friends_of_others': {'name': 'Bob'},
-                    },
-                    {
-                        'name': 'Bob',
-                    },
-                ],
-                [
-                    {
-                        'name': 'Dave',
-                        'friends_of_others': None,  # Bob is a direct friend
-                    },
-                    {
-                        'name': 'Bob',
-                    },
-                ],
-            ]
-        )
-
     async def test_edgeql_scope_tuple_10(self):
         await self.assert_query_result(
             r'''
+                SELECT (
+                FOR User in User
                 SELECT (User.name, User.deck_cost, count(User.deck),
                         User.deck_cost / count(User.deck))
-                ORDER BY User.name;
+                )
+                ORDER BY .0;
             ''',
             [
                 ['Alice', 11, 4, 2.75],
@@ -842,12 +153,10 @@ class TestEdgeQLScope(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                # in the below expression User.friends is the
-                # longest common prefix, so we know that for
-                # each friend, the average cost will be
-                # calculated.
-                SELECT User.friends.deck_cost / count(User.friends.deck)
-                ORDER BY User.friends.name;
+                SELECT (SELECT (
+                FOR uf in User.friends
+                SELECT (uf, uf.deck_cost / count(uf.deck))
+                ) ORDER BY .0.name).1
             ''',
             [
                 2.25,                # Bob (friend of Alice and Dave)
@@ -858,208 +167,12 @@ class TestEdgeQLScope(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                # in the below expression User.friends is the
-                # longest common prefix, so we know that for
-                # each friend, the average cost will be
-                # calculated.
-                SELECT User.friends.deck_cost / count(User.friends.deck)
-                FILTER User.friends.name = 'Bob';
+                FOR uf in User.friends
+                SELECT uf.deck_cost / count(uf.deck)
+                FILTER uf.name = 'Bob';
             ''',
             [2.25],
         )
-
-    async def test_edgeql_scope_tuple_11(self):
-        await self.assert_query_result(
-            r'''
-                SELECT x := (
-                    Card {
-                        name,
-                        percent_cost := (
-                            SELECT <int64>(100 * Card.cost /
-                                           Card.<deck[IS User].deck_cost)
-                        ),
-                    },
-                    Card.<deck[IS User] { name }
-                )
-                ORDER BY x.1.name THEN x.0.name;
-            ''',
-            [
-                [{'name': 'Bog monster', 'percent_cost': 18},
-                 {'name': 'Alice'}],
-                [{'name': 'Dragon', 'percent_cost': 45},
-                 {'name': 'Alice'}],
-                [{'name': 'Giant turtle', 'percent_cost': 27},
-                 {'name': 'Alice'}],
-                [{'name': 'Imp', 'percent_cost': 9},
-                 {'name': 'Alice'}],
-
-                [{'name': 'Bog monster', 'percent_cost': 22},
-                 {'name': 'Bob'}],
-                [{'name': 'Dwarf', 'percent_cost': 11},
-                 {'name': 'Bob'}],
-                [{'name': 'Giant turtle', 'percent_cost': 33},
-                 {'name': 'Bob'}],
-                [{'name': 'Golem', 'percent_cost': 33},
-                 {'name': 'Bob'}],
-
-                [{'name': 'Bog monster', 'percent_cost': 12},
-                 {'name': 'Carol'}],
-                [{'name': 'Djinn', 'percent_cost': 25},
-                 {'name': 'Carol'}],
-                [{'name': 'Dwarf', 'percent_cost': 6},
-                 {'name': 'Carol'}],
-                [{'name': 'Giant eagle', 'percent_cost': 12},
-                 {'name': 'Carol'}],
-                [{'name': 'Giant turtle', 'percent_cost': 19},
-                 {'name': 'Carol'}],
-                [{'name': 'Golem', 'percent_cost': 19},
-                 {'name': 'Carol'}],
-                [{'name': 'Sprite', 'percent_cost': 6},
-                 {'name': 'Carol'}],
-
-                [{'name': 'Bog monster', 'percent_cost': 10},
-                 {'name': 'Dave'}],
-                [{'name': 'Djinn', 'percent_cost': 20},
-                 {'name': 'Dave'}],
-                [{'name': 'Dragon', 'percent_cost': 25},
-                 {'name': 'Dave'}],
-                [{'name': 'Giant eagle', 'percent_cost': 10},
-                 {'name': 'Dave'}],
-                [{'name': 'Giant turtle', 'percent_cost': 15},
-                 {'name': 'Dave'}],
-                [{'name': 'Golem', 'percent_cost': 15},
-                 {'name': 'Dave'}],
-                [{'name': 'Sprite', 'percent_cost': 5},
-                 {'name': 'Dave'}],
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_12(self):
-        await self.assert_query_result(
-            r'''
-                # this is similar to test_edgeql_scope_tuple_04
-                SELECT _ := (
-                    # User.friends is a common path, so it refers to the
-                    # SAME object in both tuple elements. In particular
-                    # that means that in the User shape there will always
-                    # be a single object appearing in friends link
-                    # (although it's a ** link).
-                    User {
-                        name,
-                        friends: {
-                            name
-                        }
-                    },
-                    User.friends@nickname
-                )
-                ORDER BY _.0.name THEN _.1;
-            ''',
-            [
-                # the only User who has nicknames for friends is Alice
-                [
-                    {'name': 'Alice', 'friends': [{'name': 'Carol'}]},
-                    'Firefighter'
-                ],
-                [
-                    {'name': 'Alice', 'friends': [{'name': 'Dave'}]},
-                    'Grumpy'
-                ],
-                [
-                    {'name': 'Alice', 'friends': [{'name': 'Bob'}]},
-                    'Swampy'
-                ],
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_13(self):
-        # Test that the tuple elements are interpreted as singletons.
-        await self.assert_query_result(
-            r"""
-            WITH
-                letter := {'A', 'B'},
-                tup := (
-                    letter,
-                    (
-                        SELECT User
-                        FILTER .name[0] = letter
-                    )
-                )
-            SELECT tup.1 {
-                name,
-                l := tup.0,
-            }
-            ORDER BY .name;
-            """,
-            [
-                {'name': 'Alice', 'l': 'A'},
-                {'name': 'Bob', 'l': 'B'}
-            ]
-        )
-
-        await self.assert_query_result(
-            r"""
-            WITH
-                letter := {'A', 'B'},
-                tup := (
-                    (
-                        letter,
-                        (
-                            SELECT User
-                            FILTER .name[0] = letter
-                        ),
-                    ),
-                    'foo',
-                )
-            SELECT tup.0.1 {
-                name,
-                l := tup.0.0,
-            }
-            ORDER BY .name;
-            """,
-            [
-                {'name': 'Alice', 'l': 'A'},
-                {'name': 'Bob', 'l': 'B'}
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_14(self):
-        # Test that the tuple elements are interpreted as singletons.
-
-        await self.assert_query_result(
-            r"""
-            WITH
-                letter := {'A', 'B'},
-                tup := (
-                    letter,
-                    (
-                        SELECT User
-                        FILTER .name[0] = letter
-                    )
-                ),
-                result := tup.1 {
-                    l := tup.0
-                },
-            SELECT result {
-                name,
-                l,
-            }
-            ORDER BY .name;
-            """,
-            [
-                {'name': 'Alice', 'l': 'A'},
-                {'name': 'Bob', 'l': 'B'}
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_15(self):
-        res = await self.con.query(r"""
-            SELECT ((SELECT User {deck}), User.deck);
-        """)
-
-        # The deck shape ought to contain just the correlated element
-        for row in res:
-            self.assertEqual(len(row[0].deck), 1)
-            self.assertEqual(row[0].deck[0].id, row[1].id)
 
     async def test_edgeql_scope_tuple_16(self):
         await self.assert_query_result(
@@ -1097,16 +210,28 @@ class TestEdgeQLScope(tb.QueryTestCase):
                 name := {'Alice', 'Bob'},
                 L := (name, (
                     SELECT User
-                    FILTER .name = name
+                    FILTER any(.name = name)
                 )),
             SELECT _ := ((SELECT L.1.name), (SELECT L.1.name))
             ORDER BY _;
             """,
             [
-                ['Alice', 'Alice'],
-                ['Alice', 'Bob'],
-                ['Bob', 'Alice'],
-                ['Bob', 'Bob'],
+                ["Alice", "Alice"],
+                ["Alice", "Alice"],
+                ["Alice", "Alice"],
+                ["Alice", "Alice"],
+                ["Alice", "Bob"],
+                ["Alice", "Bob"],
+                ["Alice", "Bob"],
+                ["Alice", "Bob"],
+                ["Bob", "Alice"],
+                ["Bob", "Alice"],
+                ["Bob", "Alice"],
+                ["Bob", "Alice"],
+                ["Bob", "Bob"],
+                ["Bob", "Bob"],
+                ["Bob", "Bob"],
+                ["Bob", "Bob"]
             ]
         )
 
@@ -1117,36 +242,28 @@ class TestEdgeQLScope(tb.QueryTestCase):
                 name := {'Alice', 'Bob'},
                 L := ((
                     SELECT User
-                    FILTER .name = name
+                    FILTER any(.name = name)
                 ), name),
             SELECT _ := ((SELECT L.0.name), (SELECT L.0.name))
             ORDER BY _;
             """,
             [
-                ['Alice', 'Alice'],
-                ['Alice', 'Bob'],
-                ['Bob', 'Alice'],
-                ['Bob', 'Bob'],
-            ]
-        )
-
-    async def test_edgeql_scope_binding_03(self):
-        await self.assert_query_result(
-            r"""
-            WITH
-                name := {'Alice', 'Bob'},
-                L := (name, (
-                    SELECT User
-                    FILTER .name = name
-                )).1,
-            SELECT _ := ((SELECT L.name), (SELECT L.name))
-            ORDER BY _;
-            """,
-            [
-                ['Alice', 'Alice'],
-                ['Alice', 'Bob'],
-                ['Bob', 'Alice'],
-                ['Bob', 'Bob'],
+                ["Alice", "Alice"],
+                ["Alice", "Alice"],
+                ["Alice", "Alice"],
+                ["Alice", "Alice"],
+                ["Alice", "Bob"],
+                ["Alice", "Bob"],
+                ["Alice", "Bob"],
+                ["Alice", "Bob"],
+                ["Bob", "Alice"],
+                ["Bob", "Alice"],
+                ["Bob", "Alice"],
+                ["Bob", "Alice"],
+                ["Bob", "Bob"],
+                ["Bob", "Bob"],
+                ["Bob", "Bob"],
+                ["Bob", "Bob"]
             ]
         )
 
@@ -1168,7 +285,8 @@ class TestEdgeQLScope(tb.QueryTestCase):
             SELECT _ := ((SELECT Y), (SELECT Y))
             ORDER BY _;
             """,
-            [[2, 2], [2, 3], [3, 2], [3, 3]]
+            [[2, 2], [2, 2], [2, 2], [2, 2], [2, 3], [2, 3], [2, 3], [2, 3],
+             [3, 2], [3, 2], [3, 2], [3, 2], [3, 3], [3, 3], [3, 3], [3, 3]]
         )
 
     async def test_edgeql_scope_binding_06(self):
@@ -1219,7 +337,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                     (WITH X := (SELECT Card) SELECT X.name),
                 ));
             """,
-            [9],
+            [81],
         )
 
     @tb.ignore_warnings('more than one.* in a FILTER clause')
@@ -1642,61 +760,14 @@ class TestEdgeQLScope(tb.QueryTestCase):
         await self.assert_query_result(
             r'''
                 # control query Q1
-                SELECT Card.element ++ ' ' ++ Card.name
+                select (
+                SELECT Card { slug := Card.element ++ ' ' ++ Card.name }
                 FILTER Card.name > Card.element
-                ORDER BY Card.name;
+                ORDER BY Card.name
+                ).slug
             ''',
             ['Air Djinn', 'Air Giant eagle', 'Earth Golem', 'Fire Imp',
              'Air Sprite']
-        )
-
-    async def test_edgeql_scope_nested_02(self):
-        await self.assert_query_result(
-            r'''
-                # Semantically this is same as control query Q1, with lots
-                # of nested shapes. SELECT sets up A to be the longest
-                # common prefix to be iterated over, so the rest of shapes
-                # work out because they all refer to a singleton with same
-                # value as A.
-                WITH
-                    A := Card
-                SELECT
-                    A.element ++ ' ' ++ (WITH B := A SELECT B).name
-                FILTER (
-                    WITH C := A
-                    SELECT (
-                        WITH D := C
-                        SELECT D.name
-                    ) > C.element
-                )
-                ORDER BY
-                    (WITH E := A SELECT E.name);
-            ''',
-            ['Air Djinn', 'Air Giant eagle', 'Earth Golem', 'Fire Imp',
-             'Air Sprite'],
-        )
-
-    async def test_edgeql_scope_nested_03(self):
-        await self.assert_query_result(
-            r'''
-                # semantically same as control query Q1, with lots of
-                # nested shapes
-                WITH
-                    A := Card
-                SELECT
-                    A.element ++ ' ' ++ (WITH B := A SELECT B).name
-                FILTER (
-                    WITH C := A
-                    SELECT (
-                        WITH D := A
-                        SELECT D.name
-                    ) > C.element
-                )
-                ORDER BY
-                    (WITH E := A SELECT E.name);
-            ''',
-            ['Air Djinn', 'Air Giant eagle', 'Earth Golem', 'Fire Imp',
-             'Air Sprite'],
         )
 
     async def test_edgeql_scope_nested_05(self):
@@ -1721,11 +792,15 @@ class TestEdgeQLScope(tb.QueryTestCase):
         )
 
     async def test_edgeql_scope_nested_06(self):
+        # Sigh, doing this sort of query with an ORDER BY in the new
+        # simple-scoping world really is ugly.
         await self.assert_query_result(
             r'''
                 # control query Q2
                 # combination of element + SET OF with a common prefix
-                SELECT Card.name ++ <str>count(Card.owners)
+                SELECT (SELECT (
+                FOR Card in Card
+                SELECT (Card.name ++ <str>count(Card.owners), Card)
                 FILTER
                     # some element filters
                     Card.name < Card.element
@@ -1733,60 +808,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                     # a SET OF filter that shares a prefix with SELECT SET
                     # OF, but is actually independent
                     count(Card.owners.friends) > 2
-                ORDER BY Card.name;
-            ''',
-            ['Bog monster4', 'Dragon2', 'Giant turtle4']
-        )
-
-    async def test_edgeql_scope_nested_07(self):
-        await self.assert_query_result(
-            r'''
-                # semantically same as control query Q2, with lots of
-                # nested aliases
-                WITH
-                    A := Card
-                SELECT
-                    A.name ++ (WITH B := A SELECT <str>count(B.owners))
-                FILTER (
-                    WITH C := A
-                    SELECT (
-                        WITH D := C
-                        SELECT D.name
-                    ) < C.element
-                    AND
-                    (
-                        WITH E := A
-                        SELECT count((WITH F := E SELECT F.owners.friends)) > 2
-                    )
-                )
-                ORDER BY
-                    (WITH E := A SELECT E.name);
-            ''',
-            ['Bog monster4', 'Dragon2', 'Giant turtle4']
-        )
-
-    async def test_edgeql_scope_nested_08(self):
-        await self.assert_query_result(
-            r'''
-                # semantically same as control query Q2, with lots of
-                # nested aliases, all referring to the top level alias
-                WITH
-                    A := Card
-                SELECT
-                    A.name ++ (WITH B := A SELECT <str>count(B.owners))
-                FILTER (
-                    WITH C := A
-                    SELECT (
-                        WITH D := A
-                        SELECT D.name
-                    ) < C.element
-                    AND
-                    (
-                        SELECT count((WITH F := A SELECT F.owners.friends)) > 2
-                    )
-                )
-                ORDER BY
-                    (WITH E := A SELECT E.name);
+                ) ORDER BY .1.name).0;
             ''',
             ['Bog monster4', 'Dragon2', 'Giant turtle4']
         )
@@ -1795,6 +817,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
         await self.assert_query_result(
             r'''
                 # control query Q3
+                FOR Card in Card
                 SELECT Card.name ++ <str>count(Card.owners);
             ''',
             {'Imp1', 'Dragon2', 'Bog monster4', 'Giant turtle4', 'Dwarf2',
@@ -1806,6 +829,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
             r'''
                 # semantically same as control query Q3, except that some
                 # aliases are introduced
+                FOR Card in Card
                 SELECT Card.name ++
                        <str>count((WITH A := Card SELECT A).owners);
             ''',
@@ -1815,6 +839,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
+                FOR Card in Card
                 SELECT Card.name ++
                        <str>count((WITH A := Card SELECT A.owners));
             ''',
@@ -1824,6 +849,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
+                FOR Card in Card
                 SELECT <str>count((WITH A := Card SELECT A.owners)) ++
                        Card.name;
             ''',
@@ -1833,6 +859,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
+                FOR Card in Card
                 # semantically same as control query Q3, except that some
                 # aliases are introduced
                 SELECT (Card.name,
@@ -1866,6 +893,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
     async def test_edgeql_scope_detached_01(self):
         names = {'Alice', 'Bob', 'Carol', 'Dave'}
 
+        results = [a + b for a in names for b in names]
         await self.assert_query_result(
             r"""
                 # U2 is a combination of DETACHED and non-DETACHED expression
@@ -1873,10 +901,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                     U2 := User.name ++ DETACHED User.name
                 SELECT U2 ++ U2;
             """,
-            {u + u for u in
-                (a + b
-                    for a in names
-                    for b in names)},
+            {u1 + u2 for u1 in results for u2 in results},
         )
 
         await self.assert_query_result(
@@ -1885,8 +910,9 @@ class TestEdgeQLScope(tb.QueryTestCase):
                 SELECT User.name ++ DETACHED User.name ++
                        User.name ++ DETACHED User.name;
             """,
-            {a + b + a + c
-                for a in names
+            {a1 + b + a2 + c
+                for a1 in names
+                for a2 in names
                 for b in names
                 for c in names},
         )
@@ -1903,9 +929,8 @@ class TestEdgeQLScope(tb.QueryTestCase):
                 # with everybody twice.
                 WITH
                     # calculate some expression ("full" name)
-                    U0 := User.name ++ <str>count(User.deck),
-                    # make a copy of U0 so that we can do cross product
-                    U1 := U0
+                    X := User.name ++ <str>count(User.deck),
+                FOR U0 in X FOR U1 IN X
                 SELECT U0 ++ ' vs ' ++ U1
                 # get rid of players matching themselves
                 FILTER U0 != U1;
@@ -2294,10 +1319,10 @@ class TestEdgeQLScope(tb.QueryTestCase):
             SELECT _ := (User.name, { x := User.name }) ORDER BY _;
             """,
             [
-                ["Alice", {"x": "Alice"}],
-                ["Bob", {"x": "Bob"}],
-                ["Carol", {"x": "Carol"}],
-                ["Dave", {"x": "Dave"}],
+                ['Alice', {'x': ['Alice', 'Bob', 'Carol', 'Dave']}],
+                ['Bob', {'x': ['Alice', 'Bob', 'Carol', 'Dave']}],
+                ['Carol', {'x': ['Alice', 'Bob', 'Carol', 'Dave']}],
+                ['Dave', {'x': ['Alice', 'Bob', 'Carol', 'Dave']}],
             ]
         )
 
@@ -2370,7 +1395,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                 SELECT len(User.name)
                 FILTER User.name > 'C';
             ''',
-            [4, 5],
+            [3, 4, 5, 5],
             sort=True,
         )
 
@@ -2392,6 +1417,10 @@ class TestEdgeQLScope(tb.QueryTestCase):
             sort=True,
         )
 
+    @test.xfail('''
+       This broke with SIMPLE_SCOPING but something about it is worth
+       saving I think
+    ''')
     async def test_edgeql_scope_computables_01(self):
         # Test that expressions in schema link computables
         # do not leak out into the query.
@@ -2572,7 +1601,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                 WITH U := User { cards := .deck },
                 SELECT count((U.cards.name, U.cards.cost));
             """,
-            [9],
+            [81],
         )
 
     async def test_edgeql_scope_computables_07b(self):
@@ -2581,7 +1610,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                 WITH U := User { cards := Card },
                 SELECT count((U.cards.name, U.cards.cost));
             """,
-            [9],
+            [81],
         )
 
     async def test_edgeql_scope_computables_07c(self):
@@ -2599,7 +1628,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
             r"""
                 SELECT count((Card.owners.name, Card.owners.deck_cost));
             """,
-            [4],
+            [16],
         )
 
     async def test_edgeql_scope_computables_09a(self):
@@ -2629,19 +1658,6 @@ class TestEdgeQLScope(tb.QueryTestCase):
             ],
         )
 
-    async def test_edgeql_scope_computables_09c(self):
-        await self.assert_query_result(
-            r"""
-                WITH U := (SELECT User {
-                        unowned := (SELECT Card FILTER Card NOT IN User.deck)
-                    } FILTER .name IN {'Carol', 'Dave'}),
-                SELECT _ := (U.unowned.name, U.unowned.cost) ORDER BY _;
-            """,
-            [
-                ['Dragon', 5], ['Dwarf', 1], ['Imp', 1],
-            ],
-        )
-
     async def test_edgeql_scope_computables_11a(self):
         await self.assert_query_result(
             r"""
@@ -2650,7 +1666,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                     }),
                 SELECT count((U.deck.a.name, U.deck.a.id, U.deck.name));
             """,
-            [27],
+            [81],
             implicit_limit=100,
         )
 
@@ -2662,7 +1678,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                     }),
                 SELECT count((U.cards.a.name, U.cards.a.id, U.cards.name));
             """,
-            [27],
+            [81],
         )
 
     async def test_edgeql_scope_computables_11c(self):
@@ -2868,7 +1884,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
             """
                 SELECT count(((SELECT User), ((User),).0));
             """,
-            [4],
+            [16],
         )
 
     async def test_edgeql_scope_branch_02(self):
@@ -2879,7 +1895,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                     ((SELECT User.name) ++ (User.name),).0,
                  ));
             """,
-            [4],
+            [64],
         )
 
     async def test_edgeql_scope_branch_03(self):
@@ -2890,7 +1906,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                     ((SELECT User.name) ++ (User.name)) ?? "uhoh",
                  ));
             """,
-            [4],
+            [64],
         )
 
     async def test_edgeql_scope_computable_factoring_01(self):
@@ -2927,7 +1943,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                     count(((SELECT U.cards.foo),
                           ((SELECT U.cards.foo), (U.cards.foo))))
             """,
-            [7],
+            [343],
         )
 
     async def test_edgeql_scope_computable_factoring_03(self):
@@ -2946,7 +1962,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                     count(((SELECT U.cards.foo),
                           (((SELECT U.cards.foo), (U.cards.foo)),).0))
             """,
-            [7],
+            [343],
         )
 
     async def test_edgeql_scope_3x_nested_materialized_01(self):
@@ -3290,7 +2306,6 @@ class TestEdgeQLScope(tb.QueryTestCase):
             ]
         )
 
-    @test.xfail("gives every user name in the output")
     async def test_edgeql_scope_ref_outer_05b(self):
         # I was trying to do something I wasn't sure of, and I tried
         # to write this variant of outer_05a to investigate.
@@ -3454,103 +2469,13 @@ class TestEdgeQLScope(tb.QueryTestCase):
             ]
         )
 
-    async def test_edgeql_scope_ref_side_01(self):
-        await self.assert_query_result(
-            """
-                SELECT (
-                    SELECT (
-                        User,
-                        (SELECT Card { name, user := User.name }
-                         FILTER Card.name[0] = User.name[0]),
-                    )
-                ).1 { name, user } ORDER BY .name;
-            """,
-            [
-                {"name": "Bog monster", "user": "Bob"},
-                {"name": "Djinn", "user": "Dave"},
-                {"name": "Dragon", "user": "Dave"},
-                {"name": "Dwarf", "user": "Dave"},
-            ]
-        )
-
-    async def test_edgeql_scope_ref_side_02a(self):
-        await self.assert_query_result(
-            """
-                SELECT (
-                    SELECT (
-                        User,
-                        (SELECT Card { name, user := (SELECT _ := User.name) }
-                         FILTER Card.name[0] = User.name[0]),
-                    )
-                ).1 { name, user } ORDER BY .name;
-            """,
-            [
-                {"name": "Bog monster", "user": "Bob"},
-                {"name": "Djinn", "user": "Dave"},
-                {"name": "Dragon", "user": "Dave"},
-                {"name": "Dwarf", "user": "Dave"},
-            ]
-        )
-
-    async def test_edgeql_scope_ref_side_02b(self):
-        await self.assert_query_result(
-            """
-                SELECT (
-                    SELECT (
-                        (SELECT Card { name, user := (SELECT _ := User.name) }
-                         FILTER Card.name[0] = User.name[0]),
-                        User,
-                    )
-                ).0 { name, user } ORDER BY .name;
-            """,
-            [
-                {"name": "Bog monster", "user": "Bob"},
-                {"name": "Djinn", "user": "Dave"},
-                {"name": "Dragon", "user": "Dave"},
-                {"name": "Dwarf", "user": "Dave"},
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_correlate_01(self):
-        await self.assert_query_result(
-            """
-            SELECT _ := (User {friends: {name}}, User.friends.name ?? 'n/a')
-            ORDER BY _.1;
-            """,
-            [
-                [{"friends": [{"name": "Bob"}]}, "Bob"],
-                [{"friends": [{"name": "Bob"}]}, "Bob"],
-                [{"friends": [{"name": "Carol"}]}, "Carol"],
-                [{"friends": [{"name": "Dave"}]}, "Dave"],
-                [{"friends": []}, "n/a"],
-                [{"friends": []}, "n/a"]
-            ]
-        )
-
-    async def test_edgeql_scope_tuple_correlate_02(self):
-        await self.assert_query_result(
-            """
-            SELECT _ := (User {z := .friends {name}},
-                         User.friends.name ?? 'n/a')
-            ORDER BY _.1;
-            """,
-            [
-                [{"z": {"name": "Bob"}}, "Bob"],
-                [{"z": {"name": "Bob"}}, "Bob"],
-                [{"z": {"name": "Carol"}}, "Carol"],
-                [{"z": {"name": "Dave"}}, "Dave"],
-                [{"z": None}, "n/a"],
-                [{"z": None}, "n/a"]
-            ]
-        )
-
     async def test_edgeql_scope_tuple_correlate_03(self):
         await self.assert_query_result(
             """
                 WITH X := (User, User.friends)
                 SELECT count(X.0.friends.name ++ X.1.name);
             """,
-            [10]
+            [36]
         )
 
     async def test_edgeql_scope_tuple_correlate_04(self):
@@ -3562,23 +2487,7 @@ class TestEdgeQLScope(tb.QueryTestCase):
                 WITH X := (User { friends }, User.friends)
                 SELECT count(X.0.friends.name ++ X.1.name);
             """,
-            [4]
-        )
-
-    async def test_edgeql_scope_tuple_correlate_05(self):
-        await self.assert_query_result(
-            """
-                WITH X := (User {friends}, User.friends.name ?? 'n/a')
-                SELECT _ := (X.0 {friends: {name}}, X.1) ORDER BY _.1;
-            """,
-            [
-                [{"friends": [{"name": "Bob"}]}, "Bob"],
-                [{"friends": [{"name": "Bob"}]}, "Bob"],
-                [{"friends": [{"name": "Carol"}]}, "Carol"],
-                [{"friends": [{"name": "Dave"}]}, "Dave"],
-                [{"friends": []}, "n/a"],
-                [{"friends": []}, "n/a"],
-            ]
+            [36]
         )
 
     async def test_edgeql_select_outer_rebind_01(self):
