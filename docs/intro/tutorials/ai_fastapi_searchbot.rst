@@ -51,9 +51,7 @@ with semantic search-based cross-chat memory.
   following uv's instructions on `managing dependencies
   <https://docs.astral.sh/uv/concepts/projects/dependencies/#optional-dependencies>`_,
   as well as FastAPI's `installation docs
-  <https://fastapi.tiangolo.com/#installation>`_. Running ``uv sync`` after
-  that will create our virtual environment in a ``.venv`` directory and ensure
-  it's ready. As the last step, we'll activate the environment and get started.
+  <https://fastapi.tiangolo.com/#installation>`_. Installiing dependencies will create a virtual environment and a lockfile. We'll activate the environment and get started.
 
   .. note::
 
@@ -64,11 +62,10 @@ with semantic search-based cross-chat memory.
 
       $ uv add "fastapi[standard]" \
         && uv add gel \
-        && uv sync \
         && source .venv/bin/activate
 
 
-2. Get started with FastAPI
+1. Get started with FastAPI
 ===========================
 
 .. edb:split-section::
@@ -128,7 +125,7 @@ with semantic search-based cross-chat memory.
 .. edb:split-section::
 
   Now, to create the search endpoint we mentioned earlier, we need to pass our
-  query as a parameter to it. We'd prefer to have it in the request's body
+  query as a parameter to it. We prefer to have it in the request's body
   since user messages can be long.
 
   In FastAPI land, this is done by creating a Pydantic schema and making it the
@@ -192,17 +189,14 @@ to it by implementing web search capabilities.
 
 .. edb:split-section::
 
-  There're many powerful feature-rich products for LLM-driven web search. But
-  in this tutorial we're going to use a much more reliable source of real-world
-  information that is comment threads on `Hacker News
+  Many powerful, feature-rich products exist for LLM-driven web search. However, in this tutorial, w'll use a more reliable source of real-world information: comment threads on `Hacker News
   <https://news.ycombinator.com/>`_. Their `web API
   <https://hn.algolia.com/api>`_ is free of charge and doesn't require an
   account. Below is a simple function that requests a full-text search for a
   string query and extracts a nice sampling of comment threads from each of the
   stories that came up in the result.
 
-  We are not going to cover this code sample in too much depth. Feel free to grab
-  it save it to ``app/web.py``, or make your own.
+  We are not going to cover this code sample in too much depth. Feel free to grab it and save it to ``app/web.py``, or make your own.
 
   Notice that we've created another Pydantic type called ``WebSource`` to store
   our web search results. There's no framework-related reason for that, it's just
@@ -374,7 +368,7 @@ those results to the LLM to get a nice-looking summary.
 
 .. edb:split-section::
 
-  There's a million different LLMs accessible via a web API (`one
+  There are a million different LLMs accessible via a web API (`one
   <https://docs.anthropic.com/en/api/getting-started>`_, `two
   <https://ai.google.dev/gemini-api/docs>`_, `three
   <https://ollama.com/search>`_, `four <https://docs.mistral.ai/api/>`_ to name
@@ -388,6 +382,7 @@ those results to the LLM to get a nice-looking summary.
   .. code-block:: python
       :caption: app/main.py
 
+      import os
       import requests
       from dotenv import load_dotenv
 
@@ -418,12 +413,8 @@ those results to the LLM to get a nice-looking summary.
 .. edb:split-section::
 
   Note that this cloud LLM API (and many others) requires a secret key to be
-  set as an environment variable. A common way to manage those is to use the
-  ``python-dotenv`` library in combinations with a ``.env`` file. Feel free to
-  browse `the readme
-  <https://github.com/theskumar/python-dotenv?tab=readme-ov-file#getting-started>`_,
-  to learn more. Create a file called ``.env`` in the root directory and put
-  your api key in there:
+  set as an environment variable. A common way to manage them is to use the
+  ``python-dotenv`` library in combination with a ``.env`` file. Create a ``.env`` file in the root directory and store your API key inside it. You can generate an API key `here <https://platform.openai.com/api-keys>`_:
 
   .. code-block:: .env
       :caption: .env
@@ -437,7 +428,7 @@ those results to the LLM to get a nice-looking summary.
 
   .. code-block:: bash
 
-      uv add python-dotenv
+      $ uv add python-dotenv
 
 
 .. edb:split-section::
@@ -536,11 +527,7 @@ Now's a good time to introduce Gel.
       $ gel project init --non-interactive
 
 
-This command is going to put some project scaffolding inside our app, spin up a
-local instace of Gel, and then link the two together. From now on, all
-Gel-related things that happen inside our project directory are going to be
-automatically run on the correct database instance, no need to worry about
-connection incantations.
+This command will generate project scaffolding inside our app, spin up a local instance of Gel, and then link the two together. From now on, all Gel-related operations within our project directory will automatically use the correct database instance—no need to worry about connection configurations.
 
 
 Defining the schema
@@ -552,15 +539,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  We obviously want to keep track of the messages, so we need to represent
-  those in the schema. By convention established in the LLM space, each message
-  is going to have a role in addition to the message content itself. We can
-  also get Gel to automatically keep track of message's creation time by adding
-  a property callled ``timestamp`` and setting its :ref:`default value
-  <ref_datamodel_props>` to the output of the :ref:`datetime_current()
-  <ref_std_datetime>` function. Finally, LLM messages in our search bot have
-  source URLs associated with them. Let's keep track of those too, by adding a
-  :ref:`multi-property <ref_datamodel_props>`.
+  To keep track of messages, we need to represent them in the schema. In line with conventions in the LLM space, each message will have a role in addition to its content. We can also configure Gel to automatically keep track of message's creation time by adding a ``timestamp`` property and setting its :ref:`default value<ref_datamodel_props>` to the output of the :ref:`datetime_current()<ref_std_datetime>` function. Finally, LLM messages in our search bot have source URLs associated with them. Let's keep track of those too, by adding a :ref:`multi-property <ref_datamodel_props>`.
 
   .. code-block:: sdl
       :caption: dbschema/default.esdl
@@ -590,9 +569,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  And chats all belong to a certain user, making up their chat history. One other
-  thing we'd like to keep track of about our users is their username, and it would
-  make sense for us to make sure that it's unique by using an ``excusive``
+  And, finally, we'll add a ``User`` type. Each chat belongs to a specific user, forming their chat history. Another important detail to track for users is their username, which should be unique. To enforce this, we can apply an ``exclusive``
   :ref:`constraint <ref_datamodel_constraints>`.
 
   .. code-block:: sdl
@@ -608,9 +585,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  We're going to keep our schema super simple. One cool thing about Gel is that
-  it will enable us to easily implement advanced features such as authentication
-  or AI down the road, but we're gonna come back to that later.
+  We'll keep our schema super simple. One great thing about Gel is that it allows us to easily implement advanced features like authentication or AI in the future—but we'll get to that later.
 
   For now, this is the entire schema we came up with:
 
@@ -642,8 +617,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  Let's use the :gelcmd:`migration create` CLI command, followed by :gelcmd:`migrate` in
-  order to migrate to our new schema and proceed to writing some queries.
+  Let's use the :gelcmd:`migration create` CLI command, followed by :gelcmd:`migrate` in order to migrate to our new schema and proceed to writing some queries.
 
   .. code-block:: bash
 
@@ -655,13 +629,20 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
   Now that our schema is applied, let's quickly populate the database with some
   fake data in order to be able to test the queries. We're going to explore
-  writing queries in a bit, but for now you can just run the following command in
-  the shell:
+  writing queries in a bit, but for now you can just run the following command in the shell:
 
   .. code-block:: bash
-      :class: collapsible
 
       $ mkdir app/sample_data && cat << 'EOF' > app/sample_data/inserts.edgeql
+
+
+.. edb:split-section::
+
+  After running the command, the terminal will wait for you to input text. Anything you type will be written into ``app/sample_data/inserts.edgeql`` until you type ``EOF`` on a new line. Copy and paste the following text into the terminal:
+
+  .. code-block:: edgeql
+      :class: collapsible
+
       # Create users first
       insert User {
           name := 'alice',
@@ -737,13 +718,11 @@ declaratively. The :gelcmd:`project init` command has created a file called
               })
           }
       };
-      EOF
 
 
 .. edb:split-section::
 
-  This created the ``app/sample_data/inserts.edgeql`` file, which we can now execute
-  using the CLI like this:
+  Type ``EOF`` on a new line to save the file. Now, let's execute the queries using the CLI.
 
   .. code-block:: bash
 
@@ -757,10 +736,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  The :gelcmd:`query` command is one of many ways we can execute a query in Gel. Now
-  that we've done it, there's stuff in the database.
-
-  Let's verify it by running:
+  This will insert data in the database. Let's verify it by running a ``Gel query``:
 
   .. code-block:: bash
 
@@ -816,7 +792,7 @@ basics before proceeding.
   .. code-block:: python
       :caption: app/main.py
 
-      from edgedb import create_async_client
+      from gel import create_async_client
       from .queries.get_users_async_edgeql import get_users as get_users_query, GetUsersResult
 
 
@@ -1543,7 +1519,7 @@ schema.
   .. code-block:: python-diff
       :caption: app.main.py
 
-      + from edgedb.ai import create_async_ai, AsyncEdgeDBAI
+      + from gel.ai import create_async_rag_client, AsyncRAGClient
       + from .queries.search_chats_async_edgeql import (
       +     search_chats as search_chats_query,
       + )
@@ -1581,7 +1557,7 @@ schema.
             web_sources = await search_web(search_query)
 
       +     # 4. Fetch similar chats
-      +     db_ai: AsyncEdgeDBAI = await create_async_ai(gel_client, model="gpt-4o-mini")
+      +     db_ai: AsyncRagClient = await create_async_rag_client(gel_client, model="gpt-4o-mini")
       +     embedding = await db_ai.generate_embeddings(
       +         search_query, model="text-embedding-3-small"
       +     )
