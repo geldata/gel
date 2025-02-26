@@ -26,6 +26,7 @@ from edb.tools import test
 
 
 class TestEdgeQLSelect(tb.QueryTestCase):
+    NO_FACTOR = False
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 
@@ -8502,4 +8503,5 @@ class TestEdgeQLSelectNoFactor(TestEdgeQLSelect):
 
 
 class TestEdgeQLSelectWarnFactor(TestEdgeQLSelect):
+    NO_FACTOR = False
     WARN_FACTOR = True

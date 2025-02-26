@@ -27,6 +27,7 @@ from edb.tools import test
 class TestEdgeQLGroup(tb.QueryTestCase):
     '''These tests are focused on using the internal GROUP statement.'''
 
+    NO_FACTOR = False
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 
@@ -4060,4 +4061,5 @@ class TestEdgeQLGroupNoFactor(TestEdgeQLGroup):
 
 
 class TestEdgeQLGroupWarnFactor(TestEdgeQLGroup):
+    NO_FACTOR = False
     WARN_FACTOR = True

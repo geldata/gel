@@ -29,7 +29,7 @@ from edb.tools import test
 
 class TestInsert(tb.QueryTestCase):
     '''The scope of the tests is testing various modes of Object creation.'''
-    # NO_FACTOR = True
+    NO_FACTOR = False
     WARN_FACTOR = True
     INTERNAL_TESTMODE = False
 
