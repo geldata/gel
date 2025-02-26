@@ -115,6 +115,7 @@ cdef class PGConnection:
     cdef before_command(self)
 
     cdef write(self, buf)
+    cdef write_sync(self, WriteBuffer outbuf)
 
     cdef parse_error_message(self)
     cdef char parse_sync_message(self)
