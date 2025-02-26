@@ -629,13 +629,18 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
   Now that our schema is applied, let's quickly populate the database with some
   fake data in order to be able to test the queries. We're going to explore
-  writing queries in a bit, but for now you can just run the following command in
-  the shell:
+  writing queries in a bit, but for now you can just run the following command in the shell:
 
   .. code-block:: bash
       :class: collapsible
 
       $ mkdir app/sample_data && cat << 'EOF' > app/sample_data/inserts.edgeql
+
+
+  After running the command, the terminal will wait for you to input text. Anything you type will be written into ``app/sample_data/inserts.edgeql`` until you type ``EOF`` on a new line. Copy and paste the following text into the terminal:
+
+  .. code-block:: edgeql
+
       # Create users first
       insert User {
           name := 'alice',
@@ -711,13 +716,13 @@ declaratively. The :gelcmd:`project init` command has created a file called
               })
           }
       };
-      EOF
+
+    Type now ``EOF`` on a new line to save the file.
 
 
 .. edb:split-section::
 
-  This created the ``app/sample_data/inserts.edgeql`` file, which we can now execute
-  using the CLI like this:
+  Let's now execute the queries from this file using the CLI:
 
   .. code-block:: bash
 
@@ -731,10 +736,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  The :gelcmd:`query` command is one of many ways we can execute a query in Gel. Now
-  that we've done it, there's stuff in the database.
-
-  Let's verify it by running:
+  This will insert data in the database. Let's verify it by running a ``Gel query``:
 
   .. code-block:: bash
 
@@ -790,7 +792,7 @@ basics before proceeding.
   .. code-block:: python
       :caption: app/main.py
 
-      from edgedb import create_async_client
+      from gel import create_async_client
       from .queries.get_users_async_edgeql import get_users as get_users_query, GetUsersResult
 
 
@@ -1517,7 +1519,7 @@ schema.
   .. code-block:: python-diff
       :caption: app.main.py
 
-      + from edgedb.ai import create_async_ai, AsyncEdgeDBAI
+      + from gel.ai import create_async_rag_client, AsyncRAGClient
       + from .queries.search_chats_async_edgeql import (
       +     search_chats as search_chats_query,
       + )
@@ -1555,7 +1557,7 @@ schema.
             web_sources = await search_web(search_query)
 
       +     # 4. Fetch similar chats
-      +     db_ai: AsyncEdgeDBAI = await create_async_ai(gel_client, model="gpt-4o-mini")
+      +     db_ai: AsyncRagClient = await create_async_rag_client(gel_client, model="gpt-4o-mini")
       +     embedding = await db_ai.generate_embeddings(
       +         search_query, model="text-embedding-3-small"
       +     )
