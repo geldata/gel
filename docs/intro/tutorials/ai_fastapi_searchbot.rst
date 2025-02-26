@@ -388,6 +388,7 @@ those results to the LLM to get a nice-looking summary.
   .. code-block:: python
       :caption: app/main.py
 
+      import os
       import requests
       from dotenv import load_dotenv
 
@@ -437,7 +438,7 @@ those results to the LLM to get a nice-looking summary.
 
   .. code-block:: bash
 
-      uv add python-dotenv
+      $ uv add python-dotenv
 
 
 .. edb:split-section::
