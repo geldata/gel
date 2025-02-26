@@ -113,7 +113,7 @@ class Tenant(ha_base.ClusterProtocol):
     _accept_new_tasks: bool
     _file_watch_finalizers: list[Callable[[], None]]
 
-    __sys_pgcon: pgcon.PGConnection | None
+    __sys_pgcon: TenantConnection | None
     _sys_pgcon_waiter: asyncio.Lock
     _sys_pgcon_ready_evt: asyncio.Event
     _sys_pgcon_reconnect_evt: asyncio.Event
@@ -736,7 +736,7 @@ class Tenant(ha_base.ClusterProtocol):
 
     def terminate_sys_pgcon(self) -> None:
         if self.__sys_pgcon is not None:
-            self.__sys_pgcon.terminate()
+            self.__sys_pgcon._conn.terminate()
             self.__sys_pgcon = None
         del self._sys_pgcon_waiter
 
@@ -765,7 +765,7 @@ class Tenant(ha_base.ClusterProtocol):
         self,
         dbname: str,
         source_description: str="pool connection"
-    ) -> pgcon.PGConnection:
+    ) -> TenantConnection:
         ha_serial = self._ha_master_serial
         if self.get_backend_runtime_params().has_create_database:
             pg_dbname = self.get_pg_dbname(dbname)
@@ -783,7 +783,6 @@ class Tenant(ha_base.ClusterProtocol):
 
             if self._init_con_sql:
                 await rv.sql_execute(self._init_con_sql)
-            rv.last_init_con_data = self._init_con_data
 
         except Exception:
             metrics.backend_connection_establishment_errors.inc(
@@ -794,22 +793,24 @@ class Tenant(ha_base.ClusterProtocol):
             metrics.backend_connection_establishment_latency.observe(
                 time.monotonic() - started_at, self._instance_name
             )
+        conn = TenantConnection(self, rv)
+        conn.last_init_con_data = self._init_con_data
         if ha_serial == self._ha_master_serial:
-            rv.set_tenant(self)
+            conn.set_tenant(self)
             if self._backend_adaptive_ha is not None:
                 self._backend_adaptive_ha.on_pgcon_made(
                     dbname == defines.EDGEDB_SYSTEM_DB
                 )
             metrics.total_backend_connections.inc(1.0, self._instance_name)
             metrics.current_backend_connections.inc(1.0, self._instance_name)
-            return rv
+            return conn
         else:
-            rv.terminate()
+            conn._conn.terminate()
             raise ConnectionError("connected to outdated Postgres master")
 
-    async def _pg_disconnect(self, conn: pgcon.PGConnection) -> None:
+    async def _pg_disconnect(self, conn: TenantConnection) -> None:
         metrics.current_backend_connections.dec(1.0, self._instance_name)
-        conn.terminate()
+        conn._conn.terminate()
 
     def get_introspection_lock(
         self,
@@ -837,7 +838,7 @@ class Tenant(ha_base.ClusterProtocol):
                 await self._pg_disconnect(conn)
 
     @contextlib.asynccontextmanager
-    async def use_sys_pgcon(self) -> AsyncGenerator[pgcon.PGConnection, None]:
+    async def use_sys_pgcon(self) -> AsyncGenerator[TenantConnection, None]:
         if not self._initing and not self._running:
             raise RuntimeError("Gel server is not running.")
 
@@ -847,11 +848,11 @@ class Tenant(ha_base.ClusterProtocol):
             self._sys_pgcon_waiter.release()
             raise RuntimeError("Gel server is not running.")
 
-        if self.__sys_pgcon is None or not self.__sys_pgcon.is_healthy():
+        if self.__sys_pgcon is None or not self.__sys_pgcon._conn.is_healthy():
             conn, self.__sys_pgcon = self.__sys_pgcon, None
             if conn is not None:
                 self._sys_pgcon_ready_evt.clear()
-                conn.abort()
+                conn._conn.abort()
             # We depend on the reconnect on connection_lost() of __sys_pgcon
             await self._sys_pgcon_ready_evt.wait()
             if self.__sys_pgcon is None:
@@ -979,7 +980,7 @@ class Tenant(ha_base.ClusterProtocol):
 
             if not self._running:
                 if conn is not None:
-                    conn.abort()
+                    conn._conn.abort()
                 return
 
             assert conn is not None
@@ -1021,14 +1022,14 @@ class Tenant(ha_base.ClusterProtocol):
     async def with_pgcon(
         self, dbname: str, *,
         discard: bool=False
-    ) -> AsyncGenerator[pgcon.PGConnection, None]:
+    ) -> AsyncGenerator[TenantConnection, None]:
         conn = await self.acquire_pgcon(dbname=dbname)
         try:
             yield conn
         finally:
             self.release_pgcon(dbname, conn, discard=discard)
 
-    async def acquire_pgcon(self, dbname: str) -> pgcon.PGConnection:
+    async def acquire_pgcon(self, dbname: str) -> TenantConnection:
         if self._pg_unavailable_msg is not None:
             raise errors.BackendUnavailableError(
                 "Postgres is not available: " + self._pg_unavailable_msg
@@ -1065,11 +1066,11 @@ class Tenant(ha_base.ClusterProtocol):
     def release_pgcon(
         self,
         dbname: str,
-        conn: pgcon.PGConnection,
+        conn: TenantConnection,
         *,
         discard: bool = False,
     ) -> None:
-        if not conn.is_healthy():
+        if not conn._conn.is_healthy():
             if not discard:
                 logger.warning("Released an unhealthy pgcon; discard now.")
             discard = True
@@ -1154,7 +1155,7 @@ class Tenant(ha_base.ClusterProtocol):
     @contextlib.asynccontextmanager
     async def _with_intro_pgcon(
         self, dbname: str
-    ) -> AsyncGenerator[pgcon.PGConnection | None, None]:
+    ) -> AsyncGenerator[TenantConnection | None, None]:
         conn = None
         try:
             conn = await self.acquire_pgcon(dbname)
@@ -1824,34 +1825,35 @@ class Tenant(ha_base.ClusterProtocol):
             )
             raise
 
-    async def cancel_pgcon_operation(self, con: pgcon.PGConnection) -> bool:
+    async def cancel_pgcon_operation(self, con: TenantConnection) -> bool:
         async with self.use_sys_pgcon() as syscon:
-            if con.idle:
+            if con._conn.idle:
                 # con could have received the query results while we
                 # were acquiring a system connection to cancel it.
                 return False
 
-            if con.is_cancelling():
+            if con._conn.is_cancelling():
                 # Somehow the connection is already being cancelled and
                 # we don't want to have to cancellations go in parallel.
                 return False
 
-            con.start_pg_cancellation()
+            con._conn.start_pg_cancellation()
             try:
                 # Returns True if the `pid` exists and it was able to send it a
                 # SIGINT.  Will throw an exception if the privileges aren't
                 # sufficient.
                 result = await syscon.sql_fetch_val(
-                    f"SELECT pg_cancel_backend({con.backend_pid});".encode(),
+                    (f"SELECT pg_cancel_backend({con._conn.backend_pid});"
+                        .encode()),
                 )
             finally:
-                con.finish_pg_cancellation()
+                con._conn.finish_pg_cancellation()
 
             return result == b"\x01"
 
     async def cancel_and_discard_pgcon(
         self,
-        con: pgcon.PGConnection,
+        con: TenantConnection,
         dbname: str,
     ) -> None:
         try:
@@ -2153,6 +2155,107 @@ class Tenant(ha_base.ClusterProtocol):
     def iter_dbs(self) -> Iterator[dbview.Database]:
         if self._dbindex is not None:
             yield from self._dbindex.iter_dbs()
+
+
+class TenantConnection(pgcon.PGConnection):
+    """A wrapper for PGConnection that adds tenant-specific methods."""
+
+    def __init__(self, tenant: Tenant, conn: pgcon.PGConnectionRaw):
+        self._tenant = tenant
+        self._server = tenant.server
+        self._conn = conn
+        self.last_init_con_data: Optional[list[config.ConState]] = None
+
+    def set_tenant(self, tenant):
+        """Set the tenant for this connection."""
+        self._tenant = tenant
+        self._server = tenant.server
+
+    def mark_as_system_db(self):
+        """Mark this connection as a system database connection."""
+        if self._tenant.get_backend_runtime_params().has_create_database:
+            assert defines.EDGEDB_SYSTEM_DB in self._conn.dbname
+        self._is_system_db = True
+
+    async def listen_for_sysevent(self):
+        """Start listening for system events on this connection."""
+        try:
+            if self._tenant.get_backend_runtime_params().has_create_database:
+                assert defines.EDGEDB_SYSTEM_DB in self._conn.dbname
+            await self.sql_execute(b'LISTEN __edgedb_sysevent__;')
+        except Exception:
+            try:
+                self.abort()
+            finally:
+                raise
+
+    async def signal_sysevent(self, event, **kwargs):
+        """Signal a system event on this connection."""
+        from edb.pgsql.common import quote_literal as pg_ql
+        if self._tenant.get_backend_runtime_params().has_create_database:
+            assert defines.EDGEDB_SYSTEM_DB in self._conn.dbname
+        event = json.dumps({
+            'event': event,
+            'server_id': self.server._server_id,
+            'args': kwargs,
+        })
+        query = f"""
+            SELECT pg_notify(
+                '__edgedb_sysevent__',
+                {pg_ql(event)}
+            )
+        """.encode()
+        await self.sql_execute(query)
+
+    def get_tenant_label(self):
+        if self._tenant is None:
+            return "system"
+        else:
+            return self._tenant.get_instance_name()
+
+    def on_sys_pgcon_notification(self, channel, payload):
+
+        if not self.is_system_db:
+            # The server is still initializing, or we're getting
+            # notification from a non-system-db connection.
+            return True
+
+        if channel == '__edgedb_sysevent__':
+            event_data = json.loads(payload)
+            event = event_data.get('event')
+
+            server_id = event_data.get('server_id')
+            if server_id == self.server._server_id:
+                # We should only react to notifications sent
+                # by other edgedb servers. Reacting to events
+                # generated by this server must be implemented
+                # at a different layer.
+                return True
+
+            logger.debug("received system event: %s", event)
+
+            event_payload = event_data.get('args')
+            if event == 'schema-changes':
+                dbname = event_payload['dbname']
+                self._tenant.on_remote_ddl(dbname)
+            elif event == 'database-config-changes':
+                dbname = event_payload['dbname']
+                self._tenant.on_remote_database_config_change(dbname)
+            elif event == 'system-config-changes':
+                self._tenant.on_remote_system_config_change()
+            elif event == 'global-schema-changes':
+                self._tenant.on_global_schema_change()
+            elif event == 'database-changes':
+                self._tenant.on_remote_database_changes()
+            elif event == 'ensure-database-not-used':
+                dbname = event_payload['dbname']
+                self._tenant.on_remote_database_quarantine(dbname)
+            elif event == 'query-cache-changes':
+                dbname = event_payload['dbname']
+                keys = event_payload.get('keys')
+                self._tenant.on_remote_query_cache_change(dbname, keys=keys)
+            else:
+                raise AssertionError(f'unexpected system event: {event!r}')
 
 
 # sentinel Tenant object to indicate an empty SNI

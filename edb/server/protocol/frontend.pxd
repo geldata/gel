@@ -20,7 +20,7 @@
 from edb.server.dbview cimport dbview
 from edb.server.pgcon cimport pgcon
 from edb.server.pgproto.pgproto cimport ReadBuffer, WriteBuffer
-
+from edb.server.tenant import TenantConnection
 
 cdef class AbstractFrontendConnection:
 
@@ -39,7 +39,7 @@ cdef class FrontendConnection(AbstractFrontendConnection):
         str username
         dbview.Database database
 
-        pgcon.PGConnection _pinned_pgcon
+        TenantConnection _pinned_pgcon
         bint _pinned_pgcon_in_tx
         int _get_pgcon_cc
 

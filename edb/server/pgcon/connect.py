@@ -142,7 +142,7 @@ async def pg_connect(
     backend_params: pg_params.BackendRuntimeParams,
     source_description: str,
     apply_init_script: bool = True,
-) -> pgcon.PGConnection:
+) -> pgcon.PGConnectionRaw:
     global INIT_CON_SCRIPT
 
     if isinstance(dsn_or_connection, str):
@@ -155,7 +155,7 @@ async def pg_connect(
     # disabled.
     pgrawcon, pgconn = await rust_transport.create_postgres_connection(
         connection,
-        lambda: pgcon.PGConnection(dbname=connection.database),
+        lambda: pgcon.PGConnectionRaw(dbname=connection.database),
         source_description=source_description,
     )
 

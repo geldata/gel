@@ -29,6 +29,8 @@ import asyncio
 from edb.server import defines as edbdef
 from edb.server import pgconnparams
 
+from . import PGConnectionEventListener
+
 class BackendError(Exception):
     def get_field(self, field: str) -> str | None: ...
     def code_is(self, code: str) -> bool: ...
@@ -37,8 +39,45 @@ class BackendConnectionError(BackendError): ...
 class BackendPrivilegeError(BackendError): ...
 class BackendCatalogNameError(BackendError): ...
 
-class PGConnection(asyncio.Protocol):
+class PGConnection:
+    async def sql_execute(
+        self,
+        sql: bytes | tuple[bytes, ...],
+        *,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+    ) -> None: ...
 
+    async def sql_fetch(
+        self,
+        sql: bytes,
+        *,
+        args: tuple[bytes, ...] | list[bytes] = (),
+        use_prep_stmt: bool = False,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+        state: Optional[bytes] = None,
+    ) -> list[tuple[bytes, ...]]: ...
+
+    async def sql_fetch_val(
+        self,
+        sql: bytes,
+        *,
+        args: tuple[bytes, ...] | list[bytes] = (),
+        use_prep_stmt: bool = False,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+        state: Optional[bytes] = None,
+    ) -> bytes: ...
+
+    async def sql_fetch_col(
+        self,
+        sql: bytes,
+        *,
+        args: tuple[bytes, ...] | list[bytes] = (),
+        use_prep_stmt: bool = False,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+        state: Optional[bytes] = None,
+    ) -> list[bytes]: ...
+
+class PGConnectionRaw(PGConnection, asyncio.Protocol):
     idle: bool
     backend_pid: int
     connection: pgconnparams.ConnectionParams
@@ -46,7 +85,7 @@ class PGConnection(asyncio.Protocol):
     parameter_status: dict[str, str]
     backend_secret: int
     is_ssl: bool
-    last_init_con_data: object
+    listener: PGConnectionEventListener | None
 
     def __init__(self, dbname): ...
     async def close(self): ...

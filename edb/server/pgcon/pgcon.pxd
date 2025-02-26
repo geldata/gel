@@ -59,7 +59,7 @@ cdef enum PGAuthenticationState:
 
 
 @cython.final
-cdef class PGConnection:
+cdef class PGConnectionRaw:
 
     cdef:
         ReadBuffer buffer
@@ -91,8 +91,7 @@ cdef class PGConnection:
 
         public object connection
         public object addr
-        object server
-        object tenant
+        public object listener
         bint is_system_db
         bint close_requested
 
@@ -106,7 +105,6 @@ cdef class PGConnection:
 
         object last_state
         bint state_reset_needs_commit
-        public object last_init_con_data
 
         str last_indirect_return
 
@@ -158,7 +156,6 @@ cdef class PGConnection:
         dict type_id_map,
     )
 
-    cdef inline str get_tenant_label(self)
     cpdef set_stmt_cache_size(self, int maxsize)
 
 cdef setting_to_sql(name, setting)

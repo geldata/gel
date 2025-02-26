@@ -28,6 +28,7 @@ from .errors import (
 
 from .pgcon import (
     PGConnection,
+    PGConnectionRaw,
 )
 from .connect import (
     pg_connect,
@@ -40,6 +41,7 @@ from .connect import (
 __all__ = (
     'pg_connect',
     'PGConnection',
+    'PGConnectionRaw',
     'BackendError',
     'BackendConnectionError',
     'BackendPrivilegeError',
@@ -49,3 +51,40 @@ __all__ = (
     'SETUP_DML_DUMMY_TABLE_SCRIPT',
     'RESET_STATIC_CFG_SCRIPT'
 )
+
+from typing import Protocol, Optional
+
+
+class PGConnectionEventListener(Protocol):
+    """Protocol for PGConnection event listeners."""
+
+    def on_pgcon_broken(self) -> None:
+        """Called when a connection is broken unexpectedly."""
+        pass
+
+    def on_pgcon_lost(self) -> None:
+        """Called when a connection is closed normally."""
+        pass
+
+    def on_sys_pgcon_connection_lost(self, exc: Optional[Exception]) -> None:
+        """Called when a system database connection is lost."""
+        pass
+
+    def on_sys_pgcon_failover_signal(self) -> None:
+        """Called when a failover signal is received from the system
+        database."""
+        pass
+
+    def on_sys_pgcon_parameter_status_updated(
+        self, name: str, value: str
+    ) -> None:
+        """Called when a parameter status is updated on a system connection."""
+        pass
+
+    def set_pg_unavailable_msg(self, msg: str) -> None:
+        """Set the message to display when PostgreSQL is unavailable."""
+        pass
+
+    def on_metrics(self, metric: str, value: int) -> None:
+        """Called when a metric is updated."""
+        pass

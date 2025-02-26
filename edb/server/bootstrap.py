@@ -127,7 +127,7 @@ class PGConnectionProxy:
         dbname: Optional[str] = None,
         log_listener: Optional[Callable[[str, str], None]] = None,
     ):
-        self._conn: Optional[pgcon.PGConnection] = None
+        self._conn: Optional[pgcon.PGConnectionRaw] = None
         self._cluster = cluster
         self._dbname = dbname
         self._log_listener = log_listener or _pg_log_listener
