@@ -25,9 +25,8 @@ class PSqlParseError(Exception):
 
 
 class PSqlSyntaxError(PSqlParseError):
-    def __init__(self, message, lineno, cursorpos):
+    def __init__(self, message, cursorpos):
         self.message = message
-        self.lineno = lineno
         self.cursorpos = cursorpos
 
     def __str__(self):
@@ -35,6 +34,10 @@ class PSqlSyntaxError(PSqlParseError):
 
 
 class PSqlUnsupportedError(PSqlParseError):
+    node: Optional[Any]
+    location: Optional[int]
+    message: str
+
     def __init__(self, node: Optional[Any] = None, feat: Optional[str] = None):
         self.node = node
         self.location = None

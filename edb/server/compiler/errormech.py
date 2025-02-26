@@ -758,7 +758,7 @@ def static_interpret_psql_parse_error(
     res: errors.EdgeDBError
     if isinstance(exc, parser_errors.PSqlSyntaxError):
         res = errors.EdgeQLSyntaxError(str(exc))
-        res.set_position(exc.lineno, 0, exc.cursorpos - 1, None)
+        res.set_position(0, 0, exc.cursorpos - 1, None)
     elif isinstance(exc, parser_errors.PSqlUnsupportedError):
         res = errors.UnsupportedFeatureError(str(exc))
     else:

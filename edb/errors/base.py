@@ -179,10 +179,10 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
     def set_position(
         self,
-        column: int,
-        line: int,
-        start: int,
-        end: Optional[int],
+        column: int, # one-based
+        line: int, # one-based
+        start: int, # zero-based
+        end: Optional[int], # zero-based
     ):
         self.set_linecol(line, column)
         self._attrs[FIELD_POSITION_START] = str(start)
