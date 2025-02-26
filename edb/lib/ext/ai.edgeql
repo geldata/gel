@@ -179,8 +179,9 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
     {
         create annotation
             ext::ai::embedding_model_max_input_tokens := "<must override>";
+        # for now, use the openai batch limit as the default.
         create annotation
-            ext::ai::embedding_model_max_batch_tokens := "<must override>";
+            ext::ai::embedding_model_max_batch_tokens := "8191";
         create annotation
             ext::ai::embedding_model_max_output_dimensions := "<must override>";
         create annotation
