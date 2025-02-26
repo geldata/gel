@@ -58,6 +58,6 @@ cdef class PGMessage:
 
 cdef class PGSQLConnection:
     cdef:
-        object con
+        PGConnection con
 
     cdef _rewrite_sql_error_response(self, PGMessage action, WriteBuffer buf)
