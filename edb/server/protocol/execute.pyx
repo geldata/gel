@@ -1008,9 +1008,8 @@ async def interpret_error(
             # Translate error position for SQL queries if we can
             if source_map and isinstance(exc, errors.EdgeDBError):
                 if 'P' in fields:
-                    exc.set_position(
-                        0,
-                        0,
+                    errors.EdgeDBError.set_position(
+                        exc,
                         source_map.translate(int(fields['P'])),
                         None,
                     )
