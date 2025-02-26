@@ -10,7 +10,6 @@ Gel Go Driver
    :hidden:
 
    api
-   types
    codegen
 
 
@@ -25,11 +24,12 @@ Typical client usage looks like this:
         "log"
 
         "github.com/geldata/gel-go"
+        "github.com/geldata/gel-go/gelcfg"
     )
 
     func main() {
         ctx := context.Background()
-        client, err := gel.CreateClient(ctx, gel.Options{})
+        client, err := gel.CreateClient(ctx, gelcfg.Options{})
         if err != nil {
             log.Fatal(err)
         }
@@ -38,7 +38,7 @@ Typical client usage looks like this:
         var (
             age   int64 = 21
             users []struct {
-                ID   gel.UUID    `gel:"id"`
+                ID   geltypes.UUID    `gel:"id"`
                 Name string      `gel:"name"`
             }
         )
@@ -62,7 +62,7 @@ Or you can use Option fields.
 
 .. code-block:: go
 
-    opts := gel.Options{
+    opts := gelcfg.Options{
         Database:    "gel",
         User:        "gel",
         Concurrency: 4,
@@ -83,15 +83,15 @@ use errors.Is() or errors.As().
     err := client.Query(...)
     if errors.Is(err, context.Canceled) { ... }
 
-Most errors returned by the gel package will satisfy the gel.Error
+Most errors returned by the gel package will satisfy the gelerr.Error
 interface which has methods for introspecting.
 
 .. code-block:: go
 
     err := client.Query(...)
 
-    var edbErr gel.Error
-    if errors.As(err, &edbErr) && edbErr.Category(gel.NoDataError){
+    var gelErr gelerr.Error
+    if errors.As(err, &gelErr) && gelErr.Category(gelerr.NoDataError){
         ...
     }
 
@@ -111,26 +111,26 @@ mapping between |Gel| types and go types:
     tuple                    struct
     named tuple              struct
     Object                   struct
-    bool                     bool, gel.OptionalBool
-    bytes                    []byte, gel.OptionalBytes
-    str                      string, gel.OptionalStr
-    anyenum                  string, gel.OptionalStr
-    datetime                 time.Time, gel.OptionalDateTime
-    cal::local_datetime      gel.LocalDateTime,
-                             gel.OptionalLocalDateTime
-    cal::local_date          gel.LocalDate, gel.OptionalLocalDate
-    cal::local_time          gel.LocalTime, gel.OptionalLocalTime
-    duration                 gel.Duration, gel.OptionalDuration
-    cal::relative_duration   gel.RelativeDuration,
-                             gel.OptionalRelativeDuration
-    float32                  float32, gel.OptionalFloat32
-    float64                  float64, gel.OptionalFloat64
-    int16                    int16, gel.OptionalFloat16
-    int32                    int32, gel.OptionalInt16
-    int64                    int64, gel.OptionalInt64
-    uuid                     gel.UUID, gel.OptionalUUID
-    json                     []byte, gel.OptionalBytes
-    bigint                   *big.Int, gel.OptionalBigInt
+    bool                     bool, geltypes.OptionalBool
+    bytes                    []byte, geltypes.OptionalBytes
+    str                      string, geltypes.OptionalStr
+    anyenum                  string, geltypes.OptionalStr
+    datetime                 time.Time, geltypes.OptionalDateTime
+    cal::local_datetime      geltypes.LocalDateTime,
+                             geltypes.OptionalLocalDateTime
+    cal::local_date          geltypes.LocalDate, geltypes.OptionalLocalDate
+    cal::local_time          geltypes.LocalTime, geltypes.OptionalLocalTime
+    duration                 geltypes.Duration, geltypes.OptionalDuration
+    cal::relative_duration   geltypes.RelativeDuration,
+                             geltypes.OptionalRelativeDuration
+    float32                  float32, geltypes.OptionalFloat32
+    float64                  float64, geltypes.OptionalFloat64
+    int16                    int16, geltypes.OptionalFloat16
+    int32                    int32, geltypes.OptionalInt16
+    int64                    int64, geltypes.OptionalInt64
+    uuid                     geltypes.UUID, geltypes.OptionalUUID
+    json                     []byte, geltypes.OptionalBytes
+    bigint                   *big.Int, geltypes.OptionalBigInt
 
     decimal                  user defined (see Custom Marshalers)
 
@@ -139,13 +139,13 @@ while go's time.Duration type is int64 nanoseconds. It is incorrect to cast
 one directly to the other.
 
 Shape fields that are not required must use optional types for receiving
-query results. The gel.Optional struct can be embedded to make structs
+query results. The geltypes.Optional struct can be embedded to make structs
 optional.
 
 .. code-block:: go
 
     type User struct {
-        gel.Optional
+        geltypes.Optional
         Email string `gel:"email"`
     }
 
@@ -165,7 +165,7 @@ using sets as parameters.
 .. code-block:: go
 
     query := `select User filter .id in array_unpack(<array<uuid>>$1)`
-    client.QuerySingle(ctx, query, $user, []gel.UUID{...})
+    client.QuerySingle(ctx, query, $user, []geltypes.UUID{...})
 
 Nested structures are also not directly allowed but you can use `json <https://www.gel.com/docs/edgeql/insert#bulk-inserts>`_
 instead.
@@ -177,7 +177,7 @@ tag the embedded struct with \`gel:"$inline"\`.
 .. code-block:: go
 
     type Object struct {
-        ID gel.UUID
+        ID geltypes.UUID
     }
 
     type User struct {
@@ -211,13 +211,13 @@ Usage Example
     )
 
     type User struct {
-        ID   gel.UUID `gel:"id"`
+        ID   geltypes.UUID `gel:"id"`
         Name string      `gel:"name"`
         DOB  time.Time   `gel:"dob"`
     }
 
     func Example() {
-        opts := gel.Options{Concurrency: 4}
+        opts := gelcfg.Options{Concurrency: 4}
         ctx := context.Background()
         db, err := gel.CreateClientDSN(ctx, "gel://gel@localhost/test", opts)
         if err != nil {
@@ -237,7 +237,7 @@ Usage Example
         }
 
         // Insert a new user.
-        var inserted struct{ id gel.UUID }
+        var inserted struct{ id geltypes.UUID }
         err = db.QuerySingle(ctx, `
             INSERT User {
                 name := <str>$0,
