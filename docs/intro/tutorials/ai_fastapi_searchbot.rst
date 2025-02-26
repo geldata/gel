@@ -632,7 +632,6 @@ declaratively. The :gelcmd:`project init` command has created a file called
   writing queries in a bit, but for now you can just run the following command in the shell:
 
   .. code-block:: bash
-      :class: collapsible
 
       $ mkdir app/sample_data && cat << 'EOF' > app/sample_data/inserts.edgeql
 
@@ -1380,7 +1379,7 @@ working on our query rather than rewriting it from scratch every time.
         }'
 
 
-6. Use Gel's advanced features to create a RAG
+1. Use Gel's advanced features to create a RAG
 ==============================================
 
 At this point we have a decent search bot that can refine a search query over
