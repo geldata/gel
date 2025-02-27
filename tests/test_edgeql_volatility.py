@@ -28,6 +28,9 @@ from edb.tools import test
 
 
 class TestEdgeQLVolatility(tb.QueryTestCase):
+    # XXX
+    NO_FACTOR = False
+
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'volatility.esdl')
 

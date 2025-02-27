@@ -824,10 +824,7 @@ class TestEdgeQLJSON(tb.QueryTestCase):
                             "w": 2
                         }'))
                     )
-                SELECT
-                    <int64>q.1.1
-                ORDER BY
-                    q.1.0;
+                SELECT <int64>(SELECT q ORDER BY q.1.0).1.1;
             ''',
             [1, 2]
         )

@@ -978,7 +978,7 @@ def ignore_warnings(warning_message=None):
 class ConnectedTestCase(ClusterTestCase):
 
     BASE_TEST_CLASS = True
-    NO_FACTOR = False
+    NO_FACTOR = True
     WARN_FACTOR = False
 
     con: tconn.Connection

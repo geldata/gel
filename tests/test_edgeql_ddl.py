@@ -16321,6 +16321,10 @@ DDLStatement);
 
     async def test_edgeql_ddl_scoping_future_01(self):
         await self.con.execute("""
+            configure session reset simple_scoping
+        """)
+
+        await self.con.execute("""
             create type T;
             insert T;
             insert T;
