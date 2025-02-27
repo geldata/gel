@@ -1127,6 +1127,22 @@ class TestIntrospection(tb.QueryTestCase):
             [True] * res
         )
 
+        # Try it in a sub scope!
+        await self.assert_query_result(
+            r"""
+                SELECT {schema::Object} IS std::BaseObject;
+            """,
+            [True] * res
+        )
+
+        # ...but not std::Objects
+        await self.assert_query_result(
+            r"""
+                SELECT {schema::Object} IS NOT std::Object;
+            """,
+            [True] * res
+        )
+
     @test.xerror(
         "Known collation issue on Heroku Postgres",
         unless=os.getenv("EDGEDB_TEST_BACKEND_VENDOR") != "heroku-postgres"
