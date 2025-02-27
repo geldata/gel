@@ -40,15 +40,17 @@ Docker volume, run:
 
    $ docker run -it --rm --link=gel \
        -e GEL_SERVER_PASSWORD=secret \
-       -v gel-cli-config:/.config/gel geldata/gel-cli \
-       -H gel instance link my_instance
+       -v gel-cli-config:/.config/edgedb geldata/gel-cli \
+       -H gel instance link my_instance \
+           --tls-security insecure \
+           --non-interactive
 
 Now, to open an interactive shell to the database instance run this:
 
 .. code-block:: bash
 
    $ docker run -it --rm --link=gel \
-       -v gel-cli-config:/.config/gel geldata/gel-cli \
+       -v gel-cli-config:/.config/edgedb geldata/gel-cli \
        -I my_instance
 
 
@@ -80,7 +82,7 @@ Note that on Windows you must use a Docker volume instead:
        -v gel-data:/var/lib/gel/data \
        -d geldata/gel
 
-It is also possible to run an ``gel`` container on a remote PostgreSQL
+It is also possible to run a ``gel`` container on a remote PostgreSQL
 cluster specified by :gelenv:`SERVER_BACKEND_DSN`. See below for details.
 
 
@@ -101,7 +103,6 @@ With a ``docker-compose.yaml`` containing:
 
 .. code-block:: yaml
 
-   version: "3"
    services:
      gel:
        image: geldata/gel
@@ -124,7 +125,8 @@ machine, you can use the CLI bundled with the server container:
 
 .. code-block:: bash
 
-   $ docker-compose exec gel gel --tls-security=insecure migration create
+   $ docker compose exec gel \
+       gel --tls-security=insecure -P 5656 migration create
 
 
 .. _ref_guides_deployment_docker_customization:
