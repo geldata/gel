@@ -12924,16 +12924,15 @@ class EdgeQLAIMigrationTestCase(EdgeQLDataMigrationTestCase):
                 with model := (
                     select schema::ObjectType {
                         x := (
-                            select (.annotations, .annotations@value)
-                            filter (
-                                .0.name
-                                = 'ext::ai::embedding_model_max_batch_tokens'
-                            )
+                            for ann in .annotations
+                            select ann@value
+                            filter ann.name
+                            = 'ext::ai::embedding_model_max_batch_tokens'
                         )
                     }
                     filter .name = 'default::TestEmbeddingModel'
                 )
-                select model.x.1
+                select model.x
             """,
             ['8191'],
         )
