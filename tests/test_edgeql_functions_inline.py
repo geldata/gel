@@ -24,7 +24,6 @@ from edb.testbase import server as tb
 
 
 class TestEdgeQLFunctionsInline(tb.QueryTestCase):
-    NO_FACTOR = True
 
     async def test_edgeql_functions_inline_basic_01(self):
         await self.con.execute('''

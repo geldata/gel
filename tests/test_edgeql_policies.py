@@ -28,8 +28,6 @@ from edb.testbase import server as tb
 class TestEdgeQLPolicies(tb.QueryTestCase):
     '''Tests for policies.'''
 
-    NO_FACTOR = True
-
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 

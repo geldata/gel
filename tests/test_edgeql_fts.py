@@ -31,8 +31,6 @@ class TestEdgeQLFTSQuery(tb.QueryTestCase):
     various FTS schema features.
     '''
 
-    NO_FACTOR = True
-
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas', 'fts.esdl')
 
     SETUP = os.path.join(

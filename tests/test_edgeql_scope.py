@@ -29,8 +29,6 @@ from edb.tools import test
 class TestEdgeQLScope(tb.QueryTestCase):
     '''This tests the scoping rules.'''
 
-    NO_FACTOR = True
-
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'cards.esdl')
 

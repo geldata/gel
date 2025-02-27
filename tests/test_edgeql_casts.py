@@ -50,8 +50,6 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         x = <X><Y>x
     '''
 
-    NO_FACTOR = True
-
     # FIXME: a special schema should be used here since we need to
     # cover all known scalars and even some arrays and tuples.
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',

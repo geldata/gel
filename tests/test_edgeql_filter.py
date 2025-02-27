@@ -26,8 +26,6 @@ class TestEdgeQLFilter(tb.QueryTestCase):
     """The test DB is designed to test certain non-trivial FILTER clauses.
     """
 
-    NO_FACTOR = True
-
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 

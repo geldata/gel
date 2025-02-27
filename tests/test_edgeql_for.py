@@ -28,8 +28,6 @@ from edb.tools import test
 class TestEdgeQLFor(tb.QueryTestCase):
     '''These tests are focused on using FOR statement.'''
 
-    NO_FACTOR = True
-
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'cards.esdl')
 

@@ -184,7 +184,6 @@ def get_test_items(**flags):
 
 
 class TestExpressions(tb.QueryTestCase):
-    NO_FACTOR = True
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')

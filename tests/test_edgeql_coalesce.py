@@ -26,8 +26,6 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
     """The test DB is designed to test various coalescing operations.
     """
 
-    NO_FACTOR = True
-
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 

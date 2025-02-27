@@ -29,8 +29,6 @@ import edgedb
 class TestEdgeQLExprAliases(tb.QueryTestCase):
     '''The scope is to test expression aliases.'''
 
-    NO_FACTOR = True
-
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'cards.esdl')
 

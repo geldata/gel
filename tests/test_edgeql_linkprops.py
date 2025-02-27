@@ -28,8 +28,6 @@ from edb.tools import test
 class TestEdgeQLLinkproperties(tb.QueryTestCase):
     '''The scope is to test link properties.'''
 
-    NO_FACTOR = True
-
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'cards.esdl')
 
