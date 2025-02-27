@@ -442,11 +442,11 @@ class TestEdgeQLLinkproperties(tb.QueryTestCase):
                     name,
                     same := EXISTS (
                         SELECT User
-                        FILTER (
+                        FILTER any ((
                             FOR User IN User FOR deck IN User.deck SELECT
                             Card.cost = deck@count AND
                             Card = deck
-                        )
+                        ))
                     )
                 }
                 ORDER BY .name;
