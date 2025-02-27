@@ -176,6 +176,7 @@ Sign up
        }
 
        const registerUrl = new URL("magic-link/register", GEL_AUTH_BASE_URL);
+       const callbackUrl = new URL("auth/magic-link/callback", "http://localhost:${SERVER_PORT}");
        const registerResponse = await fetch(registerUrl.href, {
          method: "post",
          headers: {
@@ -185,7 +186,7 @@ Sign up
            challenge: pkce.challenge,
            email,
            provider,
-           callback_url: `http://localhost:${SERVER_PORT}/auth/magic-link/callback`,
+           callback_url: callbackUrl.href,
            // The following endpoint will be called if there is an error
            // processing the magic link, such as expiration or malformed token,
            // etc.
@@ -243,6 +244,7 @@ authenticate.
        }
 
        const emailUrl = new URL("magic-link/email", GEL_AUTH_BASE_URL);
+       const callbackUrl = new URL("auth/magic-link/callback", "http://localhost:${SERVER_PORT}");
        const authenticateResponse = await fetch(emailUrl.href, {
          method: "post",
          headers: {
@@ -252,6 +254,7 @@ authenticate.
            challenge: pkce.challenge,
            email,
            provider,
+           callback_url: callbackUrl.href,
          }),
        });
 
@@ -365,42 +368,129 @@ Given this ``User`` type:
        };
    }
 
-You can update the ``handleCallback`` function like this to create a new ``User``
-object:
+We need to update two parts of the sign-up flow. First, we need to signal to the callback that this particular callback is for a sign-up, which we do by setting the ``isSignUp`` query parameter to ``true``. Second, we need to create a new ``User`` object and attach it to the ``ext::auth::Identity`` object.
 
-.. lint-off
+.. tabs::
 
-.. code-block:: javascript-diff
+  .. code-tab:: javascript-diff
+    :caption: handleSignUp
 
-     const code = requestUrl.searchParams.get("code");
-     if (!code) {
-        const error = requestUrl.searchParams.get("error");
-        res.status = 400;
-        res.end(
-           `Magic link callback is missing 'code'. Provider responded with error: ${error}`,
-        );
-        return;
-     }
+      const handleSignUp = async (req, res) => {
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk.toString();
+        });
+        req.on("end", async () => {
+          const pkce = generatePKCE();
+          const { email, provider } = JSON.parse(body);
+          if (!email || !provider) {
+            res.status = 400;
+            res.end(
+              `Request body malformed. Expected JSON body with 'email' and 'provider' keys, but got: ${body}`,
+            );
+            return;
+          }
 
-   + const newIdentityId = requestUrl.searchParams.get("isSignUp") === "true" &&
-   +   requestUrl.searchParams.get("identity_id");
-   + if (newIdentityId) {
-   +   await client.query(`
-   +     with
-   +       identity := <ext::auth::Identity><uuid>$identity_id,
-   +       emailFactor := (
-   +         select ext::auth::EmailFactor filter .identity = identity
-   +       ),
-   +     insert User {
-   +       email := emailFactor.email,
-   +       identity := identity
-   +     };
-   +   `, { identity_id: newIdentityId });
-   + }
-   +
-     const cookies = req.headers.cookie?.split("; ");
+          const registerUrl = new URL("magic-link/register", GEL_AUTH_BASE_URL);
+          const callbackUrl = new URL("auth/magic-link/callback", "http://localhost:${SERVER_PORT}");
+    +     callbackUrl.searchParams.set("isSignUp", "true");
+          const registerResponse = await fetch(registerUrl.href, {
+            method: "post",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              challenge: pkce.challenge,
+              email,
+              provider,
+              callback_url: callbackUrl.href,
+              // The following endpoint will be called if there is an error
+              // processing the magic link, such as expiration or malformed token,
+              // etc.
+              redirect_on_failure: `http://localhost:${SERVER_PORT}/auth_error.html`,
+            }),
+          });
 
+          if (!registerResponse.ok) {
+            const text = await registerResponse.text();
+            res.status = 400;
+            res.end(`Error from the auth server: ${text}`);
+            return;
+          }
 
-.. lint-on
+          res.writeHead(204, {
+            "Set-Cookie": `gel-pkce-verifier=${pkce.verifier}; HttpOnly; Path=/; Secure; SameSite=Strict`,
+          });
+          res.end();
+        });
+      };
+
+  .. code-tab:: javascript-diff
+    :caption: handleCallback
+
+      const handleCallback = async (req, res) => {
+        const requestUrl = getRequestUrl(req);
+
+        const code = requestUrl.searchParams.get("code");
+        if (!code) {
+          const error = requestUrl.searchParams.get("error");
+          res.status = 400;
+          res.end(
+              `Magic link callback is missing 'code'. Provider responded with error: ${error}`,
+          );
+          return;
+        }
+
+        const cookies = req.headers.cookie?.split("; ");
+        const verifier = cookies
+          ?.find((cookie) => cookie.startsWith("gel-pkce-verifier="))
+          ?.split("=")[1];
+        if (!verifier) {
+          res.status = 400;
+          res.end(
+              `Could not find 'verifier' in the cookie store. Is this the same user agent/browser that started the authorization flow?`,
+          );
+          return;
+        }
+
+        const codeExchangeUrl = new URL("token", GEL_AUTH_BASE_URL);
+        codeExchangeUrl.searchParams.set("code", code);
+        codeExchangeUrl.searchParams.set("verifier", verifier);
+        const codeExchangeResponse = await fetch(codeExchangeUrl.href, {
+          method: "GET",
+        });
+
+        if (!codeExchangeResponse.ok) {
+          const text = await codeExchangeResponse.text();
+          res.status = 400;
+          res.end(`Error from the auth server: ${text}`);
+          return;
+        }
+
+    -   const { auth_token } = await codeExchangeResponse.json();
+    +   const {
+    +     auth_token,
+    +     identity_id
+    +   } = await codeExchangeResponse.json();
+
+    +   if (requestUrl.searchParams.get("isSignUp") === "true") {
+    +     await client.query(`
+    +       with
+    +         identity := <ext::auth::Identity><uuid>$identity_id,
+    +         emailFactor := (
+    +           select ext::auth::EmailFactor filter .identity = identity
+    +         ),
+    +       insert User {
+    +         email := emailFactor.email,
+    +         identity := identity
+    +       };
+    +     `, { identity_id });
+    +   }
+    +
+        res.writeHead(204, {
+          "Set-Cookie": `gel-auth-token=${auth_token}; HttpOnly; Path=/; Secure; SameSite=Strict`,
+        });
+        res.end();
+      };
 
 :ref:`Back to the Gel Auth guide <ref_guide_auth>`

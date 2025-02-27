@@ -240,7 +240,7 @@ impl ConnectionState {
                     (AuthenticationMD5Password as md5) => {
                         *sent_auth = true;
                         trace!("auth md5");
-                        let md5_hash = gel_auth::md5::md5_password(&credentials.password, &credentials.username, &md5.salt());
+                        let md5_hash = gel_auth::md5::md5_password(&credentials.password, &credentials.username, md5.salt());
                         update.auth(AuthType::Md5);
                         update.send(builder::PasswordMessage {
                             password: &md5_hash,

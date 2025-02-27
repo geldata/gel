@@ -23,7 +23,6 @@ import click
 
 from edb import buildmeta
 from edb.tools.edb import edbcommands
-from edb.language_server import main as ls_main
 
 
 @edbcommands.command("ls")
@@ -34,6 +33,10 @@ from edb.language_server import main as ls_main
     help="Use stdio for LSP. This is currently the only transport.",
 )
 def main(*, version: bool, stdio: bool):
+    # import language_server only if we are using this command
+    # otherwise this breaks when pygls is not installed
+    from edb.language_server import main as ls_main
+
     if version:
         print(f"gel-ls, version {buildmeta.get_version()}")
         sys.exit(0)
