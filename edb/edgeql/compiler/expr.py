@@ -1103,6 +1103,12 @@ def compile_type_check_op(
     typeref = typegen.ql_typeexpr_to_ir_typeref(expr.right, ctx=ctx)
 
     if ltype.is_object_type() and not ltype.is_free_object_type(ctx.env.schema):
+        # Argh, what a mess path factoring and deduplication is!  We
+        # need to dereference __type__, and <Expr> needs to be visible
+        # in the scope when we do it, or else it will get
+        # deduplicated.
+        pathctx.register_set_in_scope(left, ctx=ctx)
+
         left = setgen.ptr_step_set(
             left, expr=None, source=ltype, ptr_name='__type__',
             span=expr.span, ctx=ctx
