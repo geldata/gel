@@ -156,4 +156,14 @@ ALTER TYPE cfg::AbstractConfig {
     };
 };
 '''),
+    # 6.2
+    ('ext-pkg', 'ai'),
+    ('edgeql+user_ext+config|ai', '''
+alter type ext::ai::EmbeddingModel {
+    drop annotation
+      ext::ai::embedding_model_max_batch_tokens;
+    create annotation
+      ext::ai::embedding_model_max_batch_tokens := "8191";
+}
+'''),
 ]

@@ -12897,6 +12897,47 @@ class EdgeQLAIMigrationTestCase(EdgeQLDataMigrationTestCase):
                 };
             ''', explicit_modules=True)
 
+    async def test_edgeql_migration_ai_10(self):
+        # EmbeddingModel with default embedding_model_max_batch_tokens.
+
+        await self.migrate('''
+            using extension ai;
+
+            module default {
+                type TestEmbeddingModel
+                    extending ext::ai::EmbeddingModel
+                {
+                    annotation ext::ai::model_name := "text-embedding-test";
+                    annotation ext::ai::model_provider := "custom::test";
+                    annotation ext::ai::embedding_model_max_input_tokens
+                      := "8191";
+                    annotation ext::ai::embedding_model_max_output_dimensions
+                      := "10";
+                    annotation ext::ai::embedding_model_supports_shortening
+                      := "true";
+                };
+            };
+        ''', explicit_modules=True)
+
+        await self.assert_query_result(
+            r"""
+                with model := (
+                    select schema::ObjectType {
+                        x := (
+                            select (.annotations, .annotations@value)
+                            filter (
+                                .0.name
+                                = 'ext::ai::embedding_model_max_batch_tokens'
+                            )
+                        )
+                    }
+                    filter .name = 'default::TestEmbeddingModel'
+                )
+                select model.x.1
+            """,
+            ['8191'],
+        )
+
 
 class EdgeQLMigrationRewriteTestCase(EdgeQLDataMigrationTestCase):
     DEFAULT_MODULE = 'default'
