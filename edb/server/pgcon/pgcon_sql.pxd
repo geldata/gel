@@ -22,6 +22,8 @@ from edb.server.pgproto.pgproto cimport (
     FRBuffer,
 )
 
+from . cimport pgcon
+
 cdef enum PGAction:
     START_IMPLICIT_TX = 0
     PARSE = 1
@@ -58,6 +60,6 @@ cdef class PGMessage:
 
 cdef class PGSQLConnection:
     cdef:
-        PGConnection con
+        pgcon.PGConnectionRaw con
 
     cdef _rewrite_sql_error_response(self, PGMessage action, WriteBuffer buf)

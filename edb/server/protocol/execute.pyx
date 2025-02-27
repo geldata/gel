@@ -54,7 +54,8 @@ from edb.server.protocol cimport args_ser
 from edb.server.protocol cimport frontend
 from edb.server.pgcon cimport pgcon
 from edb.server.pgcon import errors as pgerror
-
+from edb.server.tenant import TenantConnection
+from edb.server.pgcon import AbstractFrontendConnection
 
 cdef object logger = logging.getLogger('edb.server')
 
@@ -73,9 +74,9 @@ cdef class ExecutionGroup:
 
     async def execute(
         self,
-        pgcon.PGConnection be_conn,
+        be_conn: TenantConnection,
         object dbv,  # can be DatabaseConnectionView or Database
-        fe_conn: frontend.AbstractFrontendConnection = None,
+        fe_conn: AbstractFrontendConnection = None,
         bytes state = None,
         bint needs_commit_state = False,
     ):
@@ -232,12 +233,12 @@ async def _parse(
 
 # TODO: can we merge execute and execute_script?
 async def execute(
-    be_conn: pgcon.PGConnection,
+    be_conn: TenantConnection,
     dbv: dbview.DatabaseConnectionView,
     compiled: dbview.CompiledQuery,
     bind_args: bytes,
     *,
-    fe_conn: frontend.AbstractFrontendConnection = None,
+    fe_conn: AbstractFrontendConnection = None,
     use_prep_stmt: bint = False,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
 ):
@@ -439,12 +440,12 @@ async def execute(
 
 
 async def execute_script(
-    conn: pgcon.PGConnection,
+    conn: TenantConnection,
     dbv: dbview.DatabaseConnectionView,
     compiled: dbview.CompiledQuery,
     bind_args: bytes,
     *,
-    fe_conn: Optional[frontend.AbstractFrontendConnection],
+    fe_conn: Optional[AbstractFrontendConnection],
 ):
     cdef:
         bytes state = None, orig_state = None
@@ -662,7 +663,7 @@ async def execute_script(
 
 
 async def execute_system_config(
-    conn: pgcon.PGConnection,
+    conn: TenantConnection,
     dbv: dbview.DatabaseConnectionView,
     query_unit: compiler.QueryUnit,
     state: bytes | None,
@@ -802,13 +803,13 @@ async def parse_execute_json(
 
 
 async def execute_json(
-    be_conn: pgcon.PGConnection,
+    be_conn: TenantConnection,
     dbv: dbview.DatabaseConnectionView,
     compiled: dbview.CompiledQuery,
     variables: Mapping[str, Any] = immutables.Map(),
     globals_: Optional[Mapping[str, Any]] = None,
     *,
-    fe_conn: Optional[frontend.AbstractFrontendConnection] = None,
+    fe_conn: Optional[AbstractFrontendConnection] = None,
     use_prep_stmt: bint = False,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
 ) -> bytes:

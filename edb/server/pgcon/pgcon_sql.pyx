@@ -323,7 +323,7 @@ cdef class PGSQLConnection:
     async def _parse_sql_extended_query(
         self,
         actions,
-        fe_conn: frontend.AbstractFrontendConnection,
+        fe_conn: AbstractFrontendConnection,
         dbver: int,
         dbv: pg_ext.ConnectionView,
     ) -> tuple[bool, bool]:

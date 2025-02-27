@@ -39,45 +39,10 @@ class BackendConnectionError(BackendError): ...
 class BackendPrivilegeError(BackendError): ...
 class BackendCatalogNameError(BackendError): ...
 
-class PGConnection:
-    async def sql_execute(
-        self,
-        sql: bytes | tuple[bytes, ...],
-        *,
-        tx_isolation: edbdef.TxIsolationLevel | None = None,
-    ) -> None: ...
+class AbstractFrontendConnection:
+    pass
 
-    async def sql_fetch(
-        self,
-        sql: bytes,
-        *,
-        args: tuple[bytes, ...] | list[bytes] = (),
-        use_prep_stmt: bool = False,
-        tx_isolation: edbdef.TxIsolationLevel | None = None,
-        state: Optional[bytes] = None,
-    ) -> list[tuple[bytes, ...]]: ...
-
-    async def sql_fetch_val(
-        self,
-        sql: bytes,
-        *,
-        args: tuple[bytes, ...] | list[bytes] = (),
-        use_prep_stmt: bool = False,
-        tx_isolation: edbdef.TxIsolationLevel | None = None,
-        state: Optional[bytes] = None,
-    ) -> bytes: ...
-
-    async def sql_fetch_col(
-        self,
-        sql: bytes,
-        *,
-        args: tuple[bytes, ...] | list[bytes] = (),
-        use_prep_stmt: bool = False,
-        tx_isolation: edbdef.TxIsolationLevel | None = None,
-        state: Optional[bytes] = None,
-    ) -> list[bytes]: ...
-
-class PGConnectionRaw(PGConnection, asyncio.Protocol):
+class PGConnectionRaw(asyncio.Protocol):
     idle: bool
     backend_pid: int
     connection: pgconnparams.ConnectionParams

@@ -1036,8 +1036,8 @@ class Tenant(ha_base.ClusterProtocol):
             )
 
         for _ in range(self._pg_pool.max_capacity):
-            conn = await self._pg_pool.acquire(dbname)
-            if not conn.is_healthy():
+            conn: TenantConnection = await self._pg_pool.acquire(dbname)
+            if not conn._conn.is_healthy():
                 logger.warning("acquired an unhealthy pgcon; discard now")
             elif conn.last_init_con_data is not self._init_con_data:
                 try:
@@ -2157,7 +2157,7 @@ class Tenant(ha_base.ClusterProtocol):
             yield from self._dbindex.iter_dbs()
 
 
-class TenantConnection(pgcon.PGConnection):
+class TenantConnection:
     """A wrapper for PGConnection that adds tenant-specific methods."""
 
     def __init__(self, tenant: Tenant, conn: pgcon.PGConnectionRaw):
@@ -2165,6 +2165,18 @@ class TenantConnection(pgcon.PGConnection):
         self._server = tenant.server
         self._conn = conn
         self.last_init_con_data: Optional[list[config.ConState]] = None
+
+    def sql_fetch_val(self, *args, **kwargs):
+        return self._conn.sql_fetch_val(*args, **kwargs)
+
+    def sql_fetch(self, *args, **kwargs):
+        return self._conn.sql_fetch(*args, **kwargs)
+
+    def sql_execute(self, *args, **kwargs):
+        return self._conn.sql_execute(*args, **kwargs)
+
+    def sql_fetch_col(self, *args, **kwargs):
+        return self._conn.sql_fetch_col(*args, **kwargs)
 
     def set_tenant(self, tenant):
         """Set the tenant for this connection."""
@@ -2185,7 +2197,7 @@ class TenantConnection(pgcon.PGConnection):
             await self.sql_execute(b'LISTEN __edgedb_sysevent__;')
         except Exception:
             try:
-                self.abort()
+                self._conn.abort()
             finally:
                 raise
 

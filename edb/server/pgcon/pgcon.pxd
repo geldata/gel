@@ -58,6 +58,12 @@ cdef enum PGAuthenticationState:
     PGAUTH_SASL_FINAL = 12
 
 
+cdef class AbstractFrontendConnection:
+
+    cdef write(self, WriteBuffer buf)
+    cdef flush(self)
+
+
 @cython.final
 cdef class PGConnectionRaw:
 

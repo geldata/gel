@@ -27,8 +27,8 @@ from .errors import (
 )
 
 from .pgcon import (
-    PGConnection,
     PGConnectionRaw,
+    AbstractFrontendConnection,
 )
 from .connect import (
     pg_connect,
@@ -38,21 +38,47 @@ from .connect import (
     RESET_STATIC_CFG_SCRIPT,
 )
 
-__all__ = (
-    'pg_connect',
-    'PGConnection',
-    'PGConnectionRaw',
-    'BackendError',
-    'BackendConnectionError',
-    'BackendPrivilegeError',
-    'BackendCatalogNameError',
-    'SETUP_TEMP_TABLE_SCRIPT',
-    'SETUP_CONFIG_CACHE_SCRIPT',
-    'SETUP_DML_DUMMY_TABLE_SCRIPT',
-    'RESET_STATIC_CFG_SCRIPT'
-)
-
+from edb.server import defines as edbdef
 from typing import Protocol, Optional
+
+
+class PGConnection(Protocol):
+    async def sql_execute(
+        self,
+        sql: bytes | tuple[bytes, ...],
+        *,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+    ) -> None: ...
+
+    async def sql_fetch(
+        self,
+        sql: bytes,
+        *,
+        args: tuple[bytes, ...] | list[bytes] = (),
+        use_prep_stmt: bool = False,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+        state: Optional[bytes] = None,
+    ) -> list[tuple[bytes, ...]]: ...
+
+    async def sql_fetch_val(
+        self,
+        sql: bytes,
+        *,
+        args: tuple[bytes, ...] | list[bytes] = (),
+        use_prep_stmt: bool = False,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+        state: Optional[bytes] = None,
+    ) -> bytes: ...
+
+    async def sql_fetch_col(
+        self,
+        sql: bytes,
+        *,
+        args: tuple[bytes, ...] | list[bytes] = (),
+        use_prep_stmt: bool = False,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+        state: Optional[bytes] = None,
+    ) -> list[bytes]: ...
 
 
 class PGConnectionEventListener(Protocol):
@@ -88,3 +114,20 @@ class PGConnectionEventListener(Protocol):
     def on_metrics(self, metric: str, value: int) -> None:
         """Called when a metric is updated."""
         pass
+
+
+__all__ = (
+    'pg_connect',
+    'PGConnection',
+    'PGConnectionRaw',
+    'PGConnectionEventListener',
+    'BackendError',
+    'BackendConnectionError',
+    'BackendPrivilegeError',
+    'BackendCatalogNameError',
+    'AbstractFrontendConnection',
+    'SETUP_TEMP_TABLE_SCRIPT',
+    'SETUP_CONFIG_CACHE_SCRIPT',
+    'SETUP_DML_DUMMY_TABLE_SCRIPT',
+    'RESET_STATIC_CFG_SCRIPT'
+)

@@ -40,7 +40,6 @@ cimport cython
 cimport cpython
 
 from . cimport cpythonx
-from . import PGConnectionEventListener
 
 from libc.stdint cimport int8_t, uint8_t, int16_t, uint16_t, \
                          int32_t, uint32_t, int64_t, uint64_t, \
@@ -79,8 +78,6 @@ from edb.server.protocol cimport args_ser
 from edb.server.protocol cimport pg_ext
 from edb.server import metrics
 
-from edb.server.protocol cimport frontend
-
 from edb.common import debug
 from edb.common import typeutils
 
@@ -106,6 +103,15 @@ cdef WriteBuffer NO_ARGS = args_ser.combine_raw_args()
 cdef object logger = logging.getLogger('edb.server')
 
 include "./pgcon_sql.pyx"
+
+
+cdef class AbstractFrontendConnection:
+
+    cdef write(self, WriteBuffer buf):
+        raise NotImplementedError
+
+    cdef flush(self):
+        raise NotImplementedError
 
 
 @cython.final
@@ -156,7 +162,6 @@ cdef class PGConnectionRaw:
 
         self.log_listeners = []
 
-        self.server = None
         self.listener = None
         self.is_system_db = False
         self.close_requested = False
@@ -222,6 +227,10 @@ cdef class PGConnectionRaw:
 
     cpdef set_stmt_cache_size(self, int maxsize):
         self.prep_stmts.resize(maxsize)
+
+    @property
+    def dbname(self) -> str:
+        return self.dbname
 
     @property
     def is_ssl(self):
@@ -652,7 +661,7 @@ cdef class PGConnectionRaw:
         int dbver,
         *,
         bint ignore_data,
-        frontend.AbstractFrontendConnection fe_conn = None,
+        AbstractFrontendConnection fe_conn = None,
     ):
         cdef WriteBuffer buf = None
 
@@ -883,7 +892,7 @@ cdef class PGConnectionRaw:
     async def _parse_execute(
         self,
         query,
-        frontend.AbstractFrontendConnection fe_conn,
+        AbstractFrontendConnection fe_conn,
         WriteBuffer bind_data,
         bint use_prep_stmt,
         bytes state,
@@ -1218,7 +1227,7 @@ cdef class PGConnectionRaw:
         query,
         WriteBuffer bind_data = NO_ARGS,
         list param_data_types = None,
-        frontend.AbstractFrontendConnection fe_conn = None,
+        AbstractFrontendConnection fe_conn = None,
         bint use_prep_stmt = False,
         bytes state = None,
         int dbver = 0,
@@ -1428,7 +1437,7 @@ cdef class PGConnectionRaw:
     async def sql_extended_query(
         self,
         actions,
-        fe_conn: frontend.AbstractFrontendConnection,
+        fe_conn: AbstractFrontendConnection,
         dbver: int,
         dbv: pg_ext.ConnectionView,
     ) -> tuple[bool, bool]:

@@ -28,6 +28,8 @@ from edb import errors
 from edb.common import debug
 from edb.server import args as srvargs, metrics
 from edb.server.pgcon import errors as pgerror
+from edb.server.pgcon cimport pgcon
+from edb.server.tenant import TenantConnection
 
 from . cimport auth_helpers
 
@@ -36,16 +38,7 @@ DEF FLUSH_BUFFER_AFTER = 100_000
 cdef object logger = logging.getLogger('edb.server')
 
 
-cdef class AbstractFrontendConnection:
-
-    cdef write(self, WriteBuffer buf):
-        raise NotImplementedError
-
-    cdef flush(self):
-        raise NotImplementedError
-
-
-cdef class FrontendConnection(AbstractFrontendConnection):
+cdef class FrontendConnection(pgcon.AbstractFrontendConnection):
     interface = "frontend"
 
     def __init__(
@@ -112,7 +105,7 @@ cdef class FrontendConnection(AbstractFrontendConnection):
             # fail all tests if this ever happens.
             self.abort_pinned_pgcon()
 
-    async def get_pgcon(self) -> pgcon.PGConnection:
+    async def _get_pgcon(self) -> TenantConnection:
         if self._cancelled or self._pgcon_released_in_connection_lost:
             raise RuntimeError(
                 'cannot acquire a pgconn; the connection is closed')
@@ -137,11 +130,11 @@ cdef class FrontendConnection(AbstractFrontendConnection):
             self._get_pgcon_cc -= 1
             raise
 
-    def maybe_release_pgcon(self, pgcon.PGConnection conn):
+    def _maybe_release_pgcon(self, conn: TenantConnection):
         self._get_pgcon_cc -= 1
         if self._get_pgcon_cc < 0:
             raise RuntimeError(
-                'maybe_release_pgcon() called more times than get_pgcon()')
+                '_maybe_release_pgcon() called more times than _get_pgcon()')
         if self._pinned_pgcon is not conn:
             raise RuntimeError('mismatched released connection')
 
@@ -173,14 +166,14 @@ cdef class FrontendConnection(AbstractFrontendConnection):
                 )
 
     @contextlib.asynccontextmanager
-    async def with_pgcon(self):
-        con = await self.get_pgcon()
+    async def with_pgcon(self) -> TenantConnection:
+        con = await self._get_pgcon()
         try:
             yield con
         finally:
-            self.maybe_release_pgcon(con)
+            self._maybe_release_pgcon(con)
 
-    def on_aborted_pgcon(self, pgcon.PGConnection conn):
+    def on_aborted_pgcon(self, conn: TenantConnection):
         try:
             self._pinned_pgcon = None
 
