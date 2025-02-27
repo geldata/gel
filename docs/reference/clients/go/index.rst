@@ -29,7 +29,7 @@ Typical client usage looks like this:
 
     func main() {
         ctx := context.Background()
-        client, err := gel.CreateClient(ctx, gelcfg.Options{})
+        client, err := gel.CreateClient(gelcfg.Options{})
         if err != nil {
             log.Fatal(err)
         }
@@ -56,7 +56,7 @@ You may also connect to a database using a DSN:
 .. code-block:: go
 
     url := "gel://admin@localhost/gel"
-    client, err := gel.CreateClientDSN(ctx, url, opts)
+    client, err := gel.CreateClientDSN(url, opts)
 
 Or you can use Option fields.
 
@@ -68,7 +68,7 @@ Or you can use Option fields.
         Concurrency: 4,
     }
 
-    client, err := gel.CreateClient(ctx, opts)
+    client, err := gel.CreateClient(opts)
 
 
 Errors
@@ -219,7 +219,7 @@ Usage Example
     func Example() {
         opts := gelcfg.Options{Concurrency: 4}
         ctx := context.Background()
-        db, err := gel.CreateClientDSN(ctx, "gel://gel@localhost/test", opts)
+        db, err := gel.CreateClientDSN("gel://gel@localhost/test", opts)
         if err != nil {
             log.Fatal(err)
         }
