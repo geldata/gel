@@ -75,7 +75,7 @@ It's often convenient to create an alias for the remote instance using
 
    $ gel instance link \
         --trust-tls-cert \
-        --dsn gel://admin:<password>@<hostname>
+        --dsn gel://admin:<password>@<hostname> \
         my_aws_instance
 
 This aliases the remote instance to ``my_aws_instance`` (this name can be
@@ -123,7 +123,7 @@ your terminal:
 .. _cf-deploy:
    https://console.aws.amazon.com
    /cloudformation/home#/stacks/new?stackName=Gel&templateURL=
-   https%3A%2F%gel-deploy.s3.us-east-2.amazonaws.com%gel-aurora.yml
+   https%3A%2F%2Fgel-deployment.s3.us-east-2.amazonaws.com%2Fgel-aurora.yml
 .. _aws_console:
    https://console.aws.amazon.com
    /ec2/v2/home#NIC:search=ec2-security-group
