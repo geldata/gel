@@ -104,7 +104,7 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
         if span:
             self.set_span(span)
         elif position:
-            self.set_linecol(position[0], position[1])
+            self.set_linecol(position[1], position[0])
             self.set_position(position[2], position[3])
 
         if filename is not None:

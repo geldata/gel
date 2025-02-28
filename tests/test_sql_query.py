@@ -2952,8 +2952,12 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         with self.assertRaisesRegex(
             edgedb.errors.EdgeQLSyntaxError,
             'syntax error at or near',
+            _position=54,
+            _col=25,
+            _line=3,
         ):
             await self.con.query_sql('''
+                -- a comment
                 select (), asdf
             ''')
 
@@ -2993,6 +2997,19 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         ):
             await self.con.query_sql('''
                 select relacl from pg_class limit 1
+            ''')
+
+    async def test_sql_native_query_31(self):
+        with self.assertRaisesRegex(
+            edgedb.EdgeQLSyntaxError,
+            'syntax error at or near "from"',
+            _position=48,
+            _col=25,
+            _line=3,
+        ):
+            await self.con.query_sql('''
+                select
+                  limit from x
             ''')
 
 
