@@ -67,6 +67,18 @@ Install the Gel package.
 Enable a systemd unit
 =====================
 
+We released gel-server-6 versions 6.0 and 6.1 without renaming the user and
+group that runs the server. This will be fixed in version 6.2. For the versions
+with the wrong user you will have to create the group, user, and data directory
+before enabling the systemd unit.
+
+.. code-block:: bash
+
+   $ sudo groupadd edgedb
+   $ sudo useradd -g edgedb edgedb
+   $ sudo mkdir /var/lib/edgedb
+   $ sudo chown edgedb:edgedb /var/lib/edgedb
+
 The Gel package comes bundled with a systemd unit that is disabled by
 default. You can start the server by enabling the unit.
 
