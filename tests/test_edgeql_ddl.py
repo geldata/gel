@@ -16259,6 +16259,46 @@ DDLStatement);
             [],
         )
 
+    async def test_edgeql_ddl_link_policy_17(self):
+        # Make sure that ALLOW works when changing optionality
+        await self.con.execute(r"""
+            CREATE TYPE Tgt;
+            CREATE TYPE Src {
+                CREATE MULTI LINK tgt -> Tgt {
+                    ON TARGET DELETE ALLOW;
+                }
+            };
+        """)
+
+        await self.con.execute(r"""
+            INSERT Src { tgt := (INSERT Tgt) };
+        """)
+
+        await self.con.execute(r"""
+            ALTER TYPE Src {
+                ALTER LINK tgt {
+                    SET REQUIRED
+                }
+            };
+        """)
+
+        async with self.assertRaisesRegexTx(edgedb.MissingRequiredError, ''):
+            await self.con.execute("""
+                DELETE Tgt;
+            """)
+
+        await self.con.execute(r"""
+            ALTER TYPE Src {
+                ALTER LINK tgt {
+                    SET OPTIONAL
+                }
+            };
+        """)
+
+        await self.con.execute("""
+            DELETE Tgt;
+        """)
+
     async def test_edgeql_ddl_link_policy_implicit_01(self):
         await self.con.execute("""
             create type T;
