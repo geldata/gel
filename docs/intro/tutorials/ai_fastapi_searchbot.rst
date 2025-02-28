@@ -194,7 +194,7 @@ to it by implementing web search capabilities.
 
 .. edb:split-section::
 
-  Many powerful, feature-rich products exist for LLM-driven web search. However, in this tutorial, w'll use a more reliable source of real-world information: comment threads on `Hacker News
+  Many powerful, feature-rich products exist for LLM-driven web search. In this tutorial, we'll use  comment threads on `Hacker News
   <https://news.ycombinator.com/>`_. Their `web API
   <https://hn.algolia.com/api>`_ is free of charge and doesn't require an
   account. Below is a simple function that requests a full-text search for a
