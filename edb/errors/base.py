@@ -160,10 +160,10 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
         start_s, end_s = tokenizer.inflate_span(source, (start, end))
 
         self._attrs[FIELD_LINE_START] = str(start_s.line)
-        self._attrs[FIELD_COL_START] = str(start_s.column)
+        self._attrs[FIELD_COLUMN_START] = str(start_s.column)
         if end_s is not None:
             self._attrs[FIELD_LINE_END] = str(end_s.line)
-            self._attrs[FIELD_COL_END] = str(end_s.column)
+            self._attrs[FIELD_COLUMN_END] = str(end_s.column)
 
     def set_hint_and_details(self, hint, details=None):
         ex.replace_context(

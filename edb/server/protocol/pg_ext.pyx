@@ -440,7 +440,7 @@ cdef class PgConnection(frontend.FrontendConnection):
             exc = pgerror.new(
                 pgerror.ERROR_SYNTAX_ERROR,
                 str(exc),
-                P=str(exc.cursorpos),
+                P=str(exc.cursor_pos),
             )
         elif isinstance(exc, errors.AuthenticationError):
             exc = pgerror.InvalidAuthSpec(str(exc), severity="FATAL")

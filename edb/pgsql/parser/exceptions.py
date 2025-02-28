@@ -25,9 +25,15 @@ class PSqlParseError(Exception):
 
 
 class PSqlSyntaxError(PSqlParseError):
-    def __init__(self, message, cursorpos):
+    def __init__(
+        self,
+        message: str,
+        cursor_pos: int, # 0-based
+        query_source: str,
+    ):
         self.message = message
-        self.cursorpos = cursorpos
+        self.cursor_pos = cursor_pos
+        self.query_source = query_source
 
     def __str__(self):
         return self.message
