@@ -2323,6 +2323,9 @@ class TenantConnection:
     def sync(self):
         return self._conn.sync()
 
+    def abort(self):
+        return self._conn.abort()
+
     def set_tenant(self, tenant):
         """Set the tenant for this connection."""
         self._tenant = tenant
