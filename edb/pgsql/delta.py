@@ -5278,6 +5278,17 @@ class AlterLinkLowerCardinality(
                 self._alter_pointer_optionality(
                     schema, orig_schema, context, fill_expr=self.fill_expr)
 
+                # If the link has an Allow on target delete action, we
+                # need to refresh the triggers, since required and
+                # optional behave differently. (Required does a
+                # check.)
+                if (
+                    self.scls.get_on_target_delete(schema) ==
+                    s_links.LinkTargetDeleteAction.Allow
+                ):
+                    self.schedule_endpoint_delete_action_update(
+                        self.scls, orig_schema, schema, context)
+
         return schema
 
 
