@@ -762,8 +762,8 @@ def static_interpret_psql_parse_error(
         res.compute_line_col(exc.query_source)
     elif isinstance(exc, parser_errors.PSqlUnsupportedError):
         res = errors.UnsupportedFeatureError(str(exc))
-        if exp.location is not None:
-            res.set_position(exp.location, None)
+        if exc.location is not None:
+            res.set_position(exc.location, None)
     else:
         res = errors.InternalServerError(str(exc))
 

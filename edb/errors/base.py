@@ -141,8 +141,8 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
     def set_linecol(
         self,
-        line: Optional[int], # one-based
-        col: Optional[int], # one-based
+        line: Optional[int],  # one-based
+        col: Optional[int],  # one-based
     ):
         if line is not None:
             self._attrs[FIELD_LINE_START] = str(line)
@@ -200,8 +200,8 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
     def set_position(
         self,
-        start: int, # zero-based
-        end: Optional[int], # zero-based
+        start: int,  # zero-based
+        end: Optional[int],  # zero-based
     ):
         self._attrs[FIELD_POSITION_START] = str(start)
         self._attrs[FIELD_POSITION_END] = str(end or start)
