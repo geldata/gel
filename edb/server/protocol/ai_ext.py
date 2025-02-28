@@ -293,6 +293,12 @@ async def _ext_ai_index_builder_controller_loop(
 
     try:
         while True:
+            if not db.tenant.is_database_connectable(dbname):
+                # Don't do work if the database is not connectable,
+                # e.g. being dropped
+                await asyncio.sleep(naptime)
+                continue
+
             models = []
             sleep_timer: rs.Timer = rs.Timer(None, False)
             try:
