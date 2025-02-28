@@ -108,8 +108,9 @@ cdef class PGConnectionRaw:
         bint _is_ssl
 
         public object pinned_by
+        public object data
 
-        object last_state
+        public object last_state
         bint state_reset_needs_commit
 
         str last_indirect_return
@@ -135,7 +136,7 @@ cdef class PGConnectionRaw:
     cdef send_sync(self)
 
     cdef make_clean_stmt_message(self, bytes stmt_name)
-    cdef send_query_unit_group(
+    cpdef send_query_unit_group(
         self, object query_unit_group, bint sync,
         object bind_datas, bytes state,
         ssize_t start, ssize_t end, int dbver, object parse_array,

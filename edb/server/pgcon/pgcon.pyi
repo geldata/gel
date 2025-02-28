@@ -51,6 +51,7 @@ class PGConnectionRaw(asyncio.Protocol):
     backend_secret: int
     is_ssl: bool
     listener: PGConnectionEventListener | None
+    data: Any
 
     def __init__(self, dbname): ...
     async def close(self): ...

@@ -84,34 +84,32 @@ class PGConnection(Protocol):
 class PGConnectionEventListener(Protocol):
     """Protocol for PGConnection event listeners."""
 
-    def on_pgcon_broken(self) -> None:
-        """Called when a connection is broken unexpectedly."""
-        pass
-
-    def on_pgcon_lost(self) -> None:
+    def on_pg_conn_closed(
+        self,
+        conn: PGConnectionRaw,
+        expected: bool,
+        exc: Optional[Exception],
+    ) -> None:
         """Called when a connection is closed normally."""
         pass
 
-    def on_sys_pgcon_connection_lost(self, exc: Optional[Exception]) -> None:
-        """Called when a system database connection is lost."""
+    def on_pg_conn_unavailable(self, conn: PGConnectionRaw, msg: str) -> None:
+        """Set the message to display when PostgreSQL is unavailable."""
         pass
 
-    def on_sys_pgcon_failover_signal(self) -> None:
-        """Called when a failover signal is received from the system
-        database."""
-        pass
-
-    def on_sys_pgcon_parameter_status_updated(
-        self, name: str, value: str
+    def on_pg_conn_parameter_updated(
+        self, conn: PGConnectionRaw, name: str, value: str
     ) -> None:
         """Called when a parameter status is updated on a system connection."""
         pass
 
-    def set_pg_unavailable_msg(self, msg: str) -> None:
-        """Set the message to display when PostgreSQL is unavailable."""
-        pass
-
-    def on_metrics(self, metric: str, value: int) -> None:
+    def on_pg_conn_metrics(
+        self,
+        conn: PGConnectionRaw,
+        metric: str,
+        value: int,
+        *args,
+    ) -> None:
         """Called when a metric is updated."""
         pass
 

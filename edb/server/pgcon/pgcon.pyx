@@ -508,10 +508,10 @@ cdef class PGConnectionRaw:
                     await self.wait_for_sync()
         finally:
             if self.listener:
-                self.listener.on_metrics('backend_query_duration', time.monotonic() - started_at)
+                self.listener.on_pg_conn_metrics(self, 'backend_query_duration', time.monotonic() - started_at)
             await self.after_command()
 
-    cdef send_query_unit_group(
+    cpdef send_query_unit_group(
         self, object query_unit_group, bint sync,
         object bind_datas, bytes state,
         ssize_t start, ssize_t end, int dbver, object parse_array,
@@ -574,7 +574,7 @@ cdef class PGConnectionRaw:
                     buf.write_int16(0)
                     out.write_buffer(buf.end_message())
                     if self.listener:
-                        self.listener.on_metrics('query_size', len(sql))
+                        self.listener.on_pg_conn_metrics(self, 'query_size', len(sql))
 
                 buf = WriteBuffer.new_message(b'B')
                 buf.write_bytestring(b'')  # portal name
@@ -594,7 +594,7 @@ cdef class PGConnectionRaw:
                 buf.write_int16(0)
                 out.write_buffer(buf.end_message())
                 if self.listener:
-                    self.listener.on_metrics('query_size', len(sql))
+                    self.listener.on_pg_conn_metrics(self, 'query_size', len(sql))
 
                 buf = WriteBuffer.new_message(b'B')
                 buf.write_bytestring(b'')  # portal name
@@ -1014,7 +1014,7 @@ cdef class PGConnectionRaw:
                     out.write_buffer(buf.end_message())
                     i += 1
                     if self.listener:
-                        self.listener.on_metrics('query_size', len(sql))
+                        self.listener.on_pg_conn_metrics(self, 'query_size', len(sql))
             else:
                 if len(sqls) != 1:
                     raise errors.InternalServerError(
@@ -1032,7 +1032,7 @@ cdef class PGConnectionRaw:
                     buf.write_int16(0)
                 out.write_buffer(buf.end_message())
                 if self.listener:
-                    self.listener.on_metrics('query_size', len(sqls[0]))
+                    self.listener.on_pg_conn_metrics(self, 'query_size', len(sqls[0]))
 
         assert bind_data is not None
         if stmt_name == b'' and msgs_num > 1:
@@ -1254,7 +1254,7 @@ cdef class PGConnectionRaw:
             )
         finally:
             if self.listener:
-                self.listener.on_metrics('backend_query_duration', time.monotonic() - started_at)
+                self.listener.on_pg_conn_metrics(self, 'backend_query_duration', time.monotonic() - started_at)
             await self.after_command()
 
     async def sql_fetch(
@@ -1408,7 +1408,7 @@ cdef class PGConnectionRaw:
             return await self._sql_execute(sql_string)
         finally:
             if self.listener:
-                self.listener.on_metrics('backend_query_duration', time.monotonic() - started_at)
+                self.listener.on_pg_conn_metrics(self, 'backend_query_duration', time.monotonic() - started_at)
             await self.after_command()
 
     async def sql_apply_state(
@@ -1989,7 +1989,7 @@ cdef class PGConnectionRaw:
 
                 pgcode = fields['C']
                 if self.listener:
-                    self.listener.on_metrics('backend_connection_aborted', 1.0, pgcode)
+                    self.listener.on_pg_conn_metrics(self, 'backend_connection_aborted', 1.0, pgcode)
 
                 if pgcode in POSTGRES_SHUTDOWN_ERR_CODES:
                     pgreason = POSTGRES_SHUTDOWN_ERR_CODES[pgcode]
@@ -2002,7 +2002,7 @@ cdef class PGConnectionRaw:
                     )
 
                     if self.listener:
-                        self.listener.set_pg_unavailable_msg(pgmsg)
+                        self.listener.on_pg_conn_unavailable(self, pgmsg)
 
                 else:
                     pgmsg = fields.get('M', '<empty message>')
@@ -2022,7 +2022,7 @@ cdef class PGConnectionRaw:
             # ParameterStatus
             name, value = self.parse_parameter_status_message()
             if self.listener:
-                self.listener.on_parameter_status_updated(name, value)
+                self.listener.on_pg_conn_parameter_updated(self, name, value)
             self.parameter_status[name] = value
             return True
 
@@ -2034,7 +2034,7 @@ cdef class PGConnectionRaw:
             self.buffer.finish_message()
 
             if self.listener:
-                self.listener.on_notification(channel, payload)
+                self.listener.on_pg_conn_notification(self, channel, payload)
 
             return True
 
@@ -2152,10 +2152,7 @@ cdef class PGConnectionRaw:
             pinned_by.on_aborted_pgcon(self)
 
         if self.listener is not None:
-            if not self.close_requested:
-                self.listener.on_pgcon_broken(exc)
-            else:
-                self.listener.on_pgcon_lost(exc)
+            self.listener.on_pg_conn_closed(self, self.close_requested, exc)
 
         if self.connected_fut is not None and not self.connected_fut.done():
             self.connected_fut.set_exception(ConnectionAbortedError())

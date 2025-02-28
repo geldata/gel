@@ -54,7 +54,7 @@ from edb.server.protocol cimport args_ser
 from edb.server.protocol cimport frontend
 from edb.server.pgcon cimport pgcon
 from edb.server.pgcon import errors as pgerror
-from edb.server.tenant import TenantConnection
+from edb.server.pgcon import PGConnection
 from edb.server.pgcon import AbstractFrontendConnection
 
 cdef object logger = logging.getLogger('edb.server')
@@ -74,7 +74,7 @@ cdef class ExecutionGroup:
 
     async def execute(
         self,
-        be_conn: TenantConnection,
+        be_conn: PGConnection,
         object dbv,  # can be DatabaseConnectionView or Database
         fe_conn: AbstractFrontendConnection = None,
         bytes state = None,
@@ -233,7 +233,7 @@ async def _parse(
 
 # TODO: can we merge execute and execute_script?
 async def execute(
-    be_conn: TenantConnection,
+    be_conn: PGConnection,
     dbv: dbview.DatabaseConnectionView,
     compiled: dbview.CompiledQuery,
     bind_args: bytes,
@@ -440,7 +440,7 @@ async def execute(
 
 
 async def execute_script(
-    conn: TenantConnection,
+    conn: PGConnection,
     dbv: dbview.DatabaseConnectionView,
     compiled: dbview.CompiledQuery,
     bind_args: bytes,
@@ -663,7 +663,7 @@ async def execute_script(
 
 
 async def execute_system_config(
-    conn: TenantConnection,
+    conn: PGConnection,
     dbv: dbview.DatabaseConnectionView,
     query_unit: compiler.QueryUnit,
     state: bytes | None,
@@ -803,7 +803,7 @@ async def parse_execute_json(
 
 
 async def execute_json(
-    be_conn: TenantConnection,
+    be_conn: PGConnection,
     dbv: dbview.DatabaseConnectionView,
     compiled: dbview.CompiledQuery,
     variables: Mapping[str, Any] = immutables.Map(),

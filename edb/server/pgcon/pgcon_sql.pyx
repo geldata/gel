@@ -157,7 +157,8 @@ cdef class PGSQLConnection:
                     msg_buf.write_bytes(data)
                     buf.write_buffer(msg_buf.end_message())
                     if self.con.listener:
-                        self.con.listener.on_metrics('query_size', len(sql_text))
+                        self.con.listener.on_pg_conn_metrics(
+                            self.con, 'query_size', len(sql_text))
 
                     if self.con.debug:
                         self.con.debug_print(

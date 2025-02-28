@@ -29,7 +29,6 @@ from edb.common import debug
 from edb.server import args as srvargs, metrics
 from edb.server.pgcon import errors as pgerror
 from edb.server.pgcon cimport pgcon
-from edb.server.tenant import TenantConnection
 
 from . cimport auth_helpers
 
@@ -105,7 +104,7 @@ cdef class FrontendConnection(pgcon.AbstractFrontendConnection):
             # fail all tests if this ever happens.
             self.abort_pinned_pgcon()
 
-    async def _get_pgcon(self) -> TenantConnection:
+    async def _get_pgcon(self) -> pgcon.PGConnection:
         if self._cancelled or self._pgcon_released_in_connection_lost:
             raise RuntimeError(
                 'cannot acquire a pgconn; the connection is closed')
@@ -130,7 +129,7 @@ cdef class FrontendConnection(pgcon.AbstractFrontendConnection):
             self._get_pgcon_cc -= 1
             raise
 
-    def _maybe_release_pgcon(self, conn: TenantConnection):
+    def _maybe_release_pgcon(self, conn: pgcon.PGConnection):
         self._get_pgcon_cc -= 1
         if self._get_pgcon_cc < 0:
             raise RuntimeError(
@@ -166,14 +165,14 @@ cdef class FrontendConnection(pgcon.AbstractFrontendConnection):
                 )
 
     @contextlib.asynccontextmanager
-    async def with_pgcon(self) -> TenantConnection:
+    async def with_pgcon(self) -> pgcon.PGConnection:
         con = await self._get_pgcon()
         try:
             yield con
         finally:
             self._maybe_release_pgcon(con)
 
-    def on_aborted_pgcon(self, conn: TenantConnection):
+    def on_aborted_pgcon(self, conn: pgcon.PGConnection):
         try:
             self._pinned_pgcon = None
 
