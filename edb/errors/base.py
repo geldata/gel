@@ -154,7 +154,7 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
         start: int = self.position
         end: int | None = self.position_end
-        if end < 0:
+        if end and end < 0:
             end = None
 
         start_s, end_s = tokenizer.inflate_span(source, (start, end))
