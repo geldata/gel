@@ -887,7 +887,7 @@ class Tenant(ha_base.ClusterProtocol):
         name: str,
         value: str,
     ) -> None:
-        if not conn.data.is_system_db:
+        if not conn.data._is_system_db:
             return
         try:
             if name == "in_hot_standby" and value == "on":
@@ -907,7 +907,10 @@ class Tenant(ha_base.ClusterProtocol):
         conn: pgcon.PGConnectionRaw,
         msg: str,
     ) -> None:
-        pass
+        if not conn.data._is_system_db:
+            return
+        self.set_pg_unavailable_msg(msg)
+        self.on_sys_pgcon_failover_signal()
 
     def on_sys_pgcon_failover_signal(self) -> None:
         if not self._running:
@@ -935,6 +938,13 @@ class Tenant(ha_base.ClusterProtocol):
         expected: bool,
         exc: Exception | None,
     ) -> None:
+        if not conn.data._is_system_db:
+            if expected:
+                self.on_pgcon_broken()
+            else:
+                self.on_pgcon_lost()
+            return
+
         try:
             if not self._running:
                 # The tenant is shutting down, release all events so that
