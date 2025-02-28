@@ -16,7 +16,7 @@ try:
     )
     for name in [
         'json', 'functions', 'expressions', 'casts', 'policies', 'vector',
-        'scope', 'httpextauth',
+        'scope', 'httpextauth', 'extai'
     ]:
         db.execute(f'create database {name};')
 
@@ -77,6 +77,18 @@ try:
     db2.execute(f'''
         create extension pgcrypto;
         create extension auth;
+    ''')
+    db2.close()
+
+    # For the extai database, create the proper extensions, so
+    # that patching of the auth extension in place can get tested.
+    db2 = edgedb.create_client(
+        host='localhost', port=10000, tls_security='insecure',
+        database='extai'
+    )
+    db2.execute(f'''
+        create extension pgvector;
+        create extension ai;
     ''')
     db2.close()
 
