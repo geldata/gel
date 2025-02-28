@@ -186,7 +186,7 @@ with semantic search-based cross-chat memory.
         "response": "string",
       }
 
-1. Implement web search
+3. Implement web search
 =======================
 
 Now that we have our web app infrastructure in place, let's add some substance
@@ -956,53 +956,53 @@ In this tutorial we'll write queries using :ref:`EdgeQL <ref_intro_edgeql>` and 
 
   That concludes our User-related functionality. Next, we need to handle Chats and Messages. Since the process is quite similar to what we've just covered, we won't go into detail. Instead, you can implement these endpoints yourself as an exercise or simply copy the following code if you're in a rush.
 
-  .. code-block:: txt
+  .. code-block:: bash
       :class: collapsible
 
-      echo 'select Chat {
-          messages: { role, body, sources },
-          user := .<chats[is User],
-      } filter .user.name = <str>$username;
-      ' > app/queries/get_chats.edgeql && 
-      echo 'select Chat {
-          messages: { role, body, sources },
-          user := .<chats[is User],
-      } filter .user.name = <str>$username and .id = <uuid>$chat_id;
-      ' > app/queries/get_chat_by_id.edgeql && 
-      echo 'with new_chat := (insert Chat)
-      select (
-          update User filter .name = <str>$username
-          set {
-              chats := assert_distinct(.chats union new_chat)
-          }
-      ) {
-          new_chat_id := new_chat.id
-      }' > app/queries/create_chat.edgeql && 
-      echo 'with
-          user := (select User filter .name = <str>$username),
-          chat := (
-              select Chat filter .<chats[is User] = user and .id = <uuid>$chat_id
-          )
-      select Message {
-          role,
-          body,
-          sources,
-          chat := .<messages[is Chat]
-      } filter .chat = chat;' > app/queries/get_messages.edgeql && 
-      echo 'with
-          user := (select User filter .name = <str>$username),
-      update Chat
-      filter .id = <uuid>$chat_id and .<chats[is User] = user
-      set {
-          messages := assert_distinct(.messages union (
-              insert Message {
-                  role := <str>$message_role,
-                  body := <str>$message_body,
-                  sources := array_unpack(<array<str>>$sources)
-              }
-          ))
-      }' > app/queries/add_message.edgeql
-
+      $ echo 'select Chat {
+      >     messages: { role, body, sources },
+      >     user := .<chats[is User],
+      > } filter .user.name = <str>$username;
+      > ' > app/queries/get_chats.edgeql &&
+      > echo 'select Chat {
+      >     messages: { role, body, sources },
+      >     user := .<chats[is User],
+      > } filter .user.name = <str>$username and .id = <uuid>$chat_id;
+      > ' > app/queries/get_chat_by_id.edgeql &&
+      > echo 'with new_chat := (insert Chat)
+      > select (
+      >     update User filter .name = <str>$username
+      >     set {
+      >         chats := assert_distinct(.chats union new_chat)
+      >     }
+      > ) {
+      >     new_chat_id := new_chat.id
+      > }' > app/queries/create_chat.edgeql && 
+      > echo 'with
+      >     user := (select User filter .name = <str>$username),
+      >     chat := (
+      >         select Chat filter .<chats[is User] = user and .id = <uuid>$chat_id
+      >     )
+      > select Message {
+      >     role,
+      >     body,
+      >     sources,
+      >     chat := .<messages[is Chat]
+      > } filter .chat = chat;
+      > ' > app/queries/get_messages.edgeql && 
+      > echo 'with
+      >     user := (select User filter .name = <str>$username),
+      > update Chat
+      > filter .id = <uuid>$chat_id and .<chats[is User] = user
+      >     set {
+      >         messages := assert_distinct(.messages union (
+      >             insert Message {
+      >                 role := <str>$message_role,
+      >                 body := <str>$message_body,
+      >                 sources := array_unpack(<array<str>>$sources)
+      >             }
+      >         ))
+      > }' > app/queries/add_message.edgeql
 
 
 .. edb:split-section::
