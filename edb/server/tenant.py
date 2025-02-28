@@ -879,7 +879,18 @@ class Tenant(ha_base.ClusterProtocol):
         value: int,
         *args,
     ) -> None:
-        pass
+        if metric == "query_size":
+            metrics.query_size.observe(
+                value, conn.data.get_tenant_label(), 'compiled'
+            )
+        elif metric == "backend_query_duration":
+            metrics.backend_query_duration.observe(
+                value, conn.data.get_tenant_label()
+            )
+        elif metric == "backend_connection_aborted":
+            metrics.backend_connection_aborted.inc(
+                value, conn.data.get_tenant_label(), *args
+            )
 
     def on_pg_conn_parameter_updated(
         self,
