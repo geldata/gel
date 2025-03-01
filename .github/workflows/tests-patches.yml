@@ -527,9 +527,7 @@ jobs:
 
     - name: Test downgrading a database after an upgrade
       if: ${{ !contains(matrix.edgedb-version, '-rc') && !contains(matrix.edgedb-version, '-beta') }}
-      env:
-        EDGEDB_VERSION: ${{ matrix.edgedb-version }}
-      run: python3 .github/scripts/patches/test-downgrade.py
+      run: python3 .github/scripts/patches/test-downgrade.py ${{ matrix.edgedb-basename }}-${{ matrix.edgedb-version }}/bin/edgedb-server
 
   workflow-notifications:
     if: failure() && github.event_name != 'pull_request'
