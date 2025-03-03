@@ -149,7 +149,7 @@ hyphens.
 
 .. code-block::
 
-    $ NAME=your-deployment-name
+    $ NAME=my-gel-db
     $ REGION=us-west-2
 
 Then create the VPC.
@@ -587,7 +587,7 @@ Then use this password to create an AWS `secret
           --output text \
           --query "DBCluster.Endpoint" \
           --engine aurora-postgresql \
-          --engine-version 13.4 \
+          --engine-version 16.6 \
           --db-cluster-identifier "$DB_CLUSTER_IDENTIFIER" \
           --db-subnet-group-name "$RDS_SUBNET_GROUP_NAME" \
           --master-username postgres \
@@ -782,10 +782,9 @@ container in it.
               \"name\": \"$NAME\", \
               \"image\": \"geldata/gel\", \
               \"portMappings\": [{\"containerPort\": 5656}], \
-              \"command\": [\"gel-server\"], \
               \"environment\": [{ \
-                \"name\": \"GEL_SERVER_GENERATE_SELF_SIGNED_CERT\", \
-                \"value\": \"1\" \
+                \"name\": \"GEL_SERVER_TLS_CERT_MODE\", \
+                \"value\": \"generate_self_signed\" \
               }], \
               \"secrets\": [ \
                 { \
@@ -832,7 +831,7 @@ container in it.
 Create a local link to the new Gel instance
 -------------------------------------------
 
-Create an local alias to the remote Gel instance with :gelcmd:`instance link`:
+Create a local alias to the remote Gel instance with :gelcmd:`instance link`:
 
 .. code-block:: bash
 
