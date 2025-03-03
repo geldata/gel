@@ -19,7 +19,7 @@ signals to the CLI and client bindings that the directory is an instance-linked
 [instance] table
 ================
 
-- ``server-version``- The server version of the Gel project.
+- ``server-version``- version of Gel server to use with this project.
 
   .. note::
 
@@ -32,16 +32,16 @@ signals to the CLI and client bindings that the directory is an instance-linked
       support `all of the same version specifications as Cargo`_,
       Rust's package manager.
 
-  .. note::
+.. note::
 
-      ``edgedb.toml`` files for versions of |Gel| prior to 6.0 use
-      ``[edgedb]`` table, not ``[instance]``.
+    For versions of |Gel| prior to 6.0 use ``[edgedb]`` table
+    instead of ``[instance]``.
 
 
 [project] table
 ===============
 
-- ``schema-dir``- The directory where schema files will be stored.
+- ``schema-dir``- directory where schema files will be stored.
   Defaults to ``dbschema``.
 
 
@@ -50,7 +50,7 @@ Example
 
 .. code-block:: toml
 
-    [gel]
+    [instance]
     server-version = "6.0"
 
     [project]
