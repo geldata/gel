@@ -1303,3 +1303,51 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             ''',
             []
         )
+
+    async def test_edgeql_aliases_array_of_array_01(self):
+        await self.assert_query_result(
+            r"""
+                select AliasArrayOfArrayOfScalar;
+            """,
+            [
+                [[1, 2, 3], [4, 5, 6]],
+            ],
+        )
+
+    async def test_edgeql_aliases_array_of_array_02(self):
+        await self.assert_query_result(
+            r"""
+                select CardsByCost;
+            """,
+            [
+                [
+                    [],
+                    ['Imp', 'Dwarf', 'Sprite'],
+                    ['Bog monster', 'Giant eagle'],
+                    ['Giant turtle', 'Golem'],
+                    ['Djinn']
+                ],
+            ],
+        )
+
+    async def test_edgeql_aliases_array_of_array_03(self):
+        await self.assert_query_result(
+            r"""
+                select array_agg((
+                    for card_group in array_unpack(CardsByCost)
+                        select array_agg((
+                            for card in array_unpack(card_group)
+                                select card.name
+                        ))
+                ))
+            """,
+            [
+                [
+                    [],
+                    ['Imp', 'Dwarf', 'Sprite'],
+                    ['Bog monster', 'Giant eagle'],
+                    ['Giant turtle', 'Golem'],
+                    ['Djinn']
+                ],
+            ],
+        )
