@@ -104,7 +104,8 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
         if span:
             self.set_span(span)
         elif position:
-            self.set_position(*position)
+            self.set_linecol(position[1], position[0])
+            self.set_position(position[2], position[3])
 
         if filename is not None:
             self.set_filename(filename)
@@ -138,11 +139,31 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
     def set_filename(self, filename):
         self._attrs[FIELD_FILENAME] = filename
 
-    def set_linecol(self, line: Optional[int], col: Optional[int]):
+    def set_linecol(
+        self,
+        line: Optional[int],  # one-based
+        col: Optional[int],  # one-based
+    ):
         if line is not None:
             self._attrs[FIELD_LINE_START] = str(line)
         if col is not None:
             self._attrs[FIELD_COLUMN_START] = str(col)
+
+    def compute_line_col(self, source: str):
+        from edb.edgeql import tokenizer
+
+        start: int = self.position
+        end: int | None = self.position_end
+        if end and end < 0:
+            end = None
+
+        start_s, end_s = tokenizer.inflate_span(source, (start, end))
+
+        self._attrs[FIELD_LINE_START] = str(start_s.line)
+        self._attrs[FIELD_COLUMN_START] = str(start_s.column)
+        if end_s is not None:
+            self._attrs[FIELD_LINE_END] = str(end_s.line)
+            self._attrs[FIELD_COLUMN_END] = str(end_s.column)
 
     def set_hint_and_details(self, hint, details=None):
         ex.replace_context(
@@ -179,12 +200,9 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
     def set_position(
         self,
-        column: int,
-        line: int,
-        start: int,
-        end: Optional[int],
+        start: int,  # zero-based
+        end: Optional[int],  # zero-based
     ):
-        self.set_linecol(line, column)
         self._attrs[FIELD_POSITION_START] = str(start)
         self._attrs[FIELD_POSITION_END] = str(end or start)
 
@@ -207,6 +225,10 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
     @property
     def position(self):
         return int(self._attrs.get(FIELD_POSITION_START, -1))
+
+    @property
+    def position_end(self):
+        return int(self._attrs.get(FIELD_POSITION_END, -1))
 
     @property
     def hint(self):

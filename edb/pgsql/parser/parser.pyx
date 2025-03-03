@@ -90,7 +90,8 @@ def pg_parse(query) -> str:
     if result.error:
         error = PSqlSyntaxError(
             result.error.message.decode('utf8'),
-            result.error.lineno, result.error.cursorpos
+            result.error.cursorpos,
+            query,
         )
         pg_query_free_parse_result(result)
         raise error
@@ -141,7 +142,8 @@ def pg_normalize(query: str) -> NormalizedQuery:
         if result.error:
             error = PSqlSyntaxError(
                 result.error.message.decode('utf8'),
-                result.error.lineno, result.error.cursorpos
+                result.error.cursorpos,
+                query,
             )
             raise error
 
