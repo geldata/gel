@@ -252,14 +252,16 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
         )
 
     async def test_edgeql_functions_array_agg_10(self):
-        with self.assertRaisesRegex(
-                edgedb.UnsupportedFeatureError,
-                r"nested arrays are not supported"):
-            await self.con.query(r"""
-                SELECT array_agg(
-                    [<str>Issue.number, Issue.status.name]
-                    ORDER BY Issue.number);
-            """)
+        await self.assert_query_result(
+            r'''
+                SELECT array_agg((
+                    for issue in Issue
+                        select [<str>issue.number, issue.status.name]
+                    ORDER BY issue.number
+                ));
+            ''',
+            [[['1', 'Open'], ['2', 'Open'], ['3', 'Closed'], ['4', 'Closed']]]
+        )
 
     @tb.needs_factoring
     async def test_edgeql_functions_array_agg_11(self):
@@ -311,12 +313,12 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
         )
 
     async def test_edgeql_functions_array_agg_14(self):
-        with self.assertRaisesRegex(
-                edgedb.UnsupportedFeatureError,
-                r"nested arrays are not supported"):
-            await self.con.query(r'''
+        await self.assert_query_result(
+            r'''
                 SELECT array_agg(array_agg(User.name));
-            ''')
+            ''',
+            [[['Elvis', 'Yury']]]
+        )
 
     @tb.needs_factoring
     async def test_edgeql_functions_array_agg_15(self):
@@ -428,6 +430,32 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
             SELECT X := array_agg((foo := 1, bar := 2)) FILTER X[0].foo = 1;
             ''',
             [[{"bar": 2, "foo": 1}]],
+        )
+
+    async def test_edgeql_functions_array_agg_24(self):
+        await self.assert_query_result(
+            '''SELECT array_agg({[1],[2],[3]});''',
+            [[[1], [2], [3]]],
+        )
+
+    async def test_edgeql_functions_array_agg_25(self):
+        await self.assert_query_result(
+            '''SELECT array_agg({
+                [(1, 'A')], [(2, 'B')], [(3, 'C')],
+            });''',
+            [[[(1, 'A')], [(2, 'B')], [(3, 'C')]]],
+        )
+
+    async def test_edgeql_functions_array_agg_26(self):
+        await self.assert_query_result(
+            '''SELECT array_agg({
+                [([[11, 12], [13, 14]], [['AA', 'AB'], ['AC', 'AD']])],
+                [([[21, 22], [23, 24]], [['BA', 'BB'], ['BC', 'BD']])],
+            });''',
+            [[
+                [([[11, 12], [13, 14]], [['AA', 'AB'], ['AC', 'AD']])],
+                [([[21, 22], [23, 24]], [['BA', 'BB'], ['BC', 'BD']])],
+            ]],
         )
 
     async def test_edgeql_functions_array_unpack_01(self):
@@ -557,6 +585,24 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
             [True],
         )
 
+    async def test_edgeql_functions_array_unpack_07(self):
+        await self.assert_query_result(
+            '''SELECT array_unpack([[1], [2, 3], [4, 5, 6]]);''',
+            [[1], [2, 3], [4, 5, 6]],
+        )
+        await self.assert_query_result(
+            '''SELECT array_unpack([
+                [(1, 'A')],
+                [(2, 'B'), (3, 'C')],
+                [(4, 'D'), (5, 'E'), (6, 'F')],
+            ]);''',
+            [
+                [(1, 'A')],
+                [(2, 'B'), (3, 'C')],
+                [(4, 'D'), (5, 'E'), (6, 'F')],
+            ],
+        )
+
     async def test_edgeql_functions_array_fill_01(self):
         await self.assert_query_result(
             r'''select array_fill(0, 5);''',
@@ -622,6 +668,20 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
         ):
             async with self.con.transaction():
                 await self.con.query(r'select array_fill(0, 12147480000);')
+
+    @test.xerror("""
+        edb.errors.InternalServerError: return type record[] is not supported
+        for SQL functions
+    """)
+    async def test_edgeql_functions_array_fill_05(self):
+        await self.assert_query_result(
+            '''SELECT array_fill([1], 5);''',
+            [[[1]] * 5],
+        )
+        await self.assert_query_result(
+            '''SELECT array_fill([(1, 'A')], 5);''',
+            [[(1, 'A')] * 5],
+        )
 
     async def test_edgeql_functions_array_replace_01(self):
         await self.assert_query_result(
@@ -704,6 +764,28 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
                 {"a": 10, "b": "b"},
                 {"a": 3, "b": "hello"},
                 {"a": 0, "b": "a"}
+            ]],
+        )
+
+    async def test_edgeql_functions_array_replace_05(self):
+        await self.assert_query_result(
+            '''SELECT array_replace([[1], [2, 3], [4, 5, 6]], [2, 3], [9]);''',
+            [[[1], [9], [4, 5, 6]]],
+        )
+        await self.assert_query_result(
+            '''SELECT array_replace(
+                [
+                    [(1, 'A')],
+                    [(2, 'B'), (3, 'C')],
+                    [(4, 'D'), (5, 'E'), (6, 'F')],
+                ],
+                [(2, 'B'), (3, 'C')],
+                [(9, 'I')],
+            );''',
+            [[
+                [(1, 'A')],
+                [(9, 'I')],
+                [(4, 'D'), (5, 'E'), (6, 'F')],
             ]],
         )
 
@@ -885,6 +967,27 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''SELECT array_get([1, 2, 3], -20);''',
+            [],
+        )
+
+        # array of array
+        await self.assert_query_result(
+            r'''SELECT array_get([[1], [2], [3]], 2);''',
+            [[3]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_get([[1], [2], [3]], -2);''',
+            [[2]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_get([[1], [2], [3]], 20);''',
+            [],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_get([[1], [2], [3]], -20);''',
             [],
         )
 
@@ -1073,6 +1176,66 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
             [[9]],
         )
 
+    @test.xerror("""
+        edb.errors.InternalServerError: return type record[] is not supported
+        for SQL functions
+    """)
+    async def test_edgeql_functions_array_set_01b(self):
+        # Array of arrays
+
+        # Positive indexes
+        await self.assert_query_result(
+            r'''SELECT array_set([[1], [2], [3], [4]], 0, [9]);''',
+            [[[9], [2], [3], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_set([[1], [2], [3], [4]], 1, [9]);''',
+            [[[1], [9], [3], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_set([[1], [2], [3], [4]], 2, [9]);''',
+            [[[1], [2], [9], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_set([[1], [2], [3], [4]], 3, [9]);''',
+            [[[1], [2], [3], [9]]],
+        )
+
+        # Negative indexes
+        await self.assert_query_result(
+            r'''SELECT array_set([[1], [2], [3], [4]], -1, [9]);''',
+            [[[1], [2], [3], [9]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_set([[1], [2], [3], [4]], -2, [9]);''',
+            [[[1], [2], [9], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_set([[1], [2], [3], [4]], -3, [9]);''',
+            [[[1], [9], [3], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_set([[1], [2], [3], [4]], -4, [9]);''',
+            [[[9], [2], [3], [4]]],
+        )
+
+        # Size 1 array
+        await self.assert_query_result(
+            r'''SELECT array_set([[1]], 0, [9]);''',
+            [[[9]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_set([[1]], -1, [9]);''',
+            [[[9]]],
+        )
+
     async def test_edgeql_functions_array_set_02(self):
         with self.assertRaisesRegex(
             edgedb.InvalidValueError,
@@ -1195,6 +1358,82 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
         await self.assert_query_result(
             r'''SELECT array_insert(<array<int64>>[], 0, 9);''',
             [[9]],
+        )
+
+    @test.xerror("""
+        edb.errors.InternalServerError: return type record[] is not supported
+        for SQL functions
+    """)
+    async def test_edgeql_functions_array_insert_01b(self):
+        # Array of array
+
+        # Positive indexes
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1], [2], [3], [4]], 0, [9]);''',
+            [[[9], [1], [2], [3], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1], [2], [3], [4]], 1, [9]);''',
+            [[[1], [9], [2], [3], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1], [2], [3], [4]], 2, [9]);''',
+            [[[1], [2], [9], [3], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1], [2], [3], [4]], 3, [9]);''',
+            [[[1], [2], [3], [9], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1], [2], [3], [4]], 4, [9]);''',
+            [[[1], [2], [3], [4], [9]]],
+        )
+
+        # Negative indexes
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1], [2], [3], [4]], -1, [9]);''',
+            [[[1], [2], [3], [9], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1], [2], [3], [4]], -2, [9]);''',
+            [[[1], [2], [9], [3], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1], [2], [3], [4]], -3, [9]);''',
+            [[[1], [9], [2], [3], [4]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1], [2], [3], [4]], -4, [9]);''',
+            [[[9], [1], [2], [3], [4]]],
+        )
+
+        # Size 1 array
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1]], 0, [9]);''',
+            [[[9], [1]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1]], 1, [9]);''',
+            [[[1], [9]]],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT array_insert([[1]], -1, [9]);''',
+            [[[9], [1]]],
+        )
+
+        # Size 0 array
+        await self.assert_query_result(
+            r'''SELECT array_insert(<array<int64>>[], 0, [9]);''',
+            [[[9]]],
         )
 
     async def test_edgeql_functions_array_insert_02(self):
@@ -4745,6 +4984,16 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
             [],
         )
 
+        await self.assert_query_result(
+            r'''SELECT contains([[1], [2, 3], [4, 5, 6]], [2, 3]);''',
+            [True],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT contains([[1], [2, 3], [4, 5, 6]], [2]);''',
+            [False],
+        )
+
     async def test_edgeql_functions_contains_02(self):
         await self.assert_query_result(
             r'''
@@ -4766,6 +5015,22 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
             r'''
                 WITH x := [3, 1, 2]
                 SELECT contains(x, 5);
+            ''',
+            [False],
+        )
+
+        await self.assert_query_result(
+            r'''
+                WITH x := [[1], [2, 3], [4, 5, 6]]
+                SELECT contains(x, [2, 3]);
+            ''',
+            [True],
+        )
+
+        await self.assert_query_result(
+            r'''
+                WITH x := [[1], [2, 3], [4, 5, 6]]
+                SELECT contains(x, [2]);
             ''',
             [False],
         )
@@ -4987,6 +5252,22 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
                             'the', 1);
             ''',
             {6},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT find(
+                [['the', 'quick'], ['brown', 'fox']],
+                ['the', 'quick']
+            );''',
+            {0},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT find(
+                [['the', 'quick'], ['brown', 'fox']],
+                ['the']
+            );''',
+            {-1},
         )
 
     async def test_edgeql_functions_str_case_01(self):
