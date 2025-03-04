@@ -495,7 +495,7 @@ handle the verification flow, we implement an endpoint:
        body: JSON.stringify({
          verification_token,
          verifier,
-         provider: "builtin::webauthn",
+         provider: "builtin::local_webauthn",
        }),
      });
 
