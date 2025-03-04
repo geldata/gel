@@ -2250,7 +2250,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        repository: edgedb/edgedb-docker
+        repository: geldata/gel-docker
         ref: master
         path: dockerfile
 
@@ -2262,7 +2262,7 @@ jobs:
       run: |
         set -e
 
-        url='https://registry.hub.docker.com/v2/repositories/edgedb/edgedb/tags?page_size=100'
+        url='https://registry.hub.docker.com/v2/repositories/geldata/gel/tags?page_size=100'
         repo_tags=$(
           while [ -n "$url" ]; do
             resp=$(curl -L -s "$url")
@@ -2320,7 +2320,7 @@ jobs:
         password: ${{ secrets.GITHUB_CI_BOT_TOKEN }}
         tags: "${{ steps.tags.outputs.tags }}"
         workdir: dockerfile
-        buildargs: version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }},exact_version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }},subdist=testing
+        buildargs: branding=gel,version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }},exact_version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }},subdist=testing
         platforms: linux/amd64,linux/arm64
 
   workflow-notifications:
