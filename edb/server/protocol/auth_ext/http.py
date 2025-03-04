@@ -1419,11 +1419,17 @@ class Router:
         email = _get_search_param(query, "email")
         webauthn_client = webauthn.Client(self.db)
 
-        (user_handle, registration_options) = (
-            await webauthn_client.create_registration_options_for_email(
-                email=email,
+        try:
+            (user_handle, registration_options) = (
+                await webauthn_client.create_registration_options_for_email(
+                    email=email,
+                )
             )
-        )
+        except Exception as e:
+            logger.error(f"Failed to create WebAuthn registration options: {e}")
+            raise errors.WebAuthnRegistrationFailed(
+                "Failed to create registration options"
+            ) from e
 
         response.status = http.HTTPStatus.OK
         response.content_type = b"application/json"
@@ -1476,11 +1482,18 @@ class Router:
         require_verification = webauthn_client.provider.require_verification
         pkce_code: Optional[str] = None
 
-        email_factor = await webauthn_client.register(
-            credentials=credentials,
-            email=email,
-            user_handle=user_handle,
-        )
+        try:
+            email_factor = await webauthn_client.register(
+                credentials=credentials,
+                email=email,
+                user_handle=user_handle,
+            )
+        except Exception as e:
+            logger.error(f"Failed to register WebAuthn: {e}")
+            raise errors.WebAuthnRegistrationFailed(
+                "Failed to register WebAuthn"
+            ) from e
+
         identity_id = email_factor.identity.id
 
         await self._maybe_send_webhook(
@@ -1579,11 +1592,19 @@ class Router:
             )
         webauthn_client = webauthn.Client(self.db)
 
-        (_, registration_options) = (
-            await webauthn_client.create_authentication_options_for_email(
-                email=email, webauthn_provider=webauthn_provider
+        try:
+            (_, registration_options) = (
+                await webauthn_client.create_authentication_options_for_email(
+                    email=email, webauthn_provider=webauthn_provider
+                )
             )
-        )
+        except Exception as e:
+            logger.error(
+                f"Failed to create WebAuthn authentication options: {e}"
+            )
+            raise errors.WebAuthnAuthenticationFailed(
+                "Failed to create authentication options"
+            ) from e
 
         response.status = http.HTTPStatus.OK
         response.content_type = b"application/json"
@@ -1606,10 +1627,16 @@ class Router:
         assertion: str = data["assertion"]
         pkce_challenge: str = data["challenge"]
 
-        identity = await webauthn_client.authenticate(
-            assertion=assertion,
-            email=email,
-        )
+        try:
+            identity = await webauthn_client.authenticate(
+                assertion=assertion,
+                email=email,
+            )
+        except Exception as e:
+            logger.error(f"Failed to authenticate WebAuthn: {e}")
+            raise errors.WebAuthnAuthenticationFailed(
+                "Failed to authenticate WebAuthn"
+            ) from e
 
         require_verification = webauthn_client.provider.require_verification
         if require_verification:

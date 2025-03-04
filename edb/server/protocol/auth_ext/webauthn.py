@@ -22,6 +22,7 @@ import dataclasses
 import base64
 import json
 import webauthn
+import logging
 
 from typing import Optional, Tuple, TYPE_CHECKING
 from webauthn.helpers import (
@@ -38,6 +39,7 @@ from . import config, data, errors, util, local
 if TYPE_CHECKING:
     from edb.server import tenant as edbtenant
 
+logger = logging.getLogger('edb.server.ext.auth')
 
 @dataclasses.dataclass(repr=False)
 class WebAuthnRegistrationChallenge:
@@ -171,17 +173,12 @@ insert ext::auth::WebAuthnRegistrationChallenge {
             user_handle=user_handle,
         )
 
-        try:
-            registration_verification = webauthn.verify_registration_response(
-                credential=credentials,
-                expected_challenge=registration_challenge.challenge,
-                expected_rp_id=self.provider.relying_party_id,
-                expected_origin=self.provider.relying_party_origin,
-            )
-        except Exception as e:
-            raise errors.WebAuthnRegistrationFailed(
-                "Invalid registration response. Please retry registration."
-            ) from e
+        registration_verification = webauthn.verify_registration_response(
+            credential=credentials,
+            expected_challenge=registration_challenge.challenge,
+            expected_rp_id=self.provider.relying_party_id,
+            expected_origin=self.provider.relying_party_origin,
+        )
 
         try:
             result = await execute.parse_execute_json(
@@ -220,6 +217,7 @@ select factor { ** };""",
             if isinstance(exc, ConstraintViolationError):
                 raise errors.UserAlreadyRegistered()
             else:
+                logger.error(f"WebAuthn registration failed: {exc}")
                 raise exc
 
         result_json = json.loads(result.decode())
