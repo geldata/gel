@@ -61,6 +61,13 @@ Install the Gel package.
 
    $ sudo yum install gel-6
 
+Disable SELinux.
+
+.. code-block:: bash
+
+   $ sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+   $ reboot
+
 
 .. _ref_guide_deployment_bare_metal_enable_unit:
 
@@ -86,7 +93,7 @@ default. You can start the server by enabling the unit.
    $ sudo systemctl enable --now gel-server-6
 
 This will start the server on port 5656, and the data directory will be
-``/var/lib/gel/1/data``.
+``/var/lib/gel/6/data``.
 
 .. warning::
 
