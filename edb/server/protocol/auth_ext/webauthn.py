@@ -22,7 +22,6 @@ import dataclasses
 import base64
 import json
 import webauthn
-import logging
 
 from typing import Optional, Tuple, TYPE_CHECKING
 from webauthn.helpers import (
@@ -38,8 +37,6 @@ from . import config, data, errors, util, local
 
 if TYPE_CHECKING:
     from edb.server import tenant as edbtenant
-
-logger = logging.getLogger('edb.server.ext.auth')
 
 
 @dataclasses.dataclass(repr=False)
@@ -218,7 +215,6 @@ select factor { ** };""",
             if isinstance(exc, ConstraintViolationError):
                 raise errors.UserAlreadyRegistered()
             else:
-                logger.error(f"WebAuthn registration failed: {exc}")
                 raise exc
 
         result_json = json.loads(result.decode())
