@@ -624,7 +624,7 @@ traversing a backlink would look like this:
 .. _ref_eql_select_order:
 
 Filtering, ordering, and limiting of links
-==========================================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Clauses like ``filter``, ``order by``, and ``limit`` can be used on links.
 If no properties of a link are selected, you can place the clauses directly

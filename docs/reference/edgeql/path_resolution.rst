@@ -183,9 +183,8 @@ that have not yet been verified or updated.
 
 .. _ref_eql_old_path_resolution:
 
-===================
 Legacy path scoping
-===================
+-------------------
 
 This section describes the path scoping algorithm used exclusively
 until |EdgeDB| 5.0 and by default in |Gel| 6.0.
