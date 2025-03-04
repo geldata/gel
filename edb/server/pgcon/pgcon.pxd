@@ -58,8 +58,14 @@ cdef enum PGAuthenticationState:
     PGAUTH_SASL_FINAL = 12
 
 
+cdef class AbstractFrontendConnection:
+
+    cdef write(self, WriteBuffer buf)
+    cdef flush(self)
+
+
 @cython.final
-cdef class PGConnection:
+cdef class PGConnectionRaw:
 
     cdef:
         ReadBuffer buffer
@@ -91,8 +97,7 @@ cdef class PGConnection:
 
         public object connection
         public object addr
-        object server
-        object tenant
+        public object listener
         bint is_system_db
         bint close_requested
 
@@ -103,10 +108,10 @@ cdef class PGConnection:
         bint _is_ssl
 
         public object pinned_by
+        public object data
 
-        object last_state
+        public object last_state
         bint state_reset_needs_commit
-        public object last_init_con_data
 
         str last_indirect_return
 
@@ -131,7 +136,7 @@ cdef class PGConnection:
     cdef send_sync(self)
 
     cdef make_clean_stmt_message(self, bytes stmt_name)
-    cdef send_query_unit_group(
+    cpdef send_query_unit_group(
         self, object query_unit_group, bint sync,
         object bind_datas, bytes state,
         ssize_t start, ssize_t end, int dbver, object parse_array,
@@ -158,7 +163,6 @@ cdef class PGConnection:
         dict type_id_map,
     )
 
-    cdef inline str get_tenant_label(self)
     cpdef set_stmt_cache_size(self, int maxsize)
 
 cdef setting_to_sql(name, setting)
