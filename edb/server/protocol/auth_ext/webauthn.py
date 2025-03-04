@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger('edb.server.ext.auth')
 
+
 @dataclasses.dataclass(repr=False)
 class WebAuthnRegistrationChallenge:
     """
