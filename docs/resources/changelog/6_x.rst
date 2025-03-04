@@ -626,3 +626,41 @@ Bug fixes
 * Don't emit instance configs matching their defaults in
   ``describe instance config``.
   (:eql:gh:`#8316`)
+
+
+6.1
+===
+
+* Report migration count and object count as metrics
+  (:eql:gh:`#8369`)
+
+* Increase recursion limit in compiler worker processes.
+  This should fix dumps in some cases.
+  (:eql:gh:`#8379`)
+
+
+6.2
+===
+
+* Fix systemd service descriptions in distro packages
+
+* Fix tagging SQL over binary protocol
+  (:eql:gh:`#8371`)
+
+* Improve error message for $0 over SQL adapter
+  (:eql:gh:`#8388`)
+
+* Fix referencing ``ext::auth::ClientTokenIdentity`` from a link default
+  (:eql:gh:`#8394`)
+
+* Add default value for ``ai::EmbeddingModel::embedding_model_max_batch_tokens ``
+  (:eql:gh:`#8406`)
+
+* Prevent ai extension connecting to branch being dropped
+  (:eql:gh:`#8416`)
+
+* Fix ``ON TARGET DELETE ALLOW`` behavior when link optionality is changed
+  (:eql:gh:`#8419`)
+
+* Fix server error when trying to register a new WebAuthn identity in the auth extension
+  (:eql:gh:`#8428`)
