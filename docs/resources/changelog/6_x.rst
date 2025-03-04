@@ -653,7 +653,7 @@ Bug fixes
 * Fix referencing ``ext::auth::ClientTokenIdentity`` from a link default
   (:eql:gh:`#8394`)
 
-* Add default value for ``ai::EmbeddingModel::embedding_model_max_batch_tokens ``
+* Add default value for ``ai::EmbeddingModel::embedding_model_max_batch_tokens``
   (:eql:gh:`#8406`)
 
 * Prevent ai extension connecting to branch being dropped
