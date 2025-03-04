@@ -274,6 +274,13 @@ class Router:
                 ex=ex,
             )
 
+        except errors.WebAuthnRegistrationFailed as ex:
+            _fail_with_error(
+                response=response,
+                status=http.HTTPStatus.BAD_REQUEST,
+                ex=ex,
+            )
+
         except errors.WebAuthnAuthenticationFailed as ex:
             _fail_with_error(
                 response=response,

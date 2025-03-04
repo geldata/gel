@@ -171,12 +171,17 @@ insert ext::auth::WebAuthnRegistrationChallenge {
             user_handle=user_handle,
         )
 
-        registration_verification = webauthn.verify_registration_response(
-            credential=credentials,
-            expected_challenge=registration_challenge.challenge,
-            expected_rp_id=self.provider.relying_party_id,
-            expected_origin=self.provider.relying_party_origin,
-        )
+        try:
+            registration_verification = webauthn.verify_registration_response(
+                credential=credentials,
+                expected_challenge=registration_challenge.challenge,
+                expected_rp_id=self.provider.relying_party_id,
+                expected_origin=self.provider.relying_party_origin,
+            )
+        except Exception as e:
+            raise errors.WebAuthnRegistrationFailed(
+                "Invalid registration response. Please retry registration."
+            ) from e
 
         try:
             result = await execute.parse_execute_json(
