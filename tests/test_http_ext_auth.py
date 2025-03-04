@@ -4149,6 +4149,61 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
             )
 
+    async def test_http_auth_ext_webauthn_register_invalid_request(self):
+        with self.http_con() as http_con:
+            email = f"{uuid.uuid4()}@example.com"
+            body, _, status = self.http_con_request(
+                http_con,
+                method="GET",
+                path=f"webauthn/register/options?email={email}",
+            )
+            self.assertEqual(status, 200, body.decode())
+            body_json = json.loads(body)
+            self.assertIn("user", body_json)
+            self.assertIn("id", body_json["user"])
+            user_handle = body_json["user"]["id"]
+            credentials = {
+                "rawId": base64.urlsafe_b64encode(uuid.uuid4().bytes)
+                .rstrip(b"=")
+                .decode(),
+                "response": {
+                    "clientDataJSON": base64.urlsafe_b64encode(
+                        uuid.uuid4().bytes
+                    )
+                    .rstrip(b"=")
+                    .decode(),
+                    "authenticatorData": base64.urlsafe_b64encode(
+                        uuid.uuid4().bytes
+                    )
+                    .rstrip(b"=")
+                    .decode(),
+                    "signature": base64.urlsafe_b64encode(uuid.uuid4().bytes)
+                    .rstrip(b"=")
+                    .decode(),
+                    "userHandle": user_handle,
+                },
+            }
+
+            body, _, status = self.http_con_request(
+                http_con,
+                method="POST",
+                headers={
+                    "Content-Type": "application/json",
+                },
+                body=json.dumps(
+                    {
+                        "provider": "builtin::local_webauthn",
+                        "email": email,
+                        "user_handle": user_handle,
+                        "credentials": credentials,
+                        "verify_url": "https://example.com/app/auth/verify",
+                        "challenge": "some_pkce_challenge",
+                    }
+                ).encode(),
+                path="webauthn/register",
+            )
+            self.assertEqual(status, 401, body.decode())
+
     async def test_http_auth_ext_magic_link_with_link_url(self):
         email = f"{uuid.uuid4()}@example.com"
         challenge = "test_challenge"
