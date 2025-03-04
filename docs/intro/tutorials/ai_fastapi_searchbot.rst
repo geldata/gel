@@ -51,9 +51,7 @@ with semantic search-based cross-chat memory.
   following uv's instructions on `managing dependencies
   <https://docs.astral.sh/uv/concepts/projects/dependencies/#optional-dependencies>`_,
   as well as FastAPI's `installation docs
-  <https://fastapi.tiangolo.com/#installation>`_. Running ``uv sync`` after
-  that will create our virtual environment in a ``.venv`` directory and ensure
-  it's ready. As the last step, we'll activate the environment and get started.
+  <https://fastapi.tiangolo.com/#installation>`_. Installiing dependencies will create a virtual environment and a lockfile. We'll activate the environment and get started.
 
   .. note::
 
@@ -64,7 +62,6 @@ with semantic search-based cross-chat memory.
 
       $ uv add "fastapi[standard]" \
         && uv add gel \
-        && uv sync \
         && source .venv/bin/activate
 
 
@@ -116,19 +113,24 @@ with semantic search-based cross-chat memory.
   Once the server gets up and running, we can make sure it works using FastAPI's
   built-in UI at <http://127.0.0.1:8000/docs>_, or manually with ``curl``:
 
+  .. note::
+      To pretty-print results in this and all following cURL examples, you can use ``jq``, by piping the output to it. `jq <https://jqlang.org/>`_ is a lightweight and flexible command-line JSON processor that, among other things, formats responses with proper indentation. However, using it is optional for this tutorial.
+
   .. code-block:: bash
 
-      $ curl -X 'GET' \
-        'http://127.0.0.1:8000/' \
-        -H 'accept: application/json'
+    $ curl -X 'GET' \
+      'http://127.0.0.1:8000/' \
+      -H 'accept: application/json'
 
-      {"message":"Hello World"}
+    {
+      "message":"Hello World"
+    }
 
 
 .. edb:split-section::
 
   Now, to create the search endpoint we mentioned earlier, we need to pass our
-  query as a parameter to it. We'd prefer to have it in the request's body
+  query as a parameter to it. We prefer to have it in the request's body
   since user messages can be long.
 
   In FastAPI land, this is done by creating a Pydantic schema and making it the
@@ -192,17 +194,14 @@ to it by implementing web search capabilities.
 
 .. edb:split-section::
 
-  There're many powerful feature-rich products for LLM-driven web search. But
-  in this tutorial we're going to use a much more reliable source of real-world
-  information that is comment threads on `Hacker News
+  Many powerful, feature-rich products exist for LLM-driven web search. In this tutorial, we'll use  comment threads on `Hacker News
   <https://news.ycombinator.com/>`_. Their `web API
   <https://hn.algolia.com/api>`_ is free of charge and doesn't require an
   account. Below is a simple function that requests a full-text search for a
   string query and extracts a nice sampling of comment threads from each of the
   stories that came up in the result.
 
-  We are not going to cover this code sample in too much depth. Feel free to grab
-  it save it to ``app/web.py``, or make your own.
+  We are not going to cover this code sample in too much depth. Feel free to grab it and save it to ``app/web.py``, or make your own.
 
   Notice that we've created another Pydantic type called ``WebSource`` to store
   our web search results. There's no framework-related reason for that, it's just
@@ -374,7 +373,7 @@ those results to the LLM to get a nice-looking summary.
 
 .. edb:split-section::
 
-  There's a million different LLMs accessible via a web API (`one
+  There are a million different LLMs accessible via a web API (`one
   <https://docs.anthropic.com/en/api/getting-started>`_, `two
   <https://ai.google.dev/gemini-api/docs>`_, `three
   <https://ollama.com/search>`_, `four <https://docs.mistral.ai/api/>`_ to name
@@ -388,6 +387,7 @@ those results to the LLM to get a nice-looking summary.
   .. code-block:: python
       :caption: app/main.py
 
+      import os
       import requests
       from dotenv import load_dotenv
 
@@ -418,12 +418,8 @@ those results to the LLM to get a nice-looking summary.
 .. edb:split-section::
 
   Note that this cloud LLM API (and many others) requires a secret key to be
-  set as an environment variable. A common way to manage those is to use the
-  ``python-dotenv`` library in combinations with a ``.env`` file. Feel free to
-  browse `the readme
-  <https://github.com/theskumar/python-dotenv?tab=readme-ov-file#getting-started>`_,
-  to learn more. Create a file called ``.env`` in the root directory and put
-  your api key in there:
+  set as an environment variable. A common way to manage them is to use the
+  ``python-dotenv`` library in combination with a ``.env`` file. Create a ``.env`` file in the root directory and store your API key inside it. You can generate an API key `here <https://platform.openai.com/api-keys>`_:
 
   .. code-block:: .env
       :caption: .env
@@ -437,7 +433,7 @@ those results to the LLM to get a nice-looking summary.
 
   .. code-block:: bash
 
-      uv add python-dotenv
+      $ uv add python-dotenv
 
 
 .. edb:split-section::
@@ -508,7 +504,7 @@ those results to the LLM to get a nice-looking summary.
           'http://127.0.0.1:8000/search' \
           -H 'accept: application/json' \
           -H 'Content-Type: application/json' \
-          -d '{ "query": "gel" }'
+          -d '{ "query": "edgedb" }'
 
 
 5. Use Gel to implement chat history
@@ -536,11 +532,7 @@ Now's a good time to introduce Gel.
       $ gel project init --non-interactive
 
 
-This command is going to put some project scaffolding inside our app, spin up a
-local instace of Gel, and then link the two together. From now on, all
-Gel-related things that happen inside our project directory are going to be
-automatically run on the correct database instance, no need to worry about
-connection incantations.
+This command will generate project scaffolding inside our app, spin up a local instance of Gel, and then link the two together. From now on, all Gel-related operations within our project directory will automatically use the correct database instance—no need to worry about connection configurations.
 
 
 Defining the schema
@@ -552,15 +544,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  We obviously want to keep track of the messages, so we need to represent
-  those in the schema. By convention established in the LLM space, each message
-  is going to have a role in addition to the message content itself. We can
-  also get Gel to automatically keep track of message's creation time by adding
-  a property callled ``timestamp`` and setting its :ref:`default value
-  <ref_datamodel_props>` to the output of the :ref:`datetime_current()
-  <ref_std_datetime>` function. Finally, LLM messages in our search bot have
-  source URLs associated with them. Let's keep track of those too, by adding a
-  :ref:`multi-property <ref_datamodel_props>`.
+  To keep track of messages, we need to represent them in the schema. In line with conventions in the LLM space, each message will have a role in addition to its content. We can also configure Gel to automatically keep track of message's creation time by adding a ``timestamp`` property and setting its :ref:`default value<ref_datamodel_props>` to the output of the :ref:`datetime_current()<ref_std_datetime>` function. Finally, LLM messages in our search bot have source URLs associated with them. Let's keep track of those too, by adding a :ref:`multi-property <ref_datamodel_props>`.
 
   .. code-block:: sdl
       :caption: dbschema/default.esdl
@@ -590,9 +574,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  And chats all belong to a certain user, making up their chat history. One other
-  thing we'd like to keep track of about our users is their username, and it would
-  make sense for us to make sure that it's unique by using an ``excusive``
+  And, finally, we'll add a ``User`` type. Each chat belongs to a specific user, forming their chat history. Another important detail to track for users is their username, which should be unique. To enforce this, we can apply an ``exclusive``
   :ref:`constraint <ref_datamodel_constraints>`.
 
   .. code-block:: sdl
@@ -608,9 +590,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  We're going to keep our schema super simple. One cool thing about Gel is that
-  it will enable us to easily implement advanced features such as authentication
-  or AI down the road, but we're gonna come back to that later.
+  We'll keep our schema super simple. One great thing about Gel is that it allows us to easily implement advanced features like authentication or AI in the future—but we'll get to that later.
 
   For now, this is the entire schema we came up with:
 
@@ -642,8 +622,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  Let's use the :gelcmd:`migration create` CLI command, followed by :gelcmd:`migrate` in
-  order to migrate to our new schema and proceed to writing some queries.
+  Let's use the :gelcmd:`migration create` CLI command, followed by :gelcmd:`migrate` in order to migrate to our new schema and proceed to writing some queries.
 
   .. code-block:: bash
 
@@ -655,13 +634,20 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
   Now that our schema is applied, let's quickly populate the database with some
   fake data in order to be able to test the queries. We're going to explore
-  writing queries in a bit, but for now you can just run the following command in
-  the shell:
+  writing queries in a bit, but for now you can just run the following command in the shell:
 
   .. code-block:: bash
-      :class: collapsible
 
       $ mkdir app/sample_data && cat << 'EOF' > app/sample_data/inserts.edgeql
+
+
+.. edb:split-section::
+
+  After running the command, the terminal will wait for you to input text. Anything you type will be written into ``app/sample_data/inserts.edgeql`` until you type ``EOF`` on a new line. Copy and paste the following text into the terminal:
+
+  .. code-block:: edgeql
+      :class: collapsible
+
       # Create users first
       insert User {
           name := 'alice',
@@ -737,13 +723,11 @@ declaratively. The :gelcmd:`project init` command has created a file called
               })
           }
       };
-      EOF
 
 
 .. edb:split-section::
 
-  This created the ``app/sample_data/inserts.edgeql`` file, which we can now execute
-  using the CLI like this:
+  Type ``EOF`` on a new line to save the file. Now, let's execute the queries using the CLI.
 
   .. code-block:: bash
 
@@ -757,10 +741,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  The :gelcmd:`query` command is one of many ways we can execute a query in Gel. Now
-  that we've done it, there's stuff in the database.
-
-  Let's verify it by running:
+  This will insert data in the database. Let's verify it by running a ``Gel query``:
 
   .. code-block:: bash
 
@@ -776,21 +757,16 @@ Writing queries
 With schema in place, it's time to focus on getting the data in and out of the
 database.
 
-In this tutorial we're going to write queries using :ref:`EdgeQL
-<ref_intro_edgeql>` and then use :ref:`codegen <gel-python-codegen>` to
-generate typesafe function that we can plug directly into out Python code. If
-you are completely unfamiliar with EdgeQL, now is a good time to check out the
-basics before proceeding.
+In this tutorial we'll write queries using :ref:`EdgeQL <ref_intro_edgeql>` and then use :ref:`codegen <gel-python-codegen>` to generate typesafe functions that we can plug directly into our Python code. If you are completely unfamiliar with EdgeQL, now is a good time to check out the basics before proceeding.
 
 
 .. edb:split-section::
 
-  Let's move on. First, we'll create a directory inside ``app`` called
-  ``queries``. This is where we're going to put all of the EdgeQL-related stuff.
+  First, we'll create a directory inside ``app`` called
+  ``queries``. This will serve as the home for all EdgeQL-related stuff.
 
-  We're going to start by writing a query that fetches all of the users. In
-  ``queries`` create a file named ``get_users.edgeql`` and put the following query
-  in there:
+  We'll start by writing a query that fetches all users. In the ``queries``
+  directory, create a file named ``get_users.edgeql`` and add the following query to it:
 
   .. code-block:: edgeql
       :caption: app/queries/get_users.edgeql
@@ -809,14 +785,13 @@ basics before proceeding.
 
 .. edb:split-section::
 
-  It's going to automatically locate the ``.edgeql`` file and generate types for
-  it. We can inspect generated code in ``app.queries/get_users_async_edgeql.py``.
-  Once that is done, let's use those types to create the endpoint in ``main.py``:
+  It automatically locates the ``.edgeql`` file and generates types for it.
+  We can inspect the generated code in ``app.queries/get_users_async_edgeql.py``. Once that is done, let's use those types to create the endpoint in ``main.py``:
 
   .. code-block:: python
       :caption: app/main.py
 
-      from edgedb import create_async_client
+      from gel import create_async_client
       from .queries.get_users_async_edgeql import get_users as get_users_query, GetUsersResult
 
 
@@ -829,7 +804,7 @@ basics before proceeding.
 
 .. edb:split-section::
 
-  Let's verify it that works as expected:
+  Let's verify that it works as expected:
 
   .. code-block:: bash
 
@@ -851,7 +826,7 @@ basics before proceeding.
 
 .. edb:split-section::
 
-  While we're at it, let's also implement the option to fetch a user by their
+  While we're at it, let's also implement the option to fetch a user by
   username. In order to do that, we need to write a new query in a separate file
   ``app/queries/get_user_by_name.edgeql``:
 
@@ -864,19 +839,10 @@ basics before proceeding.
 
 .. edb:split-section::
 
-  After that, we will run the code generator again by calling ``gel-py``. In the
-  app, we are going to reuse the same endpoint that fetches the list of all users.
-  From now on, if the user calls it without any arguments (e.g.
-  ``http://127.0.0.1/users``), they are going to receive the list of all users,
-  same as before. But if they pass a username as a query argument like this:
-  ``http://127.0.0.1/users?username=bob``, the system will attempt to fetch a user
-  named ``bob``.
+  Let's run the code generator again by calling ``gel-py``. In our app, we'll reuse the same endpoint that fetches the list of all users. From now on, if a user calls it without any arguments (e.g., ``http://127.0.0.1/users``), they'll receive the full list of users, just like before. However, if they pass a username as a query argument—for example, ``http://127.0.0.1/users?username=bob``—the system will attempt to fetch the user named bob.
 
-  In order to achieve this, we're going to need to add a ``Query``-type argument
-  to our endpoint function. You can learn more about how to configure this type of
-  arguments in `FastAPI's docs
-  <https://fastapi.tiangolo.com/tutorial/query-params/>`_. It's default value is
-  going to be ``None``, which will enable us to implement our conditional logic:
+  To achieve this, we'll need to add a ``Query``-type argument to our endpoint function. You can learn more about how to configure this type of
+  arguments in `FastAPI's docs <https://fastapi.tiangolo.com/tutorial/query-params/>`_. Setting its default value to ``None`` will allow us to implement conditional logic as needed:
 
   .. code-block:: python
       :caption: app/main.py
@@ -908,7 +874,7 @@ basics before proceeding.
 
 .. edb:split-section::
 
-  And once again, let's verify that everything works:
+  Once again, let's verify that everything works:
 
   .. code-block:: bash
 
@@ -928,9 +894,7 @@ basics before proceeding.
   before, we'll create a new file ``app/queries/create_user.edgeql``, add a query
   to it and run code generation.
 
-  Note that in this query we've wrapped the ``insert`` in a ``select`` statement.
-  This is a common pattern in EdgeQL, that can be used whenever you would like to
-  get something other than object ID when you just inserted it.
+  Note that in this query, we've wrapped the ``insert`` statement inside a ``select``. This is a common pattern in EdgeQL, allowing you to retrieve more than just the object's ID immediately after insertion.
 
   .. code-block:: edgeql
       :caption: app/queries/create_user.edgeql
@@ -973,7 +937,7 @@ basics before proceeding.
 
 .. edb:split-section::
 
-  Once more, let's verify that the new endpoint works as expected:
+  Let's verify that the new endpoint works as expected:
 
   .. code-block:: bash
 
@@ -990,52 +954,55 @@ basics before proceeding.
 
 .. edb:split-section::
 
-  This wraps things up for our user-related functionality. Of course, we now need
-  to deal with Chats and Messages, too. We're not going to go in depth for those,
-  since the process would be quite similar to what we've just done. Instead, feel
-  free to implement those endpoints yourself as an exercise, or copy the code
-  below if you are in rush.
+  That concludes our User-related functionality. Next, we need to handle Chats and Messages. Since the process is quite similar to what we've just covered, we won't go into detail. Instead, you can implement these endpoints yourself as an exercise or simply copy the following code if you're in a rush.
 
   .. code-block:: bash
       :class: collapsible
 
       $ echo 'select Chat {
-          messages: { role, body, sources },
-          user := .<chats[is User],
-      } filter .user.name = <str>$username;' > app/queries/get_chats.edgeql && echo 'select Chat {
-          messages: { role, body, sources },
-          user := .<chats[is User],
-      } filter .user.name = <str>$username and .id = <uuid>$chat_id;' > app/queries/get_chat_by_id.edgeql && echo 'with new_chat := (insert Chat)
-      select (
-          update User filter .name = <str>$username
-          set {
-              chats := assert_distinct(.chats union new_chat)
-          }
-      ) {
-          new_chat_id := new_chat.id
-      }' > app/queries/create_chat.edgeql && echo 'with
-          user := (select User filter .name = <str>$username),
-          chat := (
-              select Chat filter .<chats[is User] = user and .id = <uuid>$chat_id
-          )
-      select Message {
-          role,
-          body,
-          sources,
-          chat := .<messages[is Chat]
-      } filter .chat = chat;' > app/queries/get_messages.edgeql && echo 'with
-          user := (select User filter .name = <str>$username),
-      update Chat
-      filter .id = <uuid>$chat_id and .<chats[is User] = user
-      set {
-          messages := assert_distinct(.messages union (
-              insert Message {
-                  role := <str>$message_role,
-                  body := <str>$message_body,
-                  sources := array_unpack(<array<str>>$sources)
-              }
-          ))
-      }' > app/queries/add_message.edgeql
+      >     messages: { role, body, sources },
+      >     user := .<chats[is User],
+      > } filter .user.name = <str>$username;
+      > ' > app/queries/get_chats.edgeql &&
+      > echo 'select Chat {
+      >     messages: { role, body, sources },
+      >     user := .<chats[is User],
+      > } filter .user.name = <str>$username and .id = <uuid>$chat_id;
+      > ' > app/queries/get_chat_by_id.edgeql &&
+      > echo 'with new_chat := (insert Chat)
+      > select (
+      >     update User filter .name = <str>$username
+      >     set {
+      >         chats := assert_distinct(.chats union new_chat)
+      >     }
+      > ) {
+      >     new_chat_id := new_chat.id
+      > }' > app/queries/create_chat.edgeql && 
+      > echo 'with
+      >     user := (select User filter .name = <str>$username),
+      >     chat := (
+      >         select Chat filter .<chats[is User] = user and .id = <uuid>$chat_id
+      >     )
+      > select Message {
+      >     role,
+      >     body,
+      >     sources,
+      >     chat := .<messages[is Chat]
+      > } filter .chat = chat;
+      > ' > app/queries/get_messages.edgeql && 
+      > echo 'with
+      >     user := (select User filter .name = <str>$username),
+      > update Chat
+      > filter .id = <uuid>$chat_id and .<chats[is User] = user
+      >     set {
+      >         messages := assert_distinct(.messages union (
+      >             insert Message {
+      >                 role := <str>$message_role,
+      >                 body := <str>$message_body,
+      >                 sources := array_unpack(<array<str>>$sources)
+      >             }
+      >         ))
+      > }' > app/queries/add_message.edgeql
 
 
 .. edb:split-section::
@@ -1098,12 +1065,9 @@ basics before proceeding.
 
 .. edb:split-section::
 
-  For the ``post_messages`` function we're going to do something a little bit
-  different though. Since this is now the primary way for the user to add their
+  For the ``post_messages`` function, however, we'll take a slightly different approach. Since this is now the primary way for users to add their
   queries to the system, it functionally superceeds the ``/search`` endpoint we
-  made before. To this end, this function is where we're going to handle saving
-  messages, retrieving chat history, invoking web search and generating the
-  answer.
+  made before. To this end, this function will handle saving messages, retrieving chat history, invoking web searches and generating responses.
 
   .. code-block:: python-diff
       :caption: app/main.py
@@ -1199,8 +1163,8 @@ basics before proceeding.
 
 .. edb:split-section::
 
-  Ok, this should be it for setting up the chat history. Let's test it. First, we
-  are going to start a new chat for our user:
+  That should wrap up the chat history setup. Let's test it. First, we'll
+  start a new chat for our user:
 
   .. code-block:: bash
 
@@ -1217,7 +1181,7 @@ basics before proceeding.
 
 .. edb:split-section::
 
-  Next, let's add a couple messages and wait for the bot to respond:
+  Next, let's add a couple of messages and wait for the bot to respond:
 
   .. code-block:: bash
 
@@ -1227,7 +1191,7 @@ basics before proceeding.
         -H 'Content-Type: application/json' \
         -d '{
         "query": "best database in existence"
-      }'
+        }'
 
       $ curl -X 'POST' \
         'http://127.0.0.1:8000/messages?username=charlie&chat_id=544ef3f2-ded8-11ef-ba16-f7f254b95e36' \
@@ -1235,7 +1199,7 @@ basics before proceeding.
         -H 'Content-Type: application/json' \
         -d '{
         "query": "gel"
-      }'
+        }'
 
 
 .. edb:split-section::
@@ -1543,7 +1507,7 @@ schema.
   .. code-block:: python-diff
       :caption: app.main.py
 
-      + from edgedb.ai import create_async_ai, AsyncEdgeDBAI
+      + from gel.ai import create_async_rag_client, AsyncRAGClient
       + from .queries.search_chats_async_edgeql import (
       +     search_chats as search_chats_query,
       + )
@@ -1581,7 +1545,7 @@ schema.
             web_sources = await search_web(search_query)
 
       +     # 4. Fetch similar chats
-      +     db_ai: AsyncEdgeDBAI = await create_async_ai(gel_client, model="gpt-4o-mini")
+      +     db_ai: AsyncRagClient = await create_async_rag_client(gel_client, model="gpt-4o-mini")
       +     embedding = await db_ai.generate_embeddings(
       +         search_query, model="text-embedding-3-small"
       +     )
