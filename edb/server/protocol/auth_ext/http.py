@@ -279,6 +279,7 @@ class Router:
                 response=response,
                 status=http.HTTPStatus.BAD_REQUEST,
                 ex=ex,
+                exc_info=True,
             )
 
         except errors.WebAuthnAuthenticationFailed as ex:
@@ -286,6 +287,7 @@ class Router:
                 response=response,
                 status=http.HTTPStatus.UNAUTHORIZED,
                 ex=ex,
+                exc_info=True,
             )
 
         except Exception as ex:
@@ -295,6 +297,7 @@ class Router:
                 response=response,
                 status=http.HTTPStatus.INTERNAL_SERVER_ERROR,
                 ex=edb_errors.InternalServerError(str(ex)),
+                exc_info=True,
             )
 
     async def handle_authorize(
@@ -2309,13 +2312,16 @@ def _fail_with_error(
     response: protocol.HttpResponse,
     status: http.HTTPStatus,
     ex: Exception,
+    exc_info: bool = False,
 ) -> None:
     err_dct = {
         "message": str(ex),
         "type": str(ex.__class__.__name__),
     }
 
-    logger.error(f"Failed to handle HTTP request: {err_dct!r}", exc_info=True)
+    logger.error(
+        f"Failed to handle HTTP request: {err_dct!r}", exc_info=exc_info
+    )
     response.body = json.dumps({"error": err_dct}).encode()
     response.status = status
 
