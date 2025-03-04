@@ -155,7 +155,7 @@ def inflate_span(
 
     points = [start]
     if end is not None:
-        points.append(start)
+        points.append(end)
 
     points_sp = ql_parser.SourcePoint.from_offsets(source_bytes, points)
 
