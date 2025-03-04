@@ -1426,7 +1426,6 @@ class Router:
                 )
             )
         except Exception as e:
-            logger.error(f"Failed to create WebAuthn registration options: {e}")
             raise errors.WebAuthnRegistrationFailed(
                 "Failed to create registration options"
             ) from e
@@ -1489,7 +1488,6 @@ class Router:
                 user_handle=user_handle,
             )
         except Exception as e:
-            logger.error(f"Failed to register WebAuthn: {e}")
             raise errors.WebAuthnRegistrationFailed(
                 "Failed to register WebAuthn"
             ) from e
@@ -1599,9 +1597,6 @@ class Router:
                 )
             )
         except Exception as e:
-            logger.error(
-                f"Failed to create WebAuthn authentication options: {e}"
-            )
             raise errors.WebAuthnAuthenticationFailed(
                 "Failed to create authentication options"
             ) from e
@@ -1633,7 +1628,6 @@ class Router:
                 email=email,
             )
         except Exception as e:
-            logger.error(f"Failed to authenticate WebAuthn: {e}")
             raise errors.WebAuthnAuthenticationFailed(
                 "Failed to authenticate WebAuthn"
             ) from e
@@ -2321,7 +2315,7 @@ def _fail_with_error(
         "type": str(ex.__class__.__name__),
     }
 
-    logger.error(f"Failed to handle HTTP request: {err_dct!r}")
+    logger.error(f"Failed to handle HTTP request: {err_dct!r}", exc_info=True)
     response.body = json.dumps({"error": err_dct}).encode()
     response.status = status
 
