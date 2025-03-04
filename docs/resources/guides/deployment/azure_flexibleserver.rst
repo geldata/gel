@@ -66,7 +66,7 @@ Then create a Postgres Flexible server.
        --resource-group $GROUP \
        --name $PG_SERVER_NAME \
        --location westus \
-       --admin-user admin \
+       --admin-user gel_admin \
        --admin-password $PASSWORD \
        --sku-name Standard_D2s_v3 \
        --version 14 \
@@ -98,7 +98,19 @@ Allow other Azure services access to the Postgres instance.
        --name azure.extensions \
        --value uuid-ossp
 
-Start an Gel container.
+Azure is not able to reliably pull docker images `because of rate limits
+<azure-cli-issue_>`_, so you will need to provide docker hub login credentials
+to create a container. If you don't already have a docker hub account you can
+create one `here <https://app.docker.com/signup>`_.
+
+.. _azure-cli-issue: https://github.com/Azure/azure-cli/issues/29300
+
+.. code-block:: bash
+
+   $ echo -n "docker user> " && read -s DOCKER_USER
+   $ echo -n "docker password> " && read -s DOCKER_PASSWORD
+
+Start a Gel container.
 
 .. code-block:: bash
 
@@ -108,18 +120,24 @@ Start an Gel container.
          --query "[?name=='$PG_SERVER_NAME'].fullyQualifiedDomainName | [0]" \
          --output tsv
      )
-   $ DSN="postgresql://gel:$PASSWORD@$PG_HOST/postgres?sslmode=require"
+   $ DSN="postgresql://gel_admin:$PASSWORD@$PG_HOST/postgres?sslmode=require"
    $ az container create \
+       --registry-username $DOCKER_USER \
+       --registry-password $DOCKER_PASSWORD \
+       --registry-login-server index.docker.io \
+       --os-type Linux \
+       --cpu 1 \
+       --memory 1 \
        --resource-group $GROUP \
        --name gel-container-group \
        --image geldata/gel \
-       --dns-name-label gel \
+       --dns-name-label geldb \
        --ports 5656 \
        --secure-environment-variables \
          "GEL_SERVER_PASSWORD=$PASSWORD" \
          "GEL_SERVER_BACKEND_DSN=$DSN" \
        --environment-variables \
-         GEL_SERVER_TLS_CERT_MODE=generate_self_signed \
+         GEL_SERVER_TLS_CERT_MODE=generate_self_signed
 
 Persist the SSL certificate. We have configured Gel to generate a self
 signed SSL certificate when it starts. However, if the container is restarted a
@@ -144,10 +162,16 @@ or reboots copy the certificate files and use their contents in the
        --name gel-container-group \
        --yes
    $ az container create \
+       --registry-username $DOCKER_USER \
+       --registry-password $DOCKER_PASSWORD \
+       --registry-login-server index.docker.io \
+       --os-type Linux \
+       --cpu 1 \
+       --memory 1 \
        --resource-group $GROUP \
        --name gel-container-group \
        --image geldata/gel \
-       --dns-name-label gel \
+       --dns-name-label geldb \
        --ports 5656 \
        --secure-environment-variables \
          "GEL_SERVER_PASSWORD=$PASSWORD" \
