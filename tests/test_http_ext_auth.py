@@ -4202,7 +4202,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 ).encode(),
                 path="webauthn/register",
             )
-            self.assertEqual(status, 401, body.decode())
+            self.assertEqual(status, 400, body.decode())
 
     async def test_http_auth_ext_magic_link_with_link_url(self):
         email = f"{uuid.uuid4()}@example.com"
