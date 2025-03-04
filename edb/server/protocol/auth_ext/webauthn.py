@@ -221,7 +221,7 @@ select factor { ** };""",
         assert len(result_json) == 1
 
         factor_dict = result_json[0]
-        local_identity = data.LocalIdentity(**factor_dict["identity"])
+        local_identity = data.LocalIdentity(**factor_dict.pop("identity"))
         return data.WebAuthnFactor(**factor_dict, identity=local_identity)
 
     async def _get_registration_challenge(

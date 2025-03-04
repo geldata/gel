@@ -269,11 +269,20 @@ class Router:
                 ex=ex,
             )
 
+        except errors.WebAuthnRegistrationFailed as ex:
+            _fail_with_error(
+                response=response,
+                status=http.HTTPStatus.BAD_REQUEST,
+                ex=ex,
+                exc_info=True,
+            )
+
         except errors.WebAuthnAuthenticationFailed as ex:
             _fail_with_error(
                 response=response,
                 status=http.HTTPStatus.UNAUTHORIZED,
                 ex=ex,
+                exc_info=True,
             )
 
         except Exception as ex:
@@ -283,6 +292,7 @@ class Router:
                 response=response,
                 status=http.HTTPStatus.INTERNAL_SERVER_ERROR,
                 ex=edb_errors.InternalServerError(str(ex)),
+                exc_info=True,
             )
 
     async def handle_authorize(
@@ -1398,11 +1408,16 @@ class Router:
         email = _get_search_param(query, "email")
         webauthn_client = webauthn.Client(self.db)
 
-        (user_handle, registration_options) = (
-            await webauthn_client.create_registration_options_for_email(
-                email=email,
+        try:
+            (user_handle, registration_options) = (
+                await webauthn_client.create_registration_options_for_email(
+                    email=email,
+                )
             )
-        )
+        except Exception as e:
+            raise errors.WebAuthnRegistrationFailed(
+                "Failed to create registration options"
+            ) from e
 
         response.status = http.HTTPStatus.OK
         response.content_type = b"application/json"
@@ -1455,11 +1470,17 @@ class Router:
         require_verification = webauthn_client.provider.require_verification
         pkce_code: Optional[str] = None
 
-        email_factor = await webauthn_client.register(
-            credentials=credentials,
-            email=email,
-            user_handle=user_handle,
-        )
+        try:
+            email_factor = await webauthn_client.register(
+                credentials=credentials,
+                email=email,
+                user_handle=user_handle,
+            )
+        except Exception as e:
+            raise errors.WebAuthnRegistrationFailed(
+                "Failed to register WebAuthn"
+            ) from e
+
         identity_id = email_factor.identity.id
 
         await self._maybe_send_webhook(
@@ -1558,11 +1579,16 @@ class Router:
             )
         webauthn_client = webauthn.Client(self.db)
 
-        (_, registration_options) = (
-            await webauthn_client.create_authentication_options_for_email(
-                email=email, webauthn_provider=webauthn_provider
+        try:
+            (_, registration_options) = (
+                await webauthn_client.create_authentication_options_for_email(
+                    email=email, webauthn_provider=webauthn_provider
+                )
             )
-        )
+        except Exception as e:
+            raise errors.WebAuthnAuthenticationFailed(
+                "Failed to create authentication options"
+            ) from e
 
         response.status = http.HTTPStatus.OK
         response.content_type = b"application/json"
@@ -1585,10 +1611,15 @@ class Router:
         assertion: str = data["assertion"]
         pkce_challenge: str = data["challenge"]
 
-        identity = await webauthn_client.authenticate(
-            assertion=assertion,
-            email=email,
-        )
+        try:
+            identity = await webauthn_client.authenticate(
+                assertion=assertion,
+                email=email,
+            )
+        except Exception as e:
+            raise errors.WebAuthnAuthenticationFailed(
+                "Failed to authenticate WebAuthn"
+            ) from e
 
         require_verification = webauthn_client.provider.require_verification
         if require_verification:
@@ -2495,13 +2526,16 @@ def _fail_with_error(
     response: protocol.HttpResponse,
     status: http.HTTPStatus,
     ex: Exception,
+    exc_info: bool = False,
 ) -> None:
     err_dct = {
         "message": str(ex),
         "type": str(ex.__class__.__name__),
     }
 
-    logger.error(f"Failed to handle HTTP request: {err_dct!r}")
+    logger.error(
+        f"Failed to handle HTTP request: {err_dct!r}", exc_info=exc_info
+    )
     response.body = json.dumps({"error": err_dct}).encode()
     response.status = status
 
