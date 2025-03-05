@@ -24,7 +24,7 @@ async def fetch_code_example(slug: str) -> str | None:
 @click.option(
     "--stdio",
     is_flag=True,
-    help="Use stdio for LSP. This is currently the only transport.",
+    help="Use stdio for MCP. This is currently the only transport.",
 )
 def main(*, version: bool, stdio: bool):
     mcp.run()
