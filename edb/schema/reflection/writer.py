@@ -41,6 +41,7 @@ from edb.edgeql import qltypes
 from edb.schema import constraints as s_constr
 from edb.schema import delta as sd
 from edb.schema import extensions as s_ext
+from edb.schema import futures as s_futures
 from edb.schema import objects as so
 from edb.schema import objtypes as s_objtypes
 from edb.schema import referencing as s_ref
@@ -173,6 +174,13 @@ def _descend(
     else:
         commands = cmd.get_subcommands(include_prerequisites=False)
 
+    if (
+        not prerequisites
+        and isinstance(cmd, s_futures.FutureBehaviorCommand)
+        and cmd.future_cmd
+    ):
+        commands += (cmd.future_cmd,)
+
     if cmd_filter:
         commands = tuple(filter(cmd_filter, commands))
 
@@ -213,6 +221,28 @@ def _descend(
 @write_meta.register
 def write_meta_delta_root(
     cmd: sd.DeltaRoot,
+    *,
+    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    schema: s_schema.Schema,
+    context: sd.CommandContext,
+    blocks: List[Tuple[str, Dict[str, Any]]],
+    internal_schema_mode: bool,
+    stdmode: bool,
+) -> None:
+    _descend(
+        cmd,
+        classlayout=classlayout,
+        schema=schema,
+        context=context,
+        blocks=blocks,
+        internal_schema_mode=internal_schema_mode,
+        stdmode=stdmode,
+    )
+
+
+@write_meta.register
+def write_meta_command_group(
+    cmd: sd.CommandGroup,
     *,
     classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
