@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import Callable, Type, cast
 
 from edb import errors
-from edb.common import markup
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
@@ -89,19 +88,6 @@ class FutureBehaviorCommand(
     # If anything else ends up needing to do this, we can add another
     # variety of subcommand.
     future_cmd: sd.Command | None = None
-
-    @classmethod
-    def as_markup(
-        cls, self: sd.Command, *, ctx: markup.Context
-    ) -> markup.Markup:
-        assert isinstance(self, FutureBehaviorCommand)
-        node = super().as_markup(self, ctx=ctx)
-        assert isinstance(node, markup.elements.lang.TreeNode)
-        if self.future_cmd:
-            node.add_child(node=markup.elements.doc.Marker(text='future_cmd'))
-            node.add_child(node=markup.serialize(self.future_cmd, ctx=ctx))
-
-        return node
 
     def copy(self: FutureBehaviorCommand) -> FutureBehaviorCommand:
         result = super().copy()

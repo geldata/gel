@@ -139,21 +139,12 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
     def is_compiled(self) -> bool:
         return self.refs is not None
 
-    # Filter out refs that don't really exist; these can show up
-    # on 6.x because of issue #8431.
-    # TODO: Drop this once backported.
-    def _live_refs(self, schema: s_schema.Schema) -> tuple[so.Object, ...]:
-        return tuple([
-            schema.get_by_id(iid) for iid in self.refs._ids
-            if schema.has_object(iid)
-        ]) if self.refs else ()
-
     def _refs_keys(
         self, schema: s_schema.Schema
     ) -> Set[Tuple[Type[so.Object], sn.Name]]:
         return {
             (type(x), x.get_name(schema))
-            for x in (self._live_refs(schema) if self.refs else ())
+            for x in (self.refs.objects(schema) if self.refs else ())
         }
 
     @classmethod
@@ -314,7 +305,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
         return ExpressionShell(
             text=self.text,
             refs=(
-                r.as_shell(schema) for r in self._live_refs(schema)
+                r.as_shell(schema) for r in self.refs.objects(schema)
             ) if self.refs is not None else None,
             _qlast=self._qlast,
         )
