@@ -1341,13 +1341,27 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'pg_toast'
                 AND has_schema_privilege(n.oid, 'USAGE')
-            ORDER BY relname LIMIT 1
+            ORDER BY relname
             '''
         )
-        # res may be empty
+        if len(res) == 0:
+            return
+
+        # verify that at least one of the pg_toast tables exists
+        had_success = False
+        exception = None
         for [toast_table] in res:
-            # Result will probably be empty, so we cannot validate column names
-            await self.squery_values(f'SELECT * FROM pg_toast.{toast_table}')
+            try:
+                # Result will probably be empty, so we cannot validate column
+                # names
+                await self.squery_values(
+                    f'SELECT * FROM pg_toast.{toast_table}'
+                )
+                had_success = True
+            except BaseException as e:
+                exception = e
+        if not had_success:
+            raise exception
 
     async def test_sql_query_introspection_04(self):
         res = await self.squery_values(
