@@ -664,3 +664,15 @@ Bug fixes
 
 * Fix server error when trying to register a new WebAuthn identity in the auth extension
   (:eql:gh:`#8428`)
+
+* Fix schema reflection losing track of changes made while ``using future``
+  (:eql:gh:`#8435`)
+
+* Use correct docker repository when checking tags
+  (:eql:gh:`#8407`)
+
+* Fix parser span over SQL adapter
+  (:eql:gh:`#8399`)
+
+* Fix ``IS`` when the left-hand side is not just a path
+  (:eql:gh:`#8410`)
