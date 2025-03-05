@@ -2179,3 +2179,20 @@ annotation test::foo;
             global foo -> str;
         };
         """
+
+    @tb.must_fail(
+        errors.EdgeQLSyntaxError,
+        r"Unexpected keyword",
+        col=13,
+        col_end=19,
+        line=3,
+        line_end=3,
+        position=30,
+        position_end=36,
+    )
+    def test_eschema_syntax_extra_create(self):
+        """
+        type T {
+            create property lol -> str;
+        }
+        """
