@@ -1174,7 +1174,6 @@ async def _generate_voyageai_embeddings(
 
     return EmbeddingsResult(
         data=(error if error else EmbeddingsData(result.bytes())),
-        limits=_read_openai_limits(result),
     )
 
 
