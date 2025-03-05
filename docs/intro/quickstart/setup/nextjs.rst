@@ -69,7 +69,7 @@ Setting up your environment
       :caption: gel.toml
 
       [instance]
-      server-version = 6.0
+      server-version = 6.1
 
       [hooks]
       schema.update.after = "npx @gel/generate edgeql-js"
