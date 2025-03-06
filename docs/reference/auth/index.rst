@@ -23,7 +23,7 @@ into the Gel server. Here's how you can integrate it with your app.
 Enable extension in your schema
 ===============================
 
-Auth is an Gel extension. To enable it, you will need to add the extension
+Auth is a Gel extension. To enable it, you will need to add the extension
 to your app's schema:
 
 .. code-block:: sdl

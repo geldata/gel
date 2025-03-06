@@ -406,7 +406,7 @@ std::datetime
 :eql:type:`std::datetime` values are represented as a 64-bit integer,
 most sigificant byte first. The value is the number of *microseconds*
 between the encoded datetime and January 1st 2000, 00:00 UTC. A Unix
-timestamp can be converted into an Gel ``datetime`` value using this
+timestamp can be converted into a Gel ``datetime`` value using this
 formula:
 
 .. code-block:: c

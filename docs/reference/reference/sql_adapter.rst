@@ -19,7 +19,7 @@ connections to Gel to modify its schema. Instead, the schema should be
 managed in |.gel| files using Gel Schema Definition Language and migration
 commands.
 
-Any Postgres-compatible client can connect to an Gel database by using the
+Any Postgres-compatible client can connect to a Gel database by using the
 same port that is used for the Gel protocol and the |branch| name, username,
 and password already used for the database.
 
@@ -55,7 +55,7 @@ and password already used for the database.
 
 .. warning::
 
-    Connecting to an Gel Cloud instance via a Postgres client requires SNI
+    Connecting to a Gel Cloud instance via a Postgres client requires SNI
     support which was introduced in libpq v14. If a Postgres client uses your
     system's libpq (``psql`` does), you can connect as long as your libpq
     version is 14+. To check your version, run ``psql --version`` or

@@ -78,7 +78,7 @@ note for help with Windows):
 Initialize the database
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-Now, let's initialize an Gel project. From the project's root directory:
+Now, let's initialize a Gel project. From the project's root directory:
 
 .. code-block:: bash
 
@@ -1501,7 +1501,7 @@ endpoint to create a new user in the database. We need to do a few things:
 
 1. Import ``gel``.
 
-2. Create an Gel client.
+2. Create a Gel client.
 
 3. Get the identity ID from the Gel Auth server response.
 

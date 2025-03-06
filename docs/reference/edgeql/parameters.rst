@@ -34,7 +34,7 @@ Usage with clients
 REPL
 ^^^^
 
-When you include a parameter reference in an Gel REPL, you'll be prompted
+When you include a parameter reference in a Gel REPL, you'll be prompted
 interactively to provide a value or values.
 
 .. code-block:: edgeql-repl

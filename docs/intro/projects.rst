@@ -13,7 +13,7 @@ CLI command.
 
 That's one of the reasons we introduced the concept of an *Gel
 project*. A project is a directory on your file system that is associated
-("linked") with an Gel instance.
+("linked") with a Gel instance.
 
 .. note::
 
@@ -31,7 +31,7 @@ When you're inside a project, all CLI commands will be applied against the
 
 The same is true for all Gel client libraries (discussed in more depth in
 the :ref:`Clients <ref_intro_clients>` section). If the following file lives
-inside an Gel project directory, ``createClient`` will discover the project
+inside a Gel project directory, ``createClient`` will discover the project
 and connect to its linked instance with no additional configuration.
 
 .. code-block:: typescript
@@ -72,7 +72,7 @@ This command does a couple important things.
 
 1. It spins up a new Gel instance called ``my_instance``.
 2. If no |gel.toml| file exists, it will create one. This is a
-   configuration file that marks a given directory as an Gel project. Learn
+   configuration file that marks a given directory as a Gel project. Learn
    more about it in the :ref:`gel.toml reference <ref_reference_gel_toml>`.
 
    .. code-block:: toml

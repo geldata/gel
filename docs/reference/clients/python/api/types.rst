@@ -189,7 +189,7 @@ Named Tuples
 
 .. py:class:: NamedTuple()
 
-    An immutable value representing an Gel named tuple value.
+    An immutable value representing a Gel named tuple value.
 
     .. versionchanged:: 1.0
 
@@ -230,7 +230,7 @@ RelativeDuration
 
 .. py:class:: RelativeDuration()
 
-    An immutable value representing an Gel ``cal::relative_duration`` value.
+    An immutable value representing a Gel ``cal::relative_duration`` value.
 
     .. code-block:: pycon
 
@@ -252,7 +252,7 @@ DateDuration
 
 .. py:class:: DateDuration()
 
-    An immutable value representing an Gel ``cal::date_duration`` value.
+    An immutable value representing a Gel ``cal::date_duration`` value.
 
     .. code-block:: pycon
 
@@ -272,7 +272,7 @@ EnumValue
 
 .. py:class:: EnumValue()
 
-    An immutable value representing an Gel enum value.
+    An immutable value representing a Gel enum value.
 
     .. versionchanged:: 1.0
 

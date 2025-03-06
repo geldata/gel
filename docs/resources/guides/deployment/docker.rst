@@ -151,7 +151,7 @@ and some Docker-specific environment variables, documented below.
 Initial configuration
 ---------------------
 
-When an Gel container starts on the specified data directory or remote
+When a Gel container starts on the specified data directory or remote
 Postgres cluster for the first time, initial instance setup is performed. This
 is called the *bootstrap phase*.
 

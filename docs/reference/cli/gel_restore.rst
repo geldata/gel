@@ -15,7 +15,7 @@ Restore a |Gel| |branch| from a backup file.
 Description
 ===========
 
-:gelcmd:`restore` is a terminal command used to restore an Gel |branch|
+:gelcmd:`restore` is a terminal command used to restore a Gel |branch|
 |branch| from a backup file. The backup is restored to the
 currently active branch.
 

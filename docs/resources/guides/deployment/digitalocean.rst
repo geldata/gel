@@ -21,7 +21,7 @@ Prerequisites
 * DigitalOcean account
 
 Click the button below and follow the droplet creation workflow on
-DigitalOcean to deploy an Gel instance.
+DigitalOcean to deploy a Gel instance.
 
 .. image:: https://www.deploytodo.com/do-btn-blue.svg
    :target: 1-click-button_

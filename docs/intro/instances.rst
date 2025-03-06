@@ -4,7 +4,7 @@
 Instances
 =========
 
-Let's get to the good stuff. You can spin up an Gel instance with a single
+Let's get to the good stuff. You can spin up a Gel instance with a single
 command.
 
 .. code-block:: bash

@@ -10,7 +10,7 @@ Connection parameters
 
 
 The CLI and client libraries (collectively referred to as "clients" below) must
-connect to an Gel instance to run queries or commands. There are several
+connect to a Gel instance to run queries or commands. There are several
 connection parameters, each of which can be specified in several ways.
 
 .. _ref_reference_connection_instance:
@@ -18,7 +18,7 @@ connection parameters, each of which can be specified in several ways.
 Specifying an instance
 ----------------------
 
-There are several ways to uniquely identify an Gel instance.
+There are several ways to uniquely identify a Gel instance.
 
 .. list-table::
 
@@ -73,7 +73,7 @@ Let's dig into each of these a bit more.
 .. _ref_reference_connection_secret_key:
 
 **Secret key**
-  If you want to connect to an Gel Cloud instance in either of these
+  If you want to connect to a Gel Cloud instance in either of these
   scenarios:
 
   - from a client binding
@@ -149,7 +149,7 @@ Let's dig into each of these a bit more.
 Priority levels
 ---------------
 
-The section above describes the various ways of specifying an Gel instance.
+The section above describes the various ways of specifying a Gel instance.
 There are also several ways to provide this configuration information to the
 client. From highest to lowest priority, you can pass them explicitly as
 parameters/flags (useful for debugging), use environment variables (recommended

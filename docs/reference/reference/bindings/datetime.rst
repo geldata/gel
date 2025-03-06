@@ -81,5 +81,5 @@ perform, in particular:
    example)
 3. Converting from Gel specific type (if there is one) to native type and
    back (depending on the difference in precision)
-4. Parsing a string to an Gel specific type (this operation is optional to
+4. Parsing a string to a Gel specific type (this operation is optional to
    implement, but if it is implemented, it must obey the rules)

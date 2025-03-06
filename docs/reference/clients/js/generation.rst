@@ -4,7 +4,7 @@ Generators
 ==========
 
 The ``@gel/generate`` package provides a set of code generation tools that
-are useful when developing an Gel-backed applications with
+are useful when developing a Gel-backed applications with
 TypeScript/JavaScript.
 
 To get started with generators, first initialize an :ref:`Gel project

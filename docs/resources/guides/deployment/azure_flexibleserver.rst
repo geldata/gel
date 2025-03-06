@@ -22,7 +22,7 @@ Prerequisites
 .. _azure-install: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli
 
 
-Provision an Gel instance
+Provision a Gel instance
 =========================
 
 Login to your Microsoft Azure account.

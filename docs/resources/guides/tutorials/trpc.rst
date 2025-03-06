@@ -34,7 +34,7 @@ package manager:
 
    $ pnpm dlx gel project init # or `npx gel project init`
 
-This will create an Gel project and set up a schema to start with.
+This will create a Gel project and set up a schema to start with.
 
 Define the Gel Schema
 ---------------------

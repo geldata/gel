@@ -27,7 +27,7 @@ run :gelcmd:`project init`. You'll see something like this:
 
 Let's unpack that.
 
-1. First, it asks you to specify an Gel version, defaulting to the most
+1. First, it asks you to specify a Gel version, defaulting to the most
    recent version you have installed. You can also specify a version you
    *don't* have installed, in which case it will be installed.
 2. Then it asks you how you'd like to run Gel: locally, in a Docker image,
@@ -38,7 +38,7 @@ Let's unpack that.
    represented as some metadata stored in Gel's :ref:`config directory
    <ref_cli_gel_paths>`—feel free to peek inside to see how it's stored.
 5. Then it creates an :ref:`ref_reference_gel_toml` file, which marks this
-   directory as an Gel project.
+   directory as a Gel project.
 6. Finally, it creates a ``dbschema`` directory and a :dotgel:`dbschema/default`
    schema file (if they don't already exist).
 
@@ -112,7 +112,7 @@ How do I use :gelcmd:`project` for existing codebases?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you already have an project on your computer that uses Gel, follow these
-steps to convert it into an Gel project:
+steps to convert it into a Gel project:
 
 1. Navigate into the project directory (the one containing you ``dbschema``
    directory).
@@ -166,7 +166,7 @@ the instance, it continues running as before. After unlinking, can run
 How do I use :gelcmd:`project` with a non-local instance?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Sometimes you may want to work on an Gel instance that is just not in your
+Sometimes you may want to work on a Gel instance that is just not in your
 local development environment, like you may have a second workstation, or you
 want to test against a staging database shared by the team.
 

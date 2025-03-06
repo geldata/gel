@@ -117,7 +117,7 @@ EdgeQL.
   Libraries <ref_clients_index>`. If you're using another language, you can
   still use Gel! You can execute :ref:`queries via HTTP <ref_edgeql_http>`.
 - **Deployment** —
-  To publish an Gel-backed application, you'll need to deploy Gel. Refer
+  To publish a Gel-backed application, you'll need to deploy Gel. Refer
   to :ref:`Guides > Deployment <ref_guide_deployment>` for step-by-step
   deployment guides for all major cloud hosting platforms, as well as
   instructions for self-hosting with Docker.

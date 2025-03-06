@@ -936,7 +936,7 @@ when you're developing new features or prototyping experimental features. By
 creating a new branch, you can isolate schema changes from your other branches.
 
 Imagine a scenario in which your main branch is |main| and your feature branch
-is called ``feature``. This is the ideal workflow for using an Gel branch
+is called ``feature``. This is the ideal workflow for using a Gel branch
 alongside a feature branch in your VCS to develop a new feature:
 
 1. Create a new feature branch with :ref:`ref_cli_gel_branch_create`

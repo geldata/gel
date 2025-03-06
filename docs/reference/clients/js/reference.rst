@@ -848,14 +848,14 @@ Local Time
         microsecond: number = 0, \
         nanosecond: number = 0)
 
-    A JavaScript representation of an Gel ``local_time`` value. Implements
+    A JavaScript representation of a Gel ``local_time`` value. Implements
     a subset of the `TC39 Temporal Proposal`_ ``PlainTime`` type.
 
     .. note::
 
         The Gel ``local_time`` type only has microsecond precision, any
         nanoseconds specified in the ``LocalTime`` will be ignored when
-        encoding to an Gel ``local_time``.
+        encoding to a Gel ``local_time``.
 
     .. js:attribute:: hour: number
 
@@ -968,7 +968,7 @@ Duration
 
         The Gel ``duration`` type only has microsecond precision, any
         nanoseconds specified in the ``Duration`` will be ignored when
-        encoding to an Gel ``duration``.
+        encoding to a Gel ``duration``.
 
     .. note::
 
@@ -1058,7 +1058,7 @@ RelativeDuration
         milliseconds: number = 0, \
         microseconds: number = 0)
 
-  A JavaScript representation of an Gel
+  A JavaScript representation of a Gel
   :eql:type:`cal::relative_duration` value. This type represents a
   non-definite span of time such as "2 years 3 days". This cannot be
   represented as a :eql:type:`duration` because a year has no absolute
@@ -1133,7 +1133,7 @@ DateDuration
       days: number = 0, \
     )
 
-  A JavaScript representation of an Gel
+  A JavaScript representation of a Gel
   :eql:type:`cal::date_duration` value. This type represents a
   non-definite span of time consisting of an integer number of *months* and
   *days*.
@@ -1189,7 +1189,7 @@ Memory
 
 .. js:class:: ConfigMemory(bytes: BigInt)
 
-  A JavaScript representation of an Gel ``cfg::memory`` value.
+  A JavaScript representation of a Gel ``cfg::memory`` value.
 
   .. js:attribute:: bytes: number
 
@@ -1242,7 +1242,7 @@ Range
         incUpper: boolean = false \
     )
 
-  A JavaScript representation of an Gel ``std::range`` value. This is a generic TypeScript class with the following type signature.
+  A JavaScript representation of a Gel ``std::range`` value. This is a generic TypeScript class with the following type signature.
 
   .. code-block:: typescript
 

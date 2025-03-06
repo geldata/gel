@@ -203,7 +203,7 @@ message and continue as before.
 Message Flow
 ============
 
-There are two main phases in the lifetime of an Gel connection: the
+There are two main phases in the lifetime of a Gel connection: the
 connection phase, and the command phase.  The connection phase is responsible
 for negotiating the protocol and connection parameters, including
 authentication.  The command phase is the regular operation phase where the

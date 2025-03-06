@@ -126,7 +126,7 @@ Initializing Gel
 ----------------
 
 Now let's spin up a database for the app. You have two options to initialize
-an Gel project: using ``$ npx gel`` without installing the CLI, or
+a Gel project: using ``$ npx gel`` without installing the CLI, or
 installing the gel CLI directly. In this tutorial, we'll use the first
 option. If you prefer to install the CLI, see the
 :ref:`Gel CLI guide <ref_cli_overview>` for more information.
@@ -158,7 +158,7 @@ From the application's root directory, run the following command:
   Everything is up to date. Revision initial.
   Project initialized.
 
-This process has spun up an Gel instance called ``nextjs-blog`` and
+This process has spun up a Gel instance called ``nextjs-blog`` and
 "linked" it with your current directory. As long as you're inside that
 directory, CLI commands and client libraries will be able to connect to the
 linked instance automatically, without additional configuration.
@@ -291,7 +291,7 @@ Then create a new file at ``pages/api/post.ts`` and copy in the following code.
     res.status(200).json(posts);
   }
 
-This file initializes an Gel client, which manages a pool of connections to
+This file initializes a Gel client, which manages a pool of connections to
 the database and provides an API for executing queries. We're using the
 ``.query()`` method to fetch all the posts in the database with a simple
 ``select`` statement.
@@ -545,7 +545,7 @@ Deploying to Vercel
 
 **#1 Deploy Gel**
 
-First deploy an Gel instance on your preferred cloud provider:
+First deploy a Gel instance on your preferred cloud provider:
 
 - :ref:`AWS <ref_guide_deployment_aws_aurora_ecs>`
 - :ref:`Azure <ref_guide_deployment_azure_flexibleserver>`
