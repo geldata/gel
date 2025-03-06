@@ -237,6 +237,54 @@ def array_as_json_object(
                 )
             ] if needs_unnest else [],
         )
+    elif irtyputils.is_array(el_type):
+        el_name = 'f1'
+        coldeflist = [
+            pgast.ColumnDef(
+                name=str(el_name),
+                typename=pgast.TypeName(
+                    name=pgtypes.pg_type_from_ir_typeref(el_type),
+                ),
+            )
+        ]
+        agg_arg = serialize_expr_to_json(
+            pgast.ColumnRef(name=[str(el_name)]),
+            styperef=el_type,
+            nested=True,
+            env=env,
+        )
+
+        return pgast.SelectStmt(
+            target_list=[
+                pgast.ResTarget(
+                    val=pgast.CoalesceExpr(
+                        args=[
+                            pgast.FuncCall(
+                                name=_get_json_func('agg', env=env),
+                                args=[agg_arg],
+                            ),
+                            pgast.StringConstant(val='[]'),
+                        ]
+                    ),
+                    ser_safe=True,
+                )
+            ],
+            from_clause=[
+                pgast.RangeFunction(
+                    functions=[
+                        pgast.FuncCall(
+                            name=('unnest',),
+                            args=[
+                                pgast.ArrayExpr(
+                                    elements=[expr],
+                                )
+                            ],
+                            coldeflist=coldeflist,
+                        )
+                    ]
+                )
+            ]
+        )
     else:
         return pgast.FuncCall(
             name=_get_json_func('to', env=env), args=[expr],
