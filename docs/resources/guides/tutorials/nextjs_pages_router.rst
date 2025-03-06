@@ -552,7 +552,6 @@ First deploy an Gel instance on your preferred cloud provider:
 - :ref:`DigitalOcean <ref_guide_deployment_digitalocean>`
 - :ref:`Fly.io <ref_guide_deployment_fly_io>`
 - :ref:`Google Cloud <ref_guide_deployment_gcp>`
-- :ref:`Heroku <ref_guide_deployment_heroku>`
 
 or use a cloud-agnostic deployment method:
 
