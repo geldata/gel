@@ -194,7 +194,7 @@ to it by implementing web search capabilities.
 
 .. edb:split-section::
 
-  Many powerful, feature-rich products exist for LLM-driven web search. In this tutorial, we'll use  comment threads on `Hacker News
+  Many powerful, feature-rich products exist for LLM-driven web search. In this tutorial, we'll use comment threads on `Hacker News
   <https://news.ycombinator.com/>`_. Their `web API
   <https://hn.algolia.com/api>`_ is free of charge and doesn't require an
   account. Below is a simple function that requests a full-text search for a
@@ -419,7 +419,7 @@ those results to the LLM to get a nice-looking summary.
 
   Note that this cloud LLM API (and many others) requires a secret key to be
   set as an environment variable. A common way to manage them is to use the
-  ``python-dotenv`` library in combination with a ``.env`` file. Create a ``.env`` file in the root directory and store your API key inside it. You can generate an API key `here <https://platform.openai.com/api-keys>`_:
+  `python-dotenv <https://github.com/theskumar/python-dotenv?tab=readme-ov-file#getting-started>`_ library in combination with a ``.env`` file. Create a ``.env`` file in the root directory and store your API key inside it. If you follow along with OpenAI, you can obtain an API key `here <https://platform.openai.com/api-keys>`_:
 
   .. code-block:: .env
       :caption: .env
@@ -634,100 +634,93 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
   Now that our schema is applied, let's quickly populate the database with some
   fake data in order to be able to test the queries. We're going to explore
-  writing queries in a bit, but for now you can just run the following command in the shell:
+  writing queries in a bit, for now copy and paste the following text into the terminal:
 
   .. code-block:: bash
-
-      $ mkdir app/sample_data && cat << 'EOF' > app/sample_data/inserts.edgeql
-
-
-.. edb:split-section::
-
-  After running the command, the terminal will wait for you to input text. Anything you type will be written into ``app/sample_data/inserts.edgeql`` until you type ``EOF`` on a new line. Copy and paste the following text into the terminal:
-
-  .. code-block:: edgeql
       :class: collapsible
 
-      # Create users first
-      insert User {
-          name := 'alice',
-      };
-      insert User {
-          name := 'bob',
-      };
-      # Insert chat histories for Alice
-      update User
-      filter .name = 'alice'
-      set {
-          chats := {
-              (insert Chat {
-                  messages := {
-                      (insert Message {
-                          role := 'user',
-                          body := 'What are the main differences between GPT-3 and GPT-4?',
-                          timestamp := <datetime>'2024-01-07T10:00:00Z',
-                          sources := {'arxiv:2303.08774', 'openai.com/research/gpt-4'}
-                      }),
-                      (insert Message {
-                          role := 'assistant',
-                          body := 'The key differences include improved reasoning capabilities, better context understanding, and enhanced safety features...',
-                          timestamp := <datetime>'2024-01-07T10:00:05Z',
-                          sources := {'openai.com/blog/gpt-4-details', 'arxiv:2303.08774'}
-                      })
-                  }
-              }),
-              (insert Chat {
-                  messages := {
-                      (insert Message {
-                          role := 'user',
-                          body := 'Can you explain what policy gradient methods are in RL?',
-                          timestamp := <datetime>'2024-01-08T14:30:00Z',
-                          sources := {'Sutton-Barto-RL-Book-Ch13', 'arxiv:1904.12901'}
-                      }),
-                      (insert Message {
-                          role := 'assistant',
-                          body := 'Policy gradient methods are a class of reinforcement learning algorithms that directly optimize the policy...',
-                          timestamp := <datetime>'2024-01-08T14:30:10Z',
-                          sources := {'Sutton-Barto-RL-Book-Ch13', 'spinning-up.openai.com'}
-                      })
-                  }
-              })
-          }
-      };
-      # Insert chat histories for Bob
-      update User
-      filter .name = 'bob'
-      set {
-          chats := {
-              (insert Chat {
-                  messages := {
-                      (insert Message {
-                          role := 'user',
-                          body := 'What are the pros and cons of different sharding strategies?',
-                          timestamp := <datetime>'2024-01-05T16:15:00Z',
-                          sources := {'martin-kleppmann-ddia-ch6', 'aws.amazon.com/sharding-patterns'}
-                      }),
-                      (insert Message {
-                          role := 'assistant',
-                          body := 'The main sharding strategies include range-based, hash-based, and directory-based sharding...',
-                          timestamp := <datetime>'2024-01-05T16:15:08Z',
-                          sources := {'martin-kleppmann-ddia-ch6', 'mongodb.com/docs/sharding'}
-                      }),
-                      (insert Message {
-                          role := 'user',
-                          body := 'Could you elaborate on hash-based sharding?',
-                          timestamp := <datetime>'2024-01-05T16:16:00Z',
-                          sources := {'mongodb.com/docs/sharding'}
-                      })
-                  }
-              })
-          }
-      };
+      $ mkdir app/sample_data && cat << 'EOF' > app/sample_data/inserts.edgeql
+      > # Create users first
+      > insert User {
+      >     name := 'alice',
+      > };
+      > insert User {
+      >     name := 'bob',
+      > };
+      > # Insert chat histories for Alice
+      > update User
+      > filter .name = 'alice'
+      > set {
+      >     chats := {
+      >         (insert Chat {
+      >             messages := {
+      >                 (insert Message {
+      >                     role := 'user',
+      >                     body := 'What are the main differences between GPT-3 and GPT-4?',
+      >                     timestamp := <datetime>'2024-01-07T10:00:00Z',
+      >                     sources := {'arxiv:2303.08774', 'openai.com/ research/gpt-4'}
+      >                 }),
+      >                 (insert Message {
+      >                     role := 'assistant',
+      >                     body := 'The key differences include improved reasoning capabilities, better context understanding, and enhanced safety features...',
+      >                     timestamp := <datetime>'2024-01-07T10:00:05Z',
+      >                     sources := {'openai.com/blog/gpt-4-details','arxiv:2303.08774'}
+      >                 })
+      >             }
+      >         }),
+      >         (insert Chat {
+      >             messages := {
+      >                 (insert Message {
+      >                     role := 'user',
+      >                     body := 'Can you explain what policy gradient methods are in RL?',
+      >                     timestamp := <datetime>'2024-01-08T14:30:00Z',
+      >                     sources := {'Sutton-Barto-RL-Book-Ch13', 'arxiv:1904.12901'}
+      >                 }),
+      >                 (insert Message {
+      >                     role := 'assistant',
+      >                     body := 'Policy gradient methods are a class of reinforcement learning algorithms that directly optimize the policy...',
+      >                     timestamp := <datetime>'2024-01-08T14:30:10Z',
+      >                     sources := {'Sutton-Barto-RL-Book-Ch13', 'spinning-up.openai.com'}
+      >                 })
+      >             }
+      >         })
+      >     }
+      > };
+      > # Insert chat histories for Bob
+      > update User
+      > filter .name = 'bob'
+      > set {
+      >     chats := {
+      >         (insert Chat {
+      >             messages := {
+      >                 (insert Message {
+      >                     role := 'user',
+      >                     body := 'What are the pros and cons of different sharding strategies?',
+      >                     timestamp := <datetime>'2024-01-05T16:15:00Z',
+      >                     sources := {'martin-kleppmann-ddia-ch6', 'aws.amazon.com/sharding-patterns'}
+      >                 }),
+      >                 (insert Message {
+      >                     role := 'assistant',
+      >                     body := 'The main sharding strategies include range-based, hash-based, and directory-based sharding...',
+      >                     timestamp := <datetime>'2024-01-05T16:15:08Z',
+      >                     sources := {'martin-kleppmann-ddia-ch6', 'mongodb.com/docs/sharding'}
+      >                 }),
+      >                 (insert Message {
+      >                     role := 'user',
+      >                     body := 'Could you elaborate on hash-based sharding?',
+      >                     timestamp := <datetime>'2024-01-05T16:16:00Z',
+      >                     sources := {'mongodb.com/docs/sharding'}
+      >                 })
+      >             }
+      >         })
+      >     }
+      > };
+      > EOF
 
 
 .. edb:split-section::
 
-  Type ``EOF`` on a new line to save the file. Now, let's execute the queries using the CLI.
+    This created the ``app/sample_data/inserts.edgeql`` file, which we can execute using the CLI:
 
   .. code-block:: bash
 
@@ -741,7 +734,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-  This will insert data in the database. Let's verify it by running a ``Gel query``:
+    This will insert data into the database and return the IDs of the newly created users. We will receive the IDs twice — once after the insert and once after the update. Let's verify it by running a :gelcmd:`query`:
 
   .. code-block:: bash
 
