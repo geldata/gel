@@ -4124,7 +4124,7 @@ class ResetSessionConfigFunction(trampoline.VersionedFunction):
 
 
 class ApplySessionConfigFunction(trampoline.VersionedFunction):
-    """Apply an Gel config setting to the backend, if possible.
+    """Apply a Gel config setting to the backend, if possible.
 
     The function accepts any Gel config name/value pair. If this
     specific config setting happens to be implemented via a backend

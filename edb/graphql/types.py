@@ -451,7 +451,7 @@ class GQLCoreSchema:
             return f'{inputtype}{name}'
 
     def gql_to_edb_name(self, name: str) -> str:
-        '''Convert the GraphQL field name into an Gel type/view name.'''
+        '''Convert the GraphQL field name into a Gel type/view name.'''
         if '__' in name:
             return name.replace('__', '::')
         else:

@@ -2769,7 +2769,7 @@ def start_edgedb_server(
         if backend_dsn or adjacent_to:
             import traceback
             # We don't want to implicitly "fix the issue" for the test author
-            print('WARNING: starting an Gel server with the default '
+            print('WARNING: starting a Gel server with the default '
                   'runstate_dir; the test is likely to fail or hang. '
                   'Consider specifying the runstate_dir parameter.')
             print('\n'.join(traceback.format_stack(limit=5)))

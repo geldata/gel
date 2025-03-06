@@ -64,7 +64,7 @@ class AbsPath(click.Path):
     '--tenant-id',
     type=str,
     multiple=True,
-    help='The tenant ID of an Gel server to wipe.  May be specified'
+    help='The tenant ID of a Gel server to wipe.  May be specified'
          ' multiple times.  If not specified, all tenants are wiped.')
 @click.option(
     '-y',
