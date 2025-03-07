@@ -3807,14 +3807,11 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             """)
 
     async def test_edgeql_ddl_bad_04(self):
-        with self.assertRaisesRegex(
-                edgedb.UnsupportedFeatureError,
-                r'nested arrays are not supported'):
-            await self.con.execute(r"""
-                CREATE TYPE Foo {
-                    CREATE PROPERTY bar -> array<array<int64>>;
-                };
-            """)
+        await self.con.execute(r"""
+            CREATE TYPE Foo {
+                CREATE PROPERTY bar -> array<array<int64>>;
+            };
+        """)
 
     async def test_edgeql_ddl_bad_05(self):
         with self.assertRaisesRegex(

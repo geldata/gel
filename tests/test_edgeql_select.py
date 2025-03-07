@@ -8442,6 +8442,38 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                         (DELETE User filter .name = 't1')
             ''')
 
+    async def test_edgeql_select_params_array_of_array_01(self):
+        await self.assert_query_result(
+            r'''
+            SELECT <array<array<int64>>>$0
+            ''',
+            [[[1, 2], [3, 4]]],
+            variables=([[1, 2], [3, 4]],),
+        )
+        await self.assert_query_result(
+            r'''
+            SELECT <array<array<int64>>>$foo
+            ''',
+            [[[1, 2], [3, 4]]],
+            variables={'foo': [[1, 2], [3, 4]]},
+        )
+
+        await self.assert_query_result(
+            r'''
+            SELECT <tuple<array<array<int64>>, array<array<str>>>>$foo
+            ''',
+            [([[1, 2], [3, 4]], [['A', 'B'], ['C', 'D']])],
+            variables={'foo': ([[1, 2], [3, 4]], [['A', 'B'], ['C', 'D']])},
+        )
+
+        await self.assert_query_result(
+            r'''
+            SELECT <array<array<tuple<int64, str>>>>$foo
+            ''',
+            [[[(1, 'A'), (1, 'B')], [(2, 'A'), (2, 'B')]]],
+            variables={'foo': [[(1, 'A'), (1, 'B')], [(2, 'A'), (2, 'B')]]},
+        )
+
     async def test_edgeql_select_params_01(self):
         with self.assertRaisesRegex(edgedb.QueryError, "missing a type cast"):
             await self.con.query("select ($0, $1)")
