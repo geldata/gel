@@ -10,6 +10,7 @@ Get Started
     quickstart/index
     tutorials/index
     guides/index
+    upgrading
     cli
     instances
     projects
