@@ -720,7 +720,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-    This created the ``app/sample_data/inserts.edgeql`` file, which we can execute using the CLI:
+  This created the ``app/sample_data/inserts.edgeql`` file, which we can execute using the CLI:
 
   .. code-block:: bash
 
@@ -734,7 +734,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
 .. edb:split-section::
 
-    This will insert data into the database and return the IDs of the newly created users. We will receive the IDs twice — once after the insert and once after the update. Let's verify it by running a :gelcmd:`query`:
+  This will insert data into the database and return the IDs of the newly created users. We will receive the IDs twice — once after the insert and once after the update. Let's verify it by running a :gelcmd:`query`:
 
   .. code-block:: bash
 
@@ -1182,17 +1182,13 @@ In this tutorial we'll write queries using :ref:`EdgeQL <ref_intro_edgeql>` and 
         'http://127.0.0.1:8000/messages?username=charlie&chat_id=544ef3f2-ded8-11ef-ba16-f7f254b95e36' \
         -H 'accept: application/json' \
         -H 'Content-Type: application/json' \
-        -d '{
-        "query": "best database in existence"
-        }'
+        -d '{ "query": "best database in existence" }'
 
       $ curl -X 'POST' \
         'http://127.0.0.1:8000/messages?username=charlie&chat_id=544ef3f2-ded8-11ef-ba16-f7f254b95e36' \
         -H 'accept: application/json' \
         -H 'Content-Type: application/json' \
-        -d '{
-        "query": "gel"
-        }'
+        -d '{ "query": "edgedb" }'
 
 
 .. edb:split-section::
@@ -1324,7 +1320,7 @@ working on our query rather than rewriting it from scratch every time.
                 username=username,
                 message_role="assistant",
                 message_body=search_result.response,
-                sources=[s.url for s in search_result.sources],
+                sources=[s.url for s in search_result.sources if s.url],
                 chat_id=chat_id,
             )
 
@@ -1334,7 +1330,7 @@ working on our query rather than rewriting it from scratch every time.
 
 .. edb:split-section::
 
-  Done! We've now fully integrated the chat history into out app and enabled
+  Done! We've now fully integrated the chat history into the app and enabled
   natural language conversations. As before, let's quickly test out the
   improvements before moving on:
 
@@ -1345,20 +1341,16 @@ working on our query rather than rewriting it from scratch every time.
           'http://localhost:8000/messages?username=alice&chat_id=d4eed420-e903-11ef-b8a7-8718abdafbe1' \
           -H 'accept: application/json' \
           -H 'Content-Type: application/json' \
-          -d '{
-          "query": "what are people saying about gel"
-        }'
+          -d '{ "query": "what do people say about edgedb" }'
 
       $ curl -X 'POST' \
           'http://localhost:8000/messages?username=alice&chat_id=d4eed420-e903-11ef-b8a7-8718abdafbe1' \
           -H 'accept: application/json' \
           -H 'Content-Type: application/json' \
-          -d '{
-          "query": "do they like it or not"
-        }'
+          -d '{ "query": "do they like it or not" }'
 
 
-6. Use Gel's advanced features to create a RAG
+1. Use Gel's advanced features to create a RAG
 ==============================================
 
 At this point we have a decent search bot that can refine a search query over
@@ -1392,7 +1384,7 @@ schema.
 
 .. edb:split-section::
 
-  ... and do the migration:
+  ... and run the migration:
 
 
   .. code-block:: bash
@@ -1410,9 +1402,9 @@ schema.
   .. code-block:: edgeql-repl
 
       searchbot:main> configure current database
-      insert ext::ai::OpenAIProviderConfig {
-        secret := 'sk-....',
-      };
+      ... insert ext::ai::OpenAIProviderConfig {
+      ...     secret := 'sk-....',
+      ... };
 
       OK: CONFIGURE DATABASE
 
@@ -1538,7 +1530,7 @@ schema.
             web_sources = await search_web(search_query)
 
       +     # 4. Fetch similar chats
-      +     db_ai: AsyncRagClient = await create_async_rag_client(gel_client, model="gpt-4o-mini")
+      +     db_ai: AsyncRAGClient = await create_async_rag_client(gel_client, model="gpt-4o-mini")
       +     embedding = await db_ai.generate_embeddings(
       +         search_query, model="text-embedding-3-small"
       +     )
@@ -1642,9 +1634,7 @@ schema.
           'http://localhost:8000/messages?username=alice&chat_id=d4eed420-e903-11ef-b8a7-8718abdafbe1' \
           -H 'accept: application/json' \
           -H 'Content-Type: application/json' \
-          -d '{
-                "query": "remember that cool db i was talking to you about?"
-              }'
+          -d '{ "query": "Remember that cool db I was talking to you about?" }'
 
 
 Keep going!
@@ -1657,10 +1647,3 @@ search, sure. But also authentication or access policies -- Gel will let you
 set those up in minutes.
 
 Thanks!
-
-
-
-
-
-
-
