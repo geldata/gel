@@ -9,14 +9,22 @@ With the release of Gel v6, we have introduced a number of changes that affect y
 CLI
 ===
 
-For a few versions we've been shipping an alias to the ``edgedb`` CLI named ``gel`` as we've been working on the rename. For the most part, you can now just use ``gel`` instead of ``edgedb`` as the CLI name. Make sure you are using the latest version of the CLI by running ``gel cli upgrade``. If you see a note about not being able to upgrade, you can try running ``edgedb cli upgrade`` and then after that ``gel cli upgrade``.
+.. lint-off
+
+For a few versions we've been shipping an alias to the ``edgedb`` CLI named ``gel`` as we've been working on the rename. For the most part, you can now just use ``gel`` instead of ``edgedb`` as the CLI name. Make sure you are using the latest version of the CLI by running :gelcmd:`cli upgrade`. If you see a note about not being able to upgrade, you can try running ``edgedb cli upgrade`` and then after that :gelcmd:`cli upgrade`.
 
 Don't forget to update any scripts that use the ``edgedb`` CLI to use ``gel`` instead.
+
+.. lint-on
 
 Project Configuration File
 ==========================
 
-Gel CLI and client libraries use a configuration file configure various things about your project, such as the location of the schema directory, and the target version of the Gel server. Previously, this file was named ``edgedb.toml``, but it is now named ``gel.toml``.
+.. lint-off
+
+Gel CLI and client libraries use a configuration file configure various things about your project, such as the location of the schema directory, and the target version of the Gel server. Previously, this file was named ``edgedb.toml``, but it is now named |gel.toml|.
+
+.. lint-on
 
 In addition to the name change, we have also renamed the TOML table for configuring the server version from ``[edgedb]`` to ``[instance]``.
 
@@ -101,7 +109,7 @@ If you're using a hosted instance on Gel Cloud, you can upgrade your instance by
 Local instances
 ---------------
 
-If you have local instances that you've intialized with the CLI using ``edgedb project init``, you can upgrade them easily with the CLI.
+If you have local instances that you've intialized with the CLI using :gelcmd:`project init`, you can upgrade them easily with the CLI.
 
 .. code-block:: bash
 
@@ -168,6 +176,6 @@ We publish a GitHub action for accessing a Gel instance in your GitHub Actions w
 .. code-block:: yaml-diff
 
   - - uses: edgedb/setup-edgedb@v1
-  + - uses: geldata/setup-gel@v2
+  + - uses: geldata/setup-gel@v1
   - - run: edgedb query 'select sys::get_version_as_str()'
   + - run: gel query 'select sys::get_version_as_str()'
