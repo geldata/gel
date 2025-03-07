@@ -68,7 +68,8 @@ Then create a Cloud SQL instance and set the password.
 .. code-block:: bash
 
    $ gcloud sql instances create ${PROJECT}-postgres \
-       --database-version=POSTGRES_14 \
+       --database-version=POSTGRES_17 \
+       --edition=enterprise \
        --cpu=1 \
        --memory=3840MiB \
        --region=us-west2 \
@@ -115,6 +116,7 @@ Then use this ``credentials.json`` to authenticate the Kubernetes CLI tool
 
 .. code-block:: bash
 
+   $ gcloud components install gke-gcloud-auth-plugin
    $ kubectl create secret generic cloudsql-instance-credentials \
        --from-file=credentials.json=credentials.json
 
@@ -122,7 +124,7 @@ Then use this ``credentials.json`` to authenticate the Kubernetes CLI tool
        gcloud sql instances describe ${PROJECT}-postgres \
            --format="value(connectionName)" \
            --project=$PROJECT
-   )
+     )
 
    $ DSN="postgresql://postgres:${PASSWORD}@127.0.0.1:5432"
    $ kubectl create secret generic cloudsql-db-credentials \
