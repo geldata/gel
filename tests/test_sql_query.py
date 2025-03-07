@@ -1903,7 +1903,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 asdf() FROM "Movie" ORDER BY id'''
             )
 
-    @unittest.skip("this test flakes: #5783")
     async def test_sql_query_prepare_01(self):
         await self.scon.execute(
             """
@@ -2097,7 +2096,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             """
         )
 
-    @test.skip("This is flaking in CI")
     async def test_sql_query_computed_10(self):
         # globals
 
