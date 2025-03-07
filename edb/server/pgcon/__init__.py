@@ -27,7 +27,8 @@ from .errors import (
 )
 
 from .pgcon import (
-    PGConnection,
+    PGConnectionRaw,
+    AbstractFrontendConnection,
 )
 from .connect import (
     pg_connect,
@@ -37,13 +38,92 @@ from .connect import (
     RESET_STATIC_CFG_SCRIPT,
 )
 
+from edb.server import defines as edbdef
+from typing import Protocol, Optional
+
+
+class PGConnection(Protocol):
+    async def sql_execute(
+        self,
+        sql: bytes | tuple[bytes, ...],
+        *,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+    ) -> None: ...
+
+    async def sql_fetch(
+        self,
+        sql: bytes,
+        *,
+        args: tuple[bytes, ...] | list[bytes] = (),
+        use_prep_stmt: bool = False,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+        state: Optional[bytes] = None,
+    ) -> list[tuple[bytes, ...]]: ...
+
+    async def sql_fetch_val(
+        self,
+        sql: bytes,
+        *,
+        args: tuple[bytes, ...] | list[bytes] = (),
+        use_prep_stmt: bool = False,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+        state: Optional[bytes] = None,
+    ) -> bytes: ...
+
+    async def sql_fetch_col(
+        self,
+        sql: bytes,
+        *,
+        args: tuple[bytes, ...] | list[bytes] = (),
+        use_prep_stmt: bool = False,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+        state: Optional[bytes] = None,
+    ) -> list[bytes]: ...
+
+
+class PGConnectionEventListener(Protocol):
+    """Protocol for PGConnection event listeners."""
+
+    def on_pg_conn_closed(
+        self,
+        conn: PGConnectionRaw,
+        expected: bool,
+        exc: Optional[Exception],
+    ) -> None:
+        """Called when a connection is closed normally."""
+        pass
+
+    def on_pg_conn_unavailable(self, conn: PGConnectionRaw, msg: str) -> None:
+        """Set the message to display when PostgreSQL is unavailable."""
+        pass
+
+    def on_pg_conn_parameter_updated(
+        self, conn: PGConnectionRaw, name: str, value: str
+    ) -> None:
+        """Called when a parameter status is updated on a system connection."""
+        pass
+
+    def on_pg_conn_metrics(
+        self,
+        conn: PGConnectionRaw,
+        metric: str,
+        value: int,
+        *args,
+    ) -> None:
+        """Called when a metric is updated."""
+        pass
+
+
 __all__ = (
     'pg_connect',
     'PGConnection',
+    'PGConnectionRaw',
+    'PGConnectionEventListener',
     'BackendError',
     'BackendConnectionError',
     'BackendPrivilegeError',
     'BackendCatalogNameError',
+    'AbstractFrontendConnection',
     'SETUP_TEMP_TABLE_SCRIPT',
     'SETUP_CONFIG_CACHE_SCRIPT',
     'SETUP_DML_DUMMY_TABLE_SCRIPT',
