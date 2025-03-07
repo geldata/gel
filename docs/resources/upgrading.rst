@@ -53,11 +53,8 @@ We've started publishing our various client libraries under Gel-flavored names, 
     - `gel on PyPI <https://pypi.org/project/gel/>`_
   * - TypeScript
     - `gel on npm <https://www.npmjs.com/package/gel>`_
-
-      `@gel/generate on npm <https://www.npmjs.com/package/@gel/generate>`_
   * - Go
     - `gel-go on GitHub <https://github.com/geldata/gel-go>`_
-
   * - Rust
     - `gel-rust on GitHub <https://github.com/geldata/gel-rust>`_
 
@@ -67,8 +64,30 @@ If you're using the TypeScript client library, you can use our codemod to automa
 
   $ npx @gel/codemod@latest
 
+Code generation
+===============
+
+Some of the languages we support include code generation tools that can generate code from your schema. Here is a table of how those tools have been renamed:
+
+.. list-table::
+  :header-rows: 1
+
+  * - Language
+    - Previous
+    - Current
+  * - Python
+    - ``edgedb-py``
+    - ``gel-py``
+  * - TypeScript
+    - ``@edgedb/generate``
+    - ``@gel/generate``
+
+Check your project task runners and update them accordingly.
+
 Upgrading instances
 ===================
+
+To take advantage of the new features in Gel v6, you'll need to upgrade your instances to the latest version.
 
 Cloud instances
 ---------------
@@ -119,6 +138,10 @@ To upgrade a remote instance, we recommend the following dump-and-restore proces
 
    For Docker setups, use the ``6`` or other appropriate tag.
 
+   .. note::
+
+     The new instance will have a different DSN, including a different port number. Take note of the full DSN of the new instance as you'll need it to restore your database, and update your application to use the new DSN in further steps.
+
 3. Take your application offline, then dump your v5.x database with the CLI:
 
    .. code-block:: bash
@@ -127,7 +150,7 @@ To upgrade a remote instance, we recommend the following dump-and-restore proces
 
    This will dump the schema and contents of your current database to a directory on your local disk called ``my_database.dump``. The directory name isn't important.
 
-4. Restore the empty v6.x instance from the dump:
+4. Restore to the new, empty v6 instance from the dump:
 
    .. code-block:: bash
 
