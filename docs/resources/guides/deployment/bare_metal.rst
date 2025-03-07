@@ -74,17 +74,6 @@ Disable SELinux.
 Enable a systemd unit
 =====================
 
-Versions 6.0 and 6.1 of ``gel-server-6`` retain the previous user and group configurations for server execution. This configuration will be updated in version 6.2.
-
-For systems running versions 6.0-6.1, please ensure you create the required group, user, and data directory before enabling the ``systemd`` unit. This additional setup step will be eliminated in version 6.2.
-
-.. code-block:: bash
-
-   $ sudo groupadd edgedb
-   $ sudo useradd -g edgedb edgedb
-   $ sudo mkdir /var/lib/edgedb
-   $ sudo chown edgedb:edgedb /var/lib/edgedb
-
 The Gel package comes bundled with a systemd unit that is disabled by
 default. You can start the server by enabling the unit.
 
