@@ -634,7 +634,7 @@ declaratively. The :gelcmd:`project init` command has created a file called
 
   Now that our schema is applied, let's quickly populate the database with some
   fake data in order to be able to test the queries. We're going to explore
-  writing queries in a bit, for now copy and paste the following text into the terminal:
+  writing queries in a bit, for now copy and paste the following into the terminal:
 
   .. code-block:: bash
       :class: collapsible
@@ -1000,7 +1000,7 @@ In this tutorial we'll write queries using :ref:`EdgeQL <ref_intro_edgeql>` and 
 
 .. edb:split-section::
 
-  And these are the endpoint definitions, provided in bulk.
+  And these are the endpoint definitions, provided in bulk:
 
   .. code-block:: python
       :caption: app/main.py
@@ -1060,7 +1060,7 @@ In this tutorial we'll write queries using :ref:`EdgeQL <ref_intro_edgeql>` and 
 
   For the ``post_messages`` function, however, we'll take a slightly different approach. Since this is now the primary way for users to add their
   queries to the system, it functionally superceeds the ``/search`` endpoint we
-  made before. To this end, this function will handle saving messages, retrieving chat history, invoking web searches and generating responses.
+  made before. This function will handle saving messages, retrieving chat history, invoking web searches and generating responses.
 
   .. code-block:: python-diff
       :caption: app/main.py
@@ -1193,8 +1193,7 @@ In this tutorial we'll write queries using :ref:`EdgeQL <ref_intro_edgeql>` and 
 
 .. edb:split-section::
 
-  Finally, let's check that the messages we saw are in fact stored in the chat
-  history:
+  Finally, let's check that the messages we got as responses are in fact stored in the chat history:
 
   .. code-block:: bash
 
@@ -1210,29 +1209,20 @@ almost functional by now.
 Generating a Google search query
 --------------------------------
 
-Congratulations! We just got done implementing multi-turn conversations for our
-search bot.
+Congratulations! We've added multi-turn conversations to our search bot.
 
-However, there's still one crucial piece missing. Right now we're simply
-forwarding the users message straight to the full-text search. But what happens
-if their message is a followup that cannot be used as a standalone search
-query?
+One key piece is still missing: right now, every message is sent directly to full-text search, even if it's a follow-up that makes no sense on its own.
 
-Ideally what we should do is we should infer the search query from the entire
-conversation, and use that to perform the search.
-
-Let's implement an extra step in which the LLM is going to produce a query for
-us based on the entire chat history. That way we can be sure we're progressively
-working on our query rather than rewriting it from scratch every time.
+To improve this, we'll have the LLM generate a search query based on the entire conversation history. This ensures each search builds on the previous context, instead of starting fresh every time.
 
 
 .. edb:split-section::
 
   This is what we need to do: every time the user submits a message, we need to
   fetch the chat history, extract a search query from it using the LLM, and the
-  other steps are going to the the same as before. Let's make the follwing
+  other steps are going to be the same as before. Let's make the following
   modifications to the ``main.py``: first we need to create a function that
-  prepares LLM inputs for the search query inference.
+  prepares LLM inputs for the search query inference:
 
 
   .. code-block:: python
@@ -1359,22 +1349,14 @@ multiple turns of a conversation.
 It's time to add the final touch: we can make the bot remember previous similar
 interactions with the user using retrieval-augmented generation (RAG).
 
-To achieve this we need to implement similarity search across message history:
-we're going to create a vector embedding for every message in the database using
-a neural network. Every time we generate a Google search query, we're also going
-to use it to search for similar messages in user's message history, and inject
-the corresponding chat into the prompt. That way the search bot will be able to
-quickly "remember" similar interactions with the user and use them to understand
-what they are looking for.
+We'll do this by storing vector embeddings for each message. When generating a Google search query, we'll also search the user's message history for similar conversations and include those in the prompt. This helps the bot “remember” past interactions to better understand what the user wants.
 
-Gel enables us to implement such a system with only minor modifications to the
-schema.
+Thanks to Gel, we can add this with only minor schema changes.
 
 
 .. edb:split-section::
 
-  We begin by enabling the ``ai`` extension by adding the following like on top of
-  the :dotgel:`dbschema/default`:
+  We begin by enabling the ``ai`` extension by adding the following line on top of the :dotgel:`dbschema/default`:
 
   .. code-block:: sdl-diff
       :caption: dbschema/default.esdl
@@ -1384,7 +1366,7 @@ schema.
 
 .. edb:split-section::
 
-  ... and run the migration:
+  ... and running the migration:
 
 
   .. code-block:: bash
@@ -1395,9 +1377,7 @@ schema.
 
 .. edb:split-section::
 
-  Next, we need to configure the API key in Gel for whatever embedding provider
-  we're going to be using. As per documentation, let's open up the CLI by typing
-  ``gel`` and run the following command (assuming we're using OpenAI):
+  Next, we need to set the API key for our chosen embedding provider. To do this, open the ``Gel REPL`` by typing ``gel`` in the terminal. Then set the key by running the following command (assuming we're using OpenAI):
 
   .. code-block:: edgeql-repl
 
