@@ -150,7 +150,13 @@ When specifying an index, you can provide an optional ``except`` clause to exclu
 
 .. code-block:: sdl
 
-   index on (.name) except (exists .archived_at);
+  type User {
+    required name: str;
+    required email: str;
+    archived_at: datetime;
+
+    index on (.name) except (exists .archived_at);
+  }
 
 
 Specify a Postgres index type
