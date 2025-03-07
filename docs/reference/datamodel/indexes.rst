@@ -143,6 +143,15 @@ Link properties can also be indexed. The special placeholder
      };
    }
 
+Exclude objects from an index
+=============================
+
+When specifying an index, you can provide an optional ``except`` clause to exclude objects from the index. This is known as creating a *partial index*. Partial indexes are particularly useful in scenarios where you frequently query a subset of data that meets certain criteria, while consistently excluding other data. For example, if you often filter on a property but always exclude objects with a specific value for another property, a partial index can optimize these queries by indexing only the relevant subset of data, thus improving query performance and reducing index size.
+
+.. code-block:: sdl
+
+   index on (.name) except (exists .archived_at);
+
 
 Specify a Postgres index type
 =============================
