@@ -106,28 +106,12 @@ The command will produce the following structure:
 
   projschema/
   ├─ __init__.py
-  ├─ _sqlabase.py
   ├─ _tables.py
   ├─ default.py
 
 Let's go over the contents of the generated files to see how it all works:
 
 .. tabs::
-
-    .. code-tab:: python
-        :caption: _sqlabase.py
-
-        #
-        # Automatically generated from Gel schema.
-        #
-        # Do not edit directly as re-generating this file will overwrite any changes.
-        #
-
-        from sqlalchemy import orm as orm
-
-
-        class Base(orm.DeclarativeBase):
-            pass
 
     .. code-tab:: python
         :caption: _tables.py
@@ -143,7 +127,6 @@ Let's go over the contents of the generated files to see how it all works:
 
         import sqlmodel as sm
         import sqlalchemy as sa
-
 
 
         class UserGroup_users_table(sm.SQLModel, table=True):
@@ -166,37 +149,16 @@ Let's go over the contents of the generated files to see how it all works:
         # Do not edit directly as re-generating this file will overwrite any changes.
         #
 
+        from typing import Optional
         from projschema._tables import *
 
 
-        class Post(sm.SQLModel, table=True):
-            __tablename__ = 'Post'
-            __mapper_args__ = {"confirm_deleted_rows": False}
-
-            id: uuid.UUID | None = sm.Field(
-                default=None,
-                primary_key=True,
-                sa_column_kwargs=dict(server_default='uuid_generate_v4()'),
-            )
-            gel_type_id: uuid.UUID | None = sm.Field(
-                default=None,
-                sa_column=sa.Column('__type__', server_default='PLACEHOLDER'),
-            )
-
+        class UserBase(sm.SQLModel):
             # Properties:
-            body: str = sm.Field(nullable=False)
-
-            # Links:
-            author_id: uuid.UUID = sm.Field(
-                foreign_key="User.id",
-                nullable=False,
-            )
-            author: 'User' = sm.Relationship(
-                back_populates='_author_Post',
-            )
+            name: str = sm.Field(nullable=False)
 
 
-        class User(sm.SQLModel, table=True):
+        class User(UserBase, table=True):
             __tablename__ = 'User'
             __mapper_args__ = {"confirm_deleted_rows": False}
 
@@ -210,9 +172,6 @@ Let's go over the contents of the generated files to see how it all works:
                 sa_column=sa.Column('__type__', server_default='PLACEHOLDER'),
             )
 
-            # Properties:
-            name: str = sm.Field(nullable=False)
-
             # Back-links:
             _author_Post: list['Post'] = sm.Relationship(
                 back_populates='author',
@@ -223,7 +182,45 @@ Let's go over the contents of the generated files to see how it all works:
             )
 
 
-        class UserGroup(sm.SQLModel, table=True):
+        class PostBase(sm.SQLModel):
+            # Properties:
+            body: str = sm.Field(nullable=False)
+
+            # Links:
+            author_id: uuid.UUID = sm.Field(
+                foreign_key="User.id",
+                nullable=False,
+            )
+
+
+        class Post(PostBase, table=True):
+            __tablename__ = 'Post'
+            __mapper_args__ = {"confirm_deleted_rows": False}
+
+            id: uuid.UUID | None = sm.Field(
+                default=None,
+                primary_key=True,
+                sa_column_kwargs=dict(server_default='uuid_generate_v4()'),
+            )
+            gel_type_id: uuid.UUID | None = sm.Field(
+                default=None,
+                sa_column=sa.Column('__type__', server_default='PLACEHOLDER'),
+            )
+
+            # Links:
+            author: 'User' = sm.Relationship(
+                back_populates='_author_Post',
+            )
+
+
+        class UserGroupBase(sm.SQLModel):
+            # Properties:
+            name: str = sm.Field(nullable=False)
+
+            # Links:
+
+
+        class UserGroup(UserGroupBase, table=True):
             __tablename__ = 'UserGroup'
             __mapper_args__ = {"confirm_deleted_rows": False}
 
@@ -237,22 +234,19 @@ Let's go over the contents of the generated files to see how it all works:
                 sa_column=sa.Column('__type__', server_default='PLACEHOLDER'),
             )
 
-            # Properties:
-            name: str = sm.Field(nullable=False)
-
             # Links:
             users: list['User'] = sm.Relationship(
                 back_populates='_users_UserGroup',
                 link_model=UserGroup_users_table,
             )
 
-The ``_sqlabase.py`` file contains just the ``Base`` class derived from the SQLAlchemy ``DeclarativeBase`` for the reflected model declarations.
-
 The ``_tables.py`` file contains declarations for the models used as intermediate link tables. In our case it's the model used to represent the many-to-many relationship ``users`` between ``UserGroup`` and ``User``. All such intermediate tables will contain ``source`` and ``target`` fields. Both of the fields are part of the ``primary_key`` and they are UUID foreign keys. The name of the table is automatically generated as ``<Type>_<link>_table``.
 
-Finally, the file containing SQLModel models is ``default.py`` (named after the ``default`` |Gel| module). It contains ``Post``, ``User``, and ``UserGroup`` model declarations.
+Finally, the file containing SQLModel models is ``default.py`` (named after the ``default`` |Gel| module). It contains ``PostBase``, ``Post``, ``UserBase``, ``User``, ``UserGroupBase``, and ``UserGroup`` model declarations.
 
-Let's start with what all models have in common: ``id`` and ``gel_type_id``. They refer to the unique object ``id`` and to the ``__type__.id`` in the |Gel| schema. These two UUID fields are managed automatically by |Gel| and should not be directly modified. Effectively they are supposed to be treated as read-only fields.
+The "Base" models declare all the user-defined properties and the fogeign keys used by single links (because they correspond to SQL table columns). These models serve as a baseline for deriving the *table models* as well as any custom *data models* that you want to define. These include ``PostBase``, ``UserBase``, and ``UserGroupBase``.
+
+The rest of the models, i.e. ``Post``, ``User``, and ``UserGroup``, are *table models*. They all include additional automatically generated properties ``id`` and ``gel_type_id``. They refer to the unique object ``id`` and to the ``__type__.id`` in the |Gel| schema. These two UUID fields are managed entirely by |Gel| and should not be directly modified. Effectively they are supposed to be treated as read-only fields.
 
 Properties
 ----------
