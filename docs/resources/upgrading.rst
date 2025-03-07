@@ -160,3 +160,14 @@ To upgrade a remote instance, we recommend the following dump-and-restore proces
 
    This process will involve some downtime, specifically during steps 2 and 3.
 
+GitHub Action
+=============
+
+We publish a GitHub action for accessing a Gel instance in your GitHub Actions workflows. This action has been updated to work with Gel v6. If you're using the action in your workflow, update it to use the latest version.
+
+.. code-block:: yaml-diff
+
+  - - uses: edgedb/setup-edgedb@v1
+  + - uses: geldata/setup-gel@v2
+  - - run: edgedb query 'select sys::get_version_as_str()'
+  + - run: gel query 'select sys::get_version_as_str()'
