@@ -304,9 +304,9 @@ async def _delete_requests(
             )
             result: list[int] = json.loads(result_json)
             if result[0] > 0:
-                logger.info(f"Deleted {result[0]} requests")
+                logger.debug(f"Deleted {result[0]} requests")
             else:
-                logger.info(f"No requests to delete")
+                logger.debug(f"No requests to delete")
 
 
 async def _gc(tenant: edbtenant.Tenant, expires_in: statypes.Duration) -> None:
