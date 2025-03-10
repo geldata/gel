@@ -59,6 +59,8 @@ Modules
 Multiple modules will be mapped onto multiple Postgres schemas and the schema generator will even write them out into separate Python files as well, following whatever nesting structure the modules have.
 
 
+.. _ref_guide_sqlmodel_constr:
+
 Connection String
 =================
 
@@ -217,8 +219,6 @@ Let's go over the contents of the generated files to see how it all works:
             # Properties:
             name: str = sm.Field(nullable=False)
 
-            # Links:
-
 
         class UserGroup(UserGroupBase, table=True):
             __tablename__ = 'UserGroup'
@@ -244,7 +244,7 @@ The ``_tables.py`` file contains declarations for the models used as intermediat
 
 Finally, the file containing SQLModel models is ``default.py`` (named after the ``default`` |Gel| module). It contains ``PostBase``, ``Post``, ``UserBase``, ``User``, ``UserGroupBase``, and ``UserGroup`` model declarations.
 
-The "Base" models declare all the user-defined properties and the fogeign keys used by single links (because they correspond to SQL table columns). These models serve as a baseline for deriving the *table models* as well as any custom *data models* that you want to define. These include ``PostBase``, ``UserBase``, and ``UserGroupBase``.
+The "Base" models declare all the user-defined properties and the foreign keys used by single links (because they correspond to SQL table columns). These models serve as a baseline for deriving the *table models* as well as any custom *data models* that you want to define. These include ``PostBase``, ``UserBase``, and ``UserGroupBase``.
 
 The rest of the models, i.e. ``Post``, ``User``, and ``UserGroup``, are *table models*. They all include additional automatically generated properties ``id`` and ``gel_type_id``. They refer to the unique object ``id`` and to the ``__type__.id`` in the |Gel| schema. These two UUID fields are managed entirely by |Gel| and should not be directly modified. Effectively they are supposed to be treated as read-only fields.
 
@@ -265,3 +265,141 @@ We can look at the ``User`` model and find ``_author_Post`` ``Relationship`` poi
 ``User`` model also has a many-to-many relationship with ``UserGroup``. Since in the |Gel| schema that is represented by the multi link ``users`` that originates on the ``UserGroup`` type, the ``User`` end of this relationship is a back-link and it follows the back-link naming convention. The relationship is ``_users_UserGroup`` and in addition to ``back_populates`` it also declares the other endpoint as ``list['UserGroup']`` and the ``link_model`` ``UserGroup_users_table`` from ``_tables.py`` is used.
 
 Finally, ``UserGroup`` model has the other half of the many-to-many relationship declaration. It has the same name as the |Gel| schema: ``users``. Otherwise it mirrors the ``Relationship`` declaration for ``_users_UserGroup``.
+
+FastAPI Endpoints
+-----------------
+
+We can use the generated models to set up some FastAPI endpoints. This example will cover a couple of endpoints for getting user information.
+
+First we setup a ``.env`` file with the ``SQL_DATABASE_URL`` value containing the :ref:`connection string <ref_guide_sqlmodel_constr>`:
+
+.. code-block::
+    :caption: .env
+
+    SQLALCHEMY_DATABASE_URL="postgresql://admin:0vGZ4WB1i1EY95MN9MirBqCQ@localhost:10721/main"
+
+Then we can setup our first API endpoint for getting all the users as a list:
+
+.. lint-off
+
+.. code-block:: python
+    :caption: app/main.py
+
+    from fastapi import Depends, FastAPI, HTTPException
+    from sqlmodel import Session, create_engine, select
+    from projschema import default as m
+
+    import os
+    import uuid
+    from dotenv import load_dotenv
+
+
+    load_dotenv()
+    SQL_DATABASE_URL = os.getenv('SQL_DATABASE_URL')
+    engine = create_engine(
+        SQL_DATABASE_URL,
+        echo=True,
+    )
+    app = FastAPI()
+
+
+    class UserPublic(m.UserBase):
+        id: uuid.UUID
+
+
+    def get_session():
+        with Session(engine) as session:
+            yield session
+
+
+    @app.get("/users/", response_model=list[UserPublic])
+    def read_users(
+        *,
+        session: Session = Depends(get_session),
+    ):
+        users = session.exec(select(m.Users).all()
+        return users
+
+.. lint-on
+
+Notice that we define a data model ``UserPublic`` derived from the generated ``UserBase`` in order to format the response correctly. We want to include the ``id`` field, but not any of the relationship data.
+
+Next we can add another endpoint to retrieve a specific user based on the user ``id``. This time, we want to include the ``UserGroup`` membership information in addition to the basic user information. So we create ``UserGroupPublic`` and ``UserPublicWithGroups`` data models to correctly format the API response. The ``UserPublicWithGroups`` model exposes the automatically generate backlink from ``User`` to ``UserGroup`` that provides a list of all the groups a given user is a member of:
+
+.. lint-off
+
+.. code-block:: python-diff
+    :caption: app/main.py
+
+      from fastapi import Depends, FastAPI, HTTPException
+      from sqlmodel import Session, create_engine, select
+      from projschema import default as m
+
+      import os
+      import uuid
+      from dotenv import load_dotenv
+
+
+      load_dotenv()
+      SQL_DATABASE_URL = os.getenv('SQL_DATABASE_URL')
+      engine = create_engine(
+          SQL_DATABASE_URL,
+          echo=True,
+      )
+      app = FastAPI()
+
+
+      class UserPublic(m.UserBase):
+          id: uuid.UUID
+
+
+    + class UserGroupPublic(m.UserGroupBase):
+    +     id: uuid.UUID
+    +
+    +
+    + class UserPublicWithGroups(UserPublic):
+    +     _users_UserGroup: list[UserGroupPublic]
+    +
+    +
+      def get_session():
+          with Session(engine) as session:
+              yield session
+
+
+      @app.get("/users/", response_model=list[UserPublic])
+      def read_users(
+          *,
+          session: Session = Depends(get_session),
+      ):
+          users = session.exec(select(m.Users).all()
+          return users
+    +
+    +
+    + @app.get("/user/{user_id}", response_model=UserPublicWithGroups)
+    + def read_user(
+    +     *,
+    +     session: Session = Depends(get_session),
+    +     user_id: uuid.UUID,
+    + ):
+    +     user = session.get(m.User, user_id)
+    +     if not user:
+    +         raise HTTPException(status_code=404, detail="User not found")
+    +     return user
+
+.. lint-on
+
+We can follow this process to create API endpoints for all of the reflected models and customize their responses the same way as we would for hand-written FastAPI + SQLModel code.
+
+Automating Model Generation
+---------------------------
+
+Instead of having to run the model generator manually, we can set up our project so that the model generator runs automatically after |Gel| schema changes. To do that we will edit the :ref:`ref_reference_gel_toml` file.
+
+In the |gel.toml| file find the ``[hooks]`` table or create it if needed and add the following setting:
+
+.. code-block:: toml
+
+    [hooks]
+    schema.update.after = "gel-orm sqlmodel --mod projschema --out projschema"
+
+This tells the |Gel| project tools to run the SQLModel generator command after any schema update. It ensures that you're not working with stale model code.
