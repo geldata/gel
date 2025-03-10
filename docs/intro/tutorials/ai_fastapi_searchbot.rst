@@ -1340,7 +1340,7 @@ To improve this, we'll have the LLM generate a search query based on the entire 
           -d '{ "query": "do they like it or not" }'
 
 
-1. Use Gel's advanced features to create a RAG
+6. Use Gel's advanced features to create a RAG
 ==============================================
 
 At this point we have a decent search bot that can refine a search query over
