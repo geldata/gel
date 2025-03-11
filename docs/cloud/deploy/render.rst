@@ -4,7 +4,7 @@
 Render
 ======
 
-:edb-alt-title: Deploying applications built on |Gel| Cloud to Render
+:edb-alt-title: Deploying applications built on Gel Cloud to Render
 
 1. Push project to GitHub or some other Git remote repository
 2. Create and make note of a secret key for your Gel Cloud instance

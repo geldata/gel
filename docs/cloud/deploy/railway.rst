@@ -4,7 +4,7 @@
 Railway
 =======
 
-:edb-alt-title: Deploying applications built on |Gel| Cloud to Railway
+:edb-alt-title: Deploying applications built on Gel Cloud to Railway
 
 1. Push project to GitHub or some other Git remote repository
 2. Create and make note of a secret key for your Gel Cloud instance
