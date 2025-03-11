@@ -114,7 +114,7 @@ your terminal:
     $ aws cloudformation create-stack \
         --stack-name Gel \
         --template-url \
-          https://gel-deploy.s3.us-east-2.amazonaws.com/gel-aurora.yml \
+          https://gel-deployment.s3.us-east-2.amazonaws.com/gel-aurora.yml \
         --capabilities CAPABILITY_NAMED_IAM \
         --parameters ParameterKey=SuperUserPassword,ParameterValue=<password>
 
