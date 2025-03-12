@@ -1374,7 +1374,7 @@ class TestEdgeQLExplain(tb.QueryTestCase):
                                 'title': 'index_name',
                                 'type': 'index',
                                 'value':
-                                    f"index 'pg::gist' of object type "
+                                    f"index 'std::pg::gist' of object type "
                                     f"'default::RangeTest' on (.{fname})",
                             },
                             {
@@ -1410,7 +1410,7 @@ class TestEdgeQLExplain(tb.QueryTestCase):
                                         'title': 'index_name',
                                         'type': 'index',
                                         'value':
-                                            f"index 'pg::gist' of object"
+                                            f"index 'std::pg::gist' of object"
                                             f" type 'default::RangeTest'"
                                             f" on (.{fname})",
                                     },
@@ -1897,7 +1897,7 @@ class TestEdgeQLExplain(tb.QueryTestCase):
                                         'title': 'index_name',
                                         'type': 'index',
                                         'value':
-                                            f"index 'pg::gin' of object"
+                                            f"index 'std::pg::gin' of object"
                                             f" type 'default::JSONTest'"
                                             f" on (.val)",
                                     },

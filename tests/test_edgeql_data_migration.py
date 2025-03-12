@@ -8361,6 +8361,31 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
             }],
         )
 
+    async def test_edgeql_migration_eq_index_05(self):
+        await self.migrate('''
+            abstract type Named {
+                index fts::index on (
+                    std::fts::with_options(
+                        .name, language := std::fts::Language.eng));
+                required property name: std::str;
+            };
+        ''')
+
+        await self.start_migration('''
+            abstract type Named {
+                index std::fts::index on (
+                    std::fts::with_options(
+                        .name, language := std::fts::Language.eng));
+                required property name: std::str;
+            };
+        ''')
+
+        # no changes
+        await self.assert_describe_migration({
+            'confirmed': [],
+            'complete': True,
+        })
+
     async def test_edgeql_migration_eq_collections_01(self):
         await self.migrate(r"""
             type Base;

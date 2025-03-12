@@ -13565,6 +13565,34 @@ type default::Foo {
                 };
             """)
 
+    async def test_edgeql_ddl_index_fts_01(self):
+        await self.con.execute('''
+            CREATE ABSTRACT TYPE default::Named {
+                CREATE REQUIRED PROPERTY name: std::str;
+                CREATE INDEX fts::index ON (
+                  fts::with_options(.name, language := fts::Language.eng)
+                );
+            };
+
+            CREATE ABSTRACT TYPE default::Project EXTENDING default::Named
+            {
+                ALTER PROPERTY name {
+                    SET OWNED;
+                    CREATE CONSTRAINT std::exclusive;
+                };
+            };
+        ''')
+
+        # Names canonicalized as std::fts::index
+        await self.assert_query_result(
+            '''
+            select schema::Index { name }
+            filter exists .<indexes[is schema::ObjectType]
+            and .name like '%index';
+            ''',
+            [{"name": "std::fts::index"}, {"name": "std::fts::index"}]
+        )
+
     async def test_edgeql_ddl_abstract_index_01(self):
         for _ in range(2):
             await self.con.execute('''
