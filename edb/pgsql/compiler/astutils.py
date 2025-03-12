@@ -190,33 +190,59 @@ def array_get_inner_array(
                 (101)::int8 AS "expr~7_value~1"
         )
     """
-    return pgast.SelectStmt(
-        target_list=[
-            pgast.ResTarget(val=pgast.ColumnRef(name=['0'])),
-        ],
-        from_clause=[
-            pgast.RangeFunction(
-                functions=[
-                    pgast.FuncCall(
-                        name=('unnest',),
-                        args=[
-                            pgast.ArrayExpr(
-                                elements=[wrapped_array],
-                            )
-                        ],
-                        coldeflist=[
-                            pgast.ColumnDef(
-                                name='0',
-                                typename=pgast.TypeName(
-                                    name=pg_types.pg_type_from_ir_typeref(array_typeref)
+    # Nested arrays wrap their inner arrays in a tuple
+    if array_typeref.wrapped_array_id:
+        # temporary array of array implemented as array<tuple<array<...>>>
+        # using named tuple
+        return pgast.SelectStmt(
+            target_list=[
+                pgast.ResTarget(val=pgast.ColumnRef(name=['f1'])),
+            ],
+            from_clause=[
+                pgast.RangeFunction(
+                    functions=[
+                        pgast.FuncCall(
+                            name=('unnest',),
+                            args=[
+                                pgast.ArrayExpr(
+                                    elements=[wrapped_array],
                                 )
-                            )
-                        ]
-                    )
-                ]
-            )
-        ]
-    )
+                            ],
+                        )
+                    ]
+                )
+            ]
+        )
+    else:
+        # temporary array of array implemented as array<tuple<array<...>>>
+        # using unnamed tuple
+        return pgast.SelectStmt(
+            target_list=[
+                pgast.ResTarget(val=pgast.ColumnRef(name=['0'])),
+            ],
+            from_clause=[
+                pgast.RangeFunction(
+                    functions=[
+                        pgast.FuncCall(
+                            name=('unnest',),
+                            args=[
+                                pgast.ArrayExpr(
+                                    elements=[wrapped_array],
+                                )
+                            ],
+                            coldeflist=[
+                                pgast.ColumnDef(
+                                    name='0',
+                                    typename=pgast.TypeName(
+                                        name=pg_types.pg_type_from_ir_typeref(array_typeref)
+                                    )
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
 
 
 def is_null_const(expr: pgast.BaseExpr) -> bool:

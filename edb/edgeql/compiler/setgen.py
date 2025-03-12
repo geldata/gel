@@ -2043,13 +2043,45 @@ def get_global_param(
         param_name = f'__edb_global_{len(ctx.env.query_globals)}__'
 
         target = glob.get_target(ctx.env.schema)
+
+        wrapped_target_typeref = None
+        if (
+            glob.get_expr(ctx.env.schema) is None
+            and target.contains_array_of_array(ctx.env.schema)
+        ):
+            # User specified global with array<array<...>> should treat it
+            # as array<tuple<array<...>>>
+            if isinstance(target, s_types.Array):
+                padded_collection_type = s_types.Array.get_padded_collection(
+                    ctx.env.schema,
+                    element_type=target.get_element_type(ctx.env.schema),
+                )
+            elif isinstance(target, s_types.Tuple):
+                padded_collection_type = s_types.Tuple.get_padded_collection(
+                    ctx.env.schema,
+                    element_types={
+                        n: st
+                        for n, st in (
+                            target
+                            .get_element_types(ctx.env.schema)
+                            .items(ctx.env.schema)
+                        )
+                    },
+                    named=target.get_named(ctx.env.schema),
+                )
+            else:
+                raise NotImplementedError
+            wrapped_target_typeref = typegen.type_to_typeref(
+                padded_collection_type, env=ctx.env
+            )
+
         target_typeref = typegen.type_to_typeref(target, env=ctx.env)
 
         ctx.env.query_globals[name] = irast.Global(
             name=param_name,
             required=False,
             schema_type=target,
-            ir_type=target_typeref,
+            ir_type=wrapped_target_typeref or target_typeref,
             global_name=name,
             has_present_arg=glob.needs_present_arg(ctx.env.schema),
         )
@@ -2073,6 +2105,7 @@ def get_global_param_sets(
             typeref=param.ir_type,
             is_implicit_global=is_implicit_global,
         ),
+        type_override=param.schema_type,
         ctx=ctx,
     )
     if glob.needs_present_arg(ctx.env.schema):

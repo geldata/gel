@@ -1047,7 +1047,9 @@ def _infer_slice_type(
 def compile_Indirection(
     expr: qlast.Indirection, *, ctx: context.ContextLevel
 ) -> irast.Set:
-    node: irast.Set | irast.Expr = dispatch.compile(expr.arg, ctx=ctx)
+    node: irast.Set | irast.IndexIndirection | irast.SliceIndirection = (
+        dispatch.compile(expr.arg, ctx=ctx)
+    )
     for indirection_el in expr.indirection:
         if isinstance(indirection_el, qlast.Index):
             idx = dispatch.compile(indirection_el.index, ctx=ctx)
@@ -1057,7 +1059,11 @@ def compile_Indirection(
             )
 
             node = irast.IndexIndirection(
-                expr=node, index=idx, typeref=typeref, span=expr.span
+                expr=node,
+                index=idx,
+                input_typeref=node.typeref,
+                typeref=typeref,
+                span=expr.span,
             )
         elif isinstance(indirection_el, qlast.Slice):
             start: Optional[irast.Base]

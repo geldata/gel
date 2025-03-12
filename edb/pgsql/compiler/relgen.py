@@ -3699,7 +3699,9 @@ def _compile_call_args(
             _should_wrap_polymorphic_array_args(expr)
             and _is_array_arg_as_simple_polymorphic(ir_arg)
         ):
-            arg_ref = pgast.RowExpr(args=[arg_ref])
+            arg_ref = _wrap_array_of_array_element(
+                arg_ref, ir_arg.expr.typeref,
+            )
 
         args.append(arg_ref)
         _compile_arg_null_check(expr, ir_arg, arg_ref, typemod, ctx=ctx)
@@ -4098,7 +4100,9 @@ def process_set_as_agg_expr_inner(
                     and _is_array_arg_as_simple_polymorphic(ir_call_arg)
                 ):
                     # Wrap aggregated arrays in a tuple
-                    arg_ref = pgast.RowExpr(args=[arg_ref])
+                    arg_ref = _wrap_array_of_array_element(
+                        arg_ref, ir_arg.expr.typeref,
+                    )
 
                     if aspect == pgce.PathAspect.SERIALIZED:
                         arg_ref = output.serialize_expr(
@@ -4322,14 +4326,15 @@ def process_set_as_json_object_pack(
 
 
 def build_array_expr(
-        ir_expr: irast.Base,
-        elements: list[pgast.BaseExpr], *,
-        ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
+    ir_expr: irast.Array,
+    elements: list[pgast.BaseExpr],
+    *,
+    ctx: context.CompilerContextLevel
+) -> pgast.BaseExpr:
 
     array = astutils.safe_array_expr(elements, ctx=ctx)
 
     if irutils.is_empty_array_expr(ir_expr):
-        assert isinstance(ir_expr, irast.Array)
         typeref = ir_expr.typeref
 
         if irtyputils.is_any(typeref.subtypes[0]):
@@ -4350,6 +4355,18 @@ def build_array_expr(
                 name=pg_type,
             ),
         )
+
+    elif irtyputils.is_persistent_array_of_array(ir_expr.typeref):
+        assert ir_expr.typeref.padded_array_type is not None
+        pg_type = pg_types.pg_type_from_ir_typeref(ir_expr.typeref.padded_array_type)
+
+        return pgast.TypeCast(
+            arg=array,
+            type_name=pgast.TypeName(
+                name=pg_type,
+            ),
+        )
+
     else:
         return array
 
@@ -4371,7 +4388,9 @@ def process_set_as_array_expr(
         element = dispatch.compile(ir_element, ctx=ctx)
         if irtyputils.is_array(ir_element.typeref):
             # Wrap nested arrays in a tuple
-            element = pgast.RowExpr(args=[element])
+            element = _wrap_array_of_array_element(
+                element, ir_element.typeref,
+            )
         elements.append(element)
 
         if serializing:
@@ -4412,6 +4431,29 @@ def process_set_as_array_expr(
     pathctx.put_path_value_var_if_not_exists(ctx.rel, ir_set.path_id, set_expr)
 
     return new_stmt_set_rvar(ir_set, ctx.rel, ctx=ctx)
+
+
+def _wrap_array_of_array_element(
+    element: pgast.BaseExpr,
+    typeref: irast.TypeRef,
+):
+    # Wrap aggregated arrays in a tuple
+    if typeref.wrapped_array_id:
+        # tuple in schema
+        name = cast(
+            Tuple[str, str],
+            common.get_tuple_backend_name(
+                typeref.wrapped_array_id, catenate=False
+            ),
+        )
+        return pgast.TypeCast(
+            arg=pgast.RowExpr(args=[element]),
+            type_name=pgast.TypeName(
+                name=name,
+            ),
+        )
+    else:
+        return pgast.RowExpr(args=[element])
 
 
 def process_encoded_param(
