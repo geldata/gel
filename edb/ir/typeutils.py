@@ -116,6 +116,11 @@ def is_array(typeref: irast.TypeRef) -> bool:
     return typeref.collection == s_types.Array.get_schema_name()
 
 
+def is_array_of_array(typeref: irast.TypeRef) -> bool:
+    """Return True if *typeref* describes an array of array type."""
+    return is_array(typeref) and is_array(typeref.subtypes[0])
+
+
 def is_tuple(typeref: irast.TypeRef) -> bool:
     """Return True if *typeref* describes a tuple type."""
     return typeref.collection == s_types.Tuple.get_schema_name()
@@ -181,6 +186,18 @@ def is_free_object(typeref: irast.TypeRef) -> bool:
 
 def is_persistent_tuple(typeref: irast.TypeRef) -> bool:
     if is_tuple(typeref):
+        if typeref.material_type is not None:
+            material = typeref.material_type
+        else:
+            material = typeref
+
+        return material.in_schema
+    else:
+        return False
+
+
+def is_persistent_array_of_array(typeref: irast.TypeRef) -> bool:
+    if is_array_of_array(typeref):
         if typeref.material_type is not None:
             material = typeref.material_type
         else:
@@ -480,6 +497,31 @@ def _type_to_typeref(
         else:
             material_typeref = None
 
+        padded_array_typeref = None
+        if (
+            isinstance(t, s_types.Array)
+            and (element_type := t.get_element_type(schema))
+            and isinstance(element_type, s_types.Array)
+        ):
+            padded_collection_type = s_types.Array.get_padded_collection(
+                schema, element_type=element_type
+            )
+            padded_array_typeref = _typeref(padded_collection_type)
+
+        wrapped_array_id = None
+        if isinstance(t, s_types.Array):
+            wrapped_array_name = s_types.Tuple.generate_name(
+                element_names={'f1': t.get_name(schema)},
+                named=True,
+            )
+            if (
+                (wrapped_array_type := schema.get_global(
+                    s_types.Tuple, wrapped_array_name, None
+                ))
+                and wrapped_array_type.get_is_persistent(schema)
+            ):
+                wrapped_array_id = wrapped_array_type.id
+
         result = irast.TypeRef(
             id=t.id,
             name_hint=name_hint,
@@ -490,7 +532,9 @@ def _type_to_typeref(
             in_schema=t.get_is_persistent(schema),
             subtypes=tuple(
                 _typeref(st) for st in t.get_subtypes(schema)
-            )
+            ),
+            padded_array_type=padded_array_typeref,
+            wrapped_array_id=wrapped_array_id,
         )
 
     if cache is not None and typename is None and _name is None:

@@ -276,6 +276,16 @@ class PropertyCommand(
                 f'{target_type.get_verbosename(schema)}',
                 span=span,
             )
+        if (
+            target_type.contains_array_of_array(schema)
+            and self.get_attribute_value('expr') is None
+        ):
+            span = self.get_attribute_span('target')
+            raise errors.InvalidPropertyTargetError(
+                'invalid property type: non-computed nested arrays are not '
+                'supported',
+                span=span,
+            )
 
     def _check_field_errors(self, node: qlast.DDLOperation) -> None:
         for sub in node.commands:

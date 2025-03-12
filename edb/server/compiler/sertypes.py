@@ -1654,7 +1654,28 @@ def _parse_multirange_descriptor(
 
 
 def _make_global_rep(typ: s_types.Type, ctx: Context) -> object:
-    if isinstance(typ, s_types.Tuple):
+    if typ.contains_array_of_array(ctx.schema):
+        # Nested array wraps inner array in a tuple
+        # Replace array<array<...>> with array<tuple<array<...>>>
+        if isinstance(typ, s_types.Array):
+            padded_collection_type = s_types.Array.get_padded_collection(
+                ctx.schema,
+                element_type=typ.get_element_type(ctx.schema),
+            )
+        elif isinstance(type, s_types.Tuple):
+            padded_collection_type = s_types.Tuple.get_padded_collection(
+                ctx.schema,
+                element_types={
+                    n: st
+                    for n, st in typ.get_element_types(ctx.schema)
+                },
+                named=typ.get_named(ctx.schema),
+            )
+        else:
+            raise NotImplementedError
+
+        return _make_global_rep(padded_collection_type, ctx)
+    elif isinstance(typ, s_types.Tuple):
         subtyps = typ.get_subtypes(ctx.schema)
         return (
             int(enums.TypeTag.TUPLE),
