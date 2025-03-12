@@ -2168,9 +2168,23 @@ jobs:
         ref: master
         path: dockerfile
 
+    - name: Login to Docker Hub
+      uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+      with:
+        registry: ghcr.io
+        username: "edgedb-ci"
+        password: ${{ secrets.GITHUB_CI_BOT_TOKEN }}
+
     - env:
         VERSION_SLOT: "${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }}"
         VERSION_CORE: "${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }}"
+        CATALOG_VERSION: "${{ needs.check-published-debian-bookworm-x86_64.outputs.catalog-version }}"
         PKG_SUBDIST: ""
       id: tags
       run: |
@@ -2188,53 +2202,58 @@ jobs:
           done | grep "^[[:digit:]]\+.*" | grep -v "alpha\|beta\|rc" || :
         )
 
-        tags=( "$VERSION_CORE" )
+        tags=()
 
-        top=$(printf "%s\n%s\n" "$VERSION_CORE" "$repo_tags" \
-              | grep "^${VERSION_SLOT}[\.-]" \
-              | sort --version-sort --reverse | head -n 1)
-        if [ "$top" == "$VERSION_CORE" ]; then
-          tags+=( "$VERSION_SLOT" )
-        fi
+        if [ "$PKG_SUBDIST" = "nightly" ]; then
+          tags+=(
+            "nightly"
+            "nightly_${VERSION_SLOT}_cv${CATALOG_VERSION}"
+          )
+        else
+          tags+=( "$VERSION_CORE" )
 
-        if [ -z "$PKG_SUBDIST" ]; then
           top=$(printf "%s\n%s\n" "$VERSION_CORE" "$repo_tags" \
+                | grep "^${VERSION_SLOT}[\.-]" \
                 | sort --version-sort --reverse | head -n 1)
           if [ "$top" == "$VERSION_CORE" ]; then
-            tags+=( "latest" )
+            tags+=( "$VERSION_SLOT" )
+          fi
+
+          if [ -z "$PKG_SUBDIST" ]; then
+            top=$(printf "%s\n%s\n" "$VERSION_CORE" "$repo_tags" \
+                  | sort --version-sort --reverse | head -n 1)
+            if [ "$top" == "$VERSION_CORE" ]; then
+              tags+=( "latest" )
+            fi
           fi
         fi
 
+        fq_tags=()
+        images=("geldata/gel" "ghcr.io/geldata/gel")
+
+        for image in "${images[@]}"; do
+          fq_tags+=("${tags[@]/#/$image}")
+        done
+
         IFS=,
-        echo "tags=${tags[*]}" >> $GITHUB_OUTPUT
+        echo "tags=${fq_tags[*]}" >> $GITHUB_OUTPUT
 
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v2
+      uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@edfb0fe6204400c56fbfd3feba3fe9ad1adfa345  # v3
+      uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
-    - name: Publish Docker Image (docker.io)
-      uses: elgohr/Publish-Docker-Github-Action@43dc228e327224b2eda11c8883232afd5b34943b  # v5
+    - name: Build and Publish Docker Image
+      uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.10.0
       with:
-        name: geldata/gel
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+        push: true
+        provenance: mode=max
         tags: "${{ steps.tags.outputs.tags }}"
-        workdir: dockerfile
-        buildargs: branding=gel,version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }},exact_version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }}
-        platforms: linux/amd64,linux/arm64
-
-    - name: Publish Docker Image (ghcr.io)
-      uses: elgohr/Publish-Docker-Github-Action@43dc228e327224b2eda11c8883232afd5b34943b  # v5
-      with:
-        registry: ghcr.io
-        name: ${{ github.repository }}
-        username: "edgedb-ci"
-        password: ${{ secrets.GITHUB_CI_BOT_TOKEN }}
-        tags: "${{ steps.tags.outputs.tags }}"
-        workdir: dockerfile
-        buildargs: branding=gel,version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }},exact_version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }}
+        context: dockerfile
+        build-args: |
+          version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }}
+          exact_version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }}
         platforms: linux/amd64,linux/arm64
 
   workflow-notifications:
