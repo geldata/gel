@@ -8328,6 +8328,38 @@ class TestEdgeQLSelect(tb.QueryTestCase):
         ''')
         self.assertFalse(hasattr(foo, 'id'))
 
+    async def test_edgeql_select_free_object_distinct_02(self):
+        # This was a 6.x regression :(
+        await self.assert_query_result(
+            '''
+            select {
+              lol := assert_distinct((for x in {1,2,3} select { x := x }))
+            };
+            ''',
+            [{"lol": [{"x": 1}, {"x": 2}, {"x": 3}]}]
+        )
+        # This was always supposed to work but was broken forever :(
+        await self.assert_query_result(
+            '''
+            select {
+              lol := (for x in {1,2,3} select { x := x })
+            };
+            ''',
+            [{"lol": [{"x": 1}, {"x": 2}, {"x": 3}]}]
+        )
+
+    @test.xerror('''
+        Can't compile ref to visible binding ns~1@@(__derived__::x@w~2)
+    ''')
+    async def test_edgeql_select_free_object_distinct_03(self):
+        await self.assert_query_result(
+            '''
+            with X := { lol := ((for x in {1,2,3} select { x := x })) },
+            select X {lol: { x }};
+            ''',
+            [{"lol": [{"x": 1}, {"x": 2}, {"x": 3}]}]
+        )
+
     async def test_edgeql_select_shadow_computable_01(self):
         # The thing this is testing for
         await self.assert_query_result(

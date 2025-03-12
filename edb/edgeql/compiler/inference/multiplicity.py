@@ -328,13 +328,8 @@ def _infer_set_inner(
     ):
         path_mult = dataclasses.replace(path_mult, disjoint_union=True)
 
-    # Mark free object roots
-    if irutils.is_trivial_free_object(ir):
-        path_mult = dataclasses.replace(path_mult, fresh_free_object=True)
-
-    # Remove free object freshness when we see them through a binding
-    if ir.is_binding == irast.BindingKind.With and path_mult.fresh_free_object:
-        path_mult = dataclasses.replace(path_mult, fresh_free_object=False)
+    if irtyputils.is_free_object(ir.typeref):
+        path_mult = UNIQUE
 
     return path_mult
 
@@ -643,7 +638,7 @@ def _infer_for_multiplicity(
     elif itmult.is_duplicate():
         return DUPLICATE
     else:
-        if result_mult.disjoint_union or result_mult.fresh_free_object:
+        if result_mult.disjoint_union:
             return result_mult
         else:
             return DUPLICATE
@@ -820,10 +815,10 @@ def __infer_group_stmt(
         if set:
             infer_multiplicity(set, scope_tree=scope_tree, ctx=ctx)
 
-    if result_mult.fresh_free_object:
-        return result_mult
-    else:
-        return DUPLICATE
+    # N.B: Since the type is usually a free object (except in some
+    # internal tests), this will typically get turned UNIQUE by the
+    # enclosing Set.
+    return DUPLICATE
 
 
 @_infer_multiplicity.register

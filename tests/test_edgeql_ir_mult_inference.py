@@ -751,12 +751,20 @@ class TestEdgeQLMultiplicityInference(tb.BaseEdgeQLCompilerTest):
         UNIQUE
         """
 
+    def test_edgeql_ir_mult_inference_77b(self):
+        """
+        for x in {1, 1} union { foo := 10 }
+% OK %
+        UNIQUE
+        """
+
     def test_edgeql_ir_mult_inference_78(self):
+        # free objects always unique, now
         """
         with F := { foo := 10 }
         for x in {1, 2} union F
 % OK %
-        DUPLICATE
+        UNIQUE
         """
 
     def test_edgeql_ir_mult_inference_79(self):
