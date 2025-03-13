@@ -166,4 +166,6 @@ alter type ext::ai::EmbeddingModel {
       ext::ai::embedding_model_max_batch_tokens := "8191";
 }
 '''),
+    # 6.3
+    ('repair', ''),  # For #8466
 ]
