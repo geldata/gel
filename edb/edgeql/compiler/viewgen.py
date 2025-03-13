@@ -1018,7 +1018,8 @@ def _compile_rewrites(
 
     def get_anchors(stype: s_objtypes.ObjectType) -> RewriteAnchors:
         if stype not in anchors:
-            anchors[stype] = prepare_rewrite_anchors(stype, r_ctx, s_ctx, ctx)
+            anchors[stype] = prepare_rewrite_anchors(
+                stype, ir_set.path_id, r_ctx, s_ctx, ctx)
         return anchors[stype]
 
     rewrites = _compile_rewrites_for_stype(
@@ -1270,6 +1271,7 @@ class RewriteAnchors:
 
 def prepare_rewrite_anchors(
     stype: s_objtypes.ObjectType,
+    subject_path_id: irast.PathId,
     r_ctx: RewriteContext,
     s_ctx: ShapeContext,
     ctx: context.ContextLevel,
@@ -1277,10 +1279,6 @@ def prepare_rewrite_anchors(
     schema = ctx.env.schema
 
     # init set for __subject__
-    subject_path_id = irast.PathId.from_type(
-        schema, stype,
-        namespace=ctx.path_id_namespace, env=ctx.env,
-    )
     subject_set = setgen.class_set(
         stype, path_id=subject_path_id, ctx=ctx
     )
