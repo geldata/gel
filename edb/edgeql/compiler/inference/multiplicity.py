@@ -801,7 +801,7 @@ def __infer_group_stmt(
     infer_multiplicity(ir.subject, scope_tree=scope_tree, ctx=ctx)
     for binding, _ in ir.using.values():
         infer_multiplicity(binding, scope_tree=scope_tree, ctx=ctx)
-    result_mult = _infer_stmt_multiplicity(ir, scope_tree=scope_tree, ctx=ctx)
+    _infer_stmt_multiplicity(ir, scope_tree=scope_tree, ctx=ctx)
 
     for clause in (ir.orderby or ()):
         new_scope = inf_utils.get_set_scope(clause.expr, scope_tree, ctx=ctx)
