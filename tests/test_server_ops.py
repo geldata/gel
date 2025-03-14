@@ -744,7 +744,12 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
             ) as sd:
                 con = await sd.connect()
                 try:
-                    qry = 'select schema::Object { name }'
+                    qry = '''
+                        select schema::Object {
+                            name,
+                            enumval := <cfg::TestEnum>$0,
+                        }
+                    '''
                     sql = '''
                         SELECT
                             n.nspname::text AS table_schema,
@@ -765,12 +770,12 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                             AND n.nspname = 'public';
                     '''
 
-                    await con.query(qry)
+                    await con.query(qry, 'Two')
                     await con.query_sql(sql)
 
                     # Querying a second time should hit the cache
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_sql_compilations(sd), 0):
                         await con.query_sql(sql)
 
@@ -782,9 +787,9 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     # the type, so doing the query shouldn't cause another
                     # compile!
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
 
                     # The SQL cache is reset after DDL, because recompiling SQL
                     # requires backend connection for amending in/out tids, and
@@ -797,7 +802,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     # TODO: this does not behave the way I thing it should
                     # with self.assertChange(measure_compilations(sd), 1):
                     #     con_c = con.with_config(apply_access_policies=False)
-                    #     await con_c.query(qry)
+                    #     await con_c.query(qry, 'Two')
 
                     # Set the compilation timeout to 2ms.
                     #
@@ -823,9 +828,9 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     ''')
 
                     with self.assertChange(measure_compilations(sd), 1):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_sql_compilations(sd), 1):
                         await con.query_sql(sql)
                     with self.assertChange(measure_sql_compilations(sd), 0):
@@ -873,9 +878,9 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                         create type X
                     ''')
                     with self.assertChange(measure_compilations(sd), 1):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_sql_compilations(sd), 1):
                         await con.query_sql(sql)
                     with self.assertChange(measure_sql_compilations(sd), 0):
@@ -938,7 +943,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                 try:
                     # It should hit the cache no problem.
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     # TODO(fantix): persistent SQL cache not working?
                     # with self.assertChange(measure_sql_compilation(sd), 0):
                     #     await con.query_sql(sql)
