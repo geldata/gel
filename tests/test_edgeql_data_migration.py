@@ -8361,6 +8361,31 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
             }],
         )
 
+    async def test_edgeql_migration_eq_index_05(self):
+        await self.migrate('''
+            abstract type Named {
+                index fts::index on (
+                    std::fts::with_options(
+                        .name, language := std::fts::Language.eng));
+                required property name: std::str;
+            };
+        ''')
+
+        await self.start_migration('''
+            abstract type Named {
+                index std::fts::index on (
+                    std::fts::with_options(
+                        .name, language := std::fts::Language.eng));
+                required property name: std::str;
+            };
+        ''')
+
+        # no changes
+        await self.assert_describe_migration({
+            'confirmed': [],
+            'complete': True,
+        })
+
     async def test_edgeql_migration_eq_collections_01(self):
         await self.migrate(r"""
             type Base;
@@ -13309,3 +13334,62 @@ class TestEdgeQLMigrationRewriteNonisolated(TestEdgeQLMigrationRewrite):
             await self.con.execute(r"""
                 create applied migration { }
             """)
+
+
+class TestEdgeQLFtsRegression(EdgeQLDataMigrationTestCase):
+    PARALLELISM_GRANULARITY = 'default'
+
+    SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
+                          'fts_regression.esdl')
+
+    DEFAULT_MODULE = 'default'
+
+    async def test_edgeql_fts_regression_01(self):
+        await self.start_migration('''
+            abstract type Named {
+                index std::fts::index on (
+                    std::fts::with_options(
+                        .name, language := std::fts::Language.eng));
+                required name: std::str;
+            };
+
+            type Project0 extending Named;
+        ''', module='default')
+
+        # no changes
+        await self.assert_describe_migration({
+            'confirmed': [],
+            'complete': True,
+        })
+
+    async def test_edgeql_fts_regression_02(self):
+        await self.migrate('''
+            abstract type Named {
+                index fts::index on (
+                    fts::with_options(
+                        .name, language := std::fts::Language.eng));
+                required name: std::str;
+            };
+
+            type Project0 extending Named;
+            type Project1 extending Named {
+              overloaded name {
+                constraint exclusive;
+              }
+            };
+        ''', module='default')
+
+        await self.migrate('', module='default')
+
+    async def test_edgeql_fts_regression_03(self):
+        await self.migrate('', module='default')
+
+    async def test_edgeql_fts_regression_04(self):
+        await self.assert_query_result(
+            '''
+            select schema::Index { name }
+            filter exists .<indexes[is schema::ObjectType]
+            and .name like '%index';
+            ''',
+            [{"name": "std::fts::index"}, {"name": "std::fts::index"}]
+        )

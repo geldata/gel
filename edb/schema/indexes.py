@@ -102,9 +102,9 @@ def is_index_supporting_tuples(
         "std::fts::index",
         "ext::pg_trgm::gin",
         "ext::pg_trgm::gist",
-        "pg::gist",
-        "pg::gin",
-        "pg::brin",
+        "std::pg::gist",
+        "std::pg::gin",
+        "std::pg::brin",
     }
 
 
@@ -577,9 +577,18 @@ class IndexCommand(
     ) -> sn.QualName:
         # We actually want to override how ReferencedObjectCommand determines
         # the classname
-        shortname = super(
-            referencing.ReferencedObjectCommand, cls
-        )._classname_from_ast(schema, astnode, context)
+        #
+        # We need to resolve the name so that we get fully
+        # canonicalized names for things like fts::index, which are
+        # properly std::fts::index.
+        # (We have to do that ourselves here because we are skipping
+        # ReferencedObjectCommand, which would otherwise handle it.)
+        shortname = utils.resolve_name(
+            utils.ast_ref_to_name(astnode.name),
+            modaliases=context.modaliases,
+            schema=schema,
+            metaclass=cls.get_schema_metaclass(),
+        )
 
         referrer_ctx = cls.get_referrer_context(context)
         if referrer_ctx is not None:

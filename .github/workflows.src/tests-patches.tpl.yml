@@ -54,7 +54,10 @@ jobs:
 
     - name: Create databases on the older version
       if: ${{ matrix.make-dbs }}
-      run: python3 .github/scripts/patches/create-databases.py ${{ matrix.edgedb-basename }}-${{ matrix.edgedb-version }}/bin/edgedb-server
+      run: |
+        DIR=${{ matrix.edgedb-basename }}-${{ matrix.edgedb-version }}
+        python3 .github/scripts/patches/create-databases.py $DIR/bin/edgedb-server
+        (cd $DIR && GEL_SERVER_SECURITY=insecure_dev_mode ./bin/python3 -m edb.tools --no-devmode inittestdb --update -D ../test-dir -t ../tests -k test_edgeql_fts_regression)
 
     - name: Run tests with instance created on an older version
       run: |
@@ -63,6 +66,10 @@ jobs:
         edb server --bootstrap-only --data-dir test-dir
         # Should we run *all* the tests?
         edb test -j2 -v --data-dir test-dir tests/test_edgeql_json.py tests/test_edgeql_casts.py tests/test_edgeql_functions.py tests/test_edgeql_expressions.py tests/test_edgeql_policies.py tests/test_edgeql_vector.py tests/test_edgeql_scope.py tests/test_http_ext_auth.py tests/test_ext_ai.py
+
+        # Run the fts_regression tests directly against the old databases,
+        # without running setup.
+        edb test -j1 -k test_edgeql_fts_regression -v --data-dir test-dir --use-data-dir-dbs
 
     - name: Test downgrading a database after an upgrade
       if: ${{ !contains(matrix.edgedb-version, '-rc') && !contains(matrix.edgedb-version, '-beta') }}
