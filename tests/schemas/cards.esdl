@@ -170,3 +170,12 @@ global HighestCost := (
 global CardsWithText := (
     SELECT Card FILTER exists(.text)
 );
+
+alias AliasArrayOfArrayOfScalar := [[1, 2, 3], [4, 5, 6]];
+
+alias CardsByCost := array_agg((
+    for cost in range_unpack(range(0, max(Card.cost)))
+        select array_agg(
+            (select Card filter .cost = cost order by .name)
+        )
+));
