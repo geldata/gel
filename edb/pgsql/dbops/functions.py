@@ -77,7 +77,7 @@ class FunctionExists(base.Condition):
         self.args = FunctionOperation.normalize_args(args)
 
     def code(self) -> str:
-        targs = [f"{ql('.'.join(a))}::regtype::oid" for _, a, _ in self.args]
+        targs = [f"{ql(qt(a))}::regtype::oid" for _, a, _ in self.args]
         args = f"ARRAY[{','.join(targs)}]"
 
         return textwrap.dedent(f'''\
