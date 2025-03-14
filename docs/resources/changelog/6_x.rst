@@ -676,3 +676,22 @@ Bug fixes
 
 * Fix ``IS`` when the left-hand side is not just a path
   (:eql:gh:`#8410`)
+
+6.3
+===
+
+* Make ``std::net`` polling output quieter
+  (:eql:gh:`#8450`)
+
+* Fix regression with ``UPDATE`` on a complex path with rewrite
+  (:eql:gh:`#8463`)
+
+* Make free objects always considered UNIQUE. This also fixes a regression
+  seen when using ``assert_distinct`` on free objects.
+  (:eql:gh:`#8464`)
+
+* Fix regression when using ``fts::index`` and certain inheritance patterns
+  (:eql:gh:`#8468`)
+
+* Fix function cache storage of queries that take enum parameters
+  (:eql:gh:`#8471`)
