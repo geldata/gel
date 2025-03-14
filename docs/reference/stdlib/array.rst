@@ -105,8 +105,6 @@ Reference
 
 .. eql:type:: std::array
 
-    :index: array
-
     An ordered list of values of the same type.
 
     Array indexing starts at zero.
@@ -151,7 +149,7 @@ Reference
 
 .. eql:operator:: arrayidx: array<anytype> [ int64 ] -> anytype
 
-    :index: [int], index access
+    .. api-index:: §array§[§int64§]
 
     Accesses the array element at a given index.
 

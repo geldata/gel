@@ -3,8 +3,6 @@
 With block
 ==========
 
-:index: alias module
-
 .. eql:keyword:: with
 
     The ``with`` block in EdgeQL is used to define aliases.

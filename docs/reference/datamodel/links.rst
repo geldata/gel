@@ -39,7 +39,7 @@ The ``link`` keyword is optional, and can be omitted.
 Link cardinality
 ================
 
-.. index:: single, multi
+.. api-index:: single, multi
 
 All links have a cardinality: either ``single`` or ``multi``. The default is
 ``single`` (a "to-one" link). Use the ``multi`` keyword to declare a "to-many"
@@ -55,7 +55,8 @@ link:
 Required links
 ==============
 
-.. index:: required, optional, not null
+.. index:: not null
+.. api-index:: required, optional
 
 All links are either ``optional`` or ``required``; the default is ``optional``.
 Use the ``required`` keyword to declare a required link. A required link must
@@ -87,7 +88,7 @@ Attempting to create a ``GroupChat`` with no members would fail.
 Exclusive constraints
 =====================
 
-.. index:: constraint exclusive
+.. api-index:: constraint exclusive
 
 You can add an ``exclusive`` constraint to a link to guarantee that no other
 instances can link to the same target(s):
@@ -111,7 +112,7 @@ link to the same ``Person``; put differently, no ``Person`` can be a
 Backlinks
 =========
 
-.. index:: backlink
+.. api-index:: .<
 
 In Gel you can traverse links in reverse to find objects that link to
 the object. You can do that directly in your query. E.g. for this example
@@ -175,7 +176,7 @@ Use the ``single`` keyword to declare a "to-one" backlink computed link:
 Default values
 ==============
 
-.. index:: default
+.. api-index:: default
 
 Links can declare a default value in the form of an EdgeQL expression, which
 will be executed upon insertion. In this example, new people are automatically
@@ -568,8 +569,8 @@ in the shape:
 Deletion policies
 =================
 
-.. index:: on target delete, on source delete, restrict, delete source, allow,
-           deferred restrict, delete target, if orphan
+.. api-index:: on target delete, on source delete, restrict, delete source,
+               allow, deferred restrict, delete target, if orphan
 
 Links can declare their own **deletion policy** for when the **target** or
 **source** is deleted.
@@ -653,8 +654,6 @@ linked elsewhere via the **same** link name.
 Polymorphic links
 =================
 
-.. index:: abstract, subtypes, polymorphic
-
 Links can be **polymorphic**, i.e., have an ``abstract`` target. In the
 example below, we have an abstract type ``Person`` with concrete subtypes
 ``Hero`` and ``Villain``:
@@ -689,7 +688,7 @@ for details.
 Abstract links
 ==============
 
-.. index:: abstract
+.. api-index:: abstract link
 
 It's possible to define ``abstract`` links that aren't tied to a particular
 source or target, and then extend them in concrete object types. This can help
@@ -714,7 +713,7 @@ eliminate repetitive declarations:
 Overloading
 ===========
 
-.. index:: overloaded
+.. api-index:: overloaded
 
 When an inherited link is modified (by adding more constraints or changing its
 target type, etc.), the ``overloaded`` keyword is required. This prevents

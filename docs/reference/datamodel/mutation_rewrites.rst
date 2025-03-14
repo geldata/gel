@@ -4,8 +4,7 @@
 Mutation rewrites
 =================
 
-.. index:: rewrite, insert, update, using, __subject__, __specified__, __old__,
-           modify, modification
+.. index:: modify, modification
 
 Mutation rewrites allow you to intercept database mutations (i.e.,
 :ref:`inserts <ref_eql_insert>` and/or :ref:`updates <ref_eql_update>`) and set
@@ -115,7 +114,7 @@ while updates will set the ``modified`` property:
 Mutation context
 ================
 
-.. index:: rewrite, __subject__, __specified__, __old__
+.. api-index:: rewrite, __subject__, __specified__, __old__
 
 Inside the rewrite rule's expression, you have access to a few special values:
 
@@ -290,8 +289,6 @@ containing the new author value.
 Cached computed
 ===============
 
-.. index:: cached computeds, caching computeds
-
 Mutation rewrites can be used to effectively create a cached computed value as
 demonstrated with the ``byline`` property in this schema:
 
@@ -324,6 +321,8 @@ property <ref_datamodel_computed>`.
 
 Declaring mutation rewrites
 ===========================
+
+.. api-index:: rewrite insert, rewrite update, using
 
 This section describes the syntax to declare mutation rewrites in your schema.
 

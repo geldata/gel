@@ -4,7 +4,7 @@
 Object Types
 ============
 
-.. index:: type, tables, models
+.. index:: tables, models
 
 *Object types* are the primary components of a Gel schema. They are
 analogous to SQL *tables* or ORM *models*, and consist of :ref:`properties
@@ -170,6 +170,8 @@ of the same type and cardinality.
 
 Defining object types
 =====================
+
+.. api-index:: abstract, type, extending
 
 This section describes the syntax to declare object types in your schema.
 

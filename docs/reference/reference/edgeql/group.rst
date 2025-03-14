@@ -6,8 +6,6 @@ Group
 :eql-statement:
 :eql-haswith:
 
-:index: group using by
-
 ``group``--partition a set into subsets based on one or more keys
 
 .. eql:synopsis::
