@@ -2318,7 +2318,7 @@ jobs:
         images=("geldata/gel" "ghcr.io/geldata/gel")
 
         for image in "${images[@]}"; do
-          fq_tags+=("${tags[@]/#/$image}")
+          fq_tags+=("${tags[@]/#/${image}:}")
         done
 
         IFS=,
