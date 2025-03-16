@@ -101,5 +101,5 @@ containing the value (``?host_file=./hostname.txt``).
   .. code-block::
 
     MY_PASSWORD=p@$$w0rd
-    GEL_DSN=gel://hostname.com:1234?password_env=MY_PASSWORD
+    GEL_DSN=gel://hostname.com:1234?password_env=$MY_PASSWORD
 
