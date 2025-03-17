@@ -31,6 +31,7 @@ import threading
 import urllib.parse
 import urllib.request
 import dataclasses
+import time
 
 import edgedb
 
@@ -204,6 +205,43 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         return "graphql"
 
     def graphql_query(
+        self,
+        query,
+        *,
+        operation_name=None,
+        use_http_post=True,
+        variables=None,
+        globals=None,
+        deprecated_globals=None,
+    ):
+        def inner():
+            self._graphql_query(
+                query,
+                operation_name=operation_name,
+                use_http_post=use_http_post,
+                variables=variables,
+                globals=globals,
+                deprecated_globals=deprecated_globals,
+            )
+        self._retry_operation(inner)
+
+    async def _retry_operation(self, func):
+        i = 0
+        while True:
+            i += 1
+            try:
+                return func()
+
+            # Retry transaction conflict errors
+            except errors.TransactionConflictError:
+                if i >= 10 or self.is_in_transaction():
+                    raise
+                time.sleep(
+                    min((2 ** i) * 0.1, 10)
+                    + random.randrange(100) * 0.001
+                )
+
+    def _graphql_query(
         self,
         query,
         *,
