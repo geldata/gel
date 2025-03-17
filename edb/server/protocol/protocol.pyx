@@ -749,7 +749,7 @@ cdef class HttpProtocol:
                 path_parts[1:],
                 self.server,
                 self.tenant,
-                self.is_tenant_host,
+                is_tenant_host=not self.is_tls or self.is_tenant_host,
             )
         elif path_parts == ['metrics'] and request.method == b'GET':
             if not await self._authenticate_for_default_conn_transport(

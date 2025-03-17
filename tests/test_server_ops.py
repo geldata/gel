@@ -1961,6 +1961,16 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                 data,
             )
 
+    async def _test_server_ops_multi_tenant_9(self, mtargs: MultiTenantArgs):
+        self.assertEqual(
+            mtargs.sd.call_system_api("/server/status/alive"),
+            "OK",
+        )
+        self.assertEqual(
+            mtargs.sd.call_system_api("/server/status/ready"),
+            "OK",
+        )
+
 
 class MultiTenantArgs(NamedTuple):
     srv: tb._EdgeDBServer
