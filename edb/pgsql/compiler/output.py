@@ -239,6 +239,14 @@ def array_as_json_object(
         )
     elif irtyputils.is_array(el_type):
         # array<array<...>> implemented as array<tuple<array<...>>>
+        #
+        # If we serialize without any special handling, the tuple will be
+        # included, with the key 'f1'
+        #
+        # eg. [[1, 2, 3], [4, 5]] -> [{'f1': [1,2,3]}, {'f1': [4,5]}]
+        #
+        # To prevent this, we need to explicitly serialize the inner arrays then
+        # aggregate them.
         el_name = 'f1'
         coldeflist = [
             pgast.ColumnDef(
