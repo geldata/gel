@@ -5,7 +5,6 @@ Sets
 ====
 
 :edb-alt-title: Set Functions and Operators
-:index: set aggregate
 
 
 .. list-table::
@@ -95,7 +94,7 @@ Sets
 
 .. eql:operator:: distinct: distinct set of anytype -> set of anytype
 
-    :index: distinct, unique, set of
+    .. api-index:: distinct§ set of type§
 
     Produces a set of all unique elements in the given set.
 
@@ -114,7 +113,8 @@ Sets
 .. eql:operator:: in: anytype in set of anytype -> bool
                       anytype not in set of anytype -> bool
 
-    :index: in, not in, intersection, contains, set of
+    .. index:: intersection, contains
+    .. api-index:: §element §in§ set§, §element §not in§ set§
 
     Checks if a given element is a member of a given set.
 
@@ -150,7 +150,8 @@ Sets
 
 .. eql:operator:: union: set of anytype union set of anytype -> set of anytype
 
-    :index: union, merge, join, set of
+    .. index:: join
+    .. api-index:: union
 
     Merges two sets.
 
@@ -170,7 +171,7 @@ Sets
 .. eql:operator:: intersect: set of anytype intersect set of anytype \
                                 -> set of anytype
 
-    :index: intersect, common, set of
+    .. api-index:: intersect
 
     Produces a set containing the common items between the given sets.
 
@@ -188,7 +189,7 @@ Sets
 .. eql:operator:: except: set of anytype except set of anytype \
                                 -> set of anytype
 
-    :index: except, set of
+    .. api-index:: except
 
     Produces a set of all items in the first set which are not in the second.
 
@@ -206,7 +207,8 @@ Sets
 .. eql:operator:: if..else: set of anytype if bool else set of anytype \
                                 -> set of anytype
 
-    :index: if else, ifelse, elif, ternary, conditional
+    .. index:: ternary, conditional
+    .. api-index:: §expr §if§ bool §else§ expr§
 
     Produces one of two possible results based on a given condition.
 
@@ -254,9 +256,10 @@ Sets
 .. eql:operator:: if..then..else: if bool then set of anytype else set of \
                                 anytype -> set of anytype
 
-    :index: if then else, ifelse, elif, conditional
-
     .. versionadded:: 4.0
+
+    .. index:: ternary, conditional
+    .. api-index:: if§ bool §then§ expr §else§ expr§
 
     Produces one of two possible results based on a given condition.
 
@@ -312,7 +315,7 @@ Sets
 .. eql:operator:: coalesce: optional anytype ?? set of anytype \
                               -> set of anytype
 
-    :index: ??, empty set
+    .. api-index:: ??
 
     Produces the first of its operands that is not an empty set.
 
@@ -346,7 +349,7 @@ Sets
 
 .. eql:operator:: detached: detached set of anytype -> set of anytype
 
-    :index: detached, set of
+    .. api-index:: detached
 
     Detaches the input set reference from the current scope.
 
@@ -401,7 +404,7 @@ Sets
 
 .. eql:operator:: exists: exists set of anytype -> bool
 
-    :index: exists, set of, is empty
+    .. api-index:: exists
 
     Determines whether a set is empty or not.
 
@@ -420,7 +423,8 @@ Sets
 
 .. eql:operator:: isintersect: anytype [is type] -> anytype
 
-    :index: [is type], type intersection, filter
+    .. index:: type intersection, filter
+    .. api-index:: §expr§[is §type§]
 
     Filters a set based on its type. Will return back the specified type.
 
@@ -480,7 +484,7 @@ Sets
                     named only message: optional str = <str>{} \
                   ) -> set of anytype
 
-    :index: multiplicity uniqueness
+    .. index:: multiplicity, uniqueness
 
     Checks that the input set contains only unique elements.
 
@@ -527,7 +531,7 @@ Sets
                     named only message: optional str = <str>{} \
                   ) -> set of anytype
 
-    :index: cardinality singleton
+    .. index:: cardinality, singleton
 
     Checks that the input set contains no more than one element.
 
@@ -567,7 +571,7 @@ Sets
                     named only message: optional str = <str>{} \
                   ) -> set of anytype
 
-    :index: cardinality existence empty
+    .. index:: cardinality, existence
 
     Checks that the input set contains at least one element.
 
@@ -601,7 +605,7 @@ Sets
 
 .. eql:function:: std::count(s: set of anytype) -> int64
 
-    :index: aggregate
+    .. index:: aggregate
 
     Returns the number of elements in a set.
 
@@ -624,7 +628,7 @@ Sets
                   std::sum(s: set of bigint) -> bigint
                   std::sum(s: set of decimal) -> decimal
 
-    :index: aggregate
+    .. index:: aggregate
 
     Returns the sum of the set of numbers.
 
@@ -647,7 +651,7 @@ Sets
 
 .. eql:function:: std::all(values: set of bool) -> bool
 
-    :index: aggregate
+    .. index:: aggregate
 
     Returns ``true`` if none of the values in the given set are ``false``.
 
@@ -668,7 +672,7 @@ Sets
 
 .. eql:function:: std::any(values: set of bool) -> bool
 
-    :index: aggregate
+    .. index:: aggregate
 
     Returns ``true`` if any of the values in the given set is ``true``.
 
@@ -690,7 +694,7 @@ Sets
 .. eql:function:: std::enumerate(values: set of anytype) -> \
                   set of tuple<int64, anytype>
 
-    :index: enumerate
+    .. index:: enumerate
 
     Returns a set of tuples in the form of ``(index, element)``.
 
@@ -720,7 +724,7 @@ Sets
 
 .. eql:function:: std::min(values: set of anytype) -> optional anytype
 
-    :index: aggregate
+    .. index:: aggregate
 
     Returns the smallest value in the given set.
 
@@ -735,7 +739,7 @@ Sets
 
 .. eql:function:: std::max(values: set of anytype) -> optional anytype
 
-    :index: aggregate
+    .. index:: aggregate
 
     Returns the largest value in the given set.
 

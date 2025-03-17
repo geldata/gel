@@ -127,8 +127,6 @@ System
 
 .. eql:type:: sys::TransactionIsolation
 
-    :index: enum transaction isolation
-
     :eql:type:`Enum <enum>` indicating the possible transaction
     isolation modes.
 

@@ -63,7 +63,8 @@ the ``name`` property inside ``__type__``:
 .. eql:operator:: is: anytype is type -> bool
                       anytype is not type -> bool
 
-    :index: is, type checking, compare, comparison
+    .. index:: comparison
+    .. api-index:: §type §is§ type§
 
     Type checking operator.
 
@@ -95,7 +96,8 @@ the ``name`` property inside ``__type__``:
 
 .. eql:operator:: typeor: type | type -> type
 
-    :index: \|, type union, polymorphism, polymorphic queries, nested shapes
+    .. index:: polymorphism, polymorphic queries, nested shapes
+    .. api-index:: §type §|§ type§
 
     Type union operator.
 
@@ -174,7 +176,8 @@ the ``name`` property inside ``__type__``:
 
 .. eql:operator:: cast: < type > anytype -> anytype
 
-    :index: <type>, type conversion, convert type
+    .. index:: type conversion, convert type
+    .. api-index:: <§type§>§expr§
 
     Type cast operator.
 
@@ -277,7 +280,8 @@ the ``name`` property inside ``__type__``:
 
 .. eql:operator:: typeof: typeof anytype -> type
 
-    :index: typeof, introspection
+    .. index:: introspection
+    .. api-index:: typeof§ type§
 
     Static type inference operator.
 
@@ -345,7 +349,7 @@ the ``name`` property inside ``__type__``:
 
 .. eql:operator:: introspect: introspect type -> schema::Type
 
-    :index: introspect, type introspection, typeof
+    .. api-index:: introspect§ type§
 
     Static type introspection operator.
 

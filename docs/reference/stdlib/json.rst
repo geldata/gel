@@ -183,7 +183,7 @@ JSON array.
 
 .. eql:operator:: jsonidx: json [ int64 ] -> json
 
-    :index: [int], index access
+    .. api-index:: §json§[§int§]
 
     Accesses the element of the JSON string or array at a given index.
 
@@ -211,7 +211,7 @@ JSON array.
 
 .. eql:operator:: jsonslice: json [ int64 : int64 ] -> json
 
-    :index: [int:int]
+    .. api-index:: §json§[§int§:§int§]
 
     Produces a JSON value comprising a portion of the existing JSON value.
 
@@ -238,7 +238,8 @@ JSON array.
 
 .. eql:operator:: jsonplus: json ++ json -> json
 
-    :index: ++, concatenate, join, add
+    .. index:: join, add
+    .. api-index:: §json §++§ json§
 
     Concatenates two JSON arrays, objects, or strings into one.
 
@@ -265,7 +266,8 @@ JSON array.
 
 .. eql:operator:: jsonobjdest: json [ str ] -> json
 
-    :index: [str], json get key
+    .. index:: json get key
+    .. api-index:: §json§[§str§]
 
     Accesses an element of a JSON object given its key.
 
@@ -293,7 +295,7 @@ JSON array.
 
 .. eql:function:: std::to_json(string: str) -> json
 
-    :index: json parse loads
+    .. index:: json parse, loads
 
     Returns a JSON value parsed from the given string.
 
@@ -309,8 +311,6 @@ JSON array.
 
 
 .. eql:function:: std::json_array_unpack(json: json) -> set of json
-
-    :index: array unpack
 
     Returns the elements of a JSON array as a set of :eql:type:`json`.
 
@@ -333,7 +333,7 @@ JSON array.
 .. eql:function:: std::json_get(json: json, \
                                 variadic path: str) -> optional json
 
-    :index: safe navigation
+    .. index:: safe navigation
 
     Returns a value from a JSON object or array given its path.
 
@@ -524,8 +524,6 @@ JSON array.
 
 
 .. eql:function:: std::json_typeof(json: json) -> str
-
-    :index: type
 
     Returns the type of the outermost JSON value as a string.
 

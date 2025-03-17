@@ -127,8 +127,6 @@ Constraints
 
 .. eql:constraint:: std::regexp(pattern: str)
 
-    :index: regex regexp regular
-
     Limits to string values matching a regular expression.
 
     Example:

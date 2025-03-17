@@ -571,7 +571,7 @@ functionality.
                               -> cal::local_datetime
                           cal::local_date + duration -> cal::local_datetime
 
-    :index: +, duration, datetime, add
+    .. api-index:: §datetime | duration §+§ datetime | duration§
 
     Adds a duration and any other datetime value.
 
@@ -621,7 +621,7 @@ functionality.
                            cal::relative_duration - duration\
                                 -> cal::relative_duration
 
-    :index: -, duration, datetime, subtract
+    .. api-index:: §datetime | duration §-§ datetime | duration§
 
     Subtracts two compatible datetime or duration values.
 
@@ -683,7 +683,7 @@ functionality.
 
 .. eql:function:: std::datetime_current() -> datetime
 
-    :index: now
+    .. index:: now
 
     Returns the server's current date and time.
 
@@ -702,7 +702,7 @@ functionality.
 
 .. eql:function:: std::datetime_of_transaction() -> datetime
 
-    :index: now
+    .. index:: now
 
     Returns the date and time of the start of the current transaction.
 
@@ -716,7 +716,7 @@ functionality.
 
 .. eql:function:: std::datetime_of_statement() -> datetime
 
-    :index: now
+    .. index:: now
 
     Returns the date and time of the start of the current statement.
 
@@ -1132,7 +1132,7 @@ functionality.
                   std::to_datetime(epochseconds: float64) -> datetime
                   std::to_datetime(epochseconds: int64) -> datetime
 
-    :index: parse datetime
+    .. index:: parse datetime
 
     Create a :eql:type:`datetime` value.
 
@@ -1190,7 +1190,7 @@ functionality.
                     day: int64, hour: int64, min: int64, sec: float64) \
                     -> local_datetime
 
-    :index: parse local_datetime
+    .. index:: parse local_datetime
 
     Create a :eql:type:`cal::local_datetime` value.
 
@@ -1238,7 +1238,7 @@ functionality.
                   cal::to_local_date(year: int64, month: int64, \
                     day: int64) -> cal::local_date
 
-    :index: parse local_date
+    .. index:: parse local_date
 
     Create a :eql:type:`cal::local_date` value.
 
@@ -1280,7 +1280,7 @@ functionality.
                   cal::to_local_time(hour: int64, min: int64, sec: float64) \
                     -> local_time
 
-    :index: parse local_time
+    .. index:: parse local_time
 
     Create a :eql:type:`cal::local_time` value.
 
@@ -1322,7 +1322,7 @@ functionality.
                     named only microseconds: int64=0 \
                   ) -> duration
 
-    :index: duration
+    .. index:: parse duration
 
     Create a :eql:type:`duration` value.
 
@@ -1365,7 +1365,7 @@ functionality.
                     named only microseconds: int64=0 \
                   ) -> cal::relative_duration
 
-    :index: parse relative_duration
+    .. index:: parse relative_duration
 
     Create a :eql:type:`cal::relative_duration` value.
 
@@ -1391,7 +1391,7 @@ functionality.
                     named only days: int64=0 \
                   ) -> cal::date_duration
 
-    :index: parse date_duration
+    .. index:: parse date_duration
 
     Create a :eql:type:`cal::date_duration` value.
 
@@ -1414,7 +1414,7 @@ functionality.
                     dur: cal::relative_duration \
                   ) -> cal::relative_duration
 
-    :index: justify_hours
+    .. index:: justify_hours
 
     Convert 24-hour chunks into days.
 
@@ -1444,7 +1444,7 @@ functionality.
                     dur: cal::date_duration \
                   ) -> cal::date_duration
 
-    :index: justify_days
+    .. index:: justify_days
 
     Convert 30-day chunks into months.
 
