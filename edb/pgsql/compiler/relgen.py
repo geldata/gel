@@ -3205,7 +3205,7 @@ def _process_typical_set_func_with_ordinality(
         colnames=colnames,
         inner_expr=inner_expr,
         arg_is_tuple=arg_is_tuple,
-        nullable=fexpr.nullable,
+        nullable=bool(fexpr.nullable),
     )
 
 
@@ -3244,7 +3244,7 @@ def _process_nested_array_set_func_with_ordinality(
                 val=pgast.ColumnRef(name=[colname]),
                 name=colname
             )
-            for colname in alias.colnames
+            for colname in colnames
         ],
         from_clause=[
             pgast.RangeFunction(
