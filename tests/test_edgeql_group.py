@@ -3853,6 +3853,120 @@ class TestEdgeQLGroup(tb.QueryTestCase):
             ],
         )
 
+    async def test_edgeql_group_link_property_02(self):
+        await self.assert_query_result(
+            r'''
+            WITH MODULE cards
+            select User { cards := (group .deck { name } by .element) };
+            ''',
+            tb.bag([
+                {
+                    'cards': tb.bag([
+                        {
+                            'key': {'element': 'Water'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Bog monster'},
+                                {'name': 'Giant turtle'}
+                            ])
+                        },
+                        {
+                            'key': {'element': 'Fire'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Imp'},
+                                {'name': 'Dragon'}
+                            ])
+                        },
+                    ]),
+                },
+                {
+                    'cards': tb.bag([
+                        {
+                            'key': {'element': 'Earth'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Dwarf'},
+                                {'name': 'Golem'}
+                            ])
+                        },
+                        {
+                            'key': {'element': 'Water'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Bog monster'},
+                                {'name': 'Giant turtle'}
+                            ])
+                        },
+                    ]),
+                },
+                {
+                    'cards': tb.bag([
+                        {
+                            'key': {'element': 'Earth'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Dwarf'},
+                                {'name': 'Golem'}
+                            ])
+                        },
+                        {
+                            'key': {'element': 'Water'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Bog monster'},
+                                {'name': 'Giant turtle'}
+                            ])
+                        },
+                        {
+                            'key': {'element': 'Air'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Sprite'},
+                                {'name': 'Giant eagle'},
+                                {'name': 'Djinn'}
+                            ])
+                        },
+                    ]),
+                },
+                {
+                    'cards': tb.bag([
+                        {
+                            'key': {'element': 'Earth'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Golem'}
+                            ])
+                        },
+                        {
+                            'key': {'element': 'Water'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Bog monster'},
+                                {'name': 'Giant turtle'}
+                            ])
+                        },
+                        {
+                            'key': {'element': 'Fire'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Dragon'}
+                            ])
+                        },
+                        {
+                            'key': {'element': 'Air'},
+                            'grouping': ['element'],
+                            'elements': tb.bag([
+                                {'name': 'Sprite'},
+                                {'name': 'Giant eagle'},
+                                {'name': 'Djinn'}
+                            ])
+                        },
+                    ]),
+                },
+            ]),
+        )
+
     async def test_edgeql_group_destruct_immediately_01(self):
         await self.assert_query_result(
             r'''
