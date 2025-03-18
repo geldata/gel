@@ -532,7 +532,6 @@ def _compile_cli(build_base, build_temp):
         '--verbose', '--verbose',
         '--bin', 'gel',
         '--root', rust_root,
-        '--features=dev_mode',
         '--locked',
         '--debug',
     ]
