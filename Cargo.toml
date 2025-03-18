@@ -20,10 +20,11 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", 
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["registry", "env-filter"] }
 
-gel-auth = { version = "0.1" }
-gel-stream = { version = "0.1" }
-
+gel-auth = { version = "0.1.4" }
+gel-stream = { version = "0.3.0" }
+gel-protocol = { version = "0.8.1" }
 gel-jwt = { version = "0.1.1" }
+
 db_proto = { path = "rust/db_proto" }
 captive_postgres = { path = "rust/captive_postgres" }
 conn_pool = { path = "rust/conn_pool" }
