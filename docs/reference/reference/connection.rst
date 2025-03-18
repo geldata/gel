@@ -45,6 +45,9 @@ If you have authenticated with Gel Cloud in the CLI using the :ref:`ref_cli_gel_
 
 Each named instance will also have a branch associated with the credentials, which defaults to |main|. You can create and switch branches using the :gelcmd:`branch create` and :gelcmd:`branch switch` commands or by specifying the branch name explicitly in the :ref:`branch connection parameter <ref_reference_connection_parameters_branch>`.
 
+.. _ref_dsn:
+.. _ref_reference_connection_dsn:
+
 DSN
 ---
 
