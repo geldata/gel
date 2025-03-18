@@ -3,9 +3,9 @@ use std::convert::TryFrom;
 use bigdecimal::Num;
 
 use bytes::{BufMut, Bytes, BytesMut};
+use edgeql_parser::tokenizer::Value;
 use gel_protocol::codec;
 use gel_protocol::model::{BigInt, Decimal};
-use edgeql_parser::tokenizer::Value;
 use pyo3::exceptions::{PyAssertionError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyFloat, PyInt, PyList, PyString};
