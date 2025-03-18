@@ -53,6 +53,12 @@ from . import state
 
 PROCESS_INITIAL_RESPONSE_TIMEOUT: float = 60.0
 KILL_TIMEOUT: float = 10.0
+HEALTH_CHECK_MIN_INTERVAL: float = float(
+    os.getenv("GEL_COMPILER_HEALTH_CHECK_MIN_INTERVAL", 10)
+)
+HEALTH_CHECK_TIMEOUT: float = float(
+    os.getenv("GEL_COMPILER_HEALTH_CHECK_TIMEOUT", 10)
+)
 ADAPTIVE_SCALE_UP_WAIT_TIME: float = 3.0
 ADAPTIVE_SCALE_DOWN_WAIT_TIME: float = 60.0
 WORKER_PKG: str = __name__.rpartition('.')[0] + '.'
@@ -624,9 +630,17 @@ class AbstractPool:
             self._last_active_time = time.monotonic()
 
     async def health_check(self) -> bool:
-        if time.monotonic() - self._last_active_time > 10:
-            await self.make_compilation_config_serializer()
-            self._maybe_update_last_active_time()
+        elapsed = time.monotonic() - self._last_active_time
+        if elapsed > HEALTH_CHECK_MIN_INTERVAL:
+            task = self._loop.create_task(
+                self.make_compilation_config_serializer()
+            )
+            task.add_done_callback(
+                lambda _: self._maybe_update_last_active_time()
+            )
+            await asyncio.wait([task], timeout=HEALTH_CHECK_TIMEOUT)
+            if not task.done():
+                return False
         return True
 
 
