@@ -59,7 +59,7 @@ DSNs (data source names) are a convenient and flexible way to specify connection
 
 All components of the DSN are optional; in fact, gel:// is a valid DSN. Any unspecified values will fall back to the defaults. Some additional parameters can be specified as query parameters to the DSN, such as the TLS security mode. Read the :ref:`full connection reference below <ref_reference_connection>` for more details.
 
-DSNs also support query parameters (``?host=myhost.com``) to support advanced use cases. The value for a given parameter can be specified in three ways:
+DSNs also support URL query parameters (``?host=myhost.com``) to support advanced use cases. The value for a given parameter can be specified in three ways:
 
 **Plain params**
   .. code-block::
