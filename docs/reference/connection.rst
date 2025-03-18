@@ -1,3 +1,4 @@
+.. _gel_client_connection:
 .. _ref_reference_connection:
 
 =====================
@@ -259,10 +260,53 @@ Override behavior can only happen at the *same or lower priority level*. For ins
 .. _ref_reference_connection_granular:
 .. _ref_reference_connection_parameters:
 
-Reference
-=========
+Parameter Reference
+===================
 
 The following is a list of all of the connection parameters and their corresponding environment variables, CLI flags, and client library parameters. Different language clients may have different parameter casing depending on the idiomatic conventions of the language, so see the specific client documentation for details.
+
+.. _ref_reference_connection_parameters_dsn:
+
+DSN
+---
+
+* Environment variable: :gelenv:`DSN`
+* CLI flag: ``--dsn/-d <dsn>``
+* Client library parameter: ``dsn``
+
+DSNs (data source names) are a convenient and flexible way to specify connection information with a simple string. It takes the following form:
+
+.. code-block:: text
+
+  gel://<user>:<password>@<host>:<port>/<branch>
+
+For more details, see :ref:`ref_reference_connection_dsn` above.
+
+.. _ref_reference_connection_parameters_host:
+
+Host
+----
+
+* Environment variable: :gelenv:`HOST`
+* CLI flag: ``--host/-h <host>``
+* Client library parameter: ``host``
+* DSN query parameter: ``host``, ``host_file``, ``host_env``
+* Default value: ``"localhost"``
+
+The host name or IP address of the |Gel| instance.
+
+.. _ref_reference_connection_parameters_port:
+
+Port
+----
+
+* Environment variable: :gelenv:`PORT`
+* CLI flag: ``--port/-P <port>``
+* Client library parameter: ``port``
+* DSN query parameter: ``port``, ``port_file``, ``port_env``
+* Default value: ``5656``
+
+The port number of the |Gel| instance.
 
 .. _ref_reference_connection_parameters_instance_name:
 
