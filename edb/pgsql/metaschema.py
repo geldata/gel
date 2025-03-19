@@ -7693,6 +7693,30 @@ def _generate_sql_information_schema(
 
     util_functions = [
         trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_database_privilege'),
+            args=(
+                ('database_name', 'text'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_database_privilege(oid, privilege)
+                FROM edgedbsql_VER.pg_database
+                WHERE datname = database_name
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_database_privilege'),
+            args=(
+                ('database_oid', 'oid'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_database_privilege(database_oid, privilege)
+            """
+        ),
+        trampoline.VersionedFunction(
             name=('edgedbsql', 'has_schema_privilege'),
             args=(
                 ('schema_name', 'text'),
@@ -7798,6 +7822,30 @@ def _generate_sql_information_schema(
                 FROM edgedbsql_VER.pg_class pc
                 JOIN edgedbsql_VER.pg_attribute_ext pa ON pa.attrelid = pc.oid
                 WHERE pc.relname = tbl AND pa.attname = col;
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_any_column_privilege'),
+            args=(
+                ('tbl', 'oid'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_any_column_privilege(tbl, privilege)
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_any_column_privilege'),
+            args=(
+                ('tbl', 'text'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_any_column_privilege(oid, privilege)
+                FROM edgedbsql_VER.pg_class
+                WHERE relname = tbl
             """
         ),
         trampoline.VersionedFunction(
