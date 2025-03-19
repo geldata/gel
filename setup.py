@@ -40,7 +40,7 @@ import setuptools_rust
 
 EDGEDBCLI_REPO = 'https://github.com/edgedb/edgedb-cli'
 # This can be a branch, tag, or commit
-EDGEDBCLI_COMMIT = 'master'
+EDGEDBCLI_COMMIT = 'f816a7e9ed5f17148f785d05a7df1cd02d23cc2a'
 
 EDGEDBGUI_REPO = 'https://github.com/edgedb/edgedb-studio.git'
 # This can be a branch, tag, or commit
