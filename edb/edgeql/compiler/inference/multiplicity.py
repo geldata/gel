@@ -815,9 +815,11 @@ def __infer_group_stmt(
         if set:
             infer_multiplicity(set, scope_tree=scope_tree, ctx=ctx)
 
-    # N.B: Since the type is usually a free object (except in some
-    # internal tests), this will typically get turned UNIQUE by the
-    # enclosing Set.
+    # N.B: The type is usually a free object (except in some
+    # internal tests), which are always unique
+    if irtyputils.is_free_object(ir.typeref):
+        return UNIQUE
+
     return DUPLICATE
 
 
