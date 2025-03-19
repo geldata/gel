@@ -135,42 +135,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      <<- restore_cache() >>
+    <<- restore_cache() >>
 
-      # Setup UI test dependencies
+    # Setup UI test dependencies
 
-      - uses: actions/checkout@v4
-        with:
-          repository: geldata/gel-ui
-          path: build/gel-ui
-          fetch-depth: 2
+    - uses: actions/checkout@v4
+      with:
+        repository: geldata/gel-ui
+        path: build/gel-ui
+        fetch-depth: 2
 
-      - name: Set up Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: lts/*
+    - name: Set up Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: lts/*
 
-      - name: Set up chrome
-        uses: browser-actions/setup-chrome@v1
-        with:
-          chrome-version: stable
+    - name: Set up chrome
+      uses: browser-actions/setup-chrome@v1
+      with:
+        chrome-version: stable
 
-      - name: Set up chromedriver
-        uses: nanasess/setup-chromedriver@v2
+    - name: Set up chromedriver
+      uses: nanasess/setup-chromedriver@v2
 
-      - name: Install dev deps
-        working-directory: build/gel-ui/web
-        run: |
-          yarn
+    - name: Install dev deps
+      working-directory: build/gel-ui/web
+      run: |
+        yarn
 
-      # Run the tests
+    # Run the tests
 
-      - name: Run tests
-        working-directory: build/gel-ui/web
-        env:
-          __EDGEDB_DEVMODE: 1
-        run: |
-          yarn test
+    - name: Run tests
+      working-directory: build/gel-ui/web
+      env:
+        __EDGEDB_DEVMODE: 1
+      run: |
+        yarn test
 
   test-conclusion:
     needs: [cargo-test, python-test, python-test-list, ui-test]
