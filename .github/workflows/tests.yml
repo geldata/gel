@@ -964,9 +964,9 @@ jobs:
 
       - name: Run tests
         working-directory: build/gel-ui/web
+        env:
+          __EDGEDB_DEVMODE: 1
         run: |
-          which edgedb-server
-          echo $EDGEDB_SERVER_BIN
           yarn test
 
   test-conclusion:
