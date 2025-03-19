@@ -1,4 +1,4 @@
-.. _gel_client_connection:
+.. _gel_client_js_connection:
 
 ==========
 Connection
