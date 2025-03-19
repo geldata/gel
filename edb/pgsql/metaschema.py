@@ -7693,6 +7693,35 @@ def _generate_sql_information_schema(
 
     util_functions = [
         trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('name', 'text',),
+            ),
+            returns=('regclass',),
+            text="""
+                SELECT
+                    CASE
+                        WHEN array_length(parts, 1) = 1 THEN
+                            (
+                                SELECT oid::regclass
+                                FROM edgedbsql_VER.pg_class
+                                WHERE relname = parts[1]
+                            )
+                        WHEN array_length(parts, 1) = 2 THEN
+                            (
+                                SELECT pc.oid::regclass
+                                FROM edgedbsql_VER.pg_class pc
+                                JOIN edgedbsql_VER.pg_namespace pn
+                                ON pn.oid = pc.relnamespace
+                                WHERE relname = parts[2] AND nspname = parts[1]
+                            )
+                        ELSE
+                            NULL::regclass
+                    END
+                FROM parse_ident(name) parts
+            """
+        ),
+        trampoline.VersionedFunction(
             name=('edgedbsql', 'has_database_privilege'),
             args=(
                 ('database_name', 'text'),
@@ -7752,20 +7781,19 @@ def _generate_sql_information_schema(
             ),
             returns=('bool',),
             text="""
-                SELECT has_table_privilege(oid, privilege)
-                FROM edgedbsql_VER.pg_class
-                WHERE relname = table_name;
+                SELECT has_table_privilege(
+                    edgedbsql_VER.to_regclass(table_name), privilege)
             """
         ),
         trampoline.VersionedFunction(
             name=('edgedbsql', 'has_table_privilege'),
             args=(
-                ('schema_oid', 'oid'),
+                ('table_oid', 'oid'),
                 ('privilege', 'text'),
             ),
             returns=('bool',),
             text="""
-                SELECT has_table_privilege(schema_oid, privilege)
+                SELECT has_table_privilege(table_oid, privilege)
             """
         ),
 
@@ -7790,9 +7818,8 @@ def _generate_sql_information_schema(
             ),
             returns=('bool',),
             text="""
-                SELECT has_column_privilege(oid, col, privilege)
-                FROM edgedbsql_VER.pg_class
-                WHERE relname = tbl;
+                SELECT has_column_privilege(
+                    edgedbsql_VER.to_regclass(tbl), col, privilege)
             """
         ),
         trampoline.VersionedFunction(
@@ -7819,9 +7846,9 @@ def _generate_sql_information_schema(
             returns=('bool',),
             text="""
                 SELECT has_column_privilege(pc.oid, attnum_internal, privilege)
-                FROM edgedbsql_VER.pg_class pc
-                JOIN edgedbsql_VER.pg_attribute_ext pa ON pa.attrelid = pc.oid
-                WHERE pc.relname = tbl AND pa.attname = col;
+                FROM edgedbsql_VER.pg_attribute_ext pa,
+                LATERAL (SELECT edgedbsql_VER.to_regclass(tbl) AS oid) pc
+                WHERE pa.attrelid = pc.oid AND pa.attname = col
             """
         ),
         trampoline.VersionedFunction(
@@ -7843,9 +7870,8 @@ def _generate_sql_information_schema(
             ),
             returns=('bool',),
             text="""
-                SELECT has_any_column_privilege(oid, privilege)
-                FROM edgedbsql_VER.pg_class
-                WHERE relname = tbl
+                SELECT has_any_column_privilege(
+                    edgedbsql_VER.to_regclass(tbl), privilege)
             """
         ),
         trampoline.VersionedFunction(
