@@ -1227,7 +1227,7 @@ class GetDatabaseFrontendNameFunction(trampoline.VersionedFunction):
         THEN
             substring(db_name, position('_' in db_name) + 1)
         ELSE
-            'edgedb'
+            'main'
         END
     '''
 
@@ -7143,22 +7143,36 @@ def _generate_sql_information_schema(
             query="""
         SELECT
             oid,
-            edgedb_VER.get_current_database()::name as datname,
+            frontend_name.n as datname,
             datdba,
             encoding,
+            datlocprovider,
             datcollate,
             datctype,
             datistemplate,
             datallowconn,
+            dathasloginevt,
             datconnlimit,
             0::oid AS datlastsysoid,
             datfrozenxid,
             datminmxid,
             dattablespace,
+            datlocale,
+            daticurules,
+            datcollversion,
             datacl,
             tableoid, xmin, cmin, xmax, cmax, ctid
-        FROM pg_database
-        WHERE datname LIKE '%_edgedb'
+        FROM
+            pg_database,
+            LATERAL (
+                SELECT edgedb_VER.get_database_frontend_name(datname) AS n
+            ) frontend_name,
+            LATERAL (
+                SELECT edgedb_VER.get_database_metadata(frontend_name.n) AS j
+            ) metadata
+        WHERE
+            metadata.j->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
+            AND NOT (metadata.j->'builtin')::bool
         """,
         ),
 
