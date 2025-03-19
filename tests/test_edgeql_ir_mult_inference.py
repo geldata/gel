@@ -873,3 +873,11 @@ class TestEdgeQLMultiplicityInference(tb.BaseEdgeQLCompilerTest):
 % OK %
         UNIQUE
         """
+
+    def test_edgeql_ir_mult_inference_93(self):
+        """
+        with groupedCards := User { cards := (group .deck by .element) }
+        select groupedCards.cards
+% OK %
+        UNIQUE
+        """
