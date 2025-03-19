@@ -1637,6 +1637,40 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         finally:
             await con.aclose()
 
+    async def test_sql_query_privileges_01(self):
+
+        res = await self.squery_values(
+            '''
+            select has_database_privilege($1, 'CONNECT');
+            ''',
+            self.con.dbname,
+        )
+        self.assertEqual(res, [[True]])
+
+    async def test_sql_query_privileges_02(self):
+        res = await self.squery_values(
+            '''
+            select has_table_privilege('"Movie"', 'SELECT');
+            '''
+        )
+        self.assertEqual(res, [[True]])
+
+    async def test_sql_query_privileges_03(self):
+        res = await self.squery_values(
+            '''
+            select has_column_privilege('"Movie"', 'title', 'SELECT');
+            '''
+        )
+        self.assertEqual(res, [[True]])
+
+    async def test_sql_query_privileges_04(self):
+        res = await self.squery_values(
+            '''
+            select has_any_column_privilege('"Movie"', 'SELECT');
+            '''
+        )
+        self.assertEqual(res, [[True]])
+
     async def test_sql_query_client_encoding_1(self):
         self.assertEqual(
             self.scon.get_settings().client_encoding.lower(), "utf_8"
