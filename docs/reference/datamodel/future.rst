@@ -4,7 +4,7 @@
 Future behavior
 ===============
 
-.. index:: future, nonrecursive_access_policies
+.. api-index:: using future
 
 This article explains what the ``using future ...;`` statement means in your
 schema.
@@ -28,6 +28,8 @@ add the ``future`` specification to gain early access.
 
 Flags
 =====
+
+.. api-index:: simple_scoping, warn_old_scoping, nonrecursive_access_policies
 
 At the moment there are three ``future`` flags available:
 

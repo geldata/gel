@@ -4,8 +4,8 @@
 Link properties
 ===============
 
-.. index:: property, link property, linkprops, link table, relations, @
-
+.. index:: link property, linkprops, link table, relations
+.. api-index:: @
 
 Links, like objects, can also contain **properties**. These are used to store metadata about the link. Due to how they're persisted under the hood,
 link properties have a few additional constraints: they're always ``single``

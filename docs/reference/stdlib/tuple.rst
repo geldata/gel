@@ -126,8 +126,6 @@ Here's a few examples of using tuple types in EdgeQL queries:
 
 .. eql:type:: std::tuple
 
-    :index: tuple
-
     A tuple type is a heterogeneous sequence of other types.
 
     Tuple elements can optionally have names,

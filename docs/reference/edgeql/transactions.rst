@@ -3,8 +3,8 @@
 Transactions
 ============
 
-.. index:: start transaction, declare savepoint, release savepoint,
-           rollback to savepoint, rollback, commit
+.. api-index:: start transaction, declare savepoint, release savepoint,
+               rollback to savepoint, rollback, commit
 
 EdgeQL supports atomic transactions. The transaction API consists
 of several commands:

@@ -466,7 +466,11 @@ class BaseEQLDirective(s_directives.ObjectDescription):
             first_node_index += 1
             first_node = desc_cnt.children[first_node_index]
 
-        if isinstance(first_node, s_nodes.versionmodified):
+        while (
+            isinstance(first_node, s_nodes.versionmodified)
+            or isinstance(first_node, s_nodes.index)
+            or isinstance(first_node, d_nodes.target)
+        ):
             first_node_index += 1
             first_node = desc_cnt.children[first_node_index]
 

@@ -3,7 +3,8 @@
 Parameters
 ==========
 
-.. index:: query params, query arguments, query args, $, < >$, input
+.. index:: query params, query arguments, query args, input
+.. api-index:: $, <§type§>$
 
 :edb-alt-title: Query Parameters
 
@@ -96,8 +97,6 @@ language-native types.
 Parameter types and JSON
 ------------------------
 
-.. index:: complex parameters
-
 In Gel, parameters can also be tuples. If you need to pass complex structures
 as parameters, use Gel's built-in :ref:`JSON <ref_std_json>` functionality.
 
@@ -130,7 +129,7 @@ properties.
 Optional parameters
 -------------------
 
-.. index:: <optional >$
+.. api-index:: <optional §type§>$
 
 By default, query parameters are ``required``; the query will fail if the
 parameter value is an empty set. You can use an ``optional`` modifier inside
@@ -154,7 +153,7 @@ the type cast if the parameter is optional.
 Default parameter values
 ------------------------
 
-.. index:: ??
+.. api-index:: ??
 
 When using optional parameters, you may want to provide a default value to use
 in case the parameter is not passed. You can do this by using the
@@ -172,8 +171,6 @@ in case the parameter is not passed. You can do this by using the
 
 What can be parameterized?
 --------------------------
-
-.. index:: order by parameters
 
 Any data manipulation language (DML) statement can be
 parameterized: ``select``, ``insert``, ``update``, and ``delete``. Since

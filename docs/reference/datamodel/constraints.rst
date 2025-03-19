@@ -5,9 +5,7 @@
 Constraints
 ===========
 
-.. index:: constraint, validation, exclusive, expression on, one_of, max_value,
-           max_ex_value, min_value, min_ex_value, max_len_value, min_len_value,
-           regexp, __subject__
+.. index:: validation
 
 Constraints give users fine-grained control to ensure data consistency.
 They can be defined on :ref:`properties <ref_datamodel_props>`,
@@ -20,6 +18,9 @@ and :ref:`custom scalars <ref_datamodel_links>`.
 
 Standard constraints
 ====================
+
+.. api-index:: exclusive, expression on, one_of, max_value, max_ex_value,
+               min_value, min_ex_value, max_len_value, min_len_value, regexp
 
 |Gel| includes a number of standard ready-to-use constraints:
 
@@ -49,7 +50,7 @@ no longer than 25 characters:
 Constraints on object types
 ===========================
 
-.. index:: __subject__
+.. api-index:: __subject__
 
 Constraints can be defined on object types. This is useful when the
 constraint logic must reference multiple links or properties.
@@ -98,6 +99,8 @@ Inside constraints, the keyword ``__subject__`` can be used to reference the
 Abstract constraints
 ====================
 
+.. api-index:: abstract constraint
+
 You can re-use constraints across multiple object types by declaring them as
 abstract constraints. Example:
 
@@ -143,7 +146,7 @@ Constraints can be defined on computed properties:
 Composite constraints
 =====================
 
-.. index:: tuple
+.. api-index:: constraint exclusive on
 
 To define a composite constraint, create an ``exclusive`` constraint on a
 tuple of properties or links.
@@ -167,7 +170,7 @@ tuple of properties or links.
 Partial constraints
 ===================
 
-.. index:: constraint exclusive on, except
+.. api-index:: constraint exclusive on, except
 
 Constraints on object types can be made partial, so that they are not enforced
 when the specified ``except`` condition is met.
@@ -226,7 +229,7 @@ You can also add constraints for :ref:`link properties
 Link's "@source" and "@target"
 ==============================
 
-.. index:: constraint exclusive on, @source, @target
+.. api-index:: @source, @target
 
 You can create a composite exclusive constraint on the object linking/linked
 *and* a link property by using ``@source`` or ``@target`` respectively. Here's
@@ -307,7 +310,7 @@ using arbitrary EdgeQL expressions. The example below uses the built-in
 Constraints and inheritance
 ===========================
 
-.. index:: delegated constraint
+.. api-index:: delegated constraint
 
 If you define a constraint on a type and then extend that type, the constraint
 will *not* be applied individually to each extending type. Instead, it will

@@ -95,7 +95,7 @@ UUIDs
 
 .. eql:function:: std::to_uuid(val: bytes) -> uuid
 
-    :index: parse uuid
+    .. index:: parse uuid
 
     Returns a :eql:type:`uuid` value parsed from 128-bit input.
 

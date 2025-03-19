@@ -4,7 +4,7 @@
 Extensions
 ==========
 
-.. index:: using extension
+.. api-index:: using extension
 
 Extensions are the way |Gel| can be extended with more functionality.
 They can add new types, scalars, functions, etc., but, more
@@ -14,8 +14,8 @@ importantly, they can add new ways of interacting with the database.
 Built-in extensions
 ===================
 
-.. index:: edgeql_http, graphql, auth, ai, pg_trgm, pg_unaccent, pgcrypto,
-           pgvector
+.. api-index:: edgeql_http, graphql, auth, ai, pg_trgm, pg_unaccent, pgcrypto,
+               pgvector
 
 There are a few built-in extensions available:
 
@@ -51,7 +51,7 @@ your schema:
 Standalone extensions
 =====================
 
-.. index:: postgis
+.. api-index:: postgis
 
 Additionally, standalone extension packages can be installed via the CLI,
 with ``postgis`` being a notable example.

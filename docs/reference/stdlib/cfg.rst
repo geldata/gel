@@ -64,7 +64,7 @@ Configuration Parameters
 Connection settings
 -------------------
 
-.. index:: listen_addresses, listen_port
+.. api-index:: listen_addresses, listen_port
 
 :eql:synopsis:`listen_addresses -> multi str`
   Specifies the TCP/IP address(es) on which the server is to listen for
@@ -78,7 +78,7 @@ Connection settings
 Resource usage
 --------------
 
-.. index:: effective_io_concurrency, query_work_mem, shared_buffers
+.. api-index:: effective_io_concurrency, query_work_mem, shared_buffers
 
 :eql:synopsis:`effective_io_concurrency -> int64`
   Sets the number of concurrent disk I/O operations that can be
@@ -99,7 +99,7 @@ Resource usage
 Query planning
 --------------
 
-.. index:: default_statistics_target, effective_cache_size
+.. api-index:: default_statistics_target, effective_cache_size
 
 :eql:synopsis:`default_statistics_target -> int64`
   Sets the default data statistics target for the planner.
@@ -118,7 +118,7 @@ Query cache
 
 .. versionadded:: 5.0
 
-.. index:: auto_rebuild_query_cache, query_cache_mode, cfg::QueryCacheMode
+.. api-index:: auto_rebuild_query_cache, query_cache_mode, cfg::QueryCacheMode
 
 :eql:synopsis:`auto_rebuild_query_cache -> bool`
   Determines whether to recompile the existing query cache to SQL any time DDL
@@ -143,7 +143,7 @@ Query cache
 Query behavior
 --------------
 
-.. index:: allow_bare_ddl, cfg::AllowBareDDL, apply_access_policies,
+.. api-index:: allow_bare_ddl, cfg::AllowBareDDL, apply_access_policies,
            apply_access_policies_pg, force_database_error
 
 :eql:synopsis:`allow_bare_ddl -> cfg::AllowBareDDL`
@@ -203,7 +203,7 @@ Query behavior
 Client connections
 ------------------
 
-.. index:: allow_user_specified_id, session_idle_timeout,
+.. api-index:: allow_user_specified_id, session_idle_timeout,
            session_idle_transaction_timeout, query_execution_timeout
 
 :eql:synopsis:`allow_user_specified_id -> bool`

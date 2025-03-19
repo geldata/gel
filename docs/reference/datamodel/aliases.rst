@@ -112,6 +112,8 @@ queries.
 Defining aliases
 ================
 
+.. api-index:: alias
+
 Syntax
 ------
 

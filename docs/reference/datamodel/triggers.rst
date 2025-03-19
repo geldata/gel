@@ -5,9 +5,6 @@
 Triggers
 ========
 
-.. index:: trigger, after insert, after update, after delete, for each, for all,
-           when, do, __new__, __old__
-
 Triggers allow you to define an expression to be executed whenever a given
 query type is run on an object type. The original query will *trigger* your
 pre-defined expression to run in a transaction along with the original query.
@@ -402,6 +399,9 @@ query makes a change to a ``User`` object:
 
 Declaring triggers
 ==================
+
+.. api-index:: trigger, after insert, after update, after delete, for each,
+               for all, when, do, __new__, __old__
 
 This section describes the syntax to declare a trigger in your schema.
 

@@ -5,6 +5,7 @@ With
 
 .. index:: composition, composing queries, composable, CTE,
            common table expressions, subquery, subqueries
+.. api-index:: with
 
 All top-level EdgeQL statements (``select``, ``insert``, ``update``, and
 ``delete``) can be prefixed by a ``with`` block. These blocks contain
@@ -65,8 +66,6 @@ Avengers.
 Query parameters
 ^^^^^^^^^^^^^^^^
 
-.. index:: with
-
 A common use case for ``with`` clauses is the initialization of :ref:`query
 parameters <ref_eql_params>`.
 
@@ -83,7 +82,7 @@ For a full reference on using query parameters, see :ref:`EdgeQL > Parameters
 Module alias
 ^^^^^^^^^^^^
 
-.. index:: with, as module
+.. api-index:: with, as module
 
 Another use of ``with`` is to provide aliases for modules. This can be useful
 for long queries which reuse many objects or functions from the same module.
@@ -107,7 +106,8 @@ part of the ``std`` module, that will be used automatically.
 Module selection
 ^^^^^^^^^^^^^^^^
 
-.. index:: with module, fully-qualified names
+.. index:: fully-qualified names
+.. api-index:: with module
 
 By default, the *active module* is ``default``, so all schema objects inside
 this module can be referenced by their *short name*, e.g. ``User``,
