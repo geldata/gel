@@ -936,6 +936,12 @@ jobs:
 
       # Setup UI test dependencies
 
+      - uses: actions/checkout@v4
+        with:
+          repository: geldata/gel-ui
+          path: build/gel-ui
+          fetch-depth: 2
+
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
@@ -950,14 +956,14 @@ jobs:
         uses: nanasess/setup-chromedriver@v2
 
       - name: Install dev deps
-        working-directory: build/edgedb-studio/web
+        working-directory: build/gel-ui/web
         run: |
           yarn
 
       # Run the tests
 
       - name: Run tests
-        working-directory: build/edgedb-studio/web
+        working-directory: build/gel-ui/web
         run: |
           yarn test
 
