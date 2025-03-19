@@ -47,7 +47,8 @@ def railroad_diagram():
     import edb._edgeql_parser as rust_parser
     rust_parser.save_spec(spec_json, str(dst))
 
-    to_ebnf(spec, ROOT_PATH / 'railroad_diagram')
+    productions = to_ebnf(spec)
+    write_ebnf_productions(productions, ROOT_PATH / 'railroad_diagram')
 
 
 # EBNF datatypes
@@ -429,7 +430,7 @@ def simplify_productions(
     ]
 
 
-def to_ebnf(spec: parsing.Spec, path: pathlib.Path):
+def to_ebnf(spec: parsing.Spec) -> List[ebnf.Production]:
     ebnf_productions: List[ebnf.Production] = []
 
     # add token productions
@@ -512,7 +513,13 @@ def to_ebnf(spec: parsing.Spec, path: pathlib.Path):
         if count == len(ebnf_productions):
             break
 
-    # output
+    return ebnf_productions
+
+
+def write_ebnf_productions(
+    ebnf_productions: List[ebnf.Production],
+    path: pathlib.Path
+) -> None:
     with open(path / 'grammar.iso.ebnf', 'w') as file:
         file.write('\n'.join(to_iso_ebnf(ebnf_productions)))
     with open(path / 'grammar.w3c.ebnf', 'w') as file:
