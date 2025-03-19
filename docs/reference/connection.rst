@@ -58,9 +58,7 @@ DSNs (data source names) are a convenient and flexible way to specify connection
 
   gel://<user>:<password>@<host>:<port>/<branch>
 
-All components of the DSN are optional; in fact, gel:// is a valid DSN. Any unspecified values will fall back to the defaults. Some additional parameters can be specified as query parameters to the DSN, such as the TLS security mode. Read the :ref:`full connection reference below <ref_reference_connection>` for more details.
-
-DSNs also support URL query parameters (``?host=myhost.com``) to support advanced use cases. The value for a given parameter can be specified in three ways:
+All components of the DSN are optional; in fact, gel:// is a valid DSN. Any unspecified values will fall back to the defaults. DSNs also support URL query parameters (``?host=myhost.com``) to support advanced use cases and :ref:`additional connection parameters <ref_reference_connection_parameters>`. The value for a given parameter can be specified in three ways:
 
 **Plain params**
   .. code-block::
@@ -120,8 +118,6 @@ If you wish, you can store your credentials as a JSON file like the :gelcmd:`ins
 
 Relative paths are resolved relative to the current working directory.
 
-TODO: Are these properties all optional as well, like the DSN?
-
 .. _ref_reference_connection_environments:
 
 Environments
@@ -130,14 +126,14 @@ Environments
 There are two common scenarios or environments for applications connecting to a |Gel| branch:
 
 * **Development**: When you are developing your application and running it locally, you will typically want to connect to a |Gel| instance running on the same machine, or at least on the same network.
-* **Deployed**: When you are running your application in some kind of production, or production-like environment. This could be running tests in a CI pipeline, a staging environment, or a production environment.
+* **Deployed**: When you are running your application in a production, or production-like environment, the database instance might be running on a separate network. You also typically don't interact with the application environment directly, but rather through some kind of platform or production system. Examples of a deployed environment are running tests in a CI pipeline, a staging environment, or a production environment.
 
 Development environments
 ------------------------
 
 * **CLI-managed local instances**: When you initialize a project using :gelcmd:`project init`, the CLI will create a local instance, and create a local credentials file. Clients will detect that there is a local project, and resolve the DSN and authentication credentials automatically. You can use the CLI to create and switch local branches using the :gelcmd:`branch create` and :gelcmd:`branch switch` commands.
 * **Cloud instances**: Use the :gelcmd:`cloud login` command to authenticate with |Gel| Cloud, and then use the :gelcmd:`project init --server-instance org/instance-name` command to create a local project-linked instance that is linked to an Gel Cloud instance. Once you've linked your |Gel| Cloud instance as a project, you can use the :gelcmd:`branch create` and :gelcmd:`branch switch` commands to create and switch branches.
-* **Self-hosted instances**: When you have a |Gel| instance running on a machine or in a container, you can connect to it using a DSN that specifies the host, port, branch, and authentication credentials of the instance. You can also use the :gelcmd:`instance link` command to create a name corresponding to a remote instance.
+* **Self-hosted instances**: When you have a |Gel| instance running on a remote machine or in a container, you can connect to it by specifying the host, port, branch, and authentication credentials of the instance. You can also use the :gelcmd:`instance link` command to create a name corresponding to a remote instance.
 
 Deployed environments
 ---------------------
@@ -428,3 +424,29 @@ Client security
 Provides some simple "security presets".
 
 Currently there is only one valid value: ``insecure_dev_mode``. Setting ``insecure_dev_mode`` disables all TLS security measures. Currently it is equivalent to setting :ref:`ref_reference_connection_parameters_tls_security` to ``insecure`` but it may encompass additional configuration settings later.  This is most commonly used when developing locally with Docker.
+
+.. _ref_reference_connection_parameters_wait_until_available:
+
+Wait until available
+--------------------
+
+* Environment variable: :gelenv:`WAIT_UNTIL_AVAILABLE`
+* CLI flag: ``--wait-until-available/-w <timeout>``
+* Client library parameter: ``waitUntilAvailable`` or ``wait_until_available``
+* DSN query parameter: ``wait_until_available``, ``wait_until_available_file``, ``wait_until_available_env``
+* Default value: ``10s``
+
+If the connection can't be established, keep retrying up to the given timeout value. The timeout value must be given using time units (e.g. ``1hr``, ``10min``, ``30sec``, ``500ms``, etc.) or ISO 8601 duration strings (e.g. ``PT1H``, ``PT10M``, ``PT30S``, ``PT0.5S``, etc.).
+
+.. _ref_reference_connection_parameters_connect_timeout:
+
+Connect timeout
+---------------
+
+* Environment variable: :gelenv:`CONNECT_TIMEOUT`
+* CLI flag: ``--connect-timeout/-c <timeout>``
+* Client library parameter: ``connectTimeout`` or ``connect_timeout``
+* DSN query parameter: ``connect_timeout``, ``connect_timeout_file``, ``connect_timeout_env``
+* Default value: ``10s``
+
+Specifies a timeout period. In the event Gel doesn't respond in this period, the command will fail (or retry if :ref:`ref_reference_connection_parameters_wait_until_available` is also specified). The timeout value must be given using time units (e.g. ``1hr``, ``10min``, ``30sec``, ``500ms``, etc.) or ISO 8601 duration strings (e.g. ``PT1H``, ``PT10M``, ``PT30S``, ``PT0.5S``, etc.).

@@ -1,3 +1,4 @@
+.. _gel-js-quickstart:
 .. _ref_quickstart:
 
 ==========
