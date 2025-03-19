@@ -58,7 +58,7 @@ def server(version=False, **kwargs):
     debug.init_debug_flags()
     kwargs['security'] = srv_args.ServerSecurityMode.InsecureDevMode
     if kwargs['cors_always_allowed_origins'] is None:
-       kwargs['cors_always_allowed_origins'] = "http://localhost:*"
+        kwargs['cors_always_allowed_origins'] = "http://localhost:*"
     srv_main.server_main(**kwargs)
 
 
