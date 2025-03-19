@@ -40,8 +40,7 @@ Run a generator with the following command.
 
     $ deno run \
       --allow-all \
-      --unstable \
-      https://deno.land/x/gel/generate.ts <generator> [options]
+      npm:@gel/generate <generator> [options]
 
   .. code-tab:: bash
     :caption: bun

@@ -4,40 +4,89 @@
 Client
 ======
 
-The ``Client`` class implements the basic functionality required to establish a
-connection to your database and execute queries.
+The ``Client`` class implements the basic functionality required to establish a pool of connections to your database, execute queries with some context and parameters, manage transactions, and decode results into JavaScript types.
 
+In typical usage, you will call :js:func:`createClient` with no arguments and rely on the :ref:`default behavior <gel_client_js_connection>` to connect to the instance specified either as a local project, or via environment variables. Directly specifying connection parameters should be considered for debugging or unusual scenarios.
+
+.. _gel-js-api-client:
 .. _gel-js-create-client:
 
-Creating clients
-----------------
+.. js:function:: createClient( \
+        options?: string | ConnectOptions | null | undefined \
+    ): Client
 
-A *client* represents a connection to your database and provides methods for
-executing queries.
+    Creates a new :js:class:`Client` instance.
 
-.. note::
+    :param options:
+        This is an optional parameter. We recommend omitting it in all but the most unusual circumstances. When it is not specified the client will connect to the current |Gel| Project instance or discover connection parameters from the environment.
 
-  In actuality, the client maintains a *pool* of connections under the hood.
-  When your server is under load, queries will be run in parallel across many
-  connections, instead of being bottlenecked by a single connection.
+        If this parameter is a string it can represent either a DSN or an instance name:
 
-To create a client:
+        * when the string does not start with |geluri| it is parsed as the :ref:`name of an instance <ref_reference_connection_instance_name>`;
 
-.. code-block:: javascript
+        * otherwise it specifies a single string in the DSN format: :geluri:`user:password@host:port/database?option=value`.
 
-    const gel = require("gel");
+        Alternatively the parameter can be a ``ConnectOptions`` config; see the documentation of valid options below, and the full :ref:`connection parameter reference <ref_reference_connection_parameters>` for details.
 
-    const client = gel.createClient();
+    :param string options.dsn:
+        Specifies the DSN of the instance.
 
+    :param string options.credentialsFile:
+        Path to a file containing credentials.
 
-If you're using TypeScript or have ES modules enabled, you can use
-``import`` syntax instead:
+    :param string options.host:
+        Instance host address as either an IP address or a domain name.
 
-.. code-block:: javascript
+    :param number options.port:
+        Port number to connect to at the server host.
 
-    import * as gel from "gel";
+    :param string options.branch:
+        The name of the branch to connect to.
 
-    const client = gel.createClient();
+    :param string options.user:
+        The name of the database role used for authentication.
+
+    :param string options.password:
+        Password to be used for authentication, if the server requires one.
+
+    :param string options.tlsCAFile:
+        Path to a file containing the root certificate of the server.
+
+    :param string options.tlsSecurity:
+        Determines whether certificate and hostname verification is enabled.  Valid values are ``'strict'`` (certificate will be fully validated), ``'no_host_verification'`` (certificate will be validated, but hostname may not match), ``'insecure'`` (certificate not validated, self-signed certificates will be trusted), or ``'default'`` (acts as ``strict`` by default, or ``no_host_verification`` if ``tlsCAFile`` is set).
+
+    The above connection options can also be specified by their corresponding environment variable. If none of ``dsn``, ``credentialsFile``, ``host`` or ``port`` are explicitly specified, the client will connect to your linked project instance, if it exists. For full details, see the :ref:`Connection Parameters <ref_reference_connection>` docs.
+
+    :param number options.timeout:
+        Connection timeout in milliseconds.
+
+    :param number options.waitUntilAvailable:
+        If first connection fails, the number of milliseconds to keep retrying to connect. Useful if your development instance and app are started together, to allow the server time to be ready.
+
+    :param number options.concurrency:
+        The maximum number of connections the ``Client`` will create in it's connection pool. If not specified the concurrency will be controlled by the server. This is recommended as it allows the server to better manage the number of client connections based on it's own available resources.
+
+    :returns:
+        Returns an instance of :js:class:`Client`.
+
+    Example:
+
+    .. code-block:: typescript
+
+      import { createClient } from "gel";
+      import assert from "node:assert";
+
+      async function main() {
+        const client = createClient();
+
+        const data: number = await client.queryRequiredSingle<number>(
+          "select 1 + 1"
+        );
+
+        assert(data === 2, "Result is exactly the number 2");
+      }
+
+      main();
 
 
 Connections
@@ -369,12 +418,13 @@ a query, use the ``.ensureConnected()`` method.
 
 .. code-block:: javascript
 
-  const gel = require("gel");
+  import { createClient } from "gel";
 
-  const client = gel.createClient();
+  const client = createClient();
 
   async function main() {
     await client.ensureConnected();
+    // client is now connected
   }
 
 .. _gel-js-api-transaction:
