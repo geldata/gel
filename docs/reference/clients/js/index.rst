@@ -9,7 +9,7 @@ Gel TypeScript/JS Client
    :hidden:
 
    connection
-   driver
+   client
    generation
    queries
    interfaces
