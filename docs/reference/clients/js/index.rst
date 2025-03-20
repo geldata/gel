@@ -1,8 +1,8 @@
 .. _gel-js-intro:
 
-========================
-Gel TypeScript/JS Client
-========================
+==========
+JavaScript
+==========
 
 .. toctree::
    :maxdepth: 3
@@ -26,50 +26,181 @@ Gel TypeScript/JS Client
    with
    for
    group
-   reference
 
 .. _gel-js-installation:
-
 
 Installation
 ============
 
-You can install the published database driver and optional (but recommended!)
-generators from npm using your package manager of choice.
+You can install the published database client and optional (but recommended!) generators from npm using your package manager of choice.
 
 .. tabs::
 
     .. code-tab:: bash
       :caption: npm
 
-      $ npm install --save-prod gel          # database driver
+      $ npm install --save-prod gel          # database client
       $ npm install --save-dev @gel/generate # generators
 
     .. code-tab:: bash
       :caption: yarn
 
-      $ yarn add gel                 # database driver
+      $ yarn add gel                 # database client
       $ yarn add --dev @gel/generate # generators
 
     .. code-tab:: bash
       :caption: pnpm
 
-      $ pnpm add --save-prod gel          # database driver
+      $ pnpm add --save-prod gel          # database client
       $ pnpm add --save-dev @gel/generate # generators
-
-    .. code-tab:: typescript
-      :caption: deno
-
-      import * as gel from "http://deno.land/x/gel/mod.ts";
 
     .. code-tab:: bash
       :caption: bun
 
-      $ bun add gel                 # database driver
+      $ bun add gel                 # database client
       $ bun add --dev @gel/generate # generators
 
     .. code-tab:: bash
       :caption: deno
 
-      $ deno add npm:gel                 # database driver
+      $ deno add npm:gel                 # database client
       $ deno add --dev npm:@gel/generate # generators
+
+.. _gel-js-examples:
+
+Basic Usage
+===========
+
+The ``gel`` package exposes a :ref:`createClient <gel-js-create-client>` function that can be used to create a new :ref:`Client <gel-js-api-client>` instance. This client instance manages a pool of connections to the database which it discovers automatically from either being in a :gelcmd:`project init` directory or being provided connection details via Environment Variables.
+
+Once you have a client instance, you can use the various :ref:`query methods <gel-js-running-queries>` to execute queries. Each of these methods has an implied cardinality of the result, and if you're using TypeScript, you can provide a type parameter to receive a strongly typed result.
+
+.. code-block:: bash
+
+  $ mkdir gel-js-example
+  $ cd gel-js-example
+  $ npm init -y
+  $ npm install gel
+  $ npm install --save-dev @gel/generate
+  $ npx gel project init --non-interactive
+  $ touch index.mjs
+
+.. code-block:: javascript
+  :caption: index.mjs
+
+  import { createClient } from "gel";
+  import assert from "node:assert";
+
+  const client = createClient(); // get connection details automatically
+
+  // Query always returns an array of result, even for single object queries
+  const queryResult = await client.query("select 1");
+  assert.equal(queryResult, [1]);
+
+  // querySingle will throw an error if the query returns more than one row
+  const singleQueryResult = await client.querySingle("select 1");
+  assert.equal(singleQueryResult, 1);
+
+  // queryRequired will throw an error if the query returns no rows
+  const requiredQueryResult = await client.queryRequired("select 1");
+  assert.equal(requiredQueryResult, 1);
+
+  // queryRequiredSingle will throw an error if
+  // - the query returns more than one row
+  // - the query returns no rows
+  const requiredSingleQueryResult = await client.queryRequiredSingle("select 1");
+  assert.equal(requiredSingleQueryResult, 1);
+
+Code generation
+===============
+
+The ``@gel/generate`` npm package provides a set of generators that can make querying the database a bit more pleasant than manually constructing strings and passing explicit query element types to the query methods.
+
+``interfaces`` generator
+------------------------
+
+The :ref:`interfaces <gel-js-interfaces>` generator will create TypeScript interfaces for the object types in your database.
+
+.. code-block:: bash
+
+  $ npx @gel/generate interfaces
+
+.. code-block:: typescript
+  :caption: main.mts
+
+  import { createClient } from "gel";
+  import { Movie } from "./dbschema/interfaces";
+
+  const client = createClient();
+
+  const result = await client.query<Movie[]>(`
+    select Movie {
+      **,
+      actors: { ** },
+    };
+  `);
+
+  console.log(result);
+
+``queries`` generator
+----------------------
+
+The :ref:`queries <gel-js-queries>` generator will create TypeScript functions for any EdgeQL queries defined in your project in separate ``.edgeql`` files.
+
+.. code-block:: edgeql
+  :caption: get-movies.edgeql
+
+  select Movie {
+    **,
+    actors: { ** },
+  };
+
+.. code-block:: bash
+
+  $ npx @gel/generate queries
+
+.. code-block:: typescript
+  :caption: main.mts
+
+  import { createClient } from "gel";
+  import { getMovies } from "./get-movies.query";
+
+  const client = createClient();
+
+  const result = await getMovies(client);
+
+  console.log(result);
+
+``edgeql-js`` generator
+-----------------------
+
+The :ref:`edgeql-js <gel-js-qb>` generator will create a fully type-safe query builder that you can use to write code-first queries in TypeScript. This is the recommended way to write dynamic queries and many people prefer it even for static queries.
+
+.. code-block:: bash
+
+  $ npx @gel/generate edgeql-js
+
+.. code-block:: typescript
+  :caption: main.mts
+
+  import { createClient } from "gel";
+  import e from "./dbschema/edgeql-js";
+
+  const client = createClient();
+
+  const result = await e
+    .params({ title: e.str }, (params) =>
+      e.select(e.Movie, (m) => ({
+        filter_single: e.op(m.title, "=", params.title),
+        id: true,
+        title: true,
+        actors: { name: true },
+      })),
+    )
+    .run(client, {
+      title: "The Matrix",
+    });
+
+  console.log(result);
+
+
