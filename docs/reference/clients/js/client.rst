@@ -10,7 +10,11 @@ The ``Client`` class implements the basic functionality required to establish a 
 Creating a client
 =================
 
-In typical usage, you will call :js:func:`createClient` with no arguments and rely on the :ref:`default behavior <gel_client_js_connection>` to connect to the instance specified either as a local project, or via environment variables. Directly specifying connection parameters should be considered for debugging or unusual scenarios.
+The ``gel`` package exposes a :ref:`createClient <gel-js-create-client>` function that can be used to create a new :ref:`Client <gel-js-api-client>` instance. This client instance manages a pool of connections to the database which it discovers automatically from either being in a :gelcmd:`project init` directory or being provided connection details via Environment Variables. See :ref:`the environment section of the connection reference <ref_reference_connection_environments>` for more details and options.
+
+.. note::
+
+  If you're using |Gel| Cloud to host your development instance, you can use the :gelcmd:`cloud login` command to authenticate with |Gel| Cloud and then use the :gelcmd:`project init --server-instance <instance-name>` command to create a local project-linked instance that is linked to an Gel Cloud instance. For more details, see :ref:`the Gel Cloud guide <ref_guide_cloud>`.
 
 .. code-block:: typescript
 
@@ -41,17 +45,6 @@ a query, use the ``.ensureConnected()`` method.
     await client.ensureConnected();
     // client is now connected
   }
-
-
-Configuring clients
-===================
-
-Clients can be configured using a set of methods that start with ``with``.
-
-.. note::
-
-  These methods return a *new Client instance* that *shares a connection pool* with the original client. This is important. Each call to ``createClient`` instantiates a new connection pool, so in typical usage you should create a single shared client instance and configure it at runtime as needed.
-
 
 .. _gel-js-running-queries:
 
@@ -245,6 +238,28 @@ The *transaction* object exposes ``query()``, ``execute()``, ``querySQL()``, ``e
 
   In the above example, the welcome email may be sent multiple times if the transaction block is retried. Additionally, transactions allocate expensive server resources. Having too many concurrently running long-running transactions will negatively impact the performance of the DB server.
 
+
+Configuring clients
+===================
+
+Clients can be configured using a set of methods that start with ``with``. One you'll likely use often in application code is the ``withGlobals`` which sets the global variables in the query.
+
+.. code-block:: typescript
+
+  const client = createClient();
+  await client
+    .withGlobals({
+      current_user_id: "00000000-0000-0000-0000-000000000000",
+    })
+    .querySingle(
+      "select User { * } filter .id ?= global current_user_id;"
+    );
+
+.. note::
+
+  These methods return a *new Client instance* that *shares a connection pool* with the original client. This is important. Each call to ``createClient`` instantiates a new connection pool, so in typical usage you should create a single shared client instance and configure it at runtime as needed.
+
+
 .. _gel-js-api-client:
 
 Client Reference
@@ -364,10 +379,10 @@ Client Reference
 
         .. code-block:: typescript
 
-            await client.execute(`
-              for x in {100, 200, 300}
-              insert MyType { a := x };
-            `)
+          await client.execute(`
+            for x in {100, 200, 300}
+            insert MyType { a := x };
+          `)
 
     .. js:method:: query<T>(query: string, args?: QueryArgs): Promise<T[]>
 
