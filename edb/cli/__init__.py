@@ -28,4 +28,4 @@ def rustcli(*, args: Optional[List[str]]=None) -> NoReturn:
     if args is None:
         args = [*sys.argv]
 
-    os.execve('gel', args, os.environ)
+    os.execvpe('gel', args, os.environ)
