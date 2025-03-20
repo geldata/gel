@@ -72,6 +72,10 @@ Basic Usage
 
 The ``gel`` package exposes a :ref:`createClient <gel-js-create-client>` function that can be used to create a new :ref:`Client <gel-js-api-client>` instance. This client instance manages a pool of connections to the database which it discovers automatically from either being in a :gelcmd:`project init` directory or being provided connection details via Environment Variables. See :ref:`the environment section of the connection reference <ref_reference_connection_environments>` for more details and options.
 
+.. note::
+
+  If you're using |Gel| Cloud to host your development instance, you can use the :gelcmd:`cloud login` command to authenticate with |Gel| Cloud and then use the :gelcmd:`project init --server-instance <instance-name>` command to create a local project-linked instance that is linked to an Gel Cloud instance. For more details, see :ref:`the Gel Cloud guide <ref_guide_cloud>`.
+
 Once you have a client instance, you can use the various :ref:`query methods <gel-js-running-queries>` to execute queries. Each of these methods has an implied cardinality of the result, and if you're using TypeScript, you can provide a type parameter to receive a strongly typed result.
 
 .. code-block:: bash
@@ -203,3 +207,9 @@ The :ref:`edgeql-js <gel-js-qb>` generator will create a fully type-safe query b
   console.log(result);
 
 
+Next steps
+==========
+
+If you haven't already done so, you can go through our :ref:`quickstart tutorial <ref_quickstart>` to have a guided tour of using Gel as the data layer for a complex web application.
+
+You will also find full reference information in this section of the documentation for the various generators and public APIs that the :ref:`gel <gel-js-client>` and :ref:`@gel/generate <gel-js-generators>` packages provide.
