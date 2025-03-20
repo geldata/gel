@@ -8,7 +8,6 @@ JavaScript
    :maxdepth: 3
    :hidden:
 
-   connection
    client
    generation
    queries
