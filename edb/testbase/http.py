@@ -32,10 +32,12 @@ import urllib.parse
 import urllib.request
 import dataclasses
 import time
+import random
 
 import edgedb
 
 from edb.errors import base as base_errors
+from edb import errors
 
 from edb.common import assert_data_shape
 
@@ -215,7 +217,7 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         deprecated_globals=None,
     ):
         def inner():
-            self._graphql_query(
+            return self._graphql_query(
                 query,
                 operation_name=operation_name,
                 use_http_post=use_http_post,
@@ -223,9 +225,9 @@ class GraphQLTestCase(BaseHttpExtensionTest):
                 globals=globals,
                 deprecated_globals=deprecated_globals,
             )
-        self._retry_operation(inner)
+        return self._retry_operation(inner)
 
-    async def _retry_operation(self, func):
+    def _retry_operation(self, func):
         i = 0
         while True:
             i += 1
