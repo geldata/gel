@@ -45,6 +45,8 @@ signals to the CLI and client bindings that the directory is an instance-linked
   Defaults to ``dbschema``.
 
 
+.. _ref_reference_gel_toml_hooks:
+
 [hooks] table
 =============
 
