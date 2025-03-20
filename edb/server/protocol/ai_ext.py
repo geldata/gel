@@ -1134,7 +1134,6 @@ async def _generate_voyageai_embeddings(
     model_name: str,
     inputs: list[str],
     http_client: http.HttpClient,
-    truncation: Optional[bool] = None,
 ) -> EmbeddingsResult:
 
     headers = {
@@ -1145,13 +1144,7 @@ async def _generate_voyageai_embeddings(
         base_url=provider.api_url,
     )
 
-    params: dict[str, Any] = {
-        "input": inputs,
-        "model": model_name,
-        "truncation": "float",
-    }
-    if truncation is not None:
-        params["truncation"] = truncation
+    params: dict[str, Any] = {"input": inputs, "model": model_name, "output_format": "float", "truncation": False}
 
     result = await client.post(
         "/embeddings",
