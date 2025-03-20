@@ -4,6 +4,8 @@
 JavaScript
 ==========
 
+:edb-alt-title: JavaScript Client
+
 .. toctree::
    :maxdepth: 3
    :hidden:

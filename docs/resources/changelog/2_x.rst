@@ -97,9 +97,9 @@ upgrade.
     - ``edgedb@0.21.0``
   * - :ref:`Python <gel-python-intro>`
     - ``edgedb@0.24.0``
-  * - :ref:`Golang <gel-go-intro>`
+  * - `Golang <https://github.com/geldata/gel-go>`_
     - ``edgedb@0.12.0``
-  * - `Rust <https://github.com/edgedb/edgedb-rust>`_
+  * - `Rust <https://github.com/geldata/gel-rust>`_
     - ``edgedb-tokio@0.3.0``
   * - `.NET <https://github.com/quinchs/EdgeDB.Net>`_ (community-maintained)
     - ``EdgeDB.Net.Driver@0.3.0``
