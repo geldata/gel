@@ -1,8 +1,8 @@
 .. _gel-python-intro:
 
-=================
-Gel Python Driver
-=================
+======
+Python
+======
 
 **gel-python** is the official |Gel| driver for Python.
 It provides both :ref:`blocking IO <gel-python-blocking-api-reference>`
