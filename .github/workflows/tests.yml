@@ -68,7 +68,8 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -c "import sys; print(sys.prefix)"
-        python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+        python -m pip install uv~=0.1.0 && uv pip install --verbose -U -r requirements.txt
+        gel --version
 
     - name: Compute cache keys and download the running times log
       env:
@@ -347,7 +348,7 @@ jobs:
       with:
         path: ~/.cache/uv
         key: uv-cache-${{ runner.os }}-py-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
-    
+
     - name: Download requirements.txt
       uses: actions/cache@v4
       with:
@@ -430,7 +431,7 @@ jobs:
       with:
         path: ~/.cache/uv
         key: uv-cache-${{ runner.os }}-py-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
-    
+
     - name: Download requirements.txt
       uses: actions/cache@v4
       with:
@@ -598,7 +599,7 @@ jobs:
       with:
         path: ~/.cache/uv
         key: uv-cache-${{ runner.os }}-py-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
-    
+
     - name: Download requirements.txt
       uses: actions/cache@v4
       with:

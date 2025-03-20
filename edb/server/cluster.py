@@ -339,7 +339,7 @@ class BaseCluster:
         check: bool=True,
     ) -> int:
         args = [
-            "edgedb",
+            "gel",
             "query",
             "--unix-path",
             str(os.path.abspath(self._runstate_dir)),
