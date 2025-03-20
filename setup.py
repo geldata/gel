@@ -38,10 +38,6 @@ import Cython.Build
 import setuptools_rust
 
 
-EDGEDBCLI_REPO = 'https://github.com/edgedb/edgedb-cli'
-# This can be a branch, tag, or commit
-EDGEDBCLI_COMMIT = 'master'
-
 EDGEDBGUI_REPO = 'https://github.com/edgedb/edgedb-studio.git'
 # This can be a branch, tag, or commit
 EDGEDBGUI_COMMIT = '6.x'
@@ -521,53 +517,6 @@ def _get_libpg_query_source_stamp():
     return revision.strip()
 
 
-def _compile_cli(build_base, build_temp):
-    rust_root = build_base / 'cli'
-    env = dict(os.environ)
-    env['CARGO_TARGET_DIR'] = str(build_temp / 'rust' / 'cli')
-    env['PSQL_DEFAULT_PATH'] = build_base / 'postgres' / 'install' / 'bin'
-    path = env.get("EDGEDBCLI_PATH")
-    args = [
-        'cargo', 'install',
-        '--verbose', '--verbose',
-        '--bin', 'gel',
-        '--root', rust_root,
-        '--locked',
-        '--debug',
-    ]
-    if path:
-        args.extend([
-            '--path', path,
-        ])
-    else:
-        git_ref = env.get("EDGEDBCLI_GIT_REV") or EDGEDBCLI_COMMIT
-        git_rev = _get_git_rev(EDGEDBCLI_REPO, git_ref)
-        args.extend([
-            '--git', EDGEDBCLI_REPO,
-            '--rev', git_rev,
-        ])
-
-    subprocess.run(
-        args,
-        env=env,
-        check=True,
-    )
-
-    for dest in ('gel', 'edgedb'):
-        cli_dest = ROOT_PATH / 'edb' / 'cli' / dest
-        # Delete the target first, to avoid "Text file busy" errors during
-        # the copy if the CLI is currently running.
-        try:
-            cli_dest.unlink()
-        except FileNotFoundError:
-            pass
-
-        shutil.copy(
-            rust_root / 'bin' / 'gel',
-            cli_dest,
-        )
-
-
 _PYTHON_ONLY = os.environ.get("BUILD_EXT_MODE", "both") == "skip"
 
 
@@ -581,7 +530,6 @@ class build(setuptools_build.build):
         ("build_metadata", lambda self: True),
         ("build_parsers", lambda self: True),
         ("build_postgres", lambda self: True),
-        ("build_cli", lambda self: True),
         ("build_ui", lambda self: True),
     ]
 
@@ -722,9 +670,6 @@ class ci_helper(setuptools.Command):
                 binascii.hexlify(ext_hash).decode() + '-'
                 + _get_libpg_query_source_stamp()
             )
-
-        elif self.type == 'cli':
-            print(_get_git_rev(EDGEDBCLI_REPO, EDGEDBCLI_COMMIT))
 
         elif self.type == 'ui':
             print(_get_git_rev(EDGEDBGUI_REPO, EDGEDBGUI_COMMIT))
@@ -881,28 +826,6 @@ class build_ext(setuptools_build_ext.build_ext):
         else:
             distutils.log.info(f'Skipping build_ext because '
                                f'BUILD_EXT_MODE={self.build_mode}')
-
-
-class build_cli(setuptools.Command):
-
-    description = "build the EdgeDB CLI"
-    user_options: list[str] = []
-    editable_mode: bool
-
-    def initialize_options(self):
-        self.editable_mode = False
-
-    def finalize_options(self):
-        pass
-
-    def run(self, *args, **kwargs):
-        if os.environ.get("EDGEDB_BUILD_PACKAGE"):
-            return
-        build = self.get_finalized_command('build')
-        _compile_cli(
-            pathlib.Path(build.build_base).resolve(),
-            pathlib.Path(build.build_temp).resolve(),
-        )
 
 
 class build_ui(setuptools.Command):
@@ -1092,7 +1015,6 @@ setuptools.setup(
         'build_ext': build_ext,
         'build_rust': build_rust,
         'build_postgres': build_postgres,
-        'build_cli': build_cli,
         'build_parsers': build_parsers,
         'build_ui': build_ui,
         'build_libpg_query': build_libpg_query,

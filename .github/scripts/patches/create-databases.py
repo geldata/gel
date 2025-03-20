@@ -52,7 +52,7 @@ try:
     # (At one point, having a cached query with proto version 1 caused
     # trouble...)
     cli_base = [
-        'edgedb',
+        'gel',
         'query',
         '-H',
         'localhost',
