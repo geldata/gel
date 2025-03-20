@@ -21,14 +21,11 @@ from __future__ import annotations
 from typing import Optional, List, NoReturn
 
 import os
-import pathlib
 import sys
 
 
 def rustcli(*, args: Optional[List[str]]=None) -> NoReturn:
-    thisdir = pathlib.Path(__file__).parent
-
     if args is None:
         args = [*sys.argv]
 
-    os.execve(str(thisdir / 'gel'), args, os.environ)
+    os.execvpe('gel', args, os.environ)
