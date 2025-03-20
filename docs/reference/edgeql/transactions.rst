@@ -141,7 +141,7 @@ Golang
 		log.Fatal(err)
 	}
 
-Full documentation at :ref:`Client Libraries > Go <gel-go-intro>`.
+Full documentation at `Client Libraries > Go <gel-go>`_.
 
 Rust
 ^^^^
@@ -167,3 +167,5 @@ Rust
 
 .. XXX: Add Rust docs
 .. Full documentation at :ref:`Client Libraries > Rust <ref_rust_index>`.
+
+.. _gel-go: https://pkg.go.dev/github.com/geldata/gel-go
