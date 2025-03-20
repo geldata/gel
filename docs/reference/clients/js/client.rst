@@ -252,6 +252,9 @@ Client Reference
 
 .. _gel-js-create-client:
 
+``createClient`` function
+-------------------------
+
 .. js:function:: createClient( \
       options?: string | ConnectOptions | null | undefined \
     ): Client
@@ -324,6 +327,9 @@ Client Reference
       }
 
       main();
+
+``Client`` class
+----------------
 
 .. js:class:: Client
 
