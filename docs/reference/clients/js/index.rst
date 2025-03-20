@@ -71,7 +71,7 @@ You can install the published database client and optional (but recommended!) ge
 Basic Usage
 ===========
 
-The ``gel`` package exposes a :ref:`createClient <gel-js-create-client>` function that can be used to create a new :ref:`Client <gel-js-api-client>` instance. This client instance manages a pool of connections to the database which it discovers automatically from either being in a :gelcmd:`project init` directory or being provided connection details via Environment Variables.
+The ``gel`` package exposes a :ref:`createClient <gel-js-create-client>` function that can be used to create a new :ref:`Client <gel-js-api-client>` instance. This client instance manages a pool of connections to the database which it discovers automatically from either being in a :gelcmd:`project init` directory or being provided connection details via Environment Variables. See :ref:`the environment section of the connection reference <ref_reference_connection_environments>` for more details and options.
 
 Once you have a client instance, you can use the various :ref:`query methods <gel-js-running-queries>` to execute queries. Each of these methods has an implied cardinality of the result, and if you're using TypeScript, you can provide a type parameter to receive a strongly typed result.
 
