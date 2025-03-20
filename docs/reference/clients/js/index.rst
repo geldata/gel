@@ -13,18 +13,6 @@ JavaScript
    queries
    interfaces
    querybuilder
-   literals
-   types
-   funcops
-   parameters
-   objects
-   select
-   insert
-   update
-   delete
-   with
-   for
-   group
 
 .. _gel-js-installation:
 
