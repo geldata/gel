@@ -1725,7 +1725,7 @@ class CLITestCaseMixin:
             else:
                 input = f"{conn_args['password']}\n"
         cmd_args += args
-        cmd = ['edgedb'] + cmd_args
+        cmd = ['gel'] + cmd_args
         try:
             subprocess.run(
                 cmd,
