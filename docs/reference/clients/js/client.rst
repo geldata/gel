@@ -1,4 +1,5 @@
 .. _gel-js-driver:
+.. _gel-js-client:
 
 ======
 Client
