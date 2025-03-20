@@ -133,7 +133,7 @@ Development environments
 
 * **CLI-managed local instances**: When you initialize a project using :gelcmd:`project init`, the CLI will create a local instance, and create a local credentials file. Clients will detect that there is a local project, and resolve the DSN and authentication credentials automatically. You can use the CLI to create and switch local branches using the :gelcmd:`branch create` and :gelcmd:`branch switch` commands.
 * **Cloud instances**: Use the :gelcmd:`cloud login` command to authenticate with |Gel| Cloud, and then use the :gelcmd:`project init --server-instance org/instance-name` command to create a local project-linked instance that is linked to an Gel Cloud instance. Once you've linked your |Gel| Cloud instance as a project, you can use the :gelcmd:`branch create` and :gelcmd:`branch switch` commands to create and switch branches.
-* **Self-hosted instances**: When you have a |Gel| instance running on a remote machine or in a container, you can connect to it by specifying the host, port, branch, and authentication credentials of the instance. You can also use the :gelcmd:`instance link` command to create a name corresponding to a remote instance.
+* **Self-hosted instances**: When you have a |Gel| instance running on a remote machine or in a container, you can use the :gelcmd:`instance link` command to create a name corresponding to a remote instance. Once you have a linked instance, you can use :gelcmd:`project init --server-instance <instance-name>` to create a local project that is linked to the named remote instance.
 
 Deployed environments
 ---------------------
