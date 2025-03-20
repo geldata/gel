@@ -12,6 +12,8 @@ Client Libraries
     js/index
     python/index
     go/index
+    Go <https://pkg.go.dev/github.com/geldata/gel-go>
+    Rust <https://docs.rs/gel-tokio/latest/gel_tokio/>
     http/index
     graphql/index
 
