@@ -7706,6 +7706,11 @@ def _generate_sql_information_schema(
             views.append(v)
 
     util_functions = [
+        # WARNING: this `edgedbsql.to_regclass()` function is currently not
+        # accurately implemented to take application-level `search_path`
+        # into consideration. It is currently here to support the following
+        # `has_*privilege` functions (which are less sensitive to such issue).
+        # SO DO NOT USE `edgedbsql.to_regclass()` FOR ANYTHING ELSE.
         trampoline.VersionedFunction(
             name=('edgedbsql', 'to_regclass'),
             args=(
@@ -7720,6 +7725,7 @@ def _generate_sql_information_schema(
                                 SELECT oid::regclass
                                 FROM edgedbsql_VER.pg_class
                                 WHERE relname = parts[1]
+                                LIMIT 1  -- HACK: see comments above
                             )
                         WHEN array_length(parts, 1) = 2 THEN
                             (
