@@ -4,16 +4,12 @@
 Queries Generator
 =================
 
-The ``queries`` generator scans your project for ``*.edgeql`` files and generates functions that allow you to execute these queries in a typesafe way.
+The ``queries`` generator scans your project for ``*.edgeql`` files and generates functions that allow you to execute these queries with fully defined input parameters and return types.
 
 Installation
-------------
+============
 
 To get started, install the following packages.
-
-.. note::
-
-  If you're using Deno, you can skip this step.
 
 Install the ``gel`` package.
 
@@ -22,6 +18,7 @@ Install the ``gel`` package.
   $ npm install gel       # npm users
   $ yarn add gel          # yarn users
   $ bun add gel           # bun users
+  $ deno add npm:gel      # deno users
 
 Then install ``@gel/generate`` as a dev dependency.
 
@@ -30,10 +27,11 @@ Then install ``@gel/generate`` as a dev dependency.
   $ npm install @gel/generate --save-dev      # npm users
   $ yarn add @gel/generate --dev              # yarn users
   $ bun add --dev @gel/generate               # bun users
+  $ deno add --dev npm:@gel/generate          # deno users
 
 
 Generation
-----------
+==========
 
 Consider the following file tree.
 
@@ -60,47 +58,21 @@ The following command will run the ``queries`` generator.
   .. code-tab:: bash
     :caption: Deno
 
-    $ deno run --allow-all --unstable https://deno.land/x/gel/generate.ts queries
+    $ deno run --allow-all npm:@gel/generate queries
 
   .. code-tab:: bash
     :caption: Bun
 
     $ bunx @gel/generate queries
 
-.. note:: Deno users
-
-    Create these two files in your project root:
-
-    .. code-block:: json
-        :caption: importMap.json
-
-        {
-          "imports": {
-            "gel": "https://deno.land/x/gel/mod.ts",
-            "gel/": "https://deno.land/x/gel/"
-          }
-        }
-
-    .. code-block:: json
-        :caption: deno.js
-
-        {
-          "importMap": "./importMap.json"
-        }
-
-The generator will detect the project root by looking for an ``gel.toml``,
-then scan the directory for ``*.edgeql`` files. In this case, there's only one:
-``queries/getUser.edgeql``.
+The generator will detect the project root by looking for an ``gel.toml``, then scan the directory for ``*.edgeql`` files. In this case, there's only one: ``queries/getUser.edgeql``.
 
 .. code-block:: edgeql
   :caption: getUser.edgeql
 
   select User { name, email } filter .id = <uuid>$user_id;
 
-For each ``.edgeql`` file, the generator will read the contents and send the
-query to the database, which returns type information about its parameters and
-return type. The generator uses this information to create a new file
-``getUser.query.ts`` alongside the original ``getUser.edgeql`` file.
+For each ``.edgeql`` file, the generator will read the contents and send the query to the database, which returns type information about its parameters and return type. The generator uses this information to create a new file ``getUser.query.ts`` alongside the original ``getUser.edgeql`` file.
 
 .. code-block:: text
 
@@ -116,10 +88,7 @@ return type. The generator uses this information to create a new file
 
 .. note::
 
-  This example assumes you are using TypeScript. The generator tries to
-  auto-detect the language you're using; you can also specify the language with
-  the ``--target`` flag. See the :ref:`Targets <gel_qb_target>` section for
-  more information.
+  This example assumes you are using TypeScript. The generator tries to auto-detect the language you're using; you can also specify the language with the ``--target`` flag. See the :ref:`Targets <gel_qb_target>` section for more information.
 
 The generated file will look something like this:
 
@@ -179,11 +148,10 @@ We can now use this function in our code.
 
 .. note::
 
-   Generators work by connecting to the database to get information about the current state of the schema. Make sure you run the generators again any time the schema changes so that the generated code is in-sync with the current state of the schema.
-
+  Generators work by connecting to the database to get information about the current state of the schema. Make sure you run the generators again any time the schema changes so that the generated code is in-sync with the current state of the schema. The easiest way to do this is to add the generator command to the :ref:`schema.update.after hook <ref_reference_gel_toml_hooks>` in your :ref:`gel.toml <ref_reference_gel_toml>`.
 
 Single-file mode
-----------------
+================
 
 Pass the ``--file`` flag to generate a single file that contains functions for all detected ``.edgeql`` files. This lets you import all your queries from a single file.
 
@@ -226,7 +194,7 @@ We can now use these functions in our code.
 .. code-block:: typescript
 
   import * as queries from "./dbschema/queries";
-  import {createClient} from "gel";
+  import { createClient } from "gel";
 
   const client = await createClient();
 
@@ -259,21 +227,11 @@ This will result in the following file tree.
   └── index.ts
 
 Version control
----------------
+===============
 
 To exclude the generated files, add the following lines to your ``.gitignore`` file.
 
 .. code-block:: text
 
-  **/*.edgeql.ts
+  **/*.query.ts
   dbschema/queries.*
-
-Writing Queries with Parameters
--------------------------------
-
-To inject external values into your EdgeQL queries, you can use :ref:`parameters <ref_eql_params>`.
-
-When using the queries generator, you may be tempted to declare the same parameter in multiple places.
-However, it's better practice to declare it once by assigning it to a variable in a :ref:`with block <ref_eql_with_params>`
-and reference that variable in the rest of your query. This way you avoid mismatched types in your declarations,
-such as forgetting to mark them all as :ref:`optional <ref_eql_params_optional>`.
