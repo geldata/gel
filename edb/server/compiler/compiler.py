@@ -1347,7 +1347,7 @@ class Compiler:
             stmt = (
                 f'COPY {table_name} '
                 f'({", ".join(col_list)})'
-                f'FROM STDIN WITH BINARY'
+                f'FROM STDIN WITH (FORMAT binary, FREEZE true)'
             ).encode()
 
             restore_blocks.append(
