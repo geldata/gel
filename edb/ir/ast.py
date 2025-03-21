@@ -790,6 +790,8 @@ class Statement(Command):
     views: typing.Dict[sn.Name, s_types.Type]
     params: typing.List[Param]
     globals: typing.List[Global]
+    server_conversions: list[tuple[str, str]]
+    server_conversion_params: list[Param]
     cardinality: qltypes.Cardinality
     volatility: qltypes.Volatility
     multiplicity: qltypes.Multiplicity
