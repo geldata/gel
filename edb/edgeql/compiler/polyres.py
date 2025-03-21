@@ -37,6 +37,8 @@ from typing import (
     cast,
 )
 
+import json
+
 from edb import errors
 
 from edb.ir import ast as irast
@@ -47,6 +49,7 @@ from edb.schema import name as sn
 from edb.schema import types as s_types
 from edb.schema import pseudo as s_pseudo
 from edb.schema import expr as s_expr
+from edb.schema import scalars as s_scalars
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes as ft
@@ -55,6 +58,7 @@ from . import context
 from . import dispatch
 from . import pathctx
 from . import setgen
+from . import tuple_args
 from . import typegen
 
 
@@ -159,8 +163,44 @@ def find_callable(
 
     candidates = list(candidates)
     for candidate in candidates:
-        call = try_bind_call_args(
-            args, kwargs, candidate, basic_matching_only, ctx=ctx)
+        call = None
+        if conversion := _check_server_arg_conversion(
+            candidate, args, kwargs, ctx=ctx
+        ):
+            # If there is a server param conversion, the argument should be
+            # treated as if it has already been converted.
+            #
+            # This means we need to check the other candidates to see if they
+            # match the converted args.
+            converted_args = conversion[0]
+            converted_kwargs = conversion[1]
+            converted_params = conversion[2]
+
+            for alt_candidate in candidates:
+                if alt_candidate is candidate:
+                    continue
+                if call := try_bind_call_args(
+                    converted_args,
+                    converted_kwargs,
+                    alt_candidate,
+                    basic_matching_only,
+                    ctx=ctx,
+                ):
+                    # A call which matches the conversion exists.
+                    # Add the server param conversions to the env.
+                    for param_name, conversions in (
+                        converted_params.items()
+                    ):
+                        if param_name not in ctx.env.server_param_conversions:
+                            ctx.env.server_param_conversions[param_name] = {}
+                        ctx.env.server_param_conversions[param_name].update(
+                            conversions
+                        )
+                    break
+
+        else:
+            call = try_bind_call_args(
+                args, kwargs, candidate, basic_matching_only, ctx=ctx)
 
         if call is None:
             continue
@@ -614,6 +654,191 @@ def try_bind_call_args(
         variadic_arg_id,
         variadic_arg_count,
     )
+
+
+def _check_server_arg_conversion(
+    func: s_func.CallableLike,
+    args: Sequence[Tuple[s_types.Type, irast.Set]],
+    kwargs: Mapping[str, Tuple[s_types.Type, irast.Set]],
+    *,
+    ctx: context.ContextLevel,
+) -> Optional[tuple[
+    Sequence[Tuple[s_types.Type, irast.Set]],
+    Mapping[str, Tuple[s_types.Type, irast.Set]],
+    dict[
+        str,
+        dict[str, tuple[irast.PathId, irast.Param]],
+    ],
+]]:
+    """Check if there is a server param conversion and get the effective args.
+
+    Server param conversion allows the server to replace a function arg with
+    another parameter which it computes before executing the query.
+
+    For example when `ext::ai::search(anyobject, str)` is called, the server
+    gets an embedding vector for string arg which it then substitutes into a
+    call to `ext::ai::search(anyobject, array<float32>)`.
+
+    If any conversions are applied, returns (args, kwargs) with new query
+    parameters representing the converted parameters.
+    """
+    schema = ctx.env.schema
+
+    func_params = func.get_params(schema)
+
+    if arg_conversions_json := (
+        isinstance(func, s_func.Function)
+        and func.get_server_param_conversions(schema)
+    ):
+        curr_server_param_conversions: dict[
+            str,
+            dict[str, tuple[irast.PathId, irast.Param]],
+        ] = {}
+
+        arg_conversions: dict[str, str] = json.loads(arg_conversions_json)
+        assert isinstance(arg_conversions, dict)
+        for arg_name, conversion_name in arg_conversions.items():
+            assert isinstance(arg_name, str)
+            assert isinstance(conversion_name, str)
+
+            # Get the param being converted
+            param = func_params.get_by_name(name=arg_name, schema=schema)
+            assert isinstance(param, s_func.Parameter)
+            if param is None:
+                raise RuntimeError(
+                    f'Unmatched server param conversion for arg: {arg_name}'
+                )
+
+            arg_key: int | str
+            arg: Tuple[s_types.Type, irast.Set]
+            param_kind = param.get_kind(schema)
+            if param_kind == ft.ParameterKind.PositionalParam:
+                param_index = param.get_num(schema)
+                arg_key = param_index
+                arg = args[param_index]
+            elif param_kind == ft.ParameterKind.NamedOnlyParam:
+                arg_key = arg_name
+                arg = kwargs[arg_name]
+            else:
+                raise RuntimeError(
+                    f'Server param conversion on variadic param: {arg_name}'
+                )
+
+            if arg[1].expr is None:
+                # Dummy set, do nothing
+                continue
+
+            if not isinstance(arg[1].expr, irast.Parameter):
+                raise errors.QueryError(
+                    f"Argument '{arg_name}' "
+                    f"must be constant or query parameter",
+                    span=arg[1].expr.span,
+                )
+
+            # Get the types being converted to/from
+            original_type: s_types.Type
+            converted_type: s_types.Type
+            if conversion_name == 'ai_text_embedding':
+                original_type = schema.get(
+                    'std::str', type=s_scalars.ScalarType
+                )
+                converted_type = schema.get_global(
+                    s_types.Array,
+                    s_types.Array.generate_name(
+                        sn.QualName('std', 'float32')
+                    )
+                )
+            else:
+                raise RuntimeError(
+                    f'Unknown server param conversion: {conversion_name}'
+                )
+
+            if original_type != arg[0]:
+                # Not the type to be converted!
+                continue
+
+            # Create a substitute parameter set with the correct type
+            query_param_name = arg[1].expr.name
+
+            existing_converted_path_id = None
+            if (
+                (curr_conversions := (
+                    ctx.env.server_param_conversions.get(query_param_name, None)
+                ))
+                and (
+                    existing_param_conversion := (
+                        curr_conversions.get(conversion_name, None)
+                    )
+                )
+            ):
+                # Check if the converted param already exists
+                existing_converted_path_id = existing_param_conversion[0]
+
+            converted_param_name = f'{query_param_name}~{conversion_name}'
+            converted_required = arg[1].expr.required
+            converted_typeref = typegen.type_to_typeref(
+                converted_type, ctx.env
+            )
+            conversion_set: irast.Set = setgen.ensure_set(
+                irast.Parameter(
+                    name=converted_param_name,
+                    required=converted_required,
+                    typeref=converted_typeref,
+                    span=arg[1].span,
+                ),
+                path_id=existing_converted_path_id,
+                ctx=ctx,
+            )
+
+            if existing_converted_path_id is None:
+                # If this is the first time this conversion was applied to this
+                # query param, save the path id for possible future use
+                if query_param_name not in curr_server_param_conversions:
+                    curr_server_param_conversions[query_param_name] = {}
+                curr_conversions = (
+                    curr_server_param_conversions[query_param_name]
+                )
+
+                sub_params = tuple_args.create_sub_params(
+                    converted_param_name,
+                    converted_required,
+                    typeref=converted_typeref,
+                    pt=converted_type,
+                    ctx=ctx
+                )
+                curr_conversions[conversion_name] = (
+                    conversion_set.path_id,
+                    irast.Param(
+                        name=converted_param_name,
+                        required=converted_required,
+                        schema_type=converted_type,
+                        ir_type=converted_typeref,
+                        sub_params=sub_params,
+                    )
+                )
+
+            # Substitute the old arg
+            if isinstance(arg_key, int):
+                args = [
+                    (converted_type, conversion_set)
+                    if index == arg_key else
+                    arg
+                    for index, arg in enumerate(args)
+                ]
+            else:
+                kwargs = {
+                    key: (
+                        (converted_type, conversion_set)
+                        if key == arg_key else
+                        arg
+                    )
+                    for key, arg in kwargs.items()
+                }
+
+        return args, kwargs, curr_server_param_conversions
+
+    else:
+        return None
 
 
 def compile_arg(
