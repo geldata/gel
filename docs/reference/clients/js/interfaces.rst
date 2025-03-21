@@ -9,7 +9,7 @@ The ``interfaces`` generator introspects your schema and generates file containi
 Installation
 ------------
 
-To get started, install the following packages. (If you're using Deno, you can skip this step.)
+To get started, install the following packages.
 
 Install the ``gel`` package.
 
@@ -17,7 +17,9 @@ Install the ``gel`` package.
 
   $ npm install gel       # npm users
   $ yarn add gel          # yarn users
+  $ pnpm add gel          # pnpm users
   $ bun add gel           # bun users
+  $ deno add npm:gel      # deno users
 
 Then install ``@gel/generate`` as a dev dependency.
 
@@ -25,8 +27,9 @@ Then install ``@gel/generate`` as a dev dependency.
 
   $ npm install @gel/generate --save-dev      # npm users
   $ yarn add @gel/generate --dev              # yarn users
+  $ pnpm add --dev @gel/generate              # pnpm users
   $ bun add --dev @gel/generate               # bun users
-
+  $ deno add --dev npm:@gel/generate          # deno users
 
 Generation
 ----------
@@ -61,33 +64,12 @@ The following command will run the ``interfaces`` generator.
   .. code-tab:: bash
     :caption: Deno
 
-    $ deno run --allow-all --unstable https://deno.land/x/gel/generate.ts interfaces
+    $ deno run --allow-all npm:@gel/generate interfaces
 
   .. code-tab:: bash
     :caption: Bun
 
     $ bunx @gel/generate interfaces
-
-.. note:: Deno users
-
-    Create these two files in your project root:
-
-    .. code-block:: json
-        :caption: importMap.json
-
-        {
-          "imports": {
-            "gel": "https://deno.land/x/gel/mod.ts",
-            "gel/": "https://deno.land/x/gel/"
-          }
-        }
-
-    .. code-block:: json
-        :caption: deno.js
-
-        {
-          "importMap": "./importMap.json"
-        }
 
 This will introspect your schema and generate TypeScript interfaces that correspond to each object type. By default, these interfaces will be written to a single file called ``interfaces.ts`` into the ``dbschema`` directory in your project root. The file will contain the following contents (roughly):
 
@@ -111,7 +93,7 @@ Any types declared in a non-``default`` module  will be generated into an accord
 
 .. note::
 
-   Generators work by connecting to the database to get information about the current state of the schema. Make sure you run the generators again any time the schema changes so that the generated code is in-sync with the current state of the schema.
+  Generators work by connecting to the database to get information about the current state of the schema. Make sure you run the generators again any time the schema changes so that the generated code is in-sync with the current state of the schema. The easiest way to do this is to add the generator command to the :ref:`schema.update.after hook <ref_reference_gel_toml_hooks>` in your :ref:`gel.toml <ref_reference_gel_toml>`.
 
 
 Customize file path
@@ -164,7 +146,7 @@ For convenience, the file also exports a namespace called ``helper`` containing 
 
 .. code-block:: typescript
 
-  import {Movie, helper} from "./dbschema/interfaces";
+  import type { Movie, helper } from "./dbschema/interfaces";
 
   type MovieProperties = helper.Props<Movie>;
   // { id: string; title: string; ... }
@@ -184,6 +166,5 @@ Note that an ``enum`` in your schema will be represented in the generated code a
 
 We do *not* generate TypeScript enums for a number of reasons.
 
-- In TypeScript, enums are nominally typed. Two identically named enums are not
-  considered equal, even if they have the same members.
+- In TypeScript, enums are nominally typed. Two identically named enums are not considered equal, even if they have the same members.
 - Enums are both a runtime and static construct. Hovever, for simplicity we want the ``interfaces`` generator to produce exclusively static (type-level) code.

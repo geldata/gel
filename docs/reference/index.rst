@@ -6,6 +6,7 @@ Reference
     :maxdepth: 3
     :hidden:
 
+    connection
     datamodel/index
     edgeql/index
     stdlib/index

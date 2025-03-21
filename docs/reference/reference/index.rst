@@ -12,11 +12,9 @@ Reference
 
 
     edgeql/index
-    connection
     environment
     projects
     gel_toml
-    dsn
     dump_format
     backend_ha
     configuration
