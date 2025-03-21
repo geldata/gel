@@ -1227,7 +1227,7 @@ class GetDatabaseFrontendNameFunction(trampoline.VersionedFunction):
         THEN
             substring(db_name, position('_' in db_name) + 1)
         ELSE
-            'edgedb'
+            'main'
         END
     '''
 
@@ -7143,22 +7143,36 @@ def _generate_sql_information_schema(
             query="""
         SELECT
             oid,
-            edgedb_VER.get_current_database()::name as datname,
+            frontend_name.n as datname,
             datdba,
             encoding,
+            datlocprovider,
             datcollate,
             datctype,
             datistemplate,
             datallowconn,
+            dathasloginevt,
             datconnlimit,
             0::oid AS datlastsysoid,
             datfrozenxid,
             datminmxid,
             dattablespace,
+            datlocale,
+            daticurules,
+            datcollversion,
             datacl,
             tableoid, xmin, cmin, xmax, cmax, ctid
-        FROM pg_database
-        WHERE datname LIKE '%_edgedb'
+        FROM
+            pg_database,
+            LATERAL (
+                SELECT edgedb_VER.get_database_frontend_name(datname) AS n
+            ) frontend_name,
+            LATERAL (
+                SELECT edgedb_VER.get_database_metadata(frontend_name.n) AS j
+            ) metadata
+        WHERE
+            metadata.j->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
+            AND NOT (metadata.j->'builtin')::bool
         """,
         ),
 
@@ -7692,6 +7706,65 @@ def _generate_sql_information_schema(
             views.append(v)
 
     util_functions = [
+        # WARNING: this `edgedbsql.to_regclass()` function is currently not
+        # accurately implemented to take application-level `search_path`
+        # into consideration. It is currently here to support the following
+        # `has_*privilege` functions (which are less sensitive to such issue).
+        # SO DO NOT USE `edgedbsql.to_regclass()` FOR ANYTHING ELSE.
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('name', 'text',),
+            ),
+            returns=('regclass',),
+            text="""
+                SELECT
+                    CASE
+                        WHEN array_length(parts, 1) = 1 THEN
+                            (
+                                SELECT oid::regclass
+                                FROM edgedbsql_VER.pg_class
+                                WHERE relname = parts[1]
+                                LIMIT 1  -- HACK: see comments above
+                            )
+                        WHEN array_length(parts, 1) = 2 THEN
+                            (
+                                SELECT pc.oid::regclass
+                                FROM edgedbsql_VER.pg_class pc
+                                JOIN edgedbsql_VER.pg_namespace pn
+                                ON pn.oid = pc.relnamespace
+                                WHERE relname = parts[2] AND nspname = parts[1]
+                            )
+                        ELSE
+                            NULL::regclass
+                    END
+                FROM parse_ident(name) parts
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_database_privilege'),
+            args=(
+                ('database_name', 'text'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_database_privilege(oid, privilege)
+                FROM edgedbsql_VER.pg_database
+                WHERE datname = database_name
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_database_privilege'),
+            args=(
+                ('database_oid', 'oid'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_database_privilege(database_oid, privilege)
+            """
+        ),
         trampoline.VersionedFunction(
             name=('edgedbsql', 'has_schema_privilege'),
             args=(
@@ -7728,20 +7801,19 @@ def _generate_sql_information_schema(
             ),
             returns=('bool',),
             text="""
-                SELECT has_table_privilege(oid, privilege)
-                FROM edgedbsql_VER.pg_class
-                WHERE relname = table_name;
+                SELECT has_table_privilege(
+                    edgedbsql_VER.to_regclass(table_name), privilege)
             """
         ),
         trampoline.VersionedFunction(
             name=('edgedbsql', 'has_table_privilege'),
             args=(
-                ('schema_oid', 'oid'),
+                ('table_oid', 'oid'),
                 ('privilege', 'text'),
             ),
             returns=('bool',),
             text="""
-                SELECT has_table_privilege(schema_oid, privilege)
+                SELECT has_table_privilege(table_oid, privilege)
             """
         ),
 
@@ -7766,9 +7838,8 @@ def _generate_sql_information_schema(
             ),
             returns=('bool',),
             text="""
-                SELECT has_column_privilege(oid, col, privilege)
-                FROM edgedbsql_VER.pg_class
-                WHERE relname = tbl;
+                SELECT has_column_privilege(
+                    edgedbsql_VER.to_regclass(tbl), col, privilege)
             """
         ),
         trampoline.VersionedFunction(
@@ -7795,9 +7866,32 @@ def _generate_sql_information_schema(
             returns=('bool',),
             text="""
                 SELECT has_column_privilege(pc.oid, attnum_internal, privilege)
-                FROM edgedbsql_VER.pg_class pc
-                JOIN edgedbsql_VER.pg_attribute_ext pa ON pa.attrelid = pc.oid
-                WHERE pc.relname = tbl AND pa.attname = col;
+                FROM edgedbsql_VER.pg_attribute_ext pa,
+                LATERAL (SELECT edgedbsql_VER.to_regclass(tbl) AS oid) pc
+                WHERE pa.attrelid = pc.oid AND pa.attname = col
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_any_column_privilege'),
+            args=(
+                ('tbl', 'oid'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_any_column_privilege(tbl, privilege)
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_any_column_privilege'),
+            args=(
+                ('tbl', 'text'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_any_column_privilege(
+                    edgedbsql_VER.to_regclass(tbl), privilege)
             """
         ),
         trampoline.VersionedFunction(
