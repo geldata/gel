@@ -720,8 +720,201 @@ jobs:
         path: shared-artifacts
         retention-days: 1
 
+  ui-test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: false
+
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 50
+        submodules: true
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      id: setup-python
+      with:
+        python-version: '3.12.2'
+        cache: 'pip'
+        cache-dependency-path: |
+          pyproject.toml
+
+    # The below is technically a lie as we are technically not
+    # inside a virtual env, but there is really no reason to bother
+    # actually creating and activating one as below works just fine.
+    - name: Export $VIRTUAL_ENV
+      run: |
+        venv="$(python -c 'import sys; sys.stdout.write(sys.prefix)')"
+        echo "VIRTUAL_ENV=${venv}" >> $GITHUB_ENV
+
+    - name: Set up uv cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/uv
+        key: uv-cache-${{ runner.os }}-py-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
+    
+    - name: Download requirements.txt
+      uses: actions/cache@v4
+      with:
+        path: requirements.txt
+        key: edb-requirements-${{ hashFiles('pyproject.toml') }}
+
+    - name: Install Python dependencies
+      run: python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+
+    # Restore the artifacts and environment variables
+
+    - name: Download shared artifacts
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
+      with:
+        name: shared-artifacts
+        path: shared-artifacts
+
+    - name: Set environment variables
+      run: |
+        echo EDGEDBCLI_GIT_REV=$(cat shared-artifacts/edgedbcli_git_rev.txt) >> $GITHUB_ENV
+        echo POSTGRES_GIT_REV=$(cat shared-artifacts/postgres_git_rev.txt) >> $GITHUB_ENV
+        echo STOLON_GIT_REV=$(cat shared-artifacts/stolon_git_rev.txt) >> $GITHUB_ENV
+        echo BUILD_LIB=$(python setup.py -q ci_helper --type build_lib) >> $GITHUB_ENV
+        echo BUILD_TEMP=$(python setup.py -q ci_helper --type build_temp) >> $GITHUB_ENV
+
+    # Restore build cache
+
+    - name: Restore cached EdgeDB CLI binaries
+      uses: actions/cache@v4
+      id: cli-cache
+      with:
+        path: build/cli
+        key: edb-cli-v4-${{ env.EDGEDBCLI_GIT_REV }}
+
+    - name: Restore cached Rust extensions
+      uses: actions/cache@v4
+      id: rust-cache
+      with:
+        path: build/rust_extensions
+        key: edb-rust-v4-${{ hashFiles('shared-artifacts/rust_cache_key.txt') }}
+
+    - name: Restore cached Cython extensions
+      uses: actions/cache@v4
+      id: ext-cache
+      with:
+        path: build/extensions
+        key: edb-ext-v6-${{ hashFiles('shared-artifacts/ext_cache_key.txt') }}
+
+    - name: Restore compiled parsers cache
+      uses: actions/cache@v4
+      id: parsers-cache
+      with:
+        path: build/lib
+        key: edb-parsers-v3-${{ hashFiles('shared-artifacts/parsers_cache_key.txt') }}
+
+    - name: Restore cached PostgreSQL build
+      uses: actions/cache@v4
+      id: postgres-cache
+      with:
+        path: build/postgres/install
+        key: edb-postgres-v3-${{ env.POSTGRES_GIT_REV }}-${{ hashFiles('shared-artifacts/lib_cache_key.txt') }}
+
+    - name: Restore cached Stolon build
+      uses: actions/cache@v4
+      id: stolon-cache
+      with:
+        path: build/stolon/bin
+        key: edb-stolon-v2-${{ env.STOLON_GIT_REV }}
+
+    - name: Restore bootstrap cache
+      uses: actions/cache@v4
+      id: bootstrap-cache
+      with:
+        path: build/cache
+        key: edb-bootstrap-v2-${{ hashFiles('shared-artifacts/bootstrap_cache_key.txt') }}
+
+    - name: Stop if we cannot retrieve the cache
+      if: |
+        steps.cli-cache.outputs.cache-hit != 'true' ||
+        steps.rust-cache.outputs.cache-hit != 'true' ||
+        steps.ext-cache.outputs.cache-hit != 'true' ||
+        steps.parsers-cache.outputs.cache-hit != 'true' ||
+        steps.postgres-cache.outputs.cache-hit != 'true' ||
+        steps.stolon-cache.outputs.cache-hit != 'true' ||
+        steps.bootstrap-cache.outputs.cache-hit != 'true'
+      run: |
+        echo ::error::Cannot retrieve build cache.
+        exit 1
+
+    - name: Validate cached binaries
+      run: |
+        # Validate EdgeDB CLI
+        ./build/cli/bin/gel --version || exit 1
+
+        # Validate Stolon
+        ./build/stolon/bin/stolon-sentinel --version || exit 1
+        ./build/stolon/bin/stolon-keeper --version || exit 1
+        ./build/stolon/bin/stolon-proxy --version || exit 1
+
+        # Validate PostgreSQL
+        ./build/postgres/install/bin/postgres --version || exit 1
+        ./build/postgres/install/bin/pg_config --version || exit 1
+
+    - name: Restore cache into the source tree
+      run: |
+        cp -v build/cli/bin/gel edb/cli/edgedb
+        cp -v build/cli/bin/gel edb/cli/gel
+        rsync -av ./build/rust_extensions/edb/ ./edb/
+        rsync -av ./build/extensions/edb/ ./edb/
+        rsync -av ./build/lib/edb/ ./edb/
+        cp build/postgres/install/stamp build/postgres/
+
+    - name: Install edgedb-server
+      env:
+        BUILD_EXT_MODE: skip
+      run: |
+        # --no-build-isolation because we have explicitly installed all deps
+        # and don't want them to be reinstalled in an "isolated env".
+        pip install --no-build-isolation --no-deps -e .[test,docs]
+
+    # Setup UI test dependencies
+
+    - uses: actions/checkout@v4
+      with:
+        repository: geldata/gel-ui
+        path: build/gel-ui
+        fetch-depth: 2
+
+    - name: Set up Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: lts/*
+
+    - name: Set up chrome
+      uses: browser-actions/setup-chrome@v1
+      with:
+        chrome-version: stable
+
+    - name: Set up chromedriver
+      uses: nanasess/setup-chromedriver@v2
+
+    - name: Install dev deps
+      working-directory: build/gel-ui/web
+      run: |
+        yarn
+
+    # Run the tests
+
+    - name: Run tests
+      working-directory: build/gel-ui/web
+      env:
+        __EDGEDB_DEVMODE: 1
+      run: |
+        yarn test
+
   test-conclusion:
-    needs: [cargo-test, python-test, python-test-list]
+    needs: [cargo-test, python-test, python-test-list, ui-test]
     runs-on: ubuntu-latest
     if: ${{ always() }}
     steps:
