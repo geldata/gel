@@ -1628,7 +1628,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         async with self._with_dump_restore_pgcon() as pgcon:
             _dbview.decode_state(sertypes.NULL_TYPE_ID.bytes, b'')
             await self._execute_utility_stmt(
-                'START TRANSACTION ISOLATION READ COMMITTED',
+                'START TRANSACTION ISOLATION LEVEL READ COMMITTED',
                 pgcon,
             )
 
