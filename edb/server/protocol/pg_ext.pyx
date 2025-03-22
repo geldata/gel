@@ -43,7 +43,6 @@ import edb.pgsql.parser.parser as pg_parser
 cimport edb.pgsql.parser.parser as pg_parser
 from edb.server import args as srvargs
 from edb.server import defines, metrics
-from edb.server import tenant as edbtenant
 from edb.server.compiler import dbstate
 from edb.server.pgcon import errors as pgerror
 from edb.server.pgcon.pgcon cimport PGAction, PGMessage, setting_to_sql
@@ -531,7 +530,7 @@ cdef class PgConnection(frontend.FrontendConnection):
                     tenant = self.server.retrieve_tenant(
                         self._transport.get_extra_info("ssl_object")
                     )
-                    if tenant is edbtenant.host_tenant:
+                    if tenant.is_host_tenant():
                         tenant = None
                     self.tenant = tenant
                     if self.tenant is not None:
