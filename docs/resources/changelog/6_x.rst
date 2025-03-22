@@ -705,7 +705,7 @@ Bug fixes
 * Use ``COPY ... FREEZE`` when restoring dumps to improve restore performance
   (:eql:gh:`#8494`)
 
-* pg-ext: add more SQL func wrappers
+* pg-ext: add table name parsing in ``has_*privilege`` functions and fix ``pg_database`` view
   (:eql:gh:`#8488`, fixes :eql:gh:`#8457`)
 
 * Fixed computed ptr with group by incorrectly inferring multiplicity
