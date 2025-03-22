@@ -699,10 +699,10 @@ Bug fixes
 6.4
 ===
 
-* Use ``read committed`` when restoring dumps
+* Use ``read committed`` when restoring dumps to improve restore performance
   (:eql:gh:`#8496`)
 
-* Use ``COPY ... FREEZE`` when restoring dumps
+* Use ``COPY ... FREEZE`` when restoring dumps to improve restore performance
   (:eql:gh:`#8494`)
 
 * pg-ext: add more SQL func wrappers
