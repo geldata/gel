@@ -1144,7 +1144,12 @@ async def _generate_voyageai_embeddings(
         base_url=provider.api_url,
     )
 
-    params: dict[str, Any] = {"input": inputs, "model": model_name, "output_format": "float", "truncation": False}
+    params: dict[str, Any] = {
+        "input": inputs,
+        "model": model_name,
+        "output_format": "float",
+        "truncation": False
+    }
 
     result = await client.post(
         "/embeddings",
