@@ -9,6 +9,7 @@ JavaScript
    :hidden:
 
    client
+   datatypes
    generation
    queries
    interfaces
