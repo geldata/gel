@@ -6,10 +6,13 @@ Query Builder Generator
 
 .. index:: querybuilder, generator, typescript
 
-The |Gel| query builder provides a **code-first** way to write **fully-typed** EdgeQL queries with TypeScript. We recommend it for TypeScript users, or anyone who prefers writing queries with code.
+Overview
+========
 
-Example schema
-==============
+The |Gel| query builder provides a **code-first** way to write **fully-typed** EdgeQL queries with TypeScript. Unlike traditional ORMs that offer a limited set of operations, the query builder leverages EdgeQL's composable nature, allowing developers to dynamically construct complex queries by combining expressions. This approach is particularly useful in scenarios where queries need to change dynamically at runtime. Even for static queries, the query builder offers the benefits of type safety and autocompletion, helping you write correct queries with confidence while maintaining the full expressiveness of EdgeQL.
+
+Usage Example
+-------------
 
 All queries on this page assume the following schema.
 
@@ -47,31 +50,30 @@ All queries on this page assume the following schema.
 
   const client = createClient();
 
-  async function run() {
-    const query = e.select(e.Movie, ()=>({
-      id: true,
-      title: true,
-      actors: { name: true }
-    }));
+  const query = e.select(e.Movie, () => ({
+    id: true,
+    title: true,
+    actors: {
+      name: true,
+    },
+  }));
 
-    const result = await query.run(client)
-    /*
-      {
-        id: string;
-        title: string;
-        actors: { name: string; }[];
-      }[]
-    */
-  }
+  const result = await query.run(client)
+  /*
+    {
+      id: string;
+      title: string;
+      actors: { name: string; }[];
+    }[]
+  */
 
-  run();
+Is it an ORM?
+-------------
 
-.. note:: Is it an ORM?
-
-  No—it's better! Like any modern TypeScript ORM, the query builder gives you full typesafety and autocompletion, but without the power and `performance <https://github.com/geldata/imdbench>`_ tradeoffs. You have access to the **full power** of EdgeQL and can write EdgeQL queries of arbitrary complexity. And since |Gel| compiles each EdgeQL query into a single, highly-optimized SQL query, your queries stay fast, even when they're complex.
+No—it's better! Like any modern TypeScript ORM, the query builder gives you full typesafety and autocompletion, but without the power and `performance <https://github.com/geldata/imdbench>`_ tradeoffs. You have access to the **full power** of EdgeQL and can write EdgeQL queries of arbitrary complexity. And since |Gel| compiles each EdgeQL query into a single, highly-optimized SQL query, your queries stay fast, even when they're complex.
 
 Why use the query builder?
-==========================
+--------------------------
 
 * **Type inference!**
     If you're using TypeScript, the result type of *all queries* is automatically inferred for you. For the first time, you don't need an ORM to write strongly typed queries.
@@ -86,9 +88,7 @@ Why use the query builder?
     The goal of the query builder is to provide an API that is as close as possible to EdgeQL itself while feeling like idiomatic TypeScript.
 
 Installation
-============
-
-To get started, install the following packages.
+------------
 
 Install the ``gel`` package as a production dependency and the ``@gel/generate`` package as a development dependency.
 
@@ -126,7 +126,7 @@ Install the ``gel`` package as a production dependency and the ``@gel/generate``
 
 
 Generation
-==========
+----------
 
 The following command will run the ``edgeql-js`` query builder generator.
 
@@ -182,7 +182,7 @@ connection.
 .. _gel-js-execution:
 
 Expressions
-===========
+-----------
 
 Throughout the documentation, we use the term "expression" a lot. This is a catch-all term that refers to *any query or query fragment* you define with the query builder. They all conform to an interface called ``Expression`` with some common functionality.
 
@@ -207,7 +207,7 @@ Most importantly, any expression can be executed with the ``.run()`` method, whi
 .. _gel-js-objects:
 
 Objects and Paths
-=================
+-----------------
 
 All object types in your schema are reflected into the query builder, properly namespaced by module.
 
@@ -227,7 +227,7 @@ For convenience, the contents of the ``default`` module are also available at th
   e.TVShow;
 
 Paths
------
+^^^^^
 
 EdgeQL-style *paths* are supported on object type references.
 
@@ -242,22 +242,22 @@ Paths can be constructed from any object expression, not just the root types.
 .. code-block:: typescript
 
   e.select(e.Person).name;
-  // (select Person).name
+  // EdgeQL: (select Person).name
 
-  e.op(e.Movie, 'union', e.TVShow).actors;
-  // (Movie union TVShow).actors
+  e.op(e.Movie, "union", e.TVShow).actors;
+  // EdgeQL: (Movie union TVShow).actors
 
   const ironMan = e.insert(e.Movie, {
     title: "Iron Man"
   });
   ironMan.title;
-  // (insert Movie { title := "Iron Man" }).title
+  // EdgeQL: (insert Movie { title := "Iron Man" }).title
 
 
 .. _gel-js-objects-type-intersections:
 
 Type intersections
-------------------
+^^^^^^^^^^^^^^^^^^
 
 Use the type intersection operator to narrow the type of a set of objects. For instance, to represent the elements of an Account's watchlist that are of type ``TVShow``:
 
@@ -268,7 +268,7 @@ Use the type intersection operator to narrow the type of a set of objects. For i
 
 
 Backlinks
----------
+^^^^^^^^^
 
 All possible backlinks are auto-generated and can be auto-completed by TypeScript. They behave just like forward links. However, because they contain a special character (``<``), you must use bracket syntax instead of simple dot notation.
 
@@ -285,7 +285,7 @@ For convenience, these backlinks automatically combine the backlink operator and
   // Person.<director[is Movie]
 
 Converting to EdgeQL
-====================
+--------------------
 
 .. index:: querybuilder, toedgeql
 
@@ -306,7 +306,7 @@ You can extract an EdgeQL representation of any expression calling the ``.toEdge
   // => select Movie { title, actors: { name }}
 
 Extracting the inferred type
-============================
+----------------------------
 
 The query builder *automatically infers* the TypeScript type that best represents the result of a given expression. This inferred type can be extracted with the ``$infer`` type helper.
 
@@ -564,18 +564,54 @@ Nested shapes
     }[]
   */
 
+If you need to create computed properties on the nested object, you can pass a closure to the nested object.
+
+.. code-block:: typescript
+
+  const query = e.select(e.Movie, () => ({
+    id: true,
+    title: true,
+    actors: (a) => ({
+      id: true,
+      name: true,
+      lower_name: e.str_lower(a.name),
+      upper_name: e.str_upper(a.name),
+    }),
+  }));
+
+  const result = await query.run(client);
+  /*
+    {
+      id: string;
+      title: string;
+      actors: {
+        id: string;
+        name: string;
+        lower_name: string;
+        upper_name: string;
+      }[];
+    }[]
+  */
+
 Filtering
 ---------
 
-Pass a boolean expression as the special key ``filter`` to filter the results.
+Pass a boolean expression as the special key ``filter`` to filter the results. You can even filter nested objects.
 
 .. code-block:: typescript
 
   const query = e.select(e.Movie, (movie) => ({
+    // special "filter" key
+    filter: e.op(movie.release_year, ">", 1999),
+
     id: true,
     title: true,
-    // special "filter" key
-    filter: e.op(movie.release_year, ">", 1999)
+    actors: (a) => ({
+      // nested filter
+      filter: e.op(a.name, "ilike", "a%"),
+      name: true,
+      id: true,
+    }),
   }));
 
   const result = await query.run(client);
