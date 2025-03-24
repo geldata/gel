@@ -57,15 +57,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-EDGEDB="edgedb -H localhost -P $PORT --tls-security insecure --wait-until-available 120sec"
+GEL="gel -H localhost -P $PORT --tls-security insecure --wait-until-available 120sec"
 
 # Wait for the server to come up and see it is working
-$EDGEDB -b select query 'select count(User)' | grep 2
+$GEL -b select query 'select count(User)' | grep 2
 
 # Block DDL
-$EDGEDB query 'configure instance set force_database_error := $${"type": "AvailabilityError", "message": "DDL is disabled due to in-place upgrade.", "_scopes": ["ddl"]}$$;'
+$GEL query 'configure instance set force_database_error := $${"type": "AvailabilityError", "message": "DDL is disabled due to in-place upgrade.", "_scopes": ["ddl"]}$$;'
 
-if $EDGEDB query 'create empty branch asdf'; then
+if $GEL query 'create empty branch asdf'; then
     echo Unexpected DDL success despite blocking it
     exit 4
 fi
@@ -85,7 +85,7 @@ DSN=$(curl -s http://localhost:$PORT/server-info | jq -r '.pg_addr.dsn')
 edb server --inplace-upgrade-prepare "$DIR"/upgrade.json --backend-dsn="$DSN"
 
 # Check the server is still working
-$EDGEDB -b select query 'select count(User)' | grep 2
+$GEL -b select query 'select count(User)' | grep 2
 
 if [ "$ROLLBACK" = 1 ]; then
     # Inject a failure into our first attempt to rollback
@@ -96,7 +96,7 @@ if [ "$ROLLBACK" = 1 ]; then
 
     # Second try should work
     edb server --inplace-upgrade-rollback --backend-dsn="$DSN"
-    $EDGEDB query 'configure instance reset force_database_error'
+    $GEL query 'configure instance reset force_database_error'
 
     # Rollback and then run the tests on the old database
     stop_server
@@ -114,7 +114,7 @@ if [ "$REAPPLY" = 1 ]; then
 fi
 
 # Check the server is still working
-$EDGEDB -b select query 'select count(User)' | grep 2
+$GEL -b select query 'select count(User)' | grep 2
 
 # Kill the old version so we can finalize the upgrade
 stop_server
@@ -145,11 +145,11 @@ fi
 # Start the server again so we can reenable DDL
 edb server -D "$DIR" -P $PORT &
 SPID=$!
-if $EDGEDB query 'create empty branch asdf'; then
+if $GEL query 'create empty branch asdf'; then
     echo Unexpected DDL success despite blocking it
     exit 6
 fi
-$EDGEDB query 'configure instance reset force_database_error'
+$GEL query 'configure instance reset force_database_error'
 stop_server
 if [ "$SAVE_TARBALLS" = 1 ]; then
     tar cf "$DIR"-cooked2.tar "$DIR"
