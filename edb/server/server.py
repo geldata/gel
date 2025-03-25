@@ -26,6 +26,7 @@ from typing import (
     Callable,
     Optional,
     Tuple,
+    Hashable,
     Iterator,
     Mapping,
     Sequence,
@@ -210,6 +211,7 @@ class BaseServer:
         # and there have been no new connections for n seconds
         self._auto_shutdown_after = auto_shutdown_after
         self._auto_shutdown_handler: Any = None
+        self._keepalive_tokens: set = set()
 
         self._echo_runtime_info = echo_runtime_info
         self._status_sinks = status_sinks
@@ -365,6 +367,7 @@ class BaseServer:
     def maybe_auto_shutdown(self):
         if (
             not self._binary_conns
+            and not self._keepalive_tokens
             and self._auto_shutdown_after >= 0
             and self._auto_shutdown_handler is None
         ):
@@ -377,6 +380,14 @@ class BaseServer:
             event,
             len(self._binary_conns),
         )
+
+    def add_keepalive_token(self, token: Hashable) -> None:
+        self.maybe_delay_auto_shutdown()
+        self._keepalive_tokens.add(token)
+
+    def remove_keepalive_token(self, token: Hashable) -> None:
+        self._keepalive_tokens.discard(token)
+        self.maybe_auto_shutdown()
 
     def on_pgext_client_connected(self, conn):
         self._pgext_conns[conn.get_id()] = conn
