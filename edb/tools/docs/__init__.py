@@ -112,10 +112,10 @@ class VersionedReplaceRole:
             node += d_nodes.Text(parts[1].strip())
             nodes.append(node)
         return nodes, []
-    
+
 
 class APIIndex(IndexDirective):
-    
+
     def run(self):
         nodes = super().run()
         nodes[0]['api-index'] = True
