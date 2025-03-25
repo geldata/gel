@@ -388,6 +388,7 @@ class BasePool(typing.Generic[C]):
 
         self._blocks = collections.OrderedDict()
         self._is_starving = False
+        self._running = True
 
         self._failed_connects = 0
         self._failed_disconnects = 0
@@ -397,7 +398,7 @@ class BasePool(typing.Generic[C]):
         self._conntime_avg = rolavg.RollingAverage(history_size=10)
 
     async def close(self) -> None:
-        pass
+        self._running = False
 
     @property
     def max_capacity(self) -> int:
@@ -529,7 +530,7 @@ class BasePool(typing.Generic[C]):
             logger.error(
                 "Failed to establish a new connection to backend database: %s",
                 block.dbname,
-                exc_info=True,
+                exc_info=self._running,
             )
             block.connect_failures_num += 1
 
