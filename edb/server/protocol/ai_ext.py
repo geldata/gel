@@ -293,7 +293,7 @@ async def _ext_ai_index_builder_controller_loop(
     provider_schedulers: dict[str, ProviderScheduler] = {}
 
     try:
-        while True:
+        while tenant.accept_new_tasks:
             if not db.tenant.is_database_connectable(dbname):
                 # Don't do work if the database is not connectable,
                 # e.g. being dropped
@@ -337,7 +337,13 @@ async def _ext_ai_index_builder_controller_loop(
                                     )
                                     holding_lock = False
             except Exception:
-                logger.exception(f"caught error in {task_name}")
+                logger.error(
+                    f"caught error in {task_name}",
+                    exc_info=tenant.accept_new_tasks,
+                )
+
+            if not tenant.accept_new_tasks:
+                break
 
             if not sleep_timer.is_ready_and_urgent():
                 delay = sleep_timer.remaining_time(naptime)
