@@ -351,6 +351,9 @@ Insert an object
   // { id: string }
   // by default INSERT only returns the id of the new object
 
+See also:
+* :ref:`EdgeQL <ref_eql_insert>`
+
 .. _gel-js-qb-transaction:
 
 Transaction
@@ -370,6 +373,10 @@ We can also run the same query as above, build with the query builder, in a tran
     // { id: string }
   });
 
+See also:
+
+* :ref:`EdgeQL <ref_eql_transactions>`
+
 .. _gel-js-parameters:
 
 Parameters
@@ -388,6 +395,10 @@ You can pass strongly-typed parameters into your query with ``e.params``.
 
 
 The first argument is an object defining the parameter names and their corresponding types. The second argument is a closure that returns an expression; use the ``params`` argument to construct the rest of your query.
+
+See also:
+
+* :ref:`EdgeQL <ref_eql_params>`
 
 Passing parameter data
 ^^^^^^^^^^^^^^^^^^^^^^
