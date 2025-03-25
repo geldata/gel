@@ -324,11 +324,6 @@ class BaseServer:
 
     def on_binary_client_created(self) -> str:
         self._binary_proto_id_counter += 1
-
-        if self._auto_shutdown_handler:
-            self._auto_shutdown_handler.cancel()
-            self._auto_shutdown_handler = None
-
         return str(self._binary_proto_id_counter)
 
     def on_binary_client_connected(self, conn):
@@ -361,6 +356,11 @@ class BaseServer:
             1.0, conn.get_tenant_label()
         )
         self.maybe_auto_shutdown()
+
+    def maybe_delay_auto_shutdown(self):
+        if self._auto_shutdown_handler:
+            self._auto_shutdown_handler.cancel()
+            self._auto_shutdown_handler = None
 
     def maybe_auto_shutdown(self):
         if (
@@ -728,13 +728,9 @@ class BaseServer:
         # CONFIGURE INSTANCE RESET setting_name;
         pass
 
-    async def _start_server(
-        self,
-        host: str,
-        port: int,
-        sock: Optional[socket.socket] = None,
-    ) -> Optional[asyncio.base_events.Server]:
-        proto_factory = lambda: protocol.HttpProtocol(
+    def _make_protocol(self):
+        self.maybe_delay_auto_shutdown()
+        return protocol.HttpProtocol(
             self,
             self._sslctx,
             self._sslctx_pgext,
@@ -742,13 +738,21 @@ class BaseServer:
             http_endpoint_security=self._http_endpoint_security,
         )
 
+    async def _start_server(
+        self,
+        host: str,
+        port: int,
+        sock: Optional[socket.socket] = None,
+    ) -> Optional[asyncio.base_events.Server]:
         try:
             kwargs: dict[str, Any]
             if sock is not None:
                 kwargs = {"sock": sock}
             else:
                 kwargs = {"host": host, "port": port}
-            return await self.__loop.create_server(proto_factory, **kwargs)
+            return await self.__loop.create_server(
+                self._make_protocol, **kwargs
+            )
         except Exception as e:
             logger.warning(
                 f"could not create listen socket for '{host}:{port}': {e}"

@@ -139,6 +139,7 @@ cdef class HttpProtocol:
         )
         self.transport = None
         self.unprocessed = None
+        self.server.maybe_auto_shutdown()
 
     def get_tenant_label(self):
         if self.tenant is None:

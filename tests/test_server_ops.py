@@ -112,7 +112,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                 # and the cluster to be shutdown soon.
                 await sd.connect(wait_until_available=0)
 
-    async def test_server_ops_auto_shutdown_after_one(self):
+    async def test_server_ops_auto_shutdown_after_one_1(self):
         async with tb.start_edgedb_server(
             auto_shutdown_after=1,
         ) as sd:
@@ -120,6 +120,27 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
 
             with self.assertRaises(
                     (ConnectionError, edgedb.ClientConnectionError)):
+                await sd.connect(wait_until_available=0)
+
+    async def test_server_ops_auto_shutdown_after_one_2(self):
+        async with tb.start_edgedb_server(
+            auto_shutdown_after=1,
+            http_endpoint_security=(
+                args.ServerEndpointSecurityMode.Optional
+            ),
+        ) as sd:
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(2)
+
+            with self.assertRaises(
+                (ConnectionError, edgedb.ClientConnectionError)):
                 await sd.connect(wait_until_available=0)
 
     @unittest.skipIf(
