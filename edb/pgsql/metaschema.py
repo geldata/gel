@@ -7140,26 +7140,26 @@ def _generate_sql_information_schema(
 
         trampoline.VersionedView(
             name=("edgedbsql", "pg_database"),
-            query="""
+            query=f"""
         SELECT
             oid,
             frontend_name.n as datname,
             datdba,
             encoding,
-            datlocprovider,
+            {'datlocprovider,' if backend_version.major >= 15 else ''}
             datcollate,
             datctype,
             datistemplate,
             datallowconn,
-            dathasloginevt,
+            {'dathasloginevt,' if backend_version.major >= 17 else ''}
             datconnlimit,
             0::oid AS datlastsysoid,
             datfrozenxid,
             datminmxid,
             dattablespace,
-            datlocale,
-            daticurules,
-            datcollversion,
+            {'datlocale,' if backend_version.major >= 17 else ''}
+            {'daticurules,' if backend_version.major >= 16 else ''}
+            {'datcollversion,' if backend_version.major >= 15 else ''}
             datacl,
             tableoid, xmin, cmin, xmax, cmax, ctid
         FROM
