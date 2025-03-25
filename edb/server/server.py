@@ -750,7 +750,9 @@ class BaseServer:
                 kwargs = {"sock": sock}
             else:
                 kwargs = {"host": host, "port": port}
-            return await self.__loop.create_server(self._make_protocol, **kwargs)
+            return await self.__loop.create_server(
+                self._make_protocol, **kwargs
+            )
         except Exception as e:
             logger.warning(
                 f"could not create listen socket for '{host}:{port}': {e}"
