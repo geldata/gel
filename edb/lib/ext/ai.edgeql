@@ -593,7 +593,7 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         set volatility := 'Stable';
         # Needed to pick up the indexes when used in ORDER BY.
         set prefer_subquery_args := true;
-        set server_param_conversions := '{"query": "ai_text_embedding"}';
+        set server_param_conversions := '{"query": ["ai_text_embedding", "object"]}';
         using sql expression;
     };
 

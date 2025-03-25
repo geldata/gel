@@ -171,7 +171,7 @@ class Environment:
 
     server_param_conversions: dict[
         str,
-        dict[str, tuple[irast.PathId, irast.Param]],
+        dict[str, tuple[irast.PathId, irast.Param, list[str]]],
     ]
     """A mapping of query parameters and the server param conversions which are
     needed by the query.
