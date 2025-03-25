@@ -50,6 +50,7 @@ from edb.schema import types as s_types
 from edb.schema import pseudo as s_pseudo
 from edb.schema import expr as s_expr
 from edb.schema import scalars as s_scalars
+from edb.schema import schema as s_schema
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes as ft
@@ -164,8 +165,11 @@ def find_callable(
     candidates = list(candidates)
     for candidate in candidates:
         call = None
-        if conversion := _check_server_arg_conversion(
-            candidate, args, kwargs, ctx=ctx
+        if (
+            not basic_matching_only
+            and (conversion := _check_server_arg_conversion(
+                candidate, args, kwargs, ctx=ctx
+            ))
         ):
             # If there is a server param conversion, the argument should be
             # treated as if it has already been converted.
@@ -667,7 +671,7 @@ def _check_server_arg_conversion(
     Mapping[str, Tuple[s_types.Type, irast.Set]],
     dict[
         str,
-        dict[str, tuple[irast.PathId, irast.Param]],
+        dict[str, tuple[irast.PathId, irast.Param, list[str]]],
     ],
 ]]:
     """Check if there is a server param conversion and get the effective args.
@@ -684,7 +688,10 @@ def _check_server_arg_conversion(
     """
     schema = ctx.env.schema
 
-    func_params = func.get_params(schema)
+    func_params: s_func.FuncParameterList = cast(
+        s_func.FuncParameterList,
+        func.get_params(schema),
+    )
 
     if arg_conversions_json := (
         isinstance(func, s_func.Function)
@@ -692,37 +699,29 @@ def _check_server_arg_conversion(
     ):
         curr_server_param_conversions: dict[
             str,
-            dict[str, tuple[irast.PathId, irast.Param]],
+            dict[str, tuple[irast.PathId, irast.Param, list[str]]],
         ] = {}
 
-        arg_conversions: dict[str, str] = json.loads(arg_conversions_json)
-        assert isinstance(arg_conversions, dict)
-        for arg_name, conversion_name in arg_conversions.items():
-            assert isinstance(arg_name, str)
-            assert isinstance(conversion_name, str)
+        arg_conversions: dict[str, str | list[str]] = json.loads(
+            arg_conversions_json
+        )
+        for arg_name, conversion_info in arg_conversions.items():
+            if isinstance(conversion_info, str):
+                conversion_name = conversion_info
+            else:
+                conversion_name = conversion_info[0]
 
-            # Get the param being converted
-            param = func_params.get_by_name(name=arg_name, schema=schema)
-            assert isinstance(param, s_func.Parameter)
-            if param is None:
-                raise RuntimeError(
-                    f'Unmatched server param conversion for arg: {arg_name}'
-                )
-
+            # Get the arg being converted
             arg_key: int | str
             arg: Tuple[s_types.Type, irast.Set]
-            param_kind = param.get_kind(schema)
-            if param_kind == ft.ParameterKind.PositionalParam:
-                param_index = param.get_num(schema)
-                arg_key = param_index
-                arg = args[param_index]
-            elif param_kind == ft.ParameterKind.NamedOnlyParam:
-                arg_key = arg_name
-                arg = kwargs[arg_name]
-            else:
-                raise RuntimeError(
-                    f'Server param conversion on variadic param: {arg_name}'
-                )
+            param, arg_key, arg = _get_arg(
+                func_params,
+                arg_name,
+                args,
+                kwargs,
+                error_msg=f'Server param conversion {conversion_name} error',
+                schema=schema,
+            )
 
             if arg[1].expr is None:
                 # Dummy set, do nothing
@@ -736,26 +735,42 @@ def _check_server_arg_conversion(
                 )
 
             # Get the types being converted to/from
-            original_type: s_types.Type
+            original_type: s_types.Type = arg[0]
+            if original_type != param.get_type(schema):
+                # Wrong param type, function candidate doesn't apply.
+                # TODO: Check "any" params
+                return None
+
             converted_type: s_types.Type
+            additional_info: list[str] = []
             if conversion_name == 'ai_text_embedding':
-                original_type = schema.get(
-                    'std::str', type=s_scalars.ScalarType
-                )
+                assert isinstance(conversion_info, list)
+                object_param_name = conversion_info[1]
+
                 converted_type = schema.get_global(
                     s_types.Array,
                     s_types.Array.generate_name(
                         sn.QualName('std', 'float32')
                     )
                 )
+
+                _, _, object_arg = _get_arg(
+                    func_params,
+                    object_param_name,
+                    args,
+                    kwargs,
+                    error_msg=f'Server param conversion {conversion_name} '
+                    f'error finding object argument',
+                    schema=schema,
+                )
+
+                object_type = object_arg[0].material_type(schema)[1]
+                additional_info = [str(object_type.get_id(schema))]
+
             else:
                 raise RuntimeError(
                     f'Unknown server param conversion: {conversion_name}'
                 )
-
-            if original_type != arg[0]:
-                # Not the type to be converted!
-                continue
 
             # Create a substitute parameter set with the correct type
             query_param_name = arg[1].expr.name
@@ -814,7 +829,8 @@ def _check_server_arg_conversion(
                         schema_type=converted_type,
                         ir_type=converted_typeref,
                         sub_params=sub_params,
-                    )
+                    ),
+                    additional_info,
                 )
 
             # Substitute the old arg
@@ -835,10 +851,46 @@ def _check_server_arg_conversion(
                     for key, arg in kwargs.items()
                 }
 
+        if len(curr_server_param_conversions) != len(arg_conversions):
+            # Not all conversions were applied, function candidate doesn't
+            # apply.
+            return None
+
         return args, kwargs, curr_server_param_conversions
 
     else:
         return None
+
+
+def _get_arg(
+    func_params: s_func.FuncParameterList,
+    param_name: str,
+    args: Sequence[Tuple[s_types.Type, irast.Set]],
+    kwargs: Mapping[str, Tuple[s_types.Type, irast.Set]],
+    *,
+    error_msg: str,
+    schema: s_schema.Schema,
+) -> tuple[
+    s_func.Parameter,
+    int | str,
+    tuple[s_types.Type, irast.Set],
+]:
+    param = func_params.get_by_name(name=param_name, schema=schema)
+    if param is None:
+        raise RuntimeError(
+            f'{error_msg}: missing param "{param_name}"'
+        )
+
+    param_kind = param.get_kind(schema)
+    if param_kind == ft.ParameterKind.PositionalParam:
+        param_index: int = param.get_num(schema)
+        return param, param_index, args[param_index]
+    elif param_kind == ft.ParameterKind.NamedOnlyParam:
+        return param, param_name, kwargs[param_name]
+    else:
+        raise RuntimeError(
+            f'{error_msg}: variadic param "{param_name}" not allowed'
+        )
 
 
 def compile_arg(
