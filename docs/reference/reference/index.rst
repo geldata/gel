@@ -21,7 +21,6 @@ Reference
     http
     sql_adapter
     protocol/index
-    bindings/index
     admin/index
     postgis
 
