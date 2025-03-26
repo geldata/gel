@@ -22,9 +22,9 @@ Client philosophy
 To connect your application to a |Gel| instance, you can use one of our official client libraries that speaks the Gel binary protocol. The client libraries are higher level than typical database drivers, and are designed to provide a fully-featured API for working with |Gel| instances.
 
 * Connect by convention
-* Connection pooling
 * Automatic transaction retries
-* Layered client configration
+* Layered client configuration
+* Connection pooling
 
 Connection
 ----------
@@ -33,15 +33,75 @@ Typical database drivers require you to figure out how to pass the correct conne
 
 Our client libraries take a different approach. Instead of needing to pass a DSN into our client creation function, the client libraries use a convention to discover the connection information in a way that allows you to not have to vary the code you write based on where you run your application.
 
+.. tabs::
+
+  .. code-tab:: typescript
+    :caption: TypeScript
+
+    import { createClient } from "gel";
+
+    const client = createClient();
+
+    const result = await client.queryRequiredSingle("select 42");
+
+  .. code-tab:: python
+    :caption: Python
+
+    import gel
+
+    client = gel.create_client()
+
+    result = client.query_required_single("select 42")
+
+    client.close()
+
+  .. code-tab:: go
+    :caption: Go
+
+    package main
+
+    import (
+        "context"
+
+        "github.com/geldata/gel-go"
+        "github.com/geldata/gel-go/gelcfg"
+    )
+
+    func main() {
+        ctx := context.Background()
+        client, err := gel.CreateClient(gelcfg.Options{})
+        if err != nil {
+            log.Fatal(err)
+        }
+        defer client.Close()
+
+        var (
+            answer int64
+        )
+
+        query := "select 42"
+        err = client.QuerySingle(ctx, query, &answer)
+    }
+
+  .. code-tab:: rust
+    :caption: Rust
+
+    #[tokio::main]
+    async fn main() -> anyhow::Result<()> {
+        let conn = gel_tokio::create_client().await?;
+        let val = conn.query_required_single::<i64, _>(
+            "select 42",
+            &(),
+        ).await?;
+
+        Ok(())
+    }
+
+
 * Local development: We suggest using our :ref:`projects <ref_guide_using_projects>` feature to manage your local instance. We handle creating credentials, and clients automatically know how to resolve the connection information for projects initialized in your project directory. We also support Docker Compose.
 * Production: For production, we recommend using environment variables to specify connection information to your |Gel| Cloud instance or remote self-hosted instance.
 
 This approach allows you to write code that does not need to contain any error-prone conditional logic. For more information on how to configure your connection for development and production, see :ref:`the reference for connection environments <ref_reference_connection_environments>`.
-
-Connection pooling
-------------------
-
-When you create a client instance, the library will automatically create a pool of connections to the Gel server instance to maximize parallelism and throughput. We use the safest isolation level of ``SERIALIZABLE`` to ensure consistent results across high-concurrency scenarios.
 
 Transactions
 ------------
@@ -54,6 +114,11 @@ Layered client configuration
 ----------------------------
 
 Each client library has a number of configuration options that you can set to customize the behavior of the client. Instead of needing to manage multiple pools across multiple client instances, the methods used for configuring the client will return an instance that shares the same connection pool and configuration as the base client instance. This is useful if different parts of your application need to configure the client differently at runtime, such as setting globals, disabling access policies, setting a longer query timeout, etc.
+
+Connection pooling
+------------------
+
+When you create a client instance, the library will automatically create a pool of connections to the Gel server instance to maximize parallelism and throughput. We use the safest isolation level of ``SERIALIZABLE`` to ensure consistent results across high-concurrency scenarios.
 
 Alternative Protocols
 =====================
