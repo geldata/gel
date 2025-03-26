@@ -2263,7 +2263,7 @@ Similarly you can directly include link properties inside nested ``e.insert`` qu
 
 Handling conflicts
 ^^^^^^^^^^^^^^^^^^
-:index: querybuilder unlessconflict unless conflict constraint
+.. index:: querybuilder, unlessconflict, unless conflict, constraint
 
 In EdgeQL, "upsert" functionality is achieved by handling **conflicts** on ``insert`` statements with the ``unless conflict`` clause. In the query builder, this is possible with the ``.unlessConflict`` method (available only on ``insert`` expressions).
 
