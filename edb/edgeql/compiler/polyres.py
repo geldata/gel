@@ -767,6 +767,25 @@ def _check_server_arg_conversion(
                 object_type = object_arg[0].material_type(schema)[1]
                 additional_info = [str(object_type.get_id(schema))]
 
+            elif conversion_name == 'cast_int64_to_str':
+                converted_type = schema.get(
+                    'std::str', type=s_scalars.ScalarType
+                )
+
+            elif conversion_name == 'cast_int64_to_float64':
+                converted_type = schema.get(
+                    'std::float64', type=s_scalars.ScalarType
+                )
+
+            elif conversion_name == 'join_str_array':
+                assert isinstance(conversion_info, list)
+                separator = conversion_info[1]
+
+                converted_type = schema.get(
+                    'std::str', type=s_scalars.ScalarType
+                )
+                additional_info = [separator]
+
             else:
                 raise RuntimeError(
                     f'Unknown server param conversion: {conversion_name}'

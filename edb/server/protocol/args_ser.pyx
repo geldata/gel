@@ -247,6 +247,10 @@ cdef WriteBuffer recode_bind_args(
                     out_buf.write_int32(len(encoded))
                     out_buf.write_bytes(encoded)
 
+                elif arg_type == 'float64':
+                    out_buf.write_int32(8) # elem size
+                    out_buf.write_double(arg)
+
                 elif arg_type == 'list[float32]':
                     elem_count = len(arg)
                     out_buf.write_int32(12 + 8 + elem_count * 8)  # buffer length

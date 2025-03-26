@@ -327,6 +327,26 @@ async def execute(
                                 )["data"][0]["embedding"]
                                 converted_args.append(('list[float32]', embeddings))
 
+                            elif conversion == 'cast_int64_to_str':
+                                converted_args.append(('str', str(int.from_bytes(data))))
+
+                            elif conversion == 'cast_int64_to_float64':
+                                converted_args.append(('float64', float(int.from_bytes(data))))
+
+                            elif conversion == 'join_str_array':
+                                separator = additional_info[0]
+
+                                texts = []
+                                text_count = int.from_bytes(data[12:16])
+                                data = data[20:]
+                                for _ in range(text_count):
+                                    text_length = int.from_bytes(data[:4])
+                                    data = data[4:]
+                                    texts.append(data[:(text_length)].decode("utf-8"))
+                                    data = data[text_length:]
+
+                                converted_args.append(('str', separator.join(texts)))
+
                             else:
                                 raise errors.QueryError(
                                     f'unknown param conversion: {conversion}'
