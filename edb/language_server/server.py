@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Dict, Mapping, Optional, List, Tuple
+from typing import Dict, Mapping, Optional, List, Tuple, Iterable
 import dataclasses
 import pathlib
 import os
@@ -39,10 +39,13 @@ import pygls.workspace
 
 from . import parsing as ls_parsing
 from . import is_schema_file
+from . import project
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class State:
+    manifest: Optional[Tuple[project.Manifest, pathlib.Path]] = None
+
     schema_docs: List[pygls.workspace.TextDocument] = dataclasses.field(
         default_factory=lambda: []
     )
@@ -52,18 +55,55 @@ class State:
     std_schema: Optional[s_schema.Schema] = None
 
 
+@dataclasses.dataclass(kw_only=True, slots=True)
+class Config:
+    project_dir: str
+
+
 class GelLanguageServer(LanguageServer):
     state: State
+    config: Config
 
-    def __init__(self):
+    def __init__(self, config: Config):
         super().__init__('Gel Language Server', 'v0.1')
         self.state = State()
+        self.config = config
 
 
 @dataclasses.dataclass(kw_only=True, slots=True)
 class DiagnosticsSet:
     by_doc: Dict[pygls.workspace.TextDocument, List[lsp_types.Diagnostic]] = (
         dataclasses.field(default_factory=lambda: {})
+    )
+
+    def append(
+        self,
+        doc: pygls.workspace.TextDocument,
+        diagnostic: lsp_types.Diagnostic,
+    ):
+        if doc not in self.by_doc:
+            self.by_doc[doc] = []
+        self.by_doc[doc].append(diagnostic)
+
+    def extend(
+        self,
+        doc: pygls.workspace.TextDocument,
+        diagnostics: Iterable[lsp_types.Diagnostic],
+    ):
+        if doc not in self.by_doc:
+            self.by_doc[doc] = []
+        self.by_doc[doc].extend(diagnostics)
+
+
+def _new_diagnostic_at_the_top_at_the_top(message: str) -> lsp_types.Diagnostic:
+    return lsp_types.Diagnostic(
+        range=lsp_types.Range(
+            start=lsp_types.Position(line=0, character=0),
+            end=lsp_types.Position(line=1, character=0),
+        ),
+        severity=lsp_types.DiagnosticSeverity.Error,
+        message=message,
+        related_information=[],
     )
 
 
@@ -77,6 +117,13 @@ def compile(
 
     schema, diagnostics_set = get_schema(ls)
     if not schema:
+        if len(ls.state.schema_docs) == 0:
+            diagnostics_set.append(
+                doc,
+                _new_diagnostic_at_the_top_at_the_top(
+                    "Cannot find schema files"
+                ),
+            )
         return diagnostics_set
 
     diagnostics: List[lsp_types.Diagnostic] = []
@@ -102,7 +149,7 @@ def compile(
         except errors.EdgeDBError as error:
             diagnostics.append(_convert_error(error))
 
-    diagnostics_set.by_doc[doc] = diagnostics
+    diagnostics_set.extend(doc, diagnostics)
     return diagnostics_set
 
 
@@ -137,16 +184,35 @@ def get_schema(
         return (ls.state.schema, DiagnosticsSet())
 
     if len(ls.state.schema_docs) == 0:
-        _load_schema_docs(ls)
+        schema_dir = _determine_schema_dir(ls)
+        if not schema_dir:
+            return (None, DiagnosticsSet())
+        _load_schema_docs(ls, schema_dir)
+
+    if len(ls.state.schema_docs) == 0:
+        return (None, DiagnosticsSet())
 
     return _compile_schema(ls)
 
 
-def update_schema_doc(ls: GelLanguageServer, doc: pygls.workspace.TextDocument):
-    # TODO: check that this doc in actually in dbschema dir
+def update_schema_doc(
+    ls: GelLanguageServer, doc: pygls.workspace.TextDocument
+) -> List[lsp_types.Diagnostic]:
+
+    schema_dir = _determine_schema_dir(ls)
+    if not schema_dir:
+        return [_new_diagnostic_at_the_top_at_the_top("cannot find schema-dir")]
+
+    # dont update if doc is not in schema_dir
+    if schema_dir not in pathlib.Path(doc.path).parents:
+        return [
+            _new_diagnostic_at_the_top_at_the_top(
+                f"this schema file is not in schema-dir ({schema_dir})"
+            )
+        ]
 
     if len(ls.state.schema_docs) == 0:
-        _load_schema_docs(ls)
+        _load_schema_docs(ls, schema_dir)
 
     existing = next(
         (i for i, d in enumerate(ls.state.schema_docs) if d.path == doc.path),
@@ -164,9 +230,10 @@ def update_schema_doc(ls: GelLanguageServer, doc: pygls.workspace.TextDocument):
 
         ls.state.schema_docs.append(doc)
 
+    return []
 
-def _load_schema_docs(ls: GelLanguageServer):
-    # discover dbschema/ folders
+
+def _get_workspace_path(ls: GelLanguageServer) -> Optional[pathlib.Path]:
     if len(ls.workspace.folders) != 1:
 
         if len(ls.workspace.folders) > 1:
@@ -176,25 +243,64 @@ def _load_schema_docs(ls: GelLanguageServer):
             )
         return None
 
-    # discard all existing docs
-    ls.state.schema_docs.clear()
-
     workspace: lsp_types.WorkspaceFolder = next(
         iter(ls.workspace.folders.values())
     )
-    workspace_path = pathlib.Path(pygls_uris.to_fs_path(workspace.uri))
+    return pathlib.Path(pygls_uris.to_fs_path(workspace.uri))
 
-    # TODO: read gel.toml and use [project.schema-dir]
-    schema_dir = 'dbschema'
+
+def _load_schema_docs(ls: GelLanguageServer, schema_dir: pathlib.Path):
+    # discard all existing docs
+    ls.state.schema_docs.clear()
+
+    try:
+        entries = os.listdir(schema_dir)
+    except FileNotFoundError:
+        return
 
     # read .esdl files
-    for entry in os.listdir(workspace_path / schema_dir):
+    for entry in entries:
         if not is_schema_file(entry):
             continue
-        doc = ls.workspace.get_text_document(
-            str(workspace_path / schema_dir / entry)
-        )
+        doc = ls.workspace.get_text_document(str(schema_dir / entry))
         ls.state.schema_docs.append(doc)
+
+
+def _determine_schema_dir(ls: GelLanguageServer) -> Optional[pathlib.Path]:
+    workspace_path = _get_workspace_path(ls)
+    if not workspace_path:
+        return None
+
+    project_dir = workspace_path / pathlib.Path(ls.config.project_dir)
+
+    manifest = _load_manifest(ls, project_dir)
+    if not manifest:
+        # no manifest: don't infer any schema dir
+        return None
+
+    if manifest.project:
+        schema_dir = project_dir / manifest.project.schema_dir
+    else:
+        schema_dir = project_dir / 'dbschema'
+
+    if schema_dir.is_dir():
+        return schema_dir
+    return None
+
+
+def _load_manifest(
+    ls: GelLanguageServer,
+    project_dir: pathlib.Path,
+) -> Optional[project.Manifest]:
+    if ls.state.manifest:
+        return ls.state.manifest[0]
+
+    try:
+        ls.state.manifest = project.read_manifest(project_dir)
+        return ls.state.manifest[0]
+    except BaseException as e:
+        ls.show_message_log(f"Error: {e}")
+        return None
 
 
 def _compile_schema(

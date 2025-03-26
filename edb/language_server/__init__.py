@@ -32,3 +32,7 @@ class Result(Generic[T, E]):
 
 def is_schema_file(path: str) -> bool:
     return path.endswith(('.esdl', '.gel'))
+
+
+def is_edgeql_file(path: str) -> bool:
+    return path.endswith('.edgeql')
