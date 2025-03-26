@@ -106,9 +106,67 @@ This approach allows you to write code that does not need to contain any error-p
 Transactions
 ------------
 
-Transactions are an important part of working with databases, and our client libraries are designed with a higher-level API for working with transactions that will automatically retry failures for certain classes of transaction errors. For instance, one common failure mode is a serialization error, which can happen when two transactions that are trying to modify the same data attempt to commit at the same time. The database will pick one of the transactions to commit, and the other will fail. In typical database drivers, you would need to handle this in your application code, but in our client libraries, you don't need to worry about it: we will simply retry the transaction for you in this case.
+Transactions are an important part of working with databases. In Gel, all queries are automatically run in an implicit transaction, ensuring atomicity and isolation for individual operations. Additionally, our client libraries provide a higher-level API for working with explicit transactions when you need to group multiple operations together.
+
+Our client libraries are designed to automatically retry failures for certain classes of transaction errors. For instance, one common failure mode is a serialization error, which can happen when two transactions that are trying to modify the same data attempt to commit at the same time. The database will pick one of the transactions to commit, and the other will fail. In typical database drivers, you would need to handle this in your application code, but in our client libraries, you don't need to worry about it: we will simply retry the transaction for you in this case.
 
 The behavior of transaction retries can be customized in the client configuration, which we will detail in full in the documentation for each client library.
+
+.. tabs::
+
+  .. code-tab:: typescript
+    :caption: TypeScript
+
+    import { createClient } from "gel";
+
+    const client = createClient();
+
+    await client.transaction(async (tx) => {
+      await tx.execute("insert User { name := 'Don' }");
+    });
+
+  .. code-tab:: python
+    :caption: Python
+
+    import gel
+
+    client = gel.create_client()
+
+    for tx in client.transaction():
+        with tx:
+            tx.execute("insert User { name := 'Don' }")
+
+  .. code-tab:: go
+    :caption: Go
+
+    package main
+
+    import (
+        "context"
+        "log"
+
+        "github.com/geldata/gel-go"
+        "github.com/geldata/gel-go/geltypes"
+    )
+
+    err := client.Tx(ctx, func(ctx context.Context, tx geltypes.Tx) error {
+      return tx.Execute(ctx, "insert User { name := 'Don' }")
+    })
+    if err != nil {
+      log.Println(err)
+    }
+
+  .. code-tab:: rust
+    :caption: Rust
+
+    let client = gel_tokio::create_client().await?;
+
+    client
+        .transaction(|mut conn| async move {
+            conn.execute("insert User { name := 'Don' }", &()).await?;
+            Ok(())
+        })
+        .await?;
 
 Layered client configuration
 ----------------------------
