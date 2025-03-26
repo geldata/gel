@@ -1208,7 +1208,7 @@ class ConcreteConstraintOp(ConstraintCommand):
 
     __abstract_node__ = True
     args: typing.List[Expr]
-    subjectexpr: typing.Optional[Expr]
+    subjectexpr: typing.Optional[Expr] = None
     except_expr: typing.Optional[Expr] = None
 
 

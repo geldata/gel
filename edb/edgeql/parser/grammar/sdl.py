@@ -411,62 +411,55 @@ class ConstraintDeclarationShort(Nonterm):
         )
 
 
-class ConcreteConstraintBlock(Nonterm):
-    def reduce_CreateConstraint(self, *kids):
-        r"""%reduce CONSTRAINT \
-                    NodeName OptConcreteConstraintArgList OptOnExpr \
-                    OptExceptExpr \
-                    CreateSDLCommandsBlock"""
-        _, name, arg_list, on_expr, except_expr, commands = kids
+class ConcreteConstraintStem(Nonterm):
+
+    val: qlast.CreateConcreteConstraint
+
+    def reduce_RegularConstraint(self, *kids):
+        """%reduce
+            CONSTRAINT NodeName OptConcreteConstraintArgList
+        """
         self.val = qlast.CreateConcreteConstraint(
-            name=name.val,
-            args=arg_list.val,
-            subjectexpr=on_expr.val,
-            except_expr=except_expr.val,
-            commands=commands.val,
+            name=kids[1].val,
+            args=kids[2].val,
         )
 
-    def reduce_CreateDelegatedConstraint(self, *kids):
-        r"""%reduce DELEGATED CONSTRAINT \
-                    NodeName OptConcreteConstraintArgList OptOnExpr \
-                    OptExceptExpr \
-                    CreateSDLCommandsBlock"""
-        _, _, name, arg_list, on_expr, except_expr, commands = kids
+    def reduce_DelegatedConstraint(self, *kids):
+        """%reduce
+            DELEGATED CONSTRAINT NodeName OptConcreteConstraintArgList
+        """
         self.val = qlast.CreateConcreteConstraint(
             delegated=True,
-            name=name.val,
-            args=arg_list.val,
-            subjectexpr=on_expr.val,
-            except_expr=except_expr.val,
-            commands=commands.val,
+            name=kids[2].val,
+            args=kids[3].val,
         )
+
+
+class ConcreteConstraintSignature(Nonterm):
+
+    val: qlast.CreateConcreteConstraint
+
+    def reduce_ConcreteConstraintStem_OptOnExpr_OptExceptExpr(self, *kids):
+        self.val = kids[0].val
+        self.val.subjectexpr = kids[1].val
+        self.val.except_expr = kids[2].val
+
+
+class ConcreteConstraintBlock(Nonterm):
+
+    val: qlast.CreateConcreteConstraint
+
+    def reduce_ConcreteConstraintSignature_CreateSDLCommandsBlock(self, *kids):
+        self.val = kids[0].val
+        self.val.commands = kids[1].val
 
 
 class ConcreteConstraintShort(Nonterm):
-    def reduce_CreateConstraint(self, *kids):
-        r"""%reduce CONSTRAINT \
-                    NodeName OptConcreteConstraintArgList OptOnExpr \
-                    OptExceptExpr"""
-        _, name, arg_list, on_expr, except_expr = kids
-        self.val = qlast.CreateConcreteConstraint(
-            name=name.val,
-            args=arg_list.val,
-            subjectexpr=on_expr.val,
-            except_expr=except_expr.val,
-        )
 
-    def reduce_CreateDelegatedConstraint(self, *kids):
-        r"""%reduce DELEGATED CONSTRAINT \
-                    NodeName OptConcreteConstraintArgList OptOnExpr \
-                    OptExceptExpr"""
-        _, _, name, arg_list, on_expr, except_expr = kids
-        self.val = qlast.CreateConcreteConstraint(
-            delegated=True,
-            name=name.val,
-            args=arg_list.val,
-            subjectexpr=on_expr.val,
-            except_expr=except_expr.val,
-        )
+    val: qlast.CreateConcreteConstraint
+
+    def reduce_ConcreteConstraintSignature(self, *kids):
+        self.val = kids[0].val
 
 
 #
