@@ -63,6 +63,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger("edb.server.ai_ext")
+keepalive_token = "ai-index-builder"
 
 
 class AIExtError(Exception):
@@ -292,7 +293,7 @@ async def _ext_ai_index_builder_controller_loop(
     provider_schedulers: dict[str, ProviderScheduler] = {}
 
     try:
-        while True:
+        while tenant.accept_new_tasks:
             if not db.tenant.is_database_connectable(dbname):
                 # Don't do work if the database is not connectable,
                 # e.g. being dropped
@@ -327,9 +328,22 @@ async def _ext_ai_index_builder_controller_loop(
                                 if not sleep_timer.is_ready_and_urgent():
                                     await asyncutil.deferred_shield(
                                         _ext_ai_unlock(tenant))
+                                    tenant.server.remove_keepalive_token(
+                                        (
+                                            keepalive_token,
+                                            tenant.get_instance_name(),
+                                            dbname,
+                                        )
+                                    )
                                     holding_lock = False
             except Exception:
-                logger.exception(f"caught error in {task_name}")
+                logger.error(
+                    f"caught error in {task_name}",
+                    exc_info=tenant.accept_new_tasks,
+                )
+
+            if not tenant.accept_new_tasks:
+                break
 
             if not sleep_timer.is_ready_and_urgent():
                 delay = sleep_timer.remaining_time(naptime)
@@ -548,7 +562,7 @@ class ProviderScheduler(rs.Scheduler[EmbeddingsData]):
         self, context: rs.Context,
     ) -> Optional[Sequence[EmbeddingsParams]]:
         assert isinstance(context, ProviderContext)
-        return await _generate_embeddings_params(
+        rv = await _generate_embeddings_params(
             context.db,
             context.pgconn,
             context.http_client,
@@ -561,6 +575,15 @@ class ProviderScheduler(rs.Scheduler[EmbeddingsData]):
                 None
             ),
         )
+        if rv:
+            context.db.server.add_keepalive_token(
+                (
+                    keepalive_token,
+                    context.db.tenant.get_instance_name(),
+                    context.db.name,
+                )
+            )
+        return rv
 
     def finalize(self, execution_report: rs.ExecutionReport) -> None:
         task_name = _task_name.get()
