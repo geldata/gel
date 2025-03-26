@@ -16,6 +16,7 @@
 # limitations under the License.
 #
 
+cimport cython
 cimport cpython
 
 from libc.stdint cimport int8_t, uint8_t, int16_t, uint16_t, \
@@ -24,6 +25,7 @@ from libc.stdint cimport int8_t, uint8_t, int16_t, uint16_t, \
 from edb import errors
 from edb.server.compiler import sertypes
 from edb.server.compiler import enums
+from edb.server.compiler import dbstate
 from edb.server.dbview cimport dbview
 
 from edb.server.pgproto cimport hton
@@ -60,7 +62,7 @@ cdef recode_bind_args_for_script(
     # TODO: just do the simple thing if it is only one!
 
     positions = []
-    recoded_buf = recode_bind_args(dbv, compiled, bind_args, positions)
+    recoded_buf = recode_bind_args(dbv, compiled, bind_args, None, positions)
     # TODO: something with less copies
     recoded = bytes(memoryview(recoded_buf))
 
@@ -100,6 +102,7 @@ cdef WriteBuffer recode_bind_args(
     dbview.DatabaseConnectionView dbv,
     dbview.CompiledQuery compiled,
     bytes bind_args,
+    bytes converted_args,
     # XXX do something better?!?
     list positions = None,
     list data_types = None,
@@ -183,6 +186,10 @@ cdef WriteBuffer recode_bind_args(
         data_types.extend(compiled.extra_type_oids)
         data_types.extend([0] * num_globals)
 
+    print(f"HELLO!")
+    print(f"  args_ser.recode_bind_args")
+    print(f"  {qug.in_type_args}")
+
     if qug.in_type_args:
         for param in qug.in_type_args:
             if positions is not None:
@@ -225,6 +232,7 @@ cdef WriteBuffer recode_bind_args(
 
     if live:
         if compiled.first_extra is not None:
+            print(f"  !!! {compiled.extra_blobs[0]}")
             out_buf.write_bytes(compiled.extra_blobs[0])
 
         # Inject any globals variables into the argument stream.
@@ -233,8 +241,14 @@ cdef WriteBuffer recode_bind_args(
         # All columns are in binary format
         out_buf.write_int32(0x00010001)
 
+    if converted_args:
+        print(f"  !!! {len(converted_args)}")
+        out_buf.write_bytes(converted_args)
+
     if frb_get_len(&in_buf):
         raise errors.InputDataError('unexpected trailing data in buffer')
+
+    print()
 
     return out_buf
 
@@ -597,3 +611,71 @@ cdef WriteBuffer combine_raw_args(
     bind_data.write_int32(0x00010001)
 
     return bind_data
+
+
+@cython.final
+cdef class ParamConversion:
+    def __init__(self, param_name, conversion, additional_info, data):
+        self.param_name = param_name
+        self.conversion = conversion
+        self.additional_info = additional_info
+        self.data = data
+
+    def get_param_name(self):
+        return self.param_name
+
+    def get_conversion(self):
+        return self.conversion
+
+    def get_additional_info(self):
+        return self.additional_info
+
+    def get_data(self):
+        return self.data
+
+
+cdef list[ParamConversion] get_param_conversions(
+    dbview.DatabaseConnectionView dbv,
+    object query_unit,
+    bytes bind_args,
+):
+    cdef:
+        FRBuffer in_buf
+        ssize_t in_len
+        const char *data
+
+    result: list[ParamConversion] = []
+
+    assert isinstance(query_unit, dbstate.QueryUnit)
+
+    assert cpython.PyBytes_CheckExact(bind_args)
+    frb_init(
+        &in_buf,
+        cpython.PyBytes_AS_STRING(bind_args),
+        cpython.Py_SIZE(bind_args)
+    )
+
+    if frb_get_len(&in_buf) == 0:
+        pass
+    else:
+        hton.unpack_int32(frb_read(&in_buf, 4))
+
+    if query_unit.in_type_args:
+        for param in query_unit.in_type_args:
+            frb_read(&in_buf, 4)  # reserved
+            in_len = hton.unpack_int32(frb_read(&in_buf, 4))
+            data = frb_read(&in_buf, in_len)
+
+            for param_name, conversion, additional_info in query_unit.server_param_conversions:
+                if param.name == param_name:
+                    result.append(ParamConversion(
+                        param_name=param_name,
+                        conversion=conversion,
+                        additional_info=additional_info,
+                        data=data,
+                    ))
+
+    if frb_get_len(&in_buf):
+        raise errors.InputDataError('unexpected trailing data in buffer')
+
+    return result

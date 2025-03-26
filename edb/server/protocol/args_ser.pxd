@@ -17,6 +17,8 @@
 #
 
 
+cimport cython
+
 from edb.server.dbview cimport dbview
 from edb.server.pgproto.pgproto cimport WriteBuffer
 
@@ -25,6 +27,7 @@ cdef WriteBuffer recode_bind_args(
     dbview.DatabaseConnectionView dbv,
     dbview.CompiledQuery compiled,
     bytes bind_args,
+    bytes converted_args,
     list positions = ?,
     list data_types = ?,
 )
@@ -45,3 +48,22 @@ cdef bytes recode_global(
 )
 
 cdef WriteBuffer combine_raw_args(object args = ?)
+
+@cython.final
+cdef class ParamConversion:
+    cdef:
+        str param_name
+        str conversion
+        list additional_info
+        bytes data
+
+    #cdef get_param_name
+    #cdef get_conversion
+    #cdef get_additional_info
+    #cdef get_data
+
+cdef list[ParamConversion] get_param_conversions(
+    dbview.DatabaseConnectionView dbv,
+    object query_unit,
+    bytes bind_args,
+)

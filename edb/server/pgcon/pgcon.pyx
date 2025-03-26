@@ -1025,12 +1025,20 @@ cdef class PGConnection:
 
         msgs_num = <uint64_t>(len(sqls))
 
+        print(f"HELLO!")
+        print(f"  PGConnection._parse_execute")
+        print(f"  {use_prep_stmt}")
+        print(f"  {parse}")
+        print(f"  {sqls}")
+        print()
+
         if use_prep_stmt:
             parse = self.before_prepare(stmt_name, dbver, out)
         else:
             stmt_name = b''
 
         if parse:
+            print(f"  A")
             if len(self.last_parse_prep_stmts):
                 for stmt_name_to_clean in self.last_parse_prep_stmts:
                     out.write_buffer(
@@ -1038,6 +1046,7 @@ cdef class PGConnection:
                 self.last_parse_prep_stmts.clear()
 
             if stmt_name == b'' and msgs_num > 1:
+                print(f"  A1")
                 i = 0
                 for sql in sqls:
                     pname = b'__p%d__' % i
@@ -1052,6 +1061,7 @@ cdef class PGConnection:
                         len(sql), self.get_tenant_label(), 'compiled'
                     )
             else:
+                print(f"  A2")
                 if len(sqls) != 1:
                     raise errors.InternalServerError(
                         'cannot PARSE more than one SQL query '
@@ -1097,6 +1107,7 @@ cdef class PGConnection:
             out.write_buffer(buf.end_message())
 
         if query.run_and_rollback or tx_isolation is not None:
+            print(f"  B")
             if query.run_and_rollback:
                 if sp_name:
                     sql = f'ROLLBACK TO SAVEPOINT {sp_name}'.encode('utf-8')
@@ -1124,6 +1135,7 @@ cdef class PGConnection:
             buf.write_int32(0)  # limit: 0 - return all rows
             out.write_buffer(buf.end_message())
         elif query.append_tx_op:
+            print(f"  C")
             if query.tx_commit:
                 sql = b'COMMIT'
             elif query.tx_rollback:
@@ -1153,6 +1165,7 @@ cdef class PGConnection:
             buf.write_int32(0)  # limit: 0 - return all rows
             out.write_buffer(buf.end_message())
 
+        print(f"  D")
         self.write_sync(out)
         self.write(out)
 

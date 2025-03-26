@@ -1922,6 +1922,16 @@ def _compile_ql_query(
         ctx, ir, sql_res.argmap, script_info
     )
 
+    server_param_conversions: Optional[list[tuple[str, str, list[str]]]] = None
+    param_conversion_in_type_data: Optional[bytes] = None
+    param_conversion_in_type_id: Optional[uuid.UUID] = None
+    if isinstance(ir, irast.Statement) and ir.server_param_conversions:
+        server_param_conversions = ir.server_param_conversions
+
+        _, param_conversion_in_type_data, param_conversion_in_type_id = describe_params(
+            ctx, ir, sql_res.argmap, script_info, True
+        )
+
     sql_hash = _hash_sql(
         sql_text.encode(defines.EDGEDB_ENCODING),
         mode=str(ctx.output_format).encode(),
@@ -1965,6 +1975,13 @@ def _compile_ql_query(
         in_type_args=in_type_args,
         out_type_id=out_type_id.bytes,
         out_type_data=out_type_data,
+        server_param_conversions=server_param_conversions,
+        param_conversion_in_type_data=param_conversion_in_type_data,
+        param_conversion_in_type_id=(
+            param_conversion_in_type_id.bytes
+            if param_conversion_in_type_id is not None else
+            None
+        ),
         cacheable=cacheable,
         has_dml=bool(ir.dml_exprs),
         query_asts=query_asts,
@@ -2096,16 +2113,27 @@ def describe_params(
     ir: irast.Statement | irast.ConfigCommand,
     argmap: Dict[str, pgast.Param],
     script_info: Optional[irast.ScriptInfo],
+    include_server_param_conversions: bool = False,
 ) -> Tuple[Optional[list[dbstate.Param]], bytes, uuid.UUID]:
     in_type_args = None
     params: list[tuple[str, s_types.Type, bool]] = []
     assert ir.schema
     if ir.params:
+        converted_params = []
+        explicit_param_names = {}
+        if include_server_param_conversions:
+            converted_params = [
+                p for p in ir.server_param_conversion_params
+            ]
+            explicit_param_names = {
+                p.name for p in ir.server_param_conversion_params
+            }
         params, in_type_args = _extract_params(
-            ir.params,
+            ir.params + converted_params,
             argmap=argmap,
             script_info=script_info,
             schema=ir.schema,
+            explicit_param_names=explicit_param_names,
             ctx=ctx,
         )
 
@@ -3002,6 +3030,10 @@ def _make_query_unit(
         unit.in_type_data = comp.in_type_data
         unit.in_type_id = comp.in_type_id
 
+        unit.server_param_conversions = comp.server_param_conversions
+        unit.param_conversion_in_type_id = comp.param_conversion_in_type_id
+        unit.param_conversion_in_type_data = comp.param_conversion_in_type_data
+
         unit.cacheable = comp.cacheable
 
         if comp.is_explain:
@@ -3198,6 +3230,7 @@ def _extract_params(
     schema: s_schema.Schema,
     argmap: Optional[Dict[str, pgast.Param]],
     script_info: Optional[irast.ScriptInfo],
+    explicit_param_names: Optional[set[str]] = None,
     ctx: CompileContext,
 ) -> Tuple[List[tuple[str, s_types.Type, bool]], List[dbstate.Param]]:
     first_param = next(iter(params)) if params else None
@@ -3248,6 +3281,10 @@ def _extract_params(
             not script_info
             and not has_named_params
             and str(idx) != param.name
+            and (
+                explicit_param_names is None
+                or param.name not in explicit_param_names
+            )
         ):
             raise RuntimeError(
                 'positional argument name disagrees '

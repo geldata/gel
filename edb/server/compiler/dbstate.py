@@ -113,6 +113,10 @@ class Query(BaseQuery):
 
     globals: Optional[list[tuple[str, bool]]] = None
 
+    server_param_conversions: Optional[list[tuple[str, str, list[str]]]] = None
+    param_conversion_in_type_data: Optional[bytes] = None
+    param_conversion_in_type_id: Optional[bytes] = None
+
     cacheable: bool = True
     is_explain: bool = False
     query_asts: Any = None
@@ -299,6 +303,10 @@ class QueryUnit:
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
 
+    server_param_conversions: Optional[list[tuple[str, str, list[str]]]] = None
+    param_conversion_in_type_data: Optional[bytes] = None
+    param_conversion_in_type_id: Optional[bytes] = None
+
     warnings: tuple[errors.EdgeDBError, ...] = ()
 
     # Set only when this unit contains a CONFIGURE INSTANCE command.
@@ -410,6 +418,10 @@ class QueryUnitGroup:
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
 
+    server_param_conversions: Optional[list[tuple[str, str, list[str]]]] = None
+    param_conversion_in_type_data: Optional[bytes] = None
+    param_conversion_in_type_id: Optional[bytes] = None
+
     warnings: Optional[list[errors.EdgeDBError]] = None
 
     # Cacheable QueryUnit is serialized in the compiler, so that the I/O server
@@ -473,6 +485,16 @@ class QueryUnitGroup:
             if self.globals is None:
                 self.globals = []
             self.globals.extend(query_unit.globals)
+        if query_unit.server_param_conversions is not None:
+            if self.server_param_conversions is None:
+                self.server_param_conversions = []
+            # TODO: remove duplicates
+            self.server_param_conversions.extend([
+                spc
+                for spc in query_unit.server_param_conversions
+            ])
+            self.param_conversion_in_type_data = query_unit.param_conversion_in_type_data
+            self.param_conversion_in_type_id = query_unit.param_conversion_in_type_id
         if query_unit.warnings is not None:
             if self.warnings is None:
                 self.warnings = []
