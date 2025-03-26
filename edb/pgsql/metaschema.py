@@ -6534,6 +6534,38 @@ def _generate_sql_information_schema(
                 nsdef
         '''
     )
+    # pg_settings is a function because "_edgecon_state" is a temporary table
+    # and therefore cannot be used in a view.
+    fe_pg_settings = trampoline.VersionedFunction(
+        name=('edgedbsql', '_pg_settings'),
+        args=[],
+        returns=('pg_catalog', 'pg_settings'),
+        set_returning=True,
+        volatility='volatile',
+        text='''
+            SELECT
+                s.name,
+                COALESCE(c.value #>> '{}', s.setting) AS setting,
+                unit,
+                category,
+                short_desc,
+                extra_desc,
+                context,
+                vartype,
+                source,
+                min_val,
+                max_val,
+                enumvals,
+                boot_val,
+                reset_val,
+                sourcefile,
+                sourceline,
+                pending_restart
+            FROM pg_settings s
+            LEFT JOIN _edgecon_state c
+                ON s.name = c.name AND c.type = 'S'
+        '''
+    )
 
     sql_ident = 'information_schema.sql_identifier'
     sql_str = 'information_schema.character_data'
@@ -7555,6 +7587,12 @@ def _generate_sql_information_schema(
         WHERE FALSE
         """,
         ),
+        trampoline.VersionedView(
+            name=("edgedbsql", "pg_settings"),
+            query="""
+            select * from edgedbsql_VER._pg_settings()
+        """,
+        ),
     ]
 
     # We expose most of the views as empty tables, just to prevent errors when
@@ -7604,6 +7642,7 @@ def _generate_sql_information_schema(
         'pg_tables',
         'pg_views',
         'pg_description',
+        'pg_settings',
     }
 
     PG_TABLES_WITH_SYSTEM_COLS = {
@@ -8052,6 +8091,7 @@ def _generate_sql_information_schema(
             cast(dbops.Command, dbops.CreateFunction(long_name)),
             cast(dbops.Command, dbops.CreateFunction(type_rename)),
             cast(dbops.Command, dbops.CreateFunction(namespace_rename)),
+            cast(dbops.Command, dbops.CreateFunction(fe_pg_settings)),
         ]
         + [dbops.CreateView(view) for view in views]
         + [dbops.CreateFunction(func) for func in util_functions]

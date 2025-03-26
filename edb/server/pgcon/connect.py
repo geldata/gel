@@ -44,6 +44,10 @@ INIT_CON_SCRIPT: bytes | None = None
 # * 'E': an instance-level config setting from environment variable
 # * 'F': an instance/tenant-level config setting from the TOML config file
 #
+# * 'S': a session-level pg-ext config setting (frontend-only)
+# * 'P': a session-level pg-ext config setting that's implemented by setting
+#   a corresponding backend config setting.
+#
 # Please also update ConStateType in edb/server/config/__init__.py if changed.
 SETUP_TEMP_TABLE_SCRIPT = '''
         CREATE TEMPORARY TABLE _edgecon_state (
@@ -51,7 +55,7 @@ SETUP_TEMP_TABLE_SCRIPT = '''
             value jsonb NOT NULL,
             type text NOT NULL CHECK(
                 type = 'C' OR type = 'B' OR type = 'A' OR type = 'E'
-                OR type = 'F'),
+                OR type = 'F' OR type = 'S' OR type = 'P'),
             UNIQUE(name, type)
         );
 '''.strip()
@@ -108,7 +112,8 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
             WITH x1 AS (
                 DELETE FROM _config_cache
             )
-            DELETE FROM _edgecon_state WHERE type = 'C' OR type = 'B';
+            DELETE FROM _edgecon_state
+                WHERE type = 'C' OR type = 'B' or type = 'S' OR type = 'P';
 
         PREPARE _apply_state(jsonb) AS
             INSERT INTO
@@ -128,11 +133,19 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
             SELECT edgedb._reset_session_config();
 
         PREPARE _apply_sql_state(jsonb) AS
+            INSERT INTO
+                _edgecon_state(name, value, type)
             SELECT
-                e.key AS name,
-                pg_catalog.set_config(e.key, e.value, false) AS value
+                e->>'name' AS name,
+                (CASE
+                    WHEN e->'type' = '"P"'::jsonb
+                    THEN pg_catalog.to_jsonb(pg_catalog.set_config(
+                        e->>'name', e->>'value', false))
+                    ELSE e->'value'
+                END) AS value,
+                e->>'type' AS type
             FROM
-                jsonb_each_text($1::jsonb) AS e;
+                jsonb_array_elements($1::jsonb) AS e;
     ''').strip().encode('utf-8')
 
 

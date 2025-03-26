@@ -53,7 +53,15 @@ DEFAULT_SETTINGS = dbstate.DEFAULT_SQL_SETTINGS
 DEFAULT_FE_SETTINGS = dbstate.DEFAULT_SQL_FE_SETTINGS
 
 cdef object logger = logging.getLogger('edb.server')
-cdef object DEFAULT_STATE = json.dumps(dict(DEFAULT_SETTINGS)).encode('utf-8')
+cdef object DEFAULT_STATE = json.dumps(
+    [
+        {"type": "P", "name": key, "value": val}
+        for key, val in DEFAULT_SETTINGS.items()
+    ] + [
+        {"type": "S", "name": key, "value": val}
+        for key, val in DEFAULT_FE_SETTINGS.items()
+    ]
+).encode("utf-8")
 
 encodings.aliases.aliases["sql_ascii"] = "ascii"
 
@@ -102,7 +110,9 @@ cdef class ConnectionView:
         self._in_tx_new_portals = set()
         self._in_tx_savepoints = collections.deque()
         self._tx_error = False
-        self._session_state_db_cache = (DEFAULT_SETTINGS, DEFAULT_STATE)
+        self._session_state_db_cache = (
+            DEFAULT_SETTINGS, DEFAULT_FE_SETTINGS, DEFAULT_STATE
+        )
 
     cpdef inline current_fe_settings(self):
         if self.in_tx():
@@ -347,17 +357,28 @@ cdef class ConnectionView:
         if self.in_tx():
             raise errors.InternalServerError(
                 'no need to serialize state while in transaction')
-        if self._settings == DEFAULT_SETTINGS:
+        if (
+            self._settings == DEFAULT_SETTINGS
+            and self._fe_settings == DEFAULT_FE_SETTINGS
+        ):
             return DEFAULT_STATE
 
         if self._session_state_db_cache is not None:
-            if self._session_state_db_cache[0] == self._settings:
-                return self._session_state_db_cache[1]
+            if self._session_state_db_cache[:2] == (
+                self._settings, self._fe_settings
+            ):
+                return self._session_state_db_cache[-1]
 
-        rv = json.dumps({
-            key: setting_to_sql(key, val) for key, val in self._settings.items()
-        }).encode("utf-8")
-        self._session_state_db_cache = (self._settings, rv)
+        rv = json.dumps(
+            [
+                {"type": "P", "name": key, "value": setting_to_sql(key, val)}
+                for key, val in self._settings.items()
+            ] + [
+                {"type": "S", "name": key, "value": setting_to_sql(key, val)}
+                for key, val in self._fe_settings.items()
+            ]
+        ).encode("utf-8")
+        self._session_state_db_cache = (self._settings, self._fe_settings, rv)
         return rv
 
     cdef bint needs_commit_after_state_sync(self):

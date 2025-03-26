@@ -472,6 +472,19 @@ cdef class PGConnection:
 
         buf = WriteBuffer.new_message(b'B')
         buf.write_bytestring(b'')  # portal name
+        buf.write_bytestring(b'_clear_state')  # statement name
+        buf.write_int16(0)  # number of format codes
+        buf.write_int16(0)  # number of parameters
+        buf.write_int16(0)  # number of result columns
+        out.write_buffer(buf.end_message())
+
+        buf = WriteBuffer.new_message(b'E')
+        buf.write_bytestring(b'')  # portal name
+        buf.write_int32(0)  # limit: 0 - return all rows
+        out.write_buffer(buf.end_message())
+
+        buf = WriteBuffer.new_message(b'B')
+        buf.write_bytestring(b'')  # portal name
         buf.write_bytestring(b'_reset_session_config')  # statement name
         buf.write_int16(0)  # number of format codes
         buf.write_int16(0)  # number of parameters
