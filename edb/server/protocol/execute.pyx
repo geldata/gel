@@ -302,7 +302,7 @@ async def execute(
                         print(f"  {query_unit.server_param_conversions}")
                         print()
 
-                    converted_args: Optional[bytes] = None
+                    converted_args: Optional[list[str]] = None
                     if query_unit.server_param_conversions:
                         param_conversions: list[args_ser.ParamConversion] = (
                             args_ser.get_param_conversions(
@@ -335,10 +335,10 @@ async def execute(
                                 embeddings = json.loads(
                                     embeddings_result.decode("utf-8")
                                 )["data"][0]["embedding"]
-                                converted_args = _encode_args([embeddings])
+                                converted_args = [embeddings]
 
                             elif conversion == 'cast_to_str':
-                                converted_args = _encode_args([str(data)])
+                                converted_args = [str(data)]
 
                             else:
                                 raise errors.QueryError(

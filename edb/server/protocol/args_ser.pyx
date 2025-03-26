@@ -102,7 +102,7 @@ cdef WriteBuffer recode_bind_args(
     dbview.DatabaseConnectionView dbv,
     dbview.CompiledQuery compiled,
     bytes bind_args,
-    bytes converted_args,
+    list converted_args,
     # XXX do something better?!?
     list positions = None,
     list data_types = None,
@@ -155,6 +155,9 @@ cdef WriteBuffer recode_bind_args(
             f"argument count mismatch {recv_args} != {compiled.first_extra}"
         num_args += compiled.extra_counts[0]
 
+    if converted_args is not None:
+        num_args += len(converted_args)
+
     num_globals = _count_globals(qug)
     num_args += num_globals
 
@@ -175,6 +178,10 @@ cdef WriteBuffer recode_bind_args(
             if compiled.extra_counts:
                 for _ in range(compiled.extra_counts[0]):
                     out_buf.write_int16(0x0000)
+            # and converted args are in text
+            if converted_args:
+                for _ in range(len(converted_args)):
+                    out_buf.write_int16(0x0000)
             # and injected globals are binary again
             for _ in range(num_globals):
                 out_buf.write_int16(0x0001)
@@ -188,7 +195,7 @@ cdef WriteBuffer recode_bind_args(
 
     print(f"HELLO!")
     print(f"  args_ser.recode_bind_args")
-    print(f"  {qug.in_type_args}")
+    print(f"  {qug.in_type_args} {num_args}")
 
     if qug.in_type_args:
         for param in qug.in_type_args:
@@ -235,15 +242,20 @@ cdef WriteBuffer recode_bind_args(
             print(f"  !!! {compiled.extra_blobs[0]}")
             out_buf.write_bytes(compiled.extra_blobs[0])
 
+        if converted_args:
+            for arg in converted_args:
+                if arg is None:
+                    out_buf.write_int32(-1)
+                else:
+                    arg = b'\x01' + arg.encode()
+                    out_buf.write_int32(len(arg))
+                    out_buf.write_bytes(arg)
+
         # Inject any globals variables into the argument stream.
         _inject_globals(dbv, qug, out_buf)
 
         # All columns are in binary format
         out_buf.write_int32(0x00010001)
-
-    if converted_args:
-        print(f"  !!! {len(converted_args)}")
-        out_buf.write_bytes(converted_args)
 
     if frb_get_len(&in_buf):
         raise errors.InputDataError('unexpected trailing data in buffer')
