@@ -650,7 +650,7 @@ To select a particular object, use the ``filter_single`` key and filter on an ex
       movie.id,
       "=",
       e.uuid("2053a8b4-49b1-437a-84c8-e1b0291ccd9f")
-    },
+    ),
   }));
 
   const result = await query.run(client);
@@ -2207,7 +2207,7 @@ Insert new data with ``e.insert``.
 
   e.insert(e.Movie, {
     title: e.str("Spider-Man: No Way Home"),
-    release_year: e.int64(2021)
+    release_year: e.int64(2021),
   });
 
 For convenience, the second argument of ``e.insert`` function can also accept plain JS data or a named tuple.
@@ -2240,7 +2240,7 @@ As in EdgeQL, link properties are inserted inside the shape of a subquery.
 
       // link props must correspond to expressions
       "@character_name": "Tony Stark"  // invalid
-    ))
+    }))
   });
 
 
@@ -2570,14 +2570,12 @@ Add a shape that will be applied to ``elements``. The ``by`` key is a special ke
 
   .. code-tab:: typescript
 
-    e.group(e.Movie, movie => {
-      return {
-        title: true,
-        actors: {name: true},
-        num_actors: e.count(movie.characters),
-        by: {release_year: movie.release_year}
-      }
-    });
+    e.group(e.Movie, (movie) => ({
+      title: true,
+      actors: { name: true },
+      num_actors: e.count(movie.characters),
+      by: { release_year: movie.release_year },
+    }));
     /* [
       {
         key: {release_year: 2008},
