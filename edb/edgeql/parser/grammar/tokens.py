@@ -220,6 +220,14 @@ class T_NAMEDONLY(Token, lextoken='named only'):
     pass
 
 
+class T_ONTARGET(Token, lextoken='on target'):
+    pass
+
+
+class T_ONSOURCE(Token, lextoken='on source'):
+    pass
+
+
 class T_SETTYPE(Token, lextoken='set type'):
     pass
 

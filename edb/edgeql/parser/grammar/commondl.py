@@ -497,33 +497,33 @@ class ProcessFunctionBlockMixin:
 # CREATE TYPE ... { CREATE LINK ... { ON TARGET DELETE ...
 #
 class OnTargetDeleteStmt(Nonterm):
-    def reduce_ON_TARGET_DELETE_RESTRICT(self, *_):
+    def reduce_ONTARGET_DELETE_RESTRICT(self, *_):
         self.val = qlast.OnTargetDelete(
             cascade=qltypes.LinkTargetDeleteAction.Restrict)
 
-    def reduce_ON_TARGET_DELETE_DELETE_SOURCE(self, *_):
+    def reduce_ONTARGET_DELETE_DELETE_SOURCE(self, *_):
         self.val = qlast.OnTargetDelete(
             cascade=qltypes.LinkTargetDeleteAction.DeleteSource)
 
-    def reduce_ON_TARGET_DELETE_ALLOW(self, *_):
+    def reduce_ONTARGET_DELETE_ALLOW(self, *_):
         self.val = qlast.OnTargetDelete(
             cascade=qltypes.LinkTargetDeleteAction.Allow)
 
-    def reduce_ON_TARGET_DELETE_DEFERRED_RESTRICT(self, *_):
+    def reduce_ONTARGET_DELETE_DEFERRED_RESTRICT(self, *_):
         self.val = qlast.OnTargetDelete(
             cascade=qltypes.LinkTargetDeleteAction.DeferredRestrict)
 
 
 class OnSourceDeleteStmt(Nonterm):
-    def reduce_ON_SOURCE_DELETE_DELETE_TARGET(self, *_):
+    def reduce_ONSOURCE_DELETE_DELETE_TARGET(self, *_):
         self.val = qlast.OnSourceDelete(
             cascade=qltypes.LinkSourceDeleteAction.DeleteTarget)
 
-    def reduce_ON_SOURCE_DELETE_ALLOW(self, *_):
+    def reduce_ONSOURCE_DELETE_ALLOW(self, *_):
         self.val = qlast.OnSourceDelete(
             cascade=qltypes.LinkSourceDeleteAction.Allow)
 
-    def reduce_ON_SOURCE_DELETE_DELETE_TARGET_IF_ORPHAN(self, *_):
+    def reduce_ONSOURCE_DELETE_DELETE_TARGET_IF_ORPHAN(self, *_):
         self.val = qlast.OnSourceDelete(
             cascade=qltypes.LinkSourceDeleteAction.DeleteTargetIfOrphan)
 

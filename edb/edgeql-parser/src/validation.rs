@@ -103,6 +103,14 @@ impl<'a> Validator<'a> {
                     return Some("named only");
                 }
             }
+            "on" => {
+                if self.peek_keyword("target") {
+                    return Some("on target");
+                }
+                if self.peek_keyword("source") {
+                    return Some("on source");
+                }
+            }
             "set" => {
                 if self.peek_keyword("annotation") {
                     return Some("set annotation");

@@ -209,6 +209,8 @@ pub const CURRENT_RESERVED_KEYWORDS: phf::Set<&str> = phf_set!(
 
 pub const COMBINED_KEYWORDS: phf::Set<&str> = phf_set!(
     "named only",
+    "on target",
+    "on source",
     "set annotation",
     "set type",
     "extension package",

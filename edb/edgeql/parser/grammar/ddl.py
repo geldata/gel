@@ -2389,12 +2389,12 @@ class CreateConcreteLinkStmt(Nonterm):
 
 
 class OnTargetDeleteResetStmt(Nonterm):
-    def reduce_RESET_ON_TARGET_DELETE(self, *kids):
+    def reduce_RESET_ONTARGET_DELETE(self, *kids):
         self.val = qlast.OnTargetDelete(cascade=None)
 
 
 class OnSourceDeleteResetStmt(Nonterm):
-    def reduce_RESET_ON_SOURCE_DELETE(self, *kids):
+    def reduce_RESET_ONSOURCE_DELETE(self, *kids):
         self.val = qlast.OnSourceDelete(cascade=None)
 
 
