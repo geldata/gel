@@ -762,6 +762,12 @@ def _check_server_arg_conversion(
                 object_type = object_arg[0].material_type(schema)[1]
                 additional_info = [str(object_type.get_id(schema))]
 
+            elif conversion_name == 'cast_to_str':
+                original_type = arg[0]
+                converted_type = schema.get(
+                    'std::str', type=s_scalars.ScalarType
+                )
+
             else:
                 raise RuntimeError(
                     f'Unknown server param conversion: {conversion_name}'

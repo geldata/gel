@@ -335,7 +335,10 @@ async def execute(
                                 embeddings = json.loads(
                                     embeddings_result.decode("utf-8")
                                 )["data"][0]["embedding"]
-                                converted_args = _encode_args(embeddings)
+                                converted_args = _encode_args([embeddings])
+
+                            elif conversion == 'cast_to_str':
+                                converted_args = _encode_args([str(data)])
 
                             else:
                                 raise errors.QueryError(

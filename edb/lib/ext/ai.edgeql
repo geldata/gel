@@ -597,6 +597,17 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         using sql expression;
     };
 
+    create function ext::ai::magic(val: str) -> str
+    {
+        using (val);
+    };
+
+    create function ext::ai::magic(val: int64) -> str
+    {
+        set server_param_conversions := '{"val": "cast_to_str"}';
+        using sql expression;
+    };
+
     create scalar type ext::ai::ChatParticipantRole
         extending enum<System, User, Assistant, Tool>;
 
