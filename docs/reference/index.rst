@@ -14,6 +14,7 @@ Reference
     cli/index
     ai/index
     auth/index
+    operations/index
     reference/index
 
 Learn three components, and you know |Gel|: how to work with
