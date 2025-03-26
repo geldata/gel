@@ -50,6 +50,7 @@ from edb.server.compiler import errormech
 from edb.server.compiler cimport rpc
 from edb.server.compiler import sertypes
 from edb.server.dbview cimport dbview
+from edb.server.protocol import ai_ext
 from edb.server.protocol cimport args_ser
 from edb.server.protocol cimport frontend
 from edb.server.pgcon cimport pgcon
@@ -295,9 +296,46 @@ async def execute(
                         if ddl_ret and ddl_ret['new_types']:
                             new_types = ddl_ret['new_types']
                 else:
+                    converted_args: Optional[list[tuple[str, Any]]] = None
+                    if query_unit.server_param_conversions:
+                        param_conversions: list[args_ser.ParamConversion] = (
+                            args_ser.get_param_conversions(
+                                dbv, query_unit, bind_args,
+                            )
+                        )
+
+                        converted_args = []
+                        for param_conversion in param_conversions:
+                            conversion: str = param_conversion.get_conversion()
+                            additional_info: list[str] = (
+                                param_conversion.get_additional_info()
+                            )
+                            data: bytes = param_conversion.get_data()
+
+                            if conversion == 'ai_text_embedding':
+                                object_type_id = additional_info[0]
+                                db = tenant.maybe_get_db(dbname=dbv.dbname)
+                                assert db is not None
+                                embeddings_result = await ai_ext.generate_embeddings_for_text(
+                                    db,
+                                    tenant.get_http_client(originator="ai/index"),
+                                    object_type_id,
+                                    str(data),
+                                )
+                                embeddings = json.loads(
+                                    embeddings_result.decode("utf-8")
+                                )["data"][0]["embedding"]
+                                converted_args.append(('list[float32]', embeddings))
+
+                            else:
+                                raise errors.QueryError(
+                                    f'unknown param conversion: {conversion}'
+                                )
+
                     data_types = []
                     bound_args_buf = args_ser.recode_bind_args(
-                        dbv, compiled, bind_args, None, data_types)
+                        dbv, compiled, bind_args, converted_args, None, data_types,
+                    )
 
                     assert not (query_unit.database_config
                                 and query_unit.needs_readback), (
