@@ -15,6 +15,7 @@ Client Libraries
     Rust <https://docs.rs/gel-tokio/latest/gel_tokio/>
     http/index
     graphql/index
+    datetime
 
 Client philosophy
 =================
