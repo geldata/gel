@@ -6,9 +6,7 @@ Code Generation
 
 .. py:currentmodule:: gel
 
-The ``gel-python`` package exposes a command-line tool to generate
-typesafe functions from ``*.edgeql`` files, using :py:mod:`dataclasses` for
-objects primarily.
+The ``gel-python`` package exposes a command-line tool to generate typesafe functions from ``*.edgeql`` files, using :py:mod:`dataclasses` for objects primarily.
 
 .. code-block:: bash
 
@@ -26,8 +24,7 @@ Consider a simple query that lives in a file called ``get_number.edgeql``:
 
   select <int64>$arg;
 
-Running the code generator will generate a new file called
-``get_number_async_edgeql.py`` containing the following code (roughly):
+Running the code generator will generate a new file called ``get_number_async_edgeql.py`` containing the following code (roughly):
 
 .. code-block:: python
 
@@ -50,35 +47,30 @@ Running the code generator will generate a new file called
 Target
 ~~~~~~
 
-By default, the generated code uses an ``async`` API. The generator supports
-additional targets via the ``--target`` flag.
+By default, the generated code uses an ``async`` API. The generator supports additional targets via the ``--target`` flag.
 
 .. code-block:: bash
 
   $ gel-py --target async        # generate async function (default)
   $ gel-py --target blocking     # generate blocking code
 
-The names of the generated files will differ accordingly:
-``{query_filename}_{target}_edgeql.py``.
+The names of the generated files will differ accordingly: ``{query_filename}_{target}_edgeql.py``.
 
 Single-file mode
 ~~~~~~~~~~~~~~~~
 
-It may be preferable to generate a single file containing all the generated
-functions. This can be done by passing the ``--file`` flag.
+It may be preferable to generate a single file containing all the generated functions. This can be done by passing the ``--file`` flag.
 
 .. code-block:: bash
 
   $ gel-py --file
 
-This generates a single file called ``generated_{target}_edgeql.py`` in the
-root of your project.
+This generates a single file called ``generated_{target}_edgeql.py`` in the root of your project.
 
 Connection
 ~~~~~~~~~~
 
-The ``gel-py`` command supports the same set of :ref:`connection options
-<ref_cli_gel_connopts>` as the ``gel`` CLI.
+The ``gel-py`` command supports the same set of :ref:`connection options <ref_cli_gel_connopts>` as the ``gel`` CLI.
 
 .. code-block::
 
@@ -87,7 +79,7 @@ The ``gel-py`` command supports the same set of :ref:`connection options
     --credentials-file <path/to/credentials.json>
     -H, --host <host>
     -P, --port <port>
-    -d, --database <database>
+    -b, --branch <branch>
     -u, --user <user>
     --password
     --password-from-stdin

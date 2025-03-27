@@ -1,14 +1,14 @@
 .. _gel-python-datatypes:
+.. _gel-python-data-types:
 
-=========
-Datatypes
-=========
+==========
+Data types
+==========
 
 .. py:currentmodule:: gel
 
 
-gel-python automatically converts |Gel| types to the corresponding Python
-types and vice versa.
+gel-python automatically converts |Gel| types to the corresponding Python types and vice versa.
 
 The table below shows the correspondence between Gel and Python types.
 
@@ -67,11 +67,7 @@ The table below shows the correspondence between Gel and Python types.
 
 .. note::
 
-    Inexact single-precision ``float`` values may have a different
-    representation when decoded into a Python float.  This is inherent
-    to the implementation of limited-precision floating point types.
-    If you need the decimal representation to match, cast the expression
-    to ``float64`` or ``decimal`` in your query.
+    Inexact single-precision ``float`` values may have a different representation when decoded into a Python float.  This is inherent to the implementation of limited-precision floating point types.  If you need the decimal representation to match, cast the expression to ``float64`` or ``decimal`` in your query.
 
 
 .. _gel-python-types-set:
@@ -95,19 +91,13 @@ Objects
 
     .. versionchanged:: 1.0
 
-        ``gel.Object`` instances are dataclass-compatible since version 1.0,
-        for example, ``dataclasses.is_dataclass()`` will return ``True``, and
-        ``dataclasses.asdict()`` will work on ``gel.Object`` instances.
+        ``gel.Object`` instances are dataclass-compatible since version 1.0, for example, ``dataclasses.is_dataclass()`` will return ``True``, and ``dataclasses.asdict()`` will work on ``gel.Object`` instances.
 
     .. versionchanged:: 1.0
 
-        ``gel.Object.__hash__`` is just ``object.__hash__`` in version 1.0.
-        Similarly, ``==`` is equivalent to the ``is`` operator comparing
-        ``gel.Object`` instances, and ``<``, ``<=``, ``>``, ``>=`` are not
-        allowed on ``gel.Object`` instances.
+        ``gel.Object.__hash__`` is just ``object.__hash__`` in version 1.0.  Similarly, ``==`` is equivalent to the ``is`` operator comparing ``gel.Object`` instances, and ``<``, ``<=``, ``>``, ``>=`` are not allowed on ``gel.Object`` instances.
 
-    The value of an object property or a link can be accessed through
-    a corresponding attribute:
+    The value of an object property or a link can be accessed through a corresponding attribute:
 
     .. code-block:: pycon
 
@@ -124,9 +114,7 @@ Objects
 
     .. describe:: obj[linkname]
 
-       Return a :py:class:`gel.Link` or a :py:class:`gel.LinkSet` instance
-       representing the instance(s) of link *linkname* associated with
-       *obj*.
+       Return a :py:class:`gel.Link` or a :py:class:`gel.LinkSet` instance representing the instance(s) of link *linkname* associated with *obj*.
 
        Example:
 
@@ -163,17 +151,14 @@ Links
 
     An immutable representation of an object link.
 
-    Links are created when :py:class:`gel.Object` is accessed via
-    a ``[]`` operator.  Using Link objects explicitly is useful for
-    accessing link properties.
+    Links are created when :py:class:`gel.Object` is accessed via a ``[]`` operator.  Using Link objects explicitly is useful for accessing link properties.
 
 
 .. py:class:: LinkSet
 
     An immutable representation of a set of Links.
 
-    LinkSets are created when a multi link on :py:class:`gel.Object`
-    is accessed via a ``[]`` operator.
+    LinkSets are created when a multi link on :py:class:`gel.Object` is accessed via a ``[]`` operator.
 
 
 Tuples
@@ -193,12 +178,9 @@ Named Tuples
 
     .. versionchanged:: 1.0
 
-        ``gel.NamedTuple`` is a subclass of :py:class:`tuple <python:tuple>`
-        and is duck-type compatible with ``collections.namedtuple`` since
-        version 1.0.
+        ``gel.NamedTuple`` is a subclass of :py:class:`tuple <python:tuple>` and is duck-type compatible with ``collections.namedtuple`` since version 1.0.
 
-    Instances of ``gel.NamedTuple`` generally behave similarly to
-    :py:func:`namedtuple <python:collections.namedtuple>`:
+    Instances of ``gel.NamedTuple`` generally behave similarly to :py:func:`namedtuple <python:collections.namedtuple>`:
 
     .. code-block:: pycon
 
@@ -276,10 +258,7 @@ EnumValue
 
     .. versionchanged:: 1.0
 
-        Since version 1.0, ``gel.EnumValue`` is a subclass of
-        :py:class:`enum.Enum <python:enum.Enum>`. Actual enum values are
-        instances of ad-hoc enum classes created by the codecs to represent
-        the actual members defined in your Gel schema.
+        Since version 1.0, ``gel.EnumValue`` is a subclass of :py:class:`enum.Enum <python:enum.Enum>`. Actual enum values are instances of ad-hoc enum classes created by the codecs to represent the actual members defined in your Gel schema.
 
     .. code-block:: pycon
 
