@@ -16,7 +16,6 @@
 # limitations under the License.
 #
 
-from typing import Optional
 import sys
 import json
 
@@ -41,7 +40,7 @@ from . import is_schema_file, is_edgeql_file
     help="Use stdio for LSP. This is currently the only transport.",
 )
 @click.argument("options", type=str, default='{}')
-def main(options: Optional[str], *, version: bool, stdio: bool):
+def main(options: str | None, *, version: bool, stdio: bool):
     if version:
         print(f"gel-ls, version {buildmeta.get_version()}")
         sys.exit(0)
@@ -54,7 +53,7 @@ def main(options: Optional[str], *, version: bool, stdio: bool):
         print("Error: no LSP transport enabled. Use --stdio.")
 
 
-def init(options_json: Optional[str]) -> ls_server.GelLanguageServer:
+def init(options_json: str | None) -> ls_server.GelLanguageServer:
 
     # load config
     options_dict = json.loads(options_json or '{}')

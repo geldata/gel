@@ -1,4 +1,4 @@
-from typing import Optional, cast, Any, Tuple
+from typing import cast, Any
 from pathlib import Path
 import dataclasses
 import tomllib
@@ -16,13 +16,13 @@ class Project:
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class Manifest:
-    instance: Optional[Instance]
-    project: Optional[Project]
+    instance: Instance | None
+    project: Project | None
     # hooks: Option<Hooks>,
     # watch: Vec<WatchScript>,
 
 
-def read_manifest(project_dir: Path) -> Tuple[Manifest, Path]:
+def read_manifest(project_dir: Path) -> tuple[Manifest, Path]:
     try:
         path = project_dir / 'gel.toml'
         with open(path, 'rb') as f:
@@ -52,7 +52,7 @@ def _load_manifest(manifest_dict: Any) -> Manifest:
     )
 
 
-def _load_instance(instance_dict: Any) -> Optional[Instance]:
+def _load_instance(instance_dict: Any) -> Instance | None:
     server_version = None
     if 'server-version' in instance_dict:
         server_version = cast(str, instance_dict['server-version'])
@@ -62,7 +62,7 @@ def _load_instance(instance_dict: Any) -> Optional[Instance]:
     return Instance(server_version=server_version)
 
 
-def _load_project(project_dict: Any) -> Optional[Project]:
+def _load_project(project_dict: Any) -> Project | None:
     schema_dir = None
     if 'schema-dir' in project_dict:
         schema_dir = Path(project_dict['schema-dir'])

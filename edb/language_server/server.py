@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Dict, Mapping, Optional, List, Tuple, Iterable
+from typing import Dict, Mapping, List, Iterable
 import dataclasses
 import pathlib
 import os
@@ -42,20 +42,20 @@ from . import is_schema_file
 from . import project
 
 
-@dataclasses.dataclass(kw_only=True, slots=True)
+@dataclasses.dataclass(kw_only=True)
 class State:
-    manifest: Optional[Tuple[project.Manifest, pathlib.Path]] = None
+    manifest: tuple[project.Manifest, pathlib.Path] | None = None
 
     schema_docs: List[pygls.workspace.TextDocument] = dataclasses.field(
         default_factory=lambda: []
     )
 
-    schema: Optional[s_schema.Schema] = None
+    schema: s_schema.Schema | None = None
 
-    std_schema: Optional[s_schema.Schema] = None
+    std_schema: s_schema.Schema | None = None
 
 
-@dataclasses.dataclass(kw_only=True, slots=True)
+@dataclasses.dataclass(kw_only=True)
 class Config:
     project_dir: str
 
@@ -70,7 +70,7 @@ class GelLanguageServer(LanguageServer):
         self.config = config
 
 
-@dataclasses.dataclass(kw_only=True, slots=True)
+@dataclasses.dataclass(kw_only=True)
 class DiagnosticsSet:
     by_doc: Dict[pygls.workspace.TextDocument, List[lsp_types.Diagnostic]] = (
         dataclasses.field(default_factory=lambda: {})
@@ -127,7 +127,7 @@ def compile(
         return diagnostics_set
 
     diagnostics: List[lsp_types.Diagnostic] = []
-    modaliases: Mapping[Optional[str], str] = {None: 'default'}
+    modaliases: Mapping[str | None, str] = {None: 'default'}
     for ql_stmt in stmts:
 
         try:
@@ -179,7 +179,7 @@ def _convert_error(error: errors.EdgeDBError) -> lsp_types.Diagnostic:
 
 def get_schema(
     ls: GelLanguageServer,
-) -> Tuple[Optional[s_schema.Schema], DiagnosticsSet]:
+) -> tuple[s_schema.Schema | None, DiagnosticsSet]:
     if ls.state.schema:
         return (ls.state.schema, DiagnosticsSet())
 
@@ -233,7 +233,7 @@ def update_schema_doc(
     return []
 
 
-def _get_workspace_path(ls: GelLanguageServer) -> Optional[pathlib.Path]:
+def _get_workspace_path(ls: GelLanguageServer) -> pathlib.Path | None:
     if len(ls.workspace.folders) != 1:
 
         if len(ls.workspace.folders) > 1:
@@ -266,7 +266,7 @@ def _load_schema_docs(ls: GelLanguageServer, schema_dir: pathlib.Path):
         ls.state.schema_docs.append(doc)
 
 
-def _determine_schema_dir(ls: GelLanguageServer) -> Optional[pathlib.Path]:
+def _determine_schema_dir(ls: GelLanguageServer) -> pathlib.Path | None:
     workspace_path = _get_workspace_path(ls)
     if not workspace_path:
         return None
@@ -291,7 +291,7 @@ def _determine_schema_dir(ls: GelLanguageServer) -> Optional[pathlib.Path]:
 def _load_manifest(
     ls: GelLanguageServer,
     project_dir: pathlib.Path,
-) -> Optional[project.Manifest]:
+) -> project.Manifest | None:
     if ls.state.manifest:
         return ls.state.manifest[0]
 
@@ -305,7 +305,7 @@ def _load_manifest(
 
 def _compile_schema(
     ls: GelLanguageServer,
-) -> Tuple[Optional[s_schema.Schema], DiagnosticsSet]:
+) -> tuple[s_schema.Schema | None, DiagnosticsSet]:
     # parse
     sdl = qlast.Schema(declarations=[])
     diagnostics = DiagnosticsSet()
