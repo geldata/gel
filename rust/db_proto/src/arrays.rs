@@ -110,10 +110,7 @@ impl<T: FieldAccessArray + 'static> FieldAccessArray for ZTArrayMeta<T> {
             if buf[0] == 0 {
                 return Ok(size);
             }
-            let elem_size = match T::size_of_field_at(buf) {
-                Ok(n) => n,
-                Err(e) => return Err(e),
-            };
+            let elem_size = T::size_of_field_at(buf)?;
             buf = buf.split_at(elem_size).1;
             size += elem_size;
         }
@@ -287,10 +284,7 @@ where
                 break;
             }
             len -= 1;
-            let elem_size = match T::size_of_field_at(buf) {
-                Ok(n) => n,
-                Err(e) => return Err(e),
-            };
+            let elem_size = T::size_of_field_at(buf)?;
             buf = buf.split_at(elem_size).1;
             size += elem_size;
         }

@@ -142,7 +142,7 @@ fn load_productions(py: Python<'_>, spec: &parser::Spec) -> PyResult<PyObject> {
 /// Newtype required to define a trait for a foreign type.
 struct ParserCSTNode<'a>(&'a parser::CSTNode<'a>);
 
-impl<'a, 'py> IntoPyObject<'py> for ParserCSTNode<'a> {
+impl<'py> IntoPyObject<'py> for ParserCSTNode<'_> {
     type Target = CSTNode;
     type Output = Bound<'py, Self::Target>;
     type Error = PyErr;
