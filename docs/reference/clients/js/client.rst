@@ -28,12 +28,9 @@ The ``gel`` package exposes a :ref:`createClient <gel-js-create-client>` functio
 Checking connection status
 --------------------------
 
-The client maintains a dynamically sized *pool* of connections under the hood.
-These connections are initialized *lazily*, so no connection will be
-established until the first time you execute a query.
+The client maintains a dynamically sized *pool* of connections under the hood.  These connections are initialized *lazily*, so no connection will be established until the first time you execute a query.
 
-If you want to explicitly ensure that the client is connected without running
-a query, use the ``.ensureConnected()`` method.
+If you want to explicitly ensure that the client is connected without running a query, use the ``.ensureConnected()`` method. This can be useful to catch any errors resulting from connection mis-configuration by triggering the first connection attempt explicitly.
 
 .. code-block:: typescript
 
@@ -43,8 +40,11 @@ a query, use the ``.ensureConnected()`` method.
 
   async function main() {
     await client.ensureConnected();
-    // client is now connected
+    const answer = await client.queryRequiredSingle<number>("select 2 + 2;");
+    console.log(answer); // number: 4
   }
+
+  main();
 
 .. _gel-js-running-queries:
 
@@ -76,7 +76,9 @@ If your query contains parameters (e.g. ``$foo``), you can pass in values as the
   console.log(result);
   // {id: "047c5893..."}
 
-Remember that :ref:`parameters <ref_eql_params>` can only be *scalars* or *arrays of scalars*.
+.. note::
+
+  Parameters can only be scalars or arrays of scalars. See :ref:`parameters <ref_eql_params>` for more details.
 
 Cardinality
 -----------
@@ -168,7 +170,7 @@ If you don't need the result, you can use ``executeSQL`` which will return ``voi
 Scripts
 -------
 
-Both ``execute`` and the ``query*`` methods support scripts (queries containing multiple statements). The statements are run in an implicit transaction (unless already in an explicit transaction), so the whole script remains atomic. For the ``query*`` methods only the result of the final statement in the script will be returned.
+Both ``execute`` and the ``query*`` methods support scripts (queries containing multiple statements). The statements, like all queries, are run in an implicit transaction (unless already in an explicit transaction), so the whole script remains atomic. For the ``query*`` methods only the result of the final statement in the script will be returned.
 
 .. code-block:: typescript
 

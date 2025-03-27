@@ -20,7 +20,7 @@ JavaScript
 Installation
 ============
 
-You can install the published database client and optional (but recommended!) generators from npm using your package manager of choice.
+Install the `client <https://www.npmjs.com/package/gel>`_ and optional (but recommended!) `generator <https://www.npmjs.com/package/@gel/generate>`_ packages from npm using your package manager of choice.
 
 .. tabs::
 
