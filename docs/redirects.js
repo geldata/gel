@@ -130,4 +130,24 @@ module.exports = [
     destination: "/reference/connection#dsn",
     permanent: false,
   },
+  {
+    source: "/reference/clients/python/api/asyncio_client",
+    destination: "/reference/clients/python/client#asyncio-client",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/python/api/blocking_client",
+    destination: "/reference/clients/python/client#blocking-client",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/python/installation",
+    destination: "/reference/clients/python#installation",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/python/usage",
+    destination: "/reference/clients/python#basic-usage",
+    permanent: false,
+  },
 ];
