@@ -199,12 +199,12 @@ def array_as_json_object(
                     )
 
             json_func = 'build_object' if is_named else 'build_array'
-            agg_arg = _build_json(json_func, json_args, env=env)
+            serialized_inner_array = _build_json(json_func, json_args, env=env)
 
             needs_unnest = bool(el_type.subtypes)
         else:
             val = pgast.ColumnRef(name=[out_alias])
-            agg_arg = serialize_expr_to_json(
+            serialized_inner_array = serialize_expr_to_json(
                 val, styperef=el_type, nested=True, env=env)
             needs_unnest = True
 
@@ -215,7 +215,7 @@ def array_as_json_object(
                         args=[
                             pgast.FuncCall(
                                 name=_get_json_func('agg', env=env),
-                                args=[agg_arg],
+                                args=[serialized_inner_array],
                             ),
                             pgast.StringConstant(val='[]'),
                         ]
@@ -236,6 +236,58 @@ def array_as_json_object(
                     ]
                 )
             ] if needs_unnest else [],
+        )
+    elif irtyputils.is_array(el_type):
+        # array<array<...>> implemented as array<tuple<array<...>>>
+        #
+        # If we serialize without any special handling, the tuple will be
+        # included, with the key 'f1'
+        #
+        # eg. [[1, 2, 3], [4, 5]] -> [{'f1': [1,2,3]}, {'f1': [4,5]}]
+        #
+        # To prevent this, we need to explicitly serialize the inner arrays then
+        # aggregate them.
+        el_name = 'f1'
+        coldeflist = [
+            pgast.ColumnDef(
+                name=str(el_name),
+                typename=pgast.TypeName(
+                    name=pgtypes.pg_type_from_ir_typeref(el_type),
+                ),
+            )
+        ]
+        unwrapped_inner_array = pgast.RangeFunction(
+            functions=[
+                pgast.FuncCall(
+                    name=('unnest',),
+                    args=[expr],
+                    coldeflist=coldeflist,
+                )
+            ]
+        )
+        serialized_inner_array = serialize_expr_to_json(
+            pgast.ColumnRef(name=[str(el_name)]),
+            styperef=el_type,
+            nested=True,
+            env=env,
+        )
+
+        return pgast.SelectStmt(
+            target_list=[
+                pgast.ResTarget(
+                    val=pgast.CoalesceExpr(
+                        args=[
+                            pgast.FuncCall(
+                                name=_get_json_func('agg', env=env),
+                                args=[serialized_inner_array],
+                            ),
+                            pgast.StringConstant(val='[]'),
+                        ]
+                    ),
+                    ser_safe=True,
+                )
+            ],
+            from_clause=[unwrapped_inner_array]
         )
     else:
         return pgast.FuncCall(
