@@ -1,8 +1,8 @@
 .. _ref_guide_using_projects:
 
-================
-Create a project
-================
+=================
+Local development
+=================
 
 Projects are the most convenient way to develop applications with Gel. This
 is the recommended approach.

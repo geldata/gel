@@ -13,7 +13,7 @@ Client Libraries
     python/index
     Go <https://pkg.go.dev/github.com/geldata/gel-go>
     Rust <https://docs.rs/gel-tokio/latest/gel_tokio/>
-    http/index
+    http
     graphql/index
     datetime
 

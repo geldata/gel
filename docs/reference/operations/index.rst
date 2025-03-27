@@ -6,11 +6,12 @@ Operations
     :maxdepth: 3
     :hidden:
 
+    projects
     admin/index
     configuration
     environment
     backend_ha
     dump_format
-    projects
+    http
 
 Configuring and running a |Gel| server is fun and easy!

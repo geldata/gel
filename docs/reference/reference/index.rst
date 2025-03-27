@@ -13,7 +13,6 @@ Reference
 
     edgeql/index
     gel_toml
-    http
     sql_adapter
     protocol/index
 

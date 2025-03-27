@@ -1,6 +1,6 @@
 .. _ref_reference_environment:
 
-Environment Variables
+Environment variables
 =====================
 
 The behavior of Gel can be configured with environment variables. The
