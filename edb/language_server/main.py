@@ -25,11 +25,15 @@ import click
 
 from edb import buildmeta
 from edb.common import traceback as edb_traceback
+from edb.common import span as edb_span
 from edb.edgeql import parser as qlparser
+from edb.edgeql import tokenizer as qltokenizer
+from edb.ir import ast as irast
 
 from . import parsing as ls_parsing
 from . import server as ls_server
 from . import is_schema_file, is_edgeql_file
+from . import utils as ls_utils
 
 
 @click.command()
@@ -82,6 +86,10 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
     def text_document_did_change(params: lsp_types.DidChangeTextDocumentParams):
         document_updated(ls, params.text_document.uri)
 
+    @ls.feature(lsp_types.TEXT_DOCUMENT_DEFINITION)
+    def text_document_definition(params: lsp_types.DefinitionParams):
+        return document_definition(ls, params)
+
     @ls.feature(
         lsp_types.TEXT_DOCUMENT_COMPLETION,
         lsp_types.CompletionOptions(trigger_characters=[',']),
@@ -126,20 +134,138 @@ def document_updated(ls: ls_server.GelLanguageServer, doc_uri: str):
             ql_ast = ql_ast_res.ok
 
             if isinstance(ql_ast, list):
-                diagnostic_set = ls_server.compile(ls, document, ql_ast)
+                diagnostic_set, _ = ls_server.compile(ls, document, ql_ast)
             else:
                 # SDL in query files?
-                ls.publish_diagnostics(document.uri, [], document.version)
                 diagnostic_set = ls_server.DiagnosticsSet()
         else:
             ls.show_message_log(f'Unknown file type: {doc_uri}')
+            diagnostic_set = ls_server.DiagnosticsSet()
             # doc_uri in ('gel.toml')
 
+        diagnostic_set.extend(document, [])  # make sure we publish for document
         for doc, diags in diagnostic_set.by_doc.items():
             ls.publish_diagnostics(doc.uri, diags, doc.version)
     except BaseException as e:
         send_internal_error(ls, e)
         ls.publish_diagnostics(document.uri, [], document.version)
+
+
+def document_definition(
+    ls: ls_server.GelLanguageServer, params: lsp_types.DefinitionParams
+) -> lsp_types.Location | None:
+    doc_uri = params.text_document.uri
+    document = ls.workspace.get_text_document(doc_uri)
+
+    position: int = qltokenizer.line_col_to_source_point(
+        document.source, params.position.line, params.position.character
+    ).offset
+    ls.show_message_log(f'position = {position}')
+
+    try:
+        if is_schema_file(doc_uri):
+            ls.show_message_log(
+                'Definition in schema files are not supported yet'
+            )
+
+        elif is_edgeql_file(doc_uri):
+
+            ql_ast_res = ls_parsing.parse(document, ls)
+            if not ql_ast_res.ok:
+                return None
+            ql_ast = ql_ast_res.ok
+
+            if isinstance(ql_ast, list):
+
+                # <DEBUG>
+                from edb.common import markup
+                with open('ql_stmt.txt', 'w') as file:
+                    markup.dump(ql_ast, file=file)
+                # </DEBUG>
+
+                _, ir_stmts = ls_server.compile(ls, document, ql_ast)
+
+                ir_stmt: irast.Statement
+                for ir_stmt in ir_stmts:
+
+                    # <DEBUG>
+                    from edb.common import markup
+                    with open('ir_stmt.txt', 'w') as file:
+                        markup.dump(ir_stmt, file=file)
+                    # </DEBUG>
+
+                    node = edb_span.find_by_source_position(ir_stmt, position)
+                    if not node:
+                        continue
+                    assert isinstance(node, irast.Base), node
+
+                    ls.show_message_log(f'node: {str(node)}')
+                    ls.show_message_log(f'span: {str(node.span)}')
+
+                    if not isinstance(node, irast.Set):
+                        return None
+                    assert ir_stmt.schema
+
+                    # if this is a ptr, find it in the schema
+                    target = None
+                    if ptr := node.path_id.rptr():
+                        ls.show_message_log(f'rptr: {ptr}')
+                        if isinstance(ptr, irast.PointerRef):
+                            target = ir_stmt.schema.get_by_id(ptr.id)
+
+                    # fallback to getting the target type
+                    if not target:
+                        target = ir_stmt.schema.get_by_id(
+                            node.path_id.target.id
+                        )
+                        assert target
+
+                    name = target.get_name(ir_stmt.schema)
+                    ls.show_message_log(f'target: {name}')
+
+                    span: edb_span.Span | None = target.get_span(ir_stmt.schema)
+                    ls.show_message_log(f'type span: {span}')
+
+                    if not span:
+                        return None
+
+                    doc = None
+
+                    # is doc the current document?
+                    if span.filename == document.filename:
+                        doc = document
+
+                    # find schema docs with this filename
+                    if not doc:
+                        docs = ls.state.schema_docs
+                        doc = next(
+                            (d for d in docs if d.filename == span.filename),
+                            None,
+                        )
+
+                    if not doc:
+                        ls.show_message_log(f'Cannot find doc: {span.filename}')
+                        return None
+
+                    return lsp_types.Location(
+                        uri=doc.uri,
+                        range=ls_utils.convert_span(
+                            doc.source, (span.start, span.end)
+                        ),
+                    )
+                ls.show_message_log(
+                    f'cannot find span in {len(ir_stmts)} stmts'
+                )
+            else:
+                # SDL in query files?
+                pass
+        else:
+            ls.show_message_log(f'Unknown file type: {doc_uri}')
+
+    except BaseException as e:
+        send_internal_error(ls, e)
+
+    return None
 
 
 def send_internal_error(ls: ls_server.GelLanguageServer, e: BaseException):

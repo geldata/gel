@@ -32,6 +32,8 @@ from edb import errors
 from edb.edgeql import ast as qlast
 from edb.edgeql import compiler as qlcompiler
 
+from edb.ir import ast as irast
+
 from edb.schema import schema as s_schema
 from edb.schema import std as s_std
 from edb.schema import ddl as s_ddl
@@ -111,9 +113,9 @@ def compile(
     ls: GelLanguageServer,
     doc: pygls.workspace.TextDocument,
     stmts: list[qlast.Base],
-) -> DiagnosticsSet:
+) -> tuple[DiagnosticsSet, list[irast.Statement]]:
     if not stmts:
-        return DiagnosticsSet(by_doc={doc: []})
+        return (DiagnosticsSet(by_doc={doc: []}), [])
 
     schema, diagnostics_set = get_schema(ls)
     if not schema:
@@ -122,9 +124,10 @@ def compile(
                 doc,
                 _new_diagnostic_at_the_top("Cannot find schema files"),
             )
-        return diagnostics_set
+        return (diagnostics_set, [])
 
     diagnostics: list[lsp_types.Diagnostic] = []
+    ir_stmts: list[irast.Statement] = []
     modaliases: Mapping[str | None, str] = {None: 'default'}
     for ql_stmt in stmts:
 
@@ -136,19 +139,18 @@ def compile(
 
             elif isinstance(ql_stmt, (qlast.Command, qlast.Expr)):
                 options = qlcompiler.CompilerOptions(modaliases=modaliases)
-                ir_stmt = qlcompiler.compile_ast_to_ir(
+                ir_res = qlcompiler.compile_ast_to_ir(
                     ql_stmt, schema, options=options
                 )
-                ls.show_message_log(
-                    f'IR: {ir_stmt}', msg_type=lsp_types.MessageType.Debug
-                )
+                if isinstance(ir_res, irast.Statement):
+                    ir_stmts.append(ir_res)
             else:
                 ls.show_message_log(f'skip compile of {ql_stmt}')
         except errors.EdgeDBError as error:
             diagnostics.append(_convert_error(error))
 
     diagnostics_set.extend(doc, diagnostics)
-    return diagnostics_set
+    return (diagnostics_set, ir_stmts)
 
 
 def _convert_error(error: errors.EdgeDBError) -> lsp_types.Diagnostic:
@@ -260,7 +262,7 @@ def _load_schema_docs(ls: GelLanguageServer, schema_dir: pathlib.Path):
     for entry in entries:
         if not is_schema_file(entry):
             continue
-        doc = ls.workspace.get_text_document(str(schema_dir / entry))
+        doc = ls.workspace.get_text_document(f'file://{schema_dir / entry}')
         ls.state.schema_docs.append(doc)
 
 

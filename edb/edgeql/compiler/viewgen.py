@@ -237,7 +237,6 @@ def _process_view(
         stype,
         exprtype=s_ctx.exprtype,
         derived_name=view_name,
-        attrs={'span': span},
         ctx=ctx,
     )
     assert isinstance(view_scls, s_objtypes.ObjectType), view_scls
