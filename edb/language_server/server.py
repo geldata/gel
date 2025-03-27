@@ -95,7 +95,7 @@ class DiagnosticsSet:
         self.by_doc[doc].extend(diagnostics)
 
 
-def _new_diagnostic_at_the_top_at_the_top(message: str) -> lsp_types.Diagnostic:
+def _new_diagnostic_at_the_top(message: str) -> lsp_types.Diagnostic:
     return lsp_types.Diagnostic(
         range=lsp_types.Range(
             start=lsp_types.Position(line=0, character=0),
@@ -120,9 +120,7 @@ def compile(
         if len(ls.state.schema_docs) == 0:
             diagnostics_set.append(
                 doc,
-                _new_diagnostic_at_the_top_at_the_top(
-                    "Cannot find schema files"
-                ),
+                _new_diagnostic_at_the_top("Cannot find schema files"),
             )
         return diagnostics_set
 
@@ -201,12 +199,12 @@ def update_schema_doc(
 
     schema_dir = _determine_schema_dir(ls)
     if not schema_dir:
-        return [_new_diagnostic_at_the_top_at_the_top("cannot find schema-dir")]
+        return [_new_diagnostic_at_the_top("cannot find schema-dir")]
 
     # dont update if doc is not in schema_dir
     if schema_dir not in pathlib.Path(doc.path).parents:
         return [
-            _new_diagnostic_at_the_top_at_the_top(
+            _new_diagnostic_at_the_top(
                 f"this schema file is not in schema-dir ({schema_dir})"
             )
         ]
