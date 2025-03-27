@@ -25,4 +25,109 @@ module.exports = [
     destination: "/resources/guides/:path*",
     permanent: false,
   },
+  {
+    source: "/reference/clients/connection",
+    destination: "/reference/connection",
+    permanent: false,
+  },
+  {
+    source: "/reference/reference/bindings/datetime",
+    destination: "/reference/clients/datetime",
+    permanent: false,
+  },
+  {
+    source: "/reference/reference/bindings",
+    destination: "/reference/clients",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/go/:path*",
+    destination: "https://pkg.go.dev/github.com/geldata/gel-go",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/rust/:path*",
+    destination: "https://docs.rs/gel-tokio",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/delete#delete",
+    destination: "/reference/clients/js/querybuilder",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/driver",
+    destination: "/reference/clients/js",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/for",
+    destination: "/reference/clients/js/querybuilder#for",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/funcops",
+    destination: "/reference/clients/js/querybuilder#functions-and-operators",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/group",
+    destination: "/reference/clients/js/querybuilder#group",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/insert",
+    destination: "/reference/clients/js/querybuilder#insert",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/literals",
+    destination: "/reference/clients/js/querybuilder#types-and-literals",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/objects",
+    destination: "/reference/clients/js/querybuilder#objects-and-paths",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/parameters",
+    destination: "/reference/clients/js/querybuilder#parameters",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/select",
+    destination: "/reference/clients/js/querybuilder#select",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/types",
+    destination: "/reference/clients/js/querybuilder#types-and-literals",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/update",
+    destination: "/reference/clients/js/querybuilder#update",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/with",
+    destination: "/reference/clients/js/querybuilder#with-blocks",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients/js/reference",
+    destination: "/reference/clients/js/client#client-reference",
+    permanent: false,
+  },
+  {
+    source: "/reference/reference/connection",
+    destination: "/reference/connection",
+    permanent: false,
+  },
+  {
+    source: "/reference/reference/dsn",
+    destination: "/reference/connection#dsn",
+    permanent: false,
+  },
 ];
