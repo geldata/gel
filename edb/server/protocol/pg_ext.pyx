@@ -53,15 +53,7 @@ DEFAULT_SETTINGS = dbstate.DEFAULT_SQL_SETTINGS
 DEFAULT_FE_SETTINGS = dbstate.DEFAULT_SQL_FE_SETTINGS
 
 cdef object logger = logging.getLogger('edb.server')
-cdef object DEFAULT_STATE = json.dumps(
-    [
-        {"type": "P", "name": key, "value": val}
-        for key, val in DEFAULT_SETTINGS.items()
-    ] + [
-        {"type": "S", "name": key, "value": val}
-        for key, val in DEFAULT_FE_SETTINGS.items()
-    ]
-).encode("utf-8")
+cdef object DEFAULT_STATE = None
 
 encodings.aliases.aliases["sql_ascii"] = "ascii"
 
@@ -110,6 +102,26 @@ cdef class ConnectionView:
         self._in_tx_new_portals = set()
         self._in_tx_savepoints = collections.deque()
         self._tx_error = False
+        global DEFAULT_STATE
+        if DEFAULT_STATE is None:
+            DEFAULT_STATE = json.dumps(
+                [
+                    {
+                        "type": "P",
+                        "name": key,
+                        "value": setting_to_sql(key, val),
+                    }
+                    for key, val in DEFAULT_SETTINGS.items()
+                ] + [
+                    {
+                        "type": "S",
+                        "name": key,
+                        "value": setting_to_sql(key, val),
+                    }
+                    for key, val in DEFAULT_FE_SETTINGS.items()
+                ]
+            ).encode("utf-8")
+
         self._session_state_db_cache = (
             DEFAULT_SETTINGS, DEFAULT_FE_SETTINGS, DEFAULT_STATE
         )

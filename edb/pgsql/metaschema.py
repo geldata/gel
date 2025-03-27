@@ -7949,39 +7949,50 @@ BEGIN
 END;
             """,
         ),
-        # WARNING: this `edgedbsql.to_regclass()` function is currently not
-        # accurately implemented to take application-level `search_path`
-        # into consideration. It is currently here to support the following
-        # `has_*privilege` functions (which are less sensitive to such issue).
-        # SO DO NOT USE `edgedbsql.to_regclass()` FOR ANYTHING ELSE.
         trampoline.VersionedFunction(
             name=('edgedbsql', 'to_regclass'),
             args=(
-                ('name', 'text',),
+                ('name_or_oid', 'text',),
             ),
             returns=('regclass',),
+            language="plpgsql",
             text="""
-                SELECT
-                    CASE
-                        WHEN array_length(parts, 1) = 1 THEN
-                            (
-                                SELECT oid::regclass
-                                FROM edgedbsql_VER.pg_class
-                                WHERE relname = parts[1]
-                                LIMIT 1  -- HACK: see comments above
-                            )
-                        WHEN array_length(parts, 1) = 2 THEN
-                            (
-                                SELECT pc.oid::regclass
-                                FROM edgedbsql_VER.pg_class pc
-                                JOIN edgedbsql_VER.pg_namespace pn
-                                ON pn.oid = pc.relnamespace
-                                WHERE relname = parts[2] AND nspname = parts[1]
-                            )
-                        ELSE
-                            NULL::regclass
-                    END
-                FROM parse_ident(name) parts
+DECLARE
+    parts text[];
+    result regclass;
+BEGIN
+    IF name_or_oid = '-' THEN
+        RETURN 0::regclass;
+    END IF;
+
+    IF name_or_oid ~ '^[0-9]+$' THEN
+        RETURN name_or_oid::oid::regclass;
+    END IF;
+
+    parts := parse_ident(name_or_oid);
+    IF array_length(parts, 1) = 1 THEN
+        SELECT pc.oid::regclass INTO result
+        FROM unnest(edgedbsql_VER.current_schemas(true))
+            WITH ORDINALITY AS ns(nspname, ord)
+        JOIN edgedbsql_VER.pg_namespace pn
+            USING (nspname)
+        JOIN edgedbsql_VER.pg_class pc
+            ON pn.oid = pc.relnamespace
+        WHERE pc.relname = parts[1]
+        ORDER BY ns.ord
+        LIMIT 1;
+    ELSEIF array_length(parts, 1) = 2 THEN
+        SELECT pc.oid::regclass INTO result
+        FROM edgedbsql_VER.pg_class pc
+        JOIN edgedbsql_VER.pg_namespace pn
+            ON pn.oid = pc.relnamespace
+        WHERE relname = parts[2] AND nspname = parts[1];
+    ELSE
+        RAISE EXCEPTION
+            'improper relation name (too many dotted names): %', name_or_oid;
+    END IF;
+    RETURN result;
+END;
             """
         ),
         trampoline.VersionedFunction(
