@@ -24,8 +24,7 @@ To connect your application to a |Gel| instance, you can use one of our official
 
 * Connect by convention
 * Automatic transaction retries
-* Layered client configuration
-* Connection pooling
+* Many client instances, single connection pool
 
 Connection
 ----------
@@ -107,7 +106,7 @@ This approach allows you to write code that does not need to contain any error-p
 Transactions
 ------------
 
-Transactions are an important part of working with databases. In Gel, all queries are automatically run in an implicit transaction, ensuring atomicity and isolation for individual operations. Additionally, our client libraries provide a higher-level API for working with explicit transactions when you need to group multiple operations together.
+Transactions are an important part of working with databases. In Gel, all queries are automatically run in an implicit transaction, ensuring atomicity and isolation for individual operations. We use the safest isolation level of ``SERIALIZABLE`` to ensure consistent results across high-concurrency scenarios. Additionally, our client libraries provide a higher-level API for working with explicit transactions when you need to group multiple operations together.
 
 Our client libraries are designed to automatically retry failures for certain classes of transaction errors. For instance, one common failure mode is a serialization error, which can happen when two transactions that are trying to modify the same data attempt to commit at the same time. The database will pick one of the transactions to commit, and the other will fail. In typical database drivers, you would need to handle this in your application code, but in our client libraries, you don't need to worry about it: we will simply retry the transaction for you in this case.
 
@@ -169,15 +168,21 @@ The behavior of transaction retries can be customized in the client configuratio
         })
         .await?;
 
-Layered client configuration
-----------------------------
+Many client instances, single connection pool
+---------------------------------------------
 
-Each client library has a number of configuration options that you can set to customize the behavior of the client. Instead of needing to manage multiple pools across multiple client instances, the methods used for configuring the client will return an instance that shares the same connection pool and configuration as the base client instance. This is useful if different parts of your application need to configure the client differently at runtime, such as setting globals, disabling access policies, setting a longer query timeout, etc.
+When you create a client, you also establish a connection pool to the Gel server. Since this is resource-intensive, you can create a single client instance and then derive lightweight instances that share the same connection pool. Each derived instance can have different configurations, allowing customization without additional overhead.
 
-Connection pooling
-------------------
+You can configure various aspects of these client instances at runtime, including:
+- Setting global variables
+- Adjusting query timeouts
+- Disabling access policies
+- And other client-specific options
 
-When you create a client instance, the library will automatically create a pool of connections to the Gel server instance to maximize parallelism and throughput. We use the safest isolation level of ``SERIALIZABLE`` to ensure consistent results across high-concurrency scenarios.
+.. image:: images/client-config-layers.png
+  :alt: Diagram showing how client instances share a connection pool
+  :width: 100%
+
 
 Alternative Protocols
 =====================
