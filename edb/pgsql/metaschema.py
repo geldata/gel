@@ -7745,6 +7745,147 @@ def _generate_sql_information_schema(
             views.append(v)
 
     util_functions = [
+        # A 1:1 PL/pgSQL replication of the Postgres SplitIdentifierString
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'split_identifier_string'),
+            args=(
+                ('rawstring', 'text',),
+                ('separator', 'text',),
+            ),
+            returns=('text[]',),
+            language="plpgsql",
+            volatility="immutable",
+            text=r"""
+DECLARE
+    namelist text[] := '{}';
+    pos integer := 1;
+    len integer;
+    c char;
+    sep_char char;
+    curname text;
+    in_quote boolean;
+    db_encoding text := getdatabaseencoding();
+BEGIN
+    -- Initialization
+    IF length(separator) != 1 THEN
+        RAISE EXCEPTION 'Separator must be a single character';
+    END IF;
+    sep_char := substring(separator FROM 1 FOR 1);
+    len := length(rawstring);
+
+    -- Skip leading whitespace
+    WHILE pos <= len LOOP
+        c := substring(rawstring FROM pos FOR 1);
+        IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+            pos := pos + 1;
+        ELSE
+            EXIT;
+        END IF;
+    END LOOP;
+
+    -- Allow empty string
+    IF pos > len THEN
+        RETURN namelist;
+    END IF;
+
+	-- At the top of the loop, we are at start of a new identifier.
+    LOOP
+        IF substring(rawstring FROM pos FOR 1) = '"' THEN
+			-- Quoted name --- collapse quote-quote pairs, no downcasing
+            pos := pos + 1;
+            curname := '';
+            in_quote := TRUE;
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c = '"' THEN
+                    IF pos < len
+                        AND substring(rawstring FROM pos + 1 FOR 1) = '"'
+                    THEN
+                        -- Collapse adjacent quotes into one quote,
+                        -- and look again
+                        curname := curname || '"';
+                        pos := pos + 2;
+                    ELSE
+                        -- Found end of quoted name
+                        pos := pos + 1;
+                        in_quote := FALSE;
+                        EXIT;
+                    END IF;
+                ELSE
+                    curname := curname || c;
+                    pos := pos + 1;
+                END IF;
+            END LOOP;
+
+            -- Mismatched quotes
+            IF in_quote THEN
+                RAISE EXCEPTION 'Unterminated quoted identifier';
+            END IF;
+
+        ELSE
+			-- Unquoted name --- extends to separator or whitespace
+            curname := '';
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c = sep_char OR c IN (' ', '\t', '\n', '\r', '\f') THEN
+                    EXIT;
+                END IF;
+                curname := curname || c;
+                pos := pos + 1;
+            END LOOP;
+
+            IF curname = '' THEN
+                RAISE EXCEPTION 'Empty unquoted identifier';
+            END IF;
+
+            -- Downcase the identifier
+            curname := lower(curname);
+        END IF;
+
+		-- Truncate name if it's overlength
+        IF octet_length(curname) > 63 THEN
+            RAISE NOTICE 'identifier "%" will be truncated', curname;
+            curname := convert_from(
+                substring(convert_to(curname, db_encoding) FROM 1 FOR 63),
+                db_encoding
+            );
+        END IF;
+
+		-- Finished isolating current name --- add it to list
+        namelist := array_append(namelist, curname);
+
+        -- Skip trailing whitespace
+        WHILE pos <= len LOOP
+            c := substring(rawstring FROM pos FOR 1);
+            IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+                pos := pos + 1;
+            ELSE
+                EXIT;
+            END IF;
+        END LOOP;
+
+        IF pos > len THEN
+            EXIT; -- End of string
+        ELSIF substring(rawstring FROM pos FOR 1) = sep_char THEN
+            pos := pos + 1;
+            -- Skip leading whitespace for next
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+                    pos := pos + 1;
+                ELSE
+                    EXIT;
+                END IF;
+            END LOOP;
+        ELSE
+            RAISE EXCEPTION 'Invalid character at position %: "%"', pos, c;
+        END IF;
+    END LOOP;
+
+    RETURN namelist;
+END;
+            """,
+        ),
         # WARNING: this `edgedbsql.to_regclass()` function is currently not
         # accurately implemented to take application-level `search_path`
         # into consideration. It is currently here to support the following
