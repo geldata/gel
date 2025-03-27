@@ -72,7 +72,6 @@ from edb.server import defines
 from edb.server import instdata
 from edb.server import protocol
 from edb.server import net_worker
-from edb.server import tenant as edbtenant
 from edb.server.protocol import binary  # type: ignore
 from edb.server.protocol import pg_ext  # type: ignore
 from edb.server.protocol import ui_ext  # type: ignore
@@ -89,6 +88,7 @@ if TYPE_CHECKING:
     import asyncio.base_events
 
     from edb.pgsql import params as pgparams
+    from edb.server import tenant as edbtenant
 
     from . import bootstrap
 

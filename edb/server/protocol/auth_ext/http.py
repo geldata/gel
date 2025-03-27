@@ -46,7 +46,7 @@ import aiosmtplib
 from edb import errors as edb_errors
 from edb.common import debug
 from edb.common import markup
-from edb.server import tenant as edbtenant, metrics
+from edb.server import metrics
 from edb.server.config.types import CompositeConfigType
 from edb.ir import statypes
 
@@ -68,7 +68,7 @@ from .data import EmailFactor
 
 if TYPE_CHECKING:
     from edb.server.protocol import protocol
-
+    from edb.server import tenant as edbtenant
 
 logger = logging.getLogger('edb.server.ext.auth')
 

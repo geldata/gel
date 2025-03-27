@@ -3,20 +3,24 @@ import urllib.parse
 import random
 import logging
 
+from typing import TYPE_CHECKING
+
 from email.message import EmailMessage
 from typing import Any, Coroutine
-from edb.server import tenant, smtp
+from edb.server import smtp
 from edb import errors
 
 from . import util, ui
 
+if TYPE_CHECKING:
+    from edb.server import tenant
 
 logger = logging.getLogger("edb.server.ext.auth")
 
 
 async def send_password_reset_email(
     db: Any,
-    tenant: tenant.Tenant,
+    tenant: 'tenant.Tenant',
     to_addr: str,
     reset_url: str,
     test_mode: bool,
@@ -41,7 +45,7 @@ async def send_password_reset_email(
 
 async def send_verification_email(
     db: Any,
-    tenant: tenant.Tenant,
+    tenant: 'tenant.Tenant',
     to_addr: str,
     verify_url: str,
     verification_token: str,
@@ -76,7 +80,7 @@ async def send_verification_email(
 
 async def send_magic_link_email(
     db: Any,
-    tenant: tenant.Tenant,
+    tenant: 'tenant.Tenant',
     to_addr: str,
     link: str,
     test_mode: bool,
@@ -99,7 +103,7 @@ async def send_magic_link_email(
     await _maybe_send_message(msg, tenant, db, test_mode)
 
 
-async def send_fake_email(tenant: tenant.Tenant) -> None:
+async def send_fake_email(tenant: 'tenant.Tenant') -> None:
     async def noop_coroutine() -> None:
         pass
 
@@ -109,7 +113,7 @@ async def send_fake_email(tenant: tenant.Tenant) -> None:
 
 async def _maybe_send_message(
     msg: EmailMessage,
-    tenant: tenant.Tenant,
+    tenant: 'tenant.Tenant',
     db: Any,
     test_mode: bool,
 ) -> None:
@@ -132,7 +136,7 @@ async def _maybe_send_message(
 
 
 async def _protected_send(
-    coro: Coroutine[Any, Any, None], tenant: tenant.Tenant
+    coro: Coroutine[Any, Any, None], tenant: 'tenant.Tenant'
 ) -> None:
     task = tenant.create_task(coro, interruptable=True)
     # Prevent timing attack
