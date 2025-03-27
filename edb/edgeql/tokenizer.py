@@ -90,9 +90,7 @@ class Source:
     def from_string(text: str) -> Source:
         result = _tokenize(text)
         assert isinstance(result.out, list)
-        return Source(
-            text=text, tokens=result.out, serialized=result.pack()
-        )
+        return Source(text=text, tokens=result.out, serialized=result.pack())
 
     def __repr__(self):
         return f'<edgeql.Source text={self._text!r}>'
@@ -177,6 +175,17 @@ def inflate_position(
         start.offset,
         end.offset if end else None,
     )
+
+
+def line_col_to_source_point(
+    source: str,
+    line: int,  # zero-based
+    col: int,  # zero-based, in utf16 code points
+) -> ql_parser.SourcePoint:
+    points = ql_parser.SourcePoint.from_lines_cols(
+        source.encode('utf-8'), [(line, col)]
+    )
+    return points[0]
 
 
 def _tokenize(eql: str) -> ql_parser.ParserResult:

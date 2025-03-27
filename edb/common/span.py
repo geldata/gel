@@ -95,8 +95,7 @@ class Span(markup.MarkupExceptionContext):
         # still be right...
         buffer = self.buffer.encode('utf-8') if self.buffer else b' ' * self.end
         self._points = ql_parser.SourcePoint.from_offsets(
-            buffer,
-            [self.start, self.end]
+            buffer, [self.start, self.end]
         )
 
     @property
@@ -125,7 +124,7 @@ class Span(markup.MarkupExceptionContext):
         buf_lines = []
         line_offsets = [0]
         for match in NEW_LINE.finditer(buf_bytes):
-            buf_lines.append(buf_bytes[offset:match.start()].decode('utf-8'))
+            buf_lines.append(buf_bytes[offset : match.start()].decode('utf-8'))
             offset = match.end()
             line_offsets.append(offset)
 
@@ -136,8 +135,11 @@ class Span(markup.MarkupExceptionContext):
 
         endcol = end.column if start.line == end.line else None
         tbp = me.lang.TracebackPoint(
-            name=self.name, filename=self.name, lineno=start.line,
-            colno=start.column, end_colno=endcol,
+            name=self.name,
+            filename=self.name,
+            lineno=start.line,
+            colno=start.column,
+            end_colno=endcol,
             lines=buf_lines[context_start:context_end],
             # Line numbers are 1 indexed here
             line_numbers=list(range(context_start + 1, context_end + 1)),
@@ -206,6 +208,7 @@ def infer_span_from_children(node, span: Span):
 
 def wrap_function_to_infer_spans(func):
     """Provide automatic span for Nonterm production rules."""
+
     def wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         obj, *args = args
