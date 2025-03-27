@@ -7886,6 +7886,69 @@ BEGIN
 END;
             """,
         ),
+        # current_schemas() is an emulation of Postgres current_schemas(),
+        # fetch_search_path() and recomputeNamespacePath() internal functions.
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'current_schemas'),
+            args=(
+                ('include_implicit', 'bool',),
+            ),
+            returns=('name[]',),
+            language="plpgsql",
+            volatility="stable",
+            text="""
+DECLARE
+    search_path_str text;
+    schema_list text[];
+    rv name[] := '{}'::name[];
+    is_valid_namespace boolean;
+    has_pg_catalog boolean;
+    resolved_schema text;
+BEGIN
+    -- Get the current search_path from the emulated pg_settings view
+    SELECT COALESCE(setting, 'public') INTO search_path_str
+    FROM edgedbsql_VER.pg_settings
+    WHERE name = 'search_path';
+
+    -- Split using our custom function with comma separator
+    schema_list := edgedbsql_VER.split_identifier_string(search_path_str, ',');
+
+    -- Handle implicit schemas if requested
+    IF include_implicit THEN
+        -- Temporary schema is not supported yet
+
+        -- Check if pg_catalog is already present
+        has_pg_catalog := 'pg_catalog' = ANY(schema_list);
+
+        -- Add pg_catalog if not present and GUC variables allow it
+        IF NOT has_pg_catalog THEN
+            rv := array_append(rv, 'pg_catalog'::name);
+        END IF;
+    END IF;
+
+    -- Process each schema element
+    FOR i IN 1..array_length(schema_list, 1) LOOP
+        -- Handle $user substitution
+        IF schema_list[i] = '$user' THEN
+            resolved_schema := current_user;
+        ELSE
+            resolved_schema := schema_list[i];
+        END IF;
+
+        -- Check existence in namespace catalog
+        IF EXISTS (
+            SELECT 1
+            FROM edgedbsql_VER.pg_namespace
+            WHERE nspname = resolved_schema
+        ) THEN
+            rv := array_append(rv, resolved_schema::name);
+        END IF;
+    END LOOP;
+
+    RETURN rv;
+END;
+            """,
+        ),
         # WARNING: this `edgedbsql.to_regclass()` function is currently not
         # accurately implemented to take application-level `search_path`
         # into consideration. It is currently here to support the following
