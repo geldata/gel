@@ -22,12 +22,12 @@ Client philosophy
 
 To connect your application to a |Gel| instance, you can use one of our official client libraries that speaks the Gel binary protocol. The client libraries are higher level than typical database drivers, and are designed to provide a fully-featured API for working with |Gel| instances.
 
-* Connect by convention
+* Connecting is easy
 * Automatic transaction retries
 * Many client instances, single connection pool
 
-Connection
-----------
+Connecting is easy
+------------------
 
 Typical database drivers require you to figure out how to pass the correct connection string (called a DSN, or data source name) to the driver. This is a bit of a pain, and is error prone.
 
