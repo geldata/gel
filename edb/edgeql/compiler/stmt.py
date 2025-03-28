@@ -33,6 +33,7 @@ import textwrap
 
 from edb import errors
 from edb.common import ast
+from edb.common import span as edb_span
 from edb.common.typeutils import not_none
 
 from edb.ir import ast as irast
