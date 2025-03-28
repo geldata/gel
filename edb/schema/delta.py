@@ -2665,12 +2665,6 @@ class ObjectCommand(Command, Generic[so.Object_T]):
     ) -> Any:
         raw_value = self.get_attribute_value(attr_name)
 
-        if attr_name == 'span':
-            # <DEBUG>
-            from edb.language_server.main import debug_log
-            debug_log(f'attr_name = {attr_name}, raw_value = {raw_value}')
-            # </DEBUG>
-
         if raw_value is None:
             return None
 
@@ -2683,12 +2677,6 @@ class ObjectCommand(Command, Generic[so.Object_T]):
                 context=context,
             )
             context.cache_value((self, 'attribute', attr_name), value)
-
-        if attr_name == 'span':
-            # <DEBUG>
-            from edb.language_server.main import debug_log
-            debug_log(f'attr_name = {attr_name}, value = {value}')
-            # </DEBUG>
 
         return value
 
