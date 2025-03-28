@@ -108,13 +108,14 @@ class Base(ast.AST):
         )
 
 
-# DEBUG: Probably don't actually keep this forever?
 @markup.serializer.serializer.register(Base)
-def _serialize_to_markup_base(ir: Base, *, ctx: typing.Any) -> typing.Any:
-    node = ast.serialize_to_markup(ir, ctx=ctx)
-    has_span = bool(ir.span)
-    node.add_child(
-        label='has_span', node=markup.serialize(has_span, ctx=ctx))
+def _serialize_to_markup_base(base: Base, *, ctx: typing.Any) -> typing.Any:
+    node = ast.serialize_to_markup(base, ctx=ctx)
+
+    if not base.span:
+        return node
+
+    node.add_child(label='span', node=markup.serialize(str(base.span), ctx=ctx))
     child = node.children.pop()
     node.children.insert(1, child)
     return node

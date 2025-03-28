@@ -278,7 +278,8 @@ def compile_Constant(
         ctx.env.get_schema_type_and_track(std_type),
         env=ctx.env,
     )
-    return setgen.ensure_set(node_cls(value=value, typeref=ct), ctx=ctx)
+    ir_expr = node_cls(value=value, typeref=ct, span=expr.span)
+    return setgen.ensure_set(ir_expr, ctx=ctx)
 
 
 @dispatch.compile.register(qlast.BytesConstant)

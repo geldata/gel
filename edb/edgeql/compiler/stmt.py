@@ -1178,6 +1178,8 @@ def init_stmt(
 
     ctx.env.compiled_stmts[qlstmt] = irstmt
 
+    irstmt.span = qlstmt.span
+
     if isinstance(irstmt, irast.MutatingStmt):
         # This is some kind of mutation, so we need to check if it is
         # allowed.
