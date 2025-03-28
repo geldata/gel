@@ -275,7 +275,7 @@ mod test {
         let pos = mkpos(s, off);
         let pos2 = mkpos2(s, pos.line, pos.utf16column);
         assert_eq!(pos, pos2);
-        return pos;
+        pos
     }
 
     #[test]
@@ -290,7 +290,7 @@ mod test {
             assert_eq!(pos.offset, off);
             assert_eq!(pos.char_offset, off);
 
-            let pos2 = mkpos2(&text, pos.line, pos.utf16column);
+            let pos2 = mkpos2(text, pos.line, pos.utf16column);
             assert_eq!(pos.line, pos2.line);
             assert_eq!(pos.column, pos2.column);
             assert_eq!(pos.utf16column, pos2.utf16column);
@@ -311,7 +311,7 @@ mod test {
             assert_eq!(pos.offset, off);
             assert_eq!(pos.char_offset, off);
 
-            let pos2 = mkpos2(&text, pos.line, pos.utf16column);
+            let pos2 = mkpos2(text, pos.line, pos.utf16column);
             assert_eq!(pos.line, pos2.line);
             assert_eq!(pos.column, pos2.column);
             assert_eq!(pos.utf16column, pos2.utf16column);
