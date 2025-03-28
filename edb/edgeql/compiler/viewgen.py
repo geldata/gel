@@ -104,6 +104,7 @@ class EarlyShapePtr(NamedTuple):
     ptrcls: s_pointers.Pointer
     target_set: Optional[irast.Set]
     shape_origin: qlast.ShapeOrigin
+    span: Optional[parsing.Span]
 
 
 class ShapePtr(NamedTuple):
@@ -112,6 +113,7 @@ class ShapePtr(NamedTuple):
     ptrcls: s_pointers.Pointer
     shape_op: qlast.ShapeOp
     target_set: Optional[irast.Set]
+    span: Optional[parsing.Span]
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
@@ -503,7 +505,8 @@ def _process_view(
             )
 
             pointers[pointer] = EarlyShapePtr(
-                pointer, ptr_set, shape_el_desc.ql.origin)
+                pointer, ptr_set, shape_el_desc.ql.origin, shape_el_desc.ql.span
+            )
 
     # If we are not defining a shape (so we might care about
     # materialization), look through our parent view (if one exists)
@@ -540,7 +543,8 @@ def _process_view(
             )
 
         pointers[pointer] = EarlyShapePtr(
-            pointer, ptr_set, qlast.ShapeOrigin.MATERIALIZATION)
+            pointer, ptr_set, qlast.ShapeOrigin.MATERIALIZATION, None
+        )
 
     specified_ptrs = {
         ptrcls.get_local_name(ctx.env.schema) for ptrcls in pointers
@@ -577,7 +581,7 @@ def _process_view(
     set_shape = []
     shape_ptrs: List[ShapePtr] = []
 
-    for ptrcls, ptr_set, _ in pointers.values():
+    for ptrcls, ptr_set, _, span in pointers.values():
         source: Union[s_types.Type, s_pointers.PointerLike]
 
         if ptrcls.is_link_property(ctx.env.schema):
@@ -598,7 +602,7 @@ def _process_view(
             continue
 
         ctx.env.view_shapes[source].append((ptrcls, shape_op))
-        shape_ptrs.append(ShapePtr(ir_set, ptrcls, shape_op, ptr_set))
+        shape_ptrs.append(ShapePtr(ir_set, ptrcls, shape_op, ptr_set, span))
 
     rptrcls = view_rptr.ptrcls if view_rptr else None
     shape_ptrs = _get_early_shape_configuration(
@@ -606,8 +610,7 @@ def _process_view(
 
     # Produce the shape. The main thing here is that we need to fixup
     # all of the rptrs to properly point back at ir_set.
-    for _, ptrcls, shape_op, ptr_set in shape_ptrs:
-        ptr_span = None
+    for _, ptrcls, shape_op, ptr_set, ptr_span in shape_ptrs:
         if ptrcls in ctx.env.pointer_specified_info:
             _, _, ptr_span = ctx.env.pointer_specified_info[ptrcls]
 
@@ -642,7 +645,7 @@ def _process_view(
                 ir_set,
                 ptrcls,
                 same_computable_scope=True,
-                span=ptr_span or span,
+                span=ptr_span,
                 ctx=ctx,
             )
 
@@ -722,6 +725,7 @@ def _shape_el_ql_to_shape_el_desc(
                 lexpr,
             ],
             partial=True,
+            span=shape_el.span,
         )
     else:
         path_ql = qlast.Path(
@@ -731,6 +735,7 @@ def _shape_el_ql_to_shape_el_desc(
                 qlast.TypeIntersection(type=target_typexpr),
             ],
             partial=True,
+            span=shape_el.span,
         )
 
     return ShapeElementDesc(
@@ -896,7 +901,8 @@ def _gen_pointers_from_defaults(
             )
 
             result.append(EarlyShapePtr(
-                pointer, ptr_set, qlast.ShapeOrigin.DEFAULT))
+                pointer, ptr_set, qlast.ShapeOrigin.DEFAULT, None
+            ))
 
     schema = ctx.env.schema
 
@@ -906,11 +912,11 @@ def _gen_pointers_from_defaults(
     # We cannot check or preprocess this at migration time, because some
     # defaults may not be used for some inserts.
     pointer_indexes = {}
-    for (index, (pointer, _, _)) in enumerate(result):
+    for (index, (pointer, _, _, _)) in enumerate(result):
         p = pointer.get_nearest_non_derived_parent(schema)
         pointer_indexes[p.get_name(schema).name] = index
     graph = {}
-    for (index, (_, irset, _)) in enumerate(result):
+    for (index, (_, irset, _, _)) in enumerate(result):
         assert irset
         dep_pointers = ast.find_children(irset, irast.Pointer)
         dep_rptrs = (
@@ -1255,7 +1261,7 @@ def _compile_rewrites_for_stype(
                 ctx=scopectx,
             )
             res[pn] = EarlyShapePtr(
-                pointer, ptr_set, qlast.ShapeOrigin.DEFAULT
+                pointer, ptr_set, qlast.ShapeOrigin.DEFAULT, None
             )
     return res
 
@@ -2260,7 +2266,8 @@ def _inline_type_computable(
             ctx.env.pointer_specified_info[ptr] = (None, None, None)
         view_shape.insert(0, (ptr, qlast.ShapeOp.ASSIGN))
         shape_ptrs.insert(
-            0, ShapePtr(ir_set, ptr, qlast.ShapeOp.ASSIGN, ptr_set))
+            0, ShapePtr(ir_set, ptr, qlast.ShapeOp.ASSIGN, ptr_set, None)
+        )
 
 
 def _get_shape_configuration_inner(
@@ -2273,7 +2280,8 @@ def _get_shape_configuration_inner(
 ) -> None:
     is_objtype = ir_set.path_id.is_objtype_path()
     all_materialize = all(
-        op == qlast.ShapeOp.MATERIALIZE for _, _, op, _ in shape_ptrs)
+        op == qlast.ShapeOp.MATERIALIZE for _, _, op, _, _ in shape_ptrs
+    )
 
     if is_objtype:
         assert isinstance(stype, s_objtypes.ObjectType)
@@ -2312,7 +2320,8 @@ def _get_shape_configuration_inner(
                     view_shape.insert(0, (ptr, implicit_op))
                     shape_metadata.has_implicit_id = True
                     shape_ptrs.insert(
-                        0, ShapePtr(ir_set, ptr, implicit_op, None))
+                        0, ShapePtr(ir_set, ptr, implicit_op, None, None)
+                    )
                 break
 
     is_mutation = parent_view_type in {
@@ -2415,7 +2424,8 @@ def _get_late_shape_configuration(
 
     for source in sources:
         for ptr, shape_op in ctx.env.view_shapes[source]:
-            shape_ptrs.append(ShapePtr(ir_set, ptr, shape_op, None))
+            shape_ptrs.append(ShapePtr(ir_set, ptr, shape_op, None, None)
+        )
 
     _get_shape_configuration_inner(
         ir_set, shape_ptrs, stype, parent_view_type=parent_view_type, ctx=ctx)
@@ -2512,16 +2522,16 @@ def _late_compile_view_shapes_in_set(
             return
 
         shape = []
-        for path_tip, ptr, shape_op, _ in shape_ptrs:
-            span = None
+        for path_tip, ptr, shape_op, _, ptr_span in shape_ptrs:
+            ptr_span = None
             if ptr in ctx.env.pointer_specified_info:
-                _, _, span = ctx.env.pointer_specified_info[ptr]
+                _, _, ptr_span = ctx.env.pointer_specified_info[ptr]
 
             element = setgen.extend_path(
                 path_tip,
                 ptr,
                 same_computable_scope=True,
-                span=span,
+                span=ptr_span,
                 ctx=ctx,
             )
 
