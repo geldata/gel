@@ -153,10 +153,11 @@ class PseudoTypeShell(s_types.TypeShell[PseudoType]):
         self,
         *,
         name: sn.Name,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> None:
         super().__init__(
-            name=name, schemaclass=PseudoType, sourcectx=sourcectx)
+            name=name, schemaclass=PseudoType, span=span
+        )
 
     def is_polymorphic(self, schema: s_schema.Schema) -> bool:
         return True

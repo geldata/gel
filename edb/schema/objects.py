@@ -2209,13 +2209,13 @@ class ObjectShell(Shell, Generic[Object_T_co]):
         schemaclass: type[Object_T_co],
         displayname: Optional[str] = None,
         origname: Optional[sn.Name] = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> None:
         self.name = name
         self.origname = origname
         self.displayname = displayname
         self.schemaclass = schemaclass
-        self.sourcectx = sourcectx
+        self.span = span
 
     def get_id(self, schema: s_schema.Schema) -> uuid.UUID:
         return self.resolve(schema).get_id(schema)
@@ -2228,7 +2228,7 @@ class ObjectShell(Shell, Generic[Object_T_co]):
 
         if isinstance(self.name, sn.QualName):
             return schema.get(
-                self.name, type=self.schemaclass, span=self.sourcectx,
+                self.name, type=self.schemaclass, span=self.span,
             )
         else:
             return schema.get_global(self.schemaclass, self.name)

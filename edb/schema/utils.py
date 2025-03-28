@@ -139,7 +139,7 @@ def ast_objref_to_object_shell(
         name=name,
         origname=lname,
         schemaclass=metaclass,
-        sourcectx=ref.span,
+        span=ref.span,
     )
 
 
@@ -170,7 +170,7 @@ def ast_objref_to_type_shell(
         name=name,
         origname=lname,
         schemaclass=mcls,
-        sourcectx=ref.span,
+        span=ref.span,
     )
 
 
@@ -384,7 +384,7 @@ def ast_to_type_shell(
         from . import pseudo as s_pseudo
         return s_pseudo.PseudoTypeShell(
             name=sn.UnqualName(node.maintype.name),
-            sourcectx=node.maintype.span,
+            span=node.maintype.span,
         )  # type: ignore
 
     assert isinstance(node.maintype, qlast.ObjectRef)
@@ -444,14 +444,14 @@ def type_op_ast_to_type_shell(
                 components=left.components + right.components,
                 module=module,
                 schemaclass=metaclass,
-                sourcectx=node.span,
+                span=node.span,
             )
         else:
             return s_types.UnionTypeShell(
                 components=left.components + (right,),
                 module=module,
                 schemaclass=metaclass,
-                sourcectx=node.span,
+                span=node.span,
             )
     else:
         if isinstance(right, s_types.UnionTypeShell):
@@ -459,14 +459,14 @@ def type_op_ast_to_type_shell(
                 components=(left,) + right.components,
                 schemaclass=metaclass,
                 module=module,
-                sourcectx=node.span,
+                span=node.span,
             )
         else:
             return s_types.UnionTypeShell(
                 components=(left, right),
                 module=module,
                 schemaclass=metaclass,
-                sourcectx=node.span,
+                span=node.span,
             )
 
 

@@ -812,7 +812,7 @@ class CreateInheritingObject(
 
         assert isinstance(astnode, qlast.ObjectDDL)
         bases = cls._classbases_from_ast(schema, astnode, context)
-        spans = [b.sourcectx for b in bases if b.sourcectx is not None]
+        spans = [b.span for b in bases if b.span is not None]
         if spans:
             span = edb_span.merge_spans(spans)
         else:
@@ -1292,7 +1292,7 @@ class RebaseInheritingObject(
 
             bases[idx:idx] = [
                 self.get_object(
-                    schema, context, name=b.name, span=b.sourcectx)
+                    schema, context, name=b.name, span=b.span)
                 for b in new_bases if b.name not in existing_bases
             ]
             index = {b.get_name(schema): i for i, b in enumerate(bases)}

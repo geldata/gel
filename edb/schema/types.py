@@ -603,7 +603,7 @@ class TypeShell(so.ObjectShell[TypeT_co]):
         displayname: Optional[str] = None,
         expr: Optional[str] = None,
         schemaclass: type[TypeT_co],
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
         extra_args: tuple[qlast.Expr] | None = None,
     ) -> None:
         super().__init__(
@@ -611,7 +611,7 @@ class TypeShell(so.ObjectShell[TypeT_co]):
             origname=origname,
             displayname=displayname,
             schemaclass=schemaclass,
-            sourcectx=sourcectx,
+            span=span,
         )
 
         self.expr = expr
@@ -631,7 +631,7 @@ class TypeShell(so.ObjectShell[TypeT_co]):
             f'unsupported type intersection in schema {str(view_name)}',
             hint=f'Type intersections are currently '
                  f'unsupported as valid link targets.',
-            span=self.sourcectx,
+            span=self.span,
         )
 
 
@@ -645,12 +645,12 @@ class TypeExprShell(TypeShell[TypeT_co]):
         name: s_name.Name,
         components: Iterable[TypeShell[TypeT_co]],
         schemaclass: type[TypeT_co],
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> None:
         super().__init__(
             name=name,
             schemaclass=schemaclass,
-            sourcectx=sourcectx,
+            span=span,
         )
         self.components = tuple(components)
 
@@ -676,7 +676,7 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
         components: Iterable[TypeShell[TypeT_co]],
         opaque: bool = False,
         schemaclass: type[TypeT_co],
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> None:
         name = get_union_type_name(
             (c.name for c in components),
@@ -687,7 +687,7 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
             name=name,
             components=components,
             schemaclass=schemaclass,
-            sourcectx=sourcectx,
+            span=span,
         )
         self.opaque = opaque
 
@@ -703,7 +703,7 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
         cmd.set_attribute_value('name', self.name)
         cmd.set_attribute_value('components', tuple(self.components))
         cmd.set_attribute_value('is_opaque_union', self.opaque)
-        cmd.set_attribute_value('span', self.sourcectx)
+        cmd.set_attribute_value('span', self.span)
         return cmd
 
     def __repr__(self) -> str:
@@ -933,7 +933,7 @@ class IntersectionTypeShell(TypeExprShell[TypeT_co]):
         module: str,
         components: Iterable[TypeShell[TypeT_co]],
         schemaclass: type[TypeT_co],
-        sourcectx: parsing.Span | None = None,
+        span: parsing.Span | None = None,
     ) -> None:
         name = get_intersection_type_name(
             (c.name for c in components),
@@ -944,7 +944,7 @@ class IntersectionTypeShell(TypeExprShell[TypeT_co]):
             name=name,
             components=components,
             schemaclass=schemaclass,
-            sourcectx=sourcectx
+            span=span
         )
 
 
@@ -3036,7 +3036,7 @@ class InheritingTypeCommand(
                 shell = shells.get(base.get_name(schema))
                 raise errors.SchemaError(
                     f"{base_type_name!r} cannot be a parent type",
-                    span=shell.sourcectx if shell is not None else None,
+                    span=shell.span if shell is not None else None,
                 )
 
 

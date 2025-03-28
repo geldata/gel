@@ -584,7 +584,7 @@ def _create_alias_types(
         name=classname,
         origname=classname,
         schemaclass=type_cmd.get_schema_metaclass(),
-        sourcectx=span,
+        span=span,
     )
     return result, type_shell, created_type_shells
 
