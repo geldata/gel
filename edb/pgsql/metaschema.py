@@ -7995,6 +7995,52 @@ BEGIN
 END;
             """
         ),
+        # Unlike pg_catalog.to_regclass(), edgedbsql.to_regclass() also takes
+        # numeric parameters to support compiled `::regclass` typecasting.
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'integer',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'smallint',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'bigint',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'oid',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
         trampoline.VersionedFunction(
             name=('edgedbsql', 'has_database_privilege'),
             args=(

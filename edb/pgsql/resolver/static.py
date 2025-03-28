@@ -27,7 +27,6 @@ from edb import errors
 from edb.pgsql import ast as pgast
 from edb.pgsql.ast import SQLValueFunctionOP as val_func_op
 from edb.pgsql import common
-from edb.pgsql import parser as pgparser
 
 from edb.server import defines
 from edb.server.pgcon import errors as pgerror
@@ -455,8 +454,8 @@ def cast_to_regclass(param: pgast.BaseExpr, ctx: Context) -> pgast.BaseExpr:
     """
 
     expr = eval(param, ctx=ctx)
-    res: pgast.BaseExpr
     if expr is None:
+        param = dispatch.resolve(param, ctx=ctx)
         return pgast.FuncCall(
             name=(V('edgedbsql'), "to_regclass"), args=[param]
         )
