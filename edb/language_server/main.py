@@ -57,6 +57,14 @@ def main(options: str | None, *, version: bool, stdio: bool):
         print("Error: no LSP transport enabled. Use --stdio.")
 
 
+ls_debug: ls_server.GelLanguageServer | None = None
+
+
+def debug_log(text: str):
+    if ls_debug:
+        ls_debug.show_message_log(text)
+
+
 def init(options_json: str | None) -> ls_server.GelLanguageServer:
 
     # load config
@@ -68,6 +76,9 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
 
     # construct server
     ls = ls_server.GelLanguageServer(config)
+
+    global ls_debug
+    ls_debug = ls
 
     # register hooks
     @ls.feature(
@@ -176,13 +187,18 @@ def document_definition(
 
             if isinstance(ql_ast, list):
 
+                # <DEBUG>
+                from edb.common import markup
+                with open('ql_stmt.txt', 'w') as file:
+                    markup.dump(ql_ast, file=file)
+                # </DEBUG>
+
                 _, ir_stmts = ls_server.compile(ls, document, ql_ast)
 
                 for ir_stmt in ir_stmts:
 
                     # <DEBUG>
                     from edb.common import markup
-
                     with open('ir_stmt.txt', 'w') as file:
                         markup.dump(ir_stmt, file=file)
                     # </DEBUG>
