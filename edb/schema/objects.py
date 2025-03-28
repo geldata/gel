@@ -1025,6 +1025,15 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         inheritable=False,
     )
 
+    # Span of source text that contained definition of this object
+    span = SchemaField(
+        parsing.Span,
+        default=None,
+        compcoef=None,
+        hashable=False,
+        ephemeral=True,
+    )
+
     name = SchemaField(
         sn.Name,
         inheritable=False,

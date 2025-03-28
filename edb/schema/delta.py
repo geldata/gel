@@ -3105,6 +3105,9 @@ class CreateObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
                 if specified_id is not None:
                     props['id'] = specified_id
 
+        if self.span and 'span' not in props:
+            props['span'] = self.span
+
         schema, self.scls = metaclass.create_in_schema(
             schema, stable_ids=context.stable_ids, **props)
 
