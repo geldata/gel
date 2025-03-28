@@ -6534,6 +6534,38 @@ def _generate_sql_information_schema(
                 nsdef
         '''
     )
+    # pg_settings is a function because "_edgecon_state" is a temporary table
+    # and therefore cannot be used in a view.
+    fe_pg_settings = trampoline.VersionedFunction(
+        name=('edgedbsql', '_pg_settings'),
+        args=[],
+        returns=('pg_catalog', 'pg_settings'),
+        set_returning=True,
+        volatility='volatile',
+        text='''
+            SELECT
+                s.name,
+                COALESCE(c.value #>> '{}', s.setting) AS setting,
+                unit,
+                category,
+                short_desc,
+                extra_desc,
+                context,
+                vartype,
+                source,
+                min_val,
+                max_val,
+                enumvals,
+                boot_val,
+                reset_val,
+                sourcefile,
+                sourceline,
+                pending_restart
+            FROM pg_settings s
+            LEFT JOIN _edgecon_state c
+                ON s.name = c.name AND c.type = 'S'
+        '''
+    )
 
     sql_ident = 'information_schema.sql_identifier'
     sql_str = 'information_schema.character_data'
@@ -7555,6 +7587,12 @@ def _generate_sql_information_schema(
         WHERE FALSE
         """,
         ),
+        trampoline.VersionedView(
+            name=("edgedbsql", "pg_settings"),
+            query="""
+            select * from edgedbsql_VER._pg_settings()
+        """,
+        ),
     ]
 
     # We expose most of the views as empty tables, just to prevent errors when
@@ -7604,6 +7642,7 @@ def _generate_sql_information_schema(
         'pg_tables',
         'pg_views',
         'pg_description',
+        'pg_settings',
     }
 
     PG_TABLES_WITH_SYSTEM_COLS = {
@@ -7706,39 +7745,300 @@ def _generate_sql_information_schema(
             views.append(v)
 
     util_functions = [
-        # WARNING: this `edgedbsql.to_regclass()` function is currently not
-        # accurately implemented to take application-level `search_path`
-        # into consideration. It is currently here to support the following
-        # `has_*privilege` functions (which are less sensitive to such issue).
-        # SO DO NOT USE `edgedbsql.to_regclass()` FOR ANYTHING ELSE.
+        # A 1:1 PL/pgSQL replication of the Postgres SplitIdentifierString
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'split_identifier_string'),
+            args=(
+                ('rawstring', 'text',),
+                ('separator', 'text',),
+            ),
+            returns=('text[]',),
+            language="plpgsql",
+            volatility="immutable",
+            text=r"""
+DECLARE
+    namelist text[] := '{}';
+    pos integer := 1;
+    len integer;
+    c char;
+    sep_char char;
+    curname text;
+    in_quote boolean;
+    db_encoding text := getdatabaseencoding();
+BEGIN
+    -- Initialization
+    IF length(separator) != 1 THEN
+        RAISE EXCEPTION 'Separator must be a single character';
+    END IF;
+    sep_char := substring(separator FROM 1 FOR 1);
+    len := length(rawstring);
+
+    -- Skip leading whitespace
+    WHILE pos <= len LOOP
+        c := substring(rawstring FROM pos FOR 1);
+        IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+            pos := pos + 1;
+        ELSE
+            EXIT;
+        END IF;
+    END LOOP;
+
+    -- Allow empty string
+    IF pos > len THEN
+        RETURN namelist;
+    END IF;
+
+	-- At the top of the loop, we are at start of a new identifier.
+    LOOP
+        IF substring(rawstring FROM pos FOR 1) = '"' THEN
+			-- Quoted name --- collapse quote-quote pairs, no downcasing
+            pos := pos + 1;
+            curname := '';
+            in_quote := TRUE;
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c = '"' THEN
+                    IF pos < len
+                        AND substring(rawstring FROM pos + 1 FOR 1) = '"'
+                    THEN
+                        -- Collapse adjacent quotes into one quote,
+                        -- and look again
+                        curname := curname || '"';
+                        pos := pos + 2;
+                    ELSE
+                        -- Found end of quoted name
+                        pos := pos + 1;
+                        in_quote := FALSE;
+                        EXIT;
+                    END IF;
+                ELSE
+                    curname := curname || c;
+                    pos := pos + 1;
+                END IF;
+            END LOOP;
+
+            -- Mismatched quotes
+            IF in_quote THEN
+                RAISE EXCEPTION 'Unterminated quoted identifier';
+            END IF;
+
+        ELSE
+			-- Unquoted name --- extends to separator or whitespace
+            curname := '';
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c = sep_char OR c IN (' ', '\t', '\n', '\r', '\f') THEN
+                    EXIT;
+                END IF;
+                curname := curname || c;
+                pos := pos + 1;
+            END LOOP;
+
+            IF curname = '' THEN
+                RAISE EXCEPTION 'Empty unquoted identifier';
+            END IF;
+
+            -- Downcase the identifier
+            curname := lower(curname);
+        END IF;
+
+		-- Truncate name if it's overlength
+        IF octet_length(curname) > 63 THEN
+            RAISE NOTICE 'identifier "%" will be truncated', curname;
+            curname := convert_from(
+                substring(convert_to(curname, db_encoding) FROM 1 FOR 63),
+                db_encoding
+            );
+        END IF;
+
+		-- Finished isolating current name --- add it to list
+        namelist := array_append(namelist, curname);
+
+        -- Skip trailing whitespace
+        WHILE pos <= len LOOP
+            c := substring(rawstring FROM pos FOR 1);
+            IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+                pos := pos + 1;
+            ELSE
+                EXIT;
+            END IF;
+        END LOOP;
+
+        IF pos > len THEN
+            EXIT; -- End of string
+        ELSIF substring(rawstring FROM pos FOR 1) = sep_char THEN
+            pos := pos + 1;
+            -- Skip leading whitespace for next
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+                    pos := pos + 1;
+                ELSE
+                    EXIT;
+                END IF;
+            END LOOP;
+        ELSE
+            RAISE EXCEPTION 'Invalid character at position %: "%"', pos, c;
+        END IF;
+    END LOOP;
+
+    RETURN namelist;
+END;
+            """,
+        ),
+        # current_schemas() is an emulation of Postgres current_schemas(),
+        # fetch_search_path() and recomputeNamespacePath() internal functions.
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'current_schemas'),
+            args=(
+                ('include_implicit', 'bool',),
+            ),
+            returns=('name[]',),
+            language="plpgsql",
+            volatility="stable",
+            text="""
+DECLARE
+    search_path_str text;
+    schema_list text[];
+    rv name[] := '{}'::name[];
+    is_valid_namespace boolean;
+    has_pg_catalog boolean;
+    resolved_schema text;
+BEGIN
+    -- Get the current search_path from the emulated pg_settings view
+    SELECT COALESCE(setting, 'public') INTO search_path_str
+    FROM edgedbsql_VER.pg_settings
+    WHERE name = 'search_path';
+
+    -- Split using our custom function with comma separator
+    schema_list := edgedbsql_VER.split_identifier_string(search_path_str, ',');
+
+    -- Handle implicit schemas if requested
+    IF include_implicit THEN
+        -- Temporary schema is not supported yet
+
+        -- Check if pg_catalog is already present
+        has_pg_catalog := 'pg_catalog' = ANY(schema_list);
+
+        -- Add pg_catalog if not present and GUC variables allow it
+        IF NOT has_pg_catalog THEN
+            rv := array_append(rv, 'pg_catalog'::name);
+        END IF;
+    END IF;
+
+    -- Process each schema element
+    FOR i IN 1..array_length(schema_list, 1) LOOP
+        -- Handle $user substitution
+        IF schema_list[i] = '$user' THEN
+            resolved_schema := current_user;
+        ELSE
+            resolved_schema := schema_list[i];
+        END IF;
+
+        -- Check existence in namespace catalog
+        IF EXISTS (
+            SELECT 1
+            FROM edgedbsql_VER.pg_namespace
+            WHERE nspname = resolved_schema
+        ) THEN
+            rv := array_append(rv, resolved_schema::name);
+        END IF;
+    END LOOP;
+
+    RETURN rv;
+END;
+            """,
+        ),
         trampoline.VersionedFunction(
             name=('edgedbsql', 'to_regclass'),
             args=(
-                ('name', 'text',),
+                ('name_or_oid', 'text',),
             ),
             returns=('regclass',),
+            language="plpgsql",
             text="""
-                SELECT
-                    CASE
-                        WHEN array_length(parts, 1) = 1 THEN
-                            (
-                                SELECT oid::regclass
-                                FROM edgedbsql_VER.pg_class
-                                WHERE relname = parts[1]
-                                LIMIT 1  -- HACK: see comments above
-                            )
-                        WHEN array_length(parts, 1) = 2 THEN
-                            (
-                                SELECT pc.oid::regclass
-                                FROM edgedbsql_VER.pg_class pc
-                                JOIN edgedbsql_VER.pg_namespace pn
-                                ON pn.oid = pc.relnamespace
-                                WHERE relname = parts[2] AND nspname = parts[1]
-                            )
-                        ELSE
-                            NULL::regclass
-                    END
-                FROM parse_ident(name) parts
+DECLARE
+    parts text[];
+    result regclass;
+BEGIN
+    IF name_or_oid = '-' THEN
+        RETURN 0::regclass;
+    END IF;
+
+    IF name_or_oid ~ '^[0-9]+$' THEN
+        RETURN name_or_oid::oid::regclass;
+    END IF;
+
+    parts := parse_ident(name_or_oid);
+    IF array_length(parts, 1) = 1 THEN
+        SELECT pc.oid::regclass INTO result
+        FROM unnest(edgedbsql_VER.current_schemas(true))
+            WITH ORDINALITY AS ns(nspname, ord)
+        JOIN edgedbsql_VER.pg_namespace pn
+            USING (nspname)
+        JOIN edgedbsql_VER.pg_class pc
+            ON pn.oid = pc.relnamespace
+        WHERE pc.relname = parts[1]
+        ORDER BY ns.ord
+        LIMIT 1;
+    ELSEIF array_length(parts, 1) = 2 THEN
+        SELECT pc.oid::regclass INTO result
+        FROM edgedbsql_VER.pg_class pc
+        JOIN edgedbsql_VER.pg_namespace pn
+            ON pn.oid = pc.relnamespace
+        WHERE relname = parts[2] AND nspname = parts[1];
+    ELSE
+        RAISE EXCEPTION
+            'improper relation name (too many dotted names): %', name_or_oid;
+    END IF;
+    RETURN result;
+END;
+            """
+        ),
+        # Unlike pg_catalog.to_regclass(), edgedbsql.to_regclass() also takes
+        # numeric parameters to support compiled `::regclass` typecasting.
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'integer',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'smallint',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'bigint',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'oid',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
             """
         ),
         trampoline.VersionedFunction(
@@ -8052,6 +8352,7 @@ def _generate_sql_information_schema(
             cast(dbops.Command, dbops.CreateFunction(long_name)),
             cast(dbops.Command, dbops.CreateFunction(type_rename)),
             cast(dbops.Command, dbops.CreateFunction(namespace_rename)),
+            cast(dbops.Command, dbops.CreateFunction(fe_pg_settings)),
         ]
         + [dbops.CreateView(view) for view in views]
         + [dbops.CreateFunction(func) for func in util_functions]
