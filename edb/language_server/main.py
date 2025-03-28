@@ -222,9 +222,7 @@ def document_definition(
                         name = target.get_displayname(ls.state.schema)
                         ls.show_message_log(f'target: {name}')
 
-                        span: edb_span.Span | None = target.get_sourcectx(
-                            ls.state.schema
-                        )
+                        span: edb_span.Span | None = None
                         ls.show_message_log(f'type span: {span}')
 
                         if span:

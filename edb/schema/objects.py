@@ -1032,16 +1032,6 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         inheritable=False,
     )
 
-    # Schema source context for this object
-    sourcectx = SchemaField(
-        parsing.Span,
-        default=None,
-        compcoef=None,
-        inheritable=False,
-        hashable=False,
-        ephemeral=True,
-    )
-
     name = SchemaField(
         sn.Name,
         inheritable=False,
