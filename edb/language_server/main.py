@@ -29,6 +29,7 @@ from edb.common import span as edb_span
 from edb.edgeql import parser as qlparser
 from edb.edgeql import tokenizer as qltokenizer
 from edb.ir import ast as irast
+from edb.schema import objtypes as s_objtypes
 
 from . import parsing as ls_parsing
 from . import server as ls_server
@@ -190,6 +191,7 @@ def document_definition(
 
                 # <DEBUG>
                 from edb.common import markup
+
                 with open('ql_stmt.txt', 'w') as file:
                     markup.dump(ql_ast, file=file)
                 # </DEBUG>
@@ -200,6 +202,7 @@ def document_definition(
 
                     # <DEBUG>
                     from edb.common import markup
+
                     with open('ir_stmt.txt', 'w') as file:
                         markup.dump(ir_stmt, file=file)
                     # </DEBUG>
@@ -212,40 +215,42 @@ def document_definition(
                     ls.show_message_log(f'node: {node}')
                     ls.show_message_log(f'span: {node.span}')
 
-                    if isinstance(node, irast.Set):
-                        assert ls.state.schema
-                        target = ls.state.schema.get_by_id(
-                            node.path_id.target.id
-                        )
-                        assert target
+                    if not isinstance(node, irast.Set):
+                        return None
+                    assert ls.state.schema
+                    target = ls.state.schema.get_by_id(node.path_id.target.id)
+                    assert target
 
-                        name = target.get_displayname(ls.state.schema)
-                        ls.show_message_log(f'target: {name}')
+                    name = target.get_displayname(ls.state.schema)
+                    ls.show_message_log(f'target: {name}')
 
-                        span: edb_span.Span | None = None
-                        ls.show_message_log(f'type span: {span}')
+                    if not isinstance(target, s_objtypes.ObjectType):
+                        return None
 
-                        if span:
-                            # find schema docs with this filename
-                            docs = ls.state.schema_docs
-                            doc = next(
-                                filter(
-                                    lambda d: d.filename == span.filename, docs
-                                ),
-                                None,
-                            )
-                            if not doc:
-                                ls.show_message_log(f'Cannot find doc: {span}')
-                                return None
+                    span: edb_span.Span | None = target.get_span(
+                        ls.state.schema
+                    )
+                    ls.show_message_log(f'type span: {span}')
 
-                            return lsp_types.Location(
-                                uri=doc.uri,
-                                range=ls_utils.convert_span(
-                                    doc.source, (span.start, span.end)
-                                ),
-                            )
+                    if not span:
+                        return None
 
-                    return None
+                    # find schema docs with this filename
+                    docs = ls.state.schema_docs
+                    doc = next(
+                        (d for d in docs if d.filename == span.name),
+                        None,
+                    )
+                    if not doc:
+                        ls.show_message_log(f'Cannot find doc: {span.filename}')
+                        return None
+
+                    return lsp_types.Location(
+                        uri=doc.uri,
+                        range=ls_utils.convert_span(
+                            doc.source, (span.start, span.end)
+                        ),
+                    )
                 ls.show_message_log(
                     f'cannot find span in {len(ir_stmts)} stmts'
                 )
