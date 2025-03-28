@@ -83,6 +83,9 @@ class Span(markup.MarkupExceptionContext):
             end=0,
         )
 
+    def __str__(self):
+        return f'{self.name}:{self.start}..{self.end}'
+
     def __getstate__(self):
         dic = self.__dict__.copy()
         dic['_points'] = None
