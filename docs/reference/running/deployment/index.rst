@@ -24,4 +24,3 @@ running Gel `in Docker <https://github.com/geldata/gel-docker>`_.
     gcp
     docker
     bare_metal
-    health_checks

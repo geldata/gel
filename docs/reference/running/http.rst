@@ -18,6 +18,7 @@ To determine the URL of a remote instance you have linked with the CLI, you can 
 
 .. _ref_edgeql_http_health_checks:
 .. _ref_reference_health_checks:
+.. _ref_guide_deployment_health_checks:
 
 Health Checks
 =============
