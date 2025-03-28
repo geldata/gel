@@ -31,7 +31,11 @@ impl SourcePoint {
     }
 
     #[staticmethod]
-    fn from_lines_cols(py: Python, data: &Bound<PyBytes>, lines_cols: PyObject) -> PyResult<Py<PyList>> {
+    fn from_lines_cols(
+        py: Python,
+        data: &Bound<PyBytes>,
+        lines_cols: PyObject,
+    ) -> PyResult<Py<PyList>> {
         let mut list: Vec<(u64, u64)> = lines_cols.extract(py)?;
         let data: &[u8] = data.as_bytes();
         list.sort();

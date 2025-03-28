@@ -241,7 +241,7 @@ impl InflatedPos {
                 line: last_line,
                 column: 0,
                 utf16column: 0,
-                offset: offset as u64,
+                offset,
                 char_offset,
             });
         }
