@@ -24,7 +24,7 @@ from abc import abstractmethod
 import collections.abc
 import dataclasses
 import json
-from typing import Any, Optional, Iterator, Sequence, Dict
+from typing import Any, Optional, Iterator, Sequence
 
 from edb.edgeql import compiler as qlcompiler
 from edb.ir import staeval
@@ -147,7 +147,7 @@ class FlatSpec(Spec):
     def __init__(self, *settings: Setting):
         self._settings = tuple(settings)
         self._by_name = {s.name: s for s in self._settings}
-        self._types_by_name: Dict[str, types.ConfigTypeSpec] = {}
+        self._types_by_name: dict[str, types.ConfigTypeSpec] = {}
 
         for s in self._settings:
             if isinstance(s.type, types.ConfigTypeSpec):

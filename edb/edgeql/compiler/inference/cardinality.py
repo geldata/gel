@@ -27,13 +27,8 @@ cardinality fields and performing cardinality checks.
 from __future__ import annotations
 from typing import (
     Optional,
-    Tuple,
     Iterable,
     Sequence,
-    Dict,
-    List,
-    Set,
-    FrozenSet,
     NamedTuple,
 )
 
@@ -942,7 +937,7 @@ def extract_filters(
     filter_set: irast.Set,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,
-) -> Sequence[Tuple[Sequence[s_pointers.Pointer], irast.Set]]:
+) -> Sequence[tuple[Sequence[s_pointers.Pointer], irast.Set]]:
 
     env = ctx.env
     schema = env.schema
@@ -1039,11 +1034,11 @@ def extract_exclusive_filters(
     filter_set: irast.Set,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,
-) -> List[Tuple[Tuple[s_pointers.Pointer, irast.Set], ...]]:
+) -> list[tuple[tuple[s_pointers.Pointer, irast.Set], ...]]:
 
     filtered_ptrs = extract_filters(result_set, filter_set, scope_tree, ctx)
 
-    results: List[Tuple[Tuple[s_pointers.Pointer, irast.Set], ...]] = []
+    results: list[tuple[tuple[s_pointers.Pointer, irast.Set], ...]] = []
     if filtered_ptrs:
         schema = ctx.env.schema
         # Only look at paths where all trailing pointers are exclusive;
@@ -1082,9 +1077,9 @@ def extract_exclusive_filters(
 
 def get_object_exclusive_constraints(
     typ: s_types.Type,
-    ptr_set: Set[s_pointers.Pointer],
+    ptr_set: set[s_pointers.Pointer],
     env: context.Environment,
-) -> Dict[s_constraints.Constraint, FrozenSet[s_pointers.Pointer]]:
+) -> dict[s_constraints.Constraint, frozenset[s_pointers.Pointer]]:
     """Collect any exclusive object constraints that apply.
 
     An object constraint applies if all of the pointers referenced
@@ -1137,7 +1132,7 @@ def _analyse_filter_clause(
 
 
 def _infer_matset_cardinality(
-    materialized_sets: Optional[Dict[uuid.UUID, irast.MaterializedSet]],
+    materialized_sets: Optional[dict[uuid.UUID, irast.MaterializedSet]],
     *,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,
@@ -1444,7 +1439,7 @@ def __infer_slice(
 ) -> qltypes.Cardinality:
     # slice indirection cardinality depends on the cardinality of
     # the base expression and the slice index expressions
-    args: List[irast.Base] = [ir.expr]
+    args: list[irast.Base] = [ir.expr]
     if ir.start is not None:
         args.append(ir.start)
     if ir.stop is not None:

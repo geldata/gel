@@ -23,12 +23,9 @@ from typing import (
     Final,
     Iterable,
     Iterator,
-    List,
     Mapping,
     Optional,
     Sequence,
-    Set,
-    Tuple,
     Union,
 )
 from collections.abc import MutableSequence
@@ -109,7 +106,7 @@ class SQLBlock:
 
         return body
 
-    def get_statements(self) -> List[str]:
+    def get_statements(self) -> list[str]:
         return [(cmd if isinstance(cmd, str) else cmd.to_string()).rstrip()
                 for cmd in self.commands]
 
@@ -252,7 +249,7 @@ class PLBlock(SQLBlock):
 
     def declare_var(
         self,
-        type_name: Union[str, Tuple[str, str]],
+        type_name: Union[str, tuple[str, str]],
         *,
         var_name: str='',
         var_name_prefix: str='v',
@@ -304,8 +301,8 @@ class BaseCommand(markup.MarkupCapableMixin):
 
 class Command(BaseCommand):
 
-    conditions: Set[str | Condition]
-    neg_conditions: Set[str | Condition]
+    conditions: set[str | Condition]
+    neg_conditions: set[str | Condition]
 
     def __init__(
         self,
@@ -480,7 +477,7 @@ class Query(Command):
         self,
         text: str,
         *,
-        type: Optional[str | Tuple[str, str]] = None,
+        type: Optional[str | tuple[str, str]] = None,
         trampoline_fixup: bool = True,
     ) -> None:
         from ..import trampoline

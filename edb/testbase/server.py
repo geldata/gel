@@ -23,14 +23,10 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
     Union,
     Iterable,
     Literal,
     Sequence,
-    Dict,
-    List,
     NamedTuple,
     TYPE_CHECKING,
 )
@@ -319,7 +315,7 @@ class TestCase(unittest.TestCase, metaclass=TestCaseMeta):
     @staticmethod
     def try_until_succeeds(
         *,
-        ignore: Union[Type[Exception], Tuple[Type[Exception]]] | None = None,
+        ignore: Union[type[Exception], tuple[type[Exception]]] | None = None,
         ignore_regexp: str | None = None,
         delay: float=0.5,
         timeout: float=5
@@ -346,7 +342,7 @@ class TestCase(unittest.TestCase, metaclass=TestCaseMeta):
     @staticmethod
     def try_until_fails(
         *,
-        wait_for: Union[Type[Exception], Tuple[Type[Exception]]] | None = None,
+        wait_for: Union[type[Exception], tuple[type[Exception]]] | None = None,
         wait_for_regexp: str | None = None,
         delay: float=0.5,
         timeout: float=5
@@ -1368,7 +1364,7 @@ class DatabaseTestCase(ConnectedTestCase):
     TEARDOWN: Optional[str] = None
     SCHEMA: Optional[str | pathlib.Path] = None
     DEFAULT_MODULE: str = 'default'
-    EXTENSIONS: List[str] = []
+    EXTENSIONS: list[str] = []
 
     BASE_TEST_CLASS = True
 
@@ -1683,7 +1679,7 @@ class SQLQueryTestCase(BaseQueryTestCase):
         res = await self.scon.fetch(query, *args)
         return [list(r.values()) for r in res]
 
-    def assert_shape(self, res: Any, rows: int, columns: int | List[str]):
+    def assert_shape(self, res: Any, rows: int, columns: int | list[str]):
         """
         Fail if query result does not confront the specified shape, defined in
         terms of:
@@ -1709,7 +1705,7 @@ class CLITestCaseMixin:
 
     @classmethod
     def run_cli_on_connection(
-        cls, conn_args: Dict[str, Any], *args, input: Optional[str] = None
+        cls, conn_args: dict[str, Any], *args, input: Optional[str] = None
     ) -> None:
         cmd_args = [
             '--host', conn_args['host'],
@@ -2150,8 +2146,8 @@ class StablePGDumpTestCase(BaseQueryTestCase):
 
 def get_test_cases_setup(
     cases: Iterable[unittest.TestCase]
-) -> List[Tuple[unittest.TestCase, DatabaseName, SetupScript]]:
-    result: List[Tuple[unittest.TestCase, DatabaseName, SetupScript]] = []
+) -> list[tuple[unittest.TestCase, DatabaseName, SetupScript]]:
+    result: list[tuple[unittest.TestCase, DatabaseName, SetupScript]] = []
 
     for case in cases:
         if not hasattr(case, 'get_setup_script'):
@@ -2356,7 +2352,7 @@ class _EdgeDBServer:
     def __init__(
         self,
         *,
-        bind_addrs: Tuple[str, ...] = ('localhost',),
+        bind_addrs: tuple[str, ...] = ('localhost',),
         bootstrap_command: Optional[str],
         auto_shutdown_after: Optional[int],
         adjacent_to: Optional[tconn.Connection],
@@ -2391,8 +2387,8 @@ class _EdgeDBServer:
         multitenant_config: Optional[str] = None,
         config_file: Optional[os.PathLike] = None,
         default_branch: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
-        extra_args: Optional[List[str]] = None,
+        env: Optional[dict[str, str]] = None,
+        extra_args: Optional[list[str]] = None,
         net_worker_mode: Optional[str] = None,
         password: Optional[str] = None,
     ) -> None:
@@ -2759,8 +2755,8 @@ def start_edgedb_server(
     jwt_revocation_list_file: Optional[os.PathLike] = None,
     multitenant_config: Optional[str] = None,
     config_file: Optional[os.PathLike] = None,
-    env: Optional[Dict[str, str]] = None,
-    extra_args: Optional[List[str]] = None,
+    env: Optional[dict[str, str]] = None,
+    extra_args: Optional[list[str]] = None,
     default_branch: Optional[str] = None,
     net_worker_mode: Optional[str] = None,
     force_new: bool = False,  # True for ignoring multitenant config env

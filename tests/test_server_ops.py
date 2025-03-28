@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Tuple, Mapping, NamedTuple, Callable
+from typing import Any, Mapping, NamedTuple, Callable
 
 import asyncio
 import http
@@ -248,7 +248,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     else:
                         return result
 
-        async def _waiter() -> Tuple[str, Mapping[str, Any]]:
+        async def _waiter() -> tuple[str, Mapping[str, Any]]:
             loop = asyncio.get_running_loop()
             line = await loop.run_in_executor(None, _read, status_file)
             status, _, dataline = line.partition('=')
@@ -316,7 +316,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     else:
                         return result
 
-        async def _waiter() -> Tuple[str, Mapping[str, Any]]:
+        async def _waiter() -> tuple[str, Mapping[str, Any]]:
             loop = asyncio.get_running_loop()
             lines = await asyncio.gather(
                 loop.run_in_executor(None, _read, status_file),

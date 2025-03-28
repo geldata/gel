@@ -22,15 +22,10 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     AbstractSet,
     Sequence,
-    List,
-    Set,
-    FrozenSet,
     Match,
     TYPE_CHECKING,
 )
@@ -113,7 +108,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         self.limit_ref_classes = limit_ref_classes
 
     def visit(
-        self, node: Union[qlast.Base, List[qlast.Base]], **kwargs: Any
+        self, node: Union[qlast.Base, list[qlast.Base]], **kwargs: Any
     ) -> None:
         if isinstance(node, list):
             self.visit_list(node, terminator=';')
@@ -1465,7 +1460,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
     def _eval_enum_expr(
         self,
         expr: Union[qlast.Expr, qlast.TypeExpr],
-        enum_type: Type[Enum_T],
+        enum_type: type[Enum_T],
     ) -> Enum_T:
         if (
             not isinstance(expr, qlast.Constant)
@@ -1474,9 +1469,9 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
             raise AssertionError(f'expected StringConstant, got {expr!r}')
         return enum_type(expr.value)
 
-    def _process_special_set(self, node: qlast.SetField) -> List[str]:
+    def _process_special_set(self, node: qlast.SetField) -> list[str]:
 
-        keywords: List[str] = []
+        keywords: list[str] = []
         fname = node.name
 
         if fname == 'required':
@@ -1640,7 +1635,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
             node, 'CONSTRAINT', after_name=lambda: self._after_constraint(node)
         )
 
-    def _format_access_kinds(self, kinds: List[qltypes.AccessKind]) -> str:
+    def _format_access_kinds(self, kinds: list[qltypes.AccessKind]) -> str:
         # Canonicalize the order, since the schema loses track
         kinds = [k for k in list(qltypes.AccessKind) if k in kinds]
         if kinds == list(qltypes.AccessKind):
@@ -1688,7 +1683,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
     def visit_DropAccessPolicy(self, node: qlast.DropAccessPolicy) -> None:
         self._visit_DropObject(node, 'ACCESS POLICY', unqualified=True)
 
-    def _format_trigger_kinds(self, kinds: List[qltypes.TriggerKind]) -> str:
+    def _format_trigger_kinds(self, kinds: list[qltypes.TriggerKind]) -> str:
         # Canonicalize the order, since the schema loses track
         kinds = [k for k in list(qltypes.TriggerKind) if k in kinds]
         skinds = ', '.join(str(kind).lower() for kind in kinds)
@@ -1731,7 +1726,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
     def visit_DropTrigger(self, node: qlast.DropTrigger) -> None:
         self._visit_DropObject(node, 'TRIGGER', unqualified=True)
 
-    def _format_rewrite_kinds(self, kinds: List[qltypes.RewriteKind]) -> str:
+    def _format_rewrite_kinds(self, kinds: list[qltypes.RewriteKind]) -> str:
         # Canonicalize the order, since the schema loses track
         kinds = [k for k in list(qltypes.RewriteKind) if k in kinds]
         skinds = ', '.join(str(kind).lower() for kind in kinds)
@@ -1816,7 +1811,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
     def _process_AlterConcretePointer_for_SDL(
         self,
         node: qlast.AlterObject,
-    ) -> Tuple[List[str], FrozenSet[qlast.DDLOperation]]:
+    ) -> tuple[list[str], frozenset[qlast.DDLOperation]]:
         keywords = []
         specials = set()
 
@@ -1924,7 +1919,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         kind: Optional[str],
     ) -> None:
         keywords = []
-        ignored_cmds: Set[qlast.DDLOperation] = set()
+        ignored_cmds: set[qlast.DDLOperation] = set()
 
         after_name: Optional[Callable[[], None]]
 

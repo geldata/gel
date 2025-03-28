@@ -31,15 +31,10 @@ EdgeQL AST visitor.
 from __future__ import annotations
 from typing import (
     Optional,
-    Tuple,
-    Type,
     AbstractSet,
     Iterable,
     Mapping,
     MutableSet,
-    Dict,
-    List,
-    Set,
     TypedDict,
     cast,
 )
@@ -81,14 +76,14 @@ class TraceContextBase:
 
     schema: s_schema.Schema
     module: str
-    depstack: List[Tuple[qlast.DDLOperation, s_name.QualName]]
-    modaliases: Dict[Optional[str], str]
-    objects: Dict[s_name.QualName, Optional[qltracer.ObjectLike]]
-    pointers: Dict[s_name.UnqualName, Set[s_name.QualName]]
-    parents: Dict[s_name.QualName, Set[s_name.QualName]]
-    ancestors: Dict[s_name.QualName, Set[s_name.QualName]]
-    defdeps: Dict[s_name.QualName, Set[s_name.QualName]]
-    constraints: Dict[s_name.QualName, Set[s_name.QualName]]
+    depstack: list[tuple[qlast.DDLOperation, s_name.QualName]]
+    modaliases: dict[Optional[str], str]
+    objects: dict[s_name.QualName, Optional[qltracer.ObjectLike]]
+    pointers: dict[s_name.UnqualName, set[s_name.QualName]]
+    parents: dict[s_name.QualName, set[s_name.QualName]]
+    ancestors: dict[s_name.QualName, set[s_name.QualName]]
+    defdeps: dict[s_name.QualName, set[s_name.QualName]]
+    constraints: dict[s_name.QualName, set[s_name.QualName]]
     local_modules: AbstractSet[str]
 
     def __init__(
@@ -147,7 +142,7 @@ class TraceContextBase:
         self,
         decl: qlast.DDLOperation,
         declaration: bool=False,
-    ) -> Tuple[str, s_name.QualName]:
+    ) -> tuple[str, s_name.QualName]:
         # Get the basic name form.
         if isinstance(decl, qlast.CreateConcretePointer):
             name = decl.name.name
@@ -285,7 +280,7 @@ class InheritanceGraphEntry(TypedDict):
 
 class LayoutTraceContext(TraceContextBase):
 
-    inh_graph: Dict[
+    inh_graph: dict[
         s_name.QualName,
         topological.DepGraphEntry[
             s_name.QualName,
@@ -303,7 +298,7 @@ class LayoutTraceContext(TraceContextBase):
         self.inh_graph = {}
 
 
-DDLGraph = Dict[
+DDLGraph = dict[
     s_name.QualName,
     topological.DepGraphEntry[s_name.QualName, qlast.DDLCommand, bool],
 ]
@@ -315,12 +310,12 @@ class DepTraceContext(TraceContextBase):
         self,
         schema: s_schema.Schema,
         ddlgraph: DDLGraph,
-        objects: Dict[s_name.QualName, Optional[qltracer.ObjectLike]],
-        pointers: Dict[s_name.UnqualName, Set[s_name.QualName]],
-        parents: Dict[s_name.QualName, Set[s_name.QualName]],
-        ancestors: Dict[s_name.QualName, Set[s_name.QualName]],
-        defdeps: Dict[s_name.QualName, Set[s_name.QualName]],
-        constraints: Dict[s_name.QualName, Set[s_name.QualName]],
+        objects: dict[s_name.QualName, Optional[qltracer.ObjectLike]],
+        pointers: dict[s_name.UnqualName, set[s_name.QualName]],
+        parents: dict[s_name.QualName, set[s_name.QualName]],
+        ancestors: dict[s_name.QualName, set[s_name.QualName]],
+        defdeps: dict[s_name.QualName, set[s_name.QualName]],
+        constraints: dict[s_name.QualName, set[s_name.QualName]],
         local_modules: AbstractSet[str],
     ) -> None:
         super().__init__(schema, local_modules)
@@ -368,11 +363,11 @@ class FunctionDependency(ExprDependency):
 
 def sdl_to_ddl(
     schema: s_schema.Schema,
-    documents: Mapping[str, List[qlast.DDLCommand]],
-) -> Tuple[qlast.DDLCommand, ...]:
+    documents: Mapping[str, list[qlast.DDLCommand]],
+) -> tuple[qlast.DDLCommand, ...]:
 
     ddlgraph: DDLGraph = {}
-    mods: List[qlast.DDLCommand] = []
+    mods: list[qlast.DDLCommand] = []
 
     ctx = LayoutTraceContext(schema, frozenset(mod for mod in documents))
 
@@ -772,14 +767,14 @@ def _trace_item_layout(
             ctx.objects[field_name] = qltracer.Field(field_name)
 
 
-RECURSION_GUARD: Set[s_name.QualName] = set()
+RECURSION_GUARD: set[s_name.QualName] = set()
 
 
 def get_ancestors(
     fq_name: s_name.QualName,
-    ancestors: Dict[s_name.QualName, Set[s_name.QualName]],
+    ancestors: dict[s_name.QualName, set[s_name.QualName]],
     parents: Mapping[s_name.QualName, AbstractSet[s_name.QualName]],
-) -> Set[s_name.QualName]:
+) -> set[s_name.QualName]:
     """Recursively compute ancestors (in place) from the parents graph."""
 
     # value already computed
@@ -989,7 +984,7 @@ def trace_ConcretePointer(
     *,
     ctx: DepTraceContext,
 ) -> None:
-    deps: List[Dependency] = []
+    deps: list[Dependency] = []
     if isinstance(node.target, qlast.TypeExpr):
         deps.append(TypeDependency(texpr=node.target))
     elif isinstance(node.target, qlast.Expr):
@@ -1032,7 +1027,7 @@ def trace_Global(
     *,
     ctx: DepTraceContext,
 ) -> None:
-    deps: List[Dependency] = []
+    deps: list[Dependency] = []
 
     if isinstance(node.target, qlast.TypeExpr):
         deps.append(TypeDependency(texpr=node.target))
@@ -1051,7 +1046,7 @@ def trace_Function(
     # We also need to add all the signature types as dependencies
     # to make sure that DDL linearization of SDL will define the types
     # before the function.
-    deps: List[Dependency] = []
+    deps: list[Dependency] = []
 
     # We don't actually care to resolve these, but we do need to check for
     # tracing errors.
@@ -1136,7 +1131,7 @@ def _register_item(
     else:
         deps = set()
 
-    weak_deps: Set[s_name.QualName] = set()
+    weak_deps: set[s_name.QualName] = set()
 
     op = orig_op = copy.copy(decl)
 
@@ -1183,7 +1178,7 @@ def _register_item(
     ast_subcommands = getattr(decl, 'commands', [])
     commands = []
     if ast_subcommands:
-        subcmds: List[qlast.DDLOperation] = []
+        subcmds: list[qlast.DDLOperation] = []
         for cmd in ast_subcommands:
             # include dependency on constraints or annotations if present
             if isinstance(cmd, qlast.CreateConcreteConstraint):
@@ -1429,7 +1424,7 @@ def _get_hard_deps(
 
 def _get_bases(
     decl: qlast.CreateObject, *, ctx: LayoutTraceContext
-) -> List[s_name.QualName]:
+) -> list[s_name.QualName]:
     """Resolve object bases from the "extends" declaration."""
     if not isinstance(decl, qlast.BasedOnTuple):
         return []
@@ -1523,7 +1518,7 @@ TRACER_TO_REAL_TYPE_MAP = {
 
 def _get_local_obj(
     refname: s_name.QualName,
-    tracer_type: Type[qltracer.NamedObject],
+    tracer_type: type[qltracer.NamedObject],
     sourcectx: Optional[parsing.Span],
     *,
     ctx: LayoutTraceContext | DepTraceContext,
@@ -1554,7 +1549,7 @@ def _get_local_obj(
 def _resolve_type_name(
     ref: qlast.BaseObjectRef,
     *,
-    tracer_type: Type[qltracer.NamedObject],
+    tracer_type: type[qltracer.NamedObject],
     ctx: LayoutTraceContext | DepTraceContext,
 ) -> qltracer.ObjectLike:
 
@@ -1576,9 +1571,9 @@ def _resolve_type_name(
 
 def _get_tracer_type(
     decl: qlast.CreateObject,
-) -> Optional[Type[qltracer.NamedObject]]:
+) -> Optional[type[qltracer.NamedObject]]:
 
-    tracer_type: Optional[Type[qltracer.NamedObject]] = None
+    tracer_type: Optional[type[qltracer.NamedObject]] = None
 
     if isinstance(decl, qlast.CreateObjectType):
         tracer_type = qltracer.ObjectType
@@ -1633,7 +1628,7 @@ def _validate_schema_ref(
 
 def _resolve_schema_ref(
     name: s_name.Name,
-    type: Type[qltracer.NamedObject],
+    type: type[qltracer.NamedObject],
     span: Optional[parsing.Span],
     *,
     ctx: LayoutTraceContext | DepTraceContext,

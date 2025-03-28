@@ -20,8 +20,8 @@
 from __future__ import annotations
 
 # Import specific things to avoid name clashes
-from typing import (Dict, FrozenSet, Generator, List, Mapping, Optional,
-                    Union, Set, Tuple, Iterable, Generic, TypeVar, Sequence,
+from typing import (Generator, Mapping, Optional,
+                    Union, Iterable, Generic, TypeVar, Sequence,
                     AbstractSet)
 
 import functools
@@ -128,13 +128,13 @@ class UnqualObjectIndex(Generic[T]):
     def items(
         self,
         schema: s_schema.Schema,
-    ) -> Iterable[Tuple[sn.UnqualName, T]]:
+    ) -> Iterable[tuple[sn.UnqualName, T]]:
         return self._items.items()
 
 
 class Source(NamedObject):
 
-    pointers: Dict[sn.UnqualName, Union[s_pointers.Pointer, Pointer]]
+    pointers: dict[sn.UnqualName, Union[s_pointers.Pointer, Pointer]]
 
     '''Abstract type that mocks the s_sources.Source for tracing purposes.'''
 
@@ -189,7 +189,7 @@ class Alias(ObjectType):
 
 class UnionType(Type):
 
-    def __init__(self, types: List[Union[Type, UnionType, so.Object]]) -> None:
+    def __init__(self, types: list[Union[Type, UnionType, so.Object]]) -> None:
         self.types = types
 
     def get_name(self, schema: s_schema.Schema) -> sn.QualName:
@@ -341,11 +341,11 @@ def trace_refs(
     anchors: Optional[Mapping[str, sn.QualName]] = None,
     path_prefix: Optional[sn.QualName] = None,
     module: str,
-    objects: Dict[sn.QualName, Optional[ObjectLike]],
-    pointers: Mapping[sn.UnqualName, Set[sn.QualName]],
+    objects: dict[sn.QualName, Optional[ObjectLike]],
+    pointers: Mapping[sn.UnqualName, set[sn.QualName]],
     params: Mapping[str, sn.QualName],
     local_modules: AbstractSet[str]
-) -> Tuple[FrozenSet[sn.QualName], FrozenSet[sn.QualName]]:
+) -> tuple[frozenset[sn.QualName], frozenset[sn.QualName]]:
 
     """Return a list of schema item names used in an expression.
 
@@ -373,8 +373,8 @@ def resolve_name(
     *,
     current_module: str,
     schema: s_schema.Schema,
-    objects: Dict[sn.QualName, Optional[ObjectLike]],
-    modaliases: Optional[Dict[Optional[str], str]],
+    objects: dict[sn.QualName, Optional[ObjectLike]],
+    modaliases: Optional[dict[Optional[str], str]],
     local_modules: AbstractSet[str],
     declaration: bool=False,
 ) -> sn.QualName:
@@ -446,18 +446,18 @@ class TracerContext:
         *,
         schema: s_schema.Schema,
         module: str,
-        objects: Dict[sn.QualName, Optional[ObjectLike]],
-        pointers: Mapping[sn.UnqualName, Set[sn.QualName]],
+        objects: dict[sn.QualName, Optional[ObjectLike]],
+        pointers: Mapping[sn.UnqualName, set[sn.QualName]],
         anchors: Mapping[str, sn.QualName],
         path_prefix: Optional[sn.QualName],
-        modaliases: Dict[Optional[str], str],
+        modaliases: dict[Optional[str], str],
         params: Mapping[str, sn.QualName],
-        visited: Set[Union[s_pointers.Pointer, Pointer]],
+        visited: set[Union[s_pointers.Pointer, Pointer]],
         local_modules: AbstractSet[str],
     ) -> None:
         self.schema = schema
-        self.refs: Set[sn.QualName] = set()
-        self.weak_refs: Set[sn.QualName] = set()
+        self.refs: set[sn.QualName] = set()
+        self.weak_refs: set[sn.QualName] = set()
         self.module = module
         self.objects = objects
         self.pointers = pointers
@@ -485,7 +485,7 @@ class TracerContext:
             local_modules=self.local_modules,
         )
 
-    def get_ref_name_startswith(self, ref: qlast.ObjectRef) -> Set[sn.QualName]:
+    def get_ref_name_startswith(self, ref: qlast.ObjectRef) -> set[sn.QualName]:
         refs = set()
         prefixes = set()
 

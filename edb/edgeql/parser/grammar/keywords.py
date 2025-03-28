@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import re
-from typing import Dict
 
 import edb._edgeql_parser as ql_parser
 
@@ -72,7 +71,7 @@ edgeql_keywords.update({k: (tok_name(k), PARTIAL_RESERVED_KEYWORD)
                         for k in partial_reserved_keywords})
 
 
-by_type: Dict[int, dict] = {typ: {} for typ in keyword_types}
+by_type: dict[int, dict] = {typ: {} for typ in keyword_types}
 
 for val, spec in edgeql_keywords.items():
     by_type[spec[1]][val] = spec[0]

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 import textwrap
-from typing import Any, Tuple, Iterable, Dict, List
+from typing import Any, Iterable
 
 from edb.common import ordered
 
@@ -39,13 +39,13 @@ class Index(tables.InheritableTableObject):
     def __init__(
         self,
         name: str,
-        table_name: Tuple[str, str],
+        table_name: tuple[str, str],
         unique: bool = True,
         exprs: Iterable[str] | None = None,
-        with_clause: Dict[str, str] | None = None,
+        with_clause: dict[str, str] | None = None,
         predicate: str | None = None,
         inherit: bool = False,
-        metadata: Dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
         columns: Iterable[str | pgast.Star] | None = None,
     ) -> None:
         super().__init__(inherit=inherit, metadata=metadata)
@@ -123,7 +123,7 @@ class Index(tables.InheritableTableObject):
         return code
 
     @property
-    def columns(self) -> List[str]:
+    def columns(self) -> list[str]:
         return list(self._columns)
 
     def get_type(self) -> str:

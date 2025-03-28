@@ -20,7 +20,6 @@
 """Implementation of DESCRIBE ... CONFIG"""
 
 from __future__ import annotations
-from typing import Dict, List
 
 import textwrap
 
@@ -387,7 +386,7 @@ def _describe_config_object(
     valtype: s_objtypes.ObjectType,
     level: int,
     scope: qltypes.ConfigScope,
-) -> Dict[s_name.QualName, List[str]]:
+) -> dict[s_name.QualName, list[str]]:
     cfg_types = [valtype]
     cfg_types.extend(cfg_types[0].descendants(schema))
     layouts = {}

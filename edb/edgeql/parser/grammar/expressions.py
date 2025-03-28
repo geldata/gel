@@ -115,7 +115,7 @@ class OptionallyAliasedExpr(Nonterm):
 
 class AliasedExprList(ListNonterm, element=AliasedExpr,
                       separator=tokens.T_COMMA, allow_trailing_separator=True):
-    val: typing.List[qlast.AliasedExpr]
+    val: list[qlast.AliasedExpr]
 
 
 class GroupingIdent(Nonterm):
@@ -145,7 +145,7 @@ class GroupingIdent(Nonterm):
 
 class GroupingIdentList(ListNonterm, element=GroupingIdent,
                         separator=tokens.T_COMMA):
-    val: typing.List[qlast.GroupingAtom]
+    val: list[qlast.GroupingAtom]
 
 
 class GroupingAtom(Nonterm):
@@ -162,7 +162,7 @@ class GroupingAtom(Nonterm):
 class GroupingAtomList(
         ListNonterm, element=GroupingAtom, separator=tokens.T_COMMA,
         allow_trailing_separator=True):
-    val: typing.List[qlast.GroupingAtom]
+    val: list[qlast.GroupingAtom]
 
 
 class GroupingElement(Nonterm):
@@ -184,7 +184,7 @@ class GroupingElement(Nonterm):
 class GroupingElementList(
         ListNonterm, element=GroupingElement, separator=tokens.T_COMMA,
         allow_trailing_separator=True):
-    val: typing.List[qlast.GroupingElement]
+    val: list[qlast.GroupingElement]
 
 
 class OptionalOptional(Nonterm):
@@ -255,7 +255,7 @@ class SimpleSelect(Nonterm):
 
 
 class ByClause(Nonterm):
-    val: typing.List[qlast.GroupingElement]
+    val: list[qlast.GroupingElement]
 
     @parsing.inline(1)
     def reduce_BY_GroupingElementList(self, *kids):
@@ -263,7 +263,7 @@ class ByClause(Nonterm):
 
 
 class UsingClause(Nonterm):
-    val: typing.List[qlast.AliasedExpr]
+    val: list[qlast.AliasedExpr]
 
     @parsing.inline(1)
     def reduce_USING_AliasedExprList(self, *kids):
@@ -271,7 +271,7 @@ class UsingClause(Nonterm):
 
 
 class OptUsingClause(Nonterm):
-    val: typing.List[qlast.AliasedExpr]
+    val: list[qlast.AliasedExpr]
 
     @parsing.inline(0)
     def reduce_UsingClause(self, *kids):

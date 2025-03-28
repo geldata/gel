@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 from typing import (
-    Any, Callable, Tuple, Type, Dict, List, Set, Optional, cast
+    Any, Callable, Optional, cast
 )
 
 import json
@@ -42,7 +42,7 @@ class ParserSpecIncompatibleError(Exception):
 
 
 class Token(parsing.Token):
-    token_map: Dict[Any, Any] = {}
+    token_map: dict[Any, Any] = {}
     _token: str = ""
 
     def __init_subclass__(
@@ -288,8 +288,8 @@ def precedence(precedence):
 
 
 class Precedence(parsing.Precedence):
-    token_prec_map: Dict[Any, Any] = {}
-    last: Dict[Any, Any] = {}
+    token_prec_map: dict[Any, Any] = {}
+    last: dict[Any, Any] = {}
 
     def __init_subclass__(
         cls,
@@ -350,9 +350,9 @@ def _localpath(mod, type):
 
 
 def load_spec_productions(
-    production_names: List[Tuple[str, str]], mod: types.ModuleType
-) -> List[Tuple[Type, Callable]]:
-    productions: List[Tuple[Any, Callable]] = []
+    production_names: list[tuple[str, str]], mod: types.ModuleType
+) -> list[tuple[type, Callable]]:
+    productions: list[tuple[Any, Callable]] = []
     for class_name, method_name in production_names:
         cls = mod.__dict__.get(class_name, None)
         if not cls:
@@ -369,12 +369,12 @@ def spec_to_json(spec: parsing.Spec) -> str:
     # Converts a ParserSpec into JSON. Called from edgeql-parser Rust crate.
     assert spec.pureLR
 
-    token_map: Dict[str, str] = {
+    token_map: dict[str, str] = {
         v._token: c for c, v in Token.token_map.items()
     }
 
     # productions
-    productions_all: Set[Any] = set()
+    productions_all: set[Any] = set()
     for st_actions in spec.actions():
         for _, acts in st_actions.items():
             act = cast(Any, acts[0])
@@ -439,8 +439,8 @@ def spec_to_json(spec: parsing.Spec) -> str:
 
 
 def sort_productions(
-    productions_all: Set[Any],
-) -> Tuple[List[Any], Dict[Any, int]]:
+    productions_all: set[Any],
+) -> tuple[list[Any], dict[Any, int]]:
     productions = list(productions_all)
     productions.sort(key=production_name)
 
@@ -448,5 +448,5 @@ def sort_productions(
     return (productions, productions_id)
 
 
-def production_name(prod: Any) -> Tuple[str, ...]:
+def production_name(prod: Any) -> tuple[str, ...]:
     return tuple(prod.qualified.split('.')[-2:])

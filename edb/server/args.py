@@ -24,7 +24,6 @@ from typing import (
     Optional,
     ItemsView,
     Mapping,
-    List,
     NamedTuple,
     NoReturn,
     Sequence,
@@ -204,8 +203,8 @@ DEFAULT_AUTH_METHODS = ServerAuthMethods({
 
 
 class BackendCapabilitySets(NamedTuple):
-    must_be_present: List[pgsql_params.BackendCapabilities]
-    must_be_absent: List[pgsql_params.BackendCapabilities]
+    must_be_present: list[pgsql_params.BackendCapabilities]
+    must_be_absent: list[pgsql_params.BackendCapabilities]
 
 
 class CompilerPoolMode(enum.StrEnum):
@@ -269,7 +268,7 @@ class ServerConfig(NamedTuple):
     config_file: Optional[pathlib.Path]
 
     startup_script: Optional[StartupScript]
-    status_sinks: List[Callable[[str], None]]
+    status_sinks: list[Callable[[str], None]]
 
     tls_cert_file: pathlib.Path
     tls_key_file: pathlib.Path

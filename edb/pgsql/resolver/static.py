@@ -20,7 +20,7 @@
 
 import functools
 import platform
-from typing import Optional, Sequence, List
+from typing import Optional, Sequence
 
 from edb import errors
 
@@ -51,8 +51,8 @@ def eval(expr: pgast.BaseExpr, *, ctx: Context) -> Optional[pgast.BaseExpr]:
 
 
 def eval_list(
-    exprs: List[pgast.BaseExpr], *, ctx: Context
-) -> Optional[List[pgast.BaseExpr]]:
+    exprs: list[pgast.BaseExpr], *, ctx: Context
+) -> Optional[list[pgast.BaseExpr]]:
     """
     Tries to statically evaluate exprs, recursing into sub-expressions.
     Returns None if that is not possible.

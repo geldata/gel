@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-from typing import Tuple, Sequence
+from typing import Sequence
 
 from edb.edgeql import ast as qlast
 
@@ -42,7 +42,7 @@ from . import pathctx
 
 def compile_shape(
         ir_set: irast.Set,
-        shape: Sequence[Tuple[irast.SetE[irast.Pointer], qlast.ShapeOp]], *,
+        shape: Sequence[tuple[irast.SetE[irast.Pointer], qlast.ShapeOp]], *,
         ctx: context.CompilerContextLevel) -> pgast.TupleVar:
     elements = []
 

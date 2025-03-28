@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Dict
+from typing import Any
 
 import asyncio
 import os
@@ -52,7 +52,7 @@ class TestRunner:
 
 async def execute(
     tests_dir: str,
-    conn: Dict[str, Any],
+    conn: dict[str, Any],
     num_workers: int,
     version: str,
 ) -> None:

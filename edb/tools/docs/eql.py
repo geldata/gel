@@ -208,7 +208,7 @@ import lxml.etree
 import pygments.lexers
 import pygments.lexers.special
 
-from typing import Any, Dict
+from typing import Any
 
 from edb.common import debug
 
@@ -644,7 +644,7 @@ class EQLSynopsisDirective(shared.CodeBlock):
     has_content = True
     optional_arguments = 0
     required_arguments = 0
-    option_spec: Dict[str, Any] = {
+    option_spec: dict[str, Any] = {
         'version-lt': d_directives.unchanged_required
     }
 
@@ -1065,7 +1065,7 @@ class EdgeQLDomain(s_domains.Domain):
         'op-desc',
     }
 
-    initial_data: Dict[str, Dict[str, Any]] = {
+    initial_data: dict[str, dict[str, Any]] = {
         'objects': {}  # fullname -> docname, objtype, description
     }
 

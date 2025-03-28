@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Optional, List
+from typing import Optional
 
 import contextlib
 import textwrap
@@ -26,7 +26,7 @@ import textwrap
 class RenderBuffer:
 
     ilevel: int
-    buf: List[str]
+    buf: list[str]
 
     def __init__(self):
         self.ilevel = 0

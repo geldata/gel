@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Mapping, Dict, TYPE_CHECKING
+from typing import Any, Optional, Mapping, TYPE_CHECKING
 
 import asyncio
 import json
@@ -172,7 +172,7 @@ class BaseCluster:
         else:
             return 'running' if db_exists else 'not-initialized,running'
 
-    def get_connect_args(self) -> Dict[str, Any]:
+    def get_connect_args(self) -> dict[str, Any]:
         return {
             'host': 'localhost',
             'port': self._effective_port,
@@ -214,7 +214,7 @@ class BaseCluster:
             status_r, status_w = socket.socketpair()
             extra_args.append(f'--emit-server-status=fd://{status_w.fileno()}')
 
-        env: Optional[Dict[str, str]]
+        env: Optional[dict[str, str]]
         if self._env:
             env = os.environ.copy()
             env.update(self._env)
@@ -248,7 +248,7 @@ class BaseCluster:
             self._pg_cluster.destroy()
 
     def _init(self) -> None:
-        env: Optional[Dict[str, str]]
+        env: Optional[dict[str, str]]
         if self._env:
             env = os.environ.copy()
             env.update(self._env)
@@ -282,7 +282,7 @@ class BaseCluster:
 
         async def _read_server_status(
             stream: asyncio.StreamReader,
-        ) -> Dict[str, Any]:
+        ) -> dict[str, Any]:
             while True:
                 line = await stream.readline()
                 if not line:
@@ -503,7 +503,7 @@ class RunningCluster(BaseCluster):
     def ensure_initialized(self) -> bool:
         return False
 
-    def get_connect_args(self) -> Dict[str, Any]:
+    def get_connect_args(self) -> dict[str, Any]:
         return dict(self.conn_args)
 
     async def get_status(self) -> str:

@@ -22,8 +22,6 @@ from typing import (
     ClassVar,
     Generic,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     AbstractSet,
@@ -33,9 +31,6 @@ from typing import (
     MutableSequence,
     MutableSet,
     Sequence,
-    Dict,
-    List,
-    Set,
     cast,
     overload,
 )
@@ -64,11 +59,11 @@ V = TypeVar("V")
 
 class ParametricContainer:
 
-    types: ClassVar[Optional[Tuple[type, ...]]] = None
+    types: ClassVar[Optional[tuple[type, ...]]] = None
 
-    def __reduce__(self) -> Tuple[Any, ...]:
+    def __reduce__(self) -> tuple[Any, ...]:
         assert self.types is not None, f'missing parameters in {type(self)}'
-        cls: Type[ParametricContainer] = self.__class__
+        cls: type[ParametricContainer] = self.__class__
         container = getattr(self, "_container", ())
         if cls.__name__.endswith("]"):
             # Parametrized type.
@@ -82,14 +77,14 @@ class ParametricContainer:
 
     @classmethod
     def __restore__(
-        cls, params: Tuple[type, ...], data: Iterable[Any]
+        cls, params: tuple[type, ...], data: Iterable[Any]
     ) -> ParametricContainer:
         return cls[params](data)  # type: ignore
 
 
 class AbstractCheckedList(Generic[T]):
     type: type
-    _container: List[T]
+    _container: list[T]
 
     @classmethod
     def _check_type(cls, value: Any) -> T:
@@ -104,19 +99,19 @@ class AbstractCheckedList(Generic[T]):
     def __init__(self, iterable: Iterable[T] = ()) -> None:
         pass
 
-    def __lt__(self, other: List[T]) -> bool:
+    def __lt__(self, other: list[T]) -> bool:
         return self._container < self._cast(other)
 
-    def __le__(self, other: List[T]) -> bool:
+    def __le__(self, other: list[T]) -> bool:
         return self._container <= self._cast(other)
 
-    def __gt__(self, other: List[T]) -> bool:
+    def __gt__(self, other: list[T]) -> bool:
         return self._container > self._cast(other)
 
-    def __ge__(self, other: List[T]) -> bool:
+    def __ge__(self, other: list[T]) -> bool:
         return self._container >= self._cast(other)
 
-    def _cast(self, other: List[T]) -> List[T]:
+    def _cast(self, other: list[T]) -> list[T]:
         if isinstance(other, (CheckedList, FrozenCheckedList)):
             return other._container
 
@@ -412,7 +407,7 @@ class CheckedSet(
     AbstractCheckedSet[T],
     MutableSet[T],
 ):
-    _container: Set[T]
+    _container: set[T]
 
     def __init__(self, iterable: Iterable[T] = ()) -> None:
         super().__init__()
@@ -529,7 +524,7 @@ def _type_repr(obj: Any) -> str:
 class AbstractCheckedDict(Generic[K, V]):
     keytype: type
     valuetype: type
-    _container: Dict[K, V]
+    _container: dict[K, V]
 
     @classmethod
     def _check_key_type(cls, key: Any) -> K:

@@ -22,7 +22,7 @@ from __future__ import annotations
 import functools
 import dataclasses
 import uuid
-from typing import Literal, Optional, Tuple, cast, overload
+from typing import Literal, Optional, cast, overload
 
 from edb.common.typeutils import not_none
 
@@ -257,7 +257,7 @@ def type_has_stable_oid(typ: s_types.Type) -> bool:
 
 def get_scalar_base(
     schema: s_schema.Schema, scalar: s_scalars.ScalarType
-) -> Tuple[str, ...]:
+) -> tuple[str, ...]:
     if base := base_type_name_map.get(scalar.id):
         return base
 
@@ -282,7 +282,7 @@ def get_scalar_base(
 
 def pg_type_from_scalar(
     schema: s_schema.Schema, scalar: s_scalars.ScalarType
-) -> Tuple[str, ...]:
+) -> tuple[str, ...]:
 
     if scalar.is_polymorphic(schema):
         return ('anynonarray',)
@@ -299,24 +299,24 @@ def pg_type_from_scalar(
     return column_type
 
 
-def pg_type_array(tp: Tuple[str, ...]) -> Tuple[str, ...]:
+def pg_type_array(tp: tuple[str, ...]) -> tuple[str, ...]:
     if len(tp) == 1:
         return (tp[0] + '[]',)
     else:
         return (tp[0], tp[1] + '[]')
 
 
-def pg_type_range(tp: Tuple[str, ...]) -> Tuple[str, ...]:
+def pg_type_range(tp: tuple[str, ...]) -> tuple[str, ...]:
     return type_to_range_name_map[tp]
 
 
-def pg_type_multirange(tp: Tuple[str, ...]) -> Tuple[str, ...]:
+def pg_type_multirange(tp: tuple[str, ...]) -> tuple[str, ...]:
     return type_to_multirange_name_map[tp]
 
 
 def pg_type_from_object(
     schema: s_schema.Schema, obj: s_obj.Object, persistent_tuples: bool = False
-) -> Tuple[str, ...]:
+) -> tuple[str, ...]:
 
     if isinstance(obj, s_scalars.ScalarType):
         return pg_type_from_scalar(schema, obj)
@@ -327,7 +327,7 @@ def pg_type_from_object(
     elif isinstance(obj, s_abc.Tuple):
         if persistent_tuples:
             return cast(
-                Tuple[str, ...],
+                tuple[str, ...],
                 common.get_tuple_backend_name(obj.id, catenate=False),
             )
         else:
@@ -375,7 +375,7 @@ def pg_type_from_ir_typeref(
     *,
     serialized: bool = False,
     persistent_tuples: bool = False,
-) -> Tuple[str, ...]:
+) -> tuple[str, ...]:
 
     if irtyputils.is_array(ir_typeref):
         if (irtyputils.is_generic(ir_typeref)
@@ -424,7 +424,7 @@ def pg_type_from_ir_typeref(
 
         if persistent_tuples or material.in_schema:
             return cast(
-                Tuple[str, str],
+                tuple[str, str],
                 common.get_tuple_backend_name(material.id, catenate=False),
             )
         else:
@@ -462,7 +462,7 @@ def pg_type_from_ir_typeref(
             return pg_type
 
 
-TableInfo = Tuple[Tuple[str, str], str, str]
+TableInfo = tuple[tuple[str, str], str, str]
 
 
 def _source_table_info(
@@ -497,8 +497,8 @@ def _pointer_table_info(
 
 def _resolve_type(
     schema: s_schema.Schema, pointer: s_pointers.Pointer
-) -> Tuple[str, ...]:
-    column_type: Tuple[str, ...]
+) -> tuple[str, ...]:
+    column_type: tuple[str, ...]
 
     pointer_target = pointer.get_target(schema)
     if pointer_target is not None:
@@ -617,10 +617,10 @@ def get_pointer_storage_info(
 @dataclasses.dataclass(kw_only=True, eq=False, slots=True)
 class PointerStorageInfo:
 
-    table_name: Optional[Tuple[str, str]]
+    table_name: Optional[tuple[str, str]]
     table_type: str
     column_name: str
-    column_type: Tuple[str, str]
+    column_type: tuple[str, str]
 
 
 @overload
@@ -748,7 +748,7 @@ def _get_ptrref_storage_info(
         else:
             return None
 
-    column_type: Tuple[str, ...] | None
+    column_type: tuple[str, ...] | None
     if resolve_type:
         if irtyputils.is_object(target):
             column_type = ('uuid',)

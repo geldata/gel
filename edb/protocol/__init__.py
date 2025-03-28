@@ -29,7 +29,7 @@ from .messages import *  # NoQA
 
 
 def render(
-    obj: typing.Union[typing.Type[enum.Enum], typing.Type[messages.Struct]]
+    obj: typing.Union[type[enum.Enum], type[messages.Struct]]
 ) -> str:
     if issubclass(obj, messages.Struct):
         return obj.render()

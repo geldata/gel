@@ -25,7 +25,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
     Hashable,
     Iterator,
     Mapping,
@@ -1920,7 +1919,7 @@ async def _resolve_host(host: str) -> list[str] | Exception:
 
 async def _resolve_interfaces(
     hosts: Sequence[str],
-) -> Tuple[Sequence[str], bool, bool]:
+) -> tuple[Sequence[str], bool, bool]:
 
     async with asyncio.TaskGroup() as g:
         resolve_tasks = {

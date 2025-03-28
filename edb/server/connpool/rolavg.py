@@ -17,16 +17,13 @@
 #
 
 
-import typing
-
-
 class RollingAverage:
 
     __slots__ = ('_hist_size', '_hist', '_pos', '_cached_avg')
 
     _hist_size: int
     _pos: int
-    _hist: typing.List[float]
+    _hist: list[float]
     _cached_avg: float
 
     def __init__(self, *, history_size: int):

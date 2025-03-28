@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Any, List, Tuple, Optional
+from typing import Any, Optional
 
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
@@ -34,7 +34,7 @@ from . import Result, is_schema_file
 
 def parse(
     doc: TextDocument, ls: LanguageServer
-) -> Result[List[qlast.Base] | qlast.Schema, List[lsp_types.Diagnostic]]:
+) -> Result[list[qlast.Base] | qlast.Schema, list[lsp_types.Diagnostic]]:
     sdl = is_schema_file(doc.filename) if doc.filename else False
 
     source, result, productions = _parse_inner(doc.source, sdl)
@@ -108,7 +108,7 @@ def parse_and_suggest(
     return None
 
 
-def _position_in_span(pos: lsp_types.Position, span: Tuple[Any, Any]):
+def _position_in_span(pos: lsp_types.Position, span: tuple[Any, Any]):
     start, end = span
 
     if pos.line < start.line - 1:
@@ -124,7 +124,7 @@ def _position_in_span(pos: lsp_types.Position, span: Tuple[Any, Any]):
 
 def _parse_inner(
     source_str: str, sdl: bool
-) -> Tuple[tokenizer.Source, rust_parser.ParserResult, Any]:
+) -> tuple[tokenizer.Source, rust_parser.ParserResult, Any]:
     try:
         source = tokenizer.Source.from_string(source_str)
     except Exception as e:

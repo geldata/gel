@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Callable, Optional, Tuple, Type, Union, Mapping, List
+from typing import Any, Callable, Optional, Union, Mapping
 import pathlib
 
 from edb import errors
@@ -115,7 +115,7 @@ def parse_sdl(expr: str):
 
 
 def parse(
-    start_token: Type[tokens.Token],
+    start_token: type[tokens.Token],
     source: Union[str, qltokenizer.Source],
     filename: Optional[str] = None,
 ):
@@ -176,7 +176,7 @@ def parse(
 
 def _cst_to_ast(
     cst: rust_parser.CSTNode,
-    productions: List[Tuple[Type, Callable]],
+    productions: list[tuple[type, Callable]],
     source: qltokenizer.Source,
     filename: Optional[str],
 ) -> Any:
@@ -191,8 +191,8 @@ def _cst_to_ast(
     #   are are ready to be passed to the production method. The result is
     #   obviously pushed onto the result stack
 
-    stack: List[rust_parser.CSTNode | rust_parser.Production] = [cst]
-    result: List[Any] = []
+    stack: list[rust_parser.CSTNode | rust_parser.Production] = [cst]
+    result: list[Any] = []
 
     while len(stack) > 0:
         node = stack.pop()

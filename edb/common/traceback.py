@@ -17,7 +17,7 @@ from contextlib import suppress
 
 StackSummaryLike = (
     traceback.StackSummary
-    | typing.List[typing.Tuple[str, typing.Any, str, typing.Any]]
+    | list[tuple[str, typing.Any, str, typing.Any]]
 )
 
 
@@ -32,12 +32,12 @@ def format_exception(e: BaseException) -> str:
     return '\n'.join(tb_e.format())
 
 
-def format_stack_summary(stack: StackSummaryLike) -> typing.List[str]:
+def format_stack_summary(stack: StackSummaryLike) -> list[str]:
     return _format_stack_summary(_into_list_of_frames(stack))
 
 
 class StandardStackSummary(traceback.StackSummary):
-    def format(self) -> typing.List[str]:
+    def format(self) -> list[str]:
         return format_stack_summary(self)
 
 
@@ -62,7 +62,7 @@ def _into_list_of_frames(a_list: StackSummaryLike):
     return result
 
 
-def _format_stack_summary(stack: typing.List[traceback.FrameSummary]):
+def _format_stack_summary(stack: list[traceback.FrameSummary]):
     """Format the stack ready for printing.
 
     Returns a list of strings ready for printing.  Each string in the

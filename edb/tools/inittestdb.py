@@ -18,7 +18,6 @@
 
 
 from __future__ import annotations
-from typing import List
 
 import asyncio
 import os.path
@@ -112,7 +111,7 @@ async def _inittestdb(
     jobs: int,
     data_dir: str,
     tests_dir: str,
-    include: List[str],
+    include: list[str],
     update: bool,
 ) -> None:
     cluster = edgedb_cluster.Cluster(pathlib.Path(data_dir), testmode=True)

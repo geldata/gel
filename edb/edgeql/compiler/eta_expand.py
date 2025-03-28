@@ -78,7 +78,6 @@ They are discussed in more detail at the implementation sites.
 
 from __future__ import annotations
 
-from typing import Tuple
 
 from edb.ir import ast as irast
 
@@ -197,7 +196,7 @@ def needs_eta_expansion(
 
 def _get_alias(
     name: str, *, ctx: context.ContextLevel
-) -> Tuple[str, qlast.Path]:
+) -> tuple[str, qlast.Path]:
     alias = ctx.aliases.get(name)
     return alias, qlast.Path(
         steps=[qlast.ObjectRef(name=alias)],

@@ -21,11 +21,8 @@ from __future__ import annotations
 from typing import (
     Callable,
     Optional,
-    Tuple,
     Iterable,
     Mapping,
-    Dict,
-    List,
     cast,
     TYPE_CHECKING,
 )
@@ -315,7 +312,7 @@ def delta_schemas(
         objects = sd.DeltaRoot()
 
         for sclass in schemaclasses:
-            filters: List[Callable[[s_schema.Schema, so.Object], bool]] = []
+            filters: list[Callable[[s_schema.Schema, so.Object], bool]] = []
 
             if not issubclass(sclass, so.QualifiedObject):
                 # UnqualifiedObjects (like anonymous tuples and arrays)
@@ -462,7 +459,7 @@ def apply_sdl(
     testmode: bool = False,
 ) -> tuple[s_schema.Schema, list[errors.EdgeDBError]]:
     # group declarations by module
-    documents: Dict[str, List[qlast.DDLCommand]] = defaultdict(list)
+    documents: dict[str, list[qlast.DDLCommand]] = defaultdict(list)
     # initialize the "default" module
     documents[s_mod.DEFAULT_MODULE_ALIAS] = []
     extensions = {}
@@ -620,10 +617,10 @@ def apply_ddl_script_ex(
     testmode: bool = False,
     store_migration_sdl: bool=False,
     schema_object_ids: Optional[
-        Mapping[Tuple[sn.Name, Optional[str]], uuid.UUID]
+        Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
-) -> Tuple[s_schema.Schema, sd.DeltaRoot]:
+) -> tuple[s_schema.Schema, sd.DeltaRoot]:
 
     delta = sd.DeltaRoot()
 
@@ -659,7 +656,7 @@ def delta_from_ddl(
     testmode: bool=False,
     store_migration_sdl: bool=False,
     schema_object_ids: Optional[
-        Mapping[Tuple[sn.Name, Optional[str]], uuid.UUID]
+        Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
 ) -> sd.DeltaRoot:
@@ -686,10 +683,10 @@ def delta_and_schema_from_ddl(
     testmode: bool=False,
     store_migration_sdl: bool=False,
     schema_object_ids: Optional[
-        Mapping[Tuple[sn.Name, Optional[str]], uuid.UUID]
+        Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
-) -> Tuple[s_schema.Schema, sd.DeltaRoot]:
+) -> tuple[s_schema.Schema, sd.DeltaRoot]:
     delta = sd.DeltaRoot()
     context = sd.CommandContext(
         modaliases=modaliases,
@@ -750,7 +747,7 @@ def ddlast_from_delta(
     testmode: bool = False,
     descriptive_mode: bool = False,
     include_ext_version: bool = True,
-) -> Dict[qlast.DDLOperation, sd.Command]:
+) -> dict[qlast.DDLOperation, sd.Command]:
     context = sd.CommandContext(
         descriptive_mode=descriptive_mode,
         declarative=sdlmode,
@@ -794,7 +791,7 @@ def statements_from_delta(
     uppercase: bool = False,
     limit_ref_classes: Iterable[so.ObjectMeta] = tuple(),
     include_ext_version: bool = True,
-) -> Tuple[Tuple[str, qlast.DDLOperation, sd.Command], ...]:
+) -> tuple[tuple[str, qlast.DDLOperation, sd.Command], ...]:
 
     stmts = ddlast_from_delta(
         schema_a,
@@ -813,8 +810,8 @@ def statements_from_delta(
 
     # If we're generating SDL and it includes modules, try to nest the
     # module contents in the actual modules.
-    processed: List[Tuple[qlast.DDLOperation, sd.Command]] = []
-    unqualified: List[Tuple[qlast.DDLOperation, sd.Command]] = []
+    processed: list[tuple[qlast.DDLOperation, sd.Command]] = []
+    unqualified: list[tuple[qlast.DDLOperation, sd.Command]] = []
     modules = dict()
     for stmt_ast, cmd in stmts.items():
         if sdlmode:

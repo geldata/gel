@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import os
 import parsing
 import pathlib
-from typing import List, Sequence, Tuple, Dict, Callable
+from typing import Sequence, Callable
 
 from edb.common import parsing as edb_parsing, debug
 from edb.edgeql.parser import grammar as qlgrammar
@@ -133,7 +133,7 @@ def expand_iso_ebnf(item: ebnf.Item) -> str:
             raise NotImplementedError
 
 
-def to_iso_ebnf(productions: List[ebnf.Production]) -> List[str]:
+def to_iso_ebnf(productions: list[ebnf.Production]) -> list[str]:
     return [
         production.name + ' = ' + expand_iso_ebnf(production.item) + ';'
         for production in productions
@@ -168,7 +168,7 @@ def expand_w3c_ebnf(item: ebnf.Item) -> str:
             raise NotImplementedError
 
 
-def to_w3c_ebnf(productions: List[ebnf.Production]) -> List[str]:
+def to_w3c_ebnf(productions: list[ebnf.Production]) -> list[str]:
     return [
         production.name + ' ::= ' + expand_w3c_ebnf(production.item)
         for production in productions
@@ -176,10 +176,10 @@ def to_w3c_ebnf(productions: List[ebnf.Production]) -> List[str]:
 
 
 def simplify_productions(
-    productions: List[ebnf.Production],
-) -> List[ebnf.Production]:
+    productions: list[ebnf.Production],
+) -> list[ebnf.Production]:
 
-    productions_by_name: Dict[str, ebnf.Production] = {
+    productions_by_name: dict[str, ebnf.Production] = {
         production.name: production for production in productions
     }
 
@@ -201,7 +201,7 @@ def simplify_productions(
 
     # remove unused productions
 
-    reference_counts: Dict[str, int] = {
+    reference_counts: dict[str, int] = {
         production.name: 0 for production in productions
     }
 
@@ -232,7 +232,7 @@ def simplify_productions(
         productions: Sequence[ebnf.Production],
         is_inlined: Callable[[ebnf.Item], bool],
     ):
-        inlined_references: Dict[str, ebnf.Item] = {
+        inlined_references: dict[str, ebnf.Item] = {
             production.name: production.item
             for production in productions
             if is_inlined(production.item)
@@ -246,8 +246,8 @@ def simplify_productions(
         return productions, inlined_references
 
     def inline_references(
-        item: ebnf.Item, references: Dict[str, ebnf.Item]
-    ) -> Tuple[ebnf.Item, bool]:
+        item: ebnf.Item, references: dict[str, ebnf.Item]
+    ) -> tuple[ebnf.Item, bool]:
 
         if isinstance(item, ebnf.Reference):
             if item.name in references:
@@ -261,7 +261,7 @@ def simplify_productions(
         productions, lambda item: isinstance(item, ebnf.Reference)
     )
 
-    def inline_direct_references(item: ebnf.Item) -> Tuple[ebnf.Item, bool]:
+    def inline_direct_references(item: ebnf.Item) -> tuple[ebnf.Item, bool]:
         return inline_references(item, direct_references)
 
     # inline direct optionals
@@ -270,7 +270,7 @@ def simplify_productions(
         productions, lambda item: isinstance(item, ebnf.Optional)
     )
 
-    def inline_direct_optionals(item: ebnf.Item) -> Tuple[ebnf.Item, bool]:
+    def inline_direct_optionals(item: ebnf.Item) -> tuple[ebnf.Item, bool]:
         return inline_references(item, direct_optionals)
 
     # inline choice of 3 or fewer references to literals
@@ -290,7 +290,7 @@ def simplify_productions(
 
     def inline_short_choice_of_literals(
         item: ebnf.Item,
-    ) -> Tuple[ebnf.Item, bool]:
+    ) -> tuple[ebnf.Item, bool]:
         return inline_references(item, short_choice_of_literals)
 
     # inline sequence of 2 with at least 1 literal
@@ -311,7 +311,7 @@ def simplify_productions(
 
     def inline_short_sequence_with_literal(
         item: ebnf.Item,
-    ) -> Tuple[ebnf.Item, bool]:
+    ) -> tuple[ebnf.Item, bool]:
         return inline_references(item, short_sequence_with_literal)
 
     # inline paren sequences
@@ -340,12 +340,12 @@ def simplify_productions(
         productions, is_paren_reference
     )
 
-    def inline_paren_references(item: ebnf.Item) -> Tuple[ebnf.Item, bool]:
+    def inline_paren_references(item: ebnf.Item) -> tuple[ebnf.Item, bool]:
         return inline_references(item, paren_references)
 
     # substitute multi-items with a single item
 
-    def substitute_multi_item_single(item: ebnf.Item) -> Tuple[ebnf.Item, bool]:
+    def substitute_multi_item_single(item: ebnf.Item) -> tuple[ebnf.Item, bool]:
 
         if isinstance(item, ebnf.Multiple) and len(item.inner) == 1:
             return item.inner[0], True
@@ -354,7 +354,7 @@ def simplify_productions(
 
     # substitute choices of optionals with optional of choice
 
-    def substitute_choice_of_options(item: ebnf.Item) -> Tuple[ebnf.Item, bool]:
+    def substitute_choice_of_options(item: ebnf.Item) -> tuple[ebnf.Item, bool]:
 
         if isinstance(item, ebnf.Choice):
             inner_options = [
@@ -382,7 +382,7 @@ def simplify_productions(
 
     def replace_repeatedly_helper(
         item: ebnf.Item,
-        funcs: List[Callable[[ebnf.Item], Tuple[ebnf.Item, bool]]],
+        funcs: list[Callable[[ebnf.Item], tuple[ebnf.Item, bool]]],
     ) -> ebnf.Item:
 
         changed = True
@@ -430,8 +430,8 @@ def simplify_productions(
     ]
 
 
-def to_ebnf(spec: parsing.Spec) -> List[ebnf.Production]:
-    ebnf_productions: List[ebnf.Production] = []
+def to_ebnf(spec: parsing.Spec) -> list[ebnf.Production]:
+    ebnf_productions: list[ebnf.Production] = []
 
     # add token productions
     for token in spec._tokens:
@@ -440,7 +440,7 @@ def to_ebnf(spec: parsing.Spec) -> List[ebnf.Production]:
         ebnf_productions.append(ebnf.Production(token, ebnf.Literal(token)))
 
     # add nonterm productions
-    nonterm_productions: Dict[str, List[List[ebnf.Reference]]] = {}
+    nonterm_productions: dict[str, list[list[ebnf.Reference]]] = {}
 
     has_production = {
         **{token: True for token in spec._tokens},
@@ -452,7 +452,7 @@ def to_ebnf(spec: parsing.Spec) -> List[ebnf.Production]:
         if prod_name == '<S>':
             continue
 
-        item_list: List[ebnf.Reference] = [
+        item_list: list[ebnf.Reference] = [
             ebnf.Reference(item.name) for item in production.rhs
         ]
 
@@ -517,7 +517,7 @@ def to_ebnf(spec: parsing.Spec) -> List[ebnf.Production]:
 
 
 def write_ebnf_productions(
-    ebnf_productions: List[ebnf.Production],
+    ebnf_productions: list[ebnf.Production],
     path: pathlib.Path
 ) -> None:
     with open(path / 'grammar.iso.ebnf', 'w') as file:

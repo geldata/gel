@@ -92,7 +92,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from typing import Optional, Tuple, Sequence, TYPE_CHECKING
+from typing import Optional, Sequence, TYPE_CHECKING
 
 from edb import errors
 from edb.common.typeutils import not_none
@@ -205,7 +205,7 @@ def _ref_to_ast(
 
 def _get_alias(
     name: str, *, ctx: context.ContextLevel
-) -> Tuple[str, qlast.Path]:
+) -> tuple[str, qlast.Path]:
     alias = ctx.aliases.get(name)
     return alias, qlast.Path(
         steps=[qlast.ObjectRef(name=alias)],

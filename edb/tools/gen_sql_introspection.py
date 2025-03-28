@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import textwrap
-from typing import List, Mapping, Tuple
+from typing import Mapping
 
 from edb.tools.edb import edbcommands
 
@@ -127,7 +127,7 @@ def print_schema(
     f,
     schema_name: str,
     schemas_by_version: Mapping[
-        int, Mapping[str, Mapping[str, List[Tuple[str, str]]]]
+        int, Mapping[str, Mapping[str, list[tuple[str, str]]]]
     ],
 ):
     """

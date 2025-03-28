@@ -27,7 +27,7 @@ to the caller.
 """
 
 from __future__ import annotations
-from typing import Optional, List, Tuple, Protocol, Callable, Dict, Any, TypeVar
+from typing import Optional, Protocol, Callable, Any, TypeVar
 
 import asyncio
 import ssl as ssl_module
@@ -70,8 +70,8 @@ class Authentication(Enum):
 
 @dataclass
 class PGState:
-    parameters: Dict[str, str]
-    cancellation_key: Optional[Tuple[int, int]]
+    parameters: dict[str, str]
+    cancellation_key: Optional[tuple[int, int]]
     auth: Optional[Authentication]
     server_error: Optional[list[tuple[str, str]]]
     ssl: bool
@@ -98,7 +98,7 @@ def _parse_tls_version(tls_version: str) -> ssl_module.TLSVersion:
         raise ValueError(f"No such TLS version: {tls_version}")
 
 
-def _create_ssl(ssl_config: Dict[str, Any]):
+def _create_ssl(ssl_config: dict[str, Any]):
     sslmode = SSLMode.parse(ssl_config['sslmode'])
     ssl = ssl_module.SSLContext(ssl_module.PROTOCOL_TLS_CLIENT)
     ssl.check_hostname = sslmode >= SSLMode.verify_full
@@ -149,7 +149,7 @@ class PGConnectionProtocol(asyncio.Protocol):
         state: pgrust.PyConnectionState,
         pg_state: PGState,
         complete_callback: Callable[
-            [asyncio.BaseTransport], Tuple[PGRawConn, asyncio.Protocol]
+            [asyncio.BaseTransport], tuple[PGRawConn, asyncio.Protocol]
         ],
     ):
         self.state = state
@@ -329,7 +329,7 @@ async def _create_connection_to(
     host: str | bytes,
     hostname: str,
     port: int,
-) -> Tuple[asyncio.Transport, PGConnectionProtocol]:
+) -> tuple[asyncio.Transport, PGConnectionProtocol]:
     if address_family == "unix":
         t, protocol = await asyncio.get_running_loop().create_unix_connection(
             lambda: protocol_factory(None, hostname, port), path=host  # type: ignore
@@ -346,8 +346,8 @@ async def _create_connection_to(
 async def _create_connection(
     protocol_factory: Callable[[Optional[str], str, int], PGConnectionProtocol],
     connect_timeout: Optional[int],
-    host_candidates: List[Tuple[str, str | bytes, str, int]],
-) -> Tuple[asyncio.Transport, PGConnectionProtocol]:
+    host_candidates: list[tuple[str, str | bytes, str, int]],
+) -> tuple[asyncio.Transport, PGConnectionProtocol]:
     e = None
     for address_family, host, hostname, port in host_candidates:
         try:
@@ -406,7 +406,7 @@ P = TypeVar('P', bound=asyncio.Protocol)
 
 def complete_connection_callback(
     host, port, source_description, state, protocol_factory, pg_state
-) -> Callable[[asyncio.BaseTransport], Tuple[PGRawConn, asyncio.Protocol]]:
+) -> Callable[[asyncio.BaseTransport], tuple[PGRawConn, asyncio.Protocol]]:
     def complete_connection(upgraded_transport):
         conn = PGRawConn(
             source_description,
@@ -435,7 +435,7 @@ async def create_postgres_connection(
     protocol_factory: Callable[[], P],
     *,
     source_description: Optional[str] = None,
-) -> Tuple[PGRawConn, P]:
+) -> tuple[PGRawConn, P]:
     """
     Open a PostgreSQL connection to the address specified by the DSN or
     ConnectionParams, creating the user protocol from the protocol_factory.

@@ -18,13 +18,13 @@
 
 
 from __future__ import annotations
-from typing import Optional, List, NoReturn
+from typing import Optional, NoReturn
 
 import os
 import sys
 
 
-def rustcli(*, args: Optional[List[str]]=None) -> NoReturn:
+def rustcli(*, args: Optional[list[str]]=None) -> NoReturn:
     if args is None:
         args = [*sys.argv]
 
