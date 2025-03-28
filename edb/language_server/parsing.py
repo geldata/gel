@@ -30,6 +30,7 @@ from edb.edgeql.parser.grammar import tokens as qltokens
 import edb._edgeql_parser as rust_parser
 
 from . import Result, is_schema_file
+from . import utils as ls_utils
 
 
 def parse(
@@ -48,21 +49,10 @@ def parse(
                 message += f"\n{details}"
             if hint:
                 message += f"\nHint: {hint}"
-            (start, end) = tokenizer.inflate_span(source.text(), span)
-            assert end
 
             diagnostics.append(
                 lsp_types.Diagnostic(
-                    range=lsp_types.Range(
-                        start=lsp_types.Position(
-                            line=start.line - 1,
-                            character=start.column - 1,
-                        ),
-                        end=lsp_types.Position(
-                            line=end.line - 1,
-                            character=end.column - 1,
-                        ),
-                    ),
+                    range=ls_utils.convert_span(source.text(), span),
                     severity=lsp_types.DiagnosticSeverity.Error,
                     message=message,
                 )

@@ -1839,6 +1839,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         context: CommandContext,
     ) -> ObjectCommand[so.Object_T]:
         assert isinstance(astnode, qlast.ObjectDDL), 'expected ObjectDDL'
+        # span = astnode.name.span if astnode.name else None
         classname = cls._classname_from_ast(schema, astnode, context)
         return cls(classname=classname)
 
@@ -2593,7 +2594,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         *,
         name: Optional[sn.Name] = None,
         default: Union[so.Object_T, so.NoDefaultT] = so.NoDefault,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> so.Object_T:
         ...
 
@@ -2605,7 +2606,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         *,
         name: Optional[sn.Name] = None,
         default: None = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[so.Object_T]:
         ...
 
@@ -2616,7 +2617,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         *,
         name: Optional[sn.Name] = None,
         default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[so.Object_T]:
         metaclass = self.get_schema_metaclass()
         if name is None:
@@ -2663,6 +2664,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         context: CommandContext,
     ) -> Any:
         raw_value = self.get_attribute_value(attr_name)
+
         if raw_value is None:
             return None
 
@@ -2965,7 +2967,7 @@ class QualifiedObjectCommand(ObjectCommand[so.QualifiedObject_T]):
         *,
         name: Optional[sn.Name] = None,
         default: Union[so.QualifiedObject_T, so.NoDefaultT] = so.NoDefault,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> so.QualifiedObject_T:
         ...
 
@@ -2977,7 +2979,7 @@ class QualifiedObjectCommand(ObjectCommand[so.QualifiedObject_T]):
         *,
         name: Optional[sn.Name] = None,
         default: None = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[so.QualifiedObject_T]:
         ...
 
@@ -2989,7 +2991,7 @@ class QualifiedObjectCommand(ObjectCommand[so.QualifiedObject_T]):
         name: Optional[sn.Name] = None,
         default: Union[
             so.QualifiedObject_T, so.NoDefaultT, None] = so.NoDefault,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[so.QualifiedObject_T]:
         if name is None:
             name = self.classname
@@ -2997,10 +2999,10 @@ class QualifiedObjectCommand(ObjectCommand[so.QualifiedObject_T]):
             if rename is not None:
                 name = rename
         metaclass = self.get_schema_metaclass()
-        if sourcectx is None:
-            sourcectx = self.span
+        if span is None:
+            span = self.span
         return schema.get(
-            name, type=metaclass, default=default, sourcectx=sourcectx)
+            name, type=metaclass, default=default, span=span)
 
 
 class GlobalObjectCommand(ObjectCommand[so.GlobalObject_T]):
@@ -3112,6 +3114,9 @@ class CreateObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
                 specified_id = self.get_prespecified_id(context)
                 if specified_id is not None:
                     props['id'] = specified_id
+
+        if self.span and 'span' not in props:
+            props['span'] = self.span
 
         schema, self.scls = metaclass.create_in_schema(
             schema, stable_ids=context.stable_ids, **props)

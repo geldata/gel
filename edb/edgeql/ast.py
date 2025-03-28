@@ -25,7 +25,7 @@ from __future__ import annotations
 import typing
 
 from edb.common import enum as s_enum
-from edb.common import ast, span
+from edb.common import ast, span, markup
 
 from . import qltypes
 
@@ -97,6 +97,21 @@ class Base(ast.AST):
         from edb.common.debug import dump_edgeql
 
         dump_edgeql(self)
+
+
+@markup.serializer.serializer.register(Base)
+def _serialize_to_markup_base(ir: Base, *, ctx: typing.Any) -> typing.Any:
+    node = ast.serialize_to_markup(ir, ctx=ctx)
+
+    s = getattr(ir, 'span', None)
+    if not s:
+        return node
+
+    label = f'{s.start}..{s.end}'
+    node.add_child(label='span', node=markup.serialize(label, ctx=ctx))
+    child = node.children.pop()
+    node.children.insert(1, child)
+    return node
 
 
 class GrammarEntryPoint(Base):

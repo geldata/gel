@@ -94,7 +94,7 @@ def resolve_name(
     lname: sn.Name,
     *,
     metaclass: Optional[Type[so.Object]] = None,
-    sourcectx: Optional[parsing.Span] = None,
+    span: Optional[parsing.Span] = None,
     modaliases: Mapping[Optional[str], str],
     schema: s_schema.Schema,
 ) -> sn.Name:
@@ -103,7 +103,7 @@ def resolve_name(
         type=metaclass,
         module_aliases=modaliases,
         default=None,
-        sourcectx=sourcectx,
+        span=span,
     )
     if obj is not None:
         name = obj.get_name(schema)
@@ -139,14 +139,14 @@ def ast_objref_to_object_shell(
         metaclass=metaclass,
         modaliases=modaliases,
         schema=schema,
-        sourcectx=ref.span,
+        span=ref.span,
     )
 
     return so.ObjectShell(
         name=name,
         origname=lname,
         schemaclass=metaclass,
-        sourcectx=ref.span,
+        span=ref.span,
     )
 
 
@@ -170,14 +170,14 @@ def ast_objref_to_type_shell(
         metaclass=mcls,
         modaliases=modaliases,
         schema=schema,
-        sourcectx=ref.span,
+        span=ref.span,
     )
 
     return s_types.TypeShell(
         name=name,
         origname=lname,
         schemaclass=mcls,
-        sourcectx=ref.span,
+        span=ref.span,
     )
 
 
@@ -391,7 +391,7 @@ def ast_to_type_shell(
         from . import pseudo as s_pseudo
         return s_pseudo.PseudoTypeShell(
             name=sn.UnqualName(node.maintype.name),
-            sourcectx=node.maintype.span,
+            span=node.maintype.span,
         )  # type: ignore
 
     assert isinstance(node.maintype, qlast.ObjectRef)
@@ -451,14 +451,14 @@ def type_op_ast_to_type_shell(
                 components=left.components + right.components,
                 module=module,
                 schemaclass=metaclass,
-                sourcectx=node.span,
+                span=node.span,
             )
         else:
             return s_types.UnionTypeShell(
                 components=left.components + (right,),
                 module=module,
                 schemaclass=metaclass,
-                sourcectx=node.span,
+                span=node.span,
             )
     else:
         if isinstance(right, s_types.UnionTypeShell):
@@ -466,14 +466,14 @@ def type_op_ast_to_type_shell(
                 components=(left,) + right.components,
                 schemaclass=metaclass,
                 module=module,
-                sourcectx=node.span,
+                span=node.span,
             )
         else:
             return s_types.UnionTypeShell(
                 components=(left, right),
                 module=module,
                 schemaclass=metaclass,
-                sourcectx=node.span,
+                span=node.span,
             )
 
 

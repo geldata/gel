@@ -457,7 +457,6 @@ def apply_sdl(
     sdl_document: qlast.Schema,
     *,
     base_schema: s_schema.Schema,
-    current_schema: s_schema.Schema,
     stdmode: bool = False,
     testmode: bool = False,
 ) -> tuple[s_schema.Schema, list[errors.EdgeDBError]]:
@@ -513,6 +512,10 @@ def apply_sdl(
     target_schema = base_schema
     warnings = []
 
+    # <DEBUG>
+    ddl_cmd_file = open('ddl_cmd.txt', 'w')
+    # </DEBUG>
+
     def process(ddl_stmt: qlast.DDLCommand) -> None:
         nonlocal target_schema
         delta = sd.DeltaRoot()
@@ -520,6 +523,11 @@ def apply_sdl(
             cmd = cmd_from_ddl(
                 ddl_stmt, schema=target_schema, modaliases={},
                 context=context, testmode=testmode)
+
+            # <DEBUG>
+            from edb.common import markup
+            markup.dump(cmd, file=ddl_cmd_file)
+            # </DEBUG>
 
             delta.add(cmd)
             target_schema = delta.apply(target_schema, context)
@@ -574,8 +582,20 @@ def apply_sdl(
     for ddl_stmt in extensions.values():
         process_ext(ddl_stmt)
 
+    # <DEBUG>
+    from edb.common import markup
+    with open('sdl.txt', 'w') as file:
+        markup.dump(documents.values(), file=file)
+    # </DEBUG>
+
     # Now, sort the main body of SDL and apply it.
     ddl_stmts = s_decl.sdl_to_ddl(target_schema, documents)
+
+    # <DEBUG>
+    from edb.common import markup
+    with open('ddl_stmt.txt', 'w') as file:
+        markup.dump(ddl_stmts, file=file)
+    # </DEBUG>
 
     if debug.flags.sdl_loading:
         debug.header('SDL loading script')
@@ -586,6 +606,10 @@ def apply_sdl(
 
     for ddl_stmt in itertools.chain(futures.values(), ddl_stmts):
         process(ddl_stmt)
+
+    # <DEBUG>
+    ddl_cmd_file.close()
+    # </DEBUG>
 
     return target_schema, warnings
 

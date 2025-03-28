@@ -3,7 +3,7 @@ use crate::{keywords::Keyword, position::Span};
 
 use super::{CSTNode, Context, Error, Parser, StackNode, Terminal};
 
-impl<'s> Parser<'s> {
+impl Parser<'_> {
     pub(super) fn custom_error(&self, ctx: &Context, token: &Terminal) -> Option<Error> {
         let ltok = self.get_from_top(0).unwrap();
 

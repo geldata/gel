@@ -33,7 +33,7 @@ contexts through the AST structure.
 
 from __future__ import annotations
 
-from typing import Iterable, List
+from typing import Iterable, List, Any
 import re
 import bisect
 
@@ -83,6 +83,9 @@ class Span(markup.MarkupExceptionContext):
             end=0,
         )
 
+    def __str__(self):
+        return f'{self.name}:{self.start}..{self.end}'
+
     def __getstate__(self):
         dic = self.__dict__.copy()
         dic['_points'] = None
@@ -95,8 +98,7 @@ class Span(markup.MarkupExceptionContext):
         # still be right...
         buffer = self.buffer.encode('utf-8') if self.buffer else b' ' * self.end
         self._points = ql_parser.SourcePoint.from_offsets(
-            buffer,
-            [self.start, self.end]
+            buffer, [self.start, self.end]
         )
 
     @property
@@ -125,7 +127,7 @@ class Span(markup.MarkupExceptionContext):
         buf_lines = []
         line_offsets = [0]
         for match in NEW_LINE.finditer(buf_bytes):
-            buf_lines.append(buf_bytes[offset:match.start()].decode('utf-8'))
+            buf_lines.append(buf_bytes[offset : match.start()].decode('utf-8'))
             offset = match.end()
             line_offsets.append(offset)
 
@@ -136,8 +138,11 @@ class Span(markup.MarkupExceptionContext):
 
         endcol = end.column if start.line == end.line else None
         tbp = me.lang.TracebackPoint(
-            name=self.name, filename=self.name, lineno=start.line,
-            colno=start.column, end_colno=endcol,
+            name=self.name,
+            filename=self.name,
+            lineno=start.line,
+            colno=start.column,
+            end_colno=endcol,
             lines=buf_lines[context_start:context_end],
             # Line numbers are 1 indexed here
             line_numbers=list(range(context_start + 1, context_end + 1)),
@@ -206,6 +211,7 @@ def infer_span_from_children(node, span: Span):
 
 def wrap_function_to_infer_spans(func):
     """Provide automatic span for Nonterm production rules."""
+
     def wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         obj, *args = args
@@ -294,3 +300,36 @@ class SpanValidator(ast.NodeVisitor):
         if getattr(node, 'span', None) is None:
             raise RuntimeError('node {} has no span'.format(node))
         super().generic_visit(node)
+
+
+def find_by_source_position(
+    node: ast.AST, target_offset: int
+) -> ast.AST | None:
+    finder = SpanFinder(target_offset)
+    finder.visit(node)
+    return finder.found_node
+
+
+class SpanFinder(ast.NodeVisitor):
+    target_offset: int
+    found_node: Any | None
+
+    def __init__(self, target_offset: int):
+        super().__init__()
+        self.target_offset = target_offset
+        self.found_node = None
+
+    def generic_visit(self, node, *, combine_results=None) -> Any:
+        has_span = False
+        if node_span := getattr(node, 'span', None):
+            has_span = True
+            if not span_contains(node_span, self.target_offset):
+                return
+
+        super().generic_visit(node)
+        if self.found_node is None and has_span:
+            self.found_node = node
+
+
+def span_contains(span: Span, target_offset: int) -> bool:
+    return span.start <= target_offset and target_offset <= span.end
