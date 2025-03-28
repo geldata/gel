@@ -108,7 +108,6 @@ class Base(ast.AST):
         )
 
 
-# DEBUG: Probably don't actually keep this forever?
 @markup.serializer.serializer.register(Base)
 def _serialize_to_markup_base(ir: Base, *, ctx: typing.Any) -> typing.Any:
     node = ast.serialize_to_markup(ir, ctx=ctx)
