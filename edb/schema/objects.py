@@ -1036,8 +1036,9 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
     span = SchemaField(
         parsing.Span,
         default=None,
-        compcoef=0.0,
+        compcoef=None,
         hashable=False,
+        ephemeral=True,
     )
 
     name = SchemaField(
