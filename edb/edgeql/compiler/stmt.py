@@ -35,6 +35,7 @@ from typing import (
 
 from collections import defaultdict
 import textwrap
+import itertools
 
 from edb import errors
 from edb.common import ast
@@ -1588,6 +1589,15 @@ def compile_query_subject(
 
     if (shape is not None or view_scls is not None) and len(set.path_id) == 1:
         ctx.class_view_overrides[set.path_id.target.id] = set_stype
+
+    if shape:
+        # make sure that an applied shape expands the span of the set
+        set.span = edb_span.merge_spans(
+            itertools.chain(
+                (s.span for s in [set] if s.span),
+                (el.span for el in shape if el.span)
+            )
+        )
 
     return set
 
