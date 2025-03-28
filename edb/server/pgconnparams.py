@@ -48,7 +48,12 @@ if _system == 'Windows':
 else:
 
     def get_pg_home_directory() -> pathlib.Path:
-        return pathlib.Path.home() / '.postgresql'
+        try:
+            return pathlib.Path.home() / '.postgresql'
+        except RuntimeError:
+            # In some container environments the home dir is available 
+            # so we return a path to a nonexistent file
+            return pathlib.Path('/.postgresql')
 
 
 class SSLMode(enum.IntEnum):
