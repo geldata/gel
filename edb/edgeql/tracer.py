@@ -687,7 +687,7 @@ def trace_Global(
         ctx.refs.add(refname)
         tip = ctx.objects[refname]
     else:
-        tip = ctx.schema.get(refname, sourcectx=node.span)
+        tip = ctx.schema.get(refname, span=node.span)
     return tip
 
 
@@ -703,7 +703,7 @@ def check_type_exists(
 
     try:
         # Check if the typename is already in the schema
-        ctx.schema.get(typename, type=s_types.Type, sourcectx=span)
+        ctx.schema.get(typename, type=s_types.Type, span=span)
     except errors.InvalidReferenceError as e:
         if hint and not e.hint:
             e.set_hint_and_details(hint, e.details)
@@ -814,7 +814,7 @@ def trace_Path(
                     ctx.refs.add(refname)
                     tip = ctx.objects[refname]
                 else:
-                    tip = ctx.schema.get(refname, sourcectx=step.span)
+                    tip = ctx.schema.get(refname, span=step.span)
 
         elif isinstance(step, qlast.Ptr):
             pname = sn.UnqualName(step.name)
@@ -1007,7 +1007,7 @@ def _resolve_type_expr(
             obj: TypeLike
             if local_obj is None:
                 obj = ctx.schema.get(
-                    refname, type=s_types.Type, sourcectx=texpr.span)
+                    refname, type=s_types.Type, span=texpr.span)
             else:
                 assert isinstance(local_obj, Type)
                 obj = local_obj

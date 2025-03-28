@@ -372,7 +372,7 @@ class Schema(abc.ABC):
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> so.Object:
         ...
 
@@ -385,7 +385,7 @@ class Schema(abc.ABC):
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[so.Object]:
         ...
 
@@ -399,7 +399,7 @@ class Schema(abc.ABC):
         type: Type[so.Object_T],
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> so.Object_T:
         ...
 
@@ -413,7 +413,7 @@ class Schema(abc.ABC):
         type: Type[so.Object_T],
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[so.Object_T]:
         ...
 
@@ -427,7 +427,7 @@ class Schema(abc.ABC):
         type: Optional[Type[so.Object_T]] = None,
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[so.Object]:
         ...
 
@@ -440,7 +440,7 @@ class Schema(abc.ABC):
         type: Optional[Type[so.Object_T]] = None,
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[so.Object]:
         return self._get(
             name,
@@ -449,7 +449,7 @@ class Schema(abc.ABC):
             type=type,
             condition=condition,
             label=label,
-            sourcectx=sourcectx,
+            span=span,
         )
 
     @abc.abstractmethod
@@ -462,7 +462,7 @@ class Schema(abc.ABC):
         type: Optional[Type[so.Object_T]],
         condition: Optional[Callable[[so.Object], bool]],
         label: Optional[str],
-        sourcectx: Optional[parsing.Span],
+        span: Optional[parsing.Span],
         disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> Optional[so.Object]:
         raise NotImplementedError
@@ -1404,7 +1404,7 @@ class FlatSchema(Schema):
         type: Optional[Type[so.Object_T]],
         condition: Optional[Callable[[so.Object], bool]],
         label: Optional[str],
-        sourcectx: Optional[parsing.Span],
+        span: Optional[parsing.Span],
         disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> Optional[so.Object]:
         def getter(schema: FlatSchema, name: sn.Name) -> Optional[so.Object]:
@@ -1436,7 +1436,7 @@ class FlatSchema(Schema):
                 raise errors.InvalidReferenceError(
                     f'{refname!r} exists, but is {english.add_a(got_name)}, '
                     f'not {english.add_a(exp_name)}',
-                    span=sourcectx,
+                    span=span,
                 )
 
             return obj  # type: ignore
@@ -1445,7 +1445,7 @@ class FlatSchema(Schema):
                 name=name,
                 label=label,
                 module_aliases=module_aliases,
-                sourcectx=sourcectx,
+                span=span,
                 type=type,
             )
 
@@ -1455,7 +1455,7 @@ class FlatSchema(Schema):
         *,
         label: Optional[str] = None,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
         type: Optional[Type[so.Object]] = None,
     ) -> NoReturn:
         refname = str(name)
@@ -1484,7 +1484,7 @@ class FlatSchema(Schema):
 
         raise errors.InvalidReferenceError(
             f'{label} {refname!r} does not exist',
-            span=sourcectx,
+            span=span,
         )
 
     def has_object(self, object_id: uuid.UUID) -> bool:
@@ -2092,7 +2092,7 @@ class ChainedSchema(Schema):
         type: Optional[Type[so.Object_T]],
         condition: Optional[Callable[[so.Object], bool]],
         label: Optional[str],
-        sourcectx: Optional[parsing.Span],
+        span: Optional[parsing.Span],
         disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> Optional[so.Object]:
         obj = self._top_schema._get(
@@ -2102,7 +2102,7 @@ class ChainedSchema(Schema):
             default=None,
             condition=condition,
             label=label,
-            sourcectx=sourcectx,
+            span=span,
             disallow_module=disallow_module,
         )
         if obj is None:
@@ -2119,7 +2119,7 @@ class ChainedSchema(Schema):
                 type=type,
                 condition=condition,
                 label=label,
-                sourcectx=sourcectx,
+                span=span,
                 disallow_module=disallow_module,
             )
         else:
