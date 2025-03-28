@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, List, TYPE_CHECKING, Set
+from typing import Any, Optional, TYPE_CHECKING
 
 from edb import errors
 from edb.common import parsing
@@ -213,11 +213,11 @@ class AliasLikeCommand(
         context: sd.CommandContext,
         is_alter: bool = False,
         span: Optional[parsing.Span] = None,
-    ) -> Tuple[
+    ) -> tuple[
         sd.Command,
         s_types.TypeShell[s_types.Type],
         s_expr.Expression,
-        Set[so.ObjectShell[s_types.Type]],
+        set[so.ObjectShell[s_types.Type]],
     ]:
         pschema = schema
 
@@ -452,7 +452,7 @@ class DeleteAliasLike(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         scls: so.QualifiedObject_T,
-    ) -> List[sd.Command]:
+    ) -> list[sd.Command]:
         ops = super()._canonicalize(schema, context, scls)
         if self._is_computable(scls, schema):
             ops.append(self._delete_alias_types(scls, schema, context))
@@ -512,10 +512,10 @@ def _create_alias_types(
     schema: s_schema.Schema,
     is_global: bool,
     span: Optional[parsing.Span] = None,
-) -> Tuple[
+) -> tuple[
     sd.Command,
     s_types.TypeShell[s_types.Type],
-    Set[so.ObjectShell[s_types.Type]],
+    set[so.ObjectShell[s_types.Type]],
 ]:
     from . import ordering as s_ordering
     from edb.ir import utils as irutils
@@ -525,7 +525,7 @@ def _create_alias_types(
 
     derived_delta = sd.DeltaRoot()
 
-    created_type_shells: Set[so.ObjectShell[s_types.Type]] = set()
+    created_type_shells: set[so.ObjectShell[s_types.Type]] = set()
 
     for ty_id in irutils.collect_schema_types(ir.expr):
         if schema.has_object(ty_id):

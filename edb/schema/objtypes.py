@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Type, Iterable, List, Set, cast
+from typing import Optional, Iterable, cast
 
 import collections
 
@@ -183,12 +183,12 @@ class ObjectType(
         name: str,
         *,
         sources: Iterable[so.Object] = ()
-    ) -> Set[links.Link]:
+    ) -> set[links.Link]:
         if sn.is_qualified(name):
             raise ValueError(
                 'references to concrete pointers must not be qualified')
 
-        ptrs: Set[links.Link] = set()
+        ptrs: set[links.Link] = set()
 
         ancestor_objects = self.get_ancestors(schema).objects(schema)
 
@@ -237,7 +237,7 @@ class ObjectType(
         self,
         other: s_types.Type,
         schema: s_schema.Schema,
-    ) -> Tuple[s_schema.Schema, Optional[ObjectType]]:
+    ) -> tuple[s_schema.Schema, Optional[ObjectType]]:
         if not isinstance(other, ObjectType):
             return schema, None
 
@@ -256,7 +256,7 @@ class ObjectType(
         )
 
     @classmethod
-    def get_root_classes(cls) -> Tuple[sn.QualName, ...]:
+    def get_root_classes(cls) -> tuple[sn.QualName, ...]:
         return (
             sn.QualName(module='std', name='BaseObject'),
             sn.QualName(module='std', name='Object'),
@@ -368,7 +368,7 @@ def get_or_create_union_type(
     transient: bool = False,
     opaque: bool = False,
     module: Optional[str] = None,
-) -> Tuple[s_schema.Schema, ObjectType, bool]:
+) -> tuple[s_schema.Schema, ObjectType, bool]:
 
     name = s_types.get_union_type_name(
         (c.get_name(schema) for c in components),
@@ -398,7 +398,7 @@ def get_or_create_union_type(
 
             schema = sources.populate_pointer_set_for_source_union(
                 schema,
-                cast(List[sources.Source], components),
+                cast(list[sources.Source], components),
                 objtype,
                 modname=module,
             )
@@ -412,7 +412,7 @@ def get_or_create_intersection_type(
     *,
     module: Optional[str] = None,
     transient: bool = False,
-) -> Tuple[s_schema.Schema, ObjectType]:
+) -> tuple[s_schema.Schema, ObjectType]:
 
     name = s_types.get_intersection_type_name(
         (c.get_name(schema) for c in components),
@@ -549,7 +549,7 @@ class CreateObjectType(
 
     def _get_ast_node(
         self, schema: s_schema.Schema, context: sd.CommandContext
-    ) -> Type[qlast.DDLOperation]:
+    ) -> type[qlast.DDLOperation]:
         if self.get_attribute_value('expr_type'):
             return qlast.CreateAlias
         else:

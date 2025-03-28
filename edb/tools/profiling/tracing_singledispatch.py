@@ -14,9 +14,7 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Tuple,
     TypeVar,
-    Dict,
     TYPE_CHECKING,
 )
 
@@ -39,14 +37,14 @@ if TYPE_CHECKING:
     ModulePath = str
     LineNo = int
     FunctionName = str
-    FunctionID = Tuple[ModulePath, LineNo, FunctionName]
+    FunctionID = tuple[ModulePath, LineNo, FunctionName]
     Caller = FunctionID
     Callee = FunctionID
     CallCount = int
-    CallCounts = Dict[Caller, Dict[Callee, CallCount]]
+    CallCounts = dict[Caller, dict[Callee, CallCount]]
 
 
-done_dispatches: Dict[FunctionID, CallCounts] = {}
+done_dispatches: dict[FunctionID, CallCounts] = {}
 
 
 # Taken from Python 3.8.0+ (051ff526b5dc2c40c4a53d87089740358822edfa)

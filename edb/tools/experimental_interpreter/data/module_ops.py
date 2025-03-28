@@ -1,11 +1,11 @@
 from . import data_ops as e
-from typing import Optional, List, Tuple
+from typing import Optional
 
 default_open_scopes = [("std",)]
 
 
 def resolve_module_in_schema(
-    schema: e.DBSchema, name: Tuple[str, ...]
+    schema: e.DBSchema, name: tuple[str, ...]
 ) -> e.DBModule:
     if name in schema.unchecked_modules:
         assert name not in schema.modules
@@ -79,7 +79,7 @@ def resolve_type_name(
 
 def resolve_func_name(
     ctx: e.TcCtx | e.DBSchema, name: e.QualifiedName
-) -> List[e.FuncDef]:
+) -> list[e.FuncDef]:
     me = try_resolve_module_entity(ctx, name)
     if me is not None:
         if isinstance(me, e.ModuleEntityFuncDef):
@@ -131,7 +131,7 @@ def resolve_simple_name(
 
 def resolve_raw_name_and_type_def(
     ctx: e.TcCtx | e.DBSchema, name: e.QualifiedName | e.UnqualifiedName
-) -> Tuple[e.QualifiedName, e.ObjectTp | e.ScalarTp]:
+) -> tuple[e.QualifiedName, e.ObjectTp | e.ScalarTp]:
     if isinstance(name, e.UnqualifiedName):
         name = resolve_simple_name(ctx, name)
     return (name, resolve_type_name(ctx, name))
@@ -139,7 +139,7 @@ def resolve_raw_name_and_type_def(
 
 def resolve_raw_name_and_func_def(
     ctx: e.TcCtx | e.DBSchema, name: e.QualifiedName | e.UnqualifiedName
-) -> Tuple[e.QualifiedName, List[e.FuncDef]]:
+) -> tuple[e.QualifiedName, list[e.FuncDef]]:
     if isinstance(name, e.UnqualifiedName):
         name = resolve_simple_name(ctx, name)
     return (name, resolve_func_name(ctx, name))
@@ -147,12 +147,12 @@ def resolve_raw_name_and_func_def(
 
 def enumerate_all_object_type_defs(
     ctx: e.TcCtx,
-) -> List[Tuple[e.QualifiedName, e.ObjectTp]]:
+) -> list[tuple[e.QualifiedName, e.ObjectTp]]:
     """
     Enumerate all type definitions in the current module
     and the default `std` module.
     """
-    result: List[Tuple[e.QualifiedName, e.ObjectTp]] = []
+    result: list[tuple[e.QualifiedName, e.ObjectTp]] = []
     for module_name, module_def in [
         *ctx.schema.modules.items(),
         *ctx.schema.unchecked_modules.items(),

@@ -26,7 +26,6 @@ from typing import (
     Iterable,
     Iterator,
     MutableSet,
-    Dict,
 )
 
 import collections
@@ -38,7 +37,7 @@ K = TypeVar("K", bound=Hashable)
 
 class OrderedSet(MutableSet[K]):
 
-    map: Dict[K, None]
+    map: dict[K, None]
 
     def __init__(self, iterable: Optional[Iterable[K]] = None) -> None:
         if iterable is not None:

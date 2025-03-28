@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Dict, NamedTuple
+from typing import Any, NamedTuple
 
 import asyncio
 import collections
@@ -626,7 +626,7 @@ class BaseLocalPool(
     _worker_class = Worker
     _worker_mod = "worker"
     _workers_queue: queue.WorkerQueue[Worker]
-    _workers: Dict[int, Worker]
+    _workers: dict[int, Worker]
 
     def __init__(
         self,
@@ -1324,7 +1324,7 @@ class MultiTenantWorker(Worker):
 class MultiTenantPool(FixedPool):
     _worker_class = MultiTenantWorker  # type: ignore
     _worker_mod = "multitenant_worker"
-    _workers: Dict[int, MultiTenantWorker]  # type: ignore
+    _workers: dict[int, MultiTenantWorker]  # type: ignore
 
     def __init__(self, *, cache_size, **kwargs):
         super().__init__(**kwargs)

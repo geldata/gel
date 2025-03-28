@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Optional, Iterator, FrozenSet
+from typing import Optional, Iterator
 
 import dataclasses
 import enum
@@ -83,7 +83,7 @@ class _PlanInfo:
 @dataclasses.dataclass
 class Node(to_json.ToJson, pg_tree.CostMixin):
     plan_id: uuid.UUID
-    relations: FrozenSet[str]
+    relations: frozenset[str]
     contexts: Optional[list[ir_analyze.ContextDesc]]
     children: list[Child]
 

@@ -22,7 +22,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Type,
 )
 
 import http.server
@@ -398,7 +397,7 @@ class RequestDetails:
 class MockHttpServer:
     def __init__(
         self,
-        handler_type: Type[MockHttpServerHandler] = MockHttpServerHandler,
+        handler_type: type[MockHttpServerHandler] = MockHttpServerHandler,
     ) -> None:
         self.has_started = threading.Event()
         self.routes: dict[

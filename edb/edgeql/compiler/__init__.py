@@ -130,13 +130,9 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
     TypeVar,
     AbstractSet,
     Mapping,
-    Dict,
-    List,
-    Set,
     cast,
     overload,
     TYPE_CHECKING,
@@ -293,7 +289,7 @@ def compile_ast_to_ir(
 
         # Also build and dump a mapping from scope ids to
         # paths that appear directly at them.
-        scopes: Dict[int, Set[irast.PathId]] = {
+        scopes: dict[int, set[irast.PathId]] = {
             k: set() for k in
             sorted(node.unique_id
                    for node in ctx.path_scope.descendants
@@ -373,7 +369,7 @@ def compile_ast_fragment_to_ir(
 
 @compiler_entrypoint
 def preprocess_script(
-    stmts: List[qlast.Base],
+    stmts: list[qlast.Base],
     schema: s_schema.Schema,
     *,
     options: CompilerOptions,
@@ -440,7 +436,7 @@ def evaluate_ast_to_python_val_and_ir(
     schema: s_schema.Schema,
     *,
     modaliases: Optional[Mapping[Optional[str], str]] = None,
-) -> Tuple[Any, irast.Statement]:
+) -> tuple[Any, irast.Statement]:
     """Evaluate the given EdgeQL AST as a constant expression.
 
     Args:

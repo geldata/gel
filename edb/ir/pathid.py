@@ -21,11 +21,9 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
     Union,
     AbstractSet,
     Iterator,
-    FrozenSet,
     cast,
     TYPE_CHECKING,
 )
@@ -74,20 +72,20 @@ class PathId:
                  '_is_ptr', '_is_linkprop', '_hash')
 
     #: Actual path information.
-    _path: Tuple[
+    _path: tuple[
         Union[
             irast.TypeRef,
-            Tuple[irast.BasePointerRef, s_pointers.PointerDirection]
+            tuple[irast.BasePointerRef, s_pointers.PointerDirection]
         ],
         ...
     ]
 
     #: Normalized path data, used for PathId hashing and comparisons.
-    _norm_path: Tuple[
+    _norm_path: tuple[
         Union[
             uuid.UUID,
             s_name.Name,
-            Tuple[
+            tuple[
                 s_name.QualName, s_pointers.PointerDirection, bool
             ],
         ],
@@ -95,7 +93,7 @@ class PathId:
     ]
 
     #: A set of namespace identifiers which this PathId belongs to.
-    _namespace: FrozenSet[str]
+    _namespace: frozenset[str]
 
     #: If this PathId has a prefix from another namespace, this will
     #: contain said prefix.
@@ -480,7 +478,7 @@ class PathId:
 
         for i in range(1, len(path) - 1, 2):
             ptrspec = cast(
-                Tuple[irast.BasePointerRef, s_pointers.PointerDirection],
+                tuple[irast.BasePointerRef, s_pointers.PointerDirection],
                 path[i],
             )
 
@@ -535,7 +533,7 @@ class PathId:
 
         for i in range(1, len(path) - 1, 2):
             ptrspec = cast(
-                Tuple[irast.BasePointerRef, s_pointers.PointerDirection],
+                tuple[irast.BasePointerRef, s_pointers.PointerDirection],
                 path[i],
             )
 
@@ -755,7 +753,7 @@ class PathId:
             )
 
     @property
-    def namespace(self) -> FrozenSet[str]:
+    def namespace(self) -> frozenset[str]:
         """The namespace of this ``PathId``"""
         return self._namespace
 

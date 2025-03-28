@@ -21,10 +21,7 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
     Iterator,
-    Dict,
-    List,
     NamedTuple,
     Self,
     cast,
@@ -83,10 +80,10 @@ class BaseQuery:
     sql: bytes
     is_transactional: bool = True
     has_dml: bool = False
-    cache_sql: Optional[Tuple[bytes, bytes]] = dataclasses.field(
+    cache_sql: Optional[tuple[bytes, bytes]] = dataclasses.field(
         kw_only=True, default=None
     )  # (persist, evict)
-    cache_func_call: Optional[Tuple[bytes, bytes]] = dataclasses.field(
+    cache_func_call: Optional[tuple[bytes, bytes]] = dataclasses.field(
         kw_only=True, default=None
     )
     warnings: tuple[errors.EdgeDBError, ...] = dataclasses.field(
@@ -109,7 +106,7 @@ class Query(BaseQuery):
     out_type_id: bytes
     in_type_data: bytes
     in_type_id: bytes
-    in_type_args: Optional[List[Param]] = None
+    in_type_args: Optional[list[Param]] = None
 
     globals: Optional[list[tuple[str, bool]]] = None
 
@@ -122,7 +119,7 @@ class Query(BaseQuery):
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SimpleQuery(BaseQuery):
     # XXX: Temporary hack, since SimpleQuery will die
-    in_type_args: Optional[List[Param]] = None
+    in_type_args: Optional[list[Param]] = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -138,7 +135,7 @@ class SessionStateQuery(BaseQuery):
 
     in_type_data: Optional[bytes] = None
     in_type_id: Optional[bytes] = None
-    in_type_args: Optional[List[Param]] = None
+    in_type_args: Optional[list[Param]] = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -155,7 +152,7 @@ class DDLQuery(BaseQuery):
     create_db_mode: Optional[qlast.BranchType] = None
     db_op_trailer: tuple[bytes, ...] = ()
     ddl_stmt_id: Optional[str] = None
-    config_ops: List[config.Operation] = dataclasses.field(default_factory=list)
+    config_ops: list[config.Operation] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -217,8 +214,8 @@ class QueryUnit:
     status: bytes
 
     cache_key: Optional[uuid.UUID] = None
-    cache_sql: Optional[Tuple[bytes, bytes]] = None  # (persist, evict)
-    cache_func_call: Optional[Tuple[bytes, bytes]] = None  # (sql, hash)
+    cache_sql: Optional[tuple[bytes, bytes]] = None  # (persist, evict)
+    cache_func_call: Optional[tuple[bytes, bytes]] = None  # (sql, hash)
 
     # Output format of this query unit
     output_format: enums.OutputFormat = enums.OutputFormat.NONE
@@ -295,7 +292,7 @@ class QueryUnit:
     out_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
     in_type_data: bytes = sertypes.NULL_TYPE_DESC
     in_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
-    in_type_args: Optional[List[Param]] = None
+    in_type_args: Optional[list[Param]] = None
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
 
@@ -317,7 +314,7 @@ class QueryUnit:
     # Set only when this unit contains a CONFIGURE command which
     # alters a system configuration setting.
     is_system_config: bool = False
-    config_ops: List[config.Operation] = dataclasses.field(default_factory=list)
+    config_ops: list[config.Operation] = dataclasses.field(default_factory=list)
     modaliases: Optional[immutables.Map[Optional[str], str]] = None
 
     # If present, represents the future schema state after
@@ -406,7 +403,7 @@ class QueryUnitGroup:
     out_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
     in_type_data: bytes = sertypes.NULL_TYPE_DESC
     in_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
-    in_type_args: Optional[List[Param]] = None
+    in_type_args: Optional[list[Param]] = None
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
 
@@ -414,9 +411,9 @@ class QueryUnitGroup:
 
     # Cacheable QueryUnit is serialized in the compiler, so that the I/O server
     # doesn't need to serialize it again for persistence.
-    _units: List[QueryUnit | bytes] = dataclasses.field(default_factory=list)
+    _units: list[QueryUnit | bytes] = dataclasses.field(default_factory=list)
     # This is a I/O server-only cache for unpacked QueryUnits
-    _unpacked_units: List[QueryUnit] | None = None
+    _unpacked_units: list[QueryUnit] | None = None
 
     state_serializer: Optional[sertypes.StateSerializer] = None
 
@@ -426,7 +423,7 @@ class QueryUnitGroup:
     force_non_normalized: bool = False
 
     @property
-    def units(self) -> List[QueryUnit]:
+    def units(self) -> list[QueryUnit]:
         if self._unpacked_units is None:
             self._unpacked_units = [
                 QueryUnit.deserialize(unit) if isinstance(unit, bytes) else unit
@@ -569,7 +566,7 @@ class SQLQueryUnit:
     This is useful, for example, for setting the tag of DML statements,
     which return the number of modified rows."""
 
-    params: Optional[List[SQLParam]] = None
+    params: Optional[list[SQLParam]] = None
 
 
 class CommandCompleteTag:
@@ -631,7 +628,7 @@ class SQLParamGlobal(SQLParam):
 
     global_name: s_name.QualName
 
-    pg_type: Tuple[str, ...]
+    pg_type: tuple[str, ...]
 
 
 @dataclasses.dataclass
@@ -757,7 +754,7 @@ class SQLTransactionState:
 
 
 class ProposedMigrationStep(NamedTuple):
-    statements: Tuple[str, ...]
+    statements: tuple[str, ...]
     confidence: float
     prompt: str
     prompt_id: str
@@ -767,7 +764,7 @@ class ProposedMigrationStep(NamedTuple):
     # what to prohibit when something is rejected.
     operation_key: s_delta.CommandKey
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return {
             "statements": [{"text": stmt} for stmt in self.statements],
             "confidence": self.confidence,
@@ -784,14 +781,14 @@ class MigrationState(NamedTuple):
     initial_savepoint: Optional[str]
     target_schema: s_schema.Schema
     guidance: s_obj.DeltaGuidance
-    accepted_cmds: Tuple[qlast.Base, ...]
-    last_proposed: Optional[Tuple[ProposedMigrationStep, ...]]
+    accepted_cmds: tuple[qlast.Base, ...]
+    last_proposed: Optional[tuple[ProposedMigrationStep, ...]]
 
 
 class MigrationRewriteState(NamedTuple):
     initial_savepoint: Optional[str]
     target_schema: s_schema.Schema
-    accepted_migrations: Tuple[qlast.CreateMigration, ...]
+    accepted_migrations: tuple[qlast.CreateMigration, ...]
 
 
 class TransactionState(NamedTuple):
@@ -803,7 +800,7 @@ class TransactionState(NamedTuple):
     session_config: immutables.Map[str, config.SettingValue]
     database_config: immutables.Map[str, config.SettingValue]
     system_config: immutables.Map[str, config.SettingValue]
-    cached_reflection: immutables.Map[str, Tuple[str, ...]]
+    cached_reflection: immutables.Map[str, tuple[str, ...]]
     tx: Transaction
     migration_state: Optional[MigrationState] = None
     migration_rewrite_state: Optional[MigrationRewriteState] = None
@@ -817,7 +814,7 @@ class TransactionState(NamedTuple):
 
 
 class Transaction:
-    _savepoints: Dict[int, TransactionState]
+    _savepoints: dict[int, TransactionState]
     _constate: CompilerConnectionState
 
     def __init__(
@@ -830,7 +827,7 @@ class Transaction:
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
-        cached_reflection: immutables.Map[str, Tuple[str, ...]],
+        cached_reflection: immutables.Map[str, tuple[str, ...]],
         implicit: bool = True,
     ) -> None:
         assert not isinstance(user_schema, s_schema.ChainedSchema)
@@ -986,13 +983,13 @@ class Transaction:
 
     def get_cached_reflection_if_updated(
         self,
-    ) -> Optional[immutables.Map[str, Tuple[str, ...]]]:
+    ) -> Optional[immutables.Map[str, tuple[str, ...]]]:
         if self._current.cached_reflection == self._state0.cached_reflection:
             return None
         else:
             return self._current.cached_reflection
 
-    def get_cached_reflection(self) -> immutables.Map[str, Tuple[str, ...]]:
+    def get_cached_reflection(self) -> immutables.Map[str, tuple[str, ...]]:
         return self._current.cached_reflection
 
     def get_migration_state(self) -> Optional[MigrationState]:
@@ -1029,7 +1026,7 @@ class Transaction:
 
     def update_cached_reflection(
         self,
-        new: immutables.Map[str, Tuple[str, ...]],
+        new: immutables.Map[str, tuple[str, ...]],
     ) -> None:
         self._current = self._current._replace(cached_reflection=new)
 
@@ -1042,13 +1039,13 @@ class Transaction:
         self._current = self._current._replace(migration_rewrite_state=mrstate)
 
 
-CStateStateType = Tuple[Dict[int, TransactionState], Transaction, int]
+CStateStateType = tuple[dict[int, TransactionState], Transaction, int]
 
 
 class CompilerConnectionState:
     __slots__ = ("_savepoints_log", "_current_tx", "_tx_count", "_user_schema")
 
-    _savepoints_log: Dict[int, TransactionState]
+    _savepoints_log: dict[int, TransactionState]
     _user_schema: Optional[s_schema.FlatSchema]
 
     def __init__(
@@ -1060,7 +1057,7 @@ class CompilerConnectionState:
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
-        cached_reflection: immutables.Map[str, Tuple[str, ...]],
+        cached_reflection: immutables.Map[str, tuple[str, ...]],
     ):
         assert isinstance(user_schema, s_schema.FlatSchema)
         self._user_schema = user_schema
@@ -1104,7 +1101,7 @@ class CompilerConnectionState:
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
-        cached_reflection: immutables.Map[str, Tuple[str, ...]],
+        cached_reflection: immutables.Map[str, tuple[str, ...]],
     ) -> None:
         assert isinstance(user_schema, s_schema.FlatSchema)
         assert isinstance(global_schema, s_schema.FlatSchema)

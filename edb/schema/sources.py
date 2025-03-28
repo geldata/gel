@@ -20,13 +20,9 @@
 from __future__ import annotations
 from typing import (
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Iterable,
     Sequence,
-    List,
-    Set,
     overload,
     TYPE_CHECKING,
 )
@@ -82,7 +78,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Type[s_pointers.Pointer_T],
+        type: type[s_pointers.Pointer_T],
     ) -> Optional[s_pointers.Pointer_T]:
         ...
 
@@ -92,7 +88,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[Type[s_pointers.Pointer_T]] = None,
+        type: Optional[type[s_pointers.Pointer_T]] = None,
     ) -> Optional[s_pointers.Pointer]:
         ...
 
@@ -101,7 +97,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[Type[s_pointers.Pointer_T]] = None,
+        type: Optional[type[s_pointers.Pointer_T]] = None,
     ) -> Optional[s_pointers.Pointer]:
         ptr = self.get_pointers(schema).get(schema, name, None)
         if ptr is not None and type is not None and not isinstance(ptr, type):
@@ -118,7 +114,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Type[s_pointers.Pointer_T],
+        type: type[s_pointers.Pointer_T],
     ) -> s_pointers.Pointer_T:
         ...
 
@@ -128,7 +124,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[Type[s_pointers.Pointer_T]] = None,
+        type: Optional[type[s_pointers.Pointer_T]] = None,
     ) -> s_pointers.Pointer:
         ...
 
@@ -137,7 +133,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[Type[s_pointers.Pointer_T]] = None,
+        type: Optional[type[s_pointers.Pointer_T]] = None,
     ) -> s_pointers.Pointer:
         ptr = self.maybe_get_ptr(schema, name, type=type)
         if ptr is None:
@@ -153,7 +149,7 @@ class Source(
         name: str,
         *,
         sources: Iterable[so.Object] = ()
-    ) -> Set[links.Link]:
+    ) -> set[links.Link]:
         return set()
 
     def add_pointer(
@@ -169,7 +165,7 @@ class Source(
 
     def get_addon_columns(
         self, schema: s_schema.Schema
-    ) -> Sequence[Tuple[str, str, Tuple[str, str]]]:
+    ) -> Sequence[tuple[str, str, tuple[str, str]]]:
         """
         Returns a list of columns that are present in the backing table of
         this source, apart from the columns for pointers.
@@ -221,7 +217,7 @@ class Source(
 
 def populate_pointer_set_for_source_union(
     schema: s_schema.Schema,
-    components: List[Source],
+    components: list[Source],
     union: Source,
     *,
     modname: Optional[str] = None,

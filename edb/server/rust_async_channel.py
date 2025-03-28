@@ -21,7 +21,7 @@ import io
 import logging
 
 
-from typing import Protocol, Optional, Tuple, Any, Callable
+from typing import Protocol, Optional, Any, Callable
 
 logger = logging.getLogger("edb.server")
 
@@ -29,9 +29,9 @@ MAX_BATCH_SIZE = 16
 
 
 class RustPipeProtocol(Protocol):
-    def _read(self) -> Tuple[Any, ...]: ...
+    def _read(self) -> tuple[Any, ...]: ...
 
-    def _try_read(self) -> Optional[Tuple[Any, ...]]: ...
+    def _try_read(self) -> Optional[tuple[Any, ...]]: ...
 
     def _close_pipe(self) -> None: ...
 
@@ -46,7 +46,7 @@ class RustAsyncChannel:
     def __init__(
         self,
         pipe: RustPipeProtocol,
-        callback: Callable[[Tuple[Any, ...]], None],
+        callback: Callable[[tuple[Any, ...]], None],
     ) -> None:
         self._closed = asyncio.Event()
         fd = pipe._fd

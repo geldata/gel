@@ -44,7 +44,7 @@ class tast:
 
     class FunctionCall(Base):
         name: typing.Any = None
-        args: typing.List[int]
+        args: list[int]
 
     class Constant(Base):
         value: typing.Any = None
@@ -94,17 +94,17 @@ class ASTBaseTests(unittest.TestCase):
 
         class Node(Base):
             field_list: list = ast.field(factory=list)
-            field_typing_list: typing.List[Base] = ast.field(factory=list)
-            field_typing_tuple: typing.Tuple[Base, ...] = ()
+            field_typing_list: list[Base] = ast.field(factory=list)
+            field_typing_tuple: tuple[Base, ...] = ()
             field_typing_union: typing.Union[str, bytes]
-            field_typing_union_list: typing.List[
+            field_typing_union_list: list[
                 typing.Union[str, bytes]] = ast.field(factory=list)
             field_typing_str: str
             field_typing_optional_str: typing.Optional[str]
-            field_typing_mapping: typing.Dict[
+            field_typing_mapping: dict[
                 int, str] = ast.field(factory=dict)
             field_typing_mapping_opt_key: \
-                typing.Dict[
+                dict[
                     typing.Optional[int], str] = ast.field(factory=dict)
 
         self.assertEqual(Node().field_list, [])

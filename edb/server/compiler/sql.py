@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Mapping, Sequence, List, TYPE_CHECKING, Optional
+from typing import Mapping, Sequence, TYPE_CHECKING, Optional
 
 import dataclasses
 import functools
@@ -83,8 +83,8 @@ def compile_sql(
     implicit_limit: Optional[int] = None,
 ) -> tuple[list[dbstate.SQLQueryUnit], bool]:
     def _try(
-        q: str, normalized_params: List[int]
-    ) -> List[dbstate.SQLQueryUnit]:
+        q: str, normalized_params: list[int]
+    ) -> list[dbstate.SQLQueryUnit]:
         return _compile_sql(
             q,
             orig_query_str=source.original_text(),
@@ -208,9 +208,9 @@ def _compile_sql(
     disambiguate_column_names: bool,
     backend_runtime_params: pg_params.BackendRuntimeParams,
     protocol_version: defines.ProtocolVersion,
-    normalized_params: List[int],
+    normalized_params: list[int],
     implicit_limit: Optional[int] = None,
-) -> List[dbstate.SQLQueryUnit]:
+) -> list[dbstate.SQLQueryUnit]:
     opts = ResolverOptionsPartial(
         query_str=query_str,
         current_database=current_database,
@@ -560,7 +560,7 @@ class ResolverOptionsPartial:
     apply_access_policies: Optional[bool]
     include_edgeql_io_format_alternative: Optional[bool]
     disambiguate_column_names: bool
-    normalized_params: List[int]
+    normalized_params: list[int]
     implicit_limit: Optional[int]
 
 

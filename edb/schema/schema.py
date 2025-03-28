@@ -24,17 +24,11 @@ from typing import (
     Callable,
     Generic,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     Iterable,
     Iterator,
     Mapping,
-    Dict,
-    List,
-    Set,
-    FrozenSet,
     cast,
     NoReturn,
     overload,
@@ -70,7 +64,7 @@ if TYPE_CHECKING:
     Refs_T = immu.Map[
         uuid.UUID,
         immu.Map[
-            Tuple[Type[so.Object], str],
+            tuple[type[so.Object], str],
             immu.Map[uuid.UUID, None],
         ],
     ]
@@ -126,8 +120,8 @@ class Schema(abc.ABC):
     def add_raw(
         self: Schema_T,
         id: uuid.UUID,
-        sclass: Type[so.Object],
-        data: Tuple[Any, ...],
+        sclass: type[so.Object],
+        data: tuple[Any, ...],
     ) -> Schema_T:
         raise NotImplementedError
 
@@ -135,8 +129,8 @@ class Schema(abc.ABC):
     def add(
         self: Schema_T,
         id: uuid.UUID,
-        sclass: Type[so.Object],
-        data: Tuple[Any, ...],
+        sclass: type[so.Object],
+        data: tuple[Any, ...],
     ) -> Schema_T:
         raise NotImplementedError
 
@@ -164,14 +158,14 @@ class Schema(abc.ABC):
     def maybe_get_obj_data_raw(
         self,
         obj: so.Object,
-    ) -> Optional[Tuple[Any, ...]]:
+    ) -> Optional[tuple[Any, ...]]:
         raise NotImplementedError
 
     @abc.abstractmethod
     def get_obj_data_raw(
         self,
         obj: so.Object,
-    ) -> Tuple[Any, ...]:
+    ) -> tuple[Any, ...]:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -196,12 +190,12 @@ class Schema(abc.ABC):
         self,
         name: Union[str, sn.Name],
         default: Union[
-            Tuple[s_func.Function, ...], so.NoDefaultT
+            tuple[s_func.Function, ...], so.NoDefaultT
         ] = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> Tuple[s_func.Function, ...]:
+    ) -> tuple[s_func.Function, ...]:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -209,12 +203,12 @@ class Schema(abc.ABC):
         self,
         name: Union[str, sn.Name],
         default: Union[
-            Tuple[s_oper.Operator, ...], so.NoDefaultT
+            tuple[s_oper.Operator, ...], so.NoDefaultT
         ] = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> Tuple[s_oper.Operator, ...]:
+    ) -> tuple[s_oper.Operator, ...]:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -224,7 +218,7 @@ class Schema(abc.ABC):
         *,
         implicit: bool = False,
         assignment: bool = False,
-    ) -> FrozenSet[s_casts.Cast]:
+    ) -> frozenset[s_casts.Cast]:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -234,7 +228,7 @@ class Schema(abc.ABC):
         *,
         implicit: bool = False,
         assignment: bool = False,
-    ) -> FrozenSet[s_casts.Cast]:
+    ) -> frozenset[s_casts.Cast]:
         raise NotImplementedError
 
     @overload
@@ -242,9 +236,9 @@ class Schema(abc.ABC):
         self,
         scls: so.Object,
         *,
-        scls_type: Type[so.Object_T],
+        scls_type: type[so.Object_T],
         field_name: Optional[str] = None,
-    ) -> FrozenSet[so.Object_T]:
+    ) -> frozenset[so.Object_T]:
         ...
 
     @overload
@@ -254,7 +248,7 @@ class Schema(abc.ABC):
         *,
         scls_type: None = None,
         field_name: Optional[str] = None,
-    ) -> FrozenSet[so.Object]:
+    ) -> frozenset[so.Object]:
         ...
 
     @abc.abstractmethod
@@ -262,9 +256,9 @@ class Schema(abc.ABC):
         self,
         scls: so.Object,
         *,
-        scls_type: Optional[Type[so.Object_T]] = None,
+        scls_type: Optional[type[so.Object_T]] = None,
         field_name: Optional[str] = None,
-    ) -> FrozenSet[so.Object_T]:
+    ) -> frozenset[so.Object_T]:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -272,10 +266,10 @@ class Schema(abc.ABC):
         self,
         scls: so.Object,
         *,
-        scls_type: Optional[Type[so.Object_T]] = None,
-    ) -> Dict[
-        Tuple[Type[so.Object_T], str],
-        FrozenSet[so.Object_T],
+        scls_type: Optional[type[so.Object_T]] = None,
+    ) -> dict[
+        tuple[type[so.Object_T], str],
+        frozenset[so.Object_T],
     ]:
         raise NotImplementedError
 
@@ -295,7 +289,7 @@ class Schema(abc.ABC):
         obj_id: uuid.UUID,
         default: Union[so.Object_T, so.NoDefaultT] = so.NoDefault,
         *,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
     ) -> so.Object_T:
         ...
 
@@ -305,7 +299,7 @@ class Schema(abc.ABC):
         obj_id: uuid.UUID,
         default: None = None,
         *,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
     ) -> Optional[so.Object_T]:
         ...
 
@@ -314,7 +308,7 @@ class Schema(abc.ABC):
         obj_id: uuid.UUID,
         default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
         *,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
     ) -> Optional[so.Object_T]:
         return self._get_by_id(obj_id, default, type=type)
 
@@ -324,14 +318,14 @@ class Schema(abc.ABC):
         obj_id: uuid.UUID,
         default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
         *,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
     ) -> Optional[so.Object_T]:
         raise NotImplementedError
 
     @overload
     def get_global(
         self,
-        objtype: Type[so.Object_T],
+        objtype: type[so.Object_T],
         name: Union[str, sn.Name],
         default: Union[so.Object_T, so.NoDefaultT] = so.NoDefault,
     ) -> so.Object_T:
@@ -340,7 +334,7 @@ class Schema(abc.ABC):
     @overload
     def get_global(
         self,
-        objtype: Type[so.Object_T],
+        objtype: type[so.Object_T],
         name: Union[str, sn.Name],
         default: None = None,
     ) -> Optional[so.Object_T]:
@@ -348,7 +342,7 @@ class Schema(abc.ABC):
 
     def get_global(
         self,
-        objtype: Type[so.Object_T],
+        objtype: type[so.Object_T],
         name: Union[str, sn.Name],
         default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
     ) -> Optional[so.Object_T]:
@@ -357,7 +351,7 @@ class Schema(abc.ABC):
     @abc.abstractmethod
     def _get_global(
         self,
-        objtype: Type[so.Object_T],
+        objtype: type[so.Object_T],
         name: Union[str, sn.Name],
         default: Union[so.Object_T, so.NoDefaultT, None],
     ) -> Optional[so.Object_T]:
@@ -396,7 +390,7 @@ class Schema(abc.ABC):
         default: Union[so.Object_T, so.NoDefaultT] = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Type[so.Object_T],
+        type: type[so.Object_T],
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
         sourcectx: Optional[parsing.Span] = None,
@@ -410,7 +404,7 @@ class Schema(abc.ABC):
         default: None,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Type[so.Object_T],
+        type: type[so.Object_T],
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
         sourcectx: Optional[parsing.Span] = None,
@@ -424,7 +418,7 @@ class Schema(abc.ABC):
         default: Union[so.Object, so.NoDefaultT, None] = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
         sourcectx: Optional[parsing.Span] = None,
@@ -437,7 +431,7 @@ class Schema(abc.ABC):
         default: Union[so.Object, so.NoDefaultT, None] = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
         sourcectx: Optional[parsing.Span] = None,
@@ -459,7 +453,7 @@ class Schema(abc.ABC):
         default: Union[so.Object, so.NoDefaultT, None],
         *,
         module_aliases: Optional[Mapping[Optional[str], str]],
-        type: Optional[Type[so.Object_T]],
+        type: Optional[type[so.Object_T]],
         condition: Optional[Callable[[so.Object], bool]],
         label: Optional[str],
         sourcectx: Optional[parsing.Span],
@@ -485,7 +479,7 @@ class Schema(abc.ABC):
     def get_children(
         self,
         scls: so.Object_T,
-    ) -> FrozenSet[so.Object_T]:
+    ) -> frozenset[so.Object_T]:
         # Ideally get_referrers needs to be made generic via
         # an overload on scls_type, but mypy crashes on that.
         return self.get_referrers(
@@ -497,7 +491,7 @@ class Schema(abc.ABC):
     def get_descendants(
         self,
         scls: so.Object_T,
-    ) -> FrozenSet[so.Object_T]:
+    ) -> frozenset[so.Object_T]:
         return self.get_referrers(
             scls, scls_type=type(scls), field_name='ancestors')
 
@@ -513,13 +507,13 @@ class Schema(abc.ABC):
         excluded_modules: Optional[Iterable[sn.Name]] = None,
         included_items: Optional[Iterable[sn.Name]] = None,
         excluded_items: Optional[Iterable[sn.Name]] = None,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
         extra_filters: Iterable[Callable[[Schema, so.Object_T], bool]] = (),
     ) -> SchemaIterator[so.Object_T]:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_modules(self) -> Tuple[s_mod.Module, ...]:
+    def get_modules(self) -> tuple[s_mod.Module, ...]:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -529,15 +523,15 @@ class Schema(abc.ABC):
 
 class FlatSchema(Schema):
 
-    _id_to_data: immu.Map[uuid.UUID, Tuple[Any, ...]]
+    _id_to_data: immu.Map[uuid.UUID, tuple[Any, ...]]
     _id_to_type: immu.Map[uuid.UUID, str]
     _name_to_id: immu.Map[sn.Name, uuid.UUID]
     _shortname_to_id: immu.Map[
-        Tuple[Type[so.Object], sn.Name],
-        FrozenSet[uuid.UUID],
+        tuple[type[so.Object], sn.Name],
+        frozenset[uuid.UUID],
     ]
     _globalname_to_id: immu.Map[
-        Tuple[Type[so.Object], sn.Name],
+        tuple[type[so.Object], sn.Name],
         uuid.UUID,
     ]
     _refs_to: Refs_T
@@ -558,17 +552,17 @@ class FlatSchema(Schema):
     def _replace(
         self,
         *,
-        id_to_data: Optional[immu.Map[uuid.UUID, Tuple[Any, ...]]] = None,
+        id_to_data: Optional[immu.Map[uuid.UUID, tuple[Any, ...]]] = None,
         id_to_type: Optional[immu.Map[uuid.UUID, str]] = None,
         name_to_id: Optional[immu.Map[sn.Name, uuid.UUID]] = None,
         shortname_to_id: Optional[
             immu.Map[
-                Tuple[Type[so.Object], sn.Name],
-                FrozenSet[uuid.UUID]
+                tuple[type[so.Object], sn.Name],
+                frozenset[uuid.UUID]
             ]
         ] = None,
         globalname_to_id: Optional[
-            immu.Map[Tuple[Type[so.Object], sn.Name], uuid.UUID]
+            immu.Map[tuple[type[so.Object], sn.Name], uuid.UUID]
         ] = None,
         refs_to: Optional[Refs_T] = None,
     ) -> FlatSchema:
@@ -611,13 +605,13 @@ class FlatSchema(Schema):
     def _update_obj_name(
         self,
         obj_id: uuid.UUID,
-        sclass: Type[so.Object],
+        sclass: type[so.Object],
         old_name: Optional[sn.Name],
         new_name: Optional[sn.Name],
-    ) -> Tuple[
+    ) -> tuple[
         immu.Map[sn.Name, uuid.UUID],
-        immu.Map[Tuple[Type[so.Object], sn.Name], FrozenSet[uuid.UUID]],
-        immu.Map[Tuple[Type[so.Object], sn.Name], uuid.UUID],
+        immu.Map[tuple[type[so.Object], sn.Name], frozenset[uuid.UUID]],
+        immu.Map[tuple[type[so.Object], sn.Name], uuid.UUID],
     ]:
         name_to_id = self._name_to_id
         shortname_to_id = self._shortname_to_id
@@ -750,13 +744,13 @@ class FlatSchema(Schema):
     def maybe_get_obj_data_raw(
         self,
         obj: so.Object,
-    ) -> Optional[Tuple[Any, ...]]:
+    ) -> Optional[tuple[Any, ...]]:
         return self._id_to_data.get(obj.id)
 
     def get_obj_data_raw(
         self,
         obj: so.Object,
-    ) -> Tuple[Any, ...]:
+    ) -> tuple[Any, ...]:
         try:
             return self._id_to_data[obj.id]
         except KeyError:
@@ -885,9 +879,9 @@ class FlatSchema(Schema):
     def _update_refs_to(
         self,
         object_id: uuid.UUID,
-        sclass: Type[so.Object],
-        orig_refs: Optional[Mapping[str, FrozenSet[uuid.UUID]]],
-        new_refs: Optional[Mapping[str, FrozenSet[uuid.UUID]]],
+        sclass: type[so.Object],
+        orig_refs: Optional[Mapping[str, frozenset[uuid.UUID]]],
+        new_refs: Optional[Mapping[str, frozenset[uuid.UUID]]],
     ) -> Refs_T:
         objfields = sclass.get_object_reference_fields()
         if not objfields:
@@ -908,8 +902,8 @@ class FlatSchema(Schema):
                 if not ids and not orig_ids:
                     continue
 
-                old_ids: Optional[FrozenSet[uuid.UUID]]
-                new_ids: Optional[FrozenSet[uuid.UUID]]
+                old_ids: Optional[frozenset[uuid.UUID]]
+                new_ids: Optional[frozenset[uuid.UUID]]
 
                 key = (sclass, field.name)
 
@@ -956,8 +950,8 @@ class FlatSchema(Schema):
     def add_raw(
         self,
         id: uuid.UUID,
-        sclass: Type[so.Object],
-        data: Tuple[Any, ...],
+        sclass: type[so.Object],
+        data: tuple[Any, ...],
     ) -> FlatSchema:
         name_field = sclass.get_schema_field('name')
         name = data[name_field.index]
@@ -1010,8 +1004,8 @@ class FlatSchema(Schema):
     def add(
         self,
         id: uuid.UUID,
-        sclass: Type[so.Object],
-        data: Tuple[Any, ...],
+        sclass: type[so.Object],
+        data: tuple[Any, ...],
     ) -> FlatSchema:
         reducible_fields = sclass.get_reducible_fields()
         if reducible_fields:
@@ -1161,12 +1155,12 @@ class FlatSchema(Schema):
         self,
         name: Union[str, sn.Name],
         default: Union[
-            Tuple[s_func.Function, ...], so.NoDefaultT
+            tuple[s_func.Function, ...], so.NoDefaultT
         ] = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> Tuple[s_func.Function, ...]:
+    ) -> tuple[s_func.Function, ...]:
         if isinstance(name, str):
             name = sn.name_from_string(name)
         funcs = self._search_with_getter(
@@ -1179,7 +1173,7 @@ class FlatSchema(Schema):
 
         if funcs is not so.NoDefault:
             return cast(
-                Tuple[s_func.Function, ...],
+                tuple[s_func.Function, ...],
                 funcs,
             )
         else:
@@ -1193,12 +1187,12 @@ class FlatSchema(Schema):
         self,
         name: Union[str, sn.Name],
         default: Union[
-            Tuple[s_oper.Operator, ...], so.NoDefaultT
+            tuple[s_oper.Operator, ...], so.NoDefaultT
         ] = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> Tuple[s_oper.Operator, ...]:
+    ) -> tuple[s_oper.Operator, ...]:
         funcs = self._search_with_getter(
             name,
             getter=_get_operators,
@@ -1209,7 +1203,7 @@ class FlatSchema(Schema):
 
         if funcs is not so.NoDefault:
             return cast(
-                Tuple[s_oper.Operator, ...],
+                tuple[s_oper.Operator, ...],
                 funcs,
             )
         else:
@@ -1227,10 +1221,10 @@ class FlatSchema(Schema):
         disposition: str,
         implicit: bool = False,
         assignment: bool = False,
-    ) -> FrozenSet[s_casts.Cast]:
+    ) -> frozenset[s_casts.Cast]:
 
         all_casts = cast(
-            FrozenSet[s_casts.Cast],
+            frozenset[s_casts.Cast],
             self.get_referrers(
                 stype, scls_type=s_casts.Cast, field_name=disposition),
         )
@@ -1251,7 +1245,7 @@ class FlatSchema(Schema):
         *,
         implicit: bool = False,
         assignment: bool = False,
-    ) -> FrozenSet[s_casts.Cast]:
+    ) -> frozenset[s_casts.Cast]:
         return self._get_casts(to_type, disposition='to_type',
                                implicit=implicit, assignment=assignment)
 
@@ -1261,7 +1255,7 @@ class FlatSchema(Schema):
         *,
         implicit: bool = False,
         assignment: bool = False,
-    ) -> FrozenSet[s_casts.Cast]:
+    ) -> frozenset[s_casts.Cast]:
         return self._get_casts(from_type, disposition='from_type',
                                implicit=implicit, assignment=assignment)
 
@@ -1269,9 +1263,9 @@ class FlatSchema(Schema):
         self,
         scls: so.Object,
         *,
-        scls_type: Optional[Type[so.Object_T]] = None,
+        scls_type: Optional[type[so.Object_T]] = None,
         field_name: Optional[str] = None,
-    ) -> FrozenSet[so.Object_T]:
+    ) -> frozenset[so.Object_T]:
         return self._get_referrers(
             scls, scls_type=scls_type, field_name=field_name)
 
@@ -1280,16 +1274,16 @@ class FlatSchema(Schema):
         self,
         scls: so.Object,
         *,
-        scls_type: Optional[Type[so.Object_T]] = None,
+        scls_type: Optional[type[so.Object_T]] = None,
         field_name: Optional[str] = None,
-    ) -> FrozenSet[so.Object_T]:
+    ) -> frozenset[so.Object_T]:
 
         try:
             refs = self._refs_to[scls.id]
         except KeyError:
             return frozenset()
         else:
-            referrers: Set[so.Object] = set()
+            referrers: set[so.Object] = set()
 
             if scls_type is not None:
                 if field_name is not None:
@@ -1318,10 +1312,10 @@ class FlatSchema(Schema):
         self,
         scls: so.Object,
         *,
-        scls_type: Optional[Type[so.Object_T]] = None,
-    ) -> Dict[
-        Tuple[Type[so.Object_T], str],
-        FrozenSet[so.Object_T],
+        scls_type: Optional[type[so.Object_T]] = None,
+    ) -> dict[
+        tuple[type[so.Object_T], str],
+        frozenset[so.Object_T],
     ]:
         try:
             refs = self._refs_to[scls.id]
@@ -1347,7 +1341,7 @@ class FlatSchema(Schema):
         obj_id: uuid.UUID,
         default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
         *,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
         # Deep u-optimization; this is the hottest path in the system,
         # so avoid needing to do lookups for this function.
         _raw_schema_restore: Callable[[str, uuid.UUID], so.Object] = (
@@ -1381,7 +1375,7 @@ class FlatSchema(Schema):
 
     def _get_global(
         self,
-        objtype: Type[so.Object_T],
+        objtype: type[so.Object_T],
         name: Union[str, sn.Name],
         default: Union[so.Object_T, so.NoDefaultT, None],
     ) -> Optional[so.Object_T]:
@@ -1401,7 +1395,7 @@ class FlatSchema(Schema):
         default: Union[so.Object, so.NoDefaultT, None],
         *,
         module_aliases: Optional[Mapping[Optional[str], str]],
-        type: Optional[Type[so.Object_T]],
+        type: Optional[type[so.Object_T]],
         condition: Optional[Callable[[so.Object], bool]],
         label: Optional[str],
         sourcectx: Optional[parsing.Span],
@@ -1456,7 +1450,7 @@ class FlatSchema(Schema):
         label: Optional[str] = None,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         sourcectx: Optional[parsing.Span] = None,
-        type: Optional[Type[so.Object]] = None,
+        type: Optional[type[so.Object]] = None,
     ) -> NoReturn:
         refname = str(name)
 
@@ -1507,7 +1501,7 @@ class FlatSchema(Schema):
         excluded_modules: Optional[Iterable[sn.Name]] = None,
         included_items: Optional[Iterable[sn.Name]] = None,
         excluded_items: Optional[Iterable[sn.Name]] = None,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
         extra_filters: Iterable[Callable[[Schema, so.Object_T], bool]] = (),
     ) -> SchemaIterator[so.Object_T]:
         return SchemaIterator[so.Object_T](
@@ -1525,7 +1519,7 @@ class FlatSchema(Schema):
             extra_filters=extra_filters,
         )
 
-    def get_modules(self) -> Tuple[s_mod.Module, ...]:
+    def get_modules(self) -> tuple[s_mod.Module, ...]:
         modules = []
         for (objtype, _), objid in self._globalname_to_id.items():
             if objtype is s_mod.Module:
@@ -1623,7 +1617,7 @@ class SchemaIterator(Generic[so.Object_T]):
         excluded_modules: Optional[Iterable[sn.Name]],
         included_items: Optional[Iterable[sn.Name]] = None,
         excluded_items: Optional[Iterable[sn.Name]] = None,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
         extra_filters: Iterable[Callable[[Schema, so.Object_T], bool]] = (),
     ) -> None:
 
@@ -1641,7 +1635,7 @@ class SchemaIterator(Generic[so.Object_T]):
                     obj.get_name(schema).get_module_name() in modules)
 
         if excluded_modules or exclude_stdlib:
-            excmod: Set[sn.Name] = set()
+            excmod: set[sn.Name] = set()
             if excluded_modules:
                 excmod.update(excluded_modules)
             if exclude_stdlib:
@@ -1728,8 +1722,8 @@ class ChainedSchema(Schema):
     def add_raw(
         self,
         id: uuid.UUID,
-        sclass: Type[so.Object],
-        data: Tuple[Any, ...],
+        sclass: type[so.Object],
+        data: tuple[Any, ...],
     ) -> ChainedSchema:
         if issubclass(sclass, so.GlobalObject):
             return ChainedSchema(
@@ -1747,8 +1741,8 @@ class ChainedSchema(Schema):
     def add(
         self,
         id: uuid.UUID,
-        sclass: Type[so.Object],
-        data: Tuple[Any, ...],
+        sclass: type[so.Object],
+        data: tuple[Any, ...],
     ) -> ChainedSchema:
         if issubclass(sclass, so.GlobalObject):
             return ChainedSchema(
@@ -1836,7 +1830,7 @@ class ChainedSchema(Schema):
     def maybe_get_obj_data_raw(
         self,
         obj: so.Object,
-    ) -> Optional[Tuple[Any, ...]]:
+    ) -> Optional[tuple[Any, ...]]:
         if obj.is_global_object:
             return self._global_schema.maybe_get_obj_data_raw(obj)
         else:
@@ -1849,7 +1843,7 @@ class ChainedSchema(Schema):
     def get_obj_data_raw(
         self,
         obj: so.Object,
-    ) -> Tuple[Any, ...]:
+    ) -> tuple[Any, ...]:
         top = self._top_schema.maybe_get_obj_data_raw(obj)
         if top is not None:
             return top
@@ -1903,12 +1897,12 @@ class ChainedSchema(Schema):
         self,
         name: Union[str, sn.Name],
         default: Union[
-            Tuple[s_func.Function, ...], so.NoDefaultT
+            tuple[s_func.Function, ...], so.NoDefaultT
         ] = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> Tuple[s_func.Function, ...]:
+    ) -> tuple[s_func.Function, ...]:
         objs = self._top_schema.get_functions(
             name,
             module_aliases=module_aliases,
@@ -1934,12 +1928,12 @@ class ChainedSchema(Schema):
         self,
         name: Union[str, sn.Name],
         default: Union[
-            Tuple[s_oper.Operator, ...], so.NoDefaultT
+            tuple[s_oper.Operator, ...], so.NoDefaultT
         ] = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> Tuple[s_oper.Operator, ...]:
+    ) -> tuple[s_oper.Operator, ...]:
         objs = self._top_schema.get_operators(
             name,
             module_aliases=module_aliases,
@@ -1967,7 +1961,7 @@ class ChainedSchema(Schema):
         *,
         implicit: bool = False,
         assignment: bool = False,
-    ) -> FrozenSet[s_casts.Cast]:
+    ) -> frozenset[s_casts.Cast]:
         return (
             self._base_schema.get_casts_to_type(
                 to_type,
@@ -1987,7 +1981,7 @@ class ChainedSchema(Schema):
         *,
         implicit: bool = False,
         assignment: bool = False,
-    ) -> FrozenSet[s_casts.Cast]:
+    ) -> frozenset[s_casts.Cast]:
         return (
             self._base_schema.get_casts_from_type(
                 from_type,
@@ -2005,9 +1999,9 @@ class ChainedSchema(Schema):
         self,
         scls: so.Object,
         *,
-        scls_type: Optional[Type[so.Object_T]] = None,
+        scls_type: Optional[type[so.Object_T]] = None,
         field_name: Optional[str] = None,
-    ) -> FrozenSet[so.Object_T]:
+    ) -> frozenset[so.Object_T]:
         return (
             self._base_schema.get_referrers(  # type: ignore [return-value]
                 scls,
@@ -2030,10 +2024,10 @@ class ChainedSchema(Schema):
         self,
         scls: so.Object,
         *,
-        scls_type: Optional[Type[so.Object_T]] = None,
-    ) -> Dict[
-        Tuple[Type[so.Object_T], str],
-        FrozenSet[so.Object_T],
+        scls_type: Optional[type[so.Object_T]] = None,
+    ) -> dict[
+        tuple[type[so.Object_T], str],
+        frozenset[so.Object_T],
     ]:
         base = self._base_schema.get_referrers_ex(scls, scls_type=scls_type)
         top = self._top_schema.get_referrers_ex(scls, scls_type=scls_type)
@@ -2052,7 +2046,7 @@ class ChainedSchema(Schema):
         obj_id: uuid.UUID,
         default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
         *,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
     ) -> Optional[so.Object_T]:
         obj = self._top_schema.get_by_id(obj_id, type=type, default=None)
         if obj is None:
@@ -2069,7 +2063,7 @@ class ChainedSchema(Schema):
 
     def _get_global(
         self,
-        objtype: Type[so.Object_T],
+        objtype: type[so.Object_T],
         name: Union[str, sn.Name],
         default: Union[so.Object_T, so.NoDefaultT, None],
     ) -> Optional[so.Object_T]:
@@ -2089,7 +2083,7 @@ class ChainedSchema(Schema):
         default: Union[so.Object, so.NoDefaultT, None],
         *,
         module_aliases: Optional[Mapping[Optional[str], str]],
-        type: Optional[Type[so.Object_T]],
+        type: Optional[type[so.Object_T]],
         condition: Optional[Callable[[so.Object], bool]],
         label: Optional[str],
         sourcectx: Optional[parsing.Span],
@@ -2155,7 +2149,7 @@ class ChainedSchema(Schema):
         excluded_modules: Optional[Iterable[sn.Name]] = None,
         included_items: Optional[Iterable[sn.Name]] = None,
         excluded_items: Optional[Iterable[sn.Name]] = None,
-        type: Optional[Type[so.Object_T]] = None,
+        type: Optional[type[so.Object_T]] = None,
         extra_filters: Iterable[Callable[[Schema, so.Object_T], bool]] = (),
     ) -> SchemaIterator[so.Object_T]:
         return SchemaIterator[so.Object_T](
@@ -2173,7 +2167,7 @@ class ChainedSchema(Schema):
             extra_filters=extra_filters,
         )
 
-    def get_modules(self) -> Tuple[s_mod.Module, ...]:
+    def get_modules(self) -> tuple[s_mod.Module, ...]:
         return (
             self._base_schema.get_modules()
             + self._top_schema.get_modules()
@@ -2190,12 +2184,12 @@ class ChainedSchema(Schema):
 def _get_functions(
     schema: FlatSchema,
     name: sn.Name,
-) -> Optional[Tuple[s_func.Function, ...]]:
+) -> Optional[tuple[s_func.Function, ...]]:
     objids = schema._shortname_to_id.get((s_func.Function, name))
     if objids is None:
         return None
     return cast(
-        Tuple[s_func.Function, ...],
+        tuple[s_func.Function, ...],
         tuple(schema.get_by_id(oid) for oid in objids),
     )
 
@@ -2204,7 +2198,7 @@ def _get_functions(
 def _get_operators(
     schema: FlatSchema,
     name: sn.Name,
-) -> Optional[Tuple[s_oper.Operator, ...]]:
+) -> Optional[tuple[s_oper.Operator, ...]]:
     objids = schema._shortname_to_id.get((s_oper.Operator, name))
     if objids is None:
         return None
@@ -2220,7 +2214,7 @@ def _get_last_migration(
 ) -> Optional[s_migrations.Migration]:
 
     migrations = cast(
-        List[s_migrations.Migration],
+        list[s_migrations.Migration],
         [
             schema.get_by_id(mid)
             for (t, _), mid in schema._globalname_to_id.items()

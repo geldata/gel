@@ -21,14 +21,10 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     Mapping,
     Sequence,
-    Dict,
-    List,
     cast,
     overload,
     TYPE_CHECKING,
@@ -137,7 +133,7 @@ def _merge_deferrability(
 
 def merge_deferrability(
     idx: Index,
-    bases: List[Index],
+    bases: list[Index],
     field_name: str,
     *,
     ignore_local: bool = False,
@@ -158,7 +154,7 @@ def merge_deferrability(
 
 def merge_deferred(
     idx: Index,
-    bases: List[Index],
+    bases: list[Index],
     field_name: str,
     *,
     ignore_local: bool = False,
@@ -431,7 +427,7 @@ class Index(
     def get_ddl_identity(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         v = super().get_ddl_identity(schema) or {}
         v['kwargs'] = self.get_all_kwargs(schema)
         return v
@@ -619,7 +615,7 @@ class IndexCommand(
         base_name: sn.Name,
         referrer_name: sn.QualName,
         context: sd.CommandContext,
-    ) -> Tuple[str, ...]:
+    ) -> tuple[str, ...]:
         assert isinstance(astnode, qlast.ConcreteIndexCommand)
         exprs = []
 
@@ -642,7 +638,7 @@ class IndexCommand(
         return (cls._name_qual_from_exprs(schema, exprs),)
 
     @classmethod
-    def _classname_quals_from_name(cls, name: sn.QualName) -> Tuple[str, ...]:
+    def _classname_quals_from_name(cls, name: sn.QualName) -> tuple[str, ...]:
         quals = sn.quals_from_fullname(name)
         return tuple(quals[-1:])
 
@@ -652,7 +648,7 @@ class IndexCommand(
         schema: s_schema.Schema,
         astnode: qlast.ObjectDDL,
         context: sd.CommandContext,
-    ) -> Dict[str, s_expr.Expression]:
+    ) -> dict[str, s_expr.Expression]:
         kwargs = dict()
         # Some abstract indexes and all concrete index commands have kwargs.
         assert isinstance(astnode, (qlast.CreateIndex,
@@ -758,7 +754,7 @@ class IndexCommand(
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if field in ('kwargs', 'expr', 'except_expr'):
             return field
@@ -773,7 +769,7 @@ class IndexCommand(
     def get_ddl_identity_fields(
         self,
         context: sd.CommandContext,
-    ) -> Tuple[so.Field[Any], ...]:
+    ) -> tuple[so.Field[Any], ...]:
         id_fields = super().get_ddl_identity_fields(context)
         omit_fields = set()
 
@@ -1395,7 +1391,7 @@ class CreateIndex(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         params = self._get_params(schema, context)
         props = super().get_resolved_attributes(schema, context)
         props['params'] = params
@@ -1407,7 +1403,7 @@ class CreateIndex(
         schema: s_schema.Schema,
         astnode: qlast.ObjectDDL,
         context: sd.CommandContext,
-    ) -> List[so.ObjectShell[Index]]:
+    ) -> list[so.ObjectShell[Index]]:
         if (
             isinstance(astnode, qlast.CreateConcreteIndex)
             and astnode.name

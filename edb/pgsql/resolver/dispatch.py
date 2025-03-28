@@ -55,15 +55,15 @@ def resolve_opt(
 
 def resolve_list(
     exprs: typing.Sequence[Base_T], *, ctx: context.ResolverContextLevel
-) -> typing.List[Base_T]:
+) -> list[Base_T]:
     return [resolve(e, ctx=ctx) for e in exprs]
 
 
 def resolve_opt_list(
-    exprs: typing.Optional[typing.List[Base_T]],
+    exprs: typing.Optional[list[Base_T]],
     *,
     ctx: context.ResolverContextLevel,
-) -> typing.Optional[typing.List[Base_T]]:
+) -> typing.Optional[list[Base_T]]:
     if not exprs:
         return None
     return resolve_list(exprs, ctx=ctx)
@@ -74,7 +74,7 @@ def resolve_relation(
     *,
     include_inherited: bool = True,
     ctx: context.ResolverContextLevel,
-) -> typing.Tuple[pgast.BaseRelation, context.Table]:
+) -> tuple[pgast.BaseRelation, context.Table]:
     rel, tab = _resolve_relation(
         rel, include_inherited=include_inherited, ctx=ctx
     )
@@ -87,7 +87,7 @@ def _resolve_relation(
     *,
     include_inherited: bool,
     ctx: context.ResolverContextLevel,
-) -> typing.Tuple[pgast.BaseRelation, context.Table]:
+) -> tuple[pgast.BaseRelation, context.Table]:
     _raise_unsupported(rel)
 
 

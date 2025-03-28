@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Callable, Tuple, Type, Union, Dict, List
+from typing import Any, Callable, Union
 
 import collections
 import functools
@@ -42,7 +42,7 @@ from edb.schema import version as s_ver
 from . import structure as sr_struct
 
 
-SchemaClassLayout = Dict[Type[s_obj.Object], sr_struct.SchemaTypeLayout]
+SchemaClassLayout = dict[type[s_obj.Object], sr_struct.SchemaTypeLayout]
 
 
 def parse_into(
@@ -76,14 +76,14 @@ def parse_into(
     globalname_to_id = {}
     dict_of_dicts: Callable[
         [],
-        Dict[Tuple[Type[s_obj.Object], str], Dict[uuid.UUID, None]],
+        dict[tuple[type[s_obj.Object], str], dict[uuid.UUID, None]],
     ] = functools.partial(collections.defaultdict, dict)
-    refs_to: Dict[
+    refs_to: dict[
         uuid.UUID,
-        Dict[Tuple[Type[s_obj.Object], str], Dict[uuid.UUID, None]]
+        dict[tuple[type[s_obj.Object], str], dict[uuid.UUID, None]]
     ] = collections.defaultdict(dict_of_dicts)
 
-    objects: Dict[uuid.UUID, Tuple[s_obj.Object, Dict[str, Any]]] = {}
+    objects: dict[uuid.UUID, tuple[s_obj.Object, dict[str, Any]]] = {}
     objid: uuid.UUID
 
     for entry in json.loads(data):
@@ -121,7 +121,7 @@ def parse_into(
         id_to_type[objid] = type(obj).__name__
 
         all_fields = mcls.get_schema_fields()
-        objdata: List[Any] = [None] * len(all_fields)
+        objdata: list[Any] = [None] * len(all_fields)
         val: Any
         refid: uuid.UUID
 
@@ -292,7 +292,7 @@ def parse_into(
 
 
 def _parse_expression(
-    val: Dict[str, Any], id: uuid.UUID, field: str
+    val: dict[str, Any], id: uuid.UUID, field: str
 ) -> s_expr.Expression:
     refids = frozenset(
         uuidgen.UUID(r) for r in val['refs']
@@ -308,7 +308,7 @@ def _parse_expression(
     return expr
 
 
-def _parse_version(val: Dict[str, Any]) -> verutils.Version:
+def _parse_version(val: dict[str, Any]) -> verutils.Version:
     return verutils.Version(
         major=val['major'],
         minor=val['minor'],

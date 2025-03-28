@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Tuple, TypeVar, TYPE_CHECKING
+from typing import TypeVar, TYPE_CHECKING
 
 import enum
 
@@ -133,7 +133,7 @@ class Cardinality(s_enum.StrEnum):
     def can_be_zero(self) -> bool:
         return self not in {Cardinality.ONE, Cardinality.AT_LEAST_ONE}
 
-    def to_schema_value(self) -> Tuple[bool, SchemaCardinality]:
+    def to_schema_value(self) -> tuple[bool, SchemaCardinality]:
         return _CARD_TO_TUPLE[self]
 
     @classmethod

@@ -74,8 +74,8 @@ class SnapshotLog:
 class Snapshot:
     timestamp: float
     capacity: int
-    blocks: typing.List[BlockSnapshot]
-    log: typing.List[SnapshotLog]
+    blocks: list[BlockSnapshot]
+    log: list[SnapshotLog]
 
     failed_connects: int
     failed_disconnects: int
@@ -112,15 +112,15 @@ class Block(typing.Generic[C]):
 
     loop: asyncio.AbstractEventLoop
     dbname: str
-    conns: typing.Dict[C, ConnectionState]
+    conns: dict[C, ConnectionState]
     quota: int
     pending_conns: int
     last_connect_timestamp: float
 
     conn_acquired_num: int
     conn_waiters_num: int
-    conn_waiters: typing.Deque[asyncio.Future[None]]
-    conn_stack: typing.Deque[C]
+    conn_waiters: collections.deque[asyncio.Future[None]]
+    conn_stack: collections.deque[C]
     connect_failures_num: int
 
     querytime_avg: rolavg.RollingAverage
@@ -131,7 +131,7 @@ class Block(typing.Generic[C]):
 
     _is_log_batching: bool
     _last_log_timestamp: float
-    _log_events: typing.Dict[str, int]
+    _log_events: dict[str, int]
 
     def __init__(
         self,
@@ -431,7 +431,7 @@ class BasePool(typing.Generic[C]):
         return self._loop
 
     def _build_snapshot(self, *, now: float) -> Snapshot:
-        bstats: typing.List[BlockSnapshot] = []
+        bstats: list[BlockSnapshot] = []
         for block in self._blocks.values():
             bstats.append(
                 BlockSnapshot(
@@ -673,10 +673,10 @@ class Pool(BasePool[C]):
     # total number of connections to different blocks in a round-robin fashion.
 
     _new_blocks_waitlist: collections.OrderedDict[Block[C], bool]
-    _blocks_over_quota: typing.List[Block[C]]
+    _blocks_over_quota: list[Block[C]]
     _nacquires: int
     _htick: typing.Optional[asyncio.Handle]
-    _to_drop: typing.List[Block[C]]
+    _to_drop: list[Block[C]]
     _gc_interval: float  # minimum seconds between GC runs
     _gc_requests: int  # number of GC requests
 
@@ -1037,7 +1037,7 @@ class Pool(BasePool[C]):
 
     def _find_most_starving_block(
         self,
-    ) -> typing.Tuple[typing.Optional[str], typing.Optional[Block[C]]]:
+    ) -> tuple[typing.Optional[str], typing.Optional[Block[C]]]:
         to_block = None
 
         # Find if there are any newly created blocks waiting for their
@@ -1282,7 +1282,7 @@ class _NaivePool(BasePool[C]):
     Should only be used for for testing purposes.
     """
 
-    _conns: typing.Dict[str, typing.Set[C]]
+    _conns: dict[str, set[C]]
     _last_tick: float
 
     def __init__(

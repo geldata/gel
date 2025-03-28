@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Tuple, Union, Dict, FrozenSet, NamedTuple
+from typing import Optional, Union, NamedTuple
 
 import dataclasses
 
@@ -50,18 +50,18 @@ class MultiplicityInfo:
 
 class InfCtx(NamedTuple):
     env: context.Environment
-    inferred_cardinality: Dict[
+    inferred_cardinality: dict[
         Union[
-            Tuple[irast.Base, irast.ScopeTreeNode, FrozenSet[irast.PathId]],
+            tuple[irast.Base, irast.ScopeTreeNode, frozenset[irast.PathId]],
             irast.Base,
         ],
         qltypes.Cardinality,
     ]
-    inferred_multiplicity: Dict[
-        Tuple[irast.Base, irast.ScopeTreeNode, Optional[irast.PathId]],
+    inferred_multiplicity: dict[
+        tuple[irast.Base, irast.ScopeTreeNode, Optional[irast.PathId]],
         MultiplicityInfo,
     ]
-    singletons: FrozenSet[irast.PathId]
+    singletons: frozenset[irast.PathId]
     distinct_iterator: Optional[irast.PathId]
     ignore_computed_cards: bool
     # Whether to make updates to the cardinality fields in the IR/schema.

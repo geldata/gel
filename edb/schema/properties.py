@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple, Type, Dict, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
@@ -57,9 +57,9 @@ class Property(
         referrer: so.QualifiedObject,
         *qualifiers: str,
         target: Optional[s_types.Type] = None,
-        attrs: Optional[Dict[str, Any]] = None,
+        attrs: Optional[dict[str, Any]] = None,
         **kwargs: Any,
-    ) -> Tuple[s_schema.Schema, Property]:
+    ) -> tuple[s_schema.Schema, Property]:
         from . import links as s_links
         if target is None:
             target = self.get_target(schema)
@@ -162,7 +162,7 @@ class Property(
             return not source.is_view(schema)
 
     @classmethod
-    def get_root_classes(cls) -> Tuple[sn.QualName, ...]:
+    def get_root_classes(cls) -> tuple[sn.QualName, ...]:
         return (
             sn.QualName(module='std', name='property'),
         )
@@ -181,7 +181,7 @@ class Property(
     def init_delta_command(
         self,
         schema: s_schema.Schema,
-        cmdtype: Type[sd.ObjectCommand_T],
+        cmdtype: type[sd.ObjectCommand_T],
         *,
         classname: Optional[sn.Name] = None,
         **kwargs: Any,
@@ -329,7 +329,7 @@ class CreateProperty(
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if (
             field == 'required'

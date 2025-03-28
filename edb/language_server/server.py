@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Dict, Mapping, List, Iterable
+from typing import Mapping, Iterable
 import dataclasses
 import pathlib
 import os
@@ -46,7 +46,7 @@ from . import project
 class State:
     manifest: tuple[project.Manifest, pathlib.Path] | None = None
 
-    schema_docs: List[pygls.workspace.TextDocument] = dataclasses.field(
+    schema_docs: list[pygls.workspace.TextDocument] = dataclasses.field(
         default_factory=lambda: []
     )
 
@@ -72,7 +72,7 @@ class GelLanguageServer(LanguageServer):
 
 @dataclasses.dataclass(kw_only=True)
 class DiagnosticsSet:
-    by_doc: Dict[pygls.workspace.TextDocument, List[lsp_types.Diagnostic]] = (
+    by_doc: dict[pygls.workspace.TextDocument, list[lsp_types.Diagnostic]] = (
         dataclasses.field(default_factory=lambda: {})
     )
 
@@ -110,7 +110,7 @@ def _new_diagnostic_at_the_top(message: str) -> lsp_types.Diagnostic:
 def compile(
     ls: GelLanguageServer,
     doc: pygls.workspace.TextDocument,
-    stmts: List[qlast.Base],
+    stmts: list[qlast.Base],
 ) -> DiagnosticsSet:
     if not stmts:
         return DiagnosticsSet(by_doc={doc: []})
@@ -124,7 +124,7 @@ def compile(
             )
         return diagnostics_set
 
-    diagnostics: List[lsp_types.Diagnostic] = []
+    diagnostics: list[lsp_types.Diagnostic] = []
     modaliases: Mapping[str | None, str] = {None: 'default'}
     for ql_stmt in stmts:
 
@@ -195,7 +195,7 @@ def get_schema(
 
 def update_schema_doc(
     ls: GelLanguageServer, doc: pygls.workspace.TextDocument
-) -> List[lsp_types.Diagnostic]:
+) -> list[lsp_types.Diagnostic]:
 
     schema_dir = _determine_schema_dir(ls)
     if not schema_dir:

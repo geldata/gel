@@ -37,8 +37,8 @@ class WorkerQueue(typing.Generic[W]):
 
     loop: asyncio.AbstractEventLoop
 
-    _waiters: typing.Deque[asyncio.Future[None]]
-    _queue: typing.Deque[W]
+    _waiters: collections.deque[asyncio.Future[None]]
+    _queue: collections.deque[W]
 
     def __init__(
         self,

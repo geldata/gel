@@ -20,7 +20,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 import typing
 import functools
@@ -180,7 +180,7 @@ class BaseSyntaxTest(BaseDocTest):
     markup_dump_lexer: Optional[str] = None
 
     @classmethod
-    def get_grammar_token(cls) -> Type[qlgrammar.tokens.GrammarToken]:
+    def get_grammar_token(cls) -> type[qlgrammar.tokens.GrammarToken]:
         raise NotImplementedError
 
     def run_test(self, *, source, spec, expected=None):

@@ -24,15 +24,11 @@ from typing import (
     Final,
     Generic,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     Iterable,
     Iterator,
     Mapping,
-    Dict,
-    List,
     cast,
 )
 
@@ -66,7 +62,7 @@ class Field(ProtoField, Generic[T]):
 
     def __init__(
         self,
-        type_: Type[T],
+        type_: type[T],
         default: Union[T, NoDefaultT] = NoDefault,
         *,
         coerce: bool = False,
@@ -119,14 +115,14 @@ StructMeta_T = TypeVar("StructMeta_T", bound="StructMeta")
 
 class StructMeta(type):
 
-    _fields: Dict[str, Field[Any]]
-    _sorted_fields: Dict[str, Field[Any]]
+    _fields: dict[str, Field[Any]]
+    _sorted_fields: dict[str, Field[Any]]
 
     def __new__(
-        mcls: Type[StructMeta_T],
+        mcls: type[StructMeta_T],
         name: str,
-        bases: Tuple[type, ...],
-        clsdict: Dict[str, Any],
+        bases: tuple[type, ...],
+        clsdict: dict[str, Any],
         *,
         use_slots: bool = True,
         **kwargs: Any,
@@ -192,10 +188,10 @@ class StructMeta(type):
     def get_field(cls, name: str) -> Optional[Field[Any]]:
         return cls._fields.get(name)
 
-    def get_fields(cls, sorted: bool = False) -> Dict[str, Field[Any]]:
+    def get_fields(cls, sorted: bool = False) -> dict[str, Field[Any]]:
         return cls._sorted_fields if sorted else cls._fields
 
-    def get_ownfields(cls) -> Dict[str, Field[Any]]:
+    def get_ownfields(cls) -> dict[str, Field[Any]]:
         return getattr(  # type: ignore
             cls, '{}.{}_fields'.format(cls.__module__, cls.__name__))
 
@@ -266,7 +262,7 @@ class Struct(metaclass=StructMeta):
 
     def update(self, *args: Any, **kwargs: Any) -> None:
         """Update the field values."""
-        values: Dict[str, Any] = {}
+        values: dict[str, Any] = {}
         values.update(*args, **kwargs)
 
         self._check_init_argnames(values)
@@ -274,7 +270,7 @@ class Struct(metaclass=StructMeta):
         for k, v in values.items():
             setattr(self, k, v)
 
-    def setdefaults(self) -> List[str]:
+    def setdefaults(self) -> list[str]:
         """Initialize unset fields with default values."""
         fields_set = []
         for field_name, field in self.__class__._fields.items():
@@ -291,7 +287,7 @@ class Struct(metaclass=StructMeta):
     def formatfields(
         self,
         formatter: str = 'str',
-    ) -> Iterator[Tuple[str, str]]:
+    ) -> Iterator[tuple[str, str]]:
         """Return an iterator over fields formatted using `formatter`."""
         for name, field in self.__class__._fields.items():
             formatter_obj = field.formatters.get(formatter)
@@ -300,7 +296,7 @@ class Struct(metaclass=StructMeta):
 
     def _copy_and_replace(
         self,
-        cls: Type[Struct_T],
+        cls: type[Struct_T],
         **replacements: Any,
     ) -> Struct_T:
         args = {f: getattr(self, f) for f in cls._fields.keys()}
@@ -308,7 +304,7 @@ class Struct(metaclass=StructMeta):
             args.update(replacements)
         return cls(**args)
 
-    def copy_with_class(self, cls: Type[Struct_T]) -> Struct_T:
+    def copy_with_class(self, cls: type[Struct_T]) -> Struct_T:
         return self._copy_and_replace(cls)
 
     def copy(self: Struct_T) -> Struct_T:
@@ -317,11 +313,11 @@ class Struct(metaclass=StructMeta):
     def replace(self: Struct_T, **replacements: Any) -> Struct_T:
         return self._copy_and_replace(type(self), **replacements)
 
-    def items(self) -> Iterator[Tuple[str, Any]]:
+    def items(self) -> Iterator[tuple[str, Any]]:
         for field in self.__class__._fields:
             yield field, getattr(self, field, None)
 
-    def as_tuple(self) -> Tuple[Any, ...]:
+    def as_tuple(self) -> tuple[Any, ...]:
         result = []
         for field in self.__class__._fields:
             result.append(getattr(self, field, None))
@@ -482,8 +478,8 @@ class MixedStructMeta(StructMeta):
     def __new__(
         mcls,
         name: str,
-        bases: Tuple[type, ...],
-        clsdict: Dict[str, Any],
+        bases: tuple[type, ...],
+        clsdict: dict[str, Any],
         *,
         use_slots: bool = False,
         **kwargs: Any,

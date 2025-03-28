@@ -23,13 +23,9 @@ from typing import (
     Callable,
     ClassVar,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     AbstractSet,
     Iterable,
-    Dict,
-    List,
     cast,
 )
 
@@ -124,7 +120,7 @@ class ReferencedObject(so.DerivableObject):
         context: sd.CommandContext,
         *,
         referrer: Optional[so.Object] = None,
-    ) -> Tuple[
+    ) -> tuple[
         sd.CommandGroup,
         sd.Command,
         sd.ContextStack,
@@ -139,7 +135,7 @@ class ReferencedObject(so.DerivableObject):
             return root, parent, ctx_stack
 
         obj: Optional[so.Object] = referrer
-        object_stack: List[so.Object] = [referrer]
+        object_stack: list[so.Object] = [referrer]
 
         while obj is not None:
             if isinstance(obj, ReferencedObject):
@@ -198,7 +194,7 @@ class ReferencedInheritingObject(
     def get_implicit_bases(
         self: ReferencedInheritingObjectT,
         schema: s_schema.Schema,
-    ) -> List[ReferencedInheritingObjectT]:
+    ) -> list[ReferencedInheritingObjectT]:
         return [
             b for b in self.get_bases(schema).objects(schema)
             if not b.is_non_concrete(schema)
@@ -207,7 +203,7 @@ class ReferencedInheritingObject(
     def get_implicit_ancestors(
         self: ReferencedInheritingObjectT,
         schema: s_schema.Schema,
-    ) -> List[ReferencedInheritingObjectT]:
+    ) -> list[ReferencedInheritingObjectT]:
         return [
             b for b in self.get_ancestors(schema).objects(schema)
             if not b.is_non_concrete(schema)
@@ -216,7 +212,7 @@ class ReferencedInheritingObject(
     def get_name_impacting_ancestors(
         self: ReferencedInheritingObjectT,
         schema: s_schema.Schema,
-    ) -> List[ReferencedInheritingObjectT]:
+    ) -> list[ReferencedInheritingObjectT]:
         """Return ancestors that have an impact on the name of this object.
 
         For most types this is the same as implicit ancestors.
@@ -292,7 +288,7 @@ class ReferencedInheritingObject(
         referrer: so.QualifiedObject,
         *qualifiers: str,
         mark_derived: bool = False,
-        attrs: Optional[Dict[str, Any]] = None,
+        attrs: Optional[dict[str, Any]] = None,
         dctx: Optional[sd.CommandContext] = None,
         derived_name_base: Optional[sn.Name] = None,
         inheritance_merge: bool = True,
@@ -301,7 +297,7 @@ class ReferencedInheritingObject(
         preserve_endpoint_ptrs: bool = False,
         name: Optional[sn.QualName] = None,
         **kwargs: Any,
-    ) -> Tuple[s_schema.Schema, ReferencedInheritingObjectT]:
+    ) -> tuple[s_schema.Schema, ReferencedInheritingObjectT]:
         if name is None:
             derived_name = self.get_derived_name(
                 schema,
@@ -317,7 +313,7 @@ class ReferencedInheritingObject(
             raise errors.SchemaError(
                 f'cannot derive {self!r}({derived_name}) from itself')
 
-        derived_attrs: Dict[str, object] = {}
+        derived_attrs: dict[str, object] = {}
 
         if attrs is not None:
             derived_attrs.update(attrs)
@@ -403,7 +399,7 @@ class ReferencedInheritingObject(
 class ReferencedObjectCommandBase(sd.QualifiedObjectCommand[ReferencedT]):
 
     _referrer_context_class: ClassVar[Optional[
-        Type[sd.ObjectCommandContext[so.Object]]
+        type[sd.ObjectCommandContext[so.Object]]
     ]] = None
 
     #: Whether the referenced command represents a "strong" reference,
@@ -415,7 +411,7 @@ class ReferencedObjectCommandBase(sd.QualifiedObjectCommand[ReferencedT]):
         cls,
         *,
         referrer_context_class: Optional[
-            Type[sd.ObjectCommandContext[so.Object]]
+            type[sd.ObjectCommandContext[so.Object]]
         ] = None,
         **kwargs: Any,
     ) -> None:
@@ -426,7 +422,7 @@ class ReferencedObjectCommandBase(sd.QualifiedObjectCommand[ReferencedT]):
     @classmethod
     def get_referrer_context_class(
         cls,
-    ) -> Type[sd.ObjectCommandContext[so.Object]]:
+    ) -> type[sd.ObjectCommandContext[so.Object]]:
         if cls._referrer_context_class is None:
             raise TypeError(
                 f'referrer_context_class is not defined for {cls}')
@@ -532,14 +528,14 @@ class ReferencedObjectCommand(ReferencedObjectCommandBase[ReferencedT]):
         base_name: sn.Name,
         referrer_name: sn.QualName,
         context: sd.CommandContext,
-    ) -> Tuple[str, ...]:
+    ) -> tuple[str, ...]:
         return ()
 
     @classmethod
     def _classname_quals_from_name(
         cls,
         name: sn.QualName,
-    ) -> Tuple[str, ...]:
+    ) -> tuple[str, ...]:
         return ()
 
     @classmethod
@@ -553,9 +549,9 @@ class ReferencedObjectCommand(ReferencedObjectCommandBase[ReferencedT]):
 
     def _get_ast_node(
         self, schema: s_schema.Schema, context: sd.CommandContext
-    ) -> Type[qlast.DDLOperation]:
+    ) -> type[qlast.DDLOperation]:
         subject_ctx = self.get_referrer_context(context)
-        ref_astnode: Optional[Type[qlast.DDLOperation]] = (
+        ref_astnode: Optional[type[qlast.DDLOperation]] = (
             getattr(self, 'referenced_astnode', None))
         if subject_ctx is not None and ref_astnode is not None:
             return ref_astnode
@@ -571,7 +567,7 @@ class CreateReferencedObject(
     sd.CreateObject[ReferencedT],
 ):
 
-    referenced_astnode: ClassVar[Type[qlast.ObjectDDL]]
+    referenced_astnode: ClassVar[type[qlast.ObjectDDL]]
 
     @classmethod
     def _cmd_tree_from_ast(
@@ -609,7 +605,7 @@ class CreateReferencedObject(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-    ) -> Type[qlast.DDLOperation]:
+    ) -> type[qlast.DDLOperation]:
         # Render CREATE as ALTER in DDL if the created referenced object is
         # implicitly inherited from parents.
         scls = self.get_object(schema, context)
@@ -632,7 +628,7 @@ class CreateReferencedObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         astnode: qlast.ObjectDDL,
-        bases: List[ReferencedT],
+        bases: list[ReferencedT],
         referrer: so.Object,
     ) -> sd.ObjectCommand[ReferencedT]:
         cmd = cls(classname=cls._classname_from_ast(schema, astnode, context))
@@ -730,7 +726,7 @@ class ReferencedInheritingObjectCommand(
         referrer: so.InheritingObject,
         referrer_field: str,
         fq_name: sn.QualName,
-    ) -> List[ReferencedInheritingObjectT]:
+    ) -> list[ReferencedInheritingObjectT]:
 
         ref_field_type = type(referrer).get_field(referrer_field).type
         assert isinstance(referrer, so.QualifiedObject)
@@ -757,7 +753,7 @@ class ReferencedInheritingObjectCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         refcls: ReferencedInheritingObjectT,
-        implicit_bases: List[ReferencedInheritingObjectT],
+        implicit_bases: list[ReferencedInheritingObjectT],
     ) -> inheriting.BaseDelta_T[ReferencedInheritingObjectT]:
         child_bases = refcls.get_bases(schema).objects(schema)
 
@@ -824,7 +820,7 @@ class ReferencedInheritingObjectCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         bases: Any,
-    ) -> List[sn.QualName]:
+    ) -> list[sn.QualName]:
 
         mcls = self.get_schema_metaclass()
         default_base = mcls.get_default_base_name()
@@ -1085,7 +1081,7 @@ class CreateReferencedInheritingObject(
                     bases = self.get_attribute_value('bases')
                     if bases:
                         res_bases = cast(
-                            List[ReferencedInheritingObjectT],
+                            list[ReferencedInheritingObjectT],
                             self.resolve_obj_collection(bases, schema))
                         bases = so.ObjectList.create(
                             schema,
@@ -1326,8 +1322,8 @@ class RebaseReferencedInheritingObject(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        bases: Tuple[so.ObjectShell[ReferencedInheritingObjectT], ...],
-    ) -> Tuple[so.ObjectShell[ReferencedInheritingObjectT], ...]:
+        bases: tuple[so.ObjectShell[ReferencedInheritingObjectT], ...],
+    ) -> tuple[so.ObjectShell[ReferencedInheritingObjectT], ...]:
         bases = super()._get_bases_for_ast(schema, context, bases)
         implicit_bases = set(self.get_implicit_bases(schema, context, bases))
         return tuple(b for b in bases if b.name not in implicit_bases)

@@ -20,13 +20,11 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Tuple,
     Iterator,
     Iterable,
     Mapping,
     Coroutine,
     AsyncGenerator,
-    Set,
     Optional,
     TypedDict,
     TYPE_CHECKING,
@@ -109,7 +107,7 @@ class Tenant(ha_base.ClusterProtocol):
 
     __loop: asyncio.AbstractEventLoop
     _task_group: asyncio.TaskGroup | None
-    _tasks: Set[asyncio.Task]
+    _tasks: set[asyncio.Task]
     _accept_new_tasks: bool
     _file_watch_finalizers: list[Callable[[], None]]
 
@@ -138,7 +136,7 @@ class Tenant(ha_base.ClusterProtocol):
     _report_config_data: dict[defines.ProtocolVersion, bytes]
 
     _roles: Mapping[str, RoleDescriptor]
-    _sys_auth: Tuple[Any, ...]
+    _sys_auth: tuple[Any, ...]
     _jwt_sub_allowlist_file: pathlib.Path | None
     _jwt_sub_allowlist: frozenset[str] | None
     _jwt_revocation_list_file: pathlib.Path | None

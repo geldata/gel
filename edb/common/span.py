@@ -33,7 +33,7 @@ contexts through the AST structure.
 
 from __future__ import annotations
 
-from typing import Iterable, List
+from typing import Iterable
 import re
 import bisect
 
@@ -166,7 +166,7 @@ def _get_span(items, *, reverse=False):
     return None
 
 
-def get_span(*kids: List[ast.AST]):
+def get_span(*kids: list[ast.AST]):
     start_ctx = _get_span(kids)
     end_ctx = _get_span(kids, reverse=True)
 
@@ -255,7 +255,7 @@ class SpanPropagator(ast.NodeVisitor):
     def repeated_node_visit(self, node):
         return self.memo[node]
 
-    def container_visit(self, node) -> List[Span | None]:
+    def container_visit(self, node) -> list[Span | None]:
         span_list: list[Span | None] = []
         for el in node:
             if isinstance(el, ast.AST) or typeutils.is_container(el):

@@ -1,4 +1,3 @@
-from typing import Tuple, Dict
 
 from ..data import data_ops as e
 from ..data import expr_ops as eops
@@ -135,7 +134,7 @@ def check_object_tp_comp_validity(
 def check_object_tp_validity(
     root_ctx: e.TcCtx, subject_tp: e.Tp, obj_tp: e.ObjectTp
 ) -> e.ObjectTp:
-    result_vals: Dict[str, e.ResultTp] = {}
+    result_vals: dict[str, e.ResultTp] = {}
     for lbl, (t_comp_tp, t_comp_card) in obj_tp.val.items():
         result_vals[lbl] = e.ResultTp(
             check_object_tp_comp_validity(
@@ -192,7 +191,7 @@ def check_fun_def_validity(ctx: e.TcCtx, fun_def: e.FuncDef) -> e.FuncDef:
 
 
 def check_module_validity(
-    dbschema: e.DBSchema, module_name: Tuple[str, ...]
+    dbschema: e.DBSchema, module_name: tuple[str, ...]
 ) -> e.DBSchema:
     """
     Checks the validity of an unchecked module in dbschema.
@@ -213,7 +212,7 @@ def check_module_validity(
 
 
 def re_populate_module_inheritance(
-    dbschema: e.DBSchema, module_name: Tuple[str, ...]
+    dbschema: e.DBSchema, module_name: tuple[str, ...]
 ) -> None:
     """
     Checks the validity of an unchecked module in dbschema.

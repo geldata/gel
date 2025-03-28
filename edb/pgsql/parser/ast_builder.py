@@ -22,12 +22,9 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     Sequence,
-    List,
     cast,
 )
 
@@ -54,7 +51,7 @@ Builder = Callable[[Node, Context], T]
 
 def build_stmts(
     node: Node, source_sql: str, propagate_spans: bool
-) -> List[pgast.Query | pgast.Statement]:
+) -> list[pgast.Query | pgast.Statement]:
     ctx = Context(source_sql=source_sql)
 
     try:
@@ -97,7 +94,7 @@ def _list(
     mapper: Callable[[T], U] = _ident,
     *,
     unwrap: Optional[str] = None,
-) -> List[U]:
+) -> list[U]:
     if unwrap is not None:
         return [
             mapper(builder(_unwrap(n, unwrap), ctx)) for n in node.get(name, [])
@@ -114,7 +111,7 @@ def _maybe_list(
     mapper: Callable[[T], U] = _ident,
     *,
     unwrap: Optional[str] = None,
-) -> Optional[List[U]]:
+) -> Optional[list[U]]:
     return (
         _list(node, ctx, name, builder, mapper, unwrap=unwrap)
         if name in node
@@ -123,7 +120,7 @@ def _maybe_list(
 
 
 def _enum(
-    _ty: Type[T],
+    _ty: type[T],
     node: Node,
     ctx: Context,
     builders: dict[str, Builder],
@@ -481,7 +478,7 @@ def _build_transaction_stmt(n: Node, c: Context) -> pgast.TransactionStmt:
 
 
 def _build_transaction_options(
-    nodes: List[Node], c: Context
+    nodes: list[Node], c: Context
 ) -> pgast.TransactionOptions:
     options = {}
     for n in nodes:
@@ -612,7 +609,7 @@ def _build_base_expr(node: Node, c: Context) -> pgast.BaseExpr:
     )
 
 
-def _build_distinct(nodes: List[Node], c: Context) -> List[pgast.Base]:
+def _build_distinct(nodes: list[Node], c: Context) -> list[pgast.Base]:
     # For some reason, plain DISTINCT is parsed as [{}]
     # In our AST this is represented by [pgast.Star()]
     if len(nodes) == 1 and len(nodes[0]) == 0:
@@ -647,10 +644,10 @@ def _build_record_indirection_op(
     return pgast.RecordIndirectionOp(name=_build_str(n, c))
 
 
-def _build_ctes(n: Node, c: Context) -> List[pgast.CommonTableExpr]:
+def _build_ctes(n: Node, c: Context) -> list[pgast.CommonTableExpr]:
     is_recursive = _maybe(n, c, 'recursive', lambda x, _: bool(x)) or False
 
-    ctes: List[pgast.CommonTableExpr] = _list(n, c, "ctes", _build_cte)
+    ctes: list[pgast.CommonTableExpr] = _list(n, c, "ctes", _build_cte)
     for cte in ctes:
         cte.recursive = is_recursive
     return ctes
@@ -762,7 +759,7 @@ def _build_sub_link(n: Node, c: Context) -> pgast.SubLink:
 
 
 def _build_row_expr(n: Node, c: Context) -> pgast.BaseExpr:
-    args: List[pgast.BaseExpr] = (
+    args: list[pgast.BaseExpr] = (
         _maybe_list(n, c, "args", _build_base_expr) or []
     )
 
@@ -801,7 +798,7 @@ def _build_type_cast(n: Node, c: Context) -> pgast.TypeCast:
 def _build_type_name(n: Node, c: Context) -> pgast.TypeName:
     n = _unwrap(n, "TypeName")
 
-    name: Tuple[str, ...] = tuple(_list(n, c, "names", _build_str))
+    name: tuple[str, ...] = tuple(_list(n, c, "names", _build_str))
 
     # we don't escape char properly, so let's just resolve it during parsing
     if name == ("char",):
@@ -989,7 +986,7 @@ def _build_array_expr(n: Node, c: Context) -> pgast.ArrayExpr:
 
 
 def _build_a_expr(n: Node, c: Context) -> pgast.BaseExpr:
-    names: List[str] = _list(n, c, 'name', _build_str)
+    names: list[str] = _list(n, c, 'name', _build_str)
     if names[0] == 'pg_catalog':
         names.pop(0)
     name = names.pop(0)
@@ -1094,15 +1091,15 @@ def _build_insert_target(n: Node, c: Context) -> pgast.InsertTarget:
 
 
 def _build_update_targets(
-    target_list: List[Node], c: Context
-) -> List[pgast.UpdateTarget | pgast.MultiAssignRef]:
-    targets: List[pgast.UpdateTarget | pgast.MultiAssignRef] = []
+    target_list: list[Node], c: Context
+) -> list[pgast.UpdateTarget | pgast.MultiAssignRef]:
+    targets: list[pgast.UpdateTarget | pgast.MultiAssignRef] = []
     while len(target_list) > 0:
         val: dict = target_list[0]["ResTarget"]["val"]
         if first_mar := val.get("MultiAssignRef", None):
             ncolumns = first_mar['ncolumns']
 
-            columns: List[str] = []
+            columns: list[str] = []
             for _ in range(ncolumns):
                 target = target_list.pop(0)
                 mar = target['ResTarget']
@@ -1123,7 +1120,7 @@ def _build_update_targets(
 
 
 def _build_multi_assign_ref(
-    n: Node, columns: List[str], c: Context
+    n: Node, columns: list[str], c: Context
 ) -> pgast.MultiAssignRef:
     return pgast.MultiAssignRef(
         source=_build_base_expr(n['source'], c),
@@ -1261,7 +1258,7 @@ def _build_copy_format(n: Node, c: Context) -> pgast.CopyFormat:
     raise PSqlUnsupportedError(val, f"{val} format")
 
 
-def _build_copy_options(nodes: List[Node], c: Context) -> pgast.CopyOptions:
+def _build_copy_options(nodes: list[Node], c: Context) -> pgast.CopyOptions:
     opt = pgast.CopyOptions()
     for n in nodes:
         if 'DefElem' not in n or 'defname' not in n['DefElem']:

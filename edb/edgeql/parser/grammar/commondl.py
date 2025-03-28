@@ -418,7 +418,7 @@ class FromFunction(Nonterm):
 
 class ProcessFunctionBlockMixin:
     def _process_function_body(self, block, *, optional_using: bool=False):
-        props: typing.Dict[str, typing.Any] = {}
+        props: dict[str, typing.Any] = {}
 
         commands = []
         code = None
@@ -761,7 +761,7 @@ class ProcessIndexMixin(ProcessFunctionParamsMixin):
         return params, kwargs
 
     def _process_sql_body(self, block, *, optional_using: bool=False):
-        props: typing.Dict[str, typing.Any] = {}
+        props: dict[str, typing.Any] = {}
 
         commands = []
         code = None

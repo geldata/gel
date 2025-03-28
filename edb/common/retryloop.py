@@ -21,8 +21,6 @@ from __future__ import annotations
 from typing import (
     Callable,
     Optional,
-    Tuple,
-    Type,
 )
 
 import asyncio
@@ -54,9 +52,9 @@ class RetryLoop:
         *,
         backoff: Callable[[int], float] = const_backoff(0.5),
         timeout: float,
-        ignore: Type[Exception] | Tuple[Type[Exception], ...] | None = None,
+        ignore: type[Exception] | tuple[type[Exception], ...] | None = None,
         ignore_regexp: str | None = None,
-        wait_for: Type[Exception] | Tuple[Type[Exception], ...] | None = None,
+        wait_for: type[Exception] | tuple[type[Exception], ...] | None = None,
         wait_for_regexp: str | None = None,
         retry_cb: Callable[[Optional[BaseException]], None] | None = None,
     ) -> None:
@@ -107,7 +105,7 @@ class RetryIteration:
 
     async def __aexit__(
         self,
-        et: Type[BaseException],
+        et: type[BaseException],
         e: BaseException,
         _tb: types.TracebackType,
     ) -> bool:

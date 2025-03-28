@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence, List
+from typing import Any, Optional, Sequence
 
 import abc
 import collections
@@ -103,7 +103,7 @@ def generate_source(
 
 
 def generate_ctes_source(
-    ctes: List[pgast.CommonTableExpr],
+    ctes: list[pgast.CommonTableExpr],
 ) -> str:
     # Alternative simplified entrypoint generating 'WITH a AS (...)' only.
 
@@ -124,7 +124,7 @@ class BaseSourceMap(SourceMap):
     source_start: int
     output_start: int
     output_end: int | None = None
-    children: List[BaseSourceMap] = (
+    children: list[BaseSourceMap] = (
         dataclasses.field(default_factory=list))
 
     def translate(self, pos: int) -> int:
@@ -140,7 +140,7 @@ class BaseSourceMap(SourceMap):
 
 @dataclasses.dataclass
 class ChainedSourceMap(SourceMap):
-    parts: List[SourceMap] = (
+    parts: list[SourceMap] = (
         dataclasses.field(default_factory=list))
 
     def translate(self, pos: int) -> int:
@@ -212,7 +212,7 @@ class SQLSourceGenerator(codegen.SourceGenerator):
             'No method to generate code for %s' % node.__class__.__name__
         )
 
-    def gen_ctes(self, ctes: List[pgast.CommonTableExpr]) -> None:
+    def gen_ctes(self, ctes: list[pgast.CommonTableExpr]) -> None:
         count = len(ctes)
         for i, cte in enumerate(ctes):
             self.new_lines = 1

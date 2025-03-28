@@ -18,10 +18,6 @@
 
 from __future__ import annotations
 
-from typing import (
-    List,
-)
-
 import json
 
 from edb.pgsql import ast as pgast
@@ -45,7 +41,7 @@ __all__ = (
 
 def parse(
     sql_query: str, propagate_spans: bool = False
-) -> List[pgast.Query | pgast.Statement]:
+) -> list[pgast.Query | pgast.Statement]:
     ast_json = parser.pg_parse(bytes(sql_query, encoding="UTF8"))
 
     return ast_builder.build_stmts(

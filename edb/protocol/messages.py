@@ -177,8 +177,8 @@ class ArrayOf(CType):
 
     def __init__(
         self,
-        length_in: typing.Type[CType],
-        element: typing.Union[CType, typing.Type[Struct]],
+        length_in: type[CType],
+        element: typing.Union[CType, type[Struct]],
         doc: str = None,
     ) -> None:
         self.length_in = length_in()
@@ -218,7 +218,7 @@ class FixedArrayOf(CType):
     def __init__(
         self,
         length: int,
-        element: typing.Union[CType, typing.Type[Struct]],
+        element: typing.Union[CType, type[Struct]],
         doc: typing.Optional[str]=None
     ) -> None:
         self.length = length
@@ -256,8 +256,8 @@ class EnumOf(CType):
 
     def __init__(
         self,
-        value_in: typing.Type[Scalar],
-        enum: typing.Type[enum.Enum],
+        value_in: type[Scalar],
+        enum: type[enum.Enum],
         doc: typing.Optional[str]=None,
     ) -> None:
         self.value_in = value_in()
@@ -292,7 +292,7 @@ class EnumOf(CType):
 
 class Struct:
 
-    _fields: typing.Dict[str, typing.Union[CType, typing.Type[Struct]]] = {}
+    _fields: dict[str, typing.Union[CType, type[Struct]]] = {}
 
     def __init_subclass__(cls, *, abstract=False):
         if abstract:
@@ -342,7 +342,7 @@ class Struct:
 
     @classmethod
     def parse(cls, buffer: binwrapper.BinWrapper) -> Struct:
-        kwargs: typing.Dict[str, any] = {}
+        kwargs: dict[str, any] = {}
         for fieldname, field in cls._fields.items():
             if fieldname in {'mtype', 'message_length'}:
                 continue
@@ -417,7 +417,7 @@ class Message(Struct, abstract=True):
 
 class ServerMessage(Message, abstract=True):
 
-    index: typing.Dict[int, typing.List[typing.Type[ServerMessage]]] = {}
+    index: dict[int, list[type[ServerMessage]]] = {}
 
     def __init_subclass__(cls):
         super().__init_subclass__()
@@ -434,7 +434,7 @@ class ServerMessage(Message, abstract=True):
         iobuf = io.BytesIO(data)
         buffer = binwrapper.BinWrapper(iobuf)
 
-        kwargs: typing.Dict[str, any] = {}
+        kwargs: dict[str, any] = {}
 
         msg_types = cls.index.get(mtype)
         if not msg_types:

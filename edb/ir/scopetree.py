@@ -23,14 +23,10 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
     AbstractSet,
     Iterator,
     Mapping,
     Collection,
-    List,
-    Set,
-    FrozenSet,
     NamedTuple,
     Protocol,
     cast,
@@ -95,16 +91,16 @@ class ScopeTreeNode:
     factoring_fence: bool
     """Prevent prefix factoring across this node."""
 
-    factoring_allowlist: Set[pathid.PathId]
+    factoring_allowlist: set[pathid.PathId]
     """A list of prefixes that are always allowed to be factored."""
 
     optional: bool
     """Whether this node represents an optional path."""
 
-    children: List[ScopeTreeNode]
+    children: list[ScopeTreeNode]
     """A set of child nodes."""
 
-    namespaces: Set[pathid.Namespace]
+    namespaces: set[pathid.Namespace]
     """A set of namespaces used by paths in this branch.
 
     When a path node is pulled up from this branch,
@@ -156,7 +152,7 @@ class ScopeTreeNode:
         name = 'ScopeFenceNode' if self.fenced else 'ScopeTreeNode'
         return (f'<{name} {self.path_id!r} at {id(self):0x}>')
 
-    def find_dupe_unique_ids(self) -> Set[int]:
+    def find_dupe_unique_ids(self) -> set[int]:
         seen = set()
         dupes = set()
         for node in self.root.descendants:
@@ -236,9 +232,9 @@ class ScopeTreeNode:
     @property
     def ancestors_and_namespaces(
         self,
-    ) -> Iterator[Tuple[ScopeTreeNode, FrozenSet[pathid.Namespace]]]:
+    ) -> Iterator[tuple[ScopeTreeNode, frozenset[pathid.Namespace]]]:
         """An iterator of node's ancestors and namespaces, including self."""
-        namespaces: FrozenSet[str] = frozenset()
+        namespaces: frozenset[str] = frozenset()
         node: Optional[ScopeTreeNode] = self
         while node is not None:
             namespaces |= node.namespaces
@@ -261,7 +257,7 @@ class ScopeTreeNode:
             if has_path_id(p)
         )
 
-    def get_all_paths(self) -> Set[pathid.PathId]:
+    def get_all_paths(self) -> set[pathid.PathId]:
         return {pd.path_id for pd in self.path_descendants}
 
     @property
@@ -285,7 +281,7 @@ class ScopeTreeNode:
         strict: bool=False,
         skip: Optional[ScopeTreeNode]=None,
     ) -> Iterator[
-        Tuple[
+        tuple[
             ScopeTreeNode,
             AbstractSet[pathid.Namespace],
             FenceInfo
@@ -331,7 +327,7 @@ class ScopeTreeNode:
     def strict_descendants_and_namespaces(
         self,
     ) -> Iterator[
-        Tuple[
+        tuple[
             ScopeTreeNode,
             AbstractSet[pathid.Namespace],
             FenceInfo
@@ -344,7 +340,7 @@ class ScopeTreeNode:
         return self.descendants_and_namespaces_ex(strict=True)
 
     @property
-    def descendant_namespaces(self) -> Set[pathid.Namespace]:
+    def descendant_namespaces(self) -> set[pathid.Namespace]:
         """An set of namespaces declared by descendants."""
         namespaces = set()
         for child in self.descendants:
@@ -826,7 +822,7 @@ class ScopeTreeNode:
         self.namespaces.update(namespaces)
 
     def get_effective_namespaces(self) -> AbstractSet[pathid.Namespace]:
-        namespaces: Set[pathid.Namespace] = set()
+        namespaces: set[pathid.Namespace] = set()
 
         for _node, ans in self.ancestors_and_namespaces:
             namespaces |= ans
@@ -848,7 +844,7 @@ class ScopeTreeNode:
                 all(c.is_empty() for c in self.children)
             )
 
-    def get_all_visible(self) -> Set[pathid.PathId]:
+    def get_all_visible(self) -> set[pathid.PathId]:
         paths = set()
 
         for node in self.ancestors:
@@ -866,15 +862,15 @@ class ScopeTreeNode:
         path_id: pathid.PathId,
         *,
         allow_group: bool=False,
-    ) -> Tuple[
+    ) -> tuple[
         Optional[ScopeTreeNode],
         FenceInfo,
         AbstractSet[pathid.Namespace],
     ]:
         """Find the visible node with the given *path_id*."""
-        namespaces: Set[pathid.Namespace] = set()
+        namespaces: set[pathid.Namespace] = set()
         found = None
-        nodes: List[ScopeTreeNode] = []
+        nodes: list[ScopeTreeNode] = []
         for node, ans in self.ancestors_and_namespaces:
             if (node.path_id is not None
                     and _paths_equal(node.path_id, path_id, namespaces)):
@@ -968,7 +964,7 @@ class ScopeTreeNode:
     def find_descendants(
         self,
         path_id: pathid.PathId,
-    ) -> List[ScopeTreeNodeWithPathId]:
+    ) -> list[ScopeTreeNodeWithPathId]:
         matched = []
         for descendant, dns, _ in self.strict_descendants_and_namespaces:
             if (has_path_id(descendant)
@@ -977,7 +973,7 @@ class ScopeTreeNode:
 
         return matched
 
-    def find_descendant_and_ns(self, path_id: pathid.PathId) -> Tuple[
+    def find_descendant_and_ns(self, path_id: pathid.PathId) -> tuple[
         Optional[ScopeTreeNode],
         AbstractSet[pathid.Namespace],
         Optional[FenceInfo],
@@ -1008,8 +1004,8 @@ class ScopeTreeNode:
     def find_factorable_nodes(
         self,
         path_id: pathid.PathId,
-    ) -> List[
-        Tuple[
+    ) -> list[
+        tuple[
             ScopeTreeNodeWithPathId,
             ScopeTreeNode,
             AbstractSet[pathid.Namespace],

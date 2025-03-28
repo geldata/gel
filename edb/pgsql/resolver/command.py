@@ -19,7 +19,7 @@
 """SQL resolver that compiles public SQL to internal SQL which is executable
 in our internal Postgres instance."""
 
-from typing import List, Optional, Dict, Tuple, Iterable, Mapping, Set
+from typing import Optional, Iterable, Mapping
 import dataclasses
 import functools
 import uuid
@@ -122,12 +122,12 @@ def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
 
 def _pull_columns_from_table(
     table: context.Table,
-    col_names: Optional[Iterable[Tuple[str, pgast.Span | None]]],
-) -> List[context.Column]:
+    col_names: Optional[Iterable[tuple[str, pgast.Span | None]]],
+) -> list[context.Column]:
     if not col_names:
         return [c for c in table.columns if not c.hidden]
 
-    col_map: Dict[str, context.Column] = {
+    col_map: dict[str, context.Column] = {
         col.name: col for col in table.columns
     }
 
@@ -145,7 +145,7 @@ def _pull_columns_from_table(
 
 def compile_dml(
     stmt: pgast.Base, *, ctx: Context
-) -> List[pgast.CommonTableExpr]:
+) -> list[pgast.CommonTableExpr]:
     # extract all dml stmts
     dml_stmts_sql = _collect_dml_stmts(stmt)
     if len(dml_stmts_sql) == 0:
@@ -160,13 +160,13 @@ def compile_dml(
     return ctes
 
 
-def _collect_dml_stmts(stmt: pgast.Base) -> List[pgast.DMLQuery]:
+def _collect_dml_stmts(stmt: pgast.Base) -> list[pgast.DMLQuery]:
     if not isinstance(stmt, pgast.Query):
         return []
 
     # DML can only be in the top-level statement or its CTEs.
     # If it is in any of the nested CTEs, throw errors later on
-    res: List[pgast.DMLQuery] = []
+    res: list[pgast.DMLQuery] = []
     if stmt.ctes:
         for cte in stmt.ctes:
             if isinstance(cte.query, pgast.DMLQuery):
@@ -177,7 +177,7 @@ def _collect_dml_stmts(stmt: pgast.Base) -> List[pgast.DMLQuery]:
     return res
 
 
-ExternalRel = Tuple[pgast.BaseRelation, Tuple[pgce.PathAspect, ...]]
+ExternalRel = tuple[pgast.BaseRelation, tuple[pgce.PathAspect, ...]]
 
 
 @dataclasses.dataclass(kw_only=True, eq=False, repr=False)
@@ -192,16 +192,16 @@ class UncompiledDML:
     ql_stmt: qlast.Expr
 
     # additional params needed during compilation of the edgeql node
-    ql_returning_shape: List[qlast.ShapeElement]
-    ql_singletons: Set[irast.PathId]
+    ql_returning_shape: list[qlast.ShapeElement]
+    ql_singletons: set[irast.PathId]
     ql_anchors: Mapping[str, irast.PathId]
     external_rels: Mapping[irast.PathId, ExternalRel]
 
     # list of column names of the subject type, along with pointer name
     # these columns will be available within RETURNING clause
-    subject_columns: List[Tuple[str, str]]
+    subject_columns: list[tuple[str, str]]
 
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]]
+    stype_refs: dict[uuid.UUID, list[qlast.Set]]
 
     # data needed for stitching the compiled ast into the resolver output
     early_result: context.CompiledDML
@@ -226,7 +226,7 @@ def _uncompile_dml_stmt(stmt: pgast.DMLQuery, *, ctx: Context):
 
 def _uncompile_dml_subject(
     rvar: pgast.RelRangeVar, *, ctx: Context
-) -> Tuple[
+) -> tuple[
     context.Table, s_objtypes.ObjectType | s_links.Link | s_properties.Property
 ]:
     """
@@ -311,7 +311,7 @@ def _uncompile_insert_object_stmt(
     stmt: pgast.InsertStmt,
     sub: s_objtypes.ObjectType,
     sub_table: context.Table,
-    expected_columns: List[context.Column],
+    expected_columns: list[context.Column],
     *,
     ctx: Context,
 ) -> UncompiledDML:
@@ -353,7 +353,7 @@ def _uncompile_insert_object_stmt(
     )
     value_columns = []
     insert_shape = []
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]] = {}
+    stype_refs: dict[uuid.UUID, list[qlast.Set]] = {}
     for index, expected_col in enumerate(expected_columns):
         ptr, ptr_name, is_link = _get_pointer_for_column(expected_col, sub, ctx)
         value_columns.append((ptr_name, is_link))
@@ -409,7 +409,7 @@ def _uncompile_insert_object_stmt(
             result=ql_stmt,
         )
 
-    ql_returning_shape: List[qlast.ShapeElement] = []
+    ql_returning_shape: list[qlast.ShapeElement] = []
     if stmt.returning_list:
         # construct the shape that will extract all needed column of the subject
         # table (because they might be be used by RETURNING clause)
@@ -458,7 +458,7 @@ def _construct_assign_element_for_ptr(
     ptr: s_pointers.Pointer,
     is_link: bool,
     ctx: context.ResolverContextLevel,
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]],
+    stype_refs: dict[uuid.UUID, list[qlast.Set]],
 ):
     ptr_ql: qlast.Expr = qlast.Path(
         steps=[
@@ -488,7 +488,7 @@ def _construct_assign_element_for_ptr(
 def _construct_cast_from_uuid_to_obj_type(
     ptr_ql: qlast.Path,
     object: s_objtypes.ObjectType,
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]],
+    stype_refs: dict[uuid.UUID, list[qlast.Set]],
     *,
     optional: bool,
     ctx: Context,
@@ -608,7 +608,7 @@ def _uncompile_insert_pointer_stmt(
     stmt: pgast.InsertStmt,
     sub: s_links.Link | s_properties.Property,
     sub_table: context.Table,
-    expected_columns: List[context.Column],
+    expected_columns: list[context.Column],
     *,
     ctx: Context,
 ) -> UncompiledDML:
@@ -679,7 +679,7 @@ def _uncompile_insert_pointer_stmt(
         name=value_cte_name,
         strip_output_namespaces=True,
     )
-    value_columns: List[Tuple[str, bool]] = []
+    value_columns: list[tuple[str, bool]] = []
     for index, expected_col in enumerate(expected_columns):
         ptr: Optional[s_pointers.Pointer] = None
         if expected_col.name == 'source':
@@ -727,7 +727,7 @@ def _uncompile_insert_pointer_stmt(
     value_rel.path_outputs[(base_id, pgce.PathAspect.VALUE)] = var
 
     # construct the EdgeQL DML AST
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]] = {}
+    stype_refs: dict[uuid.UUID, list[qlast.Set]] = {}
 
     sub_name = sub.get_shortname(ctx.schema)
 
@@ -805,7 +805,7 @@ def _uncompile_insert_pointer_stmt(
             result=ql_stmt,
         )
 
-    ql_returning_shape: List[qlast.ShapeElement] = []
+    ql_returning_shape: list[qlast.ShapeElement] = []
     if stmt.returning_list:
         # construct the shape that will extract all needed column of the subject
         # table (because they might be be used by RETURNING clause)
@@ -896,12 +896,12 @@ def _compile_standalone_default(
 
 def _uncompile_default_value(
     value_query: Optional[pgast.Query],
-    value_ctes: Optional[List[pgast.CommonTableExpr]],
-    expected_columns: List[context.Column],
+    value_ctes: Optional[list[pgast.CommonTableExpr]],
+    expected_columns: list[context.Column],
     sub: s_objtypes.ObjectType | s_links.Link | s_properties.Property,
     *,
     ctx: Context,
-) -> Tuple[pgast.BaseRelation, List[context.Column]]:
+) -> tuple[pgast.BaseRelation, list[context.Column]]:
     # INSERT INTO x DEFAULT VALUES
     if not value_query:
         value_query = pgast.SelectStmt(values=[])
@@ -1094,7 +1094,7 @@ def _uncompile_delete_object_stmt(
         where=where,
     )
 
-    ql_returning_shape: List[qlast.ShapeElement] = []
+    ql_returning_shape: list[qlast.ShapeElement] = []
     if stmt.returning_list:
         # construct the shape that will extract all needed column of the subject
         # table (because they might be be used by RETURNING clause)
@@ -1280,7 +1280,7 @@ def _uncompile_delete_pointer_stmt(
             result=ql_stmt,
         )
 
-    ql_returning_shape: List[qlast.ShapeElement] = []
+    ql_returning_shape: list[qlast.ShapeElement] = []
     if stmt.returning_list:
         # construct the shape that will extract all needed column of the subject
         # table (because they might be be used by RETURNING clause)
@@ -1341,7 +1341,7 @@ def _uncompile_update_stmt(
     sub_table, sub = _uncompile_dml_subject(stmt.relation, ctx=ctx)
 
     # convert the general repr of SET clause into a list of columns
-    update_targets: List[pgast.UpdateTarget] = []
+    update_targets: list[pgast.UpdateTarget] = []
     for target in stmt.targets:
         if isinstance(target, pgast.UpdateTarget):
             if target.indirection:
@@ -1400,7 +1400,7 @@ def _uncompile_update_object_stmt(
     stmt: pgast.UpdateStmt,
     sub: s_objtypes.ObjectType,
     sub_table: context.Table,
-    column_updates: List[Tuple[context.Column, pgast.BaseExpr]],
+    column_updates: list[tuple[context.Column, pgast.BaseExpr]],
     *,
     ctx: Context,
 ) -> UncompiledDML:
@@ -1474,7 +1474,7 @@ def _uncompile_update_object_stmt(
 
     value_columns = [('id', False)]
     update_shape = []
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]] = {}
+    stype_refs: dict[uuid.UUID, list[qlast.Set]] = {}
     for index, (col, val) in enumerate(column_updates):
         ptr, ptr_name, is_link = _get_pointer_for_column(col, sub, ctx)
         if not is_default(val):
@@ -1548,7 +1548,7 @@ def _uncompile_update_object_stmt(
         result=ql_stmt,
     )
 
-    ql_returning_shape: List[qlast.ShapeElement] = []
+    ql_returning_shape: list[qlast.ShapeElement] = []
     if stmt.returning_list:
         # construct the shape that will extract all needed column of the subject
         # table (because they might be be used by RETURNING clause)
@@ -1592,10 +1592,10 @@ def _uncompile_update_object_stmt(
 
 
 def _compile_uncompiled_dml(
-    stmts: List[UncompiledDML], ctx: context.ResolverContextLevel
-) -> Tuple[
+    stmts: list[UncompiledDML], ctx: context.ResolverContextLevel
+) -> tuple[
     Mapping[pgast.Query, context.CompiledDML],
-    List[pgast.CommonTableExpr],
+    list[pgast.CommonTableExpr],
 ]:
     """
     Compiles *all* DML statements in the query.
@@ -1612,16 +1612,16 @@ def _compile_uncompiled_dml(
 
     # merge params
     singletons = set()
-    anchors: Dict[str, irast.PathId] = {}
+    anchors: dict[str, irast.PathId] = {}
     for stmt in stmts:
         singletons.update(stmt.ql_singletons)
         anchors.update(stmt.ql_anchors)
 
     # construct the main query
-    ql_aliases: List[qlast.Alias] = []
-    ql_stmt_shape: List[qlast.ShapeElement] = []
+    ql_aliases: list[qlast.Alias] = []
+    ql_stmt_shape: list[qlast.ShapeElement] = []
     ql_stmt_shape_names = []
-    inserts_by_type: Dict[uuid.UUID, List[str]] = {}
+    inserts_by_type: dict[uuid.UUID, list[str]] = {}
     for index, stmt in enumerate(stmts):
 
         # fixup references to stypes that have been modified be previous inserts
@@ -1708,7 +1708,7 @@ def _compile_uncompiled_dml(
 
     result = {}
     for stmt, ir_mutating_stmt in zip(stmts, ir_stmts):
-        stmt_ctes: List[pgast.CommonTableExpr] = []
+        stmt_ctes: list[pgast.CommonTableExpr] = []
         found_it = False
         while len(ctes) > 0:
             matches = ctes[0].for_dml_stmt == ir_mutating_stmt
@@ -1734,14 +1734,14 @@ def _compile_uncompiled_dml(
         output_rel = output_cte.query
 
         # prepare a map from pointer name into pgast
-        ptr_map: Dict[Tuple[str, str], pgast.BaseExpr] = {}
+        ptr_map: dict[tuple[str, str], pgast.BaseExpr] = {}
         for (ptr_id, aspect), output_var in output_rel.path_outputs.items():
             qual_name = ptr_id.rptr_name()
             if not qual_name:
                 ptr_map['id', aspect] = output_var
             else:
                 ptr_map[qual_name.name, aspect] = output_var
-        output_namespace: Dict[str, pgast.BaseExpr] = {}
+        output_namespace: dict[str, pgast.BaseExpr] = {}
         for col_name, ptr_name in stmt.subject_columns:
             val = ptr_map.get((ptr_name, 'serialized'), None)
             if not val:
@@ -1772,11 +1772,11 @@ def _compile_uncompiled_dml(
 
 def _merge_and_prepare_external_rels(
     ir_stmt: irast.Statement,
-    stmts: List[UncompiledDML],
-    stmt_names: List[str],
-) -> Tuple[
+    stmts: list[UncompiledDML],
+    stmt_names: list[str],
+) -> tuple[
     Mapping[irast.PathId, ExternalRel],
-    List[irast.MutatingStmt],
+    list[irast.MutatingStmt],
 ]:
     """Construct external rels used for compiling all DML statements at once."""
 
@@ -1799,7 +1799,7 @@ def _merge_and_prepare_external_rels(
             continue
         shape_elements_by_name[rptr_name.name] = b.expr.expr
 
-    external_rels: Dict[irast.PathId, ExternalRel] = {}
+    external_rels: dict[irast.PathId, ExternalRel] = {}
     ir_stmts = []
     for stmt, name in zip(stmts, stmt_names):
         # find the associated binding (this is real funky)
@@ -1834,7 +1834,7 @@ def _merge_and_prepare_external_rels(
 @dispatch._resolve_relation.register
 def resolve_DMLQuery(
     stmt: pgast.DMLQuery, *, include_inherited: bool, ctx: Context
-) -> Tuple[pgast.Query, context.Table]:
+) -> tuple[pgast.Query, context.Table]:
     assert stmt.relation
 
     if ctx.subquery_depth >= 2:
@@ -1889,7 +1889,7 @@ def _resolve_dml_value_rel(compiled_dml: context.CompiledDML, *, ctx: Context):
         any(cast_to_uuid for _, cast_to_uuid in compiled_dml.value_columns)
     )
     if pre_projection_needed:
-        value_target_list: List[pgast.ResTarget] = []
+        value_target_list: list[pgast.ResTarget] = []
         for val_col, (ptr_name, cast_to_uuid) in zip(
             val_table.columns, compiled_dml.value_columns
         ):
@@ -1938,7 +1938,7 @@ def _resolve_dml_value_rel(compiled_dml: context.CompiledDML, *, ctx: Context):
 
 def _fini_resolve_dml(
     stmt: pgast.DMLQuery, compiled_dml: context.CompiledDML, *, ctx: Context
-) -> Tuple[pgast.Query, context.Table]:
+) -> tuple[pgast.Query, context.Table]:
     if stmt.returning_list:
         assert isinstance(stmt.relation.relation, pgast.Relation)
         assert stmt.relation.relation.name
@@ -1985,13 +1985,13 @@ def _fini_resolve_dml(
 
 
 def _resolve_returning_rows(
-    returning_list: List[pgast.ResTarget],
+    returning_list: list[pgast.ResTarget],
     output_relation_name: str,
     output_namespace: Mapping[str, pgast.BaseExpr],
     subject_name: str,
     subject_alias: Optional[str],
     ctx: context.ResolverContextLevel,
-) -> Tuple[pgast.Query, context.Table]:
+) -> tuple[pgast.Query, context.Table]:
     # relation that provides the values of inserted pointers
     inserted_rvar_name = ctx.alias_generator.get('ins')
     inserted_query = pgast.SelectStmt(
@@ -2032,7 +2032,7 @@ def _resolve_returning_rows(
         )
         returning_table = context.Table()
 
-        names: Set[str] = set()
+        names: set[str] = set()
         for t in returning_list:
             targets, columns = pg_res_expr.resolve_ResTarget(
                 t, existing_names=names, ctx=sctx
@@ -2046,7 +2046,7 @@ def _get_pointer_for_column(
     col: context.Column,
     subject: s_objtypes.ObjectType | s_links.Link | s_properties.Property,
     ctx: context.ResolverContextLevel,
-) -> Tuple[s_pointers.Pointer, str, bool]:
+) -> tuple[s_pointers.Pointer, str, bool]:
     if isinstance(
         subject, (s_links.Link, s_properties.Property)
     ) and col.name in ('source', 'target'):
@@ -2089,7 +2089,7 @@ def _try_inject_ptr_type_cast(
 ):
     ptr_name = ptr.get_shortname(ctx.schema).name
 
-    tgt_pg: Tuple[str, ...]
+    tgt_pg: tuple[str, ...]
     if ptr_name == 'id' or isinstance(ptr, s_links.Link):
         tgt_pg = ('uuid',)
     else:
@@ -2141,7 +2141,7 @@ def merge_params(
 ):
     # Merge the params produced by the main compiler with params for the rest of
     # the query that the resolved is keeping track of.
-    param_remapping: Dict[int, int] = {}
+    param_remapping: dict[int, int] = {}
     for arg_name, arg in sql_result.argmap.items():
         # find the global
         glob = next(g for g in ir_stmt.globals if g.name == arg_name)
@@ -2181,7 +2181,7 @@ def merge_params(
 
 class ParamMapper(ast.NodeVisitor):
 
-    def __init__(self, mapping: Dict[int, int]) -> None:
+    def __init__(self, mapping: dict[int, int]) -> None:
         super().__init__()
         self.mapping = mapping
 

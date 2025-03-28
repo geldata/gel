@@ -25,7 +25,7 @@ though if that starts becoming a problem it should just be abandoned.
 from __future__ import annotations
 
 
-from typing import Optional, Tuple, AbstractSet, Dict, List
+from typing import Optional, AbstractSet
 
 from edb import errors
 
@@ -45,7 +45,7 @@ def name_path(name: str) -> qlast.Path:
     return qlast.Path(steps=[qlast.ObjectRef(name=name)])
 
 
-def make_free_object(els: Dict[str, qlast.Expr]) -> qlast.Shape:
+def make_free_object(els: dict[str, qlast.Expr]) -> qlast.Shape:
     return qlast.Shape(
         expr=None,
         elements=[
@@ -59,7 +59,7 @@ def make_free_object(els: Dict[str, qlast.Expr]) -> qlast.Shape:
 
 
 def collect_grouping_atoms(
-    els: List[qlast.GroupingElement],
+    els: list[qlast.GroupingElement],
 ) -> AbstractSet[str]:
     atoms: ordered.OrderedSet[str] = ordered.OrderedSet()
 
@@ -95,7 +95,7 @@ def desugar_group(
     aliases: AliasGenerator,
 ) -> qlast.InternalGroupQuery:
     assert not isinstance(node, qlast.InternalGroupQuery)
-    by_alias_map: Dict[str, Tuple[str, qlast.Path]] = {}
+    by_alias_map: dict[str, tuple[str, qlast.Path]] = {}
 
     def rewrite_atom(el: qlast.GroupingAtom) -> qlast.GroupingAtom:
         if isinstance(el, qlast.ObjectRef):
@@ -144,7 +144,7 @@ def desugar_group(
     # with any bindings for pointers the by clause refers to directly.
     by = [rewrite(by_el) for by_el in node.by]
 
-    alias_map: Dict[str, Tuple[str, qlast.Expr]] = {
+    alias_map: dict[str, tuple[str, qlast.Expr]] = {
         k: v for k, v in by_alias_map.items()
     }
 

@@ -197,7 +197,7 @@ class ServerProtocol:
 class Server:
 
     _proto: ServerProtocol
-    _pids: typing.Dict[int, HubConnection]
+    _pids: dict[int, HubConnection]
 
     def __init__(self, sockname, loop, server_protocol):
         self._sockname = sockname

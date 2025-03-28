@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Type, List, Union, overload, TYPE_CHECKING
+from typing import Optional, Union, overload, TYPE_CHECKING
 
 from edgedb import scram
 
@@ -113,7 +113,7 @@ class RoleCommand(
         schema: s_schema.Schema,
         astnode: qlast.ObjectDDL,
         context: sd.CommandContext,
-    ) -> List[so.ObjectShell[Role]]:
+    ) -> list[so.ObjectShell[Role]]:
         result = []
         for b in getattr(astnode, 'bases', None) or []:
             result.append(utils.ast_objref_to_object_shell(
@@ -166,7 +166,7 @@ class CreateRole(RoleCommand, inheriting.CreateInheritingObject[Role]):
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if (
             field == 'superuser'

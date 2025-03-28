@@ -25,7 +25,7 @@ multiplicity fields and performing multiplicity checks.
 
 
 from __future__ import annotations
-from typing import Tuple, Iterable, List
+from typing import Iterable
 
 import dataclasses
 import functools
@@ -64,7 +64,7 @@ class ContainerMultiplicityInfo(inf_ctx.MultiplicityInfo):
     """Multiplicity descriptor for an expression returning a container"""
 
     #: Individual multiplicity values for container elements.
-    elements: Tuple[inf_ctx.MultiplicityInfo, ...] = ()
+    elements: tuple[inf_ctx.MultiplicityInfo, ...] = ()
 
 
 def _max_multiplicity(
@@ -383,8 +383,8 @@ def __infer_oper_call(
     ctx: inf_ctx.InfCtx,
 ) -> inf_ctx.MultiplicityInfo:
     card = cardinality.infer_cardinality(ir, scope_tree=scope_tree, ctx=ctx)
-    mult: List[inf_ctx.MultiplicityInfo] = []
-    cards: List[qltypes.Cardinality] = []
+    mult: list[inf_ctx.MultiplicityInfo] = []
+    cards: list[qltypes.Cardinality] = []
     for arg in ir.args.values():
         cards.append(
             cardinality.infer_cardinality(
@@ -408,7 +408,7 @@ def __infer_oper_call(
 
         arg_type = ctx.env.set_types[ir.args[0].expr]
         if isinstance(arg_type, s_objtypes.ObjectType):
-            types: List[s_objtypes.ObjectType] = [
+            types: list[s_objtypes.ObjectType] = [
                 downcast(s_objtypes.ObjectType, ctx.env.set_types[arg.expr])
                 for arg in ir.args.values()
             ]

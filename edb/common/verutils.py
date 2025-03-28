@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Tuple, NamedTuple
+from typing import Any, NamedTuple
 
 import enum
 import re
@@ -51,7 +51,7 @@ class Version(NamedTuple):
     minor: int
     stage: VersionStage
     stage_no: int
-    local: Tuple[str, ...]
+    local: tuple[str, ...]
 
     def __str__(self):
         ver = f'{self.major}.{self.minor}'

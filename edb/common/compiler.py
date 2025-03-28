@@ -23,11 +23,8 @@ from typing import (
     Any,
     Generic,
     Optional,
-    Type,
     TypeVar,
     ContextManager,
-    DefaultDict,
-    List,
 )
 
 import collections
@@ -96,8 +93,8 @@ class CompilerReentryContextManager(ContextManager[ContextLevel_T]):
 
 
 class CompilerContext(Generic[ContextLevel_T]):
-    stack: List[ContextLevel_T]
-    ContextLevelClass: Type[ContextLevel_T]
+    stack: list[ContextLevel_T]
+    ContextLevelClass: type[ContextLevel_T]
     default_mode: Any
 
     def __init__(self, initial: ContextLevel_T) -> None:
@@ -157,7 +154,7 @@ class CompilerContext(Generic[ContextLevel_T]):
 
 
 class SimpleCounter:
-    counts: DefaultDict[str, int]
+    counts: collections.defaultdict[str, int]
 
     def __init__(self) -> None:
         self.counts = collections.defaultdict(int)
