@@ -209,7 +209,7 @@ fn starts_with_unexpected_error(a: &Parser) -> bool {
         .map_or(true, |x| x.message.starts_with(UNEXPECTED))
 }
 
-impl<'s> Context<'s> {
+impl Context<'_> {
     fn alloc_terminal(&self, t: Terminal) -> &'_ Terminal {
         let idx = self.terminal_arena.push(t);
         &self.terminal_arena[idx]
