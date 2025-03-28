@@ -739,7 +739,7 @@ class ConstraintCommand(
         name: sn.QualName,
         subjectexpr: Optional[s_expr.Expression] = None,
         subjectexpr_inherited: bool = False,
-        sourcectx: Optional[c_parsing.Span] = None,
+        span: Optional[c_parsing.Span] = None,
         args: Optional[Iterable[s_expr.Expression]] = None,
         **kwargs: Any
     ) -> None:
@@ -777,7 +777,7 @@ class ConstraintCommand(
                 and subjectexpr.text != base_subjectexpr.text):
                 raise errors.InvalidConstraintDefinitionError(
                     f'subjectexpr is already defined for {name}',
-                    span=sourcectx,
+                    span=span,
                 )
 
             base_subjectexpr = constr_base.get_subjectexpr(schema)
@@ -790,7 +790,7 @@ class ConstraintCommand(
             raise errors.InvalidConstraintDefinitionError(
                 f'{constr_base.get_verbosename(schema)} may not '
                 f'be used on scalar types',
-                span=sourcectx,
+                span=span,
             )
 
         if (
@@ -799,7 +799,7 @@ class ConstraintCommand(
         ):
             raise errors.InvalidConstraintDefinitionError(
                 "constraints on object types must have an 'on' clause",
-                span=sourcectx,
+                span=span,
             )
 
         expr: s_expr.Expression = constr_base.get_field_value(schema, 'expr')
@@ -860,7 +860,7 @@ class ConstraintCommand(
                 f'{name} constraint expression expected '
                 f'to return a bool value, got '
                 f'{expr_type.get_verbosename(expr_schema)}',
-                span=sourcectx
+                span=span
             )
 
         except_expr: s_expr.Expression | None = attrs.get('except_expr')
@@ -916,13 +916,13 @@ class ConstraintCommand(
                             raise errors.InvalidConstraintDefinitionError(
                                 "link constraints may not access "
                                 "the link target",
-                                span=sourcectx
+                                span=span
                             )
                         else:
                             raise errors.InvalidConstraintDefinitionError(
                                 "constraints cannot contain paths with more "
                                 "than one hop",
-                                span=sourcectx
+                                span=span
                             )
 
                     ref = rptr.source
@@ -931,7 +931,7 @@ class ConstraintCommand(
                 raise errors.InvalidConstraintDefinitionError(
                     "cannot reference multiple links or properties in a "
                     "constraint where at least one link or property is MULTI",
-                    span=sourcectx
+                    span=span
                 )
 
             if set_of_op := ir_utils.find_set_of_op(
@@ -972,7 +972,7 @@ class ConstraintCommand(
         if final_expr.irast.volatility != qltypes.Volatility.Immutable:
             raise errors.InvalidConstraintDefinitionError(
                 f'constraint expressions must be immutable',
-                span=sourcectx,
+                span=span,
             )
 
         attrs['finalexpr'] = final_expr
@@ -1164,7 +1164,7 @@ class CreateConstraint(
                 name=shortname,
                 subjectexpr_inherited=self.is_attribute_inherited(
                     'subjectexpr'),
-                sourcectx=self.span,
+                span=self.span,
                 **props,
             )
 
@@ -1454,7 +1454,7 @@ class AlterConstraint(
                 subjectexpr=subjectexpr,
                 subjectexpr_inherited=subjectexpr_inherited,
                 args=args,
-                sourcectx=self.span,
+                span=self.span,
                 **props,
             )
 

@@ -1635,7 +1635,7 @@ def _resolve_schema_ref(
 ) -> s_obj.SubclassableObject:
     real_type = TRACER_TO_REAL_TYPE_MAP[type]
     try:
-        return ctx.schema.get(name, type=real_type, sourcectx=span)
+        return ctx.schema.get(name, type=real_type, span=span)
     except errors.InvalidReferenceError as e:
         s_utils.enrich_schema_lookup_error(
             e,

@@ -2228,7 +2228,7 @@ class ObjectShell(Shell, Generic[Object_T_co]):
 
         if isinstance(self.name, sn.QualName):
             return schema.get(
-                self.name, type=self.schemaclass, sourcectx=self.sourcectx,
+                self.name, type=self.schemaclass, span=self.sourcectx,
             )
         else:
             return schema.get_global(self.schemaclass, self.name)

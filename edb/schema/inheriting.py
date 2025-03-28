@@ -1292,7 +1292,7 @@ class RebaseInheritingObject(
 
             bases[idx:idx] = [
                 self.get_object(
-                    schema, context, name=b.name, sourcectx=b.sourcectx)
+                    schema, context, name=b.name, span=b.sourcectx)
                 for b in new_bases if b.name not in existing_bases
             ]
             index = {b.get_name(schema): i for i, b in enumerate(bases)}

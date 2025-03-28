@@ -667,7 +667,7 @@ class IndexCommand(
         *,
         name: Optional[sn.Name] = None,
         default: Index | so.NoDefaultT = so.NoDefault,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Index:
         ...
 
@@ -679,7 +679,7 @@ class IndexCommand(
         *,
         name: Optional[sn.Name] = None,
         default: None = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[Index]:
         ...
 
@@ -690,12 +690,12 @@ class IndexCommand(
         *,
         name: Optional[sn.Name] = None,
         default: Index | so.NoDefaultT | None = so.NoDefault,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[Index]:
         try:
             return super().get_object(
                 schema, context, name=name,
-                default=default, sourcectx=sourcectx,
+                default=default, span=span,
             )
         except errors.InvalidReferenceError:
             referrer_ctx = self.get_referrer_context_or_die(context)

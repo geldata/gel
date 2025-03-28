@@ -204,7 +204,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         *,
         name: Optional[sn.Name] = None,
         default: Role | so.NoDefaultT = so.NoDefault,
-        sourcectx: Optional[qlast.Span] = None,
+        span: Optional[qlast.Span] = None,
     ) -> Role:
         ...
 
@@ -216,7 +216,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         *,
         name: Optional[sn.Name] = None,
         default: None = None,
-        sourcectx: Optional[qlast.Span] = None,
+        span: Optional[qlast.Span] = None,
     ) -> Optional[Role]:
         ...
 
@@ -227,7 +227,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         *,
         name: Optional[sn.Name] = None,
         default: Role | so.NoDefaultT | None = so.NoDefault,
-        sourcectx: Optional[qlast.Span] = None,
+        span: Optional[qlast.Span] = None,
     ) -> Optional[Role]:
         # On an ALTER ROLE edgedb, if 'edgedb' doesn't exist, fall
         # back to 'admin'. This mirrors what we do for login and
@@ -237,7 +237,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
                 return super().get_object(
                     schema,
                     context,
-                    sourcectx=sourcectx,
+                    span=span,
                 )
             except errors.InvalidReferenceError:
                 name = sn.UnqualName('admin')
@@ -247,7 +247,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
             context,
             name=name,
             default=default,
-            sourcectx=sourcectx,
+            span=span,
         )
 
     @classmethod
