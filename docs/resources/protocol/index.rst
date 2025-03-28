@@ -16,6 +16,7 @@ clients and servers.  The protocol is supported over TCP/IP.
     errors
     typedesc
     dataformats
+    dump_format
 
 
 .. _ref_protocol_connecting:
