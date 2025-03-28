@@ -7,5 +7,6 @@ Resources
     :hidden:
 
     guides/index
+    protocol/index
     cheatsheets/index
     changelog/index
