@@ -10,11 +10,7 @@ Reference
     :maxdepth: 3
     :hidden:
 
-
     edgeql/index
-    gel_toml
-    sql_adapter
-    protocol/index
 
 
 This section contains comprehensive reference documentation on the internals of

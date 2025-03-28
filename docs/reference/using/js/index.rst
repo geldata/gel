@@ -1,7 +1,7 @@
 .. _gel-js-intro:
 
 ==========
-JavaScript
+TypeScript
 ==========
 
 .. toctree::

@@ -150,4 +150,19 @@ module.exports = [
     destination: "/reference/clients/python#basic-usage",
     permanent: false,
   },
+  {
+    source: "/reference/clients/:path*",
+    destination: "/reference/using/clients/:path*",
+    permanent: false,
+  },
+  {
+    source: "/reference/clients",
+    destination: "/reference/using/clients",
+    permanent: false,
+  },
+  {
+    source: "/reference/connection",
+    destination: "/reference/using/connection",
+    permanent: false,
+  },
 ];

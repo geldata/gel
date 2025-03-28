@@ -1,33 +1,18 @@
 .. _ref_clients_index:
+.. _ref_using_clients:
 
-================
-Client Libraries
-================
-
-.. toctree::
-    :maxdepth: 2
-    :glob:
-    :hidden:
-
-    js/index
-    python/index
-    Go <https://pkg.go.dev/github.com/geldata/gel-go>
-    Rust <https://docs.rs/gel-tokio/latest/gel_tokio/>
-    http
-    graphql/index
-    datetime
-
+=================
 Client philosophy
 =================
 
 To connect your application to a |Gel| instance, you can use one of our official client libraries that speaks the Gel binary protocol. The client libraries are higher level than typical database drivers, and are designed to provide a fully-featured API for working with |Gel| instances.
 
 * Connecting is easy
-* Automatic transaction retries
+* Transactions are robust
 * Many client instances, single connection pool
 
 Connecting is easy
-------------------
+==================
 
 Typical database drivers require you to figure out how to pass the correct connection string (called a DSN, or data source name) to the driver. This is a bit of a pain, and is error prone.
 
@@ -103,8 +88,8 @@ Our client libraries take a different approach. Instead of needing to pass a DSN
 
 This approach allows you to write code that does not need to contain any error-prone conditional logic. For more information on how to configure your connection for development and production, see :ref:`the reference for connection environments <ref_reference_connection_environments>`.
 
-Transactions
-------------
+Transactions are robust
+=======================
 
 Transactions are an important part of working with databases. In Gel, all queries are automatically run in an implicit transaction, ensuring atomicity and isolation for individual operations. We use the safest isolation level of ``SERIALIZABLE`` to ensure consistent results across high-concurrency scenarios. Additionally, our client libraries provide a higher-level API for working with explicit transactions when you need to group multiple operations together.
 
@@ -169,7 +154,7 @@ The behavior of transaction retries can be customized in the client configuratio
         .await?;
 
 Many client instances, single connection pool
----------------------------------------------
+=============================================
 
 When you create a client, you also establish a connection pool to the Gel server. Since this is resource-intensive, you can create a single client instance and then derive lightweight instances that share the same connection pool. Each derived instance can have different configurations, allowing customization without additional overhead.
 
@@ -182,12 +167,3 @@ You can configure various aspects of these client instances at runtime, includin
 .. image:: images/client-config-layers.png
   :alt: Diagram showing how client instances share a connection pool
   :width: 100%
-
-
-Alternative Protocols
-=====================
-
-In addition to our official client libraries, you can also connect to a running |Gel| instance over HTTP or GraphQL. This can be helpful for languages that are not yet supported, or in certain constrained environments.
-
-* :ref:`EdgeQL over HTTP <ref_edgeql_http>`
-* :ref:`GraphQL <ref_graphql_protocol>`
