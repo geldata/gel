@@ -51,8 +51,8 @@ else:
         try:
             return pathlib.Path.home() / '.postgresql'
         except RuntimeError:
-            # In some container environments the home dir is available 
-            # so we return a path to a nonexistent file
+            # In some container environments the home dir is not
+            # available so we return a path to a nonexistent file
             return pathlib.Path('/.postgresql')
 
 
