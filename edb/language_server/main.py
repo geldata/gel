@@ -29,7 +29,6 @@ from edb.common import span as edb_span
 from edb.edgeql import parser as qlparser
 from edb.edgeql import tokenizer as qltokenizer
 from edb.ir import ast as irast
-from edb.schema import objtypes as s_objtypes
 
 from . import parsing as ls_parsing
 from . import server as ls_server
@@ -196,8 +195,11 @@ def document_definition(
                     markup.dump(ql_ast, file=file)
                 # </DEBUG>
 
-                _, ir_stmts = ls_server.compile(ls, document, ql_ast)
+                _, ir_stmts = ls_server.compile(
+                    ls, document, ql_ast
+                )
 
+                ir_stmt: irast.Statement
                 for ir_stmt in ir_stmts:
 
                     # <DEBUG>
@@ -217,18 +219,15 @@ def document_definition(
 
                     if not isinstance(node, irast.Set):
                         return None
-                    assert ls.state.schema
-                    target = ls.state.schema.get_by_id(node.path_id.target.id)
+                    assert ir_stmt.schema
+                    target = ir_stmt.schema.get_by_id(node.path_id.target.id)
                     assert target
 
-                    name = target.get_displayname(ls.state.schema)
+                    name = target.get_displayname(ir_stmt.schema)
                     ls.show_message_log(f'target: {name}')
 
-                    if not isinstance(target, s_objtypes.ObjectType):
-                        return None
-
                     span: edb_span.Span | None = target.get_span(
-                        ls.state.schema
+                        ir_stmt.schema
                     )
                     ls.show_message_log(f'type span: {span}')
 
