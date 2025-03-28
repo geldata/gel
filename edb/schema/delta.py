@@ -1839,6 +1839,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         context: CommandContext,
     ) -> ObjectCommand[so.Object_T]:
         assert isinstance(astnode, qlast.ObjectDDL), 'expected ObjectDDL'
+        # span = astnode.name.span if astnode.name else None
         classname = cls._classname_from_ast(schema, astnode, context)
         return cls(classname=classname)
 

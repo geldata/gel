@@ -152,6 +152,7 @@ def document_updated(ls: ls_server.GelLanguageServer, doc_uri: str):
                 diagnostic_set = ls_server.DiagnosticsSet()
         else:
             ls.show_message_log(f'Unknown file type: {doc_uri}')
+            diagnostic_set = ls_server.DiagnosticsSet()
             # doc_uri in ('gel.toml')
 
         for doc, diags in diagnostic_set.by_doc.items():
@@ -208,21 +209,23 @@ def document_definition(
                         continue
                     assert isinstance(node, irast.Base), node
 
-                    ls.show_message_log(f'found node: {node}')
-                    ls.show_message_log(f'found span: {node.span}')
+                    ls.show_message_log(f'node: {node}')
+                    ls.show_message_log(f'span: {node.span}')
 
-                    if isinstance(node, irast.TypeRef):
+                    if isinstance(node, irast.Set):
                         assert ls.state.schema
-                        type_obj = ls.state.schema.get_by_id(node.id)
-                        assert type_obj
+                        target = ls.state.schema.get_by_id(
+                            node.path_id.target.id
+                        )
+                        assert target
 
-                        name = type_obj.get_displayname(ls.state.schema)
-                        ls.show_message_log(f'found name: {name}')
+                        name = target.get_displayname(ls.state.schema)
+                        ls.show_message_log(f'target: {name}')
 
-                        span: edb_span.Span | None = type_obj.get_sourcectx(
+                        span: edb_span.Span | None = target.get_sourcectx(
                             ls.state.schema
                         )
-                        ls.show_message_log(f'found span: {span}')
+                        ls.show_message_log(f'type span: {span}')
 
                         if span:
                             # find schema docs with this filename
