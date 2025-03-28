@@ -21,7 +21,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Tuple, Iterable, Sequence, Dict, List, Set
+from typing import Optional, Iterable, Sequence
 
 from edb import errors
 
@@ -56,7 +56,7 @@ def _get_needed_ptrs(
     obj_constrs: Sequence[s_constr.Constraint],
     initial_ptrs: Iterable[str],
     ctx: context.ContextLevel,
-) -> Tuple[Set[str], Dict[str, qlast.Expr]]:
+) -> tuple[set[str], dict[str, qlast.Expr]]:
     needed_ptrs = set(initial_ptrs)
     for constr in obj_constrs:
         subjexpr: Optional[s_expr.Expression] = (
@@ -91,7 +91,7 @@ def _compile_conflict_select_for_obj_type(
     for_inheritance: bool,
     fake_dml_set: Optional[irast.Set],
     obj_constrs: Sequence[s_constr.Constraint],
-    constrs: Dict[str, Tuple[s_pointers.Pointer, List[s_constr.Constraint]]],
+    constrs: dict[str, tuple[s_pointers.Pointer, list[s_constr.Constraint]]],
     span: Optional[irast.Span],
     ctx: context.ContextLevel,
 ) -> tuple[Optional[qlast.Expr], bool]:
@@ -195,7 +195,7 @@ def _compile_conflict_select_for_obj_type(
             span=span,
         )
 
-    conds: List[qlast.Expr] = []
+    conds: list[qlast.Expr] = []
     for ptrname, (ptr, ptr_cnstrs) in constrs.items():
         if ptrname not in present_ptrs:
             continue
@@ -335,12 +335,12 @@ def _constr_matters(
     )
 
 
-PointerConstraintMap = Dict[
+PointerConstraintMap = dict[
     str,
-    Tuple[s_pointers.Pointer, List[s_constr.Constraint]],
+    tuple[s_pointers.Pointer, list[s_constr.Constraint]],
 ]
-ConstraintPair = Tuple[PointerConstraintMap, List[s_constr.Constraint]]
-ConflictTypeMap = Dict[s_objtypes.ObjectType, ConstraintPair]
+ConstraintPair = tuple[PointerConstraintMap, list[s_constr.Constraint]]
+ConflictTypeMap = dict[s_objtypes.ObjectType, ConstraintPair]
 
 
 def _split_constraints(
@@ -391,7 +391,7 @@ def _compile_conflict_select(
     constrs: PointerConstraintMap,
     span: Optional[irast.Span],
     ctx: context.ContextLevel,
-) -> Tuple[irast.Set, bool, bool]:
+) -> tuple[irast.Set, bool, bool]:
     """Synthesize a select of conflicting objects
 
     This teases apart the constraints we care about based on which
@@ -452,7 +452,7 @@ def _get_exclusive_ptr_constraints(
     typ: s_objtypes.ObjectType,
     include_id: bool,
     *, ctx: context.ContextLevel,
-) -> Dict[str, Tuple[s_pointers.Pointer, List[s_constr.Constraint]]]:
+) -> dict[str, tuple[s_pointers.Pointer, list[s_constr.Constraint]]]:
     schema = ctx.env.schema
     pointers = {}
 
@@ -651,7 +651,7 @@ def _compile_inheritance_conflict_selects(
     typ: s_objtypes.ObjectType,
     subject_type: s_objtypes.ObjectType,
     *, ctx: context.ContextLevel,
-) -> List[irast.OnConflictClause]:
+) -> list[irast.OnConflictClause]:
     """Compile the selects needed to resolve multiple DML to related types
 
     Generate a SELECT that finds all objects of type `typ` that conflict with
@@ -681,7 +681,7 @@ def _compile_inheritance_conflict_selects(
     # This is a little silly, but for *this* we need to do one per
     # constraint (so that we can properly identify which constraint
     # failed in the error messages)
-    entries: List[Tuple[s_constr.Constraint, ConstraintPair]] = []
+    entries: list[tuple[s_constr.Constraint, ConstraintPair]] = []
     for name, (ptr, ptr_constrs) in pointers.items():
         for ptr_constr in ptr_constrs:
             # For updates, we only need to emit the check if we actually
@@ -742,7 +742,7 @@ def compile_inheritance_conflict_checks(
     stmt: irast.MutatingStmt,
     subject_stype: s_objtypes.ObjectType,
     *, ctx: context.ContextLevel,
-) -> Optional[List[irast.OnConflictClause]]:
+) -> Optional[list[irast.OnConflictClause]]:
 
     has_id_write = _has_explicit_id_write(stmt)
 

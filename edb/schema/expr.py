@@ -22,17 +22,11 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
-    Type,
     Union,
     AbstractSet,
     Iterable,
     Mapping,
     Sequence,
-    Dict,
-    List,
-    Set,
-    FrozenSet,
     TYPE_CHECKING,
 )
 
@@ -92,7 +86,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
         self._qlast = _qlast
         self._irast = _irast
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         return {
             'text': self.text,
             'refs': self.refs,
@@ -141,7 +135,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
 
     def _refs_keys(
         self, schema: s_schema.Schema
-    ) -> Set[Tuple[Type[so.Object], sn.Name]]:
+    ) -> set[tuple[type[so.Object], sn.Name]]:
         return {
             (type(x), x.get_name(schema))
             for x in (self.refs.objects(schema) if self.refs else ())
@@ -149,7 +143,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
 
     @classmethod
     def compare_values(
-        cls: Type[Expression],
+        cls: type[Expression],
         ours: Expression,
         theirs: Expression,
         *,
@@ -177,7 +171,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
 
     @classmethod
     def from_ast(
-        cls: Type[Expression],
+        cls: type[Expression],
         qltree: qlast_.Expr,
         schema: s_schema.Schema,
         modaliases: Optional[Mapping[Optional[str], str]] = None,
@@ -288,7 +282,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
 
     @classmethod
     def from_ir(
-        cls: Type[Expression],
+        cls: type[Expression],
         expr: Expression,
         ir: irast_.Statement,
         schema: s_schema.Schema,
@@ -312,13 +306,13 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
 
     def schema_reduce(
         self,
-    ) -> Tuple[
+    ) -> tuple[
         str,
-        Tuple[
+        tuple[
             str,
-            Optional[Union[Tuple[type, ...], type]],
-            Tuple[uuid.UUID, ...],
-            Tuple[Tuple[str, Any], ...],
+            Optional[Union[tuple[type, ...], type]],
+            tuple[uuid.UUID, ...],
+            tuple[tuple[str, Any], ...],
         ],
         Optional[str],
     ]:
@@ -332,13 +326,13 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
     @classmethod
     def schema_restore(
         cls,
-        data: Tuple[
+        data: tuple[
             str,
-            Tuple[
+            tuple[
                 str,
-                Optional[Union[Tuple[type, ...], type]],
-                Tuple[uuid.UUID, ...],
-                Tuple[Tuple[str, Any], ...],
+                Optional[Union[tuple[type, ...], type]],
+                tuple[uuid.UUID, ...],
+                tuple[tuple[str, Any], ...],
             ],
             Optional[str],
         ],
@@ -353,16 +347,16 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
     @classmethod
     def schema_refs_from_data(
         cls,
-        data: Tuple[
+        data: tuple[
             str,
-            Tuple[
+            tuple[
                 str,
-                Optional[Union[Tuple[type, ...], type]],
-                Tuple[uuid.UUID, ...],
-                Tuple[Tuple[str, Any], ...],
+                Optional[Union[tuple[type, ...], type]],
+                tuple[uuid.UUID, ...],
+                tuple[tuple[str, Any], ...],
             ],
         ],
-    ) -> FrozenSet[uuid.UUID]:
+    ) -> frozenset[uuid.UUID]:
         return so.ObjectCollection.schema_refs_from_data(data[1])
 
     @property
@@ -483,7 +477,7 @@ class ExpressionList(checked.FrozenCheckedList[Expression]):
 
     @classmethod
     def compare_values(
-        cls: Type[ExpressionList],
+        cls: type[ExpressionList],
         ours: Optional[ExpressionList],
         theirs: Optional[ExpressionList],
         *,
@@ -546,7 +540,7 @@ class ExpressionDict(checked.CheckedDict[str, Expression]):
 
     @classmethod
     def compare_values(
-        cls: Type[ExpressionDict],
+        cls: type[ExpressionDict],
         ours: Optional[ExpressionDict],
         theirs: Optional[ExpressionDict],
         *,
@@ -613,7 +607,7 @@ def imprint_expr_context(
             list(qltree.aliases) if qltree.aliases is not None else None)
     assert isinstance(qltree, (qlast_.Query, qlast_.Command))
 
-    existing_aliases: Dict[Optional[str], str] = {}
+    existing_aliases: dict[Optional[str], str] = {}
     for alias in (qltree.aliases or ()):
         if isinstance(alias, qlast_.ModuleAliasDecl):
             existing_aliases[alias.alias] = alias.module
@@ -634,12 +628,12 @@ def imprint_expr_context(
 
 def get_expr_referrers(
     schema: s_schema.Schema, obj: so.Object
-) -> Dict[so.Object, List[str]]:
+) -> dict[so.Object, list[str]]:
     """Return schema referrers with refs in expressions."""
 
-    refs: Dict[Tuple[Type[so.Object], str], FrozenSet[so.Object]] = (
+    refs: dict[tuple[type[so.Object], str], frozenset[so.Object]] = (
         schema.get_referrers_ex(obj))
-    result: Dict[so.Object, List[str]] = {}
+    result: dict[so.Object, list[str]] = {}
 
     for (mcls, fn), referrers in refs.items():
         field = mcls.get_field(fn)

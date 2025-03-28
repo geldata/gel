@@ -23,13 +23,9 @@ in our internal Postgres instance."""
 from typing import (
     Iterable,
     Optional,
-    Tuple,
     Iterator,
     Sequence,
-    Dict,
-    List,
     cast,
-    Set,
 )
 import uuid
 
@@ -89,9 +85,9 @@ def infer_alias(res_target: pgast.ResTarget) -> Optional[str]:
 def resolve_ResTarget(
     res_target: pgast.ResTarget,
     *,
-    existing_names: Set[str],
+    existing_names: set[str],
     ctx: Context,
-) -> Tuple[Sequence[pgast.ResTarget], Sequence[context.Column]]:
+) -> tuple[Sequence[pgast.ResTarget], Sequence[context.Column]]:
     targets, columns = _resolve_ResTarget(
         res_target, existing_names=existing_names, ctx=ctx
     )
@@ -102,9 +98,9 @@ def resolve_ResTarget(
 def _resolve_ResTarget(
     res_target: pgast.ResTarget,
     *,
-    existing_names: Set[str],
+    existing_names: set[str],
     ctx: Context,
-) -> Tuple[Sequence[pgast.ResTarget], Sequence[context.Column]]:
+) -> tuple[Sequence[pgast.ResTarget], Sequence[context.Column]]:
     alias = infer_alias(res_target)
 
     # special case for ColumnRef for handing wildcards
@@ -301,8 +297,8 @@ def _uuid_const(val: uuid.UUID):
 def _lookup_column(
     column_ref: pgast.ColumnRef,
     ctx: Context,
-) -> Sequence[Tuple[context.Table, context.Column]]:
-    matched_columns: List[Tuple[context.Table, context.Column]] = []
+) -> Sequence[tuple[context.Table, context.Column]]:
+    matched_columns: list[tuple[context.Table, context.Column]] = []
 
     name = column_ref.name
     col_name: str | pgast.Star
@@ -420,14 +416,14 @@ def _lookup_column(
 
 def _lookup_in_table(
     col_name: str, table: context.Table
-) -> Iterator[Tuple[context.Table, context.Column]]:
+) -> Iterator[tuple[context.Table, context.Column]]:
     for column in table.columns:
         if column.name == col_name:
             yield (table, column)
 
 
 def _maybe_lookup_table(tab_name: str, ctx: Context) -> context.Table | None:
-    matched_tables: List[context.Table] = []
+    matched_tables: list[context.Table] = []
     for t in ctx.scope.tables:
         t_name = t.alias or t.name
         if t_name == tab_name:
@@ -553,7 +549,7 @@ def resolve_LockingClause(
     ctx: Context,
 ) -> pgast.LockingClause:
 
-    tables: List[context.Table] = []
+    tables: list[context.Table] = []
     if expr.locked_rels is not None:
         for rvar in expr.locked_rels:
             assert rvar.relation.name
@@ -581,7 +577,7 @@ def resolve_LockingClause(
     )
 
 
-func_calls_remapping: Dict[Tuple[str, ...], Tuple[str, ...]] = {
+func_calls_remapping: dict[tuple[str, ...], tuple[str, ...]] = {
     ('information_schema', '_pg_truetypid'): (
         common.versioned_schema('edgedbsql'),
         '_pg_truetypid',

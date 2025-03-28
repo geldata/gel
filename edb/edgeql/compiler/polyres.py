@@ -24,15 +24,11 @@ from __future__ import annotations
 
 from typing import (
     Optional,
-    Tuple,
     Union,
     AbstractSet,
     Iterable,
     Mapping,
     Sequence,
-    Dict,
-    List,
-    Set,
     NamedTuple,
     cast,
 )
@@ -78,8 +74,8 @@ class MissingArg(NamedTuple):
 class BoundCall(NamedTuple):
 
     func: s_func.CallableLike
-    args: List[BoundArg]
-    null_args: Set[str]
+    args: list[BoundArg]
+    null_args: set[str]
     return_type: s_types.Type
     variadic_arg_id: Optional[int]
     variadic_arg_count: Optional[int]
@@ -100,7 +96,7 @@ def find_callable_typemods(
     num_args: int,
     kwargs_names: AbstractSet[str],
     ctx: context.ContextLevel,
-) -> Dict[Union[int, str], ft.TypeModifier]:
+) -> dict[Union[int, str], ft.TypeModifier]:
     """Find the type modifiers for a callable.
 
     We do this early, before we've compiled/checked the arguments,
@@ -121,7 +117,7 @@ def find_callable_typemods(
     if not options:
         return {k: _SINGLETON for k in set(range(num_args)) | kwargs_names}
 
-    fts: Dict[Union[int, str], ft.TypeModifier] = {}
+    fts: dict[Union[int, str], ft.TypeModifier] = {}
     for choice in options:
         for barg in choice.args:
             if not barg.param or barg.arg_id is None:
@@ -148,11 +144,11 @@ def find_callable_typemods(
 def find_callable(
     candidates: Iterable[s_func.CallableLike],
     *,
-    args: Sequence[Tuple[s_types.Type, irast.Set]],
-    kwargs: Mapping[str, Tuple[s_types.Type, irast.Set]],
+    args: Sequence[tuple[s_types.Type, irast.Set]],
+    kwargs: Mapping[str, tuple[s_types.Type, irast.Set]],
     basic_matching_only: bool = False,
     ctx: context.ContextLevel,
-) -> List[BoundCall]:
+) -> list[BoundCall]:
 
     implicit_cast_distance = None
     matched = []
@@ -212,8 +208,8 @@ def find_callable(
 
 
 def try_bind_call_args(
-    args: Sequence[Tuple[s_types.Type, irast.Set]],
-    kwargs: Mapping[str, Tuple[s_types.Type, irast.Set]],
+    args: Sequence[tuple[s_types.Type, irast.Set]],
+    kwargs: Mapping[str, tuple[s_types.Type, irast.Set]],
     func: s_func.CallableLike,
     basic_matching_only: bool,
     *,
@@ -330,7 +326,7 @@ def try_bind_call_args(
         if no_args_call:
             # Match: `func` is a function without parameters
             # being called with no arguments.
-            bargs: List[BoundArg] = []
+            bargs: list[BoundArg] = []
             if has_inlined_defaults:
                 bytes_t = ctx.env.get_schema_type_and_track(
                     sn.QualName('std', 'bytes'))
@@ -355,7 +351,7 @@ def try_bind_call_args(
         # one parameter without default.
         return None
 
-    bound_args_prep: List[Union[MissingArg, BoundArg]] = []
+    bound_args_prep: list[Union[MissingArg, BoundArg]] = []
 
     params = func_params.get_in_canonical_order(schema)
     nparams = len(params)
@@ -481,8 +477,8 @@ def try_bind_call_args(
 
     # Populate defaults.
     defaults_mask = 0
-    null_args: Set[str] = set()
-    bound_param_args: List[BoundArg] = []
+    null_args: set[str] = set()
+    bound_param_args: list[BoundArg] = []
     if has_missing_args:
         if has_inlined_defaults or named_only:
             for i, barg in enumerate(bound_args_prep):
@@ -568,7 +564,7 @@ def try_bind_call_args(
                 barg for barg in bound_args_prep if isinstance(barg, BoundArg)
             ]
     else:
-        bound_param_args = cast(List[BoundArg], bound_args_prep)
+        bound_param_args = cast(list[BoundArg], bound_args_prep)
 
     if has_inlined_defaults:
         # If we are compiling an EdgeQL function, inject the defaults

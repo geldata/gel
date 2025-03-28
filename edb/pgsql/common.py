@@ -24,7 +24,7 @@ import functools
 import hashlib
 import base64
 import re
-from typing import Literal, Optional, Tuple, Union, overload
+from typing import Literal, Optional, Union, overload
 import uuid
 
 from edb import buildmeta
@@ -121,7 +121,7 @@ def qname(*parts: str | pgast.Star, column: bool = False) -> str:
     return '.'.join([quote_ident(q, column=column) for q in parts])
 
 
-def quote_type(type_: Tuple[str, ...] | str) -> str:
+def quote_type(type_: tuple[str, ...] | str) -> str:
     if isinstance(type_, tuple):
         first = qname(*type_[:-1]) + '.' if len(type_) > 1 else ''
         last = type_[-1]
@@ -471,7 +471,7 @@ def get_index_table_backend_name(
     schema: s_schema.Schema,
     *,
     aspect: Optional[str] = None,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     subject = index.get_subject(schema)
     assert isinstance(subject, s_types.Type)
     return get_backend_name(schema, subject, aspect=aspect, catenate=False)

@@ -54,16 +54,12 @@ from typing import (
     Callable,
     Optional,
     Protocol,
-    Tuple,
     TypeVar,
     Union,
     Iterable,
     Iterator,
     Sequence,
     Collection,
-    Dict,
-    List,
-    Set,
     NamedTuple,
 )
 
@@ -107,23 +103,23 @@ def bsid(n: int) -> uuid.UUID:
 # ############# Data model
 
 Data = Any
-Result = List[Data]
-Row = Tuple[Data, ...]
+Result = list[Data]
+Row = tuple[Data, ...]
 
 
 class DB(NamedTuple):
-    data: Dict[uuid.UUID, Dict[str, Data]]
+    data: dict[uuid.UUID, dict[str, Data]]
     # We have a bad hacky mechanism for specifying schema computables,
     # but it's good enough to let us have these things in test queries.
-    schema_computables: Dict[str, Dict[str, qlast.Expr]]
+    schema_computables: dict[str, dict[str, qlast.Expr]]
 
 
 class Obj:
     def __init__(
         self,
         id: uuid.UUID,
-        shape: Optional[Dict[str, Data]]=None,
-        data: Optional[Dict[str, Data]]=None,
+        shape: Optional[dict[str, Data]]=None,
+        data: Optional[dict[str, Data]]=None,
     ) -> None:
         self.id = id
         if shape is None:
@@ -150,8 +146,8 @@ class Obj:
 
 
 def mk_db(
-    data: Iterable[Dict[str, Data]],
-    schema_computables: Dict[str, Dict[str, str]],
+    data: Iterable[dict[str, Data]],
+    schema_computables: dict[str, dict[str, str]],
 ) -> DB:
     return DB(
         {x["id"]: x for x in data},
@@ -168,8 +164,8 @@ def bslink(n: int, **kwargs: Data) -> Data:
 
 
 def mk_free_object(
-    shape: Optional[Dict[str, Data]]=None,
-    data: Optional[Dict[str, Data]]=None,
+    shape: Optional[dict[str, Data]]=None,
+    data: Optional[dict[str, Data]]=None,
 ) -> Obj:
     id = uuid.uuid4()
     base_data = {'id': id, '__type__': 'FreeObject'}
@@ -248,10 +244,10 @@ class IPtr(IPathElement):
 # Wrapper to indicate that an entry in the input tuple is really
 # a *set* bound by an alias.
 class Alias(NamedTuple):
-    contents: List[Data]
+    contents: list[Data]
 
 
-IPath = Tuple[IPathElement, ...]
+IPath = tuple[IPathElement, ...]
 
 # Implementation of built in functions and operators
 
@@ -403,7 +399,7 @@ _BASIS_FUNC_IMPLS: Any = {
     'uuid_generate_v1mc': lift(uuid.uuid4),
 }
 
-BASIS_IMPLS: Dict[Tuple[str, str], LiftedFunc] = {
+BASIS_IMPLS: dict[tuple[str, str], LiftedFunc] = {
     (typ, key): impl
     for typ, impls in [
         ('binop', _BASIS_BINOP_IMPLS),
@@ -419,8 +415,8 @@ BASIS_IMPLS: Dict[Tuple[str, str], LiftedFunc] = {
 
 @dataclass
 class EvalContext:
-    query_input_list: List[IPath]
-    input_tuple: Tuple[Data, ...]
+    query_input_list: list[IPath]
+    input_tuple: tuple[Data, ...]
     cur_path: Optional[qlast.Path]
     db: DB
 
@@ -501,10 +497,10 @@ def ensure_ql_query(expr: qlast.Expr) -> qlast.Query:
 
 def eval_filter(
     where: Optional[qlast.Expr],
-    qil: List[IPath],
-    out: List[Row],
+    qil: list[IPath],
+    out: list[Row],
     ctx: EvalContext
-) -> List[Row]:
+) -> list[Row]:
     if not where:
         return out
 
@@ -518,11 +514,11 @@ def eval_filter(
 
 
 def eval_orderby(
-    orderby: List[qlast.SortExpr],
-    qil: List[IPath],
-    out: List[Row],
+    orderby: list[qlast.SortExpr],
+    qil: list[IPath],
+    out: list[Row],
     ctx: EvalContext
-) -> List[Row]:
+) -> list[Row]:
     # Go through the sort specifiers in reverse order, which takes
     # advantage of sort being stable to do the right thing. (We can't
     # just build one composite key because they might have different
@@ -555,8 +551,8 @@ def eval_orderby(
 
 
 def eval_offset(
-    offset: Optional[qlast.Expr], out: List[Row], ctx: EvalContext
-) -> List[Row]:
+    offset: Optional[qlast.Expr], out: list[Row], ctx: EvalContext
+) -> list[Row]:
     if offset:
         res = subquery(offset, ctx=ctx)
         assert len(res) == 1
@@ -565,8 +561,8 @@ def eval_offset(
 
 
 def eval_limit(
-    limit: Optional[qlast.Expr], out: List[Row], ctx: EvalContext
-) -> List[Row]:
+    limit: Optional[qlast.Expr], out: list[Row], ctx: EvalContext
+) -> list[Row]:
     if limit:
         res = subquery(limit, ctx=ctx)
         assert len(res) == 1
@@ -629,7 +625,7 @@ def eval_Select(node: qlast.SelectQuery, ctx: EvalContext) -> Result:
 
 
 # From the itertools docs
-def powerset(iterable: Iterable[T]) -> Iterable[Tuple[T, ...]]:
+def powerset(iterable: Iterable[T]) -> Iterable[tuple[T, ...]]:
     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
     s = list(iterable)
     return itertools.chain.from_iterable(
@@ -638,7 +634,7 @@ def powerset(iterable: Iterable[T]) -> Iterable[Tuple[T, ...]]:
 
 def simplify_grouping_sets(
     gset: qlast.GroupingElement,
-) -> List[qlast.GroupingAtom]:
+) -> list[qlast.GroupingAtom]:
     if isinstance(gset, qlast.GroupingSimple):
         return [gset.element]
     elif isinstance(gset, qlast.GroupingSets):
@@ -669,7 +665,7 @@ def get_by_element(atom: Union[qlast.ObjectRef, qlast.Path]) -> ByElement:
         return IPtr(atom.steps[0].name)
 
 
-def flatten_grouping_atom(atom: qlast.GroupingAtom) -> Tuple[ByElement, ...]:
+def flatten_grouping_atom(atom: qlast.GroupingAtom) -> tuple[ByElement, ...]:
     if isinstance(atom, (qlast.ObjectRef, qlast.Path)):
         return (get_by_element(atom),)
     else:
@@ -682,7 +678,7 @@ def flatten_grouping_atom(atom: qlast.GroupingAtom) -> Tuple[ByElement, ...]:
 
 def get_grouping_sets(
     node: qlast.GroupQuery | qlast.InternalGroupQuery
-) -> List[Tuple[ByElement, ...]]:
+) -> list[tuple[ByElement, ...]]:
     toplevel_gsets = []
     for col in node.by:
         gsets = simplify_grouping_sets(col)
@@ -707,7 +703,7 @@ def _keyify(v: Data) -> Data:
 
 def get_groups(
     node: qlast.GroupQuery | qlast.InternalGroupQuery, ctx: EvalContext
-) -> List[Tuple[Tuple[Data, ...], Tuple[Dict[ByElement, Data], List[Data]]]]:
+) -> list[tuple[tuple[Data, ...], tuple[dict[ByElement, Data], list[Data]]]]:
     ctx = eval_aliases(node, ctx)
 
     # Actually evaluate the subject
@@ -729,7 +725,7 @@ def get_groups(
                          cur_path=subq_path,
                          input_tuple=ctx.input_tuple + (val,))
 
-        keys: Dict[ByElement, Data] = {}
+        keys: dict[ByElement, Data] = {}
         # Collect all the USING bindings
         for using in (node.using or ()):
             using_val = eval(using.expr, ctx=subctx)
@@ -756,9 +752,9 @@ def get_groups(
         for grouping_set in grouping_sets
     ]
     for grouping_set in grouping_sets:
-        groups: Dict[
-            Tuple[Data, ...],
-            Tuple[Dict[ByElement, Data], List[Data]]
+        groups: dict[
+            tuple[Data, ...],
+            tuple[dict[ByElement, Data], list[Data]]
         ] = {}
         for val, keys in vals_and_keys:
             # Prune the keys down to just this grouping set
@@ -933,7 +929,7 @@ def eval_DetachedExpr(node: qlast.DetachedExpr, ctx: EvalContext) -> Result:
 
 
 def eval_func_or_op(
-    op: str, args: List[qlast.Expr], typ: str, ctx: EvalContext
+    op: str, args: list[qlast.Expr], typ: str, ctx: EvalContext
 ) -> Result:
     arg_specs = BASIS.get(op)
 
@@ -1056,7 +1052,7 @@ def fix_links(links: Optional[Data]) -> Result:
 
 def lookup_computed(
     obj: Obj, name: str, ctx: EvalContext
-) -> Optional[Tuple[qlast.Expr, str, Obj]]:
+) -> Optional[tuple[qlast.Expr, str, Obj]]:
     """Lookup a schema-computed property
 
     Return (code, source type name, source object).
@@ -1093,7 +1089,7 @@ def eval_computed(
     paths = [qlast.Path(steps=[qlast.ObjectRef(name=typ)])]
 
     if name[0] != '@':
-        input_tuple: Tuple[Data, ...] = (obj,)
+        input_tuple: tuple[Data, ...] = (obj,)
     else:
         # For linkprops, we want both the source and the target in the
         # query input.
@@ -1205,11 +1201,11 @@ def eval_path(path: IPath, ctx: EvalContext) -> Result:
 
 
 def build_input_tuples(
-    qil: List[IPath], always_optional: Dict[IPath, bool], ctx: EvalContext
-) -> List[Tuple[Data, ...]]:
-    data: List[Tuple[Data, ...]] = [ctx.input_tuple]
+    qil: list[IPath], always_optional: dict[IPath, bool], ctx: EvalContext
+) -> list[tuple[Data, ...]]:
+    data: list[tuple[Data, ...]] = [ctx.input_tuple]
     for i, in_path in enumerate(qil):
-        new_data: List[Tuple[Data, ...]] = []
+        new_data: list[tuple[Data, ...]] = []
         new_qil = ctx.query_input_list + qil[:i]
         for row in data:
             subctx = replace(ctx, query_input_list=new_qil, input_tuple=row)
@@ -1231,7 +1227,7 @@ class PathFinder(NodeVisitor):
         self.in_optional = False
         self.optional_counter = 0
         self.in_subquery = False
-        self.paths: List[Tuple[qlast.Path, Optional[int], bool]] = []
+        self.paths: list[tuple[qlast.Path, Optional[int], bool]] = []
         self.current_path = cur_path
 
     def _update(self, **kwargs: Any) -> Iterator[None]:
@@ -1321,7 +1317,7 @@ class PathFinder(NodeVisitor):
         with self.subquery():
             self.visit(expr.elements)
 
-    def visit_func_or_op(self, op: str, args: List[qlast.Expr]) -> None:
+    def visit_func_or_op(self, op: str, args: list[qlast.Expr]) -> None:
         # Totally ignoring that polymorphic whatever is needed
         arg_specs = BASIS.get(op)
         old = self.in_optional, self.in_subquery
@@ -1364,8 +1360,8 @@ def find_paths(
     e: qlast.Expr,
     cur_path: Optional[qlast.Path],
     extra_subqs: Iterable[
-        Tuple[Optional[qlast.Path], Optional[qlast.Base]]] = (),
-) -> List[Tuple[qlast.Path, Optional[int], bool]]:
+        tuple[Optional[qlast.Path], Optional[qlast.Base]]] = (),
+) -> list[tuple[qlast.Path, Optional[int], bool]]:
     pf = PathFinder(cur_path)
     pf.visit(e)
     pf.in_subquery = True
@@ -1385,8 +1381,8 @@ def longest_common_prefix(p1: IPath, p2: IPath) -> IPath:
     return tuple(common)
 
 
-def dedup(old: Collection[T]) -> List[T]:
-    new: List[T] = []
+def dedup(old: Collection[T]) -> list[T]:
+    new: list[T] = []
     for x in old:
         if x not in new:
             new.append(x)
@@ -1394,9 +1390,9 @@ def dedup(old: Collection[T]) -> List[T]:
 
 
 def find_common_prefixes(
-    direct_refs: List[Tuple[IPath, Optional[int]]],
-    subquery_refs: List[Tuple[IPath, Optional[int]]],
-) -> Set[IPath]:
+    direct_refs: list[tuple[IPath, Optional[int]]],
+    subquery_refs: list[tuple[IPath, Optional[int]]],
+) -> set[IPath]:
     prefixes = set()
     for i, (x, ox) in enumerate(direct_refs):
         # We start from only the refs directly in the query, but we
@@ -1420,10 +1416,10 @@ def _contains_non_alias_path(paths: Sequence[IPath], new: IPath) -> bool:
 
 
 def make_query_input_list(
-    direct_refs: List[Tuple[IPath, Optional[int]]],
-    subquery_refs: List[Tuple[IPath, Optional[int]]],
-    old: List[IPath],
-) -> List[IPath]:
+    direct_refs: list[tuple[IPath, Optional[int]]],
+    subquery_refs: list[tuple[IPath, Optional[int]]],
+    old: list[IPath],
+) -> list[IPath]:
     direct_refs = [x for x in direct_refs if isinstance(x[0][0], IORef)]
     qil = find_common_prefixes(direct_refs, subquery_refs)
 
@@ -1431,7 +1427,7 @@ def make_query_input_list(
 
 
 def simplify_path(path: qlast.Path) -> IPath:
-    spath: List[IPathElement] = []
+    spath: list[IPathElement] = []
     # XXX: Could there still be some scoping issues with partial?
     # Probably yes? Maybe we need to make up fake path ids...
     if path.partial:
@@ -1471,12 +1467,12 @@ def parse_fragment(querystr: str) -> qlast.Expr:
 def analyze_paths(
     q: qlast.Expr,
     extra_subqs: Iterable[
-        Tuple[Optional[qlast.Path], Optional[qlast.Base]]],
+        tuple[Optional[qlast.Path], Optional[qlast.Base]]],
     cur_path: Optional[qlast.Path],
-) -> Tuple[
-    List[Tuple[IPath, Optional[int]]],
-    List[Tuple[IPath, Optional[int]]],
-    Dict[IPath, bool],
+) -> tuple[
+    list[tuple[IPath, Optional[int]]],
+    list[tuple[IPath, Optional[int]]],
+    dict[IPath, bool],
 ]:
     paths_opt = [(simplify_path(p), optional, subq)
                  for p, optional, subq in find_paths(q, cur_path, extra_subqs)]
@@ -1513,9 +1509,9 @@ def subquery_full(
     q: qlast.Expr,
     *,
     extra_subqs: Iterable[
-        Tuple[Optional[qlast.Path], Optional[qlast.Base]]] = (),
+        tuple[Optional[qlast.Path], Optional[qlast.Base]]] = (),
     ctx: EvalContext
-) -> Tuple[List[IPath], List[Row]]:
+) -> tuple[list[IPath], list[Row]]:
     direct_paths, subquery_paths, always_optional = analyze_paths(
         q, extra_subqs, ctx.cur_path)
 

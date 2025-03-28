@@ -24,17 +24,11 @@ from typing import (
     Callable,
     Literal,
     Optional,
-    Tuple,
-    Type,
     Union,
     Mapping,
     MutableMapping,
     Sequence,
     ChainMap,
-    Dict,
-    List,
-    Set,
-    FrozenSet,
     NamedTuple,
     cast,
     overload,
@@ -108,12 +102,12 @@ class ViewRPtr:
 class ScopeInfo:
     path_scope: irast.ScopeTreeNode
     binding_kind: Optional[irast.BindingKind]
-    pinned_path_id_ns: Optional[FrozenSet[str]] = None
+    pinned_path_id_ns: Optional[frozenset[str]] = None
 
 
-class PointerRefCache(Dict[irtyputils.PtrRefCacheKey, irast.BasePointerRef]):
+class PointerRefCache(dict[irtyputils.PtrRefCacheKey, irast.BasePointerRef]):
 
-    _rcache: Dict[irast.BasePointerRef, s_pointers.PointerLike]
+    _rcache: dict[irast.BasePointerRef, s_pointers.PointerLike]
 
     def __init__(self) -> None:
         super().__init__()
@@ -137,7 +131,7 @@ class PointerRefCache(Dict[irtyputils.PtrRefCacheKey, irast.BasePointerRef]):
 # Volatility inference computes two volatility results:
 # A basic one, and one for consumption by materialization
 InferredVolatility = Union[
-    qltypes.Volatility, Tuple[qltypes.Volatility, qltypes.Volatility]]
+    qltypes.Volatility, tuple[qltypes.Volatility, qltypes.Volatility]]
 
 
 class Environment:
@@ -155,50 +149,50 @@ class Environment:
     path_scope: irast.ScopeTreeNode
     """Overrall expression path scope tree."""
 
-    schema_view_cache: Dict[
+    schema_view_cache: dict[
         tuple[s_types.Type, object],
         tuple[s_types.Type, irast.Set],
     ]
     """Type cache used by schema-level views."""
 
-    query_parameters: Dict[str, irast.Param]
+    query_parameters: dict[str, irast.Param]
     """A mapping of query parameters to their types.  Gets populated during
     the compilation."""
 
-    query_globals: Dict[s_name.QualName, irast.Global]
+    query_globals: dict[s_name.QualName, irast.Global]
     """A mapping of query globals.  Gets populated during
     the compilation."""
 
-    set_types: Dict[irast.Set, s_types.Type]
+    set_types: dict[irast.Set, s_types.Type]
     """A dictionary of all Set instances and their schema types."""
 
-    type_origins: Dict[s_types.Type, Optional[parsing.Span]]
+    type_origins: dict[s_types.Type, Optional[parsing.Span]]
     """A dictionary of notable types and their source origins.
 
     This is used to trace where a particular type instance originated in
     order to provide useful diagnostics for type errors.
     """
 
-    inferred_volatility: Dict[
+    inferred_volatility: dict[
         irast.Base,
         InferredVolatility]
     """A dictionary of expressions and their inferred volatility."""
 
-    view_shapes: Dict[
+    view_shapes: dict[
         Union[s_types.Type, s_pointers.PointerLike],
-        List[Tuple[s_pointers.Pointer, qlast.ShapeOp]]
+        list[tuple[s_pointers.Pointer, qlast.ShapeOp]]
     ]
     """Object output or modification shapes."""
 
-    pointer_derivation_map: Dict[
+    pointer_derivation_map: dict[
         s_pointers.Pointer,
-        List[s_pointers.Pointer],
+        list[s_pointers.Pointer],
     ]
     """A parent: children mapping of derived pointer classes."""
 
-    pointer_specified_info: Dict[
+    pointer_specified_info: dict[
         s_pointers.Pointer,
-        Tuple[
+        tuple[
             Optional[qltypes.SchemaCardinality],
             Optional[bool],
             Optional[parsing.Span],
@@ -206,21 +200,21 @@ class Environment:
     ]
     """Cardinality/source context for pointers with unclear cardinality."""
 
-    view_shapes_metadata: Dict[s_types.Type, irast.ViewShapeMetadata]
+    view_shapes_metadata: dict[s_types.Type, irast.ViewShapeMetadata]
 
-    schema_refs: Set[s_obj.Object]
+    schema_refs: set[s_obj.Object]
     """A set of all schema objects referenced by an expression."""
 
-    schema_ref_exprs: Optional[Dict[s_obj.Object, Set[qlast.Base]]]
+    schema_ref_exprs: Optional[dict[s_obj.Object, set[qlast.Base]]]
     """Map from all schema objects referenced to the ast referants.
 
     This is used for rewriting expressions in the schema after a rename. """
 
     # Caches for costly operations in edb.ir.typeutils
     ptr_ref_cache: PointerRefCache
-    type_ref_cache: Dict[irtyputils.TypeRefCacheKey, irast.TypeRef]
+    type_ref_cache: dict[irtyputils.TypeRefCacheKey, irast.TypeRef]
 
-    dml_exprs: List[qlast.Base]
+    dml_exprs: list[qlast.Base]
     """A list of DML expressions (statements and DML-containing
     functions) that appear in a function body.
     """
@@ -229,56 +223,56 @@ class Environment:
     """A list of DML statements in the query"""
 
     #: A list of bindings that should be assumed to be singletons.
-    singletons: List[irast.PathId]
+    singletons: list[irast.PathId]
 
     scope_tree_nodes: MutableMapping[int, irast.ScopeTreeNode]
     """Map from unique_id to nodes."""
 
-    materialized_sets: Dict[
+    materialized_sets: dict[
         Union[s_types.Type, s_pointers.PointerLike],
-        Tuple[qlast.Statement, Sequence[irast.MaterializeReason]],
+        tuple[qlast.Statement, Sequence[irast.MaterializeReason]],
     ]
     """A mapping of computed sets that must be computed only once."""
 
-    compiled_stmts: Dict[qlast.Statement, irast.Stmt]
+    compiled_stmts: dict[qlast.Statement, irast.Stmt]
     """A mapping of from input edgeql to compiled IR"""
 
     alias_result_view_name: Optional[s_name.QualName]
     """The name of a view being defined as an alias."""
 
-    script_params: Dict[str, irast.Param]
+    script_params: dict[str, irast.Param]
     """All parameter definitions from an enclosing multi-statement script.
 
     Used to make sure the types are consistent."""
 
-    source_map: Dict[s_pointers.PointerLike, irast.ComputableInfo]
+    source_map: dict[s_pointers.PointerLike, irast.ComputableInfo]
     """A mapping of computable pointers to QL source AST and context."""
 
-    type_rewrites: Dict[
-        Tuple[s_types.Type, bool], irast.Set | None | Literal[True]]
+    type_rewrites: dict[
+        tuple[s_types.Type, bool], irast.Set | None | Literal[True]]
     """Access policy rewrites for schema-level types.
 
     None indicates no rewrite, True indicates a compound type
     that had rewrites in its components.
     """
 
-    expr_view_cache: Dict[Tuple[qlast.Base, s_name.Name], irast.Set]
+    expr_view_cache: dict[tuple[qlast.Base, s_name.Name], irast.Set]
     """Type cache used by expression-level views."""
 
-    shape_type_cache: Dict[
-        Tuple[
+    shape_type_cache: dict[
+        tuple[
             s_objtypes.ObjectType,
             s_types.ExprType,
-            Tuple[qlast.ShapeElement, ...],
+            tuple[qlast.ShapeElement, ...],
         ],
         s_objtypes.ObjectType,
     ]
     """Type cache for shape expressions."""
 
-    path_scope_map: Dict[irast.Set, ScopeInfo]
+    path_scope_map: dict[irast.Set, ScopeInfo]
     """A dictionary of scope info that are appropriate for a given view."""
 
-    dml_rewrites: Dict[irast.Set, irast.Rewrites]
+    dml_rewrites: dict[irast.Set, irast.Rewrites]
     """Compiled rewrites that should be attached to InsertStmt or UpdateStmt"""
 
     warnings: list[errors.EdgeDBError]
@@ -347,7 +341,7 @@ class Environment:
         expr: Optional[qlast.Base],
         *,
         modaliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Optional[Type[s_obj.Object]] = None,
+        type: Optional[type[s_obj.Object]] = None,
         default: Union[s_obj.Object, s_obj.NoDefaultT] = s_obj.NoDefault,
         label: Optional[str] = None,
         condition: Optional[Callable[[s_obj.Object], bool]] = None,
@@ -361,7 +355,7 @@ class Environment:
         expr: Optional[qlast.Base],
         *,
         modaliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Optional[Type[s_obj.Object]] = None,
+        type: Optional[type[s_obj.Object]] = None,
         default: Union[s_obj.Object, s_obj.NoDefaultT, None] = s_obj.NoDefault,
         label: Optional[str] = None,
         condition: Optional[Callable[[s_obj.Object], bool]] = None,
@@ -374,7 +368,7 @@ class Environment:
         expr: Optional[qlast.Base],
         *,
         modaliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Optional[Type[s_obj.Object]] = None,
+        type: Optional[type[s_obj.Object]] = None,
         default: Union[s_obj.Object, s_obj.NoDefaultT, None] = s_obj.NoDefault,
         label: Optional[str] = None,
         condition: Optional[Callable[[s_obj.Object], bool]] = None,
@@ -430,32 +424,32 @@ class ContextLevel(compiler.ContextLevel):
     derived_target_module: Optional[str]
     """The name of the module for classes derived by views."""
 
-    anchors: Dict[
-        Union[str, Type[qlast.SpecialAnchor]],
+    anchors: dict[
+        Union[str, type[qlast.SpecialAnchor]],
         irast.Set,
     ]
     """A mapping of anchor variables (aliases to path expressions passed
     to the compiler programmatically).
     """
 
-    modaliases: Dict[Optional[str], str]
+    modaliases: dict[Optional[str], str]
     """A combined list of module name aliases declared in the WITH block,
     or passed to the compiler programmatically.
     """
 
-    view_nodes: Dict[s_name.Name, s_types.Type]
+    view_nodes: dict[s_name.Name, s_types.Type]
     """A dictionary of newly derived Node classes representing views."""
 
-    view_sets: Dict[s_obj.Object, irast.Set]
+    view_sets: dict[s_obj.Object, irast.Set]
     """A dictionary of IR expressions for views declared in the query."""
 
-    suppress_rewrites: FrozenSet[s_types.Type]
+    suppress_rewrites: frozenset[s_types.Type]
     """Types to suppress using rewrites on"""
 
     aliased_views: ChainMap[s_name.Name, irast.Set]
     """A dictionary of views aliased in a statement body."""
 
-    class_view_overrides: Dict[uuid.UUID, s_types.Type]
+    class_view_overrides: dict[uuid.UUID, s_types.Type]
     """Object mapping used by implicit view override in SELECT."""
 
     clause: Optional[str]
@@ -470,21 +464,21 @@ class ContextLevel(compiler.ContextLevel):
     qlstmt: Optional[qlast.Statement]
     """Statement source node currently being built."""
 
-    path_id_namespace: FrozenSet[str]
+    path_id_namespace: frozenset[str]
     """A namespace to use for all path ids."""
 
-    pending_stmt_own_path_id_namespace: FrozenSet[str]
+    pending_stmt_own_path_id_namespace: frozenset[str]
     """A path id namespace to add to the fence of the next statement."""
 
-    pending_stmt_full_path_id_namespace: FrozenSet[str]
+    pending_stmt_full_path_id_namespace: frozenset[str]
     """A set of path id namespaces to use in path ids in the next statement."""
 
-    inserting_paths: Dict[irast.PathId, Literal['body'] | Literal['else']]
+    inserting_paths: dict[irast.PathId, Literal['body'] | Literal['else']]
     """A set of path ids that are currently being inserted."""
 
     view_map: ChainMap[
         irast.PathId,
-        Tuple[Tuple[irast.PathId, irast.Set], ...],
+        tuple[tuple[irast.PathId, irast.Set], ...],
     ]
     """Set translation map.  Used for mapping computable sources..
 
@@ -505,7 +499,7 @@ class ContextLevel(compiler.ContextLevel):
     iterator_ctx: Optional[ContextLevel]
     """The context of the statement where all iterators should be placed."""
 
-    iterator_path_ids: FrozenSet[irast.PathId]
+    iterator_path_ids: frozenset[irast.PathId]
     """The path ids of all in scope iterator variables"""
 
     scope_id_ctr: compiler.SimpleCounter
@@ -536,7 +530,7 @@ class ContextLevel(compiler.ContextLevel):
     implicit_limit: int
     """Implicit LIMIT clause in SELECT statements."""
 
-    special_computables_in_mutation_shape: FrozenSet[str]
+    special_computables_in_mutation_shape: frozenset[str]
     """A set of "special" computable pointers allowed in mutation shape."""
 
     empty_result_type_hint: Optional[s_types.Type]
@@ -564,10 +558,10 @@ class ContextLevel(compiler.ContextLevel):
     """Whether we are currently in a place where no dml is allowed,
         if not None, then it is of the form `in a FILTER clause`  """
 
-    active_rewrites: FrozenSet[s_objtypes.ObjectType]
+    active_rewrites: frozenset[s_objtypes.ObjectType]
     """For detecting cycles in rewrite rules"""
 
-    active_defaults: FrozenSet[s_objtypes.ObjectType]
+    active_defaults: frozenset[s_objtypes.ObjectType]
     """For detecting cycles in defaults"""
 
     collection_cast_info: Optional[CollectionCastInfo]
@@ -833,7 +827,7 @@ class CollectionCastInfo(NamedTuple):
     from_type: s_types.Type
     to_type: s_types.Type
 
-    path_elements: list[Tuple[str, Optional[str]]]
+    path_elements: list[tuple[str, Optional[str]]]
     """Represents a path to the current collection element being cast.
 
     A path element is a tuple of the collection type and an optional

@@ -20,7 +20,7 @@
 """Compilation helpers for output formatting and serialization."""
 
 from __future__ import annotations
-from typing import Optional, Tuple, Union, Sequence, List
+from typing import Optional, Union, Sequence
 
 import itertools
 
@@ -47,7 +47,7 @@ def _get_json_func(
     *,
     output_format: Optional[context.OutputFormat] = None,
     env: context.Environment,
-) -> Tuple[str, ...]:
+) -> tuple[str, ...]:
 
     if output_format is None:
         output_format = env.output_format
@@ -169,7 +169,7 @@ def array_as_json_object(
 
         val: pgast.BaseExpr
         if is_tuple:
-            json_args: List[pgast.BaseExpr] = []
+            json_args: list[pgast.BaseExpr] = []
             is_named = any(st.element_name for st in el_type.subtypes)
             for i, st in enumerate(el_type.subtypes):
                 if is_named:
@@ -261,7 +261,7 @@ def unnamed_tuple_as_json_object(
     styperef: irast.TypeRef,
     env: context.Environment,
 ) -> pgast.BaseExpr:
-    vals: List[pgast.BaseExpr] = []
+    vals: list[pgast.BaseExpr] = []
 
     if irtyputils.is_persistent_tuple(styperef):
         for el_idx, el_type in enumerate(styperef.subtypes):
@@ -347,7 +347,7 @@ def named_tuple_as_json_object(
     styperef: irast.TypeRef,
     env: context.Environment,
 ) -> pgast.BaseExpr:
-    keyvals: List[pgast.BaseExpr] = []
+    keyvals: list[pgast.BaseExpr] = []
 
     if irtyputils.is_persistent_tuple(styperef):
         for el_type in styperef.subtypes:
@@ -457,7 +457,7 @@ def tuple_var_as_json_object(
             env=env,
         )
     else:
-        keyvals: List[pgast.BaseExpr] = []
+        keyvals: list[pgast.BaseExpr] = []
 
         for element in tvar.elements:
             rptr = element.path_id.rptr()
@@ -491,7 +491,7 @@ def serialize_custom_tuple(
     env: context.Environment,
 ) -> pgast.BaseExpr:
     """Serialize a tuple that needs custom serialization for a component"""
-    vals: List[pgast.BaseExpr] = []
+    vals: list[pgast.BaseExpr] = []
 
     obj: pgast.BaseExpr
 
@@ -577,7 +577,7 @@ def serialize_custom_array(
         out_alias = env.aliases.get('q')
 
         val: pgast.BaseExpr
-        args: List[pgast.BaseExpr] = []
+        args: list[pgast.BaseExpr] = []
         is_named = any(st.element_name for st in el_type.subtypes)
         for i, st in enumerate(el_type.subtypes):
             if is_named:
@@ -858,7 +858,7 @@ def serialize_expr(
 
 def get_pg_type(
         typeref: irast.TypeRef, *,
-        ctx: context.CompilerContextLevel) -> Tuple[str, ...]:
+        ctx: context.CompilerContextLevel) -> tuple[str, ...]:
 
     if in_serialization_ctx(ctx):
         if ctx.env.output_format is context.OutputFormat.JSONB:

@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, List
+from typing import Optional
 
 from edb.ir import ast as irast
 
@@ -73,7 +73,7 @@ def get_access_policies(
     stype: s_objtypes.ObjectType,
     *,
     ctx: context.ContextLevel,
-) -> Tuple[s_policies.AccessPolicy, ...]:
+) -> tuple[s_policies.AccessPolicy, ...]:
     schema = ctx.env.schema
     if not ctx.env.options.apply_query_rewrites:
         return ()
@@ -377,7 +377,7 @@ def try_type_rewrite(
         with ctx.new() as subctx:
             subctx.expr_exposed = context.Exposure.UNEXPOSED
             subctx.anchors = subctx.anchors.copy()
-            parts: List[qlast.Expr] = [subctx.create_anchor(x) for x in sets]
+            parts: list[qlast.Expr] = [subctx.create_anchor(x) for x in sets]
             rewritten_set = dispatch.compile(
                 qlast.Set(elements=parts), ctx=subctx)
     elif len(sets) > 0:

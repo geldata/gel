@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Type, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 import dataclasses
 import http
 import json
@@ -81,7 +81,7 @@ def _response_error(
     response: protocol.HttpResponse,
     status: http.HTTPStatus,
     message: str,
-    ex_type: Type[errors.EdgeDBError],
+    ex_type: type[errors.EdgeDBError],
 ) -> None:
     response.body = (
         f'Unexpected error in /server-info.\n\n'

@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Iterable
+from typing import Any, Optional, Iterable
 
 import uuid
 import dataclasses
@@ -287,7 +287,7 @@ def build(
     plan: pg_tree.Plan,
     info: ir_analyze.AnalysisInfo,
     args: explain.Arguments,
-) -> Tuple[Plan, Index]:
+) -> tuple[Plan, Index]:
     tree = TreeBuilder(info)
     result = tree.build(plan, args)
     result.contexts = context_optimize(result.contexts)

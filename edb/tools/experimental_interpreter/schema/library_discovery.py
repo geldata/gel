@@ -1,5 +1,4 @@
 from ..data import data_ops as e
-from typing import List
 from ..helper_funcs import parse_ddl
 from .ddl_processing import process_ddls
 import os
@@ -16,7 +15,7 @@ def process_edgeql_file(schema: e.DBSchema, path: str) -> None:
         process_ddls(schema, ddls)
 
 
-def add_ddl_library(schema: e.DBSchema, libpaths: List[str]) -> None:
+def add_ddl_library(schema: e.DBSchema, libpaths: list[str]) -> None:
     """
     Add a library to the schema.
 

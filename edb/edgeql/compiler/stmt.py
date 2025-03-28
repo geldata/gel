@@ -24,12 +24,8 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
     Union,
     Sequence,
-    DefaultDict,
-    List,
     cast
 )
 
@@ -936,8 +932,8 @@ def compile_DescribeStmt(
         else:
             assert isinstance(ql.object, qlast.ObjectRef), ql.object
             modules = []
-            items: DefaultDict[str, List[s_name.Name]] = defaultdict(list)
-            referenced_classes: List[s_obj.ObjectMeta] = []
+            items: defaultdict[str, list[s_name.Name]] = defaultdict(list)
+            referenced_classes: list[s_obj.ObjectMeta] = []
 
             objref = ql.object
             itemclass = objref.itemclass
@@ -953,7 +949,7 @@ def compile_DescribeStmt(
 
                 modules.append(mod)
             else:
-                itemtype: Optional[Type[s_obj.Object]] = None
+                itemtype: Optional[type[s_obj.Object]] = None
 
                 name = s_utils.ast_ref_to_name(objref)
                 if itemclass is not None:
@@ -994,7 +990,7 @@ def compile_DescribeStmt(
                         # matches for the same name.
                         if (itemclass is None or is_function):
                             try:
-                                funcs: Tuple[s_func.Function, ...] = (
+                                funcs: tuple[s_func.Function, ...] = (
                                     newctx.env.schema.get_functions(
                                         name,
                                         module_aliases=aliases)
@@ -1448,7 +1444,7 @@ def compile_result_clause(
 def compile_query_subject(
         set: irast.Set,
         *,
-        shape: Optional[List[qlast.ShapeElement]]=None,
+        shape: Optional[list[qlast.ShapeElement]]=None,
         view_rptr: Optional[context.ViewRPtr]=None,
         view_name: Optional[s_name.QualName]=None,
         result_alias: Optional[str]=None,

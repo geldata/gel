@@ -25,7 +25,6 @@ from __future__ import annotations
 import json
 from typing import (
     Optional,
-    Tuple,
     Union,
     Iterable,
     Mapping,
@@ -533,7 +532,7 @@ class CastParamListWrapper(s_func.ParameterLikeList):
     def objects(
         self,
         schema: s_schema.Schema,
-    ) -> Tuple[s_func.ParameterDesc, ...]:
+    ) -> tuple[s_func.ParameterDesc, ...]:
         return self._params
 
     def has_required_params(self, schema: s_schema.Schema) -> bool:
@@ -542,7 +541,7 @@ class CastParamListWrapper(s_func.ParameterLikeList):
     def get_in_canonical_order(
         self,
         schema: s_schema.Schema,
-    ) -> Tuple[s_func.ParameterDesc, ...]:
+    ) -> tuple[s_func.ParameterDesc, ...]:
         return self._params
 
 
@@ -1498,7 +1497,7 @@ def cast_message_context(ctx: context.ContextLevel) -> Optional[str]:
 
 
 def _collection_element_message_context(
-    path_element: Tuple[str, Optional[str]]
+    path_element: tuple[str, Optional[str]]
 ) -> str:
     if path_element[0] == 'tuple':
         return f"at tuple element '{path_element[1]}', "

@@ -3,12 +3,11 @@
 
 """Declarations of information schema and pg_catalog"""
 
-from typing import Tuple, Dict, List
 
 ColumnName = str
 ColumnType = str | None
 
-INFORMATION_SCHEMA: Dict[str, List[Tuple[ColumnName, ColumnType, int]]] = {
+INFORMATION_SCHEMA: dict[str, list[tuple[ColumnName, ColumnType, int]]] = {
     "administrable_role_authorizations": [
         ("grantee", "sql_identifier", 13),
         ("role_name", "sql_identifier", 13),
@@ -800,7 +799,7 @@ INFORMATION_SCHEMA: Dict[str, List[Tuple[ColumnName, ColumnType, int]]] = {
         ("is_trigger_insertable_into", "yes_or_no", 13),
     ]
 }
-PG_CATALOG: Dict[str, List[Tuple[ColumnName, ColumnType, int]]] = {
+PG_CATALOG: dict[str, list[tuple[ColumnName, ColumnType, int]]] = {
     "pg_aggregate": [
         ("aggfnoid", "regproc", 13),
         ("aggkind", "\"char\"", 13),

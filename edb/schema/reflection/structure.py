@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Type, Sequence, Dict, List, NamedTuple
+from typing import Any, Optional, Sequence, NamedTuple
 
 import collections
 import uuid
@@ -77,25 +77,25 @@ class SchemaFieldDesc(NamedTuple):
 
     type: s_types.Type
     cardinality: qltypes.SchemaCardinality
-    properties: Dict[str, Tuple[s_types.Type, FieldType]]
+    properties: dict[str, tuple[s_types.Type, FieldType]]
     fieldname: str
     schema_fieldname: str
     is_ordered: bool = False
-    reflection_proxy: Optional[Tuple[str, str]] = None
+    reflection_proxy: Optional[tuple[str, str]] = None
     storage: Optional[FieldStorage] = None
     is_refdict: bool = False
 
 
 # N.B: Indexed by schema_fieldname
-SchemaTypeLayout = Dict[str, SchemaFieldDesc]
+SchemaTypeLayout = dict[str, SchemaFieldDesc]
 
 
 class SchemaReflectionParts(NamedTuple):
 
     intro_schema_delta: sd.Command
-    class_layout: Dict[Type[s_obj.Object], SchemaTypeLayout]
-    local_intro_parts: List[str]
-    global_intro_parts: List[str]
+    class_layout: dict[type[s_obj.Object], SchemaTypeLayout]
+    local_intro_parts: list[str]
+    global_intro_parts: list[str]
 
 
 def _run_ddl(
@@ -230,7 +230,7 @@ def _classify_object_field(field: s_obj.Field[Any]) -> FieldStorage:
     )
 
 
-def get_schema_name_for_pycls(py_cls: Type[s_obj.Object]) -> sn.Name:
+def get_schema_name_for_pycls(py_cls: type[s_obj.Object]) -> sn.Name:
     py_cls_name = py_cls.__name__
     if issubclass(py_cls, s_obj.GlobalObject):
         # Global objects, like Role and Database live in the sys:: module
@@ -239,7 +239,7 @@ def get_schema_name_for_pycls(py_cls: Type[s_obj.Object]) -> sn.Name:
         return sn.QualName(module='schema', name=py_cls_name)
 
 
-def get_default_base_for_pycls(py_cls: Type[s_obj.Object]) -> sn.Name:
+def get_default_base_for_pycls(py_cls: type[s_obj.Object]) -> sn.Name:
     if issubclass(py_cls, s_obj.GlobalObject):
         # Global objects, like Role and Database live in the sys:: module
         return sn.QualName(module='sys', name='SystemObject')
@@ -269,8 +269,8 @@ def generate_structure(
     """
 
     delta = sd.DeltaRoot()
-    classlayout: Dict[
-        Type[s_obj.Object],
+    classlayout: dict[
+        type[s_obj.Object],
         SchemaTypeLayout,
     ] = {}
 
@@ -343,7 +343,7 @@ def generate_structure(
 
         py_classes.append(py_cls)
 
-    read_sets: Dict[Type[s_obj.Object], List[str]] = {}
+    read_sets: dict[type[s_obj.Object], list[str]] = {}
 
     for py_cls in py_classes:
         rschema_name = get_schema_name_for_pycls(py_cls)
@@ -858,9 +858,9 @@ def generate_structure(
 def _get_reflected_link_props(
     *,
     ref_ptr: s_links.Link,
-    target_cls: Type[s_obj.Object],
+    target_cls: type[s_obj.Object],
     schema: s_schema.Schema,
-) -> Dict[s_obj.Field[Any], FieldStorage]:
+) -> dict[s_obj.Field[Any], FieldStorage]:
 
     fields = [
         f
@@ -879,7 +879,7 @@ def _get_reflected_link_props(
 
 def _classify_scalar_object_fields(
     fields: Sequence[s_obj.Field[Any]],
-) -> Dict[s_obj.Field[Any], FieldStorage]:
+) -> dict[s_obj.Field[Any], FieldStorage]:
 
     props = {}
 

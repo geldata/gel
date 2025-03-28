@@ -118,7 +118,7 @@ class OptionFlag(OptionValue):
 
 class Options(Base):
 
-    options: typing.Dict[str, OptionValue] = ast.field(factory=dict)
+    options: dict[str, OptionValue] = ast.field(factory=dict)
 
     def get_flag(self, k: str) -> OptionFlag:
         try:
@@ -227,7 +227,7 @@ class Slice(Base):
 
 class Indirection(Expr):
     arg: Expr
-    indirection: typing.List[typing.Union[Index, Slice]]
+    indirection: list[typing.Union[Index, Slice]]
 
 
 class BinOp(Expr):
@@ -240,14 +240,14 @@ class BinOp(Expr):
 
 
 class WindowSpec(Base):
-    orderby: typing.List[SortExpr]
-    partition: typing.List[Expr]
+    orderby: list[SortExpr]
+    partition: list[Expr]
 
 
 class FunctionCall(Expr):
-    func: typing.Union[typing.Tuple[str, str], str]
-    args: typing.List[Expr] = ast.field(factory=list)
-    kwargs: typing.Dict[str, Expr] = ast.field(factory=dict)
+    func: typing.Union[tuple[str, str], str]
+    args: list[Expr] = ast.field(factory=list)
+    kwargs: dict[str, Expr] = ast.field(factory=dict)
     window: typing.Optional[WindowSpec] = None
 
 
@@ -327,8 +327,8 @@ class TypeExprLiteral(TypeExpr):
 
 class TypeName(TypeExpr):
     maintype: BaseObjectRef
-    subtypes: typing.Optional[typing.List[TypeExpr]] = None
-    dimensions: typing.Optional[typing.List[int]] = None
+    subtypes: typing.Optional[list[TypeExpr]] = None
+    dimensions: typing.Optional[list[int]] = None
 
 
 class TypeOp(TypeExpr):
@@ -379,7 +379,7 @@ PathElement = typing.Union[Expr, Ptr, TypeIntersection, ObjectRef, Splat]
 
 
 class Path(Expr, GroupingAtom):
-    steps: typing.List[PathElement]
+    steps: list[PathElement]
     partial: bool = False
     allow_factoring: bool = False
 
@@ -410,19 +410,19 @@ class TupleElement(Base):
 
 
 class NamedTuple(Expr):
-    elements: typing.List[TupleElement]
+    elements: list[TupleElement]
 
 
 class Tuple(Expr):
-    elements: typing.List[Expr]
+    elements: list[Expr]
 
 
 class Array(Expr):
-    elements: typing.List[Expr]
+    elements: list[Expr]
 
 
 class Set(Expr):
-    elements: typing.List[Expr]
+    elements: list[Expr]
 
 
 # Statements
@@ -436,7 +436,7 @@ class Command(GrammarEntryPoint, Base):
     """
 
     __abstract_node__ = True
-    aliases: typing.Optional[typing.List[Alias]] = None
+    aliases: typing.Optional[list[Alias]] = None
 
 
 class SessionSetAliasDecl(Command):
@@ -490,7 +490,7 @@ class ShapeOrigin(s_enum.StrEnum):
 
 class ShapeElement(Expr):
     expr: Path
-    elements: typing.Optional[typing.List[ShapeElement]] = None
+    elements: typing.Optional[list[ShapeElement]] = None
     compexpr: typing.Optional[Expr] = None
     cardinality: typing.Optional[qltypes.SchemaCardinality] = None
     required: typing.Optional[bool] = None
@@ -499,7 +499,7 @@ class ShapeElement(Expr):
 
     where: typing.Optional[Expr] = None
 
-    orderby: typing.Optional[typing.List[SortExpr]] = None
+    orderby: typing.Optional[list[SortExpr]] = None
 
     offset: typing.Optional[Expr] = None
     limit: typing.Optional[Expr] = None
@@ -507,14 +507,14 @@ class ShapeElement(Expr):
 
 class Shape(Expr):
     expr: typing.Optional[Expr]
-    elements: typing.List[ShapeElement]
+    elements: list[ShapeElement]
     allow_factoring: bool = False
 
 
 class Query(Expr, GrammarEntryPoint):
     __abstract_node__ = True
 
-    aliases: typing.Optional[typing.List[Alias]] = None
+    aliases: typing.Optional[list[Alias]] = None
 
 
 class SelectQuery(Query):
@@ -523,7 +523,7 @@ class SelectQuery(Query):
 
     where: typing.Optional[Expr] = None
 
-    orderby: typing.Optional[typing.List[SortExpr]] = None
+    orderby: typing.Optional[list[SortExpr]] = None
 
     offset: typing.Optional[Expr] = None
     limit: typing.Optional[Expr] = None
@@ -537,7 +537,7 @@ class SelectQuery(Query):
 
 
 class GroupingIdentList(GroupingAtom, Base):
-    elements: typing.Tuple[GroupingAtom, ...]
+    elements: tuple[GroupingAtom, ...]
 
 
 class GroupingElement(Base):
@@ -549,26 +549,26 @@ class GroupingSimple(GroupingElement):
 
 
 class GroupingSets(GroupingElement):
-    sets: typing.List[GroupingElement]
+    sets: list[GroupingElement]
 
 
 class GroupingOperation(GroupingElement):
     oper: str
-    elements: typing.List[GroupingAtom]
+    elements: list[GroupingAtom]
 
 
 class GroupQuery(Query):
     subject_alias: typing.Optional[str] = None
-    using: typing.Optional[typing.List[AliasedExpr]]
-    by: typing.List[GroupingElement]
+    using: typing.Optional[list[AliasedExpr]]
+    by: list[GroupingElement]
 
     subject: Expr
 
 
 class InternalGroupQuery(Query):
     subject_alias: typing.Optional[str] = None
-    using: typing.Optional[typing.List[AliasedExpr]]
-    by: typing.List[GroupingElement]
+    using: typing.Optional[list[AliasedExpr]]
+    by: list[GroupingElement]
 
     subject: Expr
 
@@ -581,19 +581,19 @@ class InternalGroupQuery(Query):
 
     where: typing.Optional[Expr] = None
 
-    orderby: typing.Optional[typing.List[SortExpr]] = None
+    orderby: typing.Optional[list[SortExpr]] = None
 
 
 class InsertQuery(Query):
     subject: ObjectRef
-    shape: typing.List[ShapeElement]
+    shape: list[ShapeElement]
     unless_conflict: typing.Optional[
-        typing.Tuple[typing.Optional[Expr], typing.Optional[Expr]]
+        tuple[typing.Optional[Expr], typing.Optional[Expr]]
     ] = None
 
 
 class UpdateQuery(Query):
-    shape: typing.List[ShapeElement]
+    shape: list[ShapeElement]
 
     subject: Expr
 
@@ -607,7 +607,7 @@ class DeleteQuery(Query):
 
     where: typing.Optional[Expr] = None
 
-    orderby: typing.Optional[typing.List[SortExpr]] = None
+    orderby: typing.Optional[list[SortExpr]] = None
 
     offset: typing.Optional[Expr] = None
     limit: typing.Optional[Expr] = None
@@ -682,7 +682,7 @@ class DDLOperation(DDL):
     '''A change to schema'''
 
     __abstract_node__ = True
-    commands: typing.List[DDLOperation] = ast.field(factory=list)
+    commands: list[DDLOperation] = ast.field(factory=list)
 
 
 class DDLCommand(DDLOperation, Command):
@@ -695,11 +695,11 @@ class NonTransactionalDDLCommand(DDLCommand):
 
 class AlterAddInherit(DDLOperation):
     position: typing.Optional[Position] = None
-    bases: typing.List[TypeName]
+    bases: list[TypeName]
 
 
 class AlterDropInherit(DDLOperation):
-    bases: typing.List[TypeName]
+    bases: list[TypeName]
 
 
 class OnTargetDelete(DDLOperation):
@@ -769,7 +769,7 @@ class CreateExtendingObject(CreateObject):
     # supported except in old dumps. We track it only to allow us to
     # error on it.
     final: bool = False
-    bases: typing.List[TypeName]
+    bases: list[TypeName]
 
 
 class Rename(ObjectDDL):
@@ -782,7 +782,7 @@ class Rename(ObjectDDL):
 
 class NestedQLBlock(DDL):
 
-    commands: typing.List[DDLOperation]
+    commands: list[DDLOperation]
     text: typing.Optional[str] = None
 
 
@@ -986,7 +986,7 @@ class RoleCommand(GlobalObjectCommand):
 
 class CreateRole(CreateObject, RoleCommand):
     superuser: bool = False
-    bases: typing.List[TypeName]
+    bases: list[TypeName]
 
 
 class AlterRole(AlterObject, RoleCommand):
@@ -1065,7 +1065,7 @@ class CreateConcretePointer(CreateObject):
     declared_overloaded: bool = False
     target: typing.Optional[typing.Union[Expr, TypeExpr]]
     cardinality: qltypes.SchemaCardinality
-    bases: typing.List[TypeName]
+    bases: list[TypeName]
 
 
 class CreateConcreteUnknownPointer(CreateConcretePointer):
@@ -1193,7 +1193,7 @@ class CreateConstraint(
 ):
     subjectexpr: typing.Optional[Expr]
     abstract: bool = True
-    params: typing.List[FuncParam] = ast.field(factory=list)
+    params: list[FuncParam] = ast.field(factory=list)
 
 
 class AlterConstraint(AlterObject, ConstraintCommand):
@@ -1207,7 +1207,7 @@ class DropConstraint(DropObject, ConstraintCommand):
 class ConcreteConstraintOp(ConstraintCommand):
 
     __abstract_node__ = True
-    args: typing.List[Expr]
+    args: list[Expr]
     subjectexpr: typing.Optional[Expr]
     except_expr: typing.Optional[Expr] = None
 
@@ -1226,8 +1226,8 @@ class DropConcreteConstraint(ConcreteConstraintOp, DropObject):
 
 class IndexType(DDL):
     name: ObjectRef
-    args: typing.List[Expr] = ast.field(factory=list)
-    kwargs: typing.Dict[str, Expr] = ast.field(factory=dict)
+    args: list[Expr] = ast.field(factory=list)
+    kwargs: dict[str, Expr] = ast.field(factory=dict)
 
 
 class IndexCommand(ObjectDDL):
@@ -1244,10 +1244,10 @@ class CreateIndex(
     CreateExtendingObject,
     IndexCommand,
 ):
-    kwargs: typing.Dict[str, Expr] = ast.field(factory=dict)
-    index_types: typing.List[IndexType]
+    kwargs: dict[str, Expr] = ast.field(factory=dict)
+    index_types: list[IndexType]
     code: typing.Optional[IndexCode] = None
-    params: typing.List[FuncParam] = ast.field(factory=list)
+    params: list[FuncParam] = ast.field(factory=list)
 
 
 class AlterIndex(AlterObject, IndexCommand):
@@ -1278,7 +1278,7 @@ class DropIndexMatch(DropObject, IndexMatchCommand):
 class ConcreteIndexCommand(IndexCommand):
 
     __abstract_node__ = True
-    kwargs: typing.Dict[str, Expr] = ast.field(factory=dict)
+    kwargs: dict[str, Expr] = ast.field(factory=dict)
     expr: Expr
     except_expr: typing.Optional[Expr] = None
     deferred: typing.Optional[bool] = None
@@ -1316,12 +1316,12 @@ class AccessPolicyCommand(ObjectDDL):
 class CreateAccessPolicy(CreateObject, AccessPolicyCommand):
     condition: typing.Optional[Expr]
     action: qltypes.AccessPolicyAction
-    access_kinds: typing.List[qltypes.AccessKind]
+    access_kinds: list[qltypes.AccessKind]
     expr: typing.Optional[Expr]
 
 
 class SetAccessPerms(DDLOperation):
-    access_kinds: typing.List[qltypes.AccessKind]
+    access_kinds: list[qltypes.AccessKind]
     action: qltypes.AccessPolicyAction
 
 
@@ -1340,7 +1340,7 @@ class TriggerCommand(ObjectDDL):
 
 class CreateTrigger(CreateObject, TriggerCommand):
     timing: qltypes.TriggerTiming
-    kinds: typing.List[qltypes.TriggerKind]
+    kinds: list[qltypes.TriggerKind]
     scope: qltypes.TriggerScope
     expr: Expr
     condition: typing.Optional[Expr]
@@ -1367,7 +1367,7 @@ class RewriteCommand(ObjectDDL):
 
     __abstract_node__ = True
 
-    kinds: typing.List[qltypes.RewriteKind]
+    kinds: list[qltypes.RewriteKind]
 
 
 class CreateRewrite(CreateObject, RewriteCommand):
@@ -1398,7 +1398,7 @@ class FunctionCode(DDL):
 class FunctionCommand(DDLCommand):
 
     __abstract_node__ = True
-    params: typing.List[FuncParam] = ast.field(factory=list)
+    params: list[FuncParam] = ast.field(factory=list)
 
 
 class CreateFunction(CreateObject, FunctionCommand):
@@ -1421,8 +1421,8 @@ class DropFunction(DropObject, FunctionCommand):
 
 class OperatorCode(DDL):
     language: Language
-    from_operator: typing.Optional[typing.Tuple[str, ...]]
-    from_function: typing.Optional[typing.Tuple[str, ...]]
+    from_operator: typing.Optional[tuple[str, ...]]
+    from_function: typing.Optional[tuple[str, ...]]
     from_expr: bool
     code: typing.Optional[str]
 
@@ -1431,7 +1431,7 @@ class OperatorCommand(DDLCommand):
 
     __abstract_node__ = True
     kind: qltypes.OperatorKind
-    params: typing.List[FuncParam] = ast.field(factory=list)
+    params: list[FuncParam] = ast.field(factory=list)
 
 
 class CreateOperator(CreateObject, OperatorCommand):
@@ -1501,7 +1501,7 @@ class ConfigSet(ConfigOp):
 
 class ConfigInsert(ConfigOp):
 
-    shape: typing.List[ShapeElement]
+    shape: list[ShapeElement]
 
 
 class ConfigReset(ConfigOp):
@@ -1556,11 +1556,11 @@ class ModuleDeclaration(SDL):
     # The 'name' is treated same as in CreateModule, for consistency,
     # since this declaration also implies creating a module.
     name: ObjectRef
-    declarations: typing.List[typing.Union[ObjectDDL, ModuleDeclaration]]
+    declarations: list[typing.Union[ObjectDDL, ModuleDeclaration]]
 
 
 class Schema(SDL, GrammarEntryPoint, Base):
-    declarations: typing.List[typing.Union[ObjectDDL, ModuleDeclaration]]
+    declarations: list[typing.Union[ObjectDDL, ModuleDeclaration]]
 
 
 #
@@ -1589,7 +1589,7 @@ def get_ddl_field_value(
 
 def get_ddl_subcommand(
     ddlcmd: DDLOperation,
-    cmdtype: typing.Type[DDLOperation],
+    cmdtype: type[DDLOperation],
 ) -> typing.Optional[DDLOperation]:
     for cmd in ddlcmd.commands:
         if isinstance(cmd, cmdtype):
@@ -1600,7 +1600,7 @@ def get_ddl_subcommand(
 
 def has_ddl_subcommand(
     ddlcmd: DDLOperation,
-    cmdtype: typing.Type[DDLOperation],
+    cmdtype: type[DDLOperation],
 ) -> bool:
     return bool(get_ddl_subcommand(ddlcmd, cmdtype))
 

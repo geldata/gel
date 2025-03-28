@@ -1,11 +1,11 @@
-from typing import Any, Optional, Tuple, Dict, List
+from typing import Any, Optional
 
 class Entry:
     key: str
-    key_vars: List[str]
-    variables: Dict[str, Any]
-    substitutions: Dict[str, Tuple[str, int, int]]
+    key_vars: list[str]
+    variables: dict[str, Any]
+    substitutions: dict[str, tuple[str, int, int]]
 
-    def tokens(self) -> List[Tuple[Any, int, int, int, int, Any]]: ...
+    def tokens(self) -> list[tuple[Any, int, int, int, int, Any]]: ...
 
 def rewrite(operation: Optional[str], text: str) -> Entry: ...

@@ -23,7 +23,7 @@ import base64
 import json
 import webauthn
 
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 from webauthn.helpers import (
     parse_authentication_credential_json,
     structs as webauthn_structs,
@@ -285,7 +285,7 @@ filter .email = email and .user_handle = user_handle;""",
         *,
         webauthn_provider: config.WebAuthnProvider,
         email: str,
-    ) -> Tuple[str, bytes]:
+    ) -> tuple[str, bytes]:
         # Find credential IDs by email
         result = await execute.parse_execute_json(
             self.db,

@@ -3,11 +3,10 @@ from ..data import expr_ops as eops
 from ..data import type_ops as tops
 from ..data import path_factor as pops
 from ..data import module_ops as mops
-from typing import List, Dict
 from ..data import expr_to_str as pp
 
 
-def get_key_dependency(tp: e.DefaultTp) -> List[str]:
+def get_key_dependency(tp: e.DefaultTp) -> list[str]:
     new_head_name = eops.next_name("head_name_test")
     instantiaed = eops.instantiate_expr(e.FreeVarExpr(new_head_name), tp.expr)
     paths = pops.get_all_paths(instantiaed)
@@ -39,8 +38,8 @@ def type_elaborate_default_tp(ctx: e.TcCtx, default_expr: e.Expr) -> e.Expr:
 def insert_link_prop_checking(
     ctx: e.TcCtx,
     expr_ck: e.Expr,
-    synth_lp: Dict[str, e.ResultTp],
-    ck_lp: Dict[str, e.ResultTp],
+    synth_lp: dict[str, e.ResultTp],
+    ck_lp: dict[str, e.ResultTp],
 ) -> e.Expr:
     """
     Check link properties, return additional link props
@@ -58,7 +57,7 @@ def insert_link_prop_checking(
         else:
             tops.assert_real_subtype(ctx, synth_lp[k].tp, ck_lp[k].tp)
 
-    additional_lps: Dict[str, e.Expr] = {}
+    additional_lps: dict[str, e.Expr] = {}
 
     for k in ck_lp.keys():
         this_tp = ck_lp[k].tp
@@ -197,7 +196,7 @@ def insert_proprerty_checking(
                     for tp in all_target_tps
                 ):
                     raise ValueError("TODO")
-                all_target_names: Dict[e.QualifiedName, e.Tp] = {
+                all_target_names: dict[e.QualifiedName, e.Tp] = {
                     tp.name: tp for tp in all_target_tps  # type: ignore
                 }
                 # synthesize once to get the type
@@ -288,7 +287,7 @@ def insert_checking(ctx: e.TcCtx, expr: e.InsertExpr) -> e.Expr:
         ctx, expr.name
     )
     assert isinstance(schema_tp, e.ObjectTp), "Cannot insert into Scalar Types"
-    new_v: Dict[str, e.Expr] = {}
+    new_v: dict[str, e.Expr] = {}
     for k, v in expr.new.items():
         if k not in schema_tp.val:
             raise ValueError(f"Key {k} not in schema for {expr.name}")
@@ -328,14 +327,14 @@ def insert_checking(ctx: e.TcCtx, expr: e.InsertExpr) -> e.Expr:
     # a list of keys that are dependent,
     # need to extract them in this order,
     # second element provides the binder name
-    dependent_keys: Dict[str, str] = {}
+    dependent_keys: dict[str, str] = {}
 
-    def add_deps_from_new_v(deps: List[str]) -> None:
+    def add_deps_from_new_v(deps: list[str]) -> None:
         for k in deps:
             if k in new_v and k not in dependent_keys:
                 dependent_keys[k] = eops.next_name(f"insert_{expr.name}_{k}")
 
-    def get_shaped_from_deps(deps: List[str]) -> e.ShapedExprExpr:
+    def get_shaped_from_deps(deps: list[str]) -> e.ShapedExprExpr:
         return e.ShapedExprExpr(
             expr=e.FreeObjectExpr(),
             shape=e.ShapeExpr(
@@ -348,7 +347,7 @@ def insert_checking(ctx: e.TcCtx, expr: e.InsertExpr) -> e.Expr:
             ),
         )
 
-    pending_default: Dict[str, List[str]] = {}  # key and its dependent keys
+    pending_default: dict[str, list[str]] = {}  # key and its dependent keys
     # topologically sort the default insertions.
     for k, target_tp in schema_tp.val.items():
         if isinstance(target_tp.tp, e.DefaultTp):
@@ -438,7 +437,7 @@ def update_checking(
         for (k, v) in full_tp.val.items()
         if e.StrLabel(k) in update_shape.shape.keys()
     }
-    shape_ck: Dict[e.Label, e.BindingExpr] = {}
+    shape_ck: dict[e.Label, e.BindingExpr] = {}
     for k, v in cut_tp.items():
         ctx_new, shape_body, bnd_var = eops.tcctx_add_binding(
             ctx,

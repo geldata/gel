@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Dict, List, FrozenSet
+from typing import Any, Optional
 
 import dataclasses
 import json
@@ -359,7 +359,7 @@ def _get_delta_context_args(ctx: compiler.CompileContext) -> dict[str, Any]:
 
 def _process_delta(
     ctx: compiler.CompileContext, delta: s_delta.DeltaRoot
-) -> tuple[pg_dbops.SQLBlock, FrozenSet[str], Any]:
+) -> tuple[pg_dbops.SQLBlock, frozenset[str], Any]:
     """Adapt and process the delta command."""
 
     current_tx = ctx.state.current_tx()
@@ -381,7 +381,7 @@ def _process_delta(
 
     if db_cmd:
         block = pg_dbops.SQLBlock()
-        new_types: FrozenSet[str] = frozenset()
+        new_types: frozenset[str] = frozenset()
     else:
         block = pg_dbops.PLTopBlock()
         new_types = frozenset(str(tid) for tid in pgdelta.new_types)
@@ -565,7 +565,7 @@ def _populate_migration(
         debug.header('Populate Migration Diff')
         debug.dump(diff, schema=schema)
 
-    new_ddl: Tuple[qlast.DDLCommand, ...] = tuple(
+    new_ddl: tuple[qlast.DDLCommand, ...] = tuple(
         s_ddl.ddlast_from_delta(  # type: ignore
             schema,
             mstate.target_schema,
@@ -1070,7 +1070,7 @@ def _commit_migration_rewrite(
     current_tx.update_schema(schema)
     current_tx.update_migration_rewrite_state(None)
 
-    cmds: List[qlast.DDLCommand] = []
+    cmds: list[qlast.DDLCommand] = []
     # Now we find all the migrations...
     migrations = s_migrations.get_ordered_migrations(schema)
     for mig in reversed(migrations):
@@ -1183,7 +1183,7 @@ def _reset_schema(
 
     # diff and create migration that drops all objects
     diff = s_ddl.delta_schemas(schema, empty_schema)
-    new_ddl: Tuple[qlast.DDLCommand, ...] = tuple(
+    new_ddl: tuple[qlast.DDLCommand, ...] = tuple(
         s_ddl.ddlast_from_delta(schema, empty_schema, diff),  # type: ignore
     )
     create_mig = qlast.CreateMigration(  # type: ignore
@@ -1568,7 +1568,7 @@ def _identify_administer_tables_and_cols(
     from edb.ir import typeutils as irtypeutils
     from edb.schema import objtypes as s_objtypes
 
-    args: List[Tuple[irast.Pointer | None, s_objtypes.ObjectType]] = []
+    args: list[tuple[irast.Pointer | None, s_objtypes.ObjectType]] = []
     current_tx = ctx.state.current_tx()
     schema = current_tx.get_schema(ctx.compiler_state.std_schema)
     modaliases = current_tx.get_modaliases()
@@ -1686,7 +1686,7 @@ def administer_vacuum(
     ql: qlast.AdministerStmt,
 ) -> dbstate.BaseQuery:
     # check that the kwargs are valid
-    kwargs: Dict[str, str] = {}
+    kwargs: dict[str, str] = {}
     for name, val in ql.expr.kwargs.items():
         if name not in ('statistics_update', 'full'):
             raise errors.QueryError(

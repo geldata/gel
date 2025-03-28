@@ -28,9 +28,6 @@ from typing import (
     Union,
     Mapping,
     Sequence,
-    Dict,
-    List,
-    FrozenSet,
 )
 
 import copy
@@ -345,7 +342,7 @@ def fini_expression(
     return result
 
 
-def collect_params(ctx: context.ContextLevel) -> List[irast.Param]:
+def collect_params(ctx: context.ContextLevel) -> list[irast.Param]:
     lparams = [
         p for p in ctx.env.query_parameters.values() if not p.is_sub_param
     ]
@@ -365,7 +362,7 @@ def collect_params(ctx: context.ContextLevel) -> List[irast.Param]:
 
 def _fixup_materialized_sets(
     irs: Sequence[irast.Base], *, ctx: context.ContextLevel
-) -> List[irast.Set]:
+) -> list[irast.Set]:
     # Make sure that all materialized sets have their views compiled
     skips = {'materialized_sets'}
     children = []
@@ -455,7 +452,7 @@ def _fixup_materialized_sets(
 
 def _find_visible_binding_refs(
     ir: irast.Base, *, ctx: context.ContextLevel
-) -> List[irast.Set]:
+) -> list[irast.Set]:
     children = ast_visitor.find_children(
         ir, irast.Set, lambda n: n.is_visible_binding_ref)
     return children
@@ -715,7 +712,7 @@ def declare_view(
     factoring_fence: bool=False,
     fully_detached: bool=False,
     binding_kind: irast.BindingKind,
-    path_id_namespace: Optional[FrozenSet[str]]=None,
+    path_id_namespace: Optional[frozenset[str]]=None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -849,7 +846,7 @@ def declare_view_from_schema(
     return vc
 
 
-def check_params(params: Dict[str, irast.Param]) -> None:
+def check_params(params: dict[str, irast.Param]) -> None:
     first_argname = next(iter(params))
     for param in params.values():
         # FIXME: context?
@@ -897,7 +894,7 @@ def throw_on_loose_param(
 
 
 def preprocess_script(
-    stmts: List[qlast.Base], *, ctx: context.ContextLevel
+    stmts: list[qlast.Base], *, ctx: context.ContextLevel
 ) -> irast.ScriptInfo:
     """Extract parameters from all statements in a script.
 

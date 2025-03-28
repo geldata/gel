@@ -25,7 +25,7 @@ from edb.schema import schema
 from edb.server import config
 
 
-ReflectionCache = immutables.Map[str, typing.Tuple[str, ...]]
+ReflectionCache = immutables.Map[str, tuple[str, ...]]
 
 
 class DatabaseState(typing.NamedTuple):

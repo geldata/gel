@@ -26,18 +26,12 @@ from typing import (
     Generic,
     Optional,
     Protocol,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     Iterable,
     Iterator,
     Mapping,
     Collection,
-    Dict,
-    List,
-    Set,
-    FrozenSet,
     NamedTuple,
     cast,
     TYPE_CHECKING,
@@ -123,7 +117,7 @@ ObjectCollection_T = TypeVar(
     "ObjectCollection_T",
     bound="ObjectCollection[Object]",
 )
-HashCriterion = Union[Type["Object"], Tuple[str, Any]]
+HashCriterion = Union[type["Object"], tuple[str, Any]]
 
 TYPE_ID_NAMESPACE = uuidgen.UUID('00e50276-2502-11e7-97f2-27fe51238dbd')
 
@@ -185,10 +179,10 @@ def get_known_type_id(
 
 class DeltaGuidance(NamedTuple):
 
-    banned_creations: FrozenSet[Tuple[Type[Object], sn.Name]] = frozenset()
-    banned_deletions: FrozenSet[Tuple[Type[Object], sn.Name]] = frozenset()
-    banned_alters: FrozenSet[
-        Tuple[Type[Object], Tuple[sn.Name, sn.Name]]
+    banned_creations: frozenset[tuple[type[Object], sn.Name]] = frozenset()
+    banned_deletions: frozenset[tuple[type[Object], sn.Name]] = frozenset()
+    banned_alters: frozenset[
+        tuple[type[Object], tuple[sn.Name, sn.Name]]
     ] = frozenset()
 
 
@@ -222,10 +216,10 @@ class DescribeVisibilityPolicy(enum.IntEnum):
 
 class ComparisonContext:
 
-    renames: Dict[Tuple[Type[Object], sn.Name], sd.RenameObject[Object]]
-    deletions: Dict[Tuple[Type[Object], sn.Name], sd.DeleteObject[Object]]
+    renames: dict[tuple[type[Object], sn.Name], sd.RenameObject[Object]]
+    deletions: dict[tuple[type[Object], sn.Name], sd.DeleteObject[Object]]
     guidance: Optional[DeltaGuidance]
-    parent_ops: List[sd.ObjectCommand[Any]]
+    parent_ops: list[sd.ObjectCommand[Any]]
 
     def __init__(
         self,
@@ -239,7 +233,7 @@ class ComparisonContext:
         self.guidance = guidance
         self.renames = {}
         self.deletions = {}
-        self.placeholder_ctr: Dict[str, int] = collections.Counter()
+        self.placeholder_ctr: dict[str, int] = collections.Counter()
         self.parent_ops = []
 
     def is_deleting(self, schema: s_schema.Schema, obj: Object) -> bool:
@@ -288,7 +282,7 @@ class Field(struct.ProtoField, Generic[T]):
     #: The same as name by default, but can be overridden.
     sname: str
     #: The type of the value stored in the field
-    type: Type[T]
+    type: type[T]
     #: Specifies if *type* is a generic type of the host object
     #: this field is defined on.
     type_is_generic_self: bool
@@ -336,14 +330,14 @@ class Field(struct.ProtoField, Generic[T]):
     #: direct link (for example, if the value is a non-distinct set),
     #: this specifies a (ProxyType, linkname) pair of a proxy object type
     #: and the name of the link within that proxy type.
-    reflection_proxy: Optional[Tuple[str, str]]
+    reflection_proxy: Optional[tuple[str, str]]
     #: Which patch for the current major version this field was introduced in.
     #: Ensures that the data tuples always get extended strictly at the end.
     patch_level: int
 
     def __init__(
         self,
-        type_: Type[T],
+        type_: builtins.type[T],
         *,
         type_is_generic_self: bool = False,
         coerce: bool = False,
@@ -360,7 +354,7 @@ class Field(struct.ProtoField, Generic[T]):
         aux_cmd_data: bool = False,
         special_ddl_syntax: bool = False,
         reflection_method: ReflectionMethod = ReflectionMethod.REGULAR,
-        reflection_proxy: Optional[Tuple[str, str]] = None,
+        reflection_proxy: Optional[tuple[str, str]] = None,
         name: Optional[str] = None,
         reflection_name: Optional[str] = None,
         patch_level: int = -1,
@@ -479,7 +473,7 @@ class Field(struct.ProtoField, Generic[T]):
     def __get__(
         self,
         instance: Optional[Object],
-        owner: Type[Object],
+        owner: builtins.type[Object],
     ) -> Optional[T]:
         if instance is not None:
             return None
@@ -569,7 +563,7 @@ class SchemaField(Field[Type_T]):
     def __get__(
         self,
         instance: Optional[Object],
-        owner: Type[Object],
+        owner: type[Object],
     ) -> Optional[T]:
         if instance is not None:
             raise FieldValueNotFoundError(self.name)
@@ -591,7 +585,7 @@ class RefDict(struct.RTStruct):
     requires_explicit_overloaded = struct.Field(
         bool, default=False, frozen=True)
 
-    ref_cls: Type[Object] = struct.Field(
+    ref_cls: type[Object] = struct.Field(
         type, frozen=True)
 
 
@@ -601,33 +595,33 @@ class ObjectContainer(s_abc.Reducible):
     def schema_refs_from_data(
         cls,
         data: Any,
-    ) -> FrozenSet[uuid.UUID]:
+    ) -> frozenset[uuid.UUID]:
         raise NotImplementedError
 
 
 class ObjectMeta(type):
 
-    _all_types: ClassVar[Dict[str, Type[Object]]] = {}
-    _schema_types: ClassVar[Set[ObjectMeta]] = set()
-    _ql_map: ClassVar[Dict[qltypes.SchemaObjectClass, ObjectMeta]] = {}
+    _all_types: ClassVar[dict[str, type[Object]]] = {}
+    _schema_types: ClassVar[set[ObjectMeta]] = set()
+    _ql_map: ClassVar[dict[qltypes.SchemaObjectClass, ObjectMeta]] = {}
     _refdicts_to: ClassVar[
-        Dict[ObjectMeta, List[Tuple[RefDict, ObjectMeta]]]
+        dict[ObjectMeta, list[tuple[RefDict, ObjectMeta]]]
     ] = {}
 
     # Instance fields (i.e. class fields on types built with ObjectMeta)
     _displayname: str
-    _fields: Dict[str, Field[Any]]
-    _schema_fields: Dict[str, SchemaField[Any]]
-    _hashable_fields: Set[Field[Any]]  # if f.is_schema_field and f.hashable
+    _fields: dict[str, Field[Any]]
+    _schema_fields: dict[str, SchemaField[Any]]
+    _hashable_fields: set[Field[Any]]  # if f.is_schema_field and f.hashable
     _sorted_fields: collections.OrderedDict[str, Field[Any]]
     #: Fields that contain references to objects either directly or
     #: indirectly.
-    _objref_fields: FrozenSet[SchemaField[Any]]
-    _reducible_fields: FrozenSet[SchemaField[Any]]
-    _aux_cmd_data_fields: FrozenSet[SchemaField[Any]]  # if f.aux_cmd_data
+    _objref_fields: frozenset[SchemaField[Any]]
+    _reducible_fields: frozenset[SchemaField[Any]]
+    _aux_cmd_data_fields: frozenset[SchemaField[Any]]  # if f.aux_cmd_data
     _refdicts: collections.OrderedDict[str, RefDict]
-    _refdicts_by_refclass: Dict[type, RefDict]
-    _refdicts_by_field: Dict[str, RefDict]  # key is rd.attr
+    _refdicts_by_refclass: dict[type, RefDict]
+    _refdicts_by_field: dict[str, RefDict]  # key is rd.attr
     _ql_class: Optional[qltypes.SchemaObjectClass]
     _reflection_method: ReflectionMethod
     _reflection_link: Optional[str]
@@ -643,8 +637,8 @@ class ObjectMeta(type):
     def __new__(
         mcls,
         name: str,
-        bases: Tuple[type, ...],
-        clsdict: Dict[str, Any],
+        bases: tuple[type, ...],
+        clsdict: dict[str, Any],
         *,
         qlkind: Optional[qltypes.SchemaObjectClass] = None,
         reflection: ReflectionMethod = ReflectionMethod.REGULAR,
@@ -886,17 +880,17 @@ class ObjectMeta(type):
                     ' also'
                 )
             cls._reflection_link = reflection_link
-        mcls._all_types[name] = cast(Type['Object'], cls)
+        mcls._all_types[name] = cast(type['Object'], cls)
 
         return cls
 
-    def get_object_reference_fields(cls) -> FrozenSet[SchemaField[Any]]:
+    def get_object_reference_fields(cls) -> frozenset[SchemaField[Any]]:
         return cls._objref_fields
 
-    def get_reducible_fields(cls) -> FrozenSet[SchemaField[Any]]:
+    def get_reducible_fields(cls) -> frozenset[SchemaField[Any]]:
         return cls._reducible_fields
 
-    def get_aux_cmd_data_fields(cls) -> FrozenSet[SchemaField[Any]]:
+    def get_aux_cmd_data_fields(cls) -> frozenset[SchemaField[Any]]:
         return cls._aux_cmd_data_fields
 
     def has_field(cls, name: str) -> bool:
@@ -959,7 +953,7 @@ class ObjectMeta(type):
         else:
             raise KeyError(f'{cls} has no refdict for {refcls}')
 
-    def get_referring_classes(cls) -> FrozenSet[Tuple[RefDict, ObjectMeta]]:
+    def get_referring_classes(cls) -> frozenset[tuple[RefDict, ObjectMeta]]:
         try:
             refdicts_to = type(cls)._refdicts_to[cls]
         except KeyError:
@@ -972,25 +966,25 @@ class ObjectMeta(type):
         return cls in ObjectMeta._schema_types
 
     @classmethod
-    def get_schema_metaclasses(mcls) -> Iterator[Type[Object]]:
+    def get_schema_metaclasses(mcls) -> Iterator[type[Object]]:
         return iter(mcls._all_types.values())
 
     @classmethod
-    def get_schema_class(mcls, name: str) -> Type[Object]:
+    def get_schema_class(mcls, name: str) -> type[Object]:
         return mcls._all_types[name]
 
     @classmethod
-    def maybe_get_schema_class(mcls, name: str) -> Optional[Type[Object]]:
+    def maybe_get_schema_class(mcls, name: str) -> Optional[type[Object]]:
         return mcls._all_types.get(name)
 
     @classmethod
     def get_schema_metaclass_for_ql_class(
         mcls, qlkind: qltypes.SchemaObjectClass
-    ) -> Type[Object]:
+    ) -> type[Object]:
         cls = mcls._ql_map.get(qlkind)
         if cls is None:
             raise LookupError(f'no schema metaclass for {qlkind}')
-        return cast(Type[Object], cls)
+        return cast(type[Object], cls)
 
     def get_ql_class(cls) -> Optional[qltypes.SchemaObjectClass]:
         return cls._ql_class
@@ -1065,9 +1059,9 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         compcoef=0.999,
     )
 
-    _fields: Dict[str, SchemaField[Any]]
+    _fields: dict[str, SchemaField[Any]]
 
-    def schema_reduce(self) -> Tuple[str, uuid.UUID]:
+    def schema_reduce(self) -> tuple[str, uuid.UUID]:
         return type(self).__name__, self.id
 
     @staticmethod
@@ -1081,7 +1075,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
 
     @staticmethod
     def schema_restore(
-        data: Tuple[str, uuid.UUID],
+        data: tuple[str, uuid.UUID],
     ) -> Object:
         sclass_name, obj_id = data
         return Object.raw_schema_restore(sclass_name, obj_id)
@@ -1089,8 +1083,8 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
     @classmethod
     def schema_refs_from_data(
         cls,
-        data: Tuple[str, uuid.UUID],
-    ) -> FrozenSet[uuid.UUID]:
+        data: tuple[str, uuid.UUID],
+    ) -> frozenset[uuid.UUID]:
         return frozenset((data[1],))
 
     def get_id(self, schema: s_schema.Schema) -> uuid.UUID:
@@ -1165,7 +1159,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         cls,
         schema: s_schema.Schema,
         stable_ids: bool,
-        data: Dict[str, Any],
+        data: dict[str, Any],
     ) -> uuid.UUID:
         name = data.get('name')
         assert isinstance(name, (str, sn.Name))
@@ -1184,19 +1178,19 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
                 return uuidgen.uuid1mc()
 
     @classmethod
-    def _create_from_id(cls: Type[Object_T], id: uuid.UUID) -> Object_T:
+    def _create_from_id(cls: type[Object_T], id: uuid.UUID) -> Object_T:
         assert id is not None
         return cls(_private_id=id)
 
     @classmethod
     def create_in_schema(
-        cls: Type[Object_T],
+        cls: type[Object_T],
         schema: s_schema.Schema_T,
         stable_ids: bool = False,
         *,
         id: Optional[uuid.UUID] = None,
         **data: Any,
-    ) -> Tuple[s_schema.Schema_T, Object_T]:
+    ) -> tuple[s_schema.Schema_T, Object_T]:
 
         if not cls.is_schema_object:
             raise TypeError(f'{cls.__name__} type cannot be created in schema')
@@ -1295,7 +1289,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
             return schema.set_obj_field(self, name, value)
 
     def update(
-        self, schema: s_schema.Schema, updates: Dict[str, Any]
+        self, schema: s_schema.Schema, updates: dict[str, Any]
     ) -> s_schema.Schema:
         fields = type(self)._fields
 
@@ -1313,10 +1307,10 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
 
     def hash_criteria(
         self: Object_T, schema: s_schema.Schema
-    ) -> FrozenSet[HashCriterion]:
+    ) -> frozenset[HashCriterion]:
         cls = type(self)
 
-        sig: List[Union[Type[Object_T], Tuple[str, Any]]] = [cls]
+        sig: list[Union[type[Object_T], tuple[str, Any]]] = [cls]
         for f in cls._hashable_fields:
             fn = f.name
             val = self.get_explicit_field_value(schema, fn, default=None)
@@ -1391,7 +1385,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
     @classmethod
     def compare_field_value(
         cls,
-        field: Field[Type[T]],
+        field: Field[type[T]],
         our_value: T,
         their_value: T,
         *,
@@ -1428,8 +1422,8 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
 
     @classmethod
     def compare_obj_field_value(
-        cls: Type[Object_T],
-        field: Field[Type[T]],
+        cls: type[Object_T],
+        field: Field[type[T]],
         ours: Object_T,
         theirs: Object_T,
         *,
@@ -1482,7 +1476,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
 
     @classmethod
     def compare_values(
-        cls: Type[Object_T],
+        cls: type[Object_T],
         ours: Optional[Object_T],
         theirs: Optional[Object_T],
         *,
@@ -1609,12 +1603,12 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
     def get_ddl_identity(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         ddl_id_fields = [
             fn for fn, f in type(self).get_fields().items() if f.ddl_identity
         ]
 
-        ddl_identity: Optional[Dict[str, Any]]
+        ddl_identity: Optional[dict[str, Any]]
         if ddl_id_fields:
             ddl_identity = {}
             for fn in ddl_id_fields:
@@ -1629,7 +1623,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
     def init_delta_command(
         self: Object_T,
         schema: s_schema.Schema,
-        cmdtype: Type[sd.ObjectCommand_T],
+        cmdtype: type[sd.ObjectCommand_T],
         *,
         classname: Optional[sn.Name] = None,
         **kwargs: Any,
@@ -1666,7 +1660,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         context: sd.CommandContext,
         *,
         referrer: Optional[Object] = None,
-    ) -> Tuple[sd.CommandGroup, sd.Command, sd.ContextStack]:
+    ) -> tuple[sd.CommandGroup, sd.Command, sd.ContextStack]:
         """Prepare a parent portion of a command tree for this object.
 
         This returns a tuple containing:
@@ -1686,13 +1680,13 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         self: Object_T,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        cmdtype: Type[sd.ObjectCommand_T],
+        cmdtype: type[sd.ObjectCommand_T],
         *,
         classname: Optional[sn.Name] = None,
         referrer: Optional[Object] = None,
         possible_parent: Optional[sd.ObjectCommand[Object]] = None,
         **kwargs: Any,
-    ) -> Tuple[sd.Command, sd.ObjectCommand_T, sd.ContextStack]:
+    ) -> tuple[sd.Command, sd.ObjectCommand_T, sd.ContextStack]:
         """Make a command subtree for this object.
 
         This returns a tuple containing:
@@ -2213,7 +2207,7 @@ class ObjectShell(Shell, Generic[Object_T_co]):
         self,
         *,
         name: sn.Name,
-        schemaclass: Type[Object_T_co],
+        schemaclass: type[Object_T_co],
         displayname: Optional[str] = None,
         origname: Optional[sn.Name] = None,
         sourcectx: Optional[parsing.Span] = None,
@@ -2295,15 +2289,15 @@ class ObjectCollection(
     # to the bounds or constraints of the TypeVar, or, even better,
     # pass the actual type at the call site, but there seems to be
     # no easy solution to do that.
-    type: ClassVar[Type[Object]] = Object  # type: ignore
-    _registry: ClassVar[Dict[str, Type[ObjectCollection[Object]]]] = {}
+    type: ClassVar[type[Object]] = Object  # type: ignore
+    _registry: ClassVar[dict[str, builtins.type[ObjectCollection[Object]]]] = {}
 
-    _container: ClassVar[Type[CollectionFactory[Any]]]
+    _container: ClassVar[builtins.type[CollectionFactory[Any]]]
 
     def __init_subclass__(
         cls,
         *,
-        container: Optional[Type[CollectionFactory[Any]]] = None,
+        container: Optional[builtins.type[CollectionFactory[Any]]] = None,
     ) -> None:
         super().__init_subclass__()
         if container is not None:
@@ -2320,7 +2314,7 @@ class ObjectCollection(
                 cls._registry[name] = cls  # type: ignore
 
     @classmethod
-    def get_subclass(cls, name: str) -> Type[ObjectCollection[Object]]:
+    def get_subclass(cls, name: str) -> builtins.type[ObjectCollection[Object]]:
         return cls._registry[name]
 
     def __init__(
@@ -2348,11 +2342,11 @@ class ObjectCollection(
 
     def schema_reduce(
         self,
-    ) -> Tuple[
+    ) -> tuple[
         str,
-        Optional[Union[Tuple[builtins.type, ...], builtins.type]],
-        Tuple[uuid.UUID, ...],
-        Tuple[Tuple[str, Any], ...],
+        Optional[Union[tuple[builtins.type, ...], builtins.type]],
+        tuple[uuid.UUID, ...],
+        tuple[tuple[str, Any], ...],
     ]:
         cls = type(self)
         _, (typeargs, ids, attrs) = self.__reduce__()
@@ -2365,11 +2359,11 @@ class ObjectCollection(
     @staticmethod
     @functools.lru_cache(maxsize=10240)
     def schema_restore(
-        data: Tuple[
+        data: tuple[
             str,
-            Optional[Union[Tuple[builtins.type, ...], builtins.type]],
-            Tuple[uuid.UUID, ...],
-            Tuple[Tuple[str, Any], ...],
+            Optional[Union[tuple[builtins.type, ...], builtins.type]],
+            tuple[uuid.UUID, ...],
+            tuple[tuple[str, Any], ...],
         ],
     ) -> ObjectCollection[Object]:
         clsname, typeargs, ids, attrs = data
@@ -2379,28 +2373,28 @@ class ObjectCollection(
     @classmethod
     def schema_refs_from_data(
         cls,
-        data: Tuple[
+        data: tuple[
             str,
-            Optional[Union[Tuple[builtins.type, ...], builtins.type]],
-            Tuple[uuid.UUID, ...],
-            Tuple[Tuple[str, Any], ...],
+            Optional[Union[tuple[builtins.type, ...], builtins.type]],
+            tuple[uuid.UUID, ...],
+            tuple[tuple[str, Any], ...],
         ],
-    ) -> FrozenSet[uuid.UUID]:
+    ) -> frozenset[uuid.UUID]:
         return frozenset(data[2])
 
-    def __reduce__(self) -> Tuple[
+    def __reduce__(self) -> tuple[
         Callable[..., ObjectCollection[Any]],
-        Tuple[
-            Optional[Union[Tuple[builtins.type, ...], builtins.type]],
-            Tuple[uuid.UUID, ...],
-            Dict[str, Any],
+        tuple[
+            Optional[Union[tuple[builtins.type, ...], builtins.type]],
+            tuple[uuid.UUID, ...],
+            dict[str, Any],
         ],
     ]:
         assert type(self).is_fully_resolved(), \
             f'{type(self)} parameters are not resolved'
 
-        cls: Type[ObjectCollection[Object_T]] = self.__class__
-        types: Optional[Tuple[type, ...]] = self.orig_args
+        cls: type[ObjectCollection[Object_T]] = self.__class__
+        types: Optional[tuple[type, ...]] = self.orig_args
         if types is None or not cls.is_anon_parametrized():
             typeargs = None
         else:
@@ -2414,9 +2408,9 @@ class ObjectCollection(
     @classmethod
     def __restore__(
         cls,
-        typeargs: Optional[Union[Tuple[builtins.type, ...], builtins.type]],
-        ids: Tuple[uuid.UUID, ...],
-        attrs: Dict[str, Any],
+        typeargs: Optional[Union[tuple[builtins.type, ...], builtins.type]],
+        ids: tuple[uuid.UUID, ...],
+        attrs: dict[str, Any],
     ) -> ObjectCollection[Object_T]:
         if typeargs is None or cls.is_anon_parametrized():
             obj = cls(_ids=ids, **attrs, _private_init=True)
@@ -2435,12 +2429,12 @@ class ObjectCollection(
 
     @classmethod
     def create(
-        cls: Type[ObjectCollection[Object_T]],
+        cls: builtins.type[ObjectCollection[Object_T]],
         schema: s_schema.Schema,
         data: Collection[Object_T] | ObjectCollection[Object_T],
         **kwargs: Any,
     ) -> ObjectCollection[Object_T]:
-        ids: List[uuid.UUID] = []
+        ids: list[uuid.UUID] = []
 
         if isinstance(data, ObjectCollection):
             ids.extend(data._ids)
@@ -2466,7 +2460,7 @@ class ObjectCollection(
         else:
             raise TypeError(f'object {v!r} has no ID!')
 
-    def ids(self, schema: s_schema.Schema) -> Tuple[uuid.UUID, ...]:
+    def ids(self, schema: s_schema.Schema) -> tuple[uuid.UUID, ...]:
         return tuple(self._ids)
 
     def names(self, schema: s_schema.Schema) -> Collection[sn.Name]:
@@ -2478,7 +2472,7 @@ class ObjectCollection(
 
         return type(self)._container(result)
 
-    def objects(self, schema: s_schema.Schema) -> Tuple[Object_T, ...]:
+    def objects(self, schema: s_schema.Schema) -> tuple[Object_T, ...]:
         # Calling tuple on a list produced by a comprehension instead
         # of on a generator comprehension is tragically a slight
         # performance improvement, and this is a hot path.
@@ -2488,7 +2482,7 @@ class ObjectCollection(
 
     def _object_keys(
         self, schema: s_schema.Schema
-    ) -> Set[Tuple[Type[Object], sn.Name]]:
+    ) -> set[tuple[builtins.type[Object], sn.Name]]:
         return {(type(x), x.get_name(schema)) for x in (self.objects(schema))}
 
     @classmethod
@@ -2542,7 +2536,7 @@ class ObjectCollectionShell(Shell, Generic[Object_T]):
     def __init__(
         self,
         items: Iterable[ObjectShell[Object_T]],
-        collection_type: Type[ObjectCollection[Object_T]],
+        collection_type: type[ObjectCollection[Object_T]],
     ) -> None:
         self.items = items
         self.collection_type = collection_type
@@ -2607,7 +2601,7 @@ class ObjectIndexBase(
 
     @classmethod
     def create(
-        cls: Type[ObjectIndexBase[Key_T, Object_T]],
+        cls: type[ObjectIndexBase[Key_T, Object_T]],
         schema: s_schema.Schema,
         data: Collection[Object_T] | ObjectCollection[Object_T],
         **kwargs: Any,
@@ -2631,7 +2625,7 @@ class ObjectIndexBase(
     def __init__(
         self,
         _ids: Collection[uuid.UUID],
-        _keys: Optional[Tuple[Key_T, ...]] = None,
+        _keys: Optional[tuple[Key_T, ...]] = None,
         *,
         _private_init: bool,
     ) -> None:
@@ -2666,7 +2660,7 @@ class ObjectIndexBase(
         else:
             assert isinstance(ours, ObjectIndexBase)
             assert isinstance(theirs, ObjectIndexBase)
-            similarity: List[float] = []
+            similarity: list[float] = []
             for k, v in ours.items(our_schema):
                 try:
                     theirsv = theirs.get(their_schema, k)
@@ -2690,7 +2684,7 @@ class ObjectIndexBase(
 
     def add(
         self: OIBT, schema: s_schema.Schema, item: Object
-    ) -> Tuple[s_schema.Schema, OIBT]:
+    ) -> tuple[s_schema.Schema, OIBT]:
         """Return a copy of this collection containing the given item.
 
         If the item is already present in the collection, an
@@ -2706,7 +2700,7 @@ class ObjectIndexBase(
 
     def update(
         self: OIBT, schema: s_schema.Schema, reps: Iterable[Object]
-    ) -> Tuple[s_schema.Schema, OIBT]:
+    ) -> tuple[s_schema.Schema, OIBT]:
         items = dict(self.items(schema))
         keyfunc = type(self)._key
 
@@ -2722,7 +2716,7 @@ class ObjectIndexBase(
         self: OIBT,
         schema: s_schema.Schema,
         names: Iterable[Key_T],
-    ) -> Tuple[s_schema.Schema, OIBT]:
+    ) -> tuple[s_schema.Schema, OIBT]:
         items = dict(self.items(schema))
         for name in names:
             items.pop(name)  # type: ignore[call-overload]  # mypy bug
@@ -2734,7 +2728,7 @@ class ObjectIndexBase(
     def items(
         self,
         schema: s_schema.Schema,
-    ) -> Tuple[Tuple[Key_T, Object_T], ...]:
+    ) -> tuple[tuple[Key_T, Object_T], ...]:
         result = []
 
         for key, item_id in zip(self.keys(schema), self._ids):
@@ -2743,7 +2737,7 @@ class ObjectIndexBase(
 
         return tuple(result)  # type: ignore
 
-    def keys(self, schema: s_schema.Schema) -> Tuple[Key_T, ...]:
+    def keys(self, schema: s_schema.Schema) -> tuple[Key_T, ...]:
         # To support existing pickled schemas that don't have _keys in them,
         # lazily compute them if they are missing.
         # FUTURE: Can drop in 5.0.
@@ -2885,7 +2879,7 @@ class ObjectDict(
     def __init__(
         self,
         _ids: Collection[uuid.UUID],
-        _keys: Tuple[Key_T, ...],
+        _keys: tuple[Key_T, ...],
         *,
         _private_init: bool,
     ) -> None:
@@ -2909,16 +2903,16 @@ class ObjectDict(
         items = [f"{self._keys[i]}: {id}" for i, id in enumerate(self._ids)]
         return f'{{{", ".join(items)}}}'
 
-    def keys(self, schema: s_schema.Schema) -> Tuple[Key_T, ...]:
+    def keys(self, schema: s_schema.Schema) -> tuple[Key_T, ...]:
         return self._keys
 
-    def values(self, schema: s_schema.Schema) -> Tuple[Object_T, ...]:
+    def values(self, schema: s_schema.Schema) -> tuple[Object_T, ...]:
         return self.objects(schema)
 
     def items(
         self,
         schema: s_schema.Schema,
-    ) -> Tuple[Tuple[Key_T, Object_T], ...]:
+    ) -> tuple[tuple[Key_T, Object_T], ...]:
         return tuple(zip(self._keys, self.objects(schema)))
 
     def as_shell(
@@ -2937,12 +2931,12 @@ class ObjectDictShell(
 ):
 
     items: Mapping[Any, ObjectShell[Object_T]]
-    collection_type: Type[ObjectDict[Key_T, Object_T]]
+    collection_type: type[ObjectDict[Key_T, Object_T]]
 
     def __init__(
         self,
         items: Mapping[Any, ObjectShell[Object_T]],
-        collection_type: Type[ObjectDict[Key_T, Object_T]],
+        collection_type: type[ObjectDict[Key_T, Object_T]],
     ) -> None:
         self.items = items
         self.collection_type = collection_type
@@ -2971,7 +2965,7 @@ class ObjectSet(
 
     @classmethod
     def merge_values(
-        cls: Type[ObjectSet[Object_T]],
+        cls: type[ObjectSet[Object_T]],
         target: Object,
         sources: Iterable[Object],
         field_name: str,
@@ -3049,7 +3043,7 @@ class SubclassableObject(Object):
         self,
         schema: s_schema.Schema,
         parent: Union[SubclassableObject,
-                      Tuple[SubclassableObject, ...]],
+                      tuple[SubclassableObject, ...]],
     ) -> bool:
         from . import types as s_types
         if isinstance(parent, tuple):
@@ -3157,7 +3151,7 @@ class InheritingObject(SubclassableObject):
         return self.get_topmost_concrete_base(schema)
 
     @classmethod
-    def get_root_classes(cls) -> Tuple[sn.QualName, ...]:
+    def get_root_classes(cls) -> tuple[sn.QualName, ...]:
         return tuple()
 
     def _issubclass(
@@ -3173,12 +3167,12 @@ class InheritingObject(SubclassableObject):
 
     def descendants(
         self: InheritingObjectT, schema: s_schema.Schema
-    ) -> FrozenSet[InheritingObjectT]:
+    ) -> frozenset[InheritingObjectT]:
         return schema.get_descendants(self)
 
     def ordered_descendants(
         self: InheritingObjectT, schema: s_schema.Schema
-    ) -> List[InheritingObjectT]:
+    ) -> list[InheritingObjectT]:
         """Return class descendants in ancestral order."""
         graph = {}
         for descendant in self.descendants(schema):
@@ -3195,7 +3189,7 @@ class InheritingObject(SubclassableObject):
     def children(
         self: InheritingObjectT,
         schema: s_schema.Schema,
-    ) -> FrozenSet[InheritingObjectT]:
+    ) -> frozenset[InheritingObjectT]:
         return schema.get_children(self)
 
     def field_is_inherited(
@@ -3393,8 +3387,8 @@ class InheritingObject(SubclassableObject):
 
     @classmethod
     def compare_obj_field_value(
-        cls: Type[InheritingObjectT],
-        field: Field[Type[T]],
+        cls: type[InheritingObjectT],
+        field: Field[type[T]],
         ours: InheritingObjectT,
         theirs: InheritingObjectT,
         *,
@@ -3470,10 +3464,10 @@ def _serialize_to_markup(o: Object, *, ctx: markup.Context) -> markup.Markup:
 
 
 def _merge_lineage(
-    lineage: Iterable[List[InheritingObjectT]],
+    lineage: Iterable[list[InheritingObjectT]],
     subject_name: str,
-) -> List[InheritingObjectT]:
-    result: List[Any] = []
+) -> list[InheritingObjectT]:
+    result: list[Any] = []
 
     while True:
         nonempty = [line for line in lineage if line]
@@ -3501,7 +3495,7 @@ def _compute_lineage(
     schema: s_schema.Schema,
     obj: InheritingObjectT,
     subject_name: str,
-) -> List[InheritingObjectT]:
+) -> list[InheritingObjectT]:
     bases = tuple(obj.get_bases(schema).objects(schema))
     lineage = [[obj]]
 
@@ -3516,7 +3510,7 @@ def compute_lineage(
     schema: s_schema.Schema,
     bases: Iterable[InheritingObjectT],
     subject_name: str,
-) -> List[InheritingObjectT]:
+) -> list[InheritingObjectT]:
     lineage = []
     for base in bases:
         lineage.append(_compute_lineage(schema, base, subject_name))
@@ -3534,7 +3528,7 @@ def compute_lineage(
 def compute_ancestors(
     schema: s_schema.Schema,
     obj: InheritingObjectT,
-) -> List[InheritingObjectT]:
+) -> list[InheritingObjectT]:
     return compute_lineage(
         schema,
         obj.get_bases(schema).objects(schema),

@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Tuple, TypeVar, Union, TYPE_CHECKING
+from typing import Optional, TypeVar, Union, TYPE_CHECKING
 
 from edb import errors
 from edb.common import parsing
@@ -75,7 +75,7 @@ class PseudoType(
     def material_type(
         self,
         schema: s_schema.Schema,
-    ) -> Tuple[s_schema.Schema, PseudoType]:
+    ) -> tuple[s_schema.Schema, PseudoType]:
         return schema, self
 
     def is_any(self, schema: s_schema.Schema) -> bool:
@@ -99,7 +99,7 @@ class PseudoType(
         self,
         other: s_types.Type,
         schema: s_schema.Schema,
-    ) -> Tuple[s_schema.Schema, Optional[PseudoType]]:
+    ) -> tuple[s_schema.Schema, Optional[PseudoType]]:
         if self == other:
             return schema, self
         else:
@@ -120,7 +120,7 @@ class PseudoType(
 
     def _to_nonpolymorphic(
         self, schema: s_schema.Schema, concrete_type: s_types.Type
-    ) -> Tuple[s_schema.Schema, s_types.Type]:
+    ) -> tuple[s_schema.Schema, s_types.Type]:
         return schema, concrete_type
 
     def _resolve_polymorphic(

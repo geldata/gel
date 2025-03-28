@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Optional, Sequence, Tuple, cast
+from typing import Callable, Optional, Sequence, cast
 import typing
 
 from .data_ops import (
@@ -42,8 +42,6 @@ from .data_ops import (
 )
 from . import data_ops as e
 from ..interpreter_logging import print_warning
-
-from typing import List
 
 
 def map_tp(f: Callable[[Tp], Optional[Tp]], tp: Tp) -> Tp:
@@ -551,7 +549,7 @@ def combine_object_val(o1: ObjectVal, o2: ObjectVal) -> ObjectVal:
 
 
 def object_dedup(val: Sequence[Val]) -> Sequence[Val]:
-    temp: Dict[int, RefVal] = {}
+    temp: dict[int, RefVal] = {}
     for v in val:
         match v:
             case RefVal(refid=id, tpname=tpname, val=_):
@@ -653,7 +651,7 @@ def get_first_path_component(e: Expr) -> e.Optional[e.Expr]:
 
 def tcctx_add_binding(
     ctx: e.TcCtx, bnd_e: BindingExpr, binder_tp: e.ResultTp
-) -> Tuple[e.TcCtx, Expr, str]:
+) -> tuple[e.TcCtx, Expr, str]:
     bnd_e = ensure_no_capture(
         list(get_free_vars(bnd_e)) + list(ctx.varctx.keys()), bnd_e
     )
@@ -665,7 +663,7 @@ def tcctx_add_binding(
 
 
 def emtpy_tcctx_from_dbschema(
-    dbschema: e.DBSchema, current_module_name: Tuple[str, ...] = ("std",)
+    dbschema: e.DBSchema, current_module_name: tuple[str, ...] = ("std",)
 ) -> e.TcCtx:
     return e.TcCtx(
         schema=dbschema, current_module=current_module_name, varctx={}
@@ -688,8 +686,8 @@ def is_effect_free(expr: Expr) -> bool:
 
 def collect_names_in_select_filter(
     filter: e.EdgeDatabaseSelectFilter,
-) -> List[str]:
-    res: List[str] = []
+) -> list[str]:
+    res: list[str] = []
 
     def map_func(candidate: Expr) -> Optional[Expr]:
         if isinstance(candidate, e.EdgeDatabaseEqFilter):

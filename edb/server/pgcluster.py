@@ -21,15 +21,11 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
-    Type,
     Iterable,
     Mapping,
     Sequence,
     Coroutine,
     Unpack,
-    Dict,
-    List,
     cast,
     TYPE_CHECKING,
 )
@@ -106,10 +102,10 @@ class BaseCluster:
         *,
         instance_params: Optional[pgparams.BackendInstanceParams] = None,
     ) -> None:
-        self._connection_addr: Optional[Tuple[str, int]] = None
+        self._connection_addr: Optional[tuple[str, int]] = None
         self._connection_params: pgconnparams.ConnectionParams = \
             pgconnparams.ConnectionParams(server_settings=EDGEDB_SERVER_SETTINGS)
-        self._pg_config_data: Dict[str, str] = {}
+        self._pg_config_data: dict[str, str] = {}
         self._pg_bin_dir: Optional[pathlib.Path] = None
         if instance_params is None:
             self._instance_params = (
@@ -235,7 +231,7 @@ class BaseCluster:
         assert self._connection_params is not None
         return self._connection_params
 
-    def _get_connection_addr(self) -> Optional[Tuple[str, int]]:
+    def _get_connection_addr(self) -> Optional[tuple[str, int]]:
         return self._connection_addr
 
     def is_managed(self) -> bool:
@@ -727,13 +723,13 @@ class Cluster(BaseCluster):
         self._pg_ctl = self._find_pg_binary('pg_ctl')
         self._postgres = self._find_pg_binary('postgres')
 
-    def _get_connection_addr(self) -> Tuple[str, int]:
+    def _get_connection_addr(self) -> tuple[str, int]:
         if self._connection_addr is None:
             self._connection_addr = self._connection_addr_from_pidfile()
 
         return self._connection_addr
 
-    def _connection_addr_from_pidfile(self) -> Tuple[str, int]:
+    def _connection_addr_from_pidfile(self) -> tuple[str, int]:
         pidfile = os.path.join(self._data_dir, 'postmaster.pid')
 
         try:
@@ -867,7 +863,7 @@ class RemoteCluster(BaseCluster):
         self._connection_addr = connection_addr
         self._ha_backend = ha_backend
 
-    def _get_connection_addr(self) -> Optional[Tuple[str, int]]:
+    def _get_connection_addr(self) -> Optional[tuple[str, int]]:
         if self._ha_backend is not None:
             return self._ha_backend.get_master_addr()
         return self._connection_addr
@@ -951,7 +947,7 @@ async def get_pg_bin_dir() -> pathlib.Path:
     return pathlib.Path(pg_bin_dir)
 
 
-async def get_pg_config() -> Dict[str, str]:
+async def get_pg_config() -> dict[str, str]:
     stdout_lines, _, _ = await _run_logged_text_subprocess(
         [str(buildmeta.get_pg_config_path())],
         logger=pg_config_logger,
@@ -1040,7 +1036,7 @@ async def get_remote_pg_cluster(
 
     async def _get_cluster_type(
         conn: pgcon.PGConnection,
-    ) -> Tuple[Type[RemoteCluster], Optional[str]]:
+    ) -> tuple[type[RemoteCluster], Optional[str]]:
         managed_clouds = {
             'rds_superuser': RemoteCluster,    # Amazon RDS
             'cloudsqlsuperuser': RemoteCluster,    # GCP Cloud SQL
@@ -1346,7 +1342,7 @@ async def _run_logged_text_subprocess(
     log_stdout: bool = True,
     timeout: Optional[float] = None,
     **kwargs: Any,
-) -> Tuple[List[str], List[str], int]:
+) -> tuple[list[str], list[str], int]:
     stdout_lines, stderr_lines, exit_code = await _run_logged_subprocess(
         args,
         logger=logger,
@@ -1376,7 +1372,7 @@ async def _run_logged_subprocess(
     timeout: Optional[float] = None,
     stdin: Any = asyncio.subprocess.PIPE,
     **kwargs: Any,
-) -> Tuple[List[bytes], List[bytes], int]:
+) -> tuple[list[bytes], list[bytes], int]:
     process, stdout_reader, stderr_reader = await _start_logged_subprocess(
         args,
         logger=logger,
@@ -1419,12 +1415,12 @@ async def _start_logged_subprocess(
     capture_stdout: bool = True,
     capture_stderr: bool = True,
     stdin: Any = asyncio.subprocess.PIPE,
-    log_processor: Optional[Callable[[str], Tuple[str, int]]] = None,
+    log_processor: Optional[Callable[[str], tuple[str, int]]] = None,
     **kwargs: Any,
-) -> Tuple[
+) -> tuple[
     asyncio.subprocess.Process,
-    Coroutine[Any, Any, List[bytes]],
-    Coroutine[Any, Any, List[bytes]],
+    Coroutine[Any, Any, list[bytes]],
+    Coroutine[Any, Any, list[bytes]],
 ]:
     logger.log(
         level,
@@ -1490,11 +1486,11 @@ async def _capture_and_log_subprocess_output(
     stream: asyncio.StreamReader,
     logger: logging.Logger,
     level: int,
-    log_processor: Optional[Callable[[str], Tuple[str, int]]] = None,
+    log_processor: Optional[Callable[[str], tuple[str, int]]] = None,
     *,
     capture_output: bool,
     log_output: bool,
-) -> List[bytes]:
+) -> list[bytes]:
     lines = []
     while not stream.at_eof():
         line = await _safe_readline(stream)
@@ -1519,7 +1515,7 @@ async def _safe_readline(stream: asyncio.StreamReader) -> bytes:
     return line
 
 
-async def _dummy() -> List[bytes]:
+async def _dummy() -> list[bytes]:
     return []
 
 
@@ -1546,7 +1542,7 @@ postgres_specific_msg_level_map = {
 }
 
 
-def postgres_log_processor(msg: str) -> Tuple[str, int]:
+def postgres_log_processor(msg: str) -> tuple[str, int]:
     if m := postgres_log_re.match(msg):
         postgres_level = m.group(1)
         msg = m.group(2)

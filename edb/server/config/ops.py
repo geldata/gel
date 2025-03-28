@@ -24,7 +24,6 @@ import json
 from typing import (
     Any,
     Callable,
-    Dict,
     Optional,
     TypeVar,
     Union,
@@ -450,7 +449,7 @@ def to_json_obj(
     *,
     setting_filter: Optional[Callable[[SettingValue], bool]] = None,
     include_source: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     dct = {}
     for name, value in storage.items():
         if setting_filter is None or setting_filter(value):

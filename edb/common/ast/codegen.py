@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Union, Iterable, Sequence, List
+from typing import Any, Optional, Union, Iterable, Sequence
 from dataclasses import dataclass
 
 import itertools
@@ -38,7 +38,7 @@ class Options:
 class SourceGenerator(NodeVisitor):
     """Generate source code from an AST tree."""
 
-    result: List[str]
+    result: list[str]
 
     def __init__(
         self,

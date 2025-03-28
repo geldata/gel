@@ -190,8 +190,8 @@ class Worker(pool_mod.Worker):
 class MultiSchemaPool(pool_mod.FixedPool):
     _worker_class = Worker  # type: ignore
     _worker_mod = "multitenant_worker"
-    _workers: typing.Dict[int, Worker]  # type: ignore
-    _clients: typing.Dict[int, ClientSchema]
+    _workers: dict[int, Worker]  # type: ignore
+    _clients: dict[int, ClientSchema]
 
     def __init__(self, cache_size, *, secret, **kwargs):
         super().__init__(**kwargs)
@@ -288,7 +288,7 @@ class MultiSchemaPool(pool_mod.FixedPool):
     ):
         # EdgeDB instance syncs the schema with the compiler server
         client = self._clients[client_id]
-        client_updates: typing.Dict[str, typing.Any] = {}
+        client_updates: dict[str, typing.Any] = {}
         db = client.dbs.get(dbname)
         if db is None:
             assert user_schema is not None

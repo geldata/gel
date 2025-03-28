@@ -73,7 +73,7 @@ class Alias(ImmutableBase):
     # aliased relation name
     aliasname: str
     # optional list of column aliases
-    colnames: typing.Optional[typing.List[str]] = None
+    colnames: typing.Optional[list[str]] = None
 
 
 class Keyword(ImmutableBase):
@@ -101,7 +101,7 @@ class BaseExpr(Base):
         super().__init__(nullable=nullable, **kwargs)
 
     def _is_nullable(
-        self, kwargs: typing.Dict[str, object], nullable: typing.Optional[bool]
+        self, kwargs: dict[str, object], nullable: typing.Optional[bool]
     ) -> bool:
         if nullable is None:
             default = type(self).get_field('nullable').default
@@ -111,7 +111,7 @@ class BaseExpr(Base):
                 nullable = self._infer_nullability(kwargs)
         return nullable
 
-    def _infer_nullability(self, kwargs: typing.Dict[str, object]) -> bool:
+    def _infer_nullability(self, kwargs: dict[str, object]) -> bool:
         nullable = False
         for v in kwargs.values():
             if typeutils.is_container(v):
@@ -171,7 +171,7 @@ class EdgeQLPathInfo(Base):
     is_distinct: bool = True
 
     # A subset of paths necessary to perform joining.
-    path_bonds: typing.Set[tuple[irast.PathId, bool]] = ast.field(factory=set)
+    path_bonds: set[tuple[irast.PathId, bool]] = ast.field(factory=set)
 
     # Whether to ignore namespaces when looking at path outputs.
     # TODO: Maybe instead, Relation should have a way of specifying
@@ -179,19 +179,19 @@ class EdgeQLPathInfo(Base):
     strip_output_namespaces: bool = False
 
     # Map of res target names corresponding to paths.
-    path_outputs: typing.Dict[
-        typing.Tuple[irast.PathId, PathAspect], OutputVar
+    path_outputs: dict[
+        tuple[irast.PathId, PathAspect], OutputVar
     ] = ast.field(factory=dict)
 
     # Map of res target names corresponding to materialized paths.
-    packed_path_outputs: typing.Optional[typing.Dict[
-        typing.Tuple[irast.PathId, PathAspect],
+    packed_path_outputs: typing.Optional[dict[
+        tuple[irast.PathId, PathAspect],
         OutputVar,
     ]] = None
 
     def get_path_outputs(
         self, flavor: str
-    ) -> typing.Dict[typing.Tuple[irast.PathId, PathAspect], OutputVar]:
+    ) -> dict[tuple[irast.PathId, PathAspect], OutputVar]:
         if flavor == 'packed':
             if self.packed_path_outputs is None:
                 self.packed_path_outputs = {}
@@ -201,17 +201,17 @@ class EdgeQLPathInfo(Base):
         else:
             raise AssertionError(f'unexpected flavor "{flavor}"')
 
-    path_id_mask: typing.Set[irast.PathId] = ast.field(factory=set)
+    path_id_mask: set[irast.PathId] = ast.field(factory=set)
 
     # Map of col refs corresponding to paths.
-    path_namespace: typing.Dict[
-        typing.Tuple[irast.PathId, PathAspect],
+    path_namespace: dict[
+        tuple[irast.PathId, PathAspect],
         BaseExpr,
     ] = ast.field(factory=dict)
 
     # Same, but for packed.
-    packed_path_namespace: typing.Optional[typing.Dict[
-        typing.Tuple[irast.PathId, PathAspect],
+    packed_path_namespace: typing.Optional[dict[
+        tuple[irast.PathId, PathAspect],
         BaseExpr,
     ]] = None
 
@@ -282,7 +282,7 @@ class CommonTableExpr(Base):
     # Whether the result can be NULL.
     nullable: typing.Optional[bool] = None
     # Optional list of column names
-    aliascolnames: typing.Optional[typing.List[str]] = None
+    aliascolnames: typing.Optional[list[str]] = None
     # The CTE query
     query: Query
     # True if this CTE is recursive
@@ -333,7 +333,7 @@ class RelRangeVar(PathRangeVar):
 
 class IntersectionRangeVar(PathRangeVar):
 
-    component_rvars: typing.List[PathRangeVar]
+    component_rvars: list[PathRangeVar]
 
 
 class DynamicRangeVarFunc(typing.Protocol):
@@ -380,10 +380,10 @@ class DynamicRangeVar(PathRangeVar):
 class TypeName(ImmutableBase):
     """Type in definitions and casts."""
 
-    name: typing.Tuple[str, ...]                # Type name
+    name: tuple[str, ...]                # Type name
     setof: bool = False                         # SET OF?
     typmods: typing.Optional[list] = None       # Type modifiers
-    array_bounds: typing.Optional[typing.List[int]] = None
+    array_bounds: typing.Optional[list[int]] = None
 
 
 class ColumnRef(OutputVar):
@@ -454,7 +454,7 @@ class TupleVarBase(OutputVar):
 
     def __init__(
         self,
-        elements: typing.List[TupleElementBase],
+        elements: list[TupleElementBase],
         *,
         named: bool = False,
         nullable: bool = False,
@@ -477,7 +477,7 @@ class TupleVar(TupleVarBase):
 
     def __init__(
         self,
-        elements: typing.List[TupleElement],
+        elements: list[TupleElement],
         *,
         named: bool = False,
         nullable: bool = False,
@@ -525,7 +525,7 @@ class UpdateTarget(ImmutableBaseExpr):
     # value expression to assign
     val: BaseExpr
     # subscripts, field names and '*'
-    indirection: typing.Optional[typing.List[IndirectionOp]] = None
+    indirection: typing.Optional[list[IndirectionOp]] = None
 
 
 class InferClause(ImmutableBaseExpr):
@@ -543,14 +543,14 @@ class OnConflictClause(ImmutableBaseExpr):
     action: str
     infer: typing.Optional[InferClause] = None
     target_list: typing.Optional[
-        typing.List[InsertTarget | MultiAssignRef]
+        list[InsertTarget | MultiAssignRef]
     ] = None
     where: typing.Optional[BaseExpr] = None
 
 
 class ReturningQuery(BaseRelation):
 
-    target_list: typing.List[ResTarget] = ast.field(factory=list)
+    target_list: list[ResTarget] = ast.field(factory=list)
 
 
 class NullRelation(ReturningQuery):
@@ -580,26 +580,26 @@ class Query(ReturningQuery):
     __ast_meta__ = {'path_rvar_map', 'path_packed_rvar_map',
                     'view_path_id_map', 'argnames', 'nullable'}
 
-    view_path_id_map: typing.Dict[
+    view_path_id_map: dict[
         irast.PathId, irast.PathId
     ] = ast.field(factory=dict)
     # Map of RangeVars corresponding to paths.
-    path_rvar_map: typing.Dict[
-        typing.Tuple[irast.PathId, PathAspect], PathRangeVar
+    path_rvar_map: dict[
+        tuple[irast.PathId, PathAspect], PathRangeVar
     ] = ast.field(factory=dict)
     # Map of materialized RangeVars corresponding to paths.
-    path_packed_rvar_map: typing.Optional[typing.Dict[
-        typing.Tuple[irast.PathId, PathAspect],
+    path_packed_rvar_map: typing.Optional[dict[
+        tuple[irast.PathId, PathAspect],
         PathRangeVar,
     ]] = None
 
-    argnames: typing.Optional[typing.Dict[str, Param]] = None
+    argnames: typing.Optional[dict[str, Param]] = None
 
-    ctes: typing.Optional[typing.List[CommonTableExpr]] = None
+    ctes: typing.Optional[list[CommonTableExpr]] = None
 
     def get_rvar_map(
         self, flavor: str
-    ) -> typing.Dict[typing.Tuple[irast.PathId, PathAspect], PathRangeVar]:
+    ) -> dict[tuple[irast.PathId, PathAspect], PathRangeVar]:
         if flavor == 'packed':
             if self.path_packed_rvar_map is None:
                 self.path_packed_rvar_map = {}
@@ -612,7 +612,7 @@ class Query(ReturningQuery):
     def maybe_get_rvar_map(
         self, flavor: str
     ) -> typing.Optional[
-        typing.Dict[typing.Tuple[irast.PathId, PathAspect], PathRangeVar]
+        dict[tuple[irast.PathId, PathAspect], PathRangeVar]
     ]:
         if flavor == 'packed':
             return self.path_packed_rvar_map
@@ -640,7 +640,7 @@ class DMLQuery(Query):
     # Target relation to perform the operation on.
     relation: RelRangeVar
     # List of expressions returned
-    returning_list: typing.List[ResTarget] = ast.field(factory=list)
+    returning_list: list[ResTarget] = ast.field(factory=list)
 
     @property
     def target_list(self):
@@ -650,7 +650,7 @@ class DMLQuery(Query):
 class InsertStmt(DMLQuery):
 
     # (optional) list of target column names
-    cols: typing.Optional[typing.List[InsertTarget]] = None
+    cols: typing.Optional[list[InsertTarget]] = None
     # source SELECT/VALUES or None
     select_stmt: typing.Optional[Query] = None
     # ON CONFLICT clause
@@ -660,40 +660,40 @@ class InsertStmt(DMLQuery):
 class UpdateStmt(DMLQuery):
 
     # The UPDATE target list
-    targets: typing.List[UpdateTarget | MultiAssignRef] = ast.field(
+    targets: list[UpdateTarget | MultiAssignRef] = ast.field(
         factory=list
     )
     # WHERE clause
     where_clause: typing.Optional[BaseExpr] = None
     # optional FROM clause
-    from_clause: typing.List[BaseRangeVar] = ast.field(factory=list)
+    from_clause: list[BaseRangeVar] = ast.field(factory=list)
 
 
 class DeleteStmt(DMLQuery):
     # WHERE clause
     where_clause: typing.Optional[BaseExpr] = None
     # optional USING clause
-    using_clause: typing.List[BaseRangeVar] = ast.field(factory=list)
+    using_clause: list[BaseRangeVar] = ast.field(factory=list)
 
 
 class SelectStmt(Query):
 
     # List of DISTINCT ON expressions, empty list for DISTINCT ALL
-    distinct_clause: typing.Optional[typing.List[OutputVar]] = None
+    distinct_clause: typing.Optional[list[OutputVar]] = None
     # The FROM clause
-    from_clause: typing.List[BaseRangeVar] = ast.field(factory=list)
+    from_clause: list[BaseRangeVar] = ast.field(factory=list)
     # The WHERE clause
     where_clause: typing.Optional[BaseExpr] = None
     # GROUP BY clauses
-    group_clause: typing.Optional[typing.List[Base]] = None
+    group_clause: typing.Optional[list[Base]] = None
     # HAVING expression
     having_clause: typing.Optional[BaseExpr] = None
     # WINDOW window_name AS(...),
-    window_clause: typing.Optional[typing.List[Base]] = None
+    window_clause: typing.Optional[list[Base]] = None
     # List of ImplicitRow's in a VALUES query
-    values: typing.Optional[typing.List[Base]] = None
+    values: typing.Optional[list[Base]] = None
     # ORDER BY clause
-    sort_clause: typing.Optional[typing.List[SortBy]] = None
+    sort_clause: typing.Optional[list[SortBy]] = None
     # OFFSET expression
     limit_offset: typing.Optional[BaseExpr] = None
     # LIMIT expression
@@ -818,11 +818,11 @@ class ColumnDef(TableElement):
 class FuncCall(ImmutableBaseExpr):
 
     # Function name
-    name: typing.Tuple[str, ...]
+    name: tuple[str, ...]
     # List of arguments
-    args: typing.List[BaseExpr]
+    args: list[BaseExpr]
     # ORDER BY
-    agg_order: typing.Optional[typing.List[SortBy]]
+    agg_order: typing.Optional[list[SortBy]]
     # FILTER clause
     agg_filter: typing.Optional[BaseExpr]
     # Argument list is '*'
@@ -835,7 +835,7 @@ class FuncCall(ImmutableBaseExpr):
     with_ordinality: bool = False
     # list of Columndef  nodes to describe result of
     # the function returning RECORD.
-    coldeflist: typing.List[ColumnDef]
+    coldeflist: list[ColumnDef]
 
     def __init__(
         self,
@@ -889,19 +889,19 @@ class Indirection(ImmutableBaseExpr):
     # Indirection subject
     arg: BaseExpr
     # Subscripts and/or field names and/or '*'
-    indirection: typing.List[IndirectionOp]
+    indirection: list[IndirectionOp]
 
 
 class ArrayExpr(ImmutableBaseExpr):
     """ARRAY[] construct."""
 
     # array element expressions
-    elements: typing.List[BaseExpr]
+    elements: list[BaseExpr]
 
 
 class ArrayDimension(ImmutableBaseExpr):
     """An array dimension"""
-    elements: typing.List[BaseExpr]
+    elements: list[BaseExpr]
 
 
 class MultiAssignRef(ImmutableBase):
@@ -910,7 +910,7 @@ class MultiAssignRef(ImmutableBase):
     # row-valued expression
     source: BaseExpr
     # list of columns to assign to
-    columns: typing.List[str]
+    columns: list[str]
 
 
 class SortBy(ImmutableBase):
@@ -958,9 +958,9 @@ class WindowDef(ImmutableBase):
     # referenced window name, if any
     refname: typing.Optional[str] = None
     # PARTITION BY expr list
-    partition_clause: typing.Optional[typing.List[BaseExpr]] = None
+    partition_clause: typing.Optional[list[BaseExpr]] = None
     # ORDER BY
-    order_clause: typing.Optional[typing.List[SortBy]] = None
+    order_clause: typing.Optional[list[SortBy]] = None
     # Window frame options
     frame_options: typing.Optional[list] = None
     # expression for starting bound, if any
@@ -992,7 +992,7 @@ class RangeFunction(BaseRangeVar):
     with_ordinality: bool = False
     # ROWS FROM form
     is_rowsfrom: bool = False
-    functions: typing.List[BaseExpr]
+    functions: list[BaseExpr]
 
 
 class JoinClause(BaseRangeVar):
@@ -1001,7 +1001,7 @@ class JoinClause(BaseRangeVar):
     # Right subtree
     rarg: BaseRangeVar
     # USING clause, if any
-    using_clause: typing.Optional[typing.List[ColumnRef]] = None
+    using_clause: typing.Optional[list[ColumnRef]] = None
     # Qualifiers on join, if any
     quals: typing.Optional[BaseExpr] = None
 
@@ -1020,7 +1020,7 @@ class JoinExpr(BaseRangeVar):
         larg: BaseRangeVar,
         type: str,
         rarg: BaseRangeVar,
-        using_clause: typing.Optional[typing.List[ColumnRef]] = None,
+        using_clause: typing.Optional[list[ColumnRef]] = None,
         quals: typing.Optional[BaseExpr] = None,
     ) -> JoinExpr:
         clause = JoinClause(
@@ -1050,7 +1050,7 @@ class RowExpr(ImmutableBaseExpr):
     """A ROW() expression."""
 
     # The fields.
-    args: typing.List[BaseExpr]
+    args: list[BaseExpr]
     # Row expressions, while may contain NULLs, are not NULL themselves.
     nullable: bool = False
 
@@ -1068,9 +1068,9 @@ class CoalesceExpr(ImmutableBaseExpr):
     """A COALESCE() expression."""
 
     # The arguments.
-    args: typing.List[Base]
+    args: list[Base]
 
-    def _infer_nullability(self, kwargs: typing.Dict[str, typing.Any]) -> bool:
+    def _infer_nullability(self, kwargs: dict[str, typing.Any]) -> bool:
         # nullability of COALESCE is the nullability of the RHS
         if 'args' in kwargs:
             return kwargs['args'][1].nullable
@@ -1113,14 +1113,14 @@ class CaseExpr(ImmutableBaseExpr):
     # Equality comparison argument
     arg: typing.Optional[BaseExpr] = None
     # List of WHEN clauses
-    args: typing.List[CaseWhen]
+    args: list[CaseWhen]
     # ELSE clause
     defresult: typing.Optional[BaseExpr] = None
 
 
 class GroupingOperation(Base):
     operation: typing.Optional[str] = None
-    args: typing.List[Base]
+    args: list[Base]
 
 
 SortAsc = qlast.SortAsc
@@ -1182,7 +1182,7 @@ class VariableSetStmt(Statement):
 
 
 class ArgsList(Base):
-    args: typing.List[BaseExpr]
+    args: list[BaseExpr]
 
 
 class VariableResetStmt(Statement):
@@ -1260,13 +1260,13 @@ class TransactionOptions(Base):
 
 class PrepareStmt(Statement):
     name: str
-    argtypes: typing.Optional[typing.List[Base]]
+    argtypes: typing.Optional[list[Base]]
     query: BaseRelation
 
 
 class ExecuteStmt(Statement):
     name: str
-    params: typing.Optional[typing.List[Base]]
+    params: typing.Optional[list[Base]]
 
 
 class DeallocateStmt(Statement):
@@ -1299,7 +1299,7 @@ class SQLValueFunction(BaseExpr):
 class CreateStmt(Statement):
     relation: Relation
 
-    table_elements: typing.List[TableElement]
+    table_elements: list[TableElement]
 
     on_commit: typing.Optional[str]
 
@@ -1316,11 +1316,11 @@ class MinMaxExpr(BaseExpr):
     # Very similar to FuncCall, except that the name is not escaped
 
     op: str
-    args: typing.List[BaseExpr]
+    args: list[BaseExpr]
 
 
 class LockStmt(Statement):
-    relations: typing.List[BaseRangeVar]
+    relations: list[BaseRangeVar]
     mode: str
     no_wait: bool = False
 
@@ -1340,15 +1340,15 @@ class CopyOptions(Base):
     header: typing.Optional[bool] = None
     quote: typing.Optional[str] = None
     escape: typing.Optional[str] = None
-    force_quote: typing.List[str] = []
-    force_not_null: typing.List[str] = []
-    force_null: typing.List[str] = []
+    force_quote: list[str] = []
+    force_not_null: list[str] = []
+    force_null: list[str] = []
     encoding: typing.Optional[str] = None
 
 
 class CopyStmt(Statement):
     relation: typing.Optional[Relation]
-    colnames: typing.Optional[typing.List[str]]
+    colnames: typing.Optional[list[str]]
     query: typing.Optional[Query]
 
     is_from: bool = False
@@ -1370,6 +1370,6 @@ class FTSDocument(BaseExpr):
     text: BaseExpr
 
     language: BaseExpr
-    language_domain: typing.Set[str]
+    language_domain: set[str]
 
     weight: typing.Optional[str]

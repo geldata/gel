@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-from typing import Dict
 
 keyword_types = range(1, 5)
 (UNRESERVED_KEYWORD, RESERVED_KEYWORD,
@@ -435,7 +434,7 @@ pg_keywords = {
     "zone": ("ZONE", UNRESERVED_KEYWORD),
 }
 
-by_type: Dict[int, Dict[str, str]] = {typ: {} for typ in keyword_types}
+by_type: dict[int, dict[str, str]] = {typ: {} for typ in keyword_types}
 
 for val, spec in pg_keywords.items():
     by_type[spec[1]][val] = spec[0]

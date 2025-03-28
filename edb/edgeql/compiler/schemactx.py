@@ -26,11 +26,9 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Type,
     Union,
     Iterable,
     Sequence,
-    Dict,
     NamedTuple,
     cast,
 )
@@ -61,7 +59,7 @@ def get_schema_object(
     ref: qlast.BaseObjectRef,
     module: Optional[str]=None,
     *,
-    item_type: Optional[Type[s_obj.Object]]=None,
+    item_type: Optional[type[s_obj.Object]]=None,
     condition: Optional[Callable[[s_obj.Object], bool]]=None,
     label: Optional[str]=None,
     ctx: context.ContextLevel,
@@ -137,7 +135,7 @@ def get_schema_type(
     ctx: context.ContextLevel,
     label: Optional[str] = None,
     condition: Optional[Callable[[s_obj.Object], bool]] = None,
-    item_type: Optional[Type[s_obj.Object]] = None,
+    item_type: Optional[type[s_obj.Object]] = None,
     span: Optional[parsing.Span] = None,
 ) -> s_types.Type:
     if item_type is None:
@@ -194,7 +192,7 @@ def derive_view(
     preserve_shape: bool = False,
     exprtype: s_types.ExprType = s_types.ExprType.Select,
     inheritance_merge: bool = True,
-    attrs: Optional[Dict[str, Any]] = None,
+    attrs: Optional[dict[str, Any]] = None,
     ctx: context.ContextLevel,
 ) -> s_types.Type:
 
@@ -308,7 +306,7 @@ def derive_ptr(
     preserve_shape: bool = False,
     derive_backlink: bool = False,
     inheritance_merge: bool = True,
-    attrs: Optional[Dict[str, Any]] = None,
+    attrs: Optional[dict[str, Any]] = None,
     ctx: context.ContextLevel,
 ) -> s_pointers.Pointer:
 

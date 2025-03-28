@@ -22,7 +22,7 @@ import decimal
 import io
 import os.path
 import subprocess
-from typing import Coroutine, Optional, Tuple
+from typing import Coroutine, Optional
 import unittest
 import uuid
 
@@ -3300,7 +3300,7 @@ class TestSQLQueryNonTransactional(tb.SQLQueryTestCase):
         async def assert_not_blocked(coroutine: Coroutine) -> None:
             await asyncio.wait_for(coroutine, 0.25)
 
-        async def assert_blocked(coroutine: Coroutine) -> Tuple[asyncio.Task]:
+        async def assert_blocked(coroutine: Coroutine) -> tuple[asyncio.Task]:
             task: asyncio.Task = asyncio.create_task(coroutine)
             done, pending = await asyncio.wait((task,), timeout=0.25)
             if len(done) != 0:

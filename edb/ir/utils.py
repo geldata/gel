@@ -23,16 +23,11 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     AbstractSet,
     Mapping,
     Sequence,
-    Dict,
-    List,
     Iterable,
-    Set,
     cast,
     TYPE_CHECKING,
 )
@@ -54,7 +49,7 @@ from . import ast as irast
 from . import typeutils
 
 
-def get_longest_paths(ir: irast.Base) -> Set[irast.Set]:
+def get_longest_paths(ir: irast.Base) -> set[irast.Set]:
     """Return a distinct set of longest paths found in an expression.
 
     For example in SELECT (A.B.C, D.E.F, A.B, D.E) the result would
@@ -76,7 +71,7 @@ def get_longest_paths(ir: irast.Base) -> Set[irast.Set]:
     return result - parents
 
 
-def get_parameters(ir: irast.Base) -> Set[irast.Parameter]:
+def get_parameters(ir: irast.Base) -> set[irast.Parameter]:
     """Return all parameters found in *ir*."""
     return set(ast.find_children(ir, irast.Parameter))
 
@@ -195,7 +190,7 @@ def get_path_root(ir_set: irast.Set) -> irast.Set:
 
 def get_span_as_json(
     expr: irast.Base,
-    exctype: Type[errors.EdgeDBError] = errors.InternalServerError,
+    exctype: type[errors.EdgeDBError] = errors.InternalServerError,
 ) -> str:
     if expr.span:
         details = json.dumps({
@@ -244,9 +239,9 @@ def is_trivial_free_object(ir: irast.Set) -> bool:
 
 def collapse_type_intersection(
     ir_set: irast.Set,
-) -> Tuple[irast.Set, List[irast.TypeIntersectionPointer]]:
+) -> tuple[irast.Set, list[irast.TypeIntersectionPointer]]:
 
-    result: List[irast.TypeIntersectionPointer] = []
+    result: list[irast.TypeIntersectionPointer] = []
 
     source = ir_set
     while True:
@@ -350,9 +345,9 @@ class FindPathScopes(ast.NodeVisitor):
 
     def __init__(self, init_scope: Optional[int] = None) -> None:
         super().__init__()
-        self.path_scope_ids: List[Optional[int]] = [init_scope]
-        self.use_scopes: Dict[irast.Set, Optional[int]] = {}
-        self.scopes: Dict[irast.Set, Optional[int]] = {}
+        self.path_scope_ids: list[Optional[int]] = [init_scope]
+        self.use_scopes: dict[irast.Set, Optional[int]] = {}
+        self.scopes: dict[irast.Set, Optional[int]] = {}
 
     def visit_Stmt(self, stmt: irast.Stmt) -> Any:
         # Sometimes there is sharing, so we want the official scope
@@ -395,7 +390,7 @@ class FindPathScopes(ast.NodeVisitor):
 
 def find_path_scopes(
     stmt: irast.Base | Sequence[irast.Base],
-) -> Dict[irast.Set, Optional[int]]:
+) -> dict[irast.Set, Optional[int]]:
     visitor = FindPathScopes()
     visitor.visit(stmt)
     return visitor.scopes
@@ -416,7 +411,7 @@ class FindPotentiallyVisibleVisitor(FindPathScopes):
         self.orig_scope = scope
         self.scope_tree_nodes = scope_tree_nodes
 
-    def combine_field_results(self, xs: Any) -> Set[irast.Set]:
+    def combine_field_results(self, xs: Any) -> set[irast.Set]:
         out = set()
         for x in xs:
             if isinstance(x, (list, tuple)):
@@ -428,11 +423,11 @@ class FindPotentiallyVisibleVisitor(FindPathScopes):
                     out.update(x)
         return out
 
-    def visit_Pointer(self, node: irast.Pointer) -> Set[irast.Set]:
-        res: Set[irast.Set] = self.visit(node.source)
+    def visit_Pointer(self, node: irast.Pointer) -> set[irast.Set]:
+        res: set[irast.Set] = self.visit(node.source)
         return res
 
-    def process_set(self, node: irast.Set) -> Set[irast.Set]:
+    def process_set(self, node: irast.Set) -> set[irast.Set]:
         if node.path_id in self.to_skip:
             # We only skip nodes in to_skip if their use site is
             # underneath our original binding site. This prevents us
@@ -472,12 +467,12 @@ def find_potentially_visible(
     scope: irast.ScopeTreeNode,
     scope_tree_nodes: Mapping[int, irast.ScopeTreeNode],
     to_skip: AbstractSet[irast.PathId]=frozenset()
-) -> Set[Tuple[irast.PathId, irast.Set]]:
+) -> set[tuple[irast.PathId, irast.Set]]:
     """Find all "potentially visible" sets referenced."""
     # TODO: Make this caching.
     visitor = FindPotentiallyVisibleVisitor(
         to_skip=to_skip, scope=scope, scope_tree_nodes=scope_tree_nodes)
-    visible_sets = cast(Set[irast.Set], visitor.visit(stmt))
+    visible_sets = cast(set[irast.Set], visitor.visit(stmt))
 
     visible_paths = set()
     for ir in visible_sets:
@@ -542,7 +537,7 @@ ExprT = TypeVar('ExprT', bound=irast.Expr)
 
 def is_set_instance(
     ir: irast.Set,
-    typ: Type[ExprT],
+    typ: type[ExprT],
 ) -> TypeGuard[irast.SetE[ExprT]]:
     return isinstance(ir.expr, typ)
 
@@ -578,7 +573,7 @@ def sub_expr(ir: irast.Set) -> Optional[irast.Expr]:
 
 
 class CollectSchemaTypesVisitor(ast.NodeVisitor):
-    types: Set[uuid.UUID]
+    types: set[uuid.UUID]
 
     def __init__(self) -> None:
         super().__init__()
@@ -589,7 +584,7 @@ class CollectSchemaTypesVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def collect_schema_types(stmt: irast.Base) -> Set[uuid.UUID]:
+def collect_schema_types(stmt: irast.Base) -> set[uuid.UUID]:
     """Collect ids of all types referenced in the statement."""
 
     visitor = CollectSchemaTypesVisitor()

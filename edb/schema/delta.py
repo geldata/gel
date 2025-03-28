@@ -23,8 +23,6 @@ from typing import (
     ClassVar,
     Generic,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     AbstractSet,
@@ -33,9 +31,6 @@ from typing import (
     Iterator,
     Mapping,
     Sequence,
-    Dict,
-    List,
-    Set,
     Generator,
     cast,
     NoReturn,
@@ -74,7 +69,7 @@ from . import utils
 def delta_objects(
     old_in: Iterable[so.Object_T],
     new_in: Iterable[so.Object_T],
-    sclass: Type[so.Object_T],
+    sclass: type[so.Object_T],
     *,
     parent_confidence: Optional[float] = None,
     context: so.ComparisonContext,
@@ -115,11 +110,11 @@ def delta_objects(
         )
     )
 
-    full_matrix: List[Tuple[so.Object_T, so.Object_T, float]] = []
+    full_matrix: list[tuple[so.Object_T, so.Object_T, float]] = []
 
     # If there are any renames that are already decided on, honor those first
-    renames_x: Set[sn.Name] = set()
-    renames_y: Set[sn.Name] = set()
+    renames_x: set[sn.Name] = set()
+    renames_y: set[sn.Name] = set()
     for y in old.values():
         rename = context.renames.get((type(y), y.get_name(old_schema)))
         if rename:
@@ -187,10 +182,10 @@ def delta_objects(
 
     seen_x = set()
     seen_y = set()
-    x_alter_variants: Dict[so.Object_T, int] = collections.defaultdict(int)
-    y_alter_variants: Dict[so.Object_T, int] = collections.defaultdict(int)
-    comparison_map: Dict[so.Object_T, Tuple[float, so.Object_T]] = {}
-    comparison_map_y: Dict[so.Object_T, Tuple[float, so.Object_T]] = {}
+    x_alter_variants: dict[so.Object_T, int] = collections.defaultdict(int)
+    y_alter_variants: dict[so.Object_T, int] = collections.defaultdict(int)
+    comparison_map: dict[so.Object_T, tuple[float, so.Object_T]] = {}
+    comparison_map_y: dict[so.Object_T, tuple[float, so.Object_T]] = {}
 
     # Find the top similarity pairs
     for x, y, similarity in full_matrix:
@@ -319,7 +314,7 @@ def delta_objects(
 def sort_by_inheritance(
     schema: s_schema.Schema,
     objs: Iterable[so.InheritingObjectT],
-) -> Tuple[so.InheritingObjectT, ...]:
+) -> tuple[so.InheritingObjectT, ...]:
     graph = {}
     for x in objs:
         graph[x] = topological.DepGraphEntry(
@@ -338,7 +333,7 @@ def sort_by_cross_refs_key(
     schema: s_schema.Schema,
     objs: Iterable[T], *,
     key: Callable[[T], so.Object],
-) -> Tuple[T, ...]:
+) -> tuple[T, ...]:
     """Sort an iterable of objects according to cross-references between them.
 
     Return a toplogical ordering of a graph of objects joined by references.
@@ -375,7 +370,7 @@ def sort_by_cross_refs_key(
 def sort_by_cross_refs(
     schema: s_schema.Schema,
     objs: Iterable[so.Object_T],
-) -> Tuple[so.Object_T, ...]:
+) -> tuple[so.Object_T, ...]:
     return sort_by_cross_refs_key(schema, objs, key=lambda x: x)
 
 
@@ -387,15 +382,15 @@ class CommandMeta(
     struct.MixedStructMeta,
 ):
 
-    _astnode_map: Dict[Type[qlast.DDLOperation], Type[Command]] = {}
+    _astnode_map: dict[type[qlast.DDLOperation], type[Command]] = {}
 
     def __new__(
-        mcls: Type[CommandMeta_T],
+        mcls: type[CommandMeta_T],
         name: str,
-        bases: Tuple[type, ...],
-        dct: Dict[str, Any],
+        bases: tuple[type, ...],
+        dct: dict[str, Any],
         *,
-        context_class: Optional[Type[CommandContextToken[Command]]] = None,
+        context_class: Optional[type[CommandContextToken[Command]]] = None,
         **kwargs: Any,
     ) -> CommandMeta_T:
         cls = super().__new__(mcls, name, bases, dct, **kwargs)
@@ -408,8 +403,8 @@ class CommandMeta(
     def __init__(
         cls,
         name: str,
-        bases: Tuple[type, ...],
-        clsdict: Dict[str, Any],
+        bases: tuple[type, ...],
+        clsdict: dict[str, Any],
         *,
         adapts: Optional[type] = None,
         **kwargs: Any,
@@ -424,7 +419,7 @@ class CommandMeta(
 
     def register_astnodes(
         cls,
-        astnodes: Iterable[Type[qlast.DDLCommand]],
+        astnodes: Iterable[type[qlast.DDLCommand]],
     ) -> None:
         mapping = type(cls)._astnode_map
 
@@ -435,7 +430,7 @@ class CommandMeta(
                        '{!r} is already declared for {!r}')
                 raise TypeError(msg.format(astnode, existing))
 
-            mapping[astnode] = cast(Type["Command"], cls)
+            mapping[astnode] = cast(type["Command"], cls)
 
 
 # We use _DummyObject for contexts where an instance of an object is
@@ -458,24 +453,24 @@ class Command(
     span = struct.Field(parsing.Span, default=None)
     canonical = struct.Field(bool, default=False)
 
-    _context_class: Optional[Type[CommandContextToken[Command]]] = None
+    _context_class: Optional[type[CommandContextToken[Command]]] = None
 
     #: An optional list of commands that are prerequisites of this
     #: command and must run before any of the operations in this
     #: command or its subcommands in ops or caused_ops.
-    before_ops: List[Command]
+    before_ops: list[Command]
     #: An optional list of subcommands that are considered to be
     #: integral part of this command.
-    ops: List[Command]
+    ops: list[Command]
     #: An optional list of commands that are _caused_ by this command,
     #: such as any propagation to children or any other side-effects
     #: that are not considered integral to this command.
-    caused_ops: List[Command]
+    caused_ops: list[Command]
 
     #: AlterObjectProperty lookup table for get|set_attribute_value
-    _attrs: Dict[str, AlterObjectProperty]
+    _attrs: dict[str, AlterObjectProperty]
     #: AlterSpecialObjectField lookup table
-    _special_attrs: Dict[str, AlterSpecialObjectField[so.Object]]
+    _special_attrs: dict[str, AlterSpecialObjectField[so.Object]]
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -516,7 +511,7 @@ class Command(
         raise NotImplementedError
 
     @classmethod
-    def adapt(cls: Type[Command_T], obj: Command) -> Command_T:
+    def adapt(cls: type[Command_T], obj: Command) -> Command_T:
         result = obj.copy_with_class(cls)
         mcls = cast(CommandMeta, type(cls))
         for op in obj.get_prerequisites():
@@ -615,10 +610,10 @@ class Command(
 
         return value
 
-    def enumerate_attributes(self) -> Tuple[str, ...]:
+    def enumerate_attributes(self) -> tuple[str, ...]:
         return tuple(self._attrs)
 
-    def _enumerate_attribute_cmds(self) -> Tuple[AlterObjectProperty, ...]:
+    def _enumerate_attribute_cmds(self) -> tuple[AlterObjectProperty, ...]:
         return tuple(self._attrs.values())
 
     def has_attribute_value(self, attr_name: str) -> bool:
@@ -754,12 +749,12 @@ class Command(
     def get_subcommands(
         self,
         *,
-        type: Type[Command_T],
-        metaclass: Optional[Type[so.Object]] = None,
-        exclude: Union[Type[Command], Tuple[Type[Command], ...], None] = None,
+        type: type[Command_T],
+        metaclass: Optional[type[so.Object]] = None,
+        exclude: Union[type[Command], tuple[type[Command], ...], None] = None,
         include_prerequisites: bool = True,
         include_caused: bool = True,
-    ) -> Tuple[Command_T, ...]:
+    ) -> tuple[Command_T, ...]:
         ...
 
     @overload
@@ -767,22 +762,22 @@ class Command(
         self,
         *,
         type: None = None,
-        metaclass: Optional[Type[so.Object]] = None,
-        exclude: Union[Type[Command], Tuple[Type[Command], ...], None] = None,
+        metaclass: Optional[type[so.Object]] = None,
+        exclude: Union[type[Command], tuple[type[Command], ...], None] = None,
         include_prerequisites: bool = True,
         include_caused: bool = True,
-    ) -> Tuple[Command, ...]:
+    ) -> tuple[Command, ...]:
         ...
 
     def get_subcommands(
         self,
         *,
-        type: Union[Type[Command_T], None] = None,
-        metaclass: Optional[Type[so.Object]] = None,
-        exclude: Union[Type[Command], Tuple[Type[Command], ...], None] = None,
+        type: Union[type[Command_T], None] = None,
+        metaclass: Optional[type[so.Object]] = None,
+        exclude: Union[type[Command], tuple[type[Command], ...], None] = None,
         include_prerequisites: bool = True,
         include_caused: bool = True,
-    ) -> Tuple[Command, ...]:
+    ) -> tuple[Command, ...]:
         ops: Iterable[Command] = self.ops
         if include_prerequisites:
             ops = itertools.chain(self.before_ops, ops)
@@ -818,8 +813,8 @@ class Command(
     def get_prerequisites(
         self,
         *,
-        type: Type[Command_T],
-    ) -> Tuple[Command_T, ...]:
+        type: type[Command_T],
+    ) -> tuple[Command_T, ...]:
         ...
 
     @overload
@@ -827,14 +822,14 @@ class Command(
         self,
         *,
         type: None = None,
-    ) -> Tuple[Command, ...]:
+    ) -> tuple[Command, ...]:
         ...
 
     def get_prerequisites(
         self,
         *,
-        type: Union[Type[Command_T], None] = None,
-    ) -> Tuple[Command, ...]:
+        type: Union[type[Command_T], None] = None,
+    ) -> tuple[Command, ...]:
         if type is not None:
             t = type
             return tuple(filter(lambda i: isinstance(i, t), self.before_ops))
@@ -845,8 +840,8 @@ class Command(
     def get_caused(
         self,
         *,
-        type: Type[Command_T],
-    ) -> Tuple[Command_T, ...]:
+        type: type[Command_T],
+    ) -> tuple[Command_T, ...]:
         ...
 
     @overload
@@ -854,14 +849,14 @@ class Command(
         self,
         *,
         type: None = None,
-    ) -> Tuple[Command, ...]:
+    ) -> tuple[Command, ...]:
         ...
 
     def get_caused(
         self,
         *,
-        type: Union[Type[Command_T], None] = None,
-    ) -> Tuple[Command, ...]:
+        type: Union[type[Command_T], None] = None,
+    ) -> tuple[Command, ...]:
         if type is not None:
             t = type
             return tuple(filter(lambda i: isinstance(i, t), self.caused_ops))
@@ -1058,7 +1053,7 @@ class Command(
         astnode: qlast.DDLOperation,
         schema: s_schema.Schema,
         context: CommandContext,
-    ) -> Type[Command]:
+    ) -> type[Command]:
         return cls
 
     @classmethod
@@ -1067,7 +1062,7 @@ class Command(
         schema: s_schema.Schema,
         astnode: qlast.DDLOperation,
         context: CommandContext,
-    ) -> Dict[Optional[str], str]:
+    ) -> dict[Optional[str], str]:
         modaliases = {}
         if isinstance(astnode, qlast.DDLCommand) and astnode.aliases:
             for alias in astnode.aliases:
@@ -1082,8 +1077,8 @@ class Command(
         schema: s_schema.Schema,
         astnode: qlast.DDLOperation,
         context: CommandContext,
-    ) -> Set[str]:
-        localnames: Set[str] = set()
+    ) -> set[str]:
+        localnames: set[str] = set()
         if isinstance(astnode, qlast.DDLCommand) and astnode.aliases:
             for alias in astnode.aliases:
                 if isinstance(alias, qlast.AliasedExpr):
@@ -1115,7 +1110,7 @@ class Command(
 
     @classmethod
     def _cmd_from_ast(
-        cls: Type[Command_T],
+        cls: type[Command_T],
         schema: s_schema.Schema,
         astnode: qlast.DDLOperation,
         context: CommandContext,
@@ -1167,14 +1162,14 @@ class Command(
 
     @classmethod
     def get_context_class(
-        cls: Type[Command_T],
-    ) -> Optional[Type[CommandContextToken[Command_T]]]:
+        cls: type[Command_T],
+    ) -> Optional[type[CommandContextToken[Command_T]]]:
         return cls._context_class  # type: ignore
 
     @classmethod
     def get_context_class_or_die(
-        cls: Type[Command_T],
-    ) -> Type[CommandContextToken[Command_T]]:
+        cls: type[Command_T],
+    ) -> type[CommandContextToken[Command_T]]:
         ctxcls = cls.get_context_class()
         if ctxcls is None:
             raise RuntimeError(f'context class not defined for {cls}')
@@ -1183,7 +1178,7 @@ class Command(
     def formatfields(
         self,
         formatter: str = 'str',
-    ) -> Iterator[Tuple[str, str]]:
+    ) -> Iterator[tuple[str, str]]:
         """Return an iterator over fields formatted using `formatter`."""
         for name, field in self.__class__._fields.items():
             value = getattr(self, name)
@@ -1272,7 +1267,7 @@ class CommandContextWrapper(Generic[Command_T_co]):
 
     def __exit__(
         self,
-        exc_type: Type[Exception],
+        exc_type: type[Exception],
         exc_value: Exception,
         traceback: Any,
     ) -> None:
@@ -1294,15 +1289,15 @@ class CommandContext:
         store_migration_sdl: bool = False,
         descriptive_mode: bool = False,
         schema_object_ids: Optional[
-            Mapping[Tuple[sn.Name, Optional[str]], uuid.UUID]
+            Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
         ] = None,
         backend_runtime_params: Optional[Any] = None,
         compat_ver: Optional[verutils.Version] = None,
         include_ext_version: bool = True,
     ) -> None:
-        self.stack: List[CommandContextToken[Command]] = []
-        self._cache: Dict[Hashable, Any] = {}
-        self._values: Dict[Hashable, Any] = {}
+        self.stack: list[CommandContextToken[Command]] = []
+        self._cache: dict[Hashable, Any] = {}
+        self._values: dict[Hashable, Any] = {}
         self.declarative = declarative
         self.schema = schema
         self._modaliases = modaliases if modaliases is not None else {}
@@ -1314,16 +1309,16 @@ class CommandContext:
         self.descriptive_mode = descriptive_mode
         self.disable_dep_verification = disable_dep_verification
         self.store_migration_sdl = store_migration_sdl
-        self.renames: Dict[sn.Name, sn.Name] = {}
-        self.early_renames: Dict[sn.Name, sn.Name] = {}
-        self.renamed_objs: Set[so.Object] = set()
-        self.change_log: Dict[Tuple[Type[so.Object], str], Set[so.Object]] = (
+        self.renames: dict[sn.Name, sn.Name] = {}
+        self.early_renames: dict[sn.Name, sn.Name] = {}
+        self.renamed_objs: set[so.Object] = set()
+        self.change_log: dict[tuple[type[so.Object], str], set[so.Object]] = (
             collections.defaultdict(set))
         self.schema_object_ids = schema_object_ids
         self.backend_runtime_params = backend_runtime_params
-        self.affected_finalization: Dict[
+        self.affected_finalization: dict[
             Command,
-            List[Tuple[Command, AlterObject[so.Object], List[str]]],
+            list[tuple[Command, AlterObject[so.Object], list[str]]],
         ] = collections.defaultdict(list)
         self.compat_ver = compat_ver
         self.include_ext_version = include_ext_version
@@ -1335,8 +1330,8 @@ class CommandContext:
         return collections.ChainMap(*maps)  # type: ignore
 
     @property
-    def localnames(self) -> Set[str]:
-        ign: Set[str] = set()
+    def localnames(self) -> set[str]:
+        ign: set[str] = set()
         for ctx in reversed(self.stack):
             ign.update(ctx.localnames)
         ign.update(self._localnames)
@@ -1462,20 +1457,20 @@ class CommandContext:
     @overload
     def get(
         self,
-        cls: Type[ObjectCommandContext[so.Object_T]],
+        cls: type[ObjectCommandContext[so.Object_T]],
     ) -> Optional[ObjectCommandContext[so.Object_T]]:
         ...
 
     @overload
     def get(
         self,
-        cls: Union[Type[Command_T], Type[CommandContextToken[Command_T]]],
+        cls: Union[type[Command_T], type[CommandContextToken[Command_T]]],
     ) -> Optional[CommandContextToken[Command_T]]:
         ...
 
     def get(
         self,
-        cls: Union[Type[Command_T], Type[CommandContextToken[Command_T]]],
+        cls: Union[type[Command_T], type[CommandContextToken[Command_T]]],
     ) -> Optional[CommandContextToken[Command_T]]:
         ctxcls: Any
         if issubclass(cls, Command):
@@ -1492,7 +1487,7 @@ class CommandContext:
 
     def get_ancestor(
         self,
-        cls: Union[Type[Command], Type[CommandContextToken[Command]]],
+        cls: Union[type[Command], type[CommandContextToken[Command]]],
         op: Optional[Command] = None,
     ) -> Optional[CommandContextToken[Command]]:
         if issubclass(cls, Command):
@@ -1514,7 +1509,7 @@ class CommandContext:
 
     def get_topmost_ancestor(
         self,
-        cls: Union[Type[Command], Type[CommandContextToken[Command]]],
+        cls: Union[type[Command], type[CommandContextToken[Command]]],
     ) -> Optional[CommandContextToken[Command]]:
         if issubclass(cls, Command):
             ctxcls = cls.get_context_class()
@@ -1583,7 +1578,7 @@ class CommandContext:
 
     def compat_ver_is_before(
         self,
-        ver: Tuple[int, int, verutils.VersionStage, int],
+        ver: tuple[int, int, verutils.VersionStage, int],
     ) -> bool:
         return self.compat_ver is not None and self.compat_ver < ver
 
@@ -1618,7 +1613,7 @@ class DeltaRoot(CommandGroup, context_class=DeltaRootContext):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self.new_types: Set[uuid.UUID] = set()
+        self.new_types: set[uuid.UUID] = set()
         self.warnings: list[errors.EdgeDBError] = []
 
     @classmethod
@@ -1700,16 +1695,16 @@ class Query(Command):
         return schema
 
 
-_command_registry: Dict[
-    Tuple[str, Type[so.Object]],
-    Type[ObjectCommand[so.Object]]
+_command_registry: dict[
+    tuple[str, type[so.Object]],
+    type[ObjectCommand[so.Object]]
 ] = {}
 
 
 def get_object_command_class(
-    cmdtype: Type[Command_T],
-    schema_metaclass: Type[so.Object],
-) -> Optional[Type[Command_T]]:
+    cmdtype: type[Command_T],
+    schema_metaclass: type[so.Object],
+) -> Optional[type[Command_T]]:
     assert issubclass(cmdtype, ObjectCommand)
     return _command_registry.get(  # type: ignore
         (cmdtype._delta_action, schema_metaclass),
@@ -1717,9 +1712,9 @@ def get_object_command_class(
 
 
 def get_object_command_class_or_die(
-    cmdtype: Type[Command_T],
-    schema_metaclass: Type[so.Object],
-) -> Type[Command_T]:
+    cmdtype: type[Command_T],
+    schema_metaclass: type[so.Object],
+) -> type[Command_T]:
     cmdcls = get_object_command_class(cmdtype, schema_metaclass)
     if cmdcls is None:
         raise TypeError(f'missing {cmdtype.__name__} implementation '
@@ -1766,10 +1761,10 @@ class ObjectCommand(Command, Generic[so.Object_T]):
     scls: so.Object_T
     _delta_action: ClassVar[str]
     _schema_metaclass: ClassVar[  # type: ignore
-        Optional[Type[so.Object_T]]
+        Optional[type[so.Object_T]]
     ] = None
-    astnode: ClassVar[Union[Type[qlast.DDLOperation],
-                            List[Type[qlast.DDLOperation]]]]
+    astnode: ClassVar[Union[type[qlast.DDLOperation],
+                            list[type[qlast.DDLOperation]]]]
 
     def __init_subclass__(cls, *args: Any, **kwargs: Any) -> None:
         # Check if the command subclass has been parametrized with
@@ -1777,7 +1772,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         # argument to be made available via get_schema_metaclass().
         super().__init_subclass__(*args, **kwargs)
         generic_bases = typing_inspect.get_generic_bases(cls)
-        mcls: Optional[Type[so.Object]] = None
+        mcls: Optional[type[so.Object]] = None
         for gb in generic_bases:
             base_origin = typing_inspect.get_origin(gb)
             # Find the <ObjectCommand>[Type] base, where ObjectCommand
@@ -1884,7 +1879,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         self,
         *,
         parent_op: Optional[Command] = None,
-    ) -> Tuple[CommandKey, str]:
+    ) -> tuple[CommandKey, str]:
         """Return a human-friendly prompt describing this operation."""
 
         # The prompt is determined by the *innermost* subcommand as
@@ -1947,7 +1942,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
     def _get_special_handler(
         cls,
         field_name: str,
-    ) -> Optional[Type[AlterSpecialObjectField[so.Object]]]:
+    ) -> Optional[type[AlterSpecialObjectField[so.Object]]]:
         if (
             issubclass(cls, AlterObjectOrFragment)
             and not issubclass(cls, AlterSpecialObjectField)
@@ -2082,8 +2077,8 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         action: str,
         include_self: bool=True,
         include_ancestors: bool=False,
-        extra_refs: Optional[Dict[so.Object, List[str]]]=None,
-        filter: Type[so.Object] | Tuple[Type[so.Object], ...] | None = None,
+        extra_refs: Optional[dict[so.Object, list[str]]]=None,
+        filter: type[so.Object] | tuple[type[so.Object], ...] | None = None,
         metadata_only: bool=False,
     ) -> s_schema.Schema:
 
@@ -2243,8 +2238,8 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         # fix up (a computed property and a constraint on it, for
         # example, requires us to fix up the computed property first),
         # so sort by dependency order.
-        objs_to_cmds: Dict[
-            so.Object, List[Tuple[Command, AlterObject[so.Object], List[str]]]
+        objs_to_cmds: dict[
+            so.Object, list[tuple[Command, AlterObject[so.Object], list[str]]]
         ] = {}
         for delta, cmd, refdesc in context.affected_finalization.get(self, []):
             if schema.has_object(cmd.scls.id):
@@ -2296,7 +2291,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         self,
         schema: s_schema.Schema,
         context: CommandContext,
-    ) -> Dict[str, bool]:
+    ) -> dict[str, bool]:
         result = {}
         mcls = self.get_schema_metaclass()
         for op in self._enumerate_attribute_cmds():
@@ -2329,7 +2324,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         self,
         schema: s_schema.Schema,
         context: CommandContext,
-    ) -> Type[qlast.DDLOperation]:
+    ) -> type[qlast.DDLOperation]:
         # TODO: how to handle the following type: ignore?
         # in this class, astnode is always a Type[DDLOperation],
         # but the current design of constraints handles it as
@@ -2496,23 +2491,23 @@ class ObjectCommand(Command, Generic[so.Object_T]):
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         return None
 
     def get_ddl_identity_fields(
         self,
         context: CommandContext,
-    ) -> Tuple[so.Field[Any], ...]:
+    ) -> tuple[so.Field[Any], ...]:
         mcls = self.get_schema_metaclass()
         return tuple(f for f in mcls.get_fields().values() if f.ddl_identity)
 
     @classmethod
-    def maybe_get_schema_metaclass(cls) -> Optional[Type[so.Object_T]]:
+    def maybe_get_schema_metaclass(cls) -> Optional[type[so.Object_T]]:
         return cls._schema_metaclass
 
     @classmethod
-    def get_schema_metaclass(cls) -> Type[so.Object_T]:
+    def get_schema_metaclass(cls) -> type[so.Object_T]:
         if cls._schema_metaclass is None:
             raise TypeError(f'schema metaclass not set for {cls}')
         return cls._schema_metaclass
@@ -2520,8 +2515,8 @@ class ObjectCommand(Command, Generic[so.Object_T]):
     @classmethod
     def get_other_command_class(
         cls,
-        cmdtype: Type[ObjectCommand_T],
-    ) -> Type[ObjectCommand_T]:
+        cmdtype: type[ObjectCommand_T],
+    ) -> type[ObjectCommand_T]:
         mcls = cls.get_schema_metaclass()
         return get_object_command_class_or_die(cmdtype, mcls)
 
@@ -2719,7 +2714,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         self,
         schema: s_schema.Schema,
         context: CommandContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         result = {}
 
         for attr in self.enumerate_attributes():
@@ -2731,7 +2726,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         self,
         schema: s_schema.Schema,
         context: CommandContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         result = {}
 
         for attr in self.enumerate_attributes():
@@ -2744,7 +2739,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         self,
         schema: s_schema.Schema,
         context: CommandContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         result = {}
 
         for attr in self.enumerate_attributes():
@@ -3027,7 +3022,7 @@ class CreateObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
         astnode: qlast.DDLOperation,
         schema: s_schema.Schema,
         context: CommandContext,
-    ) -> Type[ObjectCommand[so.Object_T]]:
+    ) -> type[ObjectCommand[so.Object_T]]:
         assert isinstance(astnode, qlast.CreateObject), "expected CreateObject"
 
         if astnode.sdl_alter_if_exists:
@@ -3035,7 +3030,7 @@ class CreateObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
             dummy_op = cls(
                 classname=sn.QualName('placeholder', 'placeholder'))
             ctxcls = cast(
-                Type[ObjectCommandContext[so.Object_T]],
+                type[ObjectCommandContext[so.Object_T]],
                 cls.get_context_class_or_die(),
             )
             ctx = ctxcls(
@@ -3701,9 +3696,9 @@ class DeleteObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
         schema: s_schema.Schema,
         context: CommandContext,
         scls: so.Object_T,
-    ) -> List[Command]:
+    ) -> list[Command]:
         mcls = self.get_schema_metaclass()
-        commands: List[Command] = []
+        commands: list[Command] = []
 
         for refdict in mcls.get_refdicts():
             deleted_refs = set()
@@ -3713,7 +3708,7 @@ class DeleteObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
             )
 
             refcmds = cast(
-                Tuple[ObjectCommand[so.Object], ...],
+                tuple[ObjectCommand[so.Object], ...],
                 self.get_subcommands(metaclass=refdict.ref_cls),
             )
 
@@ -3927,9 +3922,9 @@ class DeleteExternalObject(
         return schema
 
 
-special_field_alter_handlers: Dict[
+special_field_alter_handlers: dict[
     str,
-    Dict[Type[so.Object], Type[AlterSpecialObjectField[so.Object]]],
+    dict[type[so.Object], type[AlterSpecialObjectField[so.Object]]],
 ] = {}
 
 
@@ -4014,8 +4009,8 @@ class AlterSpecialObjectField(AlterObjectFragment[so.Object_T]):
 
 def get_special_field_alter_handler(
     field: str,
-    schema_cls: Type[so.Object],
-) -> Optional[Type[AlterSpecialObjectField[so.Object]]]:
+    schema_cls: type[so.Object],
+) -> Optional[type[AlterSpecialObjectField[so.Object]]]:
     """Return a custom handler for the field value transition, if any.
 
     Returns a subclass of AlterSpecialObjectField, when in the context
@@ -4029,8 +4024,8 @@ def get_special_field_alter_handler(
 
 def get_special_field_create_handler(
     field: str,
-    schema_cls: Type[so.Object],
-) -> Optional[Type[AlterSpecialObjectField[so.Object]]]:
+    schema_cls: type[so.Object],
+) -> Optional[type[AlterSpecialObjectField[so.Object]]]:
     """Return a custom handler for the field value transition, if any.
 
     Returns a subclass of AlterSpecialObjectField, when in the context
@@ -4048,7 +4043,7 @@ def get_special_field_create_handler(
 def get_special_field_alter_handler_for_context(
     field: str,
     context: CommandContext,
-) -> Optional[Type[AlterSpecialObjectField[so.Object]]]:
+) -> Optional[type[AlterSpecialObjectField[so.Object]]]:
     """Return a custom handler for the field value transition, if any.
 
     Returns a subclass of AlterSpecialObjectField, when in the context
@@ -4479,7 +4474,7 @@ def compile_ddl(
         modaliases = cmdcls._modaliases_from_ast(schema, astnode, context)
         localnames = cmdcls.localnames_from_ast(schema, astnode, context)
         ctxcls = cast(
-            Type[ObjectCommandContext[so.Object]],
+            type[ObjectCommandContext[so.Object]],
             context_class,
         )
         ctx = ctxcls(
@@ -4499,8 +4494,8 @@ def compile_ddl(
 
 def get_object_delta_command(
     *,
-    objtype: Type[so.Object_T],
-    cmdtype: Type[ObjectCommand_T],
+    objtype: type[so.Object_T],
+    cmdtype: type[ObjectCommand_T],
     schema: s_schema.Schema,
     name: sn.Name,
     ddl_identity: Optional[Mapping[str, Any]] = None,
@@ -4508,7 +4503,7 @@ def get_object_delta_command(
 ) -> ObjectCommand_T:
 
     cmdcls = cast(
-        Type[ObjectCommand_T],
+        type[ObjectCommand_T],
         get_object_command_class_or_die(cmdtype, objtype),
     )
 
@@ -4519,7 +4514,7 @@ def get_object_delta_command(
     )
 
 
-CommandKey = Tuple[str, Type[so.Object], sn.Name, Optional[sn.Name]]
+CommandKey = tuple[str, type[so.Object], sn.Name, Optional[sn.Name]]
 
 
 def get_object_command_key(delta: ObjectCommand[Any]) -> CommandKey:

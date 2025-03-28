@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union, Sequence, List
+from typing import Optional, Union, Sequence
 
 import random
 
@@ -395,7 +395,7 @@ def compile_filter_clause(
 
 def compile_orderby_clause(
         ir_exprs: Sequence[irast.SortExpr], *,
-        ctx: context.CompilerContextLevel) -> List[pgast.SortBy]:
+        ctx: context.CompilerContextLevel) -> list[pgast.SortBy]:
 
     sort_clause = []
 
@@ -456,7 +456,7 @@ def make_check_scan(
 
 def scan_check_ctes(
     stmt: pgast.Query,
-    check_ctes: List[pgast.CommonTableExpr],
+    check_ctes: list[pgast.CommonTableExpr],
     *,
     ctx: context.CompilerContextLevel,
 ) -> None:
@@ -553,8 +553,8 @@ def fini_toplevel(
 
 
 def populate_argmap(
-    params: List[irast.Param],
-    globals: List[irast.Global],
+    params: list[irast.Param],
+    globals: list[irast.Global],
     *,
     ctx: context.CompilerContextLevel,
 ) -> None:

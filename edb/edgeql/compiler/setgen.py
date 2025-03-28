@@ -28,15 +28,12 @@ from typing import (
     Final,
     Literal,
     Optional,
-    Tuple,
-    Type,
     Union,
     AbstractSet,
     ContextManager,
     Iterable,
     Iterator,
     Sequence,
-    List,
     NoReturn,
     TYPE_CHECKING,
 )
@@ -93,7 +90,7 @@ def new_set(
     stype: s_types.Type,
     expr: irast.Expr,
     ctx: context.ContextLevel,
-    ircls: Type[irast.Set] = irast.Set,
+    ircls: type[irast.Set] = irast.Set,
     **kwargs: Any,
 ) -> irast.Set:
     """Create a new ir.Set instance with given attributes.
@@ -232,7 +229,7 @@ def new_set_from_set(
 
 
 def new_tuple_set(
-    elements: List[irast.TupleElement],
+    elements: list[irast.TupleElement],
     *,
     named: bool,
     ctx: context.ContextLevel,
@@ -709,7 +706,7 @@ def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
 
 def resolve_name(
     name: qlast.ObjectRef, *, ctx: context.ContextLevel
-) -> Tuple[Optional[irast.Set], s_types.Type]:
+) -> tuple[Optional[irast.Set], s_types.Type]:
 
     view_set = None
     stype = None
@@ -1977,7 +1974,7 @@ def should_materialize(
     ctx: context.ContextLevel,
 ) -> Sequence[irast.MaterializeReason]:
     volatility = inference.infer_volatility(ir, ctx.env, exclude_dml=True)
-    reasons: List[irast.MaterializeReason] = []
+    reasons: list[irast.MaterializeReason] = []
 
     if volatility.is_volatile():
         reasons.append(irast.MaterializeVolatile())
@@ -2023,9 +2020,9 @@ def should_materialize(
 
 def should_materialize_type(
     typ: s_types.Type, *, ctx: context.ContextLevel
-) -> List[irast.MaterializeReason]:
+) -> list[irast.MaterializeReason]:
     schema = ctx.env.schema
-    reasons: List[irast.MaterializeReason] = []
+    reasons: list[irast.MaterializeReason] = []
     if isinstance(
             typ, (s_objtypes.ObjectType, s_pointers.Pointer)):
         for pointer in typ.get_pointers(schema).objects(schema):
@@ -2066,7 +2063,7 @@ def get_global_param_sets(
     *,
     ctx: context.ContextLevel,
     is_implicit_global: bool = False,
-) -> Tuple[irast.Set, Optional[irast.Set]]:
+) -> tuple[irast.Set, Optional[irast.Set]]:
     param = get_global_param(glob, ctx=ctx)
     default = glob.get_default(ctx.env.schema)
 
@@ -2129,7 +2126,7 @@ def get_func_global_param_sets(
     glob: s_globals.Global,
     *,
     ctx: context.ContextLevel,
-) -> Tuple[qlast.Expr, Optional[qlast.Expr]]:
+) -> tuple[qlast.Expr, Optional[qlast.Expr]]:
     # NB: updates ctx anchors
 
     if ctx.env.options.func_params is not None:

@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Callable, Optional, Dict, TYPE_CHECKING
+from typing import Any, Callable, Optional, TYPE_CHECKING
 
 import asyncio
 import collections
@@ -812,10 +812,10 @@ class ParallelTextTestResult(unittest.result.TestResult):
     def record_test_stats(self, test, stats):
         self.test_stats.append((test, stats))
 
-    def annotate_test(self, test, annotations: Dict[str, Any]) -> None:
+    def annotate_test(self, test, annotations: dict[str, Any]) -> None:
         self.test_annotations[test].update(annotations)
 
-    def get_test_annotations(self, test) -> Optional[Dict[str, Any]]:
+    def get_test_annotations(self, test) -> Optional[dict[str, Any]]:
         return self.test_annotations.get(test)
 
     def _exc_info_to_string(self, err, test):

@@ -1,5 +1,5 @@
 import json
-from typing import List, Any
+from typing import Any
 from edb.edgeql import codegen
 from .back_to_ql import reverse_elab
 from .data.val_to_json import multi_set_val_to_json_like
@@ -10,7 +10,7 @@ def to_html_str(s: str) -> str:
     return s.replace("λ", "&lambda;")
 
 
-def do_write_logs(logs: List[Any], filename: str):
+def do_write_logs(logs: list[Any], filename: str):
 
     def format_entry(entry, index):
         entry_id = '_'.join(map(str, index))
@@ -133,7 +133,7 @@ def do_write_logs(logs: List[Any], filename: str):
         f.write("</html>\n")
 
 
-def write_logs_to_file(logs: List[Any], filepath: str):
+def write_logs_to_file(logs: list[Any], filepath: str):
     # the logs are structured as follows:
     # Log ::= [(Input, Output), Log_1, ..., Log_n]
     # where Log_1 ... Log_n are sub logs

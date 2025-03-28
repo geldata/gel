@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Tuple
 
 from edb import lib as stdlib
 from edb import errors
@@ -96,7 +95,7 @@ GLOBAL_BASE_VERSION = uuidgen.UUID('013d235b-51ce-11ee-be76-bf15d10edfe5')
 
 def make_schema_version(
     schema: s_schema.Schema,
-) -> Tuple[s_schema.Schema, s_ver.CreateSchemaVersion]:
+) -> tuple[s_schema.Schema, s_ver.CreateSchemaVersion]:
     context = sd.CommandContext(stdmode=True)
     sv = sn.UnqualName('__schema_version__')
     schema_version = s_ver.CreateSchemaVersion(classname=sv)
@@ -109,7 +108,7 @@ def make_schema_version(
 
 def make_global_schema_version(
     schema: s_schema.Schema,
-) -> Tuple[s_schema.Schema, s_ver.CreateGlobalSchemaVersion]:
+) -> tuple[s_schema.Schema, s_ver.CreateGlobalSchemaVersion]:
     context = sd.CommandContext(stdmode=True)
     sv = sn.UnqualName('__global_schema_version__')
     schema_version = s_ver.CreateGlobalSchemaVersion(classname=sv)

@@ -24,7 +24,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Type,
     TypeVar,
     cast,
     TYPE_CHECKING,
@@ -218,7 +217,7 @@ class AnnotationCommand(sd.QualifiedObjectCommand[Annotation],
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if field in {'abstract', 'inheritable'}:
             return field

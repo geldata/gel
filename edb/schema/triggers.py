@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Type, AbstractSet, TYPE_CHECKING
+from typing import Any, Optional, AbstractSet, TYPE_CHECKING
 
 from edb import errors
 
@@ -288,7 +288,7 @@ class CreateTrigger(
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if (
             field in ('timing', 'condition', 'kinds', 'scope', 'expr')

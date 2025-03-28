@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import Source, parser
-from typing import Any, List, Sequence
+from typing import Any, Sequence
 import json
 import uuid
 from edb.errors import EdgeQLSyntaxError
@@ -16,7 +16,7 @@ class EdbJSONEncoder(json.JSONEncoder):
         return super().default(x)
 
 
-def parse_ddl(ddlstr: str) -> List[qlast.DDLOperation]:
+def parse_ddl(ddlstr: str) -> list[qlast.DDLOperation]:
     ddls = parser.parse_block(Source.from_string(ddlstr))
     assert all(isinstance(ddl, qlast.DDLOperation) for ddl in ddls)
     return ddls  # type: ignore[return-value]

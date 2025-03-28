@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, cast
+from typing import Any, Callable, Optional, Sequence, cast
 
 import itertools
 
@@ -75,7 +75,7 @@ def eval_error(expr: Val | Expr | Sequence[Val], msg: str = "") -> Any:
 
 
 def eval_order_by(
-    after_condition: Sequence[Val], orders: Sequence[Dict[str, Val]]
+    after_condition: Sequence[Val], orders: Sequence[dict[str, Val]]
 ) -> Sequence[Val]:
     if len(after_condition) == 0:
         return after_condition
@@ -93,12 +93,12 @@ def eval_order_by(
         ]
     )
 
-    result: Sequence[Tuple[int, Val]] = list(enumerate(after_condition))
+    result: Sequence[tuple[int, Val]] = list(enumerate(after_condition))
     # use reversed to achieve the desired effect
     for idx, spec, empty_order in reversed(sort_specs):
 
         def key_extract(
-            elem: Tuple[int, Val], idx=idx, spec=spec, empty_order=empty_order
+            elem: tuple[int, Val], idx=idx, spec=spec, empty_order=empty_order
         ):
             order_elem = orders[elem[0]][
                 (str(idx) + OrderLabelSep + spec + OrderLabelSep + empty_order)
@@ -128,12 +128,12 @@ def eval_order_by(
     return [elem for (_, elem) in result]
 
 
-EvalEnv = Dict[str, MultiSetVal]
+EvalEnv = dict[str, MultiSetVal]
 
 
 def ctx_extend(
     ctx: EvalEnv, bnd: e.BindingExpr, val: MultiSetVal
-) -> Tuple[EvalEnv, Expr]:
+) -> tuple[EvalEnv, Expr]:
     assert isinstance(val, MultiSetVal), "Expecting MultiSetVal"
     bnd_no_capture = eops.ensure_no_capture(list(ctx.keys()), bnd)
     return {**ctx, bnd_no_capture.var: val}, instantiate_expr(
@@ -147,7 +147,7 @@ def apply_shape(
     def apply_shape_to_prodval(
         shape: ShapeExpr, objectval: ObjectVal
     ) -> ObjectVal:
-        result: Dict[Label, Tuple[Marker, MultiSetVal]] = {}
+        result: dict[Label, tuple[Marker, MultiSetVal]] = {}
         for key, (_, pval) in objectval.val.items():
             if key not in shape.shape.keys():
                 result = {**result, key: (Invisible(), (pval))}
@@ -272,7 +272,7 @@ def limit_vals(val: Sequence[Val], limit: Val) -> Sequence[Val]:
 
 
 def make_invisible(val: MultiSetVal) -> MultiSetVal:
-    result: List[Val] = []
+    result: list[Val] = []
     for v in val.getVals():
         match v:
             case RefVal(refid=id, tpname=tpname, val=dictval):
@@ -299,9 +299,9 @@ class EvaluationLogsWrapper:
         self.original_eval_expr = None
         self.reset_logs(None)
 
-    def reset_logs(self, logs: Optional[List[Any]]):
+    def reset_logs(self, logs: Optional[list[Any]]):
         self.logs = logs
-        self.indexes: List[int] = []
+        self.indexes: list[int] = []
 
     def __call__(
         self, eval_expr: Callable[[EvalEnv, EdgeDatabase, Expr], MultiSetVal]
@@ -411,9 +411,9 @@ def eval_expr(ctx: EvalEnv, db: EdgeDatabase, expr: Expr) -> MultiSetVal:
                 )
                 if BoolVal(True) in condition.getVals()
             ]
-            orders: Sequence[Dict[str, Val]] = []
+            orders: Sequence[dict[str, Val]] = []
             for after_condition_i in after_condition:
-                current: Dict[str, Val] = {}
+                current: dict[str, Val] = {}
                 for l, o in order.items():
                     new_ctx, o_body = ctx_extend(
                         ctx, o, e.ResultMultiSetVal([after_condition_i])
@@ -561,7 +561,7 @@ def eval_expr(ctx: EvalEnv, db: EdgeDatabase, expr: Expr) -> MultiSetVal:
             if not isinstance(tp_name, e.QualifiedName):
                 raise ValueError("Should be updated during tcking")
             subjectv = eval_expr(ctx, db, subject)
-            is_result: List[Val] = []
+            is_result: list[Val] = []
             for v in subjectv.getVals():
                 match v:
                     case RefVal(refid=_, tpname=val_tp, val=_):
@@ -580,7 +580,7 @@ def eval_expr(ctx: EvalEnv, db: EdgeDatabase, expr: Expr) -> MultiSetVal:
             if not isinstance(tp_name, e.QualifiedName):
                 raise ValueError("Should be updated during tcking")
             subjectv = eval_expr(ctx, db, subject)
-            after_intersect: List[Val] = []
+            after_intersect: list[Val] = []
             for v in subjectv.getVals():
                 match v:
                     case RefVal(refid=_, tpname=val_tp, val=_):
@@ -597,7 +597,7 @@ def eval_expr(ctx: EvalEnv, db: EdgeDatabase, expr: Expr) -> MultiSetVal:
             return e.ResultMultiSetVal(casted)
         case UnnamedTupleExpr(val=tuples):
             tuplesv = eval_expr_list(ctx, db, tuples)
-            result_list: List[Val] = []
+            result_list: list[Val] = []
             for prod in itertools.product(*map_expand_multiset_val(tuplesv)):
                 result_list.append(UnnamedTupleVal(list(prod)))
             return e.ResultMultiSetVal(result_list)
@@ -804,7 +804,7 @@ def eval_ctx_from_variables(variables) -> EvalEnv:
 def eval_expr_toplevel(
     db: EdgeDatabase,
     expr: Expr,
-    variables: Optional[Dict[str, Val] | Tuple[Val, ...]] = None,
+    variables: Optional[dict[str, Val] | tuple[Val, ...]] = None,
     logs: Optional[Any] = None,
 ) -> MultiSetVal:
 
