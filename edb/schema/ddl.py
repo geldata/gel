@@ -454,7 +454,6 @@ def apply_sdl(
     sdl_document: qlast.Schema,
     *,
     base_schema: s_schema.Schema,
-    current_schema: s_schema.Schema,
     stdmode: bool = False,
     testmode: bool = False,
 ) -> tuple[s_schema.Schema, list[errors.EdgeDBError]]:

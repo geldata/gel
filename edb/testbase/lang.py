@@ -316,7 +316,6 @@ class BaseSchemaTest(BaseDocTest):
                 migration_target, _ = s_ddl.apply_sdl(
                     stmt.target,
                     base_schema=target_schema,
-                    current_schema=current_schema,
                     testmode=True,
                 )
 
@@ -447,7 +446,6 @@ class BaseSchemaTest(BaseDocTest):
         return s_ddl.apply_sdl(
             sdl_schema,
             base_schema=schema,
-            current_schema=schema,
         )[0]
 
     @classmethod

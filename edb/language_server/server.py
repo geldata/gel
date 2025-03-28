@@ -326,8 +326,7 @@ def _compile_schema(
     try:
         schema, _warnings = s_ddl.apply_sdl(
             sdl,
-            base_schema=std_schema,
-            current_schema=std_schema,
+            base_schema=std_schema
         )
         ls.show_message_log('.. done')
     except errors.EdgeDBError as error:
