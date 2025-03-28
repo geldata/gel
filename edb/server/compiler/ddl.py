@@ -528,7 +528,6 @@ def _start_migration(
         target_schema, warnings = s_ddl.apply_sdl(
             ql.target,
             base_schema=base_schema,
-            current_schema=schema,
             testmode=ctx.is_testmode(),
         )
         query = dataclasses.replace(query, warnings=tuple(warnings))
@@ -1029,7 +1028,6 @@ def _start_migration_rewrite(
             ]
         ),
         base_schema=base_schema,
-        current_schema=base_schema,
     )
 
     # Set our current schema to be the empty one
@@ -1178,7 +1176,6 @@ def _reset_schema(
             ]
         ),
         base_schema=empty_schema,
-        current_schema=empty_schema,
     )
 
     # diff and create migration that drops all objects

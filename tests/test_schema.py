@@ -10099,7 +10099,6 @@ class BaseDescribeTest(tb.BaseSchemaLoadTest):
             schema, _ = s_ddl.apply_sdl(
                 sdl_schema,
                 base_schema=schema,
-                current_schema=schema,
             )
         else:
             schema = self.load_schema(schema_text, modname=default_module)
@@ -12206,7 +12205,6 @@ class TestSDLTextFromSchema(BaseDescribeTest):
             schema, _ = s_ddl.apply_sdl(
                 sdl_schema,
                 base_schema=schema,
-                current_schema=schema,
             )
         else:
             schema = self.load_schema(schema_text, modname=default_module)
