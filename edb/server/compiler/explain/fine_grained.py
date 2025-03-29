@@ -185,6 +185,7 @@ class TreeBuilder:
         subplans = [self.build(subplan, args)
                     for subplan in plans]
 
+        assert alias
         alias_info = self.alias_info.get(alias)
         contexts = alias_info.contexts if alias_info else None
         if not contexts and subplans and (contexts := subplans[0].contexts):

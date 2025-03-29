@@ -165,7 +165,7 @@ def _build_constant_extraction_map(
         # HACK: I don't know why, but this - 1 helps a lot.
         output_start=out.span.start - 1 if out.span else 0,
     )
-    if type(src) != type(out):
+    if type(src) is not type(out):
         return tdata
     children = tdata.children
     for (k1, v1), (k2, v2) in zip(ast.iter_fields(src), ast.iter_fields(out)):
