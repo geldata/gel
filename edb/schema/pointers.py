@@ -35,6 +35,7 @@ import collections.abc
 import enum
 import json
 import operator
+import dataclasses
 
 from edb import errors
 
@@ -1132,18 +1133,14 @@ class PseudoPointer(s_abc.Pointer):
 PointerLike = Union[Pointer, PseudoPointer]
 
 
+@dataclasses.dataclass(repr=False, eq=False)
 class ComputableRef:
     """A shell for a computed target type."""
 
     expr: qlast.Expr
-
-    def __init__(
-        self,
-        expr: qlast.Expr,
-        specified_type: Optional[s_types.TypeShell[s_types.Type]] = None,
-    ) -> None:
-        self.expr = expr
-        self.specified_type = specified_type
+    specified_type: Optional[s_types.TypeShell[s_types.Type]] = (
+        dataclasses.field(default=None)
+    )
 
 
 class PointerCommandContext(
