@@ -34,7 +34,6 @@ from __future__ import annotations
 
 from typing import (
     Optional,
-    Union,
     Mapping,
     Sequence,
     Collection,
@@ -503,7 +502,7 @@ def fini_dml_stmt(
 
 
 def get_dml_range(
-    ir_stmt: Union[irast.UpdateStmt, irast.DeleteStmt],
+    ir_stmt: irast.UpdateStmt | irast.DeleteStmt,
     *,
     ctx: context.CompilerContextLevel,
 ) -> pgast.CommonTableExpr:
@@ -2165,7 +2164,7 @@ def process_update_conflicts(
 
 def check_update_type(
     val: pgast.BaseExpr,
-    rel_or_rvar: Union[pgast.BaseExpr, pgast.PathRangeVar],
+    rel_or_rvar: pgast.BaseExpr | pgast.PathRangeVar,
     *,
     is_subquery: bool,
     ir_stmt: irast.UpdateStmt,

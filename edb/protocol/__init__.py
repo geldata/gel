@@ -20,7 +20,6 @@
 from __future__ import annotations
 
 import enum
-import typing
 
 from . import messages
 from . import render_utils
@@ -29,7 +28,7 @@ from .messages import *  # NoQA
 
 
 def render(
-    obj: typing.Union[type[enum.Enum], type[messages.Struct]]
+    obj: type[enum.Enum] | type[messages.Struct]
 ) -> str:
     if issubclass(obj, messages.Struct):
         return obj.render()

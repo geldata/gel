@@ -24,7 +24,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Union,
     AbstractSet,
     Mapping,
     Collection,
@@ -195,7 +194,7 @@ def _normalize_with_block(
 
     # Update the default aliases, modaliases, and localnames.
     modaliases = dict(modaliases)
-    newaliases: list[Union[qlast.AliasedExpr, qlast.ModuleAliasDecl]] = []
+    newaliases: list[qlast.AliasedExpr | qlast.ModuleAliasDecl] = []
 
     aliases: Optional[list[qlast.AliasedExpr]] = getattr(node, field)
     for alias in (aliases or ()):
@@ -221,7 +220,7 @@ def _normalize_with_block(
 
 
 def _normalize_aliased_field(
-    node: Union[qlast.SubjectQuery, qlast.ReturningQuery],
+    node: qlast.SubjectQuery | qlast.ReturningQuery,
     fname: str,
     *,
     schema: s_schema.Schema,

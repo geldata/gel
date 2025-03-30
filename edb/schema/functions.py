@@ -27,7 +27,6 @@ from typing import (
     Any,
     Optional,
     TypeVar,
-    Union,
     Iterable,
     Mapping,
     Sequence,
@@ -74,7 +73,7 @@ FUNC_NAMESPACE = uuidgen.UUID('80cd3b19-bb51-4659-952d-6bb03e3347d7')
 
 def param_as_str(
     schema: s_schema.Schema,
-    param: Union[ParameterDesc, Parameter],
+    param: ParameterDesc | Parameter,
 ) -> str:
     ret = []
     kind = param.get_kind(schema)
@@ -91,7 +90,7 @@ def param_as_str(
         ret.append(typemod.to_edgeql())
         ret.append(' ')
 
-    paramt: Union[s_types.Type, s_types.TypeShell[s_types.Type]]
+    paramt: s_types.Type | s_types.TypeShell[s_types.Type]
     if isinstance(param, ParameterDesc):
         paramt = param.get_type_shell(schema)
     else:

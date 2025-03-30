@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Union, Sequence, cast
+from typing import Callable, Optional, Sequence, cast
 
 from edb import errors
 
@@ -711,7 +711,7 @@ def compile_TypeCast(
             )
         raise
 
-    ir_expr: Union[irast.Set, irast.Expr]
+    ir_expr: irast.Set | irast.Expr
 
     if isinstance(expr.expr, qlast.Parameter):
         if (
@@ -1053,7 +1053,7 @@ def _infer_slice_type(
 def compile_Indirection(
     expr: qlast.Indirection, *, ctx: context.ContextLevel
 ) -> irast.Set:
-    node: Union[irast.Set, irast.Expr] = dispatch.compile(expr.arg, ctx=ctx)
+    node: irast.Set | irast.Expr = dispatch.compile(expr.arg, ctx=ctx)
     for indirection_el in expr.indirection:
         if isinstance(indirection_el, qlast.Index):
             idx = dispatch.compile(indirection_el.index, ctx=ctx)

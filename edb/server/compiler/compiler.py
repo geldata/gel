@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Union,
     AbstractSet,
     Iterable,
     Mapping,
@@ -431,9 +430,9 @@ class Compiler:
 
     @staticmethod
     def _try_compile_rollback(
-        eql: Union[edgeql.Source, bytes]
+        eql: edgeql.Source | bytes
     ) -> tuple[dbstate.QueryUnitGroup, int]:
-        source: Union[str, edgeql.Source]
+        source: str | edgeql.Source
         if isinstance(eql, edgeql.Source):
             source = eql
         else:
@@ -481,7 +480,7 @@ class Compiler:
     ) -> list[
         tuple[
             bool,
-            Union[dbstate.QueryUnit, tuple[str, str, dict[int, str]]]
+            dbstate.QueryUnit | tuple[str, str, dict[int, str]]
         ]
     ]:
 
@@ -500,7 +499,7 @@ class Compiler:
         result: list[
             tuple[
                 bool,
-                Union[dbstate.QueryUnit, tuple[str, str, dict[int, str]]]
+                dbstate.QueryUnit | tuple[str, str, dict[int, str]]
             ]
         ] = []
 

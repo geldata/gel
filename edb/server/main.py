@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Union,
     Iterator,
     Mapping,
     NoReturn,
@@ -509,7 +508,7 @@ async def run_server(
     else:
         tenant_id = f'C{args.tenant_id}'
 
-    cluster: Union[pgcluster.Cluster, pgcluster.RemoteCluster]
+    cluster: pgcluster.Cluster | pgcluster.RemoteCluster
 
     runstate_dir_str = str(runstate_dir)
     runstate_dir_str_len = len(

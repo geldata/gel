@@ -23,7 +23,6 @@ from typing import (
     Callable,
     Optional,
     TypeVar,
-    Union,
     AbstractSet,
     Sequence,
     Match,
@@ -108,7 +107,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         self.limit_ref_classes = limit_ref_classes
 
     def visit(
-        self, node: Union[qlast.Base, list[qlast.Base]], **kwargs: Any
+        self, node: qlast.Base | list[qlast.Base], **kwargs: Any
     ) -> None:
         if isinstance(node, list):
             self.visit_list(node, terminator=';')
@@ -1449,7 +1448,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
 
     def _eval_bool_expr(
         self,
-        expr: Union[qlast.Expr, qlast.TypeExpr],
+        expr: qlast.Expr | qlast.TypeExpr,
     ) -> bool:
         if (not isinstance(expr, qlast.Constant)
             or expr.kind != qlast.ConstantKind.BOOLEAN
@@ -1459,7 +1458,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
 
     def _eval_enum_expr(
         self,
-        expr: Union[qlast.Expr, qlast.TypeExpr],
+        expr: qlast.Expr | qlast.TypeExpr,
         enum_type: type[Enum_T],
     ) -> Enum_T:
         if (
@@ -2237,7 +2236,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         self._visit_DropObject(node, *op_type, after_name=after_name)
 
     def _function_after_name(
-        self, node: Union[qlast.CreateFunction, qlast.AlterFunction]
+        self, node: qlast.CreateFunction | qlast.AlterFunction
     ) -> None:
         self.write('(')
         self.visit_list(node.params, newlines=False)
@@ -2608,7 +2607,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
     @classmethod
     def to_source(  # type: ignore
         cls,
-        node: Union[qlast.Base, Sequence[qlast.Base]],
+        node: qlast.Base | Sequence[qlast.Base],
         indent_with: str = ' ' * 4,
         add_line_information: bool = False,
         pretty: bool = True,

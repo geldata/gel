@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Callable, Union
+from typing import Any, Callable
 
 import collections
 import functools
@@ -48,7 +48,7 @@ SchemaClassLayout = dict[type[s_obj.Object], sr_struct.SchemaTypeLayout]
 def parse_into(
     base_schema: s_schema.Schema,
     schema: s_schema.FlatSchema,
-    data: Union[str, bytes],
+    data: str | bytes,
     schema_class_layout: SchemaClassLayout,
 ) -> s_schema.FlatSchema:
     """Parse JSON-encoded schema objects and populate the schema with them.

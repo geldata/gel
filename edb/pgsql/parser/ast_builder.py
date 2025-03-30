@@ -23,7 +23,6 @@ from typing import (
     Callable,
     Optional,
     TypeVar,
-    Union,
     Sequence,
     cast,
 )
@@ -1240,7 +1239,7 @@ def _build_star(_n: Node, _c: Context) -> pgast.Star | str:
 
 def _build_string_or_star(node: Node, c: Context) -> pgast.Star | str:
     return _enum(
-        Union[pgast.Star, str],  # type: ignore
+        pgast.Star | str,  # type: ignore
         node,
         c,
         {"String": _build_str, "A_Star": _build_star},

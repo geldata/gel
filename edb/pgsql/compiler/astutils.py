@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union, Iterator, Sequence, TYPE_CHECKING
+from typing import Optional, Iterator, Sequence, TYPE_CHECKING
 
 from edb.ir import typeutils as irtyputils
 
@@ -308,7 +308,7 @@ def find_column_in_subselect_rvar(
 
 def get_column(
     rvar: pgast.BaseRangeVar,
-    colspec: Union[str, pgast.ColumnRef],
+    colspec: str | pgast.ColumnRef,
     *,
     is_packed_multi: bool = True,
     nullable: Optional[bool] = None,

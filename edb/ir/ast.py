@@ -770,13 +770,13 @@ def _serialize_to_markup_mat_vis(
     return node
 
 
-MaterializeReason = typing.Union[MaterializeVolatile, MaterializeVisible]
+MaterializeReason = MaterializeVolatile | MaterializeVisible
 
 
 class ComputableInfo(typing.NamedTuple):
 
     qlexpr: qlast.Expr
-    irexpr: typing.Optional[typing.Union[Set, Expr]]
+    irexpr: typing.Optional[Set | Expr]
     context: compiler.ContextLevel
     path_id: PathId
     path_id_ns: typing.Optional[Namespace]
@@ -970,7 +970,7 @@ class Call(ImmutableExpr):
     # Bound arguments.
     # Named arguments are indexed by argument name.
     # Positional arguments are indexed by argument position.
-    args: dict[typing.Union[int, str], CallArg]
+    args: dict[int | str, CallArg]
 
     # Return type and typemod.  In bodies of polymorphic functions
     # the return type can be polymorphic; in queries the return

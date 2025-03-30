@@ -23,7 +23,6 @@ from __future__ import annotations
 from typing import (
     Callable,
     Optional,
-    Union,
     Mapping,
     ChainMap,
     Generator,
@@ -93,7 +92,7 @@ class OverlayOp(s_enum.StrEnum):
 
 OverlayEntry = tuple[
     OverlayOp,
-    Union[pgast.BaseRelation, pgast.CommonTableExpr],
+    pgast.BaseRelation | pgast.CommonTableExpr,
     'irast.PathId',
 ]
 
@@ -191,7 +190,7 @@ class RelOverlays:
             tuple[
                 tuple[
                     OverlayOp,
-                    Union[pgast.BaseRelation, pgast.CommonTableExpr],
+                    pgast.BaseRelation | pgast.CommonTableExpr,
                     irast.PathId,
                 ], ...
             ],
@@ -221,7 +220,7 @@ class CompilerContextLevel(compiler.ContextLevel):
     #: Record of DML CTEs generated for the corresponding IR DML.
     #: CTEs generated for DML-containing FOR statements are keyed
     #: by their iterator set.
-    dml_stmts: dict[Union[irast.MutatingStmt, irast.Set],
+    dml_stmts: dict[irast.MutatingStmt | irast.Set,
                     pgast.CommonTableExpr]
 
     #: Inline DML functions may require additional CTEs.

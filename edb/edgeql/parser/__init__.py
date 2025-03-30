@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Callable, Optional, Union, Mapping
+from typing import Any, Callable, Optional, Mapping
 import pathlib
 
 from edb import errors
@@ -49,7 +49,7 @@ def append_module_aliases(tree, aliases):
 
 
 def parse_fragment(
-    source: Union[qltokenizer.Source, str],
+    source: qltokenizer.Source | str,
     filename: Optional[str] = None,
 ) -> qlast.Expr:
     res = parse(tokens.T_STARTFRAGMENT, source, filename=filename)
@@ -58,7 +58,7 @@ def parse_fragment(
 
 
 def parse_query(
-    source: Union[qltokenizer.Source, str],
+    source: qltokenizer.Source | str,
     module_aliases: Optional[Mapping[Optional[str], str]] = None,
 ) -> qlast.Query:
     """Parse some EdgeQL potentially adding some module aliases.
@@ -116,7 +116,7 @@ def parse_sdl(expr: str):
 
 def parse(
     start_token: type[tokens.Token],
-    source: Union[str, qltokenizer.Source],
+    source: str | qltokenizer.Source,
     filename: Optional[str] = None,
 ):
     if not SPEC_LOADED:

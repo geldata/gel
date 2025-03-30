@@ -178,7 +178,7 @@ class ArrayOf(CType):
     def __init__(
         self,
         length_in: type[CType],
-        element: typing.Union[CType, type[Struct]],
+        element: CType | type[Struct],
         doc: str = None,
     ) -> None:
         self.length_in = length_in()
@@ -218,7 +218,7 @@ class FixedArrayOf(CType):
     def __init__(
         self,
         length: int,
-        element: typing.Union[CType, type[Struct]],
+        element: CType | type[Struct],
         doc: typing.Optional[str]=None
     ) -> None:
         self.length = length
@@ -292,7 +292,7 @@ class EnumOf(CType):
 
 class Struct:
 
-    _fields: dict[str, typing.Union[CType, type[Struct]]] = {}
+    _fields: dict[str, CType | type[Struct]] = {}
 
     def __init_subclass__(cls, *, abstract=False):
         if abstract:

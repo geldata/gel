@@ -23,7 +23,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Union,
     Iterable,
     Literal,
     Sequence,
@@ -315,7 +314,7 @@ class TestCase(unittest.TestCase, metaclass=TestCaseMeta):
     @staticmethod
     def try_until_succeeds(
         *,
-        ignore: Union[type[Exception], tuple[type[Exception]]] | None = None,
+        ignore: type[Exception] | tuple[type[Exception]] | None = None,
         ignore_regexp: str | None = None,
         delay: float=0.5,
         timeout: float=5
@@ -342,7 +341,7 @@ class TestCase(unittest.TestCase, metaclass=TestCaseMeta):
     @staticmethod
     def try_until_fails(
         *,
-        wait_for: Union[type[Exception], tuple[type[Exception]]] | None = None,
+        wait_for: type[Exception] | tuple[type[Exception]] | None = None,
         wait_for_regexp: str | None = None,
         delay: float=0.5,
         timeout: float=5

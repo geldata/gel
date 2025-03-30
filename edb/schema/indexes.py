@@ -22,7 +22,6 @@ from typing import (
     Any,
     Optional,
     TypeVar,
-    Union,
     Mapping,
     Sequence,
     cast,
@@ -667,7 +666,7 @@ class IndexCommand(
         context: sd.CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[Index, so.NoDefaultT] = so.NoDefault,
+        default: Index | so.NoDefaultT = so.NoDefault,
         sourcectx: Optional[parsing.Span] = None,
     ) -> Index:
         ...
@@ -690,7 +689,7 @@ class IndexCommand(
         context: sd.CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[Index, so.NoDefaultT, None] = so.NoDefault,
+        default: Index | so.NoDefaultT | None = so.NoDefault,
         sourcectx: Optional[parsing.Span] = None,
     ) -> Optional[Index]:
         try:

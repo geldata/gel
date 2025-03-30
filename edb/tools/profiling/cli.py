@@ -22,7 +22,7 @@ See README.md in this package for more details.
 """
 
 from __future__ import annotations
-from typing import Optional, Union
+from typing import Optional
 
 import pathlib
 
@@ -80,7 +80,7 @@ def perfviz(
     prefix: str,
     suffix: str,
     sort_by: str,
-    out: Union[pathlib.Path, str],
+    out: pathlib.Path | str,
     width: int,
     threshold: float,
 ) -> None:

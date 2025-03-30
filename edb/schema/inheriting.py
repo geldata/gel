@@ -22,7 +22,6 @@ from typing import (
     Any,
     Generic,
     Optional,
-    Union,
     AbstractSet,
     Iterable,
     Mapping,
@@ -605,7 +604,7 @@ class InheritingObjectCommand(sd.ObjectCommand[so.InheritingObjectT]):
 
 BaseDeltaItem_T = tuple[
     list[so.ObjectShell[so.InheritingObjectT]],
-    Union[str, tuple[str, so.ObjectShell[so.InheritingObjectT]]],
+    str | tuple[str, so.ObjectShell[so.InheritingObjectT]],
 ]
 
 
@@ -670,7 +669,7 @@ class AlterInherit(sd.Command, Generic[so.InheritingObjectT]):
     # so the positioning is maintained.
     added_bases = struct.Field(list[tuple[
         list[so.ObjectShell[so.InheritingObjectT]],
-        Optional[Union[str, tuple[str, so.ObjectShell[so.InheritingObjectT]]]],
+        Optional[str | tuple[str, so.ObjectShell[so.InheritingObjectT]]],
     ]])
     dropped_bases = struct.Field(list[so.ObjectShell[so.InheritingObjectT]])
 
@@ -712,7 +711,7 @@ class AlterInherit(sd.Command, Generic[so.InheritingObjectT]):
 
             pos_node = astcmd.position
             pos: Optional[
-                Union[str, tuple[str, so.ObjectShell[so.InheritingObjectT]]]
+                str | tuple[str, so.ObjectShell[so.InheritingObjectT]]
             ]
             if pos_node is not None:
                 if pos_node.ref is not None:

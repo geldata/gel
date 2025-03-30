@@ -21,7 +21,6 @@ from typing import (
     Any,
     Optional,
     TypeVar,
-    Union,
     Iterable,
     Sequence,
     cast,
@@ -1127,7 +1126,7 @@ class PseudoPointer(s_abc.Pointer):
         return None
 
 
-PointerLike = Union[Pointer, PseudoPointer]
+PointerLike = Pointer | PseudoPointer
 
 
 @dataclasses.dataclass(repr=False, eq=False)
@@ -1347,11 +1346,7 @@ class PointerCommandOrFragment(
             )
 
         spec_target: Optional[
-            Union[
-                s_types.TypeShell[s_types.Type],
-                s_types.Type,
-                ComputableRef,
-            ]
+            s_types.TypeShell[s_types.Type] | s_types.Type | ComputableRef
         ] = (
             self.get_specified_attribute_value('target', schema, context))
         spec_required: Optional[bool] = (
@@ -1446,7 +1441,7 @@ class PointerCommandOrFragment(
         detached: bool = False,
         should_set_path_prefix_anchor: bool = True
     ) -> s_expr.CompiledExpression:
-        singletons: list[Union[s_types.Type, Pointer]] = []
+        singletons: list[s_types.Type | Pointer] = []
 
         parent_ctx = self.get_referrer_context_or_die(context)
         source = parent_ctx.op.get_object(schema, context)
@@ -1960,7 +1955,7 @@ class PointerCommand(
             so.ObjectShell(name=source_name, schemaclass=s_sources.Source),
         )
 
-        target_ref: Union[None, s_types.TypeShell[s_types.Type], ComputableRef]
+        target_ref: None | s_types.TypeShell[s_types.Type] | ComputableRef
 
         if astnode.target:
             if isinstance(astnode.target, qlast.TypeExpr):

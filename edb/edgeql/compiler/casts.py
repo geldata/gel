@@ -25,7 +25,6 @@ from __future__ import annotations
 import json
 from typing import (
     Optional,
-    Union,
     Iterable,
     Mapping,
     cast,
@@ -66,7 +65,7 @@ if TYPE_CHECKING:
 
 
 def compile_cast(
-    ir_expr: Union[irast.Set, irast.Expr],
+    ir_expr: irast.Set | irast.Expr,
     new_stype: s_types.Type,
     *,
     span: Optional[parsing.Span],
@@ -407,7 +406,7 @@ def _get_concrete_scalar_base(
 
 
 def _compile_cast(
-    ir_expr: Union[irast.Set, irast.Expr],
+    ir_expr: irast.Set | irast.Expr,
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
     *,
@@ -1373,7 +1372,7 @@ def _cast_array_literal(
 
 
 def _cast_enum_str_immutable(
-    ir_expr: Union[irast.Set, irast.Expr],
+    ir_expr: irast.Set | irast.Expr,
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
     *,
@@ -1416,7 +1415,7 @@ def _cast_enum_str_immutable(
 
 
 def _find_object_by_id(
-    ir_expr: Union[irast.Set, irast.Expr],
+    ir_expr: irast.Set | irast.Expr,
     new_stype: s_types.Type,
     *,
     ctx: context.ContextLevel,

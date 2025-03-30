@@ -26,7 +26,6 @@ from typing import (
     Callable,
     Optional,
     TypeVar,
-    Union,
     Iterable,
     Mapping,
     Collection,
@@ -165,7 +164,7 @@ class Operation(NamedTuple):
     opcode: OpCode
     scope: qltypes.ConfigScope
     setting_name: str
-    value: Union[str, int, bool, Collection[Union[str, int, bool, None]], None]
+    value: str | int | bool | Collection[str | int | bool | None] | None
 
     def get_setting(self, spec: spec.Spec) -> spec.Setting:
         try:

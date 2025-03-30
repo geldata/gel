@@ -24,7 +24,6 @@ from __future__ import annotations
 from typing import (
     Callable,
     Optional,
-    Union,
     AbstractSet,
     Iterable,
     Sequence,
@@ -2539,7 +2538,7 @@ def range_for_pointer(
 
 
 def rvar_for_rel(
-    rel: Union[pgast.BaseRelation, pgast.CommonTableExpr],
+    rel: pgast.BaseRelation | pgast.CommonTableExpr,
     *,
     alias: Optional[str] = None,
     typeref: Optional[irast.TypeRef] = None,
@@ -2581,7 +2580,7 @@ def rvar_for_rel(
 def _add_type_rel_overlay(
     typeid: uuid.UUID,
     op: context.OverlayOp,
-    rel: Union[pgast.BaseRelation, pgast.CommonTableExpr], *,
+    rel: pgast.BaseRelation | pgast.CommonTableExpr, *,
     dml_stmts: Iterable[irast.MutatingLikeStmt] = (),
     path_id: irast.PathId,
     ctx: context.CompilerContextLevel
@@ -2604,7 +2603,7 @@ def _add_type_rel_overlay(
 def add_type_rel_overlay(
     typeref: irast.TypeRef,
     op: context.OverlayOp,
-    rel: Union[pgast.BaseRelation, pgast.CommonTableExpr], *,
+    rel: pgast.BaseRelation | pgast.CommonTableExpr, *,
     stop_ref: Optional[irast.TypeRef]=None,
     dml_stmts: Iterable[irast.MutatingLikeStmt] = (),
     path_id: irast.PathId,
@@ -2675,7 +2674,7 @@ def _add_ptr_rel_overlay(
     typeid: uuid.UUID,
     ptrref_name: str,
     op: context.OverlayOp,
-    rel: Union[pgast.BaseRelation, pgast.CommonTableExpr], *,
+    rel: pgast.BaseRelation | pgast.CommonTableExpr, *,
     dml_stmts: Iterable[irast.MutatingLikeStmt] = (),
     path_id: irast.PathId,
     ctx: context.CompilerContextLevel
@@ -2700,7 +2699,7 @@ def _add_ptr_rel_overlay(
 def add_ptr_rel_overlay(
     ptrref: irast.PointerRef,
     op: context.OverlayOp,
-    rel: Union[pgast.BaseRelation, pgast.CommonTableExpr], *,
+    rel: pgast.BaseRelation | pgast.CommonTableExpr, *,
     dml_stmts: Iterable[irast.MutatingLikeStmt] = (),
     path_id: irast.PathId,
     ctx: context.CompilerContextLevel

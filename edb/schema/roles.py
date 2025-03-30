@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Union, overload, TYPE_CHECKING
+from typing import Optional, overload, TYPE_CHECKING
 
 from edgedb import scram
 
@@ -203,7 +203,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         context: sd.CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[Role, so.NoDefaultT] = so.NoDefault,
+        default: Role | so.NoDefaultT = so.NoDefault,
         sourcectx: Optional[qlast.Span] = None,
     ) -> Role:
         ...
@@ -226,7 +226,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         context: sd.CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[Role, so.NoDefaultT, None] = so.NoDefault,
+        default: Role | so.NoDefaultT | None = so.NoDefault,
         sourcectx: Optional[qlast.Span] = None,
     ) -> Optional[Role]:
         # On an ALTER ROLE edgedb, if 'edgedb' doesn't exist, fall

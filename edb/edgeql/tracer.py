@@ -21,7 +21,7 @@ from __future__ import annotations
 
 # Import specific things to avoid name clashes
 from typing import (Generator, Mapping, Optional,
-                    Union, Iterable, Generic, TypeVar, Sequence,
+                    Iterable, Generic, TypeVar, Sequence,
                     AbstractSet)
 
 import functools
@@ -62,7 +62,7 @@ SentinelObject = NamedObject(
 )
 
 
-ObjectLike = Union[NamedObject, so.Object]
+ObjectLike = NamedObject | so.Object
 
 
 class Function(NamedObject):
@@ -114,7 +114,7 @@ class ScalarType(Type):
         return True
 
 
-TypeLike = Union[Type, s_types.Type]
+TypeLike = Type | s_types.Type
 
 
 T = TypeVar('T')
@@ -134,7 +134,7 @@ class UnqualObjectIndex(Generic[T]):
 
 class Source(NamedObject):
 
-    pointers: dict[sn.UnqualName, Union[s_pointers.Pointer, Pointer]]
+    pointers: dict[sn.UnqualName, s_pointers.Pointer | Pointer]
 
     '''Abstract type that mocks the s_sources.Source for tracing purposes.'''
 
@@ -146,14 +146,14 @@ class Source(NamedObject):
         self,
         schema: s_schema.Schema,
         name: sn.UnqualName,
-    ) -> Optional[Union[s_pointers.Pointer, Pointer]]:
+    ) -> Optional[s_pointers.Pointer | Pointer]:
         return self.pointers.get(name)
 
     def getptr(
         self,
         schema: s_schema.Schema,
         name: sn.UnqualName,
-    ) -> Union[s_pointers.Pointer, Pointer]:
+    ) -> s_pointers.Pointer | Pointer:
         ptr = self.maybe_get_ptr(schema, name)
         if ptr is None:
             raise AssertionError(f'{self.name} has no link or property {name}')
@@ -162,12 +162,12 @@ class Source(NamedObject):
     def get_pointers(
         self,
         schema: s_schema.Schema,
-    ) -> UnqualObjectIndex[Union[s_pointers.Pointer, Pointer]]:
+    ) -> UnqualObjectIndex[s_pointers.Pointer | Pointer]:
         return UnqualObjectIndex(self.pointers)
 
 
 Source_T = TypeVar("Source_T", bound="Source")
-SourceLike = Union[Source, s_sources.Source]
+SourceLike = Source | s_sources.Source
 SourceLike_T = TypeVar("SourceLike_T", bound="SourceLike")
 
 
@@ -189,7 +189,7 @@ class Alias(ObjectType):
 
 class UnionType(Type):
 
-    def __init__(self, types: list[Union[Type, UnionType, so.Object]]) -> None:
+    def __init__(self, types: list[Type | UnionType | so.Object]) -> None:
         self.types = types
 
     def get_name(self, schema: s_schema.Schema) -> sn.QualName:
@@ -229,7 +229,7 @@ class Pointer(Source):
         self,
         schema: s_schema.Schema,
         name: sn.UnqualName,
-    ) -> Optional[Union[s_pointers.Pointer, Pointer]]:
+    ) -> Optional[s_pointers.Pointer | Pointer]:
         if (not (res := super().maybe_get_ptr(schema, name))
                 and isinstance(self.target, (Source, s_sources.Source))):
             res = self.target.maybe_get_ptr(schema, name)
@@ -452,7 +452,7 @@ class TracerContext:
         path_prefix: Optional[sn.QualName],
         modaliases: dict[Optional[str], str],
         params: Mapping[str, sn.QualName],
-        visited: set[Union[s_pointers.Pointer, Pointer]],
+        visited: set[s_pointers.Pointer | Pointer],
         local_modules: AbstractSet[str],
     ) -> None:
         self.schema = schema
@@ -558,7 +558,7 @@ def alias_context(
 @contextmanager
 def result_alias_context(
     ctx: TracerContext,
-    node: Union[qlast.ReturningQuery, qlast.SubjectQuery],
+    node: qlast.ReturningQuery | qlast.SubjectQuery,
     obj: Optional[ObjectLike],
 ) -> Generator[TracerContext, None, None]:
 
@@ -791,7 +791,7 @@ def trace_Path(
     ctx: TracerContext,
 ) -> Optional[ObjectLike]:
     tip: Optional[ObjectLike] = None
-    ptr: Optional[Union[Pointer, s_pointers.Pointer]] = None
+    ptr: Optional[Pointer | s_pointers.Pointer] = None
     plen = len(node.steps)
 
     # HACK: This isn't very smart, and can't properly track types

@@ -23,7 +23,6 @@ from typing import (
     Generic,
     Optional,
     TypeVar,
-    Union,
     get_type_hints,
 )
 
@@ -209,7 +208,7 @@ class ParametricType:
     @classmethod
     @functools.lru_cache()
     def __class_getitem__(
-        cls, params: Union[Union[type, str], tuple[Union[type, str], ...]]
+        cls, params: type | str | tuple[type | str, ...]
     ) -> type[ParametricType]:
         """Return a dynamic subclass parametrized with `params`.
 

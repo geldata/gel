@@ -28,7 +28,6 @@ from typing import (
     Final,
     Literal,
     Optional,
-    Union,
     AbstractSet,
     ContextManager,
     Iterable,
@@ -810,7 +809,7 @@ def resolve_ptr(
         s_pointers.PointerDirection.Outbound
     ),
     span: Optional[qlast.Span] = None,
-    track_ref: Optional[Union[qlast.Base, Literal[False]]],
+    track_ref: Optional[qlast.Base | Literal[False]],
     ctx: context.ContextLevel,
 ) -> s_pointers.Pointer:
     return resolve_ptr_with_intersections(
@@ -829,7 +828,7 @@ def resolve_ptr_with_intersections(
         s_pointers.PointerDirection.Outbound
     ),
     span: Optional[qlast.Span] = None,
-    track_ref: Optional[Union[qlast.Base, Literal[False]]],
+    track_ref: Optional[qlast.Base | Literal[False]],
     ctx: context.ContextLevel,
 ) -> tuple[s_pointers.Pointer, s_pointers.Pointer]:
     """Resolve a pointer, taking into account upcoming intersections.
@@ -1459,7 +1458,7 @@ def expression_set(
 
 
 def scoped_set(
-    expr: Union[irast.Set, irast.Expr],
+    expr: irast.Set | irast.Expr,
     *,
     type_override: Optional[s_types.Type] = None,
     typehint: Optional[s_types.Type] = None,
@@ -1497,7 +1496,7 @@ def scoped_set(
 
 
 def ensure_set(
-    expr: Union[irast.Set, irast.Expr],
+    expr: irast.Set | irast.Expr,
     *,
     type_override: Optional[s_types.Type] = None,
     typehint: Optional[s_types.Type] = None,
@@ -1545,7 +1544,7 @@ def ensure_set(
 
 
 def ensure_stmt(
-    expr: Union[irast.Set, irast.Expr], *, ctx: context.ContextLevel
+    expr: irast.Set | irast.Expr, *, ctx: context.ContextLevel
 ) -> irast.Stmt:
     if not isinstance(expr, irast.Stmt):
         expr = irast.SelectStmt(
@@ -1929,7 +1928,7 @@ def _get_computable_ctx(
 
 
 def maybe_materialize(
-    stype: Union[s_types.Type, s_pointers.PointerLike],
+    stype: s_types.Type | s_pointers.PointerLike,
     ir: irast.Set,
     *,
     ctx: context.ContextLevel,

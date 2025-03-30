@@ -24,7 +24,6 @@ from typing import (
     Generic,
     Optional,
     TypeVar,
-    Union,
     AbstractSet,
     Hashable,
     Iterable,
@@ -751,7 +750,7 @@ class Command(
         *,
         type: type[Command_T],
         metaclass: Optional[type[so.Object]] = None,
-        exclude: Union[type[Command], tuple[type[Command], ...], None] = None,
+        exclude: type[Command] | tuple[type[Command], ...] | None = None,
         include_prerequisites: bool = True,
         include_caused: bool = True,
     ) -> tuple[Command_T, ...]:
@@ -763,7 +762,7 @@ class Command(
         *,
         type: None = None,
         metaclass: Optional[type[so.Object]] = None,
-        exclude: Union[type[Command], tuple[type[Command], ...], None] = None,
+        exclude: type[Command] | tuple[type[Command], ...] | None = None,
         include_prerequisites: bool = True,
         include_caused: bool = True,
     ) -> tuple[Command, ...]:
@@ -772,9 +771,9 @@ class Command(
     def get_subcommands(
         self,
         *,
-        type: Union[type[Command_T], None] = None,
+        type: type[Command_T] | None = None,
         metaclass: Optional[type[so.Object]] = None,
-        exclude: Union[type[Command], tuple[type[Command], ...], None] = None,
+        exclude: type[Command] | tuple[type[Command], ...] | None = None,
         include_prerequisites: bool = True,
         include_caused: bool = True,
     ) -> tuple[Command, ...]:
@@ -828,7 +827,7 @@ class Command(
     def get_prerequisites(
         self,
         *,
-        type: Union[type[Command_T], None] = None,
+        type: type[Command_T] | None = None,
     ) -> tuple[Command, ...]:
         if type is not None:
             t = type
@@ -855,7 +854,7 @@ class Command(
     def get_caused(
         self,
         *,
-        type: Union[type[Command_T], None] = None,
+        type: type[Command_T] | None = None,
     ) -> tuple[Command, ...]:
         if type is not None:
             t = type
@@ -1464,13 +1463,13 @@ class CommandContext:
     @overload
     def get(
         self,
-        cls: Union[type[Command_T], type[CommandContextToken[Command_T]]],
+        cls: type[Command_T] | type[CommandContextToken[Command_T]],
     ) -> Optional[CommandContextToken[Command_T]]:
         ...
 
     def get(
         self,
-        cls: Union[type[Command_T], type[CommandContextToken[Command_T]]],
+        cls: type[Command_T] | type[CommandContextToken[Command_T]],
     ) -> Optional[CommandContextToken[Command_T]]:
         ctxcls: Any
         if issubclass(cls, Command):
@@ -1487,7 +1486,7 @@ class CommandContext:
 
     def get_ancestor(
         self,
-        cls: Union[type[Command], type[CommandContextToken[Command]]],
+        cls: type[Command] | type[CommandContextToken[Command]],
         op: Optional[Command] = None,
     ) -> Optional[CommandContextToken[Command]]:
         if issubclass(cls, Command):
@@ -1509,7 +1508,7 @@ class CommandContext:
 
     def get_topmost_ancestor(
         self,
-        cls: Union[type[Command], type[CommandContextToken[Command]]],
+        cls: type[Command] | type[CommandContextToken[Command]],
     ) -> Optional[CommandContextToken[Command]]:
         if issubclass(cls, Command):
             ctxcls = cls.get_context_class()
@@ -1763,8 +1762,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
     _schema_metaclass: ClassVar[  # type: ignore
         Optional[type[so.Object_T]]
     ] = None
-    astnode: ClassVar[Union[type[qlast.DDLOperation],
-                            list[type[qlast.DDLOperation]]]]
+    astnode: ClassVar[type[qlast.DDLOperation] | list[type[qlast.DDLOperation]]]
 
     def __init_subclass__(cls, *args: Any, **kwargs: Any) -> None:
         # Check if the command subclass has been parametrized with
@@ -2587,7 +2585,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         context: CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[so.Object_T, so.NoDefaultT] = so.NoDefault,
+        default: so.Object_T | so.NoDefaultT = so.NoDefault,
         sourcectx: Optional[parsing.Span] = None,
     ) -> so.Object_T:
         ...
@@ -2610,7 +2608,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         context: CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
+        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
         sourcectx: Optional[parsing.Span] = None,
     ) -> Optional[so.Object_T]:
         metaclass = self.get_schema_metaclass()
@@ -2959,7 +2957,7 @@ class QualifiedObjectCommand(ObjectCommand[so.QualifiedObject_T]):
         context: CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[so.QualifiedObject_T, so.NoDefaultT] = so.NoDefault,
+        default: so.QualifiedObject_T | so.NoDefaultT = so.NoDefault,
         sourcectx: Optional[parsing.Span] = None,
     ) -> so.QualifiedObject_T:
         ...
@@ -2982,8 +2980,7 @@ class QualifiedObjectCommand(ObjectCommand[so.QualifiedObject_T]):
         context: CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[
-            so.QualifiedObject_T, so.NoDefaultT, None] = so.NoDefault,
+        default: so.QualifiedObject_T | so.NoDefaultT | None = so.NoDefault,
         sourcectx: Optional[parsing.Span] = None,
     ) -> Optional[so.QualifiedObject_T]:
         if name is None:

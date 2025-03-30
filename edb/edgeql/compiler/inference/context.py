@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Union, NamedTuple
+from typing import Optional, NamedTuple
 
 import dataclasses
 
@@ -51,10 +51,8 @@ class MultiplicityInfo:
 class InfCtx(NamedTuple):
     env: context.Environment
     inferred_cardinality: dict[
-        Union[
-            tuple[irast.Base, irast.ScopeTreeNode, frozenset[irast.PathId]],
-            irast.Base,
-        ],
+        tuple[irast.Base, irast.ScopeTreeNode, frozenset[irast.PathId]]
+        | irast.Base,
         qltypes.Cardinality,
     ]
     inferred_multiplicity: dict[

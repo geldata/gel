@@ -24,7 +24,6 @@ from __future__ import annotations
 
 from typing import (
     Optional,
-    Union,
     AbstractSet,
     Iterable,
     Mapping,
@@ -61,7 +60,7 @@ class BoundArg(NamedTuple):
     val: irast.Set
     valtype: s_types.Type
     cast_distance: int
-    arg_id: Optional[Union[int, str]]
+    arg_id: Optional[int | str]
     is_default: bool = False
 
 
@@ -96,7 +95,7 @@ def find_callable_typemods(
     num_args: int,
     kwargs_names: AbstractSet[str],
     ctx: context.ContextLevel,
-) -> dict[Union[int, str], ft.TypeModifier]:
+) -> dict[int | str, ft.TypeModifier]:
     """Find the type modifiers for a callable.
 
     We do this early, before we've compiled/checked the arguments,
@@ -117,7 +116,7 @@ def find_callable_typemods(
     if not options:
         return {k: _SINGLETON for k in set(range(num_args)) | kwargs_names}
 
-    fts: dict[Union[int, str], ft.TypeModifier] = {}
+    fts: dict[int | str, ft.TypeModifier] = {}
     for choice in options:
         for barg in choice.args:
             if not barg.param or barg.arg_id is None:
@@ -351,7 +350,7 @@ def try_bind_call_args(
         # one parameter without default.
         return None
 
-    bound_args_prep: list[Union[MissingArg, BoundArg]] = []
+    bound_args_prep: list[MissingArg | BoundArg] = []
 
     params = func_params.get_in_canonical_order(schema)
     nparams = len(params)

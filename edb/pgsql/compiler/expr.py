@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union, Sequence
+from typing import Optional, Sequence
 
 from edb import errors
 
@@ -790,7 +790,7 @@ def compile_FunctionCall(
 def _tuple_to_row_expr(
         tuple_set: irast.Set, *,
         ctx: context.CompilerContextLevel,
-) -> Union[pgast.ImplicitRowExpr, pgast.RowExpr]:
+) -> pgast.ImplicitRowExpr | pgast.RowExpr:
     tuple_val = dispatch.compile(tuple_set, ctx=ctx)
     if not isinstance(tuple_val, (pgast.RowExpr, pgast.ImplicitRowExpr)):
         raise RuntimeError('tuple compilation unexpectedly did '

@@ -25,7 +25,6 @@ from typing import (
     Generic,
     Optional,
     TypeVar,
-    Union,
     Iterable,
     Iterator,
     Mapping,
@@ -63,7 +62,7 @@ class Field(ProtoField, Generic[T]):
     def __init__(
         self,
         type_: type[T],
-        default: Union[T, NoDefaultT] = NoDefault,
+        default: T | NoDefaultT = NoDefault,
         *,
         coerce: bool = False,
         str_formatter: Callable[[T], str] = str,

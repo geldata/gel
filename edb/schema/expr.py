@@ -22,7 +22,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Union,
     AbstractSet,
     Iterable,
     Mapping,
@@ -310,7 +309,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
         str,
         tuple[
             str,
-            Optional[Union[tuple[type, ...], type]],
+            Optional[tuple[type, ...] | type],
             tuple[uuid.UUID, ...],
             tuple[tuple[str, Any], ...],
         ],
@@ -330,7 +329,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
             str,
             tuple[
                 str,
-                Optional[Union[tuple[type, ...], type]],
+                Optional[tuple[type, ...] | type],
                 tuple[uuid.UUID, ...],
                 tuple[tuple[str, Any], ...],
             ],
@@ -351,7 +350,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
             str,
             tuple[
                 str,
-                Optional[Union[tuple[type, ...], type]],
+                Optional[tuple[type, ...] | type],
                 tuple[uuid.UUID, ...],
                 tuple[tuple[str, Any], ...],
             ],
