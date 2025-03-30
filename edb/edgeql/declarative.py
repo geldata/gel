@@ -1519,7 +1519,7 @@ TRACER_TO_REAL_TYPE_MAP = {
 def _get_local_obj(
     refname: s_name.QualName,
     tracer_type: type[qltracer.NamedObject],
-    sourcectx: Optional[parsing.Span],
+    span: Optional[parsing.Span],
     *,
     ctx: LayoutTraceContext | DepTraceContext,
 ) -> Optional[qltracer.NamedObject]:
@@ -1530,7 +1530,7 @@ def _get_local_obj(
         raise errors.SchemaError(
             f'invalid type: {obj.get_verbosename(ctx.schema)} is a generic '
             f'type and they are not supported in user-defined schema',
-            span=sourcectx,
+            span=span,
         )
 
     elif obj is not None and not isinstance(obj, tracer_type):
@@ -1540,7 +1540,7 @@ def _get_local_obj(
             f'{str(refname)!r} exists, but is '
             f'{english.add_a(obj_type.get_schema_class_displayname())}, '
             f'not {english.add_a(real_type.get_schema_class_displayname())}',
-            span=sourcectx,
+            span=span,
         )
 
     return obj
