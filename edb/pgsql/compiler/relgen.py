@@ -37,6 +37,7 @@ from typing import (
     cast,
 )
 
+import dataclasses
 import contextlib
 import functools
 
@@ -71,26 +72,19 @@ from . import pathctx
 from . import relctx
 
 
+@dataclasses.dataclass(repr=False, eq=False)
 class SetRVar:
-    __slots__ = ('rvar', 'path_id', 'aspects')
-
-    def __init__(
-        self,
-        rvar: pgast.PathRangeVar,
-        path_id: irast.PathId,
-        aspects: Iterable[pgce.PathAspect]=(pgce.PathAspect.VALUE,),
-    ) -> None:
-        self.aspects = aspects
-        self.path_id = path_id
-        self.rvar = rvar
+    rvar: pgast.PathRangeVar
+    path_id: irast.PathId
+    aspects: Iterable[pgce.PathAspect] = dataclasses.field(
+        default=(pgce.PathAspect.VALUE,)
+    )
 
 
+@dataclasses.dataclass(kw_only=True, repr=False, eq=False)
 class SetRVars:
-    __slots__ = ('main', 'new')
-
-    def __init__(self, main: SetRVar, new: List[SetRVar]) -> None:
-        self.main = main
-        self.new = new
+    main: SetRVar
+    new: List[SetRVar]
 
 
 def new_simple_set_rvar(

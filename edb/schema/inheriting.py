@@ -1264,23 +1264,23 @@ class RebaseInheritingObject(
     ) -> List[so.InheritingObjectT]:
         mcls = self.get_schema_metaclass()
         default_base_name = mcls.get_default_base_name()
-        bases = list(orig_bases.objects(schema))
+        ori_bases = list(orig_bases.objects(schema))
         if default_base_name:
             default_base: Optional[so.InheritingObjectT] = self.get_object(
                 schema, context, name=default_base_name)
-            if bases == [default_base]:
-                bases = []
+            if ori_bases == [default_base]:
+                ori_bases = []
         else:
             default_base = None
 
         removed_bases = {b.name for b in self.removed_bases}
-        existing_bases = set()
-
-        for b in bases:
-            if b.get_name(schema) in removed_bases:
-                bases.remove(b)
-            else:
-                existing_bases.add(b.get_name(schema))
+        bases = [
+            b for b in ori_bases
+            if b.get_name(schema) not in removed_bases
+        ]
+        existing_bases = {
+            b.get_name(schema) for b in bases
+        }
 
         index = {b.get_name(schema): i for i, b in enumerate(bases)}
 
