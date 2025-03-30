@@ -649,19 +649,15 @@ impl<'a> Tokenizer<'a> {
                     };
                     Ok((Substitution, len + 1))
                 }
-                _ => {
-                    Err(Error::new(format_args!(
-                        "unexpected character {:?}",
-                        cur_char
-                    )))
-                }
-            },
-            _ => {
-                Err(Error::new(format_args!(
+                _ => Err(Error::new(format_args!(
                     "unexpected character {:?}",
                     cur_char
-                )))
-            }
+                ))),
+            },
+            _ => Err(Error::new(format_args!(
+                "unexpected character {:?}",
+                cur_char
+            ))),
         }
     }
 
