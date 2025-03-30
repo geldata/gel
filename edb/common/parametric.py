@@ -20,7 +20,6 @@ from __future__ import annotations
 from typing import (
     Any,
     ClassVar,
-    Generic,
     Optional,
     TypeVar,
     get_type_hints,
@@ -38,10 +37,6 @@ __all__ = [
     "SingleParametricType",
     "KeyValueParametricType",
 ]
-
-
-T = TypeVar("T")
-V = TypeVar("V")
 
 
 try:
@@ -323,12 +318,12 @@ class ParametricType:
         )
 
 
-class SingleParametricType(ParametricType, Generic[T]):
+class SingleParametricType[T](ParametricType):
 
     type: ClassVar[type[T]]  # type: ignore
 
 
-class KeyValueParametricType(ParametricType, Generic[T, V]):
+class KeyValueParametricType[T, V](ParametricType):
 
     keytype: ClassVar[type[T]]  # type: ignore
     valuetype: ClassVar[type[V]]  # type: ignore

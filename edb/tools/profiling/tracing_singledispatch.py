@@ -14,7 +14,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    TypeVar,
     TYPE_CHECKING,
 )
 
@@ -33,7 +32,6 @@ profiling_in_progress = threading.Event()
 
 
 if TYPE_CHECKING:
-    T = TypeVar("T", bound=Callable[..., Any])
     ModulePath = str
     LineNo = int
     FunctionName = str
@@ -50,7 +48,7 @@ done_dispatches: dict[FunctionID, CallCounts] = {}
 # Taken from Python 3.8.0+ (051ff526b5dc2c40c4a53d87089740358822edfa)
 # The only change is the `wrapper` function implementation, replaced with
 # `sd_wrapper` for clarity.
-def tracing_singledispatch(func: T) -> T:
+def tracing_singledispatch[T: Callable[..., Any]](func: T) -> T:
     """Single-dispatch generic function decorator.
 
     Transforms a function into a generic function, which can have different

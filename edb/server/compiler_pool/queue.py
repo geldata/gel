@@ -23,7 +23,6 @@ import collections
 import typing
 
 
-W = typing.TypeVar('W')
 W2 = typing.TypeVar('W2', contravariant=True)
 
 
@@ -33,7 +32,7 @@ class _AcquireCondition(typing.Protocol[W2]):
         pass
 
 
-class WorkerQueue(typing.Generic[W]):
+class WorkerQueue[W]:
 
     loop: asyncio.AbstractEventLoop
 

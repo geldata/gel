@@ -111,8 +111,9 @@ class TriggerCommandContext(
     pass
 
 
-class TriggerSourceCommandContext(
-        s_sources.SourceCommandContext[s_sources.Source_T]):
+class TriggerSourceCommandContext[Source_T: s_sources.Source](
+    s_sources.SourceCommandContext[Source_T]
+):
     pass
 
 

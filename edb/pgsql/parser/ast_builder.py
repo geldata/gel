@@ -44,7 +44,6 @@ class Context:
 # Node = bool | str | int | float | List[Any] | dict[str, Any]
 Node = Any
 T = TypeVar("T")
-U = TypeVar("U")
 Builder = Callable[[Node, Context], T]
 
 
@@ -85,7 +84,7 @@ def _ident(t: Any) -> Any:
     return t
 
 
-def _list(
+def _list[T, U](
     node: Node,
     ctx: Context,
     name: str,
@@ -102,7 +101,7 @@ def _list(
         return [mapper(builder(n, ctx)) for n in node.get(name, [])]
 
 
-def _maybe_list(
+def _maybe_list[T, U](
     node: Node,
     ctx: Context,
     name: str,
@@ -118,7 +117,7 @@ def _maybe_list(
     )
 
 
-def _enum(
+def _enum[T](
     _ty: type[T],
     node: Node,
     ctx: Context,

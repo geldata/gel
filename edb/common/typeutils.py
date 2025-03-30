@@ -19,16 +19,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Sequence, TypeVar
+from typing import Any, Callable, Optional, Sequence
 
 import collections.abc
 import functools
 
-T = TypeVar('T')
-TC = TypeVar('TC', bound=Callable)
 
-
-def chain_decorators(
+def chain_decorators[TC: Callable](
     funcs: Sequence[Callable[[TC], TC]]
 ) -> Callable[[TC], TC]:
     def f(func: TC) -> TC:
@@ -39,12 +36,12 @@ def chain_decorators(
     return f
 
 
-def downcast(typ: type[T], x: Any) -> T:
+def downcast[T](typ: type[T], x: Any) -> T:
     assert isinstance(x, typ)
     return x
 
 
-def not_none(x: Optional[T]) -> T:
+def not_none[T](x: Optional[T]) -> T:
     assert x is not None
     return x
 

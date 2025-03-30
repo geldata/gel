@@ -31,7 +31,6 @@ from .config import logger
 
 CP1 = typing.TypeVar('CP1', covariant=True)
 CP2 = typing.TypeVar('CP2', contravariant=True)
-C = typing.TypeVar('C')
 
 
 class Connector(typing.Protocol[CP1]):
@@ -90,7 +89,7 @@ class ConnectionState:
     in_stack_since: float = 0
 
 
-class Block(typing.Generic[C]):
+class Block[C]:
     # A Block holds a number of connections to the same backend database.
     # A Pool consists of one or more blocks; blocks are the basic unit of
     # connection pool algorithm, while the pool itself also takes care of
@@ -340,7 +339,7 @@ class Block(typing.Generic[C]):
         self._last_log_timestamp = time.monotonic()
 
 
-class BasePool(typing.Generic[C]):
+class BasePool[C]:
 
     _connect_cb: Connector[C]
     _disconnect_cb: Disconnector[C]
@@ -632,7 +631,7 @@ class BasePool(typing.Generic[C]):
         block.log_connection("discarded")
 
 
-class Pool(BasePool[C]):
+class Pool[C](BasePool[C]):
     # The backend database connection pool implementation in EdgeDB, managing
     # connections to multiple databases of a single PostgreSQL cluster,
     # optimized for quality of service (QoS) so that connection acquisitions
@@ -1276,7 +1275,7 @@ class Pool(BasePool[C]):
                 yield conn
 
 
-class _NaivePool(BasePool[C]):
+class _NaivePool[C](BasePool[C]):
     """Implements a rather naive and flawed balancing algorithm.
 
     Should only be used for for testing purposes.

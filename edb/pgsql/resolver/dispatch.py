@@ -29,9 +29,6 @@ from edb import errors
 
 from . import context
 
-Base_T = typing.TypeVar('Base_T', bound=pgast.Base)
-BaseRelation_T = typing.TypeVar('BaseRelation_T', bound=pgast.BaseRelation)
-
 
 @functools.singledispatch
 def _resolve(
@@ -40,12 +37,14 @@ def _resolve(
     _raise_unsupported(expr)
 
 
-def resolve(expr: Base_T, *, ctx: context.ResolverContextLevel) -> Base_T:
+def resolve[Base_T: pgast.Base](
+    expr: Base_T, *, ctx: context.ResolverContextLevel
+) -> Base_T:
     res = _resolve(expr, ctx=ctx)
     return typing.cast(Base_T, res.replace(span=expr.span))
 
 
-def resolve_opt(
+def resolve_opt[Base_T: pgast.Base](
     node: typing.Optional[Base_T], *, ctx: context.ResolverContextLevel
 ) -> typing.Optional[Base_T]:
     if not node:
@@ -53,13 +52,13 @@ def resolve_opt(
     return resolve(node, ctx=ctx)
 
 
-def resolve_list(
+def resolve_list[Base_T: pgast.Base](
     exprs: typing.Sequence[Base_T], *, ctx: context.ResolverContextLevel
 ) -> list[Base_T]:
     return [resolve(e, ctx=ctx) for e in exprs]
 
 
-def resolve_opt_list(
+def resolve_opt_list[Base_T: pgast.Base](
     exprs: typing.Optional[list[Base_T]],
     *,
     ctx: context.ResolverContextLevel,
