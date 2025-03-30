@@ -239,7 +239,7 @@ ignore_errors = true
 [tool.ruff]
 line-length = 80
 indent-width = 4
-exclude = ["postgres", ".github"]
+exclude = ["postgres", ".github", "edb/server/pgproto"]
 
 [tool.ruff.lint]
 preview = true
