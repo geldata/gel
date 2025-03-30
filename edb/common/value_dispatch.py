@@ -17,17 +17,14 @@
 #
 
 from __future__ import annotations
-from typing import Any, Callable, Generic, Protocol, TypeVar, Iterable
+from typing import Any, Callable, Protocol, Iterable
 
 import functools
 import inspect
 import types
 
 
-_T = TypeVar("_T")
-
-
-class _ValueDispatchCallable(Generic[_T], Protocol):
+class _ValueDispatchCallable[_T](Protocol):
     registry: types.MappingProxyType[Any, Callable[..., _T]]
 
     def register(
@@ -45,7 +42,7 @@ class _ValueDispatchCallable(Generic[_T], Protocol):
     def __call__(__self, *args: Any, **kwargs: Any) -> _T: ...
 
 
-def value_dispatch(func: Callable[..., _T]) -> _ValueDispatchCallable[_T]:
+def value_dispatch[_T](func: Callable[..., _T]) -> _ValueDispatchCallable[_T]:
     """Like singledispatch() but dispatches by value of the first arg.
 
     Example:

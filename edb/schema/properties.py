@@ -35,7 +35,7 @@ from . import objects as so
 from . import pointers
 from . import referencing
 from . import rewrites as s_rewrites
-from . import sources
+from . import sources as s_sources
 from . import types as s_types
 from . import utils
 from . import expr as s_expr
@@ -195,12 +195,14 @@ class Property(
         return delta  # type: ignore
 
 
-class PropertySourceContext(sources.SourceCommandContext[sources.Source_T]):
+class PropertySourceContext[Source_T: s_sources.Source](
+    s_sources.SourceCommandContext[Source_T]
+):
     pass
 
 
-class PropertySourceCommand(
-    inheriting.InheritingObjectCommand[sources.Source_T],
+class PropertySourceCommand[Source_T: s_sources.Source](
+    inheriting.InheritingObjectCommand[Source_T],
 ):
     pass
 

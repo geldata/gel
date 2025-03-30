@@ -22,7 +22,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    TypeVar,
     Iterable,
     Mapping,
     Awaitable,
@@ -106,10 +105,6 @@ class ClusterMode(enum.IntEnum):
     single_database = 3
 
 
-_T = TypeVar("_T")
-_T_Schema = TypeVar("_T_Schema", bound=s_schema.Schema)
-
-
 # A simple connection proxy that reconnects and retries queries
 # on connection errors.  Helps defeat flaky connections and/or
 # flaky Postgres servers (Digital Ocean managed instances are
@@ -154,10 +149,10 @@ class PGConnectionProxy:
         )
         self.terminate()
 
-    async def _retry_conn_errors(
+    async def _retry_conn_errors[T](
         self,
-        task: Callable[[], Awaitable[_T]],
-    ) -> _T:
+        task: Callable[[], Awaitable[T]],
+    ) -> T:
         rloop = retryloop.RetryLoop(
             backoff=retryloop.exp_backoff(),
             timeout=5.0,
@@ -555,12 +550,12 @@ async def _store_static_json_cache(
     await _execute(ctx.conn, text)
 
 
-def _process_delta_params(
-    delta, schema: _T_Schema, params,
+def _process_delta_params[Schema_T: s_schema.Schema](
+    delta, schema: Schema_T, params,
     stdmode: bool=True,
     **kwargs,
 ) -> tuple[
-    _T_Schema,
+    Schema_T,
     delta_cmds.MetaCommand,
     delta_cmds.CreateTrampolines,
 ]:
@@ -583,7 +578,7 @@ def _process_delta_params(
         **kwargs,
     )
     schema = cast(
-        _T_Schema,
+        Schema_T,
         sd.apply(delta, schema=schema, context=context),
     )
 

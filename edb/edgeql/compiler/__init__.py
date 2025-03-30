@@ -130,7 +130,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    TypeVar,
     AbstractSet,
     Mapping,
     cast,
@@ -177,10 +176,8 @@ else:
 #: Compiler modules lazy-load guard.
 _LOADED = False
 
-Tf = TypeVar('Tf', bound=Callable[..., Any])
 
-
-def compiler_entrypoint(func: Tf) -> Tf:
+def compiler_entrypoint[Tf: Callable[..., Any]](func: Tf) -> Tf:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         if not _LOADED:

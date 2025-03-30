@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    TypeVar,
     Mapping,
     cast,
     Iterable,
@@ -59,10 +58,7 @@ if TYPE_CHECKING:
     from edb.schema import schema as s_schema
 
 
-T = TypeVar('T')
-
-
-def _assert_not_none(value: Optional[T]) -> T:
+def _assert_not_none[T](value: Optional[T]) -> T:
     if value is None:
         raise TypeError("A value is expected")
     return value

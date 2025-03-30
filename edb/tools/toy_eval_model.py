@@ -54,7 +54,6 @@ from typing import (
     Callable,
     Optional,
     Protocol,
-    TypeVar,
     Iterable,
     Iterator,
     Sequence,
@@ -90,9 +89,6 @@ import uuid
 
 
 DESUGARING_GROUP = True
-
-
-T = TypeVar('T')
 
 
 def bsid(n: int) -> uuid.UUID:
@@ -624,7 +620,7 @@ def eval_Select(node: qlast.SelectQuery, ctx: EvalContext) -> Result:
 
 
 # From the itertools docs
-def powerset(iterable: Iterable[T]) -> Iterable[tuple[T, ...]]:
+def powerset[T](iterable: Iterable[T]) -> Iterable[tuple[T, ...]]:
     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
     s = list(iterable)
     return itertools.chain.from_iterable(
@@ -1158,7 +1154,7 @@ def eval_objref(name: str, ctx: EvalContext) -> Result:
     ]
 
 
-def last_index(vs: Sequence[T], x: T) -> int:
+def last_index[T](vs: Sequence[T], x: T) -> int:
     for i in range(len(vs) - 1, -1, -1):
         if vs[i] == x:
             return i
@@ -1380,7 +1376,7 @@ def longest_common_prefix(p1: IPath, p2: IPath) -> IPath:
     return tuple(common)
 
 
-def dedup(old: Collection[T]) -> list[T]:
+def dedup[T](old: Collection[T]) -> list[T]:
     new: list[T] = []
     for x in old:
         if x not in new:

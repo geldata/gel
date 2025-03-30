@@ -554,7 +554,7 @@ T_expr_co = typing.TypeVar('T_expr_co', covariant=True, bound=Expr)
 # of expression it holds. Most code uses the Set alias below, which
 # instantiates it with Expr.
 # irutils.is_set_instance can be used to refine the type.
-class SetE(Base, typing.Generic[T_expr_co]):
+class SetE(Base, typing.Generic[T_expr_co]):  # noqa: UP046
     '''A somewhat overloaded metadata container for expressions.
 
     Its primary purpose is to be the holder for expression metadata
