@@ -50,6 +50,7 @@ from edb.server.compiler import errormech
 from edb.server.compiler cimport rpc
 from edb.server.compiler import sertypes
 from edb.server.dbview cimport dbview
+from edb.server.protocol import ai_ext
 from edb.server.protocol cimport args_ser
 from edb.server.protocol cimport frontend
 from edb.server.pgcon cimport pgcon
@@ -295,9 +296,19 @@ async def execute(
                         if ddl_ret and ddl_ret['new_types']:
                             new_types = ddl_ret['new_types']
                 else:
+                    converted_args: Optional[list[args_ser.ConvertedArg]] = None
+                    if query_unit.server_param_conversions:
+                        converted_args = await _convert_parameters(
+                            dbv,
+                            query_unit.server_param_conversions,
+                            query_unit.in_type_args,
+                            bind_args,
+                        )
+
                     data_types = []
                     bound_args_buf = args_ser.recode_bind_args(
-                        dbv, compiled, bind_args, None, data_types)
+                        dbv, compiled, bind_args, converted_args, None, data_types,
+                    )
 
                     assert not (query_unit.database_config
                                 and query_unit.needs_readback), (
@@ -438,6 +449,96 @@ async def execute(
     return data
 
 
+async def _convert_parameters(
+    dbv: dbview.DatabaseConnectionView,
+    server_param_conversions: list[dbstate.ServerParamConversion],
+    in_type_args: Optional[list[dbstate.Param]],
+    bind_args: bytes,
+) -> Optional[list[args_ser.ConvertedArg]]:
+    # If there are server param conversions, compute them now so that they are
+    # injected into the recoded bind args later.
+    tenant = dbv.tenant
+
+    # We receive the encoded param data from the bind_args
+    # and decode it manually.
+    def decode_int(data: bytes) -> int:
+        return int.from_bytes(data)
+
+    def decode_str(data: bytes) -> str:
+        return data.decode("utf-8")
+
+    def decode_array_of_str(data: bytes) -> list[str]:
+        texts = []
+        text_count = int.from_bytes(data[12:16])
+        data = data[20:]
+        for _ in range(text_count):
+            text_length = int.from_bytes(data[:4])
+            data = data[4:]
+            texts.append(data[:(text_length)].decode("utf-8"))
+            data = data[text_length:]
+        return texts
+
+    param_conversions: list[args_ser.ParamConversion] = (
+        args_ser.get_param_conversions(
+            dbv, server_param_conversions, in_type_args, bind_args,
+        )
+    )
+
+    converted_args = []
+    for conversion in param_conversions:
+        conversion_name: str = conversion.get_conversion_name()
+        additional_info: tuple[str, ...] = (
+            conversion.get_additional_info()
+        )
+
+        if conversion_name == 'cast_int64_to_str':
+            decoded_param_data = (
+                decode_int(conversion.get_data())
+                if conversion.get_source_value() is None
+                else conversion.get_source_value()
+            )
+            converted_args.append(
+                args_ser.ConvertedArgStr(
+                    str(decoded_param_data)
+                )
+            )
+
+        elif conversion_name == 'cast_int64_to_float64':
+            decoded_param_data = (
+                decode_int(conversion.get_data())
+                if conversion.get_source_value() is None
+                else conversion.get_source_value()
+            )
+            converted_args.append(
+                args_ser.ConvertedArgFloat64(
+                    float(decoded_param_data)
+                )
+            )
+
+        elif conversion_name == 'join_str_array':
+            decoded_param_data = (
+                decode_array_of_str(
+                    conversion.get_data()
+                )
+                if conversion.get_source_value() is None
+                else conversion.get_source_value()
+            )
+
+            separator = additional_info[0]
+            converted_args.append(
+                args_ser.ConvertedArgStr(
+                    separator.join(decoded_param_data)
+                )
+            )
+
+        else:
+            raise errors.QueryError(
+                f'unknown param conversion: {conversion_name}'
+            )
+
+    return converted_args
+
+
 async def execute_script(
     conn: pgcon.PGConnection,
     dbv: dbview.DatabaseConnectionView,
@@ -478,6 +579,16 @@ async def execute_script(
             # state restoring
             state = None
         async with conn.parse_execute_script_context():
+            
+            converted_args: Optional[list[args_ser.ConvertedArg]] = None
+            if unit_group.server_param_conversions:
+                converted_args = await _convert_parameters(
+                    dbv,
+                    unit_group.server_param_conversions,
+                    unit_group.in_type_args,
+                    bind_args,
+                )
+
             parse_array = [False] * len(unit_group)
             for idx, query_unit in enumerate(unit_group):
                 if fe_conn is not None and fe_conn.cancelled:
@@ -508,8 +619,10 @@ async def execute_script(
                         sent = len(unit_group)
 
                     sync = sent == len(unit_group) and not no_sync
+
                     bind_array = args_ser.recode_bind_args_for_script(
-                        dbv, compiled, bind_args, idx, sent)
+                        dbv, compiled, bind_args, converted_args, idx, sent)
+
                     dbver = dbv.dbver
                     conn.send_query_unit_group(
                         unit_group,

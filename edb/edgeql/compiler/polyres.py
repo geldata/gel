@@ -664,10 +664,7 @@ def _check_server_arg_conversion(
 ) -> Optional[tuple[
     Sequence[tuple[s_types.Type, irast.Set]],
     Mapping[str, tuple[s_types.Type, irast.Set]],
-    dict[
-        str,
-        dict[str, tuple[irast.PathId, irast.Param, list[str]]],
-    ],
+    dict[str, dict[str, context.ServerParamConversion]],
 ]]:
     """Check if there is a server param conversion and get the effective args.
 
@@ -694,7 +691,7 @@ def _check_server_arg_conversion(
     ):
         curr_server_param_conversions: dict[
             str,
-            dict[str, tuple[irast.PathId, irast.Param, list[str]]],
+            dict[str, context.ServerParamConversion],
         ] = {}
 
         arg_conversions: dict[str, str | list[str]] = json.loads(
@@ -744,7 +741,7 @@ def _check_server_arg_conversion(
 
             # Get info about the conversion
             converted_type: s_types.Type
-            additional_info: list[str] = []
+            additional_info: tuple[str, ...] = tuple()
             if conversion_name == 'cast_int64_to_str':
                 converted_type = schema.get(
                     'std::str', type=s_scalars.ScalarType
@@ -762,7 +759,7 @@ def _check_server_arg_conversion(
                 converted_type = schema.get(
                     'std::str', type=s_scalars.ScalarType
                 )
-                additional_info = [separator]
+                additional_info = (separator,)
 
             else:
                 raise RuntimeError(
@@ -784,7 +781,7 @@ def _check_server_arg_conversion(
                 )
             ):
                 # Check if the converted param already exists
-                existing_converted_path_id = existing_param_conversion[0]
+                existing_converted_path_id = existing_param_conversion.path_id
 
             converted_param_name = f'{query_param_name}~{conversion_name}'
             converted_required = arg[1].expr.required
@@ -819,15 +816,17 @@ def _check_server_arg_conversion(
                     ctx=ctx
                 )
                 curr_conversions[conversion_name] = (
-                    conversion_set.path_id,
-                    irast.Param(
-                        name=converted_param_name,
-                        required=converted_required,
-                        schema_type=converted_type,
-                        ir_type=converted_typeref,
-                        sub_params=sub_params,
-                    ),
-                    additional_info,
+                    context.ServerParamConversion(
+                        path_id=conversion_set.path_id,
+                        ir_param=irast.Param(
+                            name=converted_param_name,
+                            required=converted_required,
+                            schema_type=converted_type,
+                            ir_type=converted_typeref,
+                            sub_params=sub_params,
+                        ),
+                        additional_info=additional_info,
+                    )
                 )
 
             # Substitute the old arg

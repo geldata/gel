@@ -135,6 +135,13 @@ InferredVolatility = (
 )
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ServerParamConversion:
+    path_id: irast.PathId
+    ir_param: irast.Param
+    additional_info: tuple[str, ...]
+
+
 class Environment:
     """Compilation environment."""
 
@@ -166,7 +173,7 @@ class Environment:
 
     server_param_conversions: dict[
         str,
-        dict[str, tuple[irast.PathId, irast.Param, list[str]]],
+        dict[str, ServerParamConversion],
     ]
     """A mapping of query parameters and the server param conversions which are
     needed by the query.

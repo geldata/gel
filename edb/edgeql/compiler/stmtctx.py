@@ -222,10 +222,13 @@ def fini_expression(
         if p.sub_params and p.sub_params.decoder_ir
     ]
     extra_exprs += [
-        p.sub_params.decoder_ir
+        conversion.ir_param.sub_params.decoder_ir
         for conversions in ctx.env.server_param_conversions.values()
-        for _, p, _ in conversions.values()
-        if p.sub_params and p.sub_params.decoder_ir
+        for conversion in conversions.values()
+        if (
+            conversion.ir_param.sub_params
+            and conversion.ir_param.sub_params.decoder_ir
+        )
     ]
     extra_exprs += [trigger.expr for stage in ir_triggers for trigger in stage]
 
@@ -379,14 +382,19 @@ def collect_params(ctx: context.ContextLevel) -> list[irast.Param]:
 def collect_server_param_conversions(
     ctx: context.ContextLevel
 ) -> tuple[
-    list[tuple[str, str, list[str]]],
+    list[irast.ServerParamConversion],
     list[irast.Param],
 ]:
     lparams = [
-        (param_name, conversion_name, p, additional_info)
+        (
+            param_name,
+            conversion_name,
+            conversion.ir_param,
+            conversion.additional_info,
+        )
         for param_name, conversions in ctx.env.server_param_conversions.items()
-        for conversion_name, (_, p, additional_info) in conversions.items()
-        if not p.is_sub_param
+        for conversion_name, (conversion) in conversions.items()
+        if not conversion.ir_param.is_sub_param
     ]
     script_ordering = {k: i for i, k in enumerate(ctx.env.script_params)}
     lparams.sort(key=lambda x: (script_ordering[x[0]], x[1]))
@@ -395,11 +403,15 @@ def collect_server_param_conversions(
     params = []
     # Now flatten it out, including all sub_params, making sure subparams
     # appear in the right order.
-    for param_name, conversion_name, p, additional_info in lparams:
-        conversions.append((param_name, conversion_name, additional_info))
-        params.append(p)
-        if p.sub_params:
-            params.extend(p.sub_params.params)
+    for param_name, conversion_name, ir_param, additional_info in lparams:
+        conversions.append(irast.ServerParamConversion(
+            param_name=param_name,
+            conversion_name=conversion_name,
+            additional_info=additional_info,
+        ))
+        params.append(ir_param)
+        if ir_param.sub_params:
+            params.extend(ir_param.sub_params.params)
     return conversions, params
 
 
