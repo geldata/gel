@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import (
     Any,
     ClassVar,
+    Generic,
     Optional,
     TypeVar,
     get_type_hints,
@@ -37,6 +38,10 @@ __all__ = [
     "SingleParametricType",
     "KeyValueParametricType",
 ]
+
+
+T = TypeVar("T")
+V = TypeVar("V")
 
 
 try:
@@ -318,12 +323,16 @@ class ParametricType:
         )
 
 
-class SingleParametricType[T](ParametricType):
+class SingleParametricType(ParametricType, Generic[T]):  # noqa: UP046
+    # We ignore UP046 (Generic[T]) because Python 3.12.2 typing.get_type_hints
+    # has problems with resolving `T` when it is defined using the new syntax.
 
     type: ClassVar[type[T]]  # type: ignore
 
 
-class KeyValueParametricType[T, V](ParametricType):
+class KeyValueParametricType(ParametricType, Generic[T, V]):  # noqa: UP046
+    # We ignore UP046 (Generic[T]) because Python 3.12.2 typing.get_type_hints
+    # has problems with resolving `T` when it is defined using the new syntax.
 
     keytype: ClassVar[type[T]]  # type: ignore
     valuetype: ClassVar[type[V]]  # type: ignore
