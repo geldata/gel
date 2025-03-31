@@ -78,8 +78,8 @@ class SourcePoint:
 
     @staticmethod
     def from_lines_cols(
-        data: bytes, lines_cols: typing.List[tuple[int, int]]
-    ) -> typing.List[SourcePoint]: ...
+        data: bytes, lines_cols: list[tuple[int, int]]
+    ) -> list[SourcePoint]: ...
 
 def offset_of_line(text: str, target: int) -> int: ...
 
