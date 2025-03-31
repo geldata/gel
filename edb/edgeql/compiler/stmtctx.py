@@ -91,6 +91,7 @@ def init_context(
         env.path_scope = inlining_context.path_scope
         env.alias_result_view_name = options.result_view_name
         env.query_parameters = {}
+        env.server_param_conversions = {}
         env.script_params = {}
 
         ctx = context.ContextLevel(
@@ -211,13 +212,19 @@ def fini_expression(
     # to catch them all in our fixups and analyses.
     # IMPORTANT: Any new expressions that are sent to the backend
     # but don't appear in `ir` must be added here.
-    extra_exprs = []
+    extra_exprs: list[irast.Set] = []
     extra_exprs += [
         rw for rw in ctx.env.type_rewrites.values()
         if isinstance(rw, irast.Set)
     ]
     extra_exprs += [
         p.sub_params.decoder_ir for p in ctx.env.query_parameters.values()
+        if p.sub_params and p.sub_params.decoder_ir
+    ]
+    extra_exprs += [
+        p.sub_params.decoder_ir
+        for conversions in ctx.env.server_param_conversions.values()
+        for _, p, _ in conversions.values()
         if p.sub_params and p.sub_params.decoder_ir
     ]
     extra_exprs += [trigger.expr for stage in ir_triggers for trigger in stage]
@@ -256,6 +263,9 @@ def fini_expression(
 
     # Collect query parameters
     params = collect_params(ctx)
+    server_param_conversions, server_param_conversion_params = (
+        collect_server_param_conversions(ctx)
+    )
 
     # ConfigSet and ConfigReset don't like being part of a Set, so bail early
     if isinstance(ir.expr, (irast.ConfigSet, irast.ConfigReset)):
@@ -263,6 +273,11 @@ def fini_expression(
         ir.expr.globals = list(ctx.env.query_globals.values())
         ir.expr.params = params
         ir.expr.schema = ctx.env.schema
+
+        if server_param_conversions:
+            raise RuntimeError(
+                'Config commands cannot use server param conversions'
+            )
 
         return ir.expr
 
@@ -307,6 +322,8 @@ def fini_expression(
         expr=ir,
         params=params,
         globals=list(ctx.env.query_globals.values()),
+        server_param_conversions=server_param_conversions,
+        server_param_conversion_params=server_param_conversion_params,
         views=ctx.view_nodes,
         scope_tree=ctx.env.path_scope,
         cardinality=cardinality,
@@ -357,6 +374,33 @@ def collect_params(ctx: context.ContextLevel) -> list[irast.Param]:
         if p.sub_params:
             params.extend(p.sub_params.params)
     return params
+
+
+def collect_server_param_conversions(
+    ctx: context.ContextLevel
+) -> tuple[
+    list[tuple[str, str, list[str]]],
+    list[irast.Param],
+]:
+    lparams = [
+        (param_name, conversion_name, p, additional_info)
+        for param_name, conversions in ctx.env.server_param_conversions.items()
+        for conversion_name, (_, p, additional_info) in conversions.items()
+        if not p.is_sub_param
+    ]
+    script_ordering = {k: i for i, k in enumerate(ctx.env.script_params)}
+    lparams.sort(key=lambda x: (script_ordering[x[0]], x[1]))
+
+    conversions = []
+    params = []
+    # Now flatten it out, including all sub_params, making sure subparams
+    # appear in the right order.
+    for param_name, conversion_name, p, additional_info in lparams:
+        conversions.append((param_name, conversion_name, additional_info))
+        params.append(p)
+        if p.sub_params:
+            params.extend(p.sub_params.params)
+    return conversions, params
 
 
 def _fixup_materialized_sets(

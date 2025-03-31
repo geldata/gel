@@ -555,6 +555,7 @@ def fini_toplevel(
 def populate_argmap(
     params: list[irast.Param],
     globals: list[irast.Global],
+    server_param_conversion_params: list[irast.Param],
     *,
     ctx: context.CompilerContextLevel,
 ) -> None:
@@ -593,3 +594,13 @@ def populate_argmap(
                 logical_index=-1,
             )
             physical_index += 1
+    for param in server_param_conversion_params:
+        ctx.argmap[param.name] = pgast.Param(
+            index=physical_index,
+            logical_index=logical_index,
+            required=param.required,
+        )
+        if not param.sub_params:
+            physical_index += 1
+        if not param.is_sub_param:
+            logical_index += 1

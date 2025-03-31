@@ -164,6 +164,19 @@ class Environment:
     """A mapping of query globals.  Gets populated during
     the compilation."""
 
+    server_param_conversions: dict[
+        str,
+        dict[str, tuple[irast.PathId, irast.Param, list[str]]],
+    ]
+    """A mapping of query parameters and the server param conversions which are
+    needed by the query.
+
+    This is indicates that the server will compute and provide an additional
+    parameter based on a user provided parameter.
+
+    Used by ext::ai:search to get embeddings from text before running a query.
+    """
+
     set_types: dict[irast.Set, s_types.Type]
     """A dictionary of all Set instances and their schema types."""
 
@@ -300,6 +313,7 @@ class Environment:
         self.schema_view_cache = {}
         self.query_parameters = {}
         self.query_globals = {}
+        self.server_param_conversions = {}
         self.set_types = {}
         self.type_origins = {}
         self.inferred_volatility = {}

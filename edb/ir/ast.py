@@ -778,6 +778,8 @@ class Statement(Command):
     views: dict[sn.Name, s_types.Type]
     params: list[Param]
     globals: list[Global]
+    server_param_conversions: list[tuple[str, str, list[str]]]
+    server_param_conversion_params: list[Param]
     cardinality: qltypes.Cardinality
     volatility: qltypes.Volatility
     multiplicity: qltypes.Multiplicity
