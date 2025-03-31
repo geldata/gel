@@ -53,7 +53,7 @@ else:
         except RuntimeError:
             # In some container environments the home dir is not
             # available so we return a path to a nonexistent file
-            return pathlib.Path('/.postgresql')
+            return pathlib.Path('')
 
 
 class SSLMode(enum.IntEnum):
