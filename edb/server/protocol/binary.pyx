@@ -553,6 +553,13 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                     return await dbv.parse(
                         query_req,
                         allow_capabilities=allow_capabilities,
+                        send_log_message=(
+                            lambda code, s: self.write_log(
+                                EdgeSeverity.EDGE_SEVERITY_NOTICE,
+                                code,
+                                s,
+                            )
+                        )
                     )
             finally:
                 if suppress_timeout:

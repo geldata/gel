@@ -1215,7 +1215,12 @@ cdef class DatabaseConnectionView:
             self.get_system_config(),
         )
 
-    async def recompile_cached_queries(self, user_schema, schema_version):
+    async def recompile_cached_queries(
+        self,
+        user_schema,
+        schema_version,
+        send_log_message: object | None = None,
+    ):
         compiler_pool = self.server.get_compiler_pool()
         compile_concurrency = max(1, compiler_pool.get_size_hint() // 2)
         concurrency_control = asyncio.Semaphore(compile_concurrency)
@@ -1264,6 +1269,7 @@ cdef class DatabaseConnectionView:
 
         async with asyncio.TaskGroup() as g:
             req: rpc.CompilationRequest
+            cnt = 0
             # Reversed so that we compile more recently used first.
             for req, grp in reversed(self._db._eql_to_compiled.items()):
                 if (
@@ -1275,7 +1281,14 @@ cdef class DatabaseConnectionView:
                     # backend connection, which is not available here.
                     and req.input_language != enums.InputLanguage.SQL
                 ):
+                    cnt += 1
                     g.create_task(recompile_request(req))
+
+            if send_log_message:
+                send_log_message(
+                    errors.MigrationStatusMessage.get_code(),
+                    f'Recompiling {cnt} cached queries'
+                )
 
         return rv
 
@@ -1313,6 +1326,7 @@ cdef class DatabaseConnectionView:
         allow_capabilities: uint64_t = <uint64_t>compiler.Capability.ALL,
         pgcon: pgcon.PGConnection | None = None,
         tag: str | None = None,
+        send_log_message: object | None = None,
     ) -> CompiledQuery:
         query_unit_group = None
         if self._query_cache_enabled:
@@ -1457,7 +1471,9 @@ cdef class DatabaseConnectionView:
                 user_schema = None
             if user_schema:
                 recompiled_cache = await self.recompile_cached_queries(
-                    user_schema, user_schema_version
+                    user_schema,
+                    user_schema_version,
+                    send_log_message=send_log_message,
                 )
 
         if use_metrics:
