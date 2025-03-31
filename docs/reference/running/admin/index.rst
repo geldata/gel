@@ -10,10 +10,6 @@ Administrative commands for managing Gel:
 
   Configure server behavior.
 
-* :ref:`database <ref_admin_databases>`
-
-  Create or remove a database.
-
 * :ref:`role <ref_admin_roles>`
 
   Create, remove, or alter a role.
@@ -40,7 +36,6 @@ Administrative commands for managing Gel:
     :hidden:
 
     configure
-    databases
     roles
     statistics_update
     vacuum
