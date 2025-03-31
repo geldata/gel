@@ -26,16 +26,12 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
     TypeVar,
     Union,
     AbstractSet,
     Iterator,
     Sequence,
     Counter,
-    Dict,
-    List,
-    Set,
     NamedTuple,
     cast,
     TYPE_CHECKING,
@@ -78,26 +74,26 @@ if TYPE_CHECKING:
     ModulePath = str
     LineNo = int
     FunctionName = str
-    FunctionID = Tuple[ModulePath, LineNo, FunctionName]
-    LineID = Tuple[ModulePath, LineNo]
+    FunctionID = tuple[ModulePath, LineNo, FunctionName]
+    LineID = tuple[ModulePath, LineNo]
     # cc, nc, tt, ct, callers
     PrimitiveCallCount = int  # without recursion
     CallCount = int  # with recursion
     TotalTime = float
     CumulativeTime = float
-    Stat = Tuple[PrimitiveCallCount, CallCount, TotalTime, CumulativeTime]
-    StatWithCallers = Tuple[
+    Stat = tuple[PrimitiveCallCount, CallCount, TotalTime, CumulativeTime]
+    StatWithCallers = tuple[
         PrimitiveCallCount,
         CallCount,
         TotalTime,
         CumulativeTime,
-        Dict[FunctionID, Stat],  # callers
+        dict[FunctionID, Stat],  # callers
     ]
-    Stats = Dict[FunctionID, StatWithCallers]
+    Stats = dict[FunctionID, StatWithCallers]
     Caller = FunctionID
     Callee = FunctionID
-    Call = Tuple[Caller, Optional[Callee]]
-    CallCounts = Dict[Caller, Dict[Callee, CallCount]]
+    Call = tuple[Caller, Optional[Callee]]
+    CallCounts = dict[Caller, dict[Callee, CallCount]]
 
 
 class profile:
@@ -203,7 +199,7 @@ class profile:
         width: int = 1920,
         threshold: float = 0.0001,  # 1.0 is 100%
         quiet: bool = False,
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         """Read all pstats in `self.dir` and write a summary to `out_path`.
 
         `sort_by` after `pstats.sort_stats()`.  Files identified by `self.dir`,
@@ -278,8 +274,8 @@ class profile:
         )
         return success, failure
 
-    def accumulate_singledispatch_traces(self) -> Dict[FunctionID, CallCounts]:
-        result: Dict[FunctionID, CallCounts] = {}
+    def accumulate_singledispatch_traces(self) -> dict[FunctionID, CallCounts]:
+        result: dict[FunctionID, CallCounts] = {}
         d = self.dir.glob(
             self.prefix + "*" + self.suffix + SINGLEDISPATCH_SUFFIX
         )
@@ -331,8 +327,8 @@ def profile_memory(func: Callable[[], Any]) -> MemoryFrame:
 @dataclasses.dataclass
 class Function:
     id: FunctionID
-    calls: List[FunctionID]
-    calledby: List[FunctionID]
+    calls: list[FunctionID]
+    calledby: list[FunctionID]
     stat: Stat
 
 
@@ -369,11 +365,11 @@ def gradient_from_name(name: str) -> float:
 def calc_callers(
     stats: Stats,
     threshold: float,
-) -> Tuple[Dict[FunctionID, Function], Dict[Call, Stat]]:
+) -> tuple[dict[FunctionID, Function], dict[Call, Stat]]:
     """Calculate flattened stats of calls between functions."""
-    roots: List[FunctionID] = []
-    funcs: Dict[FunctionID, Function] = {}
-    calls: Dict[Call, Stat] = {}
+    roots: list[FunctionID] = []
+    funcs: dict[FunctionID, Function] = {}
+    calls: dict[Call, Stat] = {}
     for func, (cc, nc, tt, ct, callers) in stats.items():
         funcs[func] = Function(
             id=func, calls=[], calledby=[], stat=(cc, nc, tt, ct)
@@ -414,7 +410,7 @@ def calc_callers(
 @dataclasses.dataclass
 class Block:
     func: FunctionID
-    call_stack: Tuple[FunctionID, ...]
+    call_stack: tuple[FunctionID, ...]
     color: int
     level: int
     tooltip: str
@@ -475,7 +471,7 @@ class MemoryFrame:
     """
     blocks: int
     size: int  # in bytes
-    callers: Dict[LineID, MemoryFrame] = dataclasses.field(
+    callers: dict[LineID, MemoryFrame] = dataclasses.field(
         default_factory=dict
     )
 
@@ -484,10 +480,10 @@ class ScopeRecorder(ast.NodeVisitor):
     """A nifty AST visitor that records all scope changes in the file."""
 
     # the value is a qualified name (without the module), e.g. "Class.method"
-    scopes: Dict[LineNo, str]
+    scopes: dict[LineNo, str]
 
     # internal stack for correct naming in the scope
-    stack: List[FunctionName]
+    stack: list[FunctionName]
 
     def __init__(self):
         self.reset()
@@ -518,10 +514,10 @@ class ScopeCache:
 
     def __init__(self) -> None:
         self.recorder = ScopeRecorder()
-        self.scopes: Dict[ModulePath, Dict[LineNo, str]] = {}
-        self.cache: Dict[Tuple[ModulePath, LineNo], str] = {}
+        self.scopes: dict[ModulePath, dict[LineNo, str]] = {}
+        self.cache: dict[tuple[ModulePath, LineNo], str] = {}
 
-    def __getitem__(self, key: Tuple[ModulePath, LineNo]) -> str:
+    def __getitem__(self, key: tuple[ModulePath, LineNo]) -> str:
         if key not in self.cache:
             try:
                 self.cache[key] = self._get_scope(key[0], key[1])
@@ -545,10 +541,10 @@ class ScopeCache:
         return last_scope
 
 
-def count_calls(funcs: Dict[FunctionID, Function]) -> Counter[Call]:
+def count_calls(funcs: dict[FunctionID, Function]) -> Counter[Call]:
     call_counter: Counter[Call] = Counter()
 
-    def _counts(caller: FunctionID, visited: Set[Call], level: int = 0) -> None:
+    def _counts(caller: FunctionID, visited: set[Call], level: int = 0) -> None:
         for callee in funcs[caller].calls:
             call = caller, callee
             call_counter[call] += 1
@@ -601,7 +597,7 @@ def find_singledispatch_wrapper(
 
 def filter_singledispatch_in_place(
     stats: Stats,
-    dispatches: Dict[FunctionID, CallCounts],
+    dispatches: dict[FunctionID, CallCounts],
     regular_location: bool = False,
 ) -> None:
     """Removes singledispatch `wrapper` from the `stats.`
@@ -697,12 +693,12 @@ def filter_singledispatch_in_place(
 
 
 def build_svg_blocks(
-    funcs: Dict[FunctionID, Function],
-    calls: Dict[Call, Stat],
+    funcs: dict[FunctionID, Function],
+    calls: dict[Call, Stat],
     threshold: float,
-) -> Tuple[List[Block], List[Block], float]:
-    call_stack_blocks: List[Block] = []
-    usage_blocks: List[Block] = []
+) -> tuple[list[Block], list[Block], float]:
+    call_stack_blocks: list[Block] = []
+    usage_blocks: list[Block] = []
     counts: Counter[Call] = count_calls(funcs)
     maxw = float(funcs[ROOT_ID].stat[3])
 
@@ -713,7 +709,7 @@ def build_svg_blocks(
         visited: AbstractSet[Call] = frozenset(),
         level: int = 0,
         origin: float = 0,
-        call_stack: Tuple[FunctionID, ...] = (),
+        call_stack: tuple[FunctionID, ...] = (),
         parent_call_count: int = 1,
         parent_block: Optional[Block] = None,
     ) -> None:
@@ -874,9 +870,9 @@ def build_svg_blocks_by_memory(
 
 
 def render_svg_section(
-    blocks: List[Block],
+    blocks: list[Block],
     maxw: float,
-    colors: List[List[RGB]],
+    colors: list[list[RGB]],
     block_height: int,
     font_size: int,
     width: int,

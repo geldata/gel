@@ -21,12 +21,7 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
     Sequence,
-    Dict,
-    List,
-    Set,
     NamedTuple,
     TYPE_CHECKING,
 )
@@ -55,14 +50,14 @@ if TYPE_CHECKING:
 
 
 class DepGraphEntryExtra(NamedTuple):
-    implicit_ancestors: List[sn.Name]
+    implicit_ancestors: list[sn.Name]
 
 
-DepGraphKey = Tuple[str, str]
+DepGraphKey = tuple[str, str]
 DepGraphEntry = topological.DepGraphEntry[
-    DepGraphKey, Tuple[sd.Command, ...], DepGraphEntryExtra,
+    DepGraphKey, tuple[sd.Command, ...], DepGraphEntryExtra,
 ]
-DepGraph = Dict[DepGraphKey, DepGraphEntry]
+DepGraph = dict[DepGraphKey, DepGraphEntry]
 
 
 def linearize_delta(
@@ -92,16 +87,16 @@ def linearize_delta(
     # A map of commands to root->command paths through the tree.
     # Nodes are duplicated so the interior nodes of the path are
     # distinct.
-    opmap: Dict[sd.Command, List[sd.Command]] = {}
-    strongrefs: Dict[sn.Name, sn.Name] = {}
+    opmap: dict[sd.Command, list[sd.Command]] = {}
+    strongrefs: dict[sn.Name, sn.Name] = {}
 
     for op in _get_sorted_subcommands(delta):
         _break_down(opmap, strongrefs, [delta, op])
 
     depgraph: DepGraph = {}
-    renames: Dict[sn.Name, sn.Name] = {}
-    renames_r: Dict[sn.Name, sn.Name] = {}
-    deletions: Set[sn.Name] = set()
+    renames: dict[sn.Name, sn.Name] = {}
+    renames_r: dict[sn.Name, sn.Name] = {}
+    deletions: set[sn.Name] = set()
 
     for op in opmap:
         if isinstance(op, sd.RenameObject):
@@ -141,27 +136,27 @@ def linearize_delta(
 
 
 def reconstruct_tree(
-    sortedlist: List[DepGraphEntry],
+    sortedlist: list[DepGraphEntry],
     depgraph: DepGraph,
 ) -> sd.DeltaRoot:
 
     result = sd.DeltaRoot()
     # Child to parent mapping.
-    parents: Dict[sd.Command, sd.Command] = {}
+    parents: dict[sd.Command, sd.Command] = {}
     # A mapping of commands to their dependencies.
-    dependencies: Dict[sd.Command, Set[sd.Command]] = (
+    dependencies: dict[sd.Command, set[sd.Command]] = (
         collections.defaultdict(set))
     # Current address of command within a tree in the form of
     # a tuple of indexes where each index represents relative
     # position within the tree rank.
-    offsets: Dict[sd.Command, Tuple[int, ...]] = {}
+    offsets: dict[sd.Command, tuple[int, ...]] = {}
     # Object commands indexed by command type and object name and
     # implicitness, where each entry represents the latest seen
     # command of the type for a particular object.  Implicit commands
     # are included, but can only be attached to by other implicit
     # commands.
-    opindex: Dict[
-        Tuple[Type[sd.ObjectCommand[so.Object]], sn.Name, bool],
+    opindex: dict[
+        tuple[type[sd.ObjectCommand[so.Object]], sn.Name, bool],
         sd.ObjectCommand[so.Object]
     ] = {}
 
@@ -187,7 +182,7 @@ def reconstruct_tree(
         return all(offsets[dep][:tgt_offset_len] <= tgt_offset for dep in deps)
 
     def attach(
-        opbranch: Tuple[sd.Command, ...],
+        opbranch: tuple[sd.Command, ...],
         new_parent: sd.Command,
         slice_start: int = 1,
         as_implicit: bool = False,
@@ -296,9 +291,9 @@ def reconstruct_tree(
         return True
 
     def maybe_attach_to_preceding(
-        opbranch: Tuple[sd.Command, ...],
-        parent_candidates: List[sn.Name],
-        allowed_op_types: List[Type[sd.ObjectCommand[so.Object]]],
+        opbranch: tuple[sd.Command, ...],
+        parent_candidates: list[sn.Name],
+        allowed_op_types: list[type[sd.ObjectCommand[so.Object]]],
         as_implicit: bool = False,
         slice_start: int = 1,
     ) -> bool:
@@ -427,16 +422,16 @@ def _command_key(cmd: sd.Command) -> Any:
         return ('_generic', type(cmd).__name__)
 
 
-def _get_sorted_subcommands(cmd: sd.Command) -> List[sd.Command]:
+def _get_sorted_subcommands(cmd: sd.Command) -> list[sd.Command]:
     subcommands = list(cmd.get_subcommands())
     subcommands.sort(key=_command_key)
     return subcommands
 
 
 def _break_down(
-    opmap: Dict[sd.Command, List[sd.Command]],
-    strongrefs: Dict[sn.Name, sn.Name],
-    opbranch: List[sd.Command],
+    opmap: dict[sd.Command, list[sd.Command]],
+    strongrefs: dict[sn.Name, sn.Name],
+    opbranch: list[sd.Command],
 ) -> None:
     if len(opbranch) > 2:
         new_opbranch = _extract_op(opbranch)
@@ -502,11 +497,11 @@ def _break_down(
 
 def _trace_op(
     op: sd.Command,
-    opbranch: List[sd.Command],
+    opbranch: list[sd.Command],
     depgraph: DepGraph,
-    renames: Dict[sn.Name, sn.Name],
-    renames_r: Dict[sn.Name, sn.Name],
-    strongrefs: Dict[sn.Name, sn.Name],
+    renames: dict[sn.Name, sn.Name],
+    renames_r: dict[sn.Name, sn.Name],
+    strongrefs: dict[sn.Name, sn.Name],
     old_schema: Optional[s_schema.Schema],
     new_schema: s_schema.Schema,
 ) -> None:
@@ -558,9 +553,9 @@ def _trace_op(
 
     def write_dep_matrix(
         dependent: str,
-        dependent_tags: Tuple[str, ...],
+        dependent_tags: tuple[str, ...],
         dependency: str,
-        dependency_tags: Tuple[str, ...],
+        dependency_tags: tuple[str, ...],
         *,
         as_weak: bool = False,
     ) -> None:
@@ -634,9 +629,9 @@ def _trace_op(
                         as_weak=True,
                     )
 
-    deps: ordered.OrderedSet[Tuple[str, str]] = ordered.OrderedSet()
+    deps: ordered.OrderedSet[tuple[str, str]] = ordered.OrderedSet()
     graph_key: str
-    implicit_ancestors: List[sn.Name] = []
+    implicit_ancestors: list[sn.Name] = []
 
     if isinstance(op, sd.CreateObject):
         tag = 'create'
@@ -966,10 +961,10 @@ def get_object(
 def _get_referrers(
     schema: s_schema.Schema,
     obj: so.Object,
-    strongrefs: Dict[sn.Name, sn.Name],
-) -> List[so.Object]:
+    strongrefs: dict[sn.Name, sn.Name],
+) -> list[so.Object]:
     refs = schema.get_referrers(obj)
-    result: Set[so.Object] = set()
+    result: set[so.Object] = set()
 
     for ref in refs:
         if not ref.is_blocking_ref(schema, obj):
@@ -992,7 +987,7 @@ def _get_referrers(
     ))
 
 
-def _extract_op(stack: Sequence[sd.Command]) -> List[sd.Command]:
+def _extract_op(stack: Sequence[sd.Command]) -> list[sd.Command]:
     parent_op = stack[0]
     new_stack = [parent_op]
 

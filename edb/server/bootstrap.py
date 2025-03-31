@@ -22,15 +22,10 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Iterable,
     Mapping,
     Awaitable,
-    Dict,
-    List,
-    Set,
     Sequence,
     NamedTuple,
     TYPE_CHECKING,
@@ -620,7 +615,7 @@ def compile_bootstrap_script(
     bootstrap_mode: bool = True,
     expected_cardinality_one: bool = False,
     output_format: edbcompiler.OutputFormat = edbcompiler.OutputFormat.JSON,
-) -> Tuple[s_schema.Schema, str]:
+) -> tuple[s_schema.Schema, str]:
     ctx = edbcompiler.new_compiler_context(
         compiler_state=compiler.state,
         user_schema=schema,
@@ -645,7 +640,7 @@ def compile_single_query(
 
 
 def _get_all_subcommands(
-    cmd: sd.Command, type: Optional[Type[sd.Command]] = None
+    cmd: sd.Command, type: Optional[type[sd.Command]] = None
 ) -> list[sd.Command]:
     cmds = []
 
@@ -661,7 +656,7 @@ def _get_all_subcommands(
 
 def _get_schema_object_ids(
     delta: sd.Command,
-) -> Mapping[Tuple[sn.Name, Optional[str]], uuid.UUID]:
+) -> Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]:
     schema_object_ids = {}
     for cmd in _get_all_subcommands(delta, sd.CreateObject):
         assert isinstance(cmd, sd.CreateObject)
@@ -1282,9 +1277,9 @@ class StdlibBits(NamedTuple):
     #: Descriptors of all the needed trampolines
     trampolines: list[trampoline.Trampoline]
     #: A set of ids of all types in std.
-    types: Set[uuid.UUID]
+    types: set[uuid.UUID]
     #: Schema class reflection layout.
-    classlayout: Dict[Type[s_obj.Object], s_refl.SchemaTypeLayout]
+    classlayout: dict[type[s_obj.Object], s_refl.SchemaTypeLayout]
     #: Schema introspection SQL query.
     local_intro_query: str
     #: Global object introspection SQL query.
@@ -1326,8 +1321,8 @@ def _make_stdlib(
             std_texts.append(s_std.get_std_module_text(modname))
 
     ddl_text = '\n'.join(std_texts)
-    types: Set[uuid.UUID] = set()
-    std_plans: List[sd.Command] = []
+    types: set[uuid.UUID] = set()
+    std_plans: list[sd.Command] = []
 
     for ddl_cmd in edgeql.parse_block(ddl_text):
         assert isinstance(ddl_cmd, qlast.DDLCommand)
@@ -1446,7 +1441,7 @@ async def _amend_stdlib(
     ctx: BootstrapContext,
     ddl_text: str,
     stdlib: StdlibBits,
-) -> Tuple[StdlibBits, str, list[trampoline.Trampoline]]:
+) -> tuple[StdlibBits, str, list[trampoline.Trampoline]]:
     schema = s_schema.ChainedSchema(
         s_schema.EMPTY_SCHEMA,
         stdlib.stdschema,
@@ -1506,7 +1501,7 @@ def compile_intro_queries_stdlib(
     user_schema: s_schema.Schema,
     global_schema: s_schema.Schema=s_schema.EMPTY_SCHEMA,
     reflection: s_refl.SchemaReflectionParts,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     compilerctx = edbcompiler.new_compiler_context(
         compiler_state=compiler.state,
         user_schema=user_schema,
@@ -2211,7 +2206,7 @@ def compile_sys_queries(
 
 async def _populate_misc_instance_data(
     ctx: BootstrapContext,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
 
     mock_auth_nonce = scram.generate_nonce()
     json_instance_data = {
@@ -2336,7 +2331,7 @@ async def _get_instance_data(
     conn: metaschema.PGConnection,
     *,
     versioned: bool=True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     schema = 'edgedbinstdata_VER' if versioned else 'edgedbinstdata'
     data = await conn.sql_fetch_val(
         trampoline.fixup_query(f"""

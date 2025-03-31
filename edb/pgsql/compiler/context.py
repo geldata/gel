@@ -23,14 +23,9 @@ from __future__ import annotations
 from typing import (
     Callable,
     Optional,
-    Tuple,
     Union,
     Mapping,
     ChainMap,
-    Dict,
-    List,
-    Set,
-    FrozenSet,
     Generator,
     TYPE_CHECKING,
 )
@@ -192,9 +187,9 @@ class RelOverlays:
     ptr: immu.Map[
         Optional[irast.MutatingLikeStmt],
         immu.Map[
-            Tuple[uuid.UUID, str],
-            Tuple[
-                Tuple[
+            tuple[uuid.UUID, str],
+            tuple[
+                tuple[
                     OverlayOp,
                     Union[pgast.BaseRelation, pgast.CommonTableExpr],
                     irast.PathId,
@@ -212,7 +207,7 @@ class CompilerContextLevel(compiler.ContextLevel):
     env: Environment
 
     #: mapping of named args to position
-    argmap: Dict[str, pgast.Param]
+    argmap: dict[str, pgast.Param]
 
     #: whether compiling in singleton expression mode
     singleton_mode: bool
@@ -226,7 +221,7 @@ class CompilerContextLevel(compiler.ContextLevel):
     #: Record of DML CTEs generated for the corresponding IR DML.
     #: CTEs generated for DML-containing FOR statements are keyed
     #: by their iterator set.
-    dml_stmts: Dict[Union[irast.MutatingStmt, irast.Set],
+    dml_stmts: dict[Union[irast.MutatingStmt, irast.Set],
                     pgast.CommonTableExpr]
 
     #: Inline DML functions may require additional CTEs.
@@ -246,22 +241,22 @@ class CompilerContextLevel(compiler.ContextLevel):
     rel: pgast.SelectStmt
 
     #: SQL query hierarchy
-    rel_hierarchy: Dict[pgast.Query, pgast.Query]
+    rel_hierarchy: dict[pgast.Query, pgast.Query]
 
     #: CTEs representing decoded parameters
-    param_ctes: Dict[str, pgast.CommonTableExpr]
+    param_ctes: dict[str, pgast.CommonTableExpr]
 
     #: CTEs representing pointers and their inherited pointers
-    ptr_inheritance_ctes: Dict[uuid.UUID, pgast.CommonTableExpr]
+    ptr_inheritance_ctes: dict[uuid.UUID, pgast.CommonTableExpr]
 
     #: CTEs representing types, when rewritten based on access policy
-    type_rewrite_ctes: Dict[FullRewriteKey, pgast.CommonTableExpr]
+    type_rewrite_ctes: dict[FullRewriteKey, pgast.CommonTableExpr]
 
     #: A set of type CTEs currently being generated
-    pending_type_rewrite_ctes: Set[RewriteKey]
+    pending_type_rewrite_ctes: set[RewriteKey]
 
     #: CTEs representing types and their inherited types
-    type_inheritance_ctes: Dict[uuid.UUID, pgast.CommonTableExpr]
+    type_inheritance_ctes: dict[uuid.UUID, pgast.CommonTableExpr]
 
     # Type and type inheriance CTEs in creation order. This ensures type CTEs
     # referring to other CTEs are in the correct order.
@@ -275,7 +270,7 @@ class CompilerContextLevel(compiler.ContextLevel):
     pending_query: Optional[pgast.SelectStmt]
 
     #: Sets currently being materialized
-    materializing: FrozenSet[irast.Stmt]
+    materializing: frozenset[irast.Stmt]
 
     #: Whether the expression currently being processed is
     #: directly exposed to the output of the statement.
@@ -288,7 +283,7 @@ class CompilerContextLevel(compiler.ContextLevel):
 
     #: Expression to use to force SQL expression volatility in this context
     #: (Delayed with a lambda to avoid inserting it when not used.)
-    volatility_ref: Tuple[
+    volatility_ref: tuple[
         Callable[[pgast.SelectStmt, CompilerContextLevel],
                  Optional[pgast.BaseExpr]], ...]
 
@@ -297,20 +292,20 @@ class CompilerContextLevel(compiler.ContextLevel):
     current_insert_path_id: Optional[irast.PathId]
 
     #: Paths, for which semi-join is banned in this context.
-    disable_semi_join: FrozenSet[irast.PathId]
+    disable_semi_join: frozenset[irast.PathId]
 
     #: Paths, which need to be explicitly wrapped into SQL
     #: optionality scaffolding.
-    force_optional: FrozenSet[irast.PathId]
+    force_optional: frozenset[irast.PathId]
 
     #: Paths that can be ignored when they appear as the source of a
     # computable. This is key to optimizing away free object sources in
     # group by aggregates.
-    skippable_sources: FrozenSet[irast.PathId]
+    skippable_sources: frozenset[irast.PathId]
 
     #: Specifies that references to a specific Set must be narrowed
     #: by only selecting instances of type specified by the mapping value.
-    intersection_narrowing: Dict[irast.Set, irast.Set]
+    intersection_narrowing: dict[irast.Set, irast.Set]
 
     #: Which SQL query holds the SQL scope for the given PathId
     path_scope: ChainMap[irast.PathId, Optional[pgast.SelectStmt]]
@@ -320,7 +315,7 @@ class CompilerContextLevel(compiler.ContextLevel):
 
     #: A stack of dml statements currently being compiled. Used for
     #: figuring out what to record in type_rel_overlays.
-    dml_stmt_stack: List[irast.MutatingLikeStmt]
+    dml_stmt_stack: list[irast.MutatingLikeStmt]
 
     #: Relations used to "overlay" the main table for
     #: the type.  Mostly used with DML statements.
@@ -329,9 +324,9 @@ class CompilerContextLevel(compiler.ContextLevel):
     #: Mapping from path ids to "external" rels given by a particular relation
     external_rels: Mapping[
         irast.PathId,
-        Tuple[
+        tuple[
             pgast.BaseRelation | pgast.CommonTableExpr,
-            Tuple[pgce.PathAspect, ...]
+            tuple[pgce.PathAspect, ...]
         ]
     ]
 
@@ -342,7 +337,7 @@ class CompilerContextLevel(compiler.ContextLevel):
 
     #: Sets to force shape compilation on, because the values are
     #: needed by DML.
-    shapes_needed_by_dml: Set[irast.Set]
+    shapes_needed_by_dml: set[irast.Set]
 
     def __init__(
         self,
@@ -526,8 +521,8 @@ class CompilerContext(compiler.CompilerContext[CompilerContextLevel]):
     default_mode = ContextSwitchMode.TRANSPARENT
 
 
-RewriteKey = Tuple[uuid.UUID, bool]
-FullRewriteKey = Tuple[
+RewriteKey = tuple[uuid.UUID, bool]
+FullRewriteKey = tuple[
     uuid.UUID, bool, Optional[frozenset['irast.MutatingLikeStmt']]]
 
 
@@ -537,24 +532,24 @@ class Environment:
     aliases: pg_aliases.AliasGenerator
     output_format: Optional[OutputFormat]
     named_param_prefix: Optional[tuple[str, ...]]
-    ptrref_source_visibility: Dict[irast.BasePointerRef, bool]
+    ptrref_source_visibility: dict[irast.BasePointerRef, bool]
     expected_cardinality_one: bool
     ignore_object_shapes: bool
     explicit_top_cast: Optional[irast.TypeRef]
     singleton_mode: bool
-    query_params: List[irast.Param]
-    type_rewrites: Dict[RewriteKey, irast.Set]
-    scope_tree_nodes: Dict[int, irast.ScopeTreeNode]
+    query_params: list[irast.Param]
+    type_rewrites: dict[RewriteKey, irast.Set]
+    scope_tree_nodes: dict[int, irast.ScopeTreeNode]
     external_rvars: Mapping[
-        Tuple[irast.PathId, pgce.PathAspect], pgast.PathRangeVar
+        tuple[irast.PathId, pgce.PathAspect], pgast.PathRangeVar
     ]
-    materialized_views: Dict[uuid.UUID, irast.Set]
+    materialized_views: dict[uuid.UUID, irast.Set]
     backend_runtime_params: pgparams.BackendRuntimeParams
     versioned_stdlib: bool
 
     #: A list of CTEs that implement constraint validation at the
     #: query level.
-    check_ctes: List[pgast.CommonTableExpr]
+    check_ctes: list[pgast.CommonTableExpr]
 
     def __init__(
         self,
@@ -567,11 +562,11 @@ class Environment:
         singleton_mode: bool,
         is_explain: bool,
         explicit_top_cast: Optional[irast.TypeRef],
-        query_params: List[irast.Param],
-        type_rewrites: Dict[RewriteKey, irast.Set],
-        scope_tree_nodes: Dict[int, irast.ScopeTreeNode],
+        query_params: list[irast.Param],
+        type_rewrites: dict[RewriteKey, irast.Set],
+        scope_tree_nodes: dict[int, irast.ScopeTreeNode],
         external_rvars: Optional[
-            Mapping[Tuple[irast.PathId, pgce.PathAspect], pgast.PathRangeVar]
+            Mapping[tuple[irast.PathId, pgce.PathAspect], pgast.PathRangeVar]
         ] = None,
         backend_runtime_params: pgparams.BackendRuntimeParams,
         # XXX: TRAMPOLINE: THIS IS WRONG

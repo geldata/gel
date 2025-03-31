@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Sequence, List, Set, cast, overload
+from typing import Optional, Sequence, cast, overload
 
 from edb import errors
 
@@ -170,7 +170,7 @@ def ql_typeexpr_to_type(
 
 
 def _ql_typeexpr_combine_types(
-        op: Optional[str], types: List[s_types.Type], *,
+        op: Optional[str], types: list[s_types.Type], *,
         ctx: context.ContextLevel
 ) -> s_types.Type:
     if len(types) == 1:
@@ -185,7 +185,7 @@ def _ql_typeexpr_combine_types(
 
 def _ql_typeexpr_get_types(
     ql_t: qlast.TypeExpr, *, ctx: context.ContextLevel
-) -> Tuple[Optional[str], bool, List[s_types.Type]]:
+) -> tuple[Optional[str], bool, list[s_types.Type]]:
 
     if isinstance(ql_t, qlast.TypeOf):
         with ctx.new() as subctx:
@@ -229,7 +229,7 @@ def _ql_typeexpr_get_types(
             # flatten it into the result types list.
             # if an operand has a different operator is used, its types should
             # be combined into a new type before appending to the result types.
-            types: List[s_types.Type] = []
+            types: list[s_types.Type] = []
             types += (
                 left_types
                 if left_op is None or left_op == ql_t.op else
@@ -358,13 +358,13 @@ def collapse_type_intersection_rptr(
     ir_set: irast.Set,
     *,
     ctx: context.ContextLevel,
-) -> Tuple[irast.Set, List[s_pointers.Pointer]]:
+) -> tuple[irast.Set, list[s_pointers.Pointer]]:
 
     ind_prefix, ind_ptrs = irutils.collapse_type_intersection(ir_set)
     if not ind_ptrs:
         return ir_set, []
 
-    rptr_specialization: Set[irast.PointerRef] = set()
+    rptr_specialization: set[irast.PointerRef] = set()
     for ind_ptr in ind_ptrs:
         for ind_ptr in ind_ptrs:
             if ind_ptr.ptrref.rptr_specialization:

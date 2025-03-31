@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Optional, List
+from typing import Optional
 import dataclasses
 import pathlib
 import os
@@ -54,9 +54,9 @@ class EdgeDBLanguageServer(LanguageServer):
 
 
 def compile(
-    ls: EdgeDBLanguageServer, stmts: List[qlast.Base]
-) -> List[lsp_types.Diagnostic]:
-    diagnostics: List[lsp_types.Diagnostic] = []
+    ls: EdgeDBLanguageServer, stmts: list[qlast.Base]
+) -> list[lsp_types.Diagnostic]:
+    diagnostics: list[lsp_types.Diagnostic] = []
 
     if not stmts:
         return diagnostics

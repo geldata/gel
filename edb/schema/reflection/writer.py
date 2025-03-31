@@ -23,11 +23,7 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
-    Type,
     Collection,
-    Dict,
-    List,
     cast,
 )
 
@@ -56,10 +52,10 @@ from edb.schema.reflection import structure as sr_struct
 def generate_metadata_write_edgeql(
     cmd: sd.Command,
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
 ) -> None:
@@ -126,10 +122,10 @@ def _hoist_if_unused_deletes(
 def write_meta(
     cmd: sd.Command,
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
 ) -> None:
@@ -159,10 +155,10 @@ def write_meta(
 def _descend(
     cmd: sd.Command,
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
     prerequisites: bool = False,
@@ -204,7 +200,7 @@ def _descend(
             and isinstance(cmd, sd.ObjectCommand)
         ):
             objctxcls = cast(
-                Type[sd.ObjectCommandContext[so.Object]],
+                type[sd.ObjectCommandContext[so.Object]],
                 ctxcls,
             )
             ctx = objctxcls(schema=schema, op=cmd, scls=sd._dummy_object)
@@ -222,10 +218,10 @@ def _descend(
 def write_meta_delta_root(
     cmd: sd.DeltaRoot,
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
 ) -> None:
@@ -244,10 +240,10 @@ def write_meta_delta_root(
 def write_meta_command_group(
     cmd: sd.CommandGroup,
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
 ) -> None:
@@ -265,9 +261,9 @@ def write_meta_command_group(
 def _build_object_mutation_shape(
     cmd: sd.ObjectCommand[so.Object],
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     lprop_fields: Optional[
-        Dict[str, Tuple[s_types.Type, sr_struct.FieldType]]
+        dict[str, tuple[s_types.Type, sr_struct.FieldType]]
     ] = None,
     lprops_only: bool = False,
     internal_schema_mode: bool,
@@ -275,7 +271,7 @@ def _build_object_mutation_shape(
     var_prefix: str = '',
     schema: s_schema.Schema,
     context: sd.CommandContext,
-) -> Tuple[str, Dict[str, Any]]:
+) -> tuple[str, dict[str, Any]]:
 
     props = cmd.get_resolved_attributes(schema, context)
     mcls = cmd.get_schema_metaclass()
@@ -296,7 +292,7 @@ def _build_object_mutation_shape(
         props.update(sub.get_resolved_attributes(schema, context))
 
     assignments = []
-    variables: Dict[str, str] = {}
+    variables: dict[str, str] = {}
     if isinstance(cmd, sd.CreateObject):
         empties = {
             v.fieldname: None for f, v in layout.items()
@@ -622,8 +618,8 @@ def _reflect_object_dict_value(
     is_ordered: bool,
     value_var_name: str,
     target: s_types.Type,
-    reflection_proxy: Optional[Tuple[str, str]],
-) -> Tuple[str, Any]:
+    reflection_proxy: Optional[tuple[str, str]],
+) -> tuple[str, Any]:
 
     if reflection_proxy is not None:
         # Non-unique ObjectDict, reflecting via a proxy object
@@ -705,10 +701,10 @@ def _reflect_object_dict_value(
 def write_meta_create_object(
     cmd: sd.CreateObject,  # type: ignore
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
 ) -> None:
@@ -858,10 +854,10 @@ def write_meta_create_object(
 def write_meta_alter_object(
     cmd: sd.ObjectCommand,  # type: ignore
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
 ) -> None:
@@ -925,9 +921,9 @@ def write_meta_alter_object(
 def _update_lprops(
     cmd: s_ref.ReferencedObjectCommand,  # type: ignore
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     context: sd.CommandContext,
     internal_schema_mode: bool,
     stdmode: bool,
@@ -1083,10 +1079,10 @@ def _update_lprops(
 def write_meta_delete_object(
     cmd: sd.DeleteObject,  # type: ignore
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
 ) -> None:
@@ -1193,10 +1189,10 @@ def write_meta_delete_object(
 def write_meta_rename_object(
     cmd: sd.RenameObject,  # type: ignore
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
 ) -> None:
@@ -1218,10 +1214,10 @@ def write_meta_rename_object(
 def write_meta_nop(
     cmd: sd.Nop,
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
 ) -> None:
@@ -1232,10 +1228,10 @@ def write_meta_nop(
 def write_meta_query(
     cmd: sd.Query,
     *,
-    classlayout: Dict[Type[so.Object], sr_struct.SchemaTypeLayout],
+    classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    blocks: List[Tuple[str, Dict[str, Any]]],
+    blocks: list[tuple[str, dict[str, Any]]],
     internal_schema_mode: bool,
     stdmode: bool,
 ) -> None:

@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence, List
+from typing import Optional, Sequence
 
 from edb.edgeql import ast as qlast
 from edb.ir import ast as irast
@@ -61,12 +61,12 @@ def compile_where_clause(
 
 def compile_orderby_clause(
     sortexprs: Optional[Sequence[qlast.SortExpr]], *, ctx: context.ContextLevel
-) -> Optional[List[irast.SortExpr]]:
+) -> Optional[list[irast.SortExpr]]:
 
     if not sortexprs:
         return None
 
-    result: List[irast.SortExpr] = []
+    result: list[irast.SortExpr] = []
 
     if ctx.partial_path_prefix:
         pathctx.register_set_in_scope(ctx.partial_path_prefix, ctx=ctx)

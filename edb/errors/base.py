@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Type, Iterator, Dict
+from typing import Optional, Iterator
 
 from edb.common import span as edb_span
 from edb.common import exceptions as ex
@@ -33,8 +33,8 @@ __all__ = (
 
 
 class EdgeDBErrorMeta(type):
-    _error_map: Dict[int, Type[EdgeDBError]] = {}
-    _name_map: Dict[str, Type[EdgeDBError]] = {}
+    _error_map: dict[int, type[EdgeDBError]] = {}
+    _name_map: dict[str, type[EdgeDBError]] = {}
 
     def __new__(mcls, name, bases, dct):
         cls = super().__new__(mcls, name, bases, dct)
@@ -57,11 +57,11 @@ class EdgeDBErrorMeta(type):
                 'subclass one of its subclasses in edb.errors')
 
     @classmethod
-    def get_error_class_from_code(mcls, code: int) -> Type[EdgeDBError]:
+    def get_error_class_from_code(mcls, code: int) -> type[EdgeDBError]:
         return mcls._error_map[code]
 
     @classmethod
-    def get_error_class_from_name(mcls, name: str) -> Type[EdgeDBError]:
+    def get_error_class_from_name(mcls, name: str) -> type[EdgeDBError]:
         return mcls._name_map[name]
 
 
@@ -80,7 +80,7 @@ class EdgeDBMessage(Warning):
 class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
     _code: Optional[int] = None
-    _attrs: Dict[int, str]
+    _attrs: dict[int, str]
     _pgext_code: Optional[str] = None
 
     def __init__(

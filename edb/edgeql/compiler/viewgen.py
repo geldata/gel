@@ -28,15 +28,10 @@ import functools
 from typing import (
     Callable,
     Optional,
-    Tuple,
-    Type,
     Union,
     AbstractSet,
     Mapping,
     Sequence,
-    Dict,
-    List,
-    Set,
     NamedTuple,
     cast,
     TYPE_CHECKING,
@@ -137,7 +132,7 @@ def process_view(
     exprtype: s_types.ExprType = s_types.ExprType.Select,
     ctx: context.ContextLevel,
     span: Optional[parsing.Span],
-) -> Tuple[s_objtypes.ObjectType, irast.Set]:
+) -> tuple[s_objtypes.ObjectType, irast.Set]:
 
     cache_key = (stype, exprtype, tuple(elements))
     view_scls = ctx.env.shape_type_cache.get(cache_key)
@@ -186,7 +181,7 @@ def _process_view(
     s_ctx: ShapeContext,
     ctx: context.ContextLevel,
     span: Optional[parsing.Span],
-) -> Tuple[s_objtypes.ObjectType, irast.Set]:
+) -> tuple[s_objtypes.ObjectType, irast.Set]:
     path_id = ir_set.path_id
     view_rptr = s_ctx.view_rptr
 
@@ -261,12 +256,12 @@ def _process_view(
         target_scls = stype if is_mutation else view_scls
         derive_ptrcls(view_rptr, target_scls=target_scls, ctx=ctx)
 
-    pointers: Dict[s_pointers.Pointer, EarlyShapePtr] = {}
+    pointers: dict[s_pointers.Pointer, EarlyShapePtr] = {}
 
     if elements is None:
         elements = []
 
-    shape_desc: List[ShapeElementDesc] = []
+    shape_desc: list[ShapeElementDesc] = []
     # First, find all explicit pointers (i.e. non-splat elements)
     for shape_el in elements:
         if isinstance(shape_el.expr.steps[0], qlast.Splat):
@@ -288,7 +283,7 @@ def _process_view(
 
     # Now look for any splats and expand them.
     # Track descriptions by name and whether they are link properties.
-    splat_descs: dict[Tuple[str, bool], ShapeElementDesc] = {}
+    splat_descs: dict[tuple[str, bool], ShapeElementDesc] = {}
     for shape_el in elements:
         if not isinstance(shape_el.expr.steps[0], qlast.Splat):
             continue
@@ -368,7 +363,7 @@ def _process_view(
             desc = _shape_el_ql_to_shape_el_desc(
                 splat_el, source=view_scls, s_ctx=s_ctx, ctx=ctx
             )
-            desc_key: Tuple[str, bool] = (desc.ptr_name, desc.is_linkprop)
+            desc_key: tuple[str, bool] = (desc.ptr_name, desc.is_linkprop)
             if old_desc := splat_descs.get(desc_key):
                 # If pointers appear in multiple splats, we take the
                 # one from the ancestor class. If neither class is an
@@ -575,7 +570,7 @@ def _process_view(
         _raise_on_missing(pointers, stype, rewrites, ctx, span=span)
 
     set_shape = []
-    shape_ptrs: List[ShapePtr] = []
+    shape_ptrs: list[ShapePtr] = []
 
     for ptrcls, ptr_set, _ in pointers.values():
         source: Union[s_types.Type, s_pointers.PointerLike]
@@ -754,7 +749,7 @@ def _expand_splat(
     rlink: Optional[s_links.Link] = None,
     intersection: Optional[qlast.TypeIntersection] = None,
     ctx: context.ContextLevel,
-) -> List[qlast.ShapeElement]:
+) -> list[qlast.ShapeElement]:
     """Expand a splat (possibly recursively) into a list of ShapeElements"""
     elements = []
     pointers = stype.get_pointers(ctx.env.schema)
@@ -825,15 +820,15 @@ def _expand_splat(
 
 
 def _gen_pointers_from_defaults(
-    specified_ptrs: Set[sn.UnqualName],
+    specified_ptrs: set[sn.UnqualName],
     view_scls: s_objtypes.ObjectType,
     ir_set: irast.Set,
     stype: s_objtypes.ObjectType,
     s_ctx: ShapeContext,
     ctx: context.ContextLevel,
-) -> Dict[s_pointers.Pointer, EarlyShapePtr]:
+) -> dict[s_pointers.Pointer, EarlyShapePtr]:
     path_id = ir_set.path_id
-    result: List[EarlyShapePtr] = []
+    result: list[EarlyShapePtr] = []
 
     if stype in ctx.active_defaults:
         vn = stype.get_verbosename(ctx.env.schema)
@@ -934,7 +929,7 @@ def _gen_pointers_from_defaults(
 
 
 def _raise_on_missing(
-    pointers: Dict[s_pointers.Pointer, EarlyShapePtr],
+    pointers: dict[s_pointers.Pointer, EarlyShapePtr],
     stype: s_objtypes.ObjectType,
     rewrites: Optional[irast.Rewrites],
     ctx: context.ContextLevel,
@@ -988,7 +983,7 @@ def _raise_on_missing(
 
 @dataclasses.dataclass(kw_only=True, repr=False, eq=False)
 class RewriteContext:
-    specified_ptrs: Set[sn.UnqualName]
+    specified_ptrs: set[sn.UnqualName]
     kind: qltypes.RewriteKind
 
     base_type: s_objtypes.ObjectType
@@ -996,7 +991,7 @@ class RewriteContext:
 
 
 def _compile_rewrites(
-    specified_ptrs: Set[sn.UnqualName],
+    specified_ptrs: set[sn.UnqualName],
     kind: qltypes.RewriteKind,
     view_scls: s_objtypes.ObjectType,
     ir_set: irast.Set,
@@ -1014,7 +1009,7 @@ def _compile_rewrites(
 
     # Computing anchors isn't cheap, so we want to only do it once,
     # and only do it when it is necessary.
-    anchors: Dict[s_objtypes.ObjectType, RewriteAnchors] = {}
+    anchors: dict[s_objtypes.ObjectType, RewriteAnchors] = {}
 
     def get_anchors(stype: s_objtypes.ObjectType) -> RewriteAnchors:
         if stype not in anchors:
@@ -1046,7 +1041,7 @@ def _compile_rewrites(
         raise NotImplementedError()
 
     schema = ctx.env.schema
-    by_type: Dict[irast.TypeRef, irast.RewritesOfType] = {}
+    by_type: dict[irast.TypeRef, irast.RewritesOfType] = {}
     for ty, rewrites_of_type in rewrites_by_type.items():
         ty = ty.real_material_type
 
@@ -1093,15 +1088,15 @@ def _compile_rewrites(
 
 def _compile_rewrites_of_children(
     stype: s_objtypes.ObjectType,
-    parent_rewrites: Dict[sn.UnqualName, EarlyShapePtr],
+    parent_rewrites: dict[sn.UnqualName, EarlyShapePtr],
     kind: qltypes.RewriteKind,
     ir_set: irast.Set,
     get_anchors: Callable[[s_objtypes.ObjectType], RewriteAnchors],
     s_ctx: ShapeContext,
     ctx: context.ContextLevel,
-) -> Dict[irast.TypeRef, Dict[sn.UnqualName, EarlyShapePtr]]:
-    rewrites_for_type: Dict[
-        irast.TypeRef, Dict[sn.UnqualName, EarlyShapePtr]
+) -> dict[irast.TypeRef, dict[sn.UnqualName, EarlyShapePtr]]:
+    rewrites_for_type: dict[
+        irast.TypeRef, dict[sn.UnqualName, EarlyShapePtr]
     ] = {}
 
     # save parent to result
@@ -1148,7 +1143,7 @@ def _compile_rewrites_for_stype(
     already_defined_rewrites: Optional[
         Mapping[sn.UnqualName, EarlyShapePtr]] = None,
     ctx: context.ContextLevel,
-) -> Dict[sn.UnqualName, EarlyShapePtr]:
+) -> dict[sn.UnqualName, EarlyShapePtr]:
     schema = ctx.env.schema
 
     path_id = ir_set.path_id
@@ -1293,7 +1288,7 @@ def prepare_rewrite_anchors(
     )
 
     # init set for __specified__
-    specified_pointers: List[irast.TupleElement] = []
+    specified_pointers: list[irast.TupleElement] = []
     for pn, _ in stype.get_pointers(schema).items(schema):
         pointer_path_id = irast.PathId.from_type(
             schema,
@@ -1371,7 +1366,7 @@ def _compile_qlexpr(
     should_set_partial_prefix: bool,
     s_ctx: ShapeContext,
     ctx: context.ContextLevel,
-) -> Tuple[irast.Set, context.ViewRPtr]:
+) -> tuple[irast.Set, context.ViewRPtr]:
 
     with ctx.newscope(fenced=True) as shape_expr_ctx:
         # Put current pointer class in context, so
@@ -1425,7 +1420,7 @@ def _normalize_view_ptr_expr(
     pending_pointers: Mapping[s_pointers.Pointer, EarlyShapePtr] | None = None,
     s_ctx: ShapeContext,
     ctx: context.ContextLevel,
-) -> Tuple[s_pointers.Pointer, Optional[irast.Set]]:
+) -> tuple[s_pointers.Pointer, Optional[irast.Set]]:
     is_mutation = s_ctx.exprtype.is_insert() or s_ctx.exprtype.is_update()
 
     materialized = None
@@ -1778,7 +1773,7 @@ def _normalize_view_ptr_expr(
                     repr(str(base_target.get_displayname(ctx.env.schema)))
                 ]
 
-                ercls: Type[errors.EdgeDBError]
+                ercls: type[errors.EdgeDBError]
                 if ptrcls.is_property(ctx.env.schema):
                     ercls = errors.InvalidPropertyTargetError
                 else:
@@ -2181,7 +2176,7 @@ def _inline_type_computable(
     compname: str,
     propname: str,
     *,
-    shape_ptrs: List[ShapePtr],
+    shape_ptrs: list[ShapePtr],
     ctx: context.ContextLevel,
 ) -> None:
     assert isinstance(stype, s_objtypes.ObjectType)
@@ -2265,7 +2260,7 @@ def _inline_type_computable(
 
 def _get_shape_configuration_inner(
     ir_set: irast.Set,
-    shape_ptrs: List[ShapePtr],
+    shape_ptrs: list[ShapePtr],
     stype: s_types.Type,
     *,
     parent_view_type: Optional[s_types.ExprType]=None,
@@ -2339,12 +2334,12 @@ def _get_shape_configuration_inner(
 
 def _get_early_shape_configuration(
     ir_set: irast.Set,
-    in_shape_ptrs: List[ShapePtr],
+    in_shape_ptrs: list[ShapePtr],
     *,
     rptrcls: Optional[s_pointers.Pointer],
     parent_view_type: Optional[s_types.ExprType]=None,
     ctx: context.ContextLevel
-) -> List[ShapePtr]:
+) -> list[ShapePtr]:
     """Return a list of (source_set, ptrcls) pairs as a shape for a given set.
     """
 
@@ -2369,14 +2364,14 @@ def _get_late_shape_configuration(
     rptr: Optional[irast.Pointer]=None,
     parent_view_type: Optional[s_types.ExprType]=None,
     ctx: context.ContextLevel
-) -> List[ShapePtr]:
+) -> list[ShapePtr]:
 
     """Return a list of (source_set, ptrcls) pairs as a shape for a given set.
     """
 
     stype = setgen.get_set_type(ir_set, ctx=ctx)
 
-    sources: List[Union[s_types.Type, s_pointers.PointerLike]] = []
+    sources: list[Union[s_types.Type, s_pointers.PointerLike]] = []
     link_view = False
     is_objtype = ir_set.path_id.is_objtype_path()
 
@@ -2411,7 +2406,7 @@ def _get_late_shape_configuration(
         assert rptrcls is not None
         sources.append(rptrcls)
 
-    shape_ptrs: List[ShapePtr] = []
+    shape_ptrs: list[ShapePtr] = []
 
     for source in sources:
         for ptr, shape_op in ctx.env.view_shapes[source]:

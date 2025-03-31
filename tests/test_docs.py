@@ -6,8 +6,6 @@
 ##
 
 
-from typing import List
-
 import collections
 import json
 import os
@@ -92,7 +90,7 @@ class TestDocSnippets(unittest.TestCase):
 
                 return msg
 
-    def find_rest_files(self, path: str) -> List[str]:
+    def find_rest_files(self, path: str) -> list[str]:
         def scan(path):
             with os.scandir(path) as it:
                 for entry in it:
@@ -101,7 +99,7 @@ class TestDocSnippets(unittest.TestCase):
                     if entry.is_dir():
                         scan(entry.path)
 
-        files: List[str] = []
+        files: list[str] = []
         scan(path)
         return files
 

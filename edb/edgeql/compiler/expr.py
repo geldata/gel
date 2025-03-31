@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Type, Union, Sequence, List, cast
+from typing import Callable, Optional, Union, Sequence, cast
 
 from edb import errors
 
@@ -245,7 +245,7 @@ def compile_Constant(
 ) -> irast.Set:
     value = expr.value
 
-    node_cls: Type[irast.BaseConstant]
+    node_cls: type[irast.BaseConstant]
 
     if expr.kind == qlast.ConstantKind.STRING:
         std_type = sn.QualName('std', 'str')
@@ -1137,7 +1137,7 @@ def compile_type_check_op(
         typeref=output_typeref)
 
 
-def flatten_set(expr: qlast.Set) -> List[qlast.Expr]:
+def flatten_set(expr: qlast.Set) -> list[qlast.Expr]:
     elements = []
     for el in expr.elements:
         if isinstance(el, qlast.Set):
@@ -1148,7 +1148,7 @@ def flatten_set(expr: qlast.Set) -> List[qlast.Expr]:
     return elements
 
 
-def collect_binop(expr: qlast.BinOp) -> List[qlast.Expr]:
+def collect_binop(expr: qlast.BinOp) -> list[qlast.Expr]:
     elements = []
 
     stack = [expr.right, expr.left]

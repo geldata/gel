@@ -19,14 +19,12 @@
 from __future__ import annotations
 
 from typing import (
-    Tuple,
     Any,
     Mapping,
     Optional,
     Union,
     Self,
     Callable,
-    List,
 )
 
 import asyncio
@@ -319,7 +317,7 @@ class HttpClient:
             logger.error(f"Error in HTTP client", exc_info=True)
             raise
 
-    def _process_message(self, msg: Tuple[Any, ...]) -> None:
+    def _process_message(self, msg: tuple[Any, ...]) -> None:
         try:
             msg_type, id, data = msg
             if msg_type == 0:  # Error
@@ -427,7 +425,7 @@ class HttpClientContext(HttpClient):
 
 
 class CaseInsensitiveDict(dict):
-    def __init__(self, data: Optional[list[Tuple[str, str]]] = None):
+    def __init__(self, data: Optional[list[tuple[str, str]]] = None):
         super().__init__()
         if data:
             for k, v in data:
@@ -463,7 +461,7 @@ class Response:
     is_streaming: bool = False
 
     @classmethod
-    def from_tuple(cls, data: Tuple[int, bytearray, dict[str, str]]):
+    def from_tuple(cls, data: tuple[int, bytearray, dict[str, str]]):
         status_code, body, headers_list = data
         headers = CaseInsensitiveDict([(k, v) for k, v in headers_list.items()])
         return cls(status_code, body, headers)
@@ -492,13 +490,13 @@ class ResponseSSE:
     _stream: asyncio.Queue = dataclasses.field(repr=False)
     _cancel: Callable[[], None] = dataclasses.field(repr=False)
     _ack: Callable[[], None] = dataclasses.field(repr=False)
-    _closed: List[bool] = dataclasses.field(default_factory=lambda: [False])
+    _closed: list[bool] = dataclasses.field(default_factory=lambda: [False])
     is_streaming: bool = True
 
     @classmethod
     def from_tuple(
         cls,
-        data: Tuple[int, dict[str, str]],
+        data: tuple[int, dict[str, str]],
         stream: asyncio.Queue,
         cancel: Callable[[], None],
         ack: Callable[[], None],

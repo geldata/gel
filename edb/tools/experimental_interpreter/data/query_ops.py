@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Callable, Optional, Sequence, Dict
+from typing import Callable, Optional, Sequence
 
 from . import data_ops as e
 from .data_ops import (
@@ -168,7 +168,7 @@ def map_query(
                             mapped_args = [*mapped_args, sub_recur(args[i])]
                         case _:
                             raise ValueError
-                mapped_kwargs: Dict[str, Expr] = {}
+                mapped_kwargs: dict[str, Expr] = {}
                 for i, (k, v) in enumerate(kwargs.items()):
                     match params[i + len(args)]:
                         case ParamSingleton():

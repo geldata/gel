@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Sequence, Tuple, Union, cast, List
+from typing import Any, Optional, Sequence, Union, cast
 
 from edb.edgeql import ast as qlast
 
@@ -46,7 +46,7 @@ def elab_schema_target_tp(
 
 
 def construct_final_schema_target_tp(
-    base: Tp, linkprops: Dict[str, ResultTp]
+    base: Tp, linkprops: dict[str, ResultTp]
 ) -> Tp:
     if linkprops:
         match base:
@@ -77,11 +77,11 @@ def construct_final_schema_target_tp(
 
 
 def elab_create_object_tp(
-    commands: List[qlast.DDLOperation],
-) -> Tuple[ObjectTp, Sequence[e.Constraint], Sequence[Sequence[str]]]:
-    object_tp_content: Dict[str, ResultTp] = {}
-    constrants: List[e.Constraint] = []
-    indexes: List[List[str]] = []
+    commands: list[qlast.DDLOperation],
+) -> tuple[ObjectTp, Sequence[e.Constraint], Sequence[Sequence[str]]]:
+    object_tp_content: dict[str, ResultTp] = {}
+    constrants: list[e.Constraint] = []
+    indexes: list[list[str]] = []
     for cmd in commands:
         match cmd:
             case qlast.CreateConcretePointer(
@@ -107,7 +107,7 @@ def elab_create_object_tp(
                     )
                 else:
                     print_warning("WARNING: not implemented ptarget", ptarget)
-                link_property_tps: Dict[str, ResultTp] = {}
+                link_property_tps: dict[str, ResultTp] = {}
                 p_has_set_default: Optional[e.BindingExpr] = None
                 for pcmd in pcommands:
                     match pcmd:
@@ -298,13 +298,13 @@ def elab_create_object_tp(
 
 def add_bases_for_name(
     schema: e.DBSchema,
-    current_module_name: Tuple[str, ...],
+    current_module_name: tuple[str, ...],
     current_type_name: str,
-    bases: List[qlast.TypeName],
+    bases: list[qlast.TypeName],
     add_object_type=False,
 ) -> None:
     base_tps = [elab_single_type_expr(base) for base in bases]
-    base_tps_ck: List[Tuple[Tuple[str, ...], e.RawName]] = []
+    base_tps_ck: list[tuple[tuple[str, ...], e.RawName]] = []
     this_type_name = e.QualifiedName([*current_module_name, current_type_name])
     for base_tp in base_tps:
         match base_tp:
@@ -322,7 +322,7 @@ def add_bases_for_name(
     schema.unchecked_subtyping_relations[this_type_name] = base_tps_ck
 
 
-def elab_schema(existing: e.DBSchema, sdef: qlast.Schema) -> Tuple[str, ...]:
+def elab_schema(existing: e.DBSchema, sdef: qlast.Schema) -> tuple[str, ...]:
     if (
         len(sdef.declarations) != 1
         or sdef.declarations[0].name.name != "default"
@@ -336,7 +336,7 @@ def elab_schema(existing: e.DBSchema, sdef: qlast.Schema) -> Tuple[str, ...]:
 
     current_module_name = ("default",)
 
-    type_defs: Dict[str, e.ModuleEntityTypeDef | e.ModuleEntityFuncDef] = {}
+    type_defs: dict[str, e.ModuleEntityTypeDef | e.ModuleEntityFuncDef] = {}
     existing.unchecked_modules[current_module_name] = e.DBModule(type_defs)
     for t_decl in types_decls:
         match t_decl:

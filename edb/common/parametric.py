@@ -22,11 +22,8 @@ from typing import (
     ClassVar,
     Generic,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Union,
-    Dict,
     get_type_hints,
 )
 
@@ -56,11 +53,11 @@ except ImportError:
 
 class ParametricType:
 
-    types: ClassVar[Optional[Tuple[type, ...]]] = None
-    orig_args: ClassVar[Optional[Tuple[type, ...]]] = None
-    _forward_refs: ClassVar[Dict[str, Tuple[int, str]]] = {}
-    _type_param_map: ClassVar[Dict[Any, str]] = {}
-    _non_type_params: ClassVar[Dict[int, type]] = {}
+    types: ClassVar[Optional[tuple[type, ...]]] = None
+    orig_args: ClassVar[Optional[tuple[type, ...]]] = None
+    _forward_refs: ClassVar[dict[str, tuple[int, str]]] = {}
+    _type_param_map: ClassVar[dict[Any, str]] = {}
+    _non_type_params: ClassVar[dict[int, type]] = {}
 
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
@@ -212,8 +209,8 @@ class ParametricType:
     @classmethod
     @functools.lru_cache()
     def __class_getitem__(
-        cls, params: Union[Union[type, str], Tuple[Union[type, str], ...]]
-    ) -> Type[ParametricType]:
+        cls, params: Union[Union[type, str], tuple[Union[type, str], ...]]
+    ) -> type[ParametricType]:
         """Return a dynamic subclass parametrized with `params`.
 
         We cannot use `_GenericAlias` provided by `Generic[T]` because the
@@ -236,13 +233,13 @@ class ParametricType:
         params_str = ", ".join(_type_repr(a) for a in all_params)
         name = f"{cls.__name__}[{params_str}]"
         bases = (cls,)
-        type_dict: Dict[str, Any] = {
+        type_dict: dict[str, Any] = {
             "types": tuple(type_params),
             "orig_args": all_params,
             "__module__": cls.__module__,
         }
-        forward_refs: Dict[str, Tuple[int, str]] = {}
-        tuple_to_attr: Dict[int, str] = {}
+        forward_refs: dict[str, tuple[int, str]] = {}
+        tuple_to_attr: dict[int, str] = {}
 
         if cls._type_param_map:
             gen_params = getattr(cls, '__parameters__', ())
@@ -293,7 +290,7 @@ class ParametricType:
         return not cls._forward_refs
 
     @classmethod
-    def resolve_types(cls, globalns: Dict[str, Any]) -> None:
+    def resolve_types(cls, globalns: dict[str, Any]) -> None:
         if cls.types is None:
             raise TypeError(
                 f"{cls!r} is not parametrized"
@@ -321,7 +318,7 @@ class ParametricType:
     def is_anon_parametrized(cls) -> bool:
         return cls.__name__.endswith(']')
 
-    def __reduce__(self) -> Tuple[Any, ...]:
+    def __reduce__(self) -> tuple[Any, ...]:
         raise NotImplementedError(
             'must implement explicit __reduce__ for ParametricType subclass'
         )
@@ -329,13 +326,13 @@ class ParametricType:
 
 class SingleParametricType(ParametricType, Generic[T]):
 
-    type: ClassVar[Type[T]]  # type: ignore
+    type: ClassVar[type[T]]  # type: ignore
 
 
 class KeyValueParametricType(ParametricType, Generic[T, V]):
 
-    keytype: ClassVar[Type[T]]  # type: ignore
-    valuetype: ClassVar[Type[V]]  # type: ignore
+    keytype: ClassVar[type[T]]  # type: ignore
+    valuetype: ClassVar[type[V]]  # type: ignore
 
 
 def _type_repr(obj: Any) -> str:

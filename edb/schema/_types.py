@@ -3,7 +3,6 @@
 
 
 from __future__ import annotations
-from typing import Type
 
 
 import uuid
@@ -12,7 +11,7 @@ from edb.common import uuidgen
 from edb.schema import name as sn
 
 
-UUID: Type[uuid.UUID] = uuidgen.UUID
+UUID: type[uuid.UUID] = uuidgen.UUID
 
 
 TYPE_IDS = {

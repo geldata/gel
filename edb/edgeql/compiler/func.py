@@ -26,12 +26,9 @@ from typing import (
     Final,
     Optional,
     Protocol,
-    Tuple,
     Union,
     Iterable,
     Sequence,
-    Dict,
-    List,
     cast,
     TYPE_CHECKING,
 )
@@ -148,7 +145,7 @@ def compile_FunctionCall(
             funcs, args=args, kwargs=kwargs, ctx=ctx)
     if not matched:
         alts = [f.get_signature_as_str(env.schema) for f in funcs]
-        sig: List[str] = []
+        sig: list[str] = []
         # This is used to generate unique arg names.
         argnum = 0
         for argtype, _ in args:
@@ -590,7 +587,7 @@ def _special_case(name: str) -> Callable[[_SpecialCaseFunc], _SpecialCaseFunc]:
 def compile_operator(
     qlexpr: qlast.Expr,
     op_name: str,
-    qlargs: List[qlast.Expr],
+    qlargs: list[qlast.Expr],
     *,
     ctx: context.ContextLevel,
 ) -> irast.Set:
@@ -931,13 +928,13 @@ def _check_free_shape_op(ir: irast.Call, *, ctx: context.ContextLevel) -> None:
 
 def validate_recursive_operator(
     opers: Iterable[s_func.CallableObject],
-    larg: Tuple[s_types.Type, irast.Set],
-    rarg: Tuple[s_types.Type, irast.Set],
+    larg: tuple[s_types.Type, irast.Set],
+    rarg: tuple[s_types.Type, irast.Set],
     *,
     ctx: context.ContextLevel,
-) -> List[polyres.BoundCall]:
+) -> list[polyres.BoundCall]:
 
-    matched: List[polyres.BoundCall] = []
+    matched: list[polyres.BoundCall] = []
 
     # if larg and rarg are tuples or arrays, recurse into their subtypes
     if (
@@ -970,13 +967,13 @@ def validate_recursive_operator(
 def compile_func_call_args(
     expr: qlast.FunctionCall,
     funcname: sn.Name,
-    typemods: Dict[Union[int, str], ft.TypeModifier],
+    typemods: dict[Union[int, str], ft.TypeModifier],
     *,
     prefer_subquery_args: bool=False,
     ctx: context.ContextLevel
-) -> Tuple[
-    List[Tuple[s_types.Type, irast.Set]],
-    Dict[str, Tuple[s_types.Type, irast.Set]],
+) -> tuple[
+    list[tuple[s_types.Type, irast.Set]],
+    dict[str, tuple[s_types.Type, irast.Set]],
 ]:
     args = []
     kwargs = {}
@@ -1016,7 +1013,7 @@ def get_globals(
     bound_call: polyres.BoundCall,
     candidates: Sequence[s_func.Function],
     *, ctx: context.ContextLevel,
-) -> List[irast.Set]:
+) -> list[irast.Set]:
     assert isinstance(bound_call.func, s_func.Function)
 
     func_language = bound_call.func.get_language(ctx.env.schema)
@@ -1058,7 +1055,7 @@ def finalize_args(
     bound_call: polyres.BoundCall,
     *,
     actual_typemods: Sequence[ft.TypeModifier] = (),
-    guessed_typemods: Dict[Union[int, str], ft.TypeModifier],
+    guessed_typemods: dict[Union[int, str], ft.TypeModifier],
     is_polymorphic: bool = False,
     ctx: context.ContextLevel,
 ) -> tuple[dict[int | str, irast.CallArg], dict[str, int | str]]:

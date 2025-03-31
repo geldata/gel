@@ -20,7 +20,7 @@
 in our internal Postgres instance."""
 
 import functools
-from typing import Optional, Tuple, Union, Iterable, List, cast
+from typing import Optional, Union, Iterable, cast
 
 from edb import errors
 from edb.common.parsing import Span
@@ -69,7 +69,7 @@ def _resolve_range_var(
     alias: pgast.Alias,
     *,
     ctx: context.ResolverContextLevel,
-) -> Tuple[pgast.BaseRangeVar, context.Table]:
+) -> tuple[pgast.BaseRangeVar, context.Table]:
     raise ValueError(f'no SQL resolve handler for {ir.__class__}')
 
 
@@ -79,7 +79,7 @@ def _resolve_RelRangeVar(
     alias: pgast.Alias,
     *,
     ctx: Context,
-) -> Tuple[pgast.BaseRangeVar, context.Table]:
+) -> tuple[pgast.BaseRangeVar, context.Table]:
     with ctx.child() as subctx:
         relation: Union[pgast.BaseRelation, pgast.CommonTableExpr]
         if isinstance(range_var.relation, pgast.BaseRelation):
@@ -121,7 +121,7 @@ def _resolve_RangeSubselect(
     alias: pgast.Alias,
     *,
     ctx: Context,
-) -> Tuple[pgast.BaseRangeVar, context.Table]:
+) -> tuple[pgast.BaseRangeVar, context.Table]:
     with ctx.lateral() if range_var.lateral else ctx.child() as subctx:
         subquery, subtable = dispatch.resolve_relation(
             range_var.subquery, ctx=subctx
@@ -219,7 +219,7 @@ def _resolve_JoinExpr(
 
 def resolve_CommonTableExpr(
     cte: pgast.CommonTableExpr, *, ctx: Context
-) -> Tuple[pgast.CommonTableExpr, context.CTE]:
+) -> tuple[pgast.CommonTableExpr, context.CTE]:
     reference_as = None
 
     with ctx.child() as subctx:
@@ -283,11 +283,11 @@ def resolve_CommonTableExpr(
     return node, result
 
 
-def _infer_col_aliases(query: pgast.SelectStmt) -> Optional[List[str]]:
+def _infer_col_aliases(query: pgast.SelectStmt) -> Optional[list[str]]:
     aliases = [expr.infer_alias(t) for t in query.target_list]
     if not all(aliases):
         return None
-    return cast(List[str], aliases)
+    return cast(list[str], aliases)
 
 
 @_resolve_range_var.register
@@ -296,10 +296,10 @@ def _resolve_RangeFunction(
     alias: pgast.Alias,
     *,
     ctx: Context,
-) -> Tuple[pgast.BaseRangeVar, context.Table]:
+) -> tuple[pgast.BaseRangeVar, context.Table]:
     with ctx.lateral() if range_var.lateral else ctx.child() as subctx:
 
-        functions: List[pgast.BaseExpr] = []
+        functions: list[pgast.BaseExpr] = []
         col_names = []
         for function in range_var.functions:
             match function:
@@ -390,10 +390,10 @@ def _resolve_RangeFunction(
 
 
 def _zip_column_alias(
-    columns: List[context.Column],
+    columns: list[context.Column],
     alias: pgast.Alias,
     ctx: Optional[Span],
-) -> Iterable[Tuple[context.Column, Optional[str]]]:
+) -> Iterable[tuple[context.Column, Optional[str]]]:
     if not alias.colnames:
         return map(lambda c: (c, None), columns)
 

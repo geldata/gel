@@ -24,11 +24,9 @@ from typing import (
     ClassVar,
     Literal,
     Optional,
-    Type,
     Iterable,
     Mapping,
     Sequence,
-    Dict,
     cast,
     overload,
 )
@@ -1944,7 +1942,7 @@ class TypeDesc:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SequenceDesc(TypeDesc):
     subtype: TypeDesc
-    impl: ClassVar[Type[s_obj.CollectionFactory[Any]]]
+    impl: ClassVar[type[s_obj.CollectionFactory[Any]]]
 
     def encode(self, data: collections.abc.Collection[Any]) -> bytes:
         if not data:
@@ -2019,7 +2017,7 @@ class CompoundDesc(SchemaTypeDesc):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class BaseScalarDesc(SchemaTypeDesc):
-    codecs: ClassVar[Dict[
+    codecs: ClassVar[dict[
         uuid.UUID,
         tuple[Callable[[Any], bytes], Callable[[bytes], Any]]
     ]] = {

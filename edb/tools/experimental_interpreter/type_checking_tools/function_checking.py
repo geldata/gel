@@ -3,7 +3,7 @@ from ..data import type_ops as tops
 from ..data import expr_to_str as pp
 from ..data import module_ops as mops
 from ..interpreter_logging import print_warning
-from typing import List, Tuple, Dict, Optional, Sequence
+from typing import Optional, Sequence
 from functools import reduce
 import operator
 
@@ -60,14 +60,14 @@ def try_match_and_get_arg_mods(
 
 
 def check_args_ret_type_match(
-    ctx: e.TcCtx, tps_syn: List[e.Tp], tps_ck: e.FunArgRetType
+    ctx: e.TcCtx, tps_syn: list[e.Tp], tps_ck: e.FunArgRetType
 ) -> Optional[e.Tp]:  # Returns the result Tp if matches
     """
     If matches, return the result type.
     Need to return result type because we have parametric ploymorphism.
     """
 
-    some_tp_mapping_candidates: Dict[int, List[e.Tp]] = {}
+    some_tp_mapping_candidates: dict[int, list[e.Tp]] = {}
 
     args_ck_tps = tps_ck.args_tp
     ret_tp = tps_ck.ret_tp.tp
@@ -80,7 +80,7 @@ def check_args_ret_type_match(
             ctx, syn_tp, ck_tp, some_tp_mapping_candidates
         )
 
-    some_tp_mapping: Dict[int, e.Tp] = {}
+    some_tp_mapping: dict[int, e.Tp] = {}
     for i, candidate_tps in some_tp_mapping_candidates.items():
         if len(candidate_tps) == 1:
             some_tp_mapping[i] = candidate_tps[0]
@@ -135,7 +135,7 @@ def check_args_ret_type_match(
 
 def func_call_checking(
     ctx: e.TcCtx, fun_call: e.FunAppExpr
-) -> Tuple[e.ResultTp, e.FunAppExpr]:
+) -> tuple[e.ResultTp, e.FunAppExpr]:
     # for breaking circular dependency
     from . import typechecking as tc
 
@@ -173,7 +173,7 @@ def func_call_checking(
                         fun_call,
                     )
             else:
-                ok_candidates: List[Tuple[int, e.Tp]] = []
+                ok_candidates: list[tuple[int, e.Tp]] = []
                 for fun_idx, fun_def in enumerate(fun_defs):
                     if len(tps) == len(fun_def.tp.args_tp):
                         if len(kwargs) == 0:

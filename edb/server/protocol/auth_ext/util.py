@@ -29,7 +29,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from cryptography.hazmat.backends import default_backend
 
 from jwcrypto import jwt, jwk
-from typing import TypeVar, Type, overload, Any, cast, Optional, TYPE_CHECKING
+from typing import TypeVar, overload, Any, cast, Optional, TYPE_CHECKING
 
 from edb.server import config as edb_config
 from edb.server.config.types import CompositeConfigType
@@ -47,7 +47,7 @@ def maybe_get_config_unchecked(db: edbtenant.dbview.Database, key: str) -> Any:
 
 
 @overload
-def maybe_get_config(db: Any, key: str, expected_type: Type[T]) -> T | None: ...
+def maybe_get_config(db: Any, key: str, expected_type: type[T]) -> T | None: ...
 
 
 @overload
@@ -55,7 +55,7 @@ def maybe_get_config(db: Any, key: str) -> str | None: ...
 
 
 def maybe_get_config(
-    db: Any, key: str, expected_type: Type[object] = str
+    db: Any, key: str, expected_type: type[object] = str
 ) -> object:
     value = maybe_get_config_unchecked(db, key)
 
@@ -72,14 +72,14 @@ def maybe_get_config(
 
 
 @overload
-def get_config(db: Any, key: str, expected_type: Type[T]) -> T: ...
+def get_config(db: Any, key: str, expected_type: type[T]) -> T: ...
 
 
 @overload
 def get_config(db: Any, key: str) -> str: ...
 
 
-def get_config(db: Any, key: str, expected_type: Type[object] = str) -> object:
+def get_config(db: Any, key: str, expected_type: type[object] = str) -> object:
     value = maybe_get_config(db, key, expected_type)
     if value is None:
         raise errors.MissingConfiguration(

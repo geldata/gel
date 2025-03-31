@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Sequence, Type, TypeVar
+from typing import Any, Callable, Optional, Sequence, TypeVar
 
 import collections.abc
 import functools
@@ -39,7 +39,7 @@ def chain_decorators(
     return f
 
 
-def downcast(typ: Type[T], x: Any) -> T:
+def downcast(typ: type[T], x: Any) -> T:
     assert isinstance(x, typ)
     return x
 

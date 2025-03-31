@@ -17,8 +17,6 @@
 #
 
 
-from typing import List
-
 import json
 import urllib
 
@@ -36,7 +34,7 @@ class TestHttpNotebook(tb.BaseHttpExtensionTest):
     def get_extension_path(cls):
         return 'notebook'
 
-    def run_queries(self, queries: List[str]):
+    def run_queries(self, queries: list[str]):
         req_data = {
             'queries': queries
         }

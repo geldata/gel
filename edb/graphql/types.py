@@ -22,12 +22,7 @@ from typing import (
     Any,
     ClassVar,
     Optional,
-    Tuple,
-    Type,
     Union,
-    Dict,
-    List,
-    Set,
     cast,
 )
 
@@ -185,7 +180,7 @@ def coerce_bigint(value: Any) -> int:
 
 def parse_int_literal(
     ast: gql_ast.Node,
-    _variables: Optional[Dict[str, Any]] = None,
+    _variables: Optional[dict[str, Any]] = None,
 ) -> Optional[int]:
     if isinstance(ast, gql_ast.IntValueNode):
         return int(ast.value)
@@ -222,7 +217,7 @@ GraphQLJSON = GraphQLScalarType(
 
 def parse_decimal_literal(
     ast: gql_ast.Node,
-    _variables: Optional[Dict[str, Any]] = None,
+    _variables: Optional[dict[str, Any]] = None,
 ) -> Optional[float]:
     if isinstance(ast, (gql_ast.FloatValueNode, gql_ast.IntValueNode)):
         return float(ast.value)
@@ -320,22 +315,22 @@ HIDDEN_TYPES = {
 
 class GQLCoreSchema:
 
-    _gql_interfaces: Dict[
+    _gql_interfaces: dict[
         s_name.QualName,
         GraphQLInterfaceType,
     ]
 
-    _gql_objtypes_from_alias: Dict[
+    _gql_objtypes_from_alias: dict[
         s_name.QualName,
         GraphQLObjectType,
     ]
 
-    _gql_objtypes: Dict[
+    _gql_objtypes: dict[
         s_name.QualName,
         GraphQLObjectType,
     ]
 
-    _gql_inobjtypes: Dict[
+    _gql_inobjtypes: dict[
         str,
         Union[
             GraphQLInputObjectType,
@@ -344,11 +339,11 @@ class GQLCoreSchema:
         ]
     ]
 
-    _gql_ordertypes: Dict[str, GraphQLInputType]
+    _gql_ordertypes: dict[str, GraphQLInputType]
 
-    _gql_enums: Dict[str, GraphQLEnumType]
+    _gql_enums: dict[str, GraphQLEnumType]
 
-    _type_map: Dict[Tuple[str, bool], GQLBaseType]
+    _type_map: dict[tuple[str, bool], GQLBaseType]
 
     def __init__(self, edb_schema: s_schema.Schema) -> None:
         '''Create a graphql schema based on edgedb schema.'''
@@ -361,7 +356,7 @@ class GQLCoreSchema:
         } - HIDDEN_MODULES))
 
         self._gql_interfaces = {}
-        self._gql_uniontypes: Set[s_name.QualName] = set()
+        self._gql_uniontypes: set[s_name.QualName] = set()
         self._gql_objtypes_from_alias = {}
         self._gql_objtypes = {}
         self._gql_inobjtypes = {}
@@ -587,7 +582,7 @@ class GQLCoreSchema:
     def _get_query_args(
         self,
         typename: s_name.QualName,
-    ) -> Dict[str, GraphQLArgument]:
+    ) -> dict[str, GraphQLArgument]:
         return {
             'filter': GraphQLArgument(self._gql_inobjtypes[str(typename)]),
             'order': GraphQLArgument(self._gql_ordertypes[str(typename)]),
@@ -602,7 +597,7 @@ class GQLCoreSchema:
     def _get_insert_args(
         self,
         typename: s_name.QualName,
-    ) -> Dict[str, GraphQLArgument]:
+    ) -> dict[str, GraphQLArgument]:
         # The data can only be a specific non-interface type, if no
         # such type exists, skip it as we cannot accept unambiguous
         # data input. It's still possible to just select some existing
@@ -619,7 +614,7 @@ class GQLCoreSchema:
     def _get_update_args(
         self,
         typename: s_name.QualName,
-    ) -> Dict[str, GraphQLArgument]:
+    ) -> dict[str, GraphQLArgument]:
         # some types have no updates
         uptype = self._gql_inobjtypes.get(f'Update{typename}')
         if uptype is None:
@@ -633,12 +628,12 @@ class GQLCoreSchema:
     def get_fields(
         self,
         typename: s_name.QualName,
-    ) -> Dict[str, GraphQLField]:
+    ) -> dict[str, GraphQLField]:
         fields = {}
 
         if str(typename) == '__graphql__::Query':
             # The fields here will come from abstract types and aliases.
-            queryable: List[Tuple[s_name.QualName, GraphQLNamedType]] = []
+            queryable: list[tuple[s_name.QualName, GraphQLNamedType]] = []
             queryable.extend(self._gql_interfaces.items())
             queryable.extend(self._gql_objtypes_from_alias.items())
             queryable.sort(key=lambda x: x[1].name)
@@ -724,7 +719,7 @@ class GQLCoreSchema:
                     # We want to look at the pointer lineage because that
                     # will be reflected into GraphQL interface that is
                     # being extended and the type cannot be changed.
-                    ancestors: Tuple[s_pointers.Pointer, ...]
+                    ancestors: tuple[s_pointers.Pointer, ...]
                     ancestors = ptr.get_ancestors(
                         self.edb_schema).objects(self.edb_schema)
 
@@ -758,7 +753,7 @@ class GQLCoreSchema:
         self,
         typename: s_name.QualName,
         nested: bool = False,
-    ) -> Dict[str, GraphQLInputField]:
+    ) -> dict[str, GraphQLInputField]:
         selftype = self._gql_inobjtypes[str(typename)]
         fields = {}
 
@@ -827,7 +822,7 @@ class GQLCoreSchema:
     def get_insert_fields(
         self,
         typename: s_name.QualName,
-    ) -> Dict[str, GraphQLInputField]:
+    ) -> dict[str, GraphQLInputField]:
         fields = {}
 
         edb_type = self.edb_schema.get(typename, type=s_objtypes.ObjectType)
@@ -934,7 +929,7 @@ class GQLCoreSchema:
     def get_update_fields(
         self,
         typename: s_name.QualName,
-    ) -> Dict[str, GraphQLInputField]:
+    ) -> dict[str, GraphQLInputField]:
         fields = {}
 
         edb_type = self.edb_schema.get(typename, type=s_objtypes.ObjectType)
@@ -1246,7 +1241,7 @@ class GQLCoreSchema:
     def _make_generic_filter_type(
         self,
         base: Union[GraphQLScalarType, GraphQLEnumType],
-        ops: List[str],
+        ops: list[str],
     ) -> None:
         name = f'Filter{base.name}'
         fields = {}
@@ -1298,8 +1293,8 @@ class GQLCoreSchema:
     def get_order_fields(
         self,
         typename: s_name.QualName,
-    ) -> Dict[str, GraphQLInputField]:
-        fields: Dict[str, GraphQLInputField] = {}
+    ) -> dict[str, GraphQLInputField]:
+        fields: dict[str, GraphQLInputField] = {}
 
         edb_type = self.edb_schema.get(typename, type=s_objtypes.ObjectType)
         pointers = edb_type.get_pointers(self.edb_schema)
@@ -1535,7 +1530,7 @@ class GQLCoreSchema:
         '''Get a special GQL type either by name or based on Gel type.'''
         # normalize name and possibly add 'edb_base' to kwargs
         edb_base = None
-        kwargs: Dict[str, Any] = {'dummy': dummy}
+        kwargs: dict[str, Any] = {'dummy': dummy}
 
         if not name.startswith('__graphql__::'):
             # The name may potentially contain the suffix "_Type",
@@ -1601,13 +1596,13 @@ class GQLCoreSchema:
 
 
 class GQLTypeMeta(type):
-    edb_map: Dict[str, Type[GQLBaseType]] = {}
+    edb_map: dict[str, type[GQLBaseType]] = {}
 
     def __new__(
         mcls,
         name: str,
-        bases: Tuple[type, ...],
-        dct: Dict[str, Any],
+        bases: tuple[type, ...],
+        dct: dict[str, Any],
     ) -> GQLTypeMeta:
         cls = super().__new__(mcls, name, bases, dct)
 
@@ -1623,8 +1618,8 @@ class GQLBaseType(metaclass=GQLTypeMeta):
     edb_type: ClassVar[Optional[s_name.QualName]] = None
     _edb_base: Optional[s_types.Type]
     _module: Optional[str]
-    _fields: Dict[Tuple[str, bool], GQLBaseType]
-    _shadow_fields: Tuple[str, ...]
+    _fields: dict[tuple[str, bool], GQLBaseType]
+    _shadow_fields: tuple[str, ...]
 
     def __init__(
         self,
@@ -1890,7 +1885,7 @@ class GQLBaseType(metaclass=GQLTypeMeta):
 
     def get_template(
         self,
-    ) -> Tuple[qlast.Base, Optional[qlast.Expr], Optional[qlast.SelectQuery]]:
+    ) -> tuple[qlast.Base, Optional[qlast.Expr], Optional[qlast.SelectQuery]]:
         '''Provide an EQL AST template to be filled.
 
         Return the overall ast, a reference to where the shape element
@@ -1919,7 +1914,7 @@ class GQLBaseType(metaclass=GQLTypeMeta):
         *,
         parent: qlast.Base,
         has_shape: bool = False,
-    ) -> Tuple[
+    ) -> tuple[
         Optional[qlast.Base],
         Optional[qlast.Expr],
         Optional[qlast.SelectQuery],
@@ -2028,7 +2023,7 @@ class GQLBaseQuery(GQLBaseType):
             )
         ]
 
-    def get_module_and_name(self, name: str) -> Tuple[str, ...]:
+    def get_module_and_name(self, name: str) -> tuple[str, ...]:
         if name in self._std_obj_names:
             return ('std', name)
         elif '__' in name:

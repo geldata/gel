@@ -35,8 +35,6 @@ import dataclasses
 from typing import (
     Any,
     Optional,
-    Tuple,
-    FrozenSet,
     cast,
     TYPE_CHECKING,
     Callable,
@@ -2223,7 +2221,7 @@ class Router:
 
         return (identity_id, challenge, callback_url)
 
-    def _get_data_from_reset_token(self, token: str) -> Tuple[str, str, str]:
+    def _get_data_from_reset_token(self, token: str) -> tuple[str, str, str]:
         try:
             claims = self._verify_and_extract_claims(token, "reset")
         except Exception:
@@ -2240,7 +2238,7 @@ class Router:
 
     def _get_data_from_verification_token(
         self, token: str
-    ) -> Tuple[str, float, str, Optional[str], Optional[str]]:
+    ) -> tuple[str, float, str, Optional[str], Optional[str]]:
         try:
             claims = self._verify_and_extract_claims(token, "verify")
         except Exception:
@@ -2271,7 +2269,7 @@ class Router:
         if maybe_issued_at is None:
             raise errors.InvalidData("Missing 'iat' in 'verification_token'")
 
-        return_value: Tuple[str, float, str, Optional[str], Optional[str]]
+        return_value: tuple[str, float, str, Optional[str], Optional[str]]
         match (
             identity_id,
             maybe_issued_at,
@@ -2455,7 +2453,7 @@ class Router:
             "ext::auth::AuthConfig::allowed_redirect_urls",
             frozenset,
         )
-        allowed_urls = cast(FrozenSet[str], allowed_urls).union(
+        allowed_urls = cast(frozenset[str], allowed_urls).union(
             {self.base_path}
         )
 
