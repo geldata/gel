@@ -6,6 +6,8 @@ Docker
 
 :edb-alt-title: Deploying Gel with Docker
 
+.. include:: ./note_cloud.rst
+
 When to use the "geldata/gel" Docker image
 ==========================================
 

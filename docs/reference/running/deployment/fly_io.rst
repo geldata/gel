@@ -10,6 +10,8 @@ In this guide we show how to deploy Gel using a `Fly.io <https://fly.io>`_
 PostgreSQL cluster as the backend. The deployment consists of two apps: one
 running Postgres and the other running Gel.
 
+.. include:: ./note_cloud.rst
+
 
 Prerequisites
 =============

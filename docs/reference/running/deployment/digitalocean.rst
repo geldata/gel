@@ -11,6 +11,8 @@ One-click Deploy option or a
 :ref:`managed PostgreSQL <ref_guide_deployment_digitalocean_managed>`
 database as the backend.
 
+.. include:: ./note_cloud.rst
+
 One-click Deploy
 ++++++++++++++++
 

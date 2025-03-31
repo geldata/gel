@@ -6,6 +6,8 @@ AWS
 
 :edb-alt-title:  Deploying Gel to AWS
 
+.. include:: ./note_cloud.rst
+
 In this guide we show how to deploy Gel on AWS using Amazon Aurora and
 Elastic Container Service.
 
