@@ -26,7 +26,6 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
-    Union,
 )
 from collections.abc import MutableSequence
 
@@ -249,7 +248,7 @@ class PLBlock(SQLBlock):
 
     def declare_var(
         self,
-        type_name: Union[str, tuple[str, str]],
+        type_name: str | tuple[str, str],
         *,
         var_name: str='',
         var_name_prefix: str='v',

@@ -28,7 +28,6 @@ import re
 from typing import (
     Any,
     Optional,
-    Union,
     Mapping,
     NamedTuple,
 )
@@ -1994,7 +1993,7 @@ def augment_error_message(gqlcore: gt.GQLCoreSchema, message: str):
 
 def convert_default(
     node: gql_ast.ValueNode, varname: str
-) -> Union[str, float, int, bool]:
+) -> str | float | int | bool:
     if isinstance(node, (gql_ast.StringValueNode,
                          gql_ast.BooleanValueNode,
                          gql_ast.EnumValueNode)):

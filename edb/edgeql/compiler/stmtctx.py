@@ -25,7 +25,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Union,
     Mapping,
     Sequence,
 )
@@ -576,7 +575,7 @@ def _get_nearest_non_source_derived_parent(
 
 
 def _elide_derived_ancestors(
-    obj: Union[s_types.InheritingType, s_pointers.Pointer],
+    obj: s_types.InheritingType | s_pointers.Pointer,
     *,
     ctx: context.ContextLevel,
 ) -> None:
@@ -605,7 +604,7 @@ def _elide_derived_ancestors(
 
 def compile_anchor(
     name: str,
-    anchor: Union[qlast.Expr, irast.Base, s_obj.Object, irast.PathId],
+    anchor: qlast.Expr | irast.Base | s_obj.Object | irast.PathId,
     *,
     ctx: context.ContextLevel,
 ) -> irast.Set:

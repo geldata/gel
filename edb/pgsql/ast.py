@@ -313,7 +313,7 @@ class PathRangeVar(BaseRangeVar):
 class RelRangeVar(PathRangeVar):
     """Relation range variable, used in FROM clauses."""
 
-    relation: typing.Union[BaseRelation, CommonTableExpr]
+    relation: BaseRelation | CommonTableExpr
     include_inherited: bool = True
 
     @property
@@ -390,7 +390,7 @@ class ColumnRef(OutputVar):
     """Specifies a reference to a column."""
 
     # Column name list.
-    name: typing.Sequence[typing.Union[str, Star]]
+    name: typing.Sequence[str | Star]
     # Whether the col is an optional path bond (i.e accepted when NULL)
     optional: typing.Optional[bool] = None
 
@@ -407,12 +407,12 @@ class ColumnRef(OutputVar):
 class TupleElementBase(ImmutableBase):
 
     path_id: irast.PathId
-    name: typing.Optional[typing.Union[OutputVar, str]]
+    name: typing.Optional[OutputVar | str]
 
     def __init__(
         self,
         path_id: irast.PathId,
-        name: typing.Optional[typing.Union[OutputVar, str]] = None,
+        name: typing.Optional[OutputVar | str] = None,
     ):
         self.path_id = path_id
         self.name = name
@@ -433,7 +433,7 @@ class TupleElement(TupleElementBase):
         path_id: irast.PathId,
         val: BaseExpr,
         *,
-        name: typing.Optional[typing.Union[OutputVar, str]] = None,
+        name: typing.Optional[OutputVar | str] = None,
     ):
         super().__init__(path_id, name)
         self.val = val

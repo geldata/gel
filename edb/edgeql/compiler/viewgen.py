@@ -28,7 +28,6 @@ import functools
 from typing import (
     Callable,
     Optional,
-    Union,
     AbstractSet,
     Mapping,
     Sequence,
@@ -573,7 +572,7 @@ def _process_view(
     shape_ptrs: list[ShapePtr] = []
 
     for ptrcls, ptr_set, _ in pointers.values():
-        source: Union[s_types.Type, s_pointers.PointerLike]
+        source: s_types.Type | s_pointers.PointerLike
 
         if ptrcls.is_link_property(ctx.env.schema):
             assert view_rptr is not None and view_rptr.ptrcls is not None
@@ -2371,7 +2370,7 @@ def _get_late_shape_configuration(
 
     stype = setgen.get_set_type(ir_set, ctx=ctx)
 
-    sources: list[Union[s_types.Type, s_pointers.PointerLike]] = []
+    sources: list[s_types.Type | s_pointers.PointerLike] = []
     link_view = False
     is_objtype = ir_set.path_id.is_objtype_path()
 

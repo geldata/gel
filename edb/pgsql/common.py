@@ -24,7 +24,7 @@ import functools
 import hashlib
 import base64
 import re
-from typing import Literal, Optional, Union, overload
+from typing import Literal, Optional, overload
 import uuid
 
 from edb import buildmeta
@@ -479,7 +479,7 @@ def get_index_table_backend_name(
 
 def get_tuple_backend_name(
     id, catenate=True, *, aspect=None
-) -> Union[str, tuple[str, str]]:
+) -> str | tuple[str, str]:
 
     name = s_name.QualName(module='edgedb', name=f'{id}_t')
     return convert_name(name, aspect, catenate)
@@ -516,8 +516,8 @@ def get_backend_name(
     *,
     aspect: Optional[str]=None,
     versioned: bool=True,
-) -> Union[str, tuple[str, str]]:
-    name: Union[s_name.QualName, s_name.Name]
+) -> str | tuple[str, str]:
+    name: s_name.QualName | s_name.Name
     if isinstance(obj, s_objtypes.ObjectType):
         name = obj.get_name(schema)
         return get_objtype_backend_name(

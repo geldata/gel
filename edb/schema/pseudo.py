@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, TypeVar, Union, TYPE_CHECKING
+from typing import Optional, TypeVar, TYPE_CHECKING
 
 from edb import errors
 from edb.common import parsing
@@ -47,7 +47,7 @@ class PseudoType(
     def get(
         cls,
         schema: s_schema.Schema,
-        name: Union[str, sn.Name],
+        name: str | sn.Name,
     ) -> PseudoType:
         return schema.get_global(PseudoType, name)
 

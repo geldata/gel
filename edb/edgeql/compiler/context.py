@@ -24,7 +24,6 @@ from typing import (
     Callable,
     Literal,
     Optional,
-    Union,
     Mapping,
     MutableMapping,
     Sequence,
@@ -130,8 +129,10 @@ class PointerRefCache(dict[irtyputils.PtrRefCacheKey, irast.BasePointerRef]):
 
 # Volatility inference computes two volatility results:
 # A basic one, and one for consumption by materialization
-InferredVolatility = Union[
-    qltypes.Volatility, tuple[qltypes.Volatility, qltypes.Volatility]]
+InferredVolatility = (
+    qltypes.Volatility
+    | tuple[qltypes.Volatility, qltypes.Volatility]
+)
 
 
 class Environment:
@@ -179,7 +180,7 @@ class Environment:
     """A dictionary of expressions and their inferred volatility."""
 
     view_shapes: dict[
-        Union[s_types.Type, s_pointers.PointerLike],
+        s_types.Type | s_pointers.PointerLike,
         list[tuple[s_pointers.Pointer, qlast.ShapeOp]]
     ]
     """Object output or modification shapes."""
@@ -229,7 +230,7 @@ class Environment:
     """Map from unique_id to nodes."""
 
     materialized_sets: dict[
-        Union[s_types.Type, s_pointers.PointerLike],
+        s_types.Type | s_pointers.PointerLike,
         tuple[qlast.Statement, Sequence[irast.MaterializeReason]],
     ]
     """A mapping of computed sets that must be computed only once."""
@@ -342,7 +343,7 @@ class Environment:
         *,
         modaliases: Optional[Mapping[Optional[str], str]] = None,
         type: Optional[type[s_obj.Object]] = None,
-        default: Union[s_obj.Object, s_obj.NoDefaultT] = s_obj.NoDefault,
+        default: s_obj.Object | s_obj.NoDefaultT = s_obj.NoDefault,
         label: Optional[str] = None,
         condition: Optional[Callable[[s_obj.Object], bool]] = None,
     ) -> s_obj.Object:
@@ -356,7 +357,7 @@ class Environment:
         *,
         modaliases: Optional[Mapping[Optional[str], str]] = None,
         type: Optional[type[s_obj.Object]] = None,
-        default: Union[s_obj.Object, s_obj.NoDefaultT, None] = s_obj.NoDefault,
+        default: s_obj.Object | s_obj.NoDefaultT | None = s_obj.NoDefault,
         label: Optional[str] = None,
         condition: Optional[Callable[[s_obj.Object], bool]] = None,
     ) -> Optional[s_obj.Object]:
@@ -369,7 +370,7 @@ class Environment:
         *,
         modaliases: Optional[Mapping[Optional[str], str]] = None,
         type: Optional[type[s_obj.Object]] = None,
-        default: Union[s_obj.Object, s_obj.NoDefaultT, None] = s_obj.NoDefault,
+        default: s_obj.Object | s_obj.NoDefaultT | None = s_obj.NoDefault,
         label: Optional[str] = None,
         condition: Optional[Callable[[s_obj.Object], bool]] = None,
     ) -> Optional[s_obj.Object]:
@@ -403,7 +404,7 @@ class Environment:
         expr: Optional[qlast.Base]=None,
         *,
         modaliases: Optional[Mapping[Optional[str], str]] = None,
-        default: Union[None, s_obj.Object, s_obj.NoDefaultT] = s_obj.NoDefault,
+        default: None | s_obj.Object | s_obj.NoDefaultT = s_obj.NoDefault,
         label: Optional[str]=None,
         condition: Optional[Callable[[s_obj.Object], bool]]=None,
     ) -> s_types.Type:
@@ -425,7 +426,7 @@ class ContextLevel(compiler.ContextLevel):
     """The name of the module for classes derived by views."""
 
     anchors: dict[
-        Union[str, type[qlast.SpecialAnchor]],
+        str | type[qlast.SpecialAnchor],
         irast.Set,
     ]
     """A mapping of anchor variables (aliases to path expressions passed
@@ -781,7 +782,7 @@ class ContextLevel(compiler.ContextLevel):
 
     def maybe_create_anchor(
         self,
-        ir: Union[irast.Set, qlast.Expr],
+        ir: irast.Set | qlast.Expr,
         name: str = 'v',
     ) -> qlast.Expr:
         if isinstance(ir, irast.Set):

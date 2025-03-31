@@ -1,4 +1,4 @@
-from typing import Any, Optional, Sequence, Union, cast
+from typing import Any, Optional, Sequence, cast
 
 from edb.edgeql import ast as qlast
 
@@ -36,7 +36,7 @@ def elab_schema_cardinality(
 
 
 def elab_schema_target_tp(
-    target: Optional[Union[qlast.Expr, qlast.TypeExpr]]
+    target: Optional[qlast.Expr | qlast.TypeExpr]
 ) -> Tp:
     return (
         elab_single_type_expr(target)

@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union, Sequence
+from typing import Optional, Sequence
 
 import random
 
@@ -86,7 +86,7 @@ def get_volatility_ref(
 
 
 def setup_iterator_volatility(
-        iterator: Optional[Union[irast.Set, pgast.IteratorCTE]], *,
+        iterator: Optional[irast.Set | pgast.IteratorCTE], *,
         ctx: context.CompilerContextLevel) -> None:
     if iterator is None:
         return

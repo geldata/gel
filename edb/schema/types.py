@@ -46,7 +46,7 @@ from . import utils
 
 if typing.TYPE_CHECKING:
     from typing import Any, Iterable, Iterator, Mapping, Optional
-    from typing import AbstractSet, Sequence, Union, Callable
+    from typing import AbstractSet, Sequence, Callable
     from edb.common import parsing
 
 
@@ -1100,10 +1100,7 @@ class Collection(Type, s_abc.Collection):
     def issubclass(
         self,
         schema: s_schema.Schema,
-        parent: Union[
-            so.SubclassableObject,
-            tuple[so.SubclassableObject, ...],
-        ],
+        parent: so.SubclassableObject | tuple[so.SubclassableObject, ...],
     ) -> bool:
         if isinstance(parent, tuple):
             return any(self.issubclass(schema, p) for p in parent)
@@ -1562,7 +1559,7 @@ class ArrayTypeShell(CollectionTypeShell[Array_T_co]):
         view_name: Optional[s_name.QualName] = None,
         attrs: Optional[dict[str, Any]] = None,
     ) -> sd.CommandGroup:
-        ca: Union[CreateArray, CreateArrayExprAlias]
+        ca: CreateArray | CreateArrayExprAlias
         cmd = sd.CommandGroup()
         if view_name is None:
             ca = CreateArray(
@@ -1787,7 +1784,7 @@ class Tuple(
     def from_subtypes(
         cls: type[Tuple_T],
         schema: s_schema.Schema,
-        subtypes: Union[Iterable[Type], Mapping[str, Type]],
+        subtypes: Iterable[Type] | Mapping[str, Type],
         typemods: Any = None,
         *,
         name: Optional[s_name.QualName] = None,
@@ -2113,8 +2110,8 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
         *,
         view_name: Optional[s_name.QualName] = None,
         attrs: Optional[dict[str, Any]] = None,
-    ) -> Union[CreateTuple, CreateTupleExprAlias]:
-        ct: Union[CreateTuple, CreateTupleExprAlias]
+    ) -> CreateTuple | CreateTupleExprAlias:
+        ct: CreateTuple | CreateTupleExprAlias
 
         plain_tuple = self._as_plain_create_delta(schema)
         if view_name is None:
@@ -2147,7 +2144,7 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
     def _populate_create_delta(
         self,
         schema: s_schema.Schema,
-        ct: Union[CreateTuple, CreateTupleExprAlias],
+        ct: CreateTuple | CreateTupleExprAlias,
         *,
         attrs: Optional[dict[str, Any]] = None,
     ) -> None:
@@ -2495,7 +2492,7 @@ class RangeTypeShell(CollectionTypeShell[Range_T_co]):
         view_name: Optional[s_name.QualName] = None,
         attrs: Optional[dict[str, Any]] = None,
     ) -> sd.CommandGroup:
-        ca: Union[CreateRange, CreateRangeExprAlias]
+        ca: CreateRange | CreateRangeExprAlias
         cmd = sd.CommandGroup()
         if view_name is None:
             ca = CreateRange(
@@ -2829,7 +2826,7 @@ class MultiRangeTypeShell(CollectionTypeShell[MultiRange_T_co]):
         view_name: Optional[s_name.QualName] = None,
         attrs: Optional[dict[str, Any]] = None,
     ) -> sd.CommandGroup:
-        ca: Union[CreateMultiRange, CreateMultiRangeExprAlias]
+        ca: CreateMultiRange | CreateMultiRangeExprAlias
         cmd = sd.CommandGroup()
         if view_name is None:
             ca = CreateMultiRange(
@@ -2872,7 +2869,7 @@ class MultiRangeExprAlias(
         return MultiRange
 
 
-RangeLike = typing.Union[Range, MultiRange]
+RangeLike = Range | MultiRange
 
 
 def get_union_type_name(

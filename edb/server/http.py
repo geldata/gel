@@ -22,7 +22,6 @@ from typing import (
     Any,
     Mapping,
     Optional,
-    Union,
     Self,
     Callable,
 )
@@ -39,7 +38,7 @@ from edb.server._rust_native._http import Http
 from . import rust_async_channel
 
 logger = logging.getLogger("edb.server")
-HeaderType = Optional[Union[list[tuple[str, str]], dict[str, str]]]
+HeaderType = Optional[list[tuple[str, str]] | dict[str, str]]
 
 
 @dataclasses.dataclass(frozen=True)

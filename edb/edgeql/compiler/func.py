@@ -26,7 +26,6 @@ from typing import (
     Final,
     Optional,
     Protocol,
-    Union,
     Iterable,
     Sequence,
     cast,
@@ -967,7 +966,7 @@ def validate_recursive_operator(
 def compile_func_call_args(
     expr: qlast.FunctionCall,
     funcname: sn.Name,
-    typemods: dict[Union[int, str], ft.TypeModifier],
+    typemods: dict[int | str, ft.TypeModifier],
     *,
     prefer_subquery_args: bool=False,
     ctx: context.ContextLevel
@@ -1055,7 +1054,7 @@ def finalize_args(
     bound_call: polyres.BoundCall,
     *,
     actual_typemods: Sequence[ft.TypeModifier] = (),
-    guessed_typemods: dict[Union[int, str], ft.TypeModifier],
+    guessed_typemods: dict[int | str, ft.TypeModifier],
     is_polymorphic: bool = False,
     ctx: context.ContextLevel,
 ) -> tuple[dict[int | str, irast.CallArg], dict[str, int | str]]:

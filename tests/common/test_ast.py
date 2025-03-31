@@ -96,9 +96,9 @@ class ASTBaseTests(unittest.TestCase):
             field_list: list = ast.field(factory=list)
             field_typing_list: list[Base] = ast.field(factory=list)
             field_typing_tuple: tuple[Base, ...] = ()
-            field_typing_union: typing.Union[str, bytes]
+            field_typing_union: str | bytes
             field_typing_union_list: list[
-                typing.Union[str, bytes]] = ast.field(factory=list)
+                str | bytes] = ast.field(factory=list)
             field_typing_str: str
             field_typing_optional_str: typing.Optional[str]
             field_typing_mapping: dict[

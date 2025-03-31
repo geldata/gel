@@ -20,7 +20,7 @@
 in our internal Postgres instance."""
 
 import functools
-from typing import Optional, Union, Iterable, cast
+from typing import Optional, Iterable, cast
 
 from edb import errors
 from edb.common.parsing import Span
@@ -81,7 +81,7 @@ def _resolve_RelRangeVar(
     ctx: Context,
 ) -> tuple[pgast.BaseRangeVar, context.Table]:
     with ctx.child() as subctx:
-        relation: Union[pgast.BaseRelation, pgast.CommonTableExpr]
+        relation: pgast.BaseRelation | pgast.CommonTableExpr
         if isinstance(range_var.relation, pgast.BaseRelation):
             relation, table = dispatch.resolve_relation(
                 range_var.relation,

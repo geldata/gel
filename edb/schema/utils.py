@@ -23,7 +23,6 @@ from typing import (
     Callable,
     Optional,
     TypeVar,
-    Union,
     Iterable,
     Mapping,
     Sequence,
@@ -472,7 +471,7 @@ def type_op_ast_to_type_shell(
 
 
 def ast_to_object_shell(
-    node: Union[qlast.ObjectRef, qlast.TypeName],
+    node: qlast.ObjectRef | qlast.TypeName,
     *,
     metaclass: type[so.Object_T],
     module: Optional[str] = None,
@@ -515,7 +514,7 @@ def ast_to_object_shell(
 
 def typeref_to_ast(
     schema: s_schema.Schema,
-    ref: Union[so.Object_T, so.ObjectShell[so.Object_T]],
+    ref: so.Object_T | so.ObjectShell[so.Object_T],
     *,
     _name: Optional[str] = None,
     disambiguate_std: bool=False,

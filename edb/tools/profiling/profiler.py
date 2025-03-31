@@ -27,7 +27,6 @@ from typing import (
     Callable,
     Optional,
     TypeVar,
-    Union,
     AbstractSet,
     Iterator,
     Sequence,
@@ -120,7 +119,7 @@ class profile:
         self.suffix = suffix
         self.save_every_n_calls = save_every_n_calls
         self.n_calls = 0
-        self._dir: Union[str, pathlib.Path, None] = dir
+        self._dir: str | pathlib.Path | None = dir
         self._profiler: Optional[cProfile.Profile] = None
         self._dump_file_path: Optional[str] = None
         self._profiler_enabled = False
@@ -497,7 +496,7 @@ class ScopeRecorder(ast.NodeVisitor):
         self.scopes = {}
 
     def handle_scopes(
-        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef]
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
     ) -> None:
         self.stack.append(node.name)
         self.scopes[node.lineno] = ".".join(self.stack)
@@ -928,8 +927,8 @@ def render_svg_section(
 
 def render_svg(
     stats: Stats,
-    call_out: Union[pathlib.Path, str],
-    usage_out: Union[pathlib.Path, str],
+    call_out: pathlib.Path | str,
+    usage_out: pathlib.Path | str,
     *,
     threshold: float = 0.00001,  # 1.0 is 100%
     width: int = 1920,  # in pixels
@@ -979,7 +978,7 @@ def render_svg(
 
 def render_memory_svg(
     stats: MemoryFrame,
-    out: Union[pathlib.Path, str],
+    out: pathlib.Path | str,
     *,
     width: int = 1920,  # in pixels
     block_height: int = 24,  # in pixels

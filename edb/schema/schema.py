@@ -25,7 +25,6 @@ from typing import (
     Generic,
     Optional,
     TypeVar,
-    Union,
     Iterable,
     Iterator,
     Mapping,
@@ -187,10 +186,8 @@ class Schema(abc.ABC):
     @abc.abstractmethod
     def get_functions(
         self,
-        name: Union[str, sn.Name],
-        default: Union[
-            tuple[s_func.Function, ...], so.NoDefaultT
-        ] = so.NoDefault,
+        name: str | sn.Name,
+        default: tuple[s_func.Function, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
@@ -200,10 +197,8 @@ class Schema(abc.ABC):
     @abc.abstractmethod
     def get_operators(
         self,
-        name: Union[str, sn.Name],
-        default: Union[
-            tuple[s_oper.Operator, ...], so.NoDefaultT
-        ] = so.NoDefault,
+        name: str | sn.Name,
+        default: tuple[s_oper.Operator, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
@@ -276,7 +271,7 @@ class Schema(abc.ABC):
     def get_by_id(
         self,
         obj_id: uuid.UUID,
-        default: Union[so.Object, so.NoDefaultT] = so.NoDefault,
+        default: so.Object | so.NoDefaultT = so.NoDefault,
         *,
         type: None = None,
     ) -> so.Object:
@@ -286,7 +281,7 @@ class Schema(abc.ABC):
     def get_by_id(
         self,
         obj_id: uuid.UUID,
-        default: Union[so.Object_T, so.NoDefaultT] = so.NoDefault,
+        default: so.Object_T | so.NoDefaultT = so.NoDefault,
         *,
         type: Optional[type[so.Object_T]] = None,
     ) -> so.Object_T:
@@ -305,7 +300,7 @@ class Schema(abc.ABC):
     def get_by_id(
         self,
         obj_id: uuid.UUID,
-        default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
+        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
         *,
         type: Optional[type[so.Object_T]] = None,
     ) -> Optional[so.Object_T]:
@@ -315,7 +310,7 @@ class Schema(abc.ABC):
     def _get_by_id(
         self,
         obj_id: uuid.UUID,
-        default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
+        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
         *,
         type: Optional[type[so.Object_T]] = None,
     ) -> Optional[so.Object_T]:
@@ -325,8 +320,8 @@ class Schema(abc.ABC):
     def get_global(
         self,
         objtype: type[so.Object_T],
-        name: Union[str, sn.Name],
-        default: Union[so.Object_T, so.NoDefaultT] = so.NoDefault,
+        name: str | sn.Name,
+        default: so.Object_T | so.NoDefaultT = so.NoDefault,
     ) -> so.Object_T:
         ...
 
@@ -334,7 +329,7 @@ class Schema(abc.ABC):
     def get_global(
         self,
         objtype: type[so.Object_T],
-        name: Union[str, sn.Name],
+        name: str | sn.Name,
         default: None = None,
     ) -> Optional[so.Object_T]:
         ...
@@ -342,8 +337,8 @@ class Schema(abc.ABC):
     def get_global(
         self,
         objtype: type[so.Object_T],
-        name: Union[str, sn.Name],
-        default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
+        name: str | sn.Name,
+        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
     ) -> Optional[so.Object_T]:
         return self._get_global(objtype, name, default)
 
@@ -351,16 +346,16 @@ class Schema(abc.ABC):
     def _get_global(
         self,
         objtype: type[so.Object_T],
-        name: Union[str, sn.Name],
-        default: Union[so.Object_T, so.NoDefaultT, None],
+        name: str | sn.Name,
+        default: so.Object_T | so.NoDefaultT | None,
     ) -> Optional[so.Object_T]:
         raise NotImplementedError
 
     @overload
     def get(
         self,
-        name: Union[str, sn.Name],
-        default: Union[so.Object_T, so.NoDefaultT] = so.NoDefault,
+        name: str | sn.Name,
+        default: so.Object_T | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         condition: Optional[Callable[[so.Object], bool]] = None,
@@ -372,7 +367,7 @@ class Schema(abc.ABC):
     @overload
     def get(
         self,
-        name: Union[str, sn.Name],
+        name: str | sn.Name,
         default: None,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
@@ -385,8 +380,8 @@ class Schema(abc.ABC):
     @overload
     def get(
         self,
-        name: Union[str, sn.Name],
-        default: Union[so.Object_T, so.NoDefaultT] = so.NoDefault,
+        name: str | sn.Name,
+        default: so.Object_T | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         type: type[so.Object_T],
@@ -399,7 +394,7 @@ class Schema(abc.ABC):
     @overload
     def get(
         self,
-        name: Union[str, sn.Name],
+        name: str | sn.Name,
         default: None,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
@@ -413,8 +408,8 @@ class Schema(abc.ABC):
     @overload
     def get(
         self,
-        name: Union[str, sn.Name],
-        default: Union[so.Object, so.NoDefaultT, None] = so.NoDefault,
+        name: str | sn.Name,
+        default: so.Object | so.NoDefaultT | None = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         type: Optional[type[so.Object_T]] = None,
@@ -426,8 +421,8 @@ class Schema(abc.ABC):
 
     def get(
         self,
-        name: Union[str, sn.Name],
-        default: Union[so.Object, so.NoDefaultT, None] = so.NoDefault,
+        name: str | sn.Name,
+        default: so.Object | so.NoDefaultT | None = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         type: Optional[type[so.Object_T]] = None,
@@ -448,8 +443,8 @@ class Schema(abc.ABC):
     @abc.abstractmethod
     def _get(
         self,
-        name: Union[str, sn.Name],
-        default: Union[so.Object, so.NoDefaultT, None],
+        name: str | sn.Name,
+        default: so.Object | so.NoDefaultT | None,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]],
         type: Optional[type[so.Object_T]],
@@ -1076,7 +1071,7 @@ class FlatSchema(Schema):
 
     def _search_with_getter(
         self,
-        name: Union[str, sn.Name],
+        name: str | sn.Name,
         *,
         getter: Callable[[FlatSchema, sn.Name], Any],
         default: Any,
@@ -1152,10 +1147,8 @@ class FlatSchema(Schema):
 
     def get_functions(
         self,
-        name: Union[str, sn.Name],
-        default: Union[
-            tuple[s_func.Function, ...], so.NoDefaultT
-        ] = so.NoDefault,
+        name: str | sn.Name,
+        default: tuple[s_func.Function, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
@@ -1184,10 +1177,8 @@ class FlatSchema(Schema):
 
     def get_operators(
         self,
-        name: Union[str, sn.Name],
-        default: Union[
-            tuple[s_oper.Operator, ...], so.NoDefaultT
-        ] = so.NoDefault,
+        name: str | sn.Name,
+        default: tuple[s_oper.Operator, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
@@ -1338,7 +1329,7 @@ class FlatSchema(Schema):
     def _get_by_id(
         self,
         obj_id: uuid.UUID,
-        default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
+        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
         *,
         type: Optional[type[so.Object_T]] = None,
         # Deep u-optimization; this is the hottest path in the system,
@@ -1375,8 +1366,8 @@ class FlatSchema(Schema):
     def _get_global(
         self,
         objtype: type[so.Object_T],
-        name: Union[str, sn.Name],
-        default: Union[so.Object_T, so.NoDefaultT, None],
+        name: str | sn.Name,
+        default: so.Object_T | so.NoDefaultT | None,
     ) -> Optional[so.Object_T]:
         if isinstance(name, str):
             name = sn.UnqualName(name)
@@ -1390,8 +1381,8 @@ class FlatSchema(Schema):
 
     def _get(
         self,
-        name: Union[str, sn.Name],
-        default: Union[so.Object, so.NoDefaultT, None],
+        name: str | sn.Name,
+        default: so.Object | so.NoDefaultT | None,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]],
         type: Optional[type[so.Object_T]],
@@ -1444,7 +1435,7 @@ class FlatSchema(Schema):
 
     def _raise_bad_reference(
         self,
-        name: Union[str, sn.Name],
+        name: str | sn.Name,
         *,
         label: Optional[str] = None,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
@@ -1894,10 +1885,8 @@ class ChainedSchema(Schema):
 
     def get_functions(
         self,
-        name: Union[str, sn.Name],
-        default: Union[
-            tuple[s_func.Function, ...], so.NoDefaultT
-        ] = so.NoDefault,
+        name: str | sn.Name,
+        default: tuple[s_func.Function, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
@@ -1925,10 +1914,8 @@ class ChainedSchema(Schema):
 
     def get_operators(
         self,
-        name: Union[str, sn.Name],
-        default: Union[
-            tuple[s_oper.Operator, ...], so.NoDefaultT
-        ] = so.NoDefault,
+        name: str | sn.Name,
+        default: tuple[s_oper.Operator, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
@@ -2043,7 +2030,7 @@ class ChainedSchema(Schema):
     def _get_by_id(
         self,
         obj_id: uuid.UUID,
-        default: Union[so.Object_T, so.NoDefaultT, None] = so.NoDefault,
+        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
         *,
         type: Optional[type[so.Object_T]] = None,
     ) -> Optional[so.Object_T]:
@@ -2063,8 +2050,8 @@ class ChainedSchema(Schema):
     def _get_global(
         self,
         objtype: type[so.Object_T],
-        name: Union[str, sn.Name],
-        default: Union[so.Object_T, so.NoDefaultT, None],
+        name: str | sn.Name,
+        default: so.Object_T | so.NoDefaultT | None,
     ) -> Optional[so.Object_T]:
         if issubclass(objtype, so.GlobalObject):
             return self._global_schema.get_global(  # type: ignore
@@ -2078,8 +2065,8 @@ class ChainedSchema(Schema):
 
     def _get(
         self,
-        name: Union[str, sn.Name],
-        default: Union[so.Object, so.NoDefaultT, None],
+        name: str | sn.Name,
+        default: so.Object | so.NoDefaultT | None,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]],
         type: Optional[type[so.Object_T]],

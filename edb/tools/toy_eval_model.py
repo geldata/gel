@@ -55,7 +55,6 @@ from typing import (
     Optional,
     Protocol,
     TypeVar,
-    Union,
     Iterable,
     Iterator,
     Sequence,
@@ -270,7 +269,7 @@ def lift(f: Callable[..., Data]) -> LiftedFunc:
     return inner
 
 
-def lift_set_of(f: Callable[..., Union[Data]]) -> LiftedFunc:
+def lift_set_of(f: Callable[..., Data]) -> LiftedFunc:
     def inner(*args: Result) -> Result:
         return [f(*args)]
     return inner
@@ -654,10 +653,10 @@ def simplify_grouping_sets(
     raise ValueError
 
 
-ByElement = Union[IORef, IPtr]
+ByElement = IORef | IPtr
 
 
-def get_by_element(atom: Union[qlast.ObjectRef, qlast.Path]) -> ByElement:
+def get_by_element(atom: qlast.ObjectRef | qlast.Path) -> ByElement:
     if isinstance(atom, qlast.ObjectRef):
         return IORef(atom.name)
     else:

@@ -27,7 +27,6 @@ from typing import (
     Optional,
     Protocol,
     TypeVar,
-    Union,
     Iterable,
     Iterator,
     Mapping,
@@ -117,7 +116,7 @@ ObjectCollection_T = TypeVar(
     "ObjectCollection_T",
     bound="ObjectCollection[Object]",
 )
-HashCriterion = Union[type["Object"], tuple[str, Any]]
+HashCriterion = type["Object"] | tuple[str, Any]
 
 TYPE_ID_NAMESPACE = uuidgen.UUID('00e50276-2502-11e7-97f2-27fe51238dbd')
 
@@ -160,8 +159,8 @@ def default_field_merge(
 
 
 def get_known_type_id(
-    typename: Union[str, sn.Name],
-    default: Union[uuid.UUID, NoDefaultT] = NoDefault
+    typename: str | sn.Name,
+    default: uuid.UUID | NoDefaultT = NoDefault
 ) -> uuid.UUID:
     if isinstance(typename, str):
         typename = sn.name_from_string(typename)
@@ -1310,7 +1309,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
     ) -> frozenset[HashCriterion]:
         cls = type(self)
 
-        sig: list[Union[type[Object_T], tuple[str, Any]]] = [cls]
+        sig: list[type[Object_T] | tuple[str, Any]] = [cls]
         for f in cls._hashable_fields:
             fn = f.name
             val = self.get_explicit_field_value(schema, fn, default=None)
@@ -2344,7 +2343,7 @@ class ObjectCollection(
         self,
     ) -> tuple[
         str,
-        Optional[Union[tuple[builtins.type, ...], builtins.type]],
+        Optional[tuple[builtins.type, ...] | builtins.type],
         tuple[uuid.UUID, ...],
         tuple[tuple[str, Any], ...],
     ]:
@@ -2361,7 +2360,7 @@ class ObjectCollection(
     def schema_restore(
         data: tuple[
             str,
-            Optional[Union[tuple[builtins.type, ...], builtins.type]],
+            Optional[tuple[builtins.type, ...] | builtins.type],
             tuple[uuid.UUID, ...],
             tuple[tuple[str, Any], ...],
         ],
@@ -2375,7 +2374,7 @@ class ObjectCollection(
         cls,
         data: tuple[
             str,
-            Optional[Union[tuple[builtins.type, ...], builtins.type]],
+            Optional[tuple[builtins.type, ...] | builtins.type],
             tuple[uuid.UUID, ...],
             tuple[tuple[str, Any], ...],
         ],
@@ -2385,7 +2384,7 @@ class ObjectCollection(
     def __reduce__(self) -> tuple[
         Callable[..., ObjectCollection[Any]],
         tuple[
-            Optional[Union[tuple[builtins.type, ...], builtins.type]],
+            Optional[tuple[builtins.type, ...] | builtins.type],
             tuple[uuid.UUID, ...],
             dict[str, Any],
         ],
@@ -2408,7 +2407,7 @@ class ObjectCollection(
     @classmethod
     def __restore__(
         cls,
-        typeargs: Optional[Union[tuple[builtins.type, ...], builtins.type]],
+        typeargs: Optional[tuple[builtins.type, ...] | builtins.type],
         ids: tuple[uuid.UUID, ...],
         attrs: dict[str, Any],
     ) -> ObjectCollection[Object_T]:
@@ -3042,8 +3041,7 @@ class SubclassableObject(Object):
     def issubclass(
         self,
         schema: s_schema.Schema,
-        parent: Union[SubclassableObject,
-                      tuple[SubclassableObject, ...]],
+        parent: SubclassableObject | tuple[SubclassableObject, ...],
     ) -> bool:
         from . import types as s_types
         if isinstance(parent, tuple):

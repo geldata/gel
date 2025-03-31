@@ -23,7 +23,6 @@ from typing import (
     Generic,
     Optional,
     TypeVar,
-    Union,
     AbstractSet,
     Iterable,
     Iterator,
@@ -155,7 +154,7 @@ class FrozenCheckedList(
     @overload
     def __getitem__(self, index: slice) -> FrozenCheckedList[T]: ...
 
-    def __getitem__(self, index: Union[int, slice]) -> Any:
+    def __getitem__(self, index: int | slice) -> Any:
         if isinstance(index, slice):
             return self.__class__(self._container[index])
 
@@ -200,7 +199,7 @@ class CheckedList(
     @overload
     def __getitem__(self, index: slice) -> CheckedList[T]: ...
 
-    def __getitem__(self, index: Union[int, slice]) -> Any:
+    def __getitem__(self, index: int | slice) -> Any:
         if isinstance(index, slice):
             return self.__class__(self._container[index])
 
@@ -216,7 +215,7 @@ class CheckedList(
     @overload
     def __setitem__(self, index: slice, value: Iterable[T]) -> None: ...
 
-    def __setitem__(self, index: Union[int, slice], value: Any) -> None:
+    def __setitem__(self, index: int | slice, value: Any) -> None:
         if isinstance(index, int):
             self._container[index] = self._check_type(value)
             return
@@ -230,7 +229,7 @@ class CheckedList(
     @overload
     def __delitem__(self, index: slice) -> None: ...
 
-    def __delitem__(self, index: Union[int, slice]) -> None:
+    def __delitem__(self, index: int | slice) -> None:
         del self._container[index]
 
     def insert(self, index: int, value: T) -> None:

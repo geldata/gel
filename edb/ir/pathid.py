@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Union,
     AbstractSet,
     Iterator,
     cast,
@@ -73,22 +72,16 @@ class PathId:
 
     #: Actual path information.
     _path: tuple[
-        Union[
-            irast.TypeRef,
-            tuple[irast.BasePointerRef, s_pointers.PointerDirection]
-        ],
+        irast.TypeRef
+        | tuple[irast.BasePointerRef, s_pointers.PointerDirection],
         ...
     ]
 
     #: Normalized path data, used for PathId hashing and comparisons.
     _norm_path: tuple[
-        Union[
-            uuid.UUID,
-            s_name.Name,
-            tuple[
-                s_name.QualName, s_pointers.PointerDirection, bool
-            ],
-        ],
+        uuid.UUID
+        | s_name.Name
+        | tuple[s_name.QualName, s_pointers.PointerDirection, bool],
         ...
     ]
 
@@ -245,7 +238,7 @@ class PathId:
         typeref: irast.TypeRef,
         *,
         namespace: AbstractSet[Namespace] = frozenset(),
-        typename: Optional[Union[s_name.Name, uuid.UUID]] = None,
+        typename: Optional[s_name.Name | uuid.UUID] = None,
     ) -> PathId:
         """Return a ``PathId`` instance for a given :class:`ir.ast.TypeRef`
 

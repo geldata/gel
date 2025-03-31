@@ -20,7 +20,7 @@
 """Compilation helpers for output formatting and serialization."""
 
 from __future__ import annotations
-from typing import Optional, Union, Sequence
+from typing import Optional, Sequence
 
 import itertools
 
@@ -649,7 +649,7 @@ def serialize_custom_array(
 
 def _row(
     args: list[pgast.BaseExpr]
-) -> Union[pgast.ImplicitRowExpr, pgast.RowExpr]:
+) -> pgast.ImplicitRowExpr | pgast.RowExpr:
     if len(args) > 1:
         return pgast.ImplicitRowExpr(args=args)
     else:

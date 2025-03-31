@@ -24,7 +24,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Union,
     Sequence,
     cast
 )
@@ -1245,7 +1244,7 @@ def init_stmt(
 
 
 def fini_stmt(
-    irstmt: Union[irast.Stmt, irast.Set],
+    irstmt: irast.Stmt | irast.Set,
     *,
     ctx: context.ContextLevel,
     parent_ctx: context.ContextLevel,

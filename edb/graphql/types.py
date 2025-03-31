@@ -22,7 +22,6 @@ from typing import (
     Any,
     ClassVar,
     Optional,
-    Union,
     cast,
 )
 
@@ -332,11 +331,7 @@ class GQLCoreSchema:
 
     _gql_inobjtypes: dict[
         str,
-        Union[
-            GraphQLInputObjectType,
-            GraphQLEnumType,
-            GraphQLScalarType,
-        ]
+        GraphQLInputObjectType | GraphQLEnumType | GraphQLScalarType
     ]
 
     _gql_ordertypes: dict[str, GraphQLInputType]
@@ -936,7 +931,7 @@ class GQLCoreSchema:
         pointers = edb_type.get_pointers(self.edb_schema)
         names = sorted(pointers.keys(self.edb_schema))
         # This is just a heavily re-used type variable
-        target: Union[GraphQLInputType, Optional[GraphQLOutputType]]
+        target: GraphQLInputType | Optional[GraphQLOutputType]
         for unqual_name in names:
             name = str(unqual_name)
             if name == '__type__':
@@ -1240,7 +1235,7 @@ class GQLCoreSchema:
 
     def _make_generic_filter_type(
         self,
-        base: Union[GraphQLScalarType, GraphQLEnumType],
+        base: GraphQLScalarType | GraphQLEnumType,
         ops: list[str],
     ) -> None:
         name = f'Filter{base.name}'
@@ -1544,7 +1539,7 @@ class GQLCoreSchema:
 
             for tname in names:
                 if edb_base is None:
-                    module: Union[s_name.Name, str]
+                    module: s_name.Name | str
 
                     if '::' in tname:
                         edb_base = self.edb_schema.get(
@@ -1813,7 +1808,7 @@ class GQLBaseType(metaclass=GQLTypeMeta):
 
     def convert_edb_to_gql_type(
         self,
-        base: Union[s_types.Type, s_pointers.Pointer],
+        base: s_types.Type | s_pointers.Pointer,
         **kwargs: Any,
     ) -> GQLBaseType:
         if isinstance(base, s_pointers.Pointer):

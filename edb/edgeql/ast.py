@@ -227,7 +227,7 @@ class Slice(Base):
 
 class Indirection(Expr):
     arg: Expr
-    indirection: list[typing.Union[Index, Slice]]
+    indirection: list[Index | Slice]
 
 
 class BinOp(Expr):
@@ -245,7 +245,7 @@ class WindowSpec(Base):
 
 
 class FunctionCall(Expr):
-    func: typing.Union[tuple[str, str], str]
+    func: tuple[str, str] | str
     args: list[Expr] = ast.field(factory=list)
     kwargs: dict[str, Expr] = ast.field(factory=dict)
     window: typing.Optional[WindowSpec] = None
@@ -375,7 +375,7 @@ class Splat(Base):
     intersection: typing.Optional[TypeIntersection] = None
 
 
-PathElement = typing.Union[Expr, Ptr, TypeIntersection, ObjectRef, Splat]
+PathElement = Expr | Ptr | TypeIntersection | ObjectRef | Splat
 
 
 class Path(Expr, GroupingAtom):
@@ -712,7 +712,7 @@ class OnSourceDelete(DDLOperation):
 
 class SetField(DDLOperation):
     name: str
-    value: typing.Union[Expr, TypeExpr, None]
+    value: Expr | TypeExpr | None
     #: Indicates that this AST originated from a special DDL syntax
     #: rather than from a generic `SET field := value` statement, and
     #: so must not be subject to the "allow_ddl_set" constraint.
@@ -1063,7 +1063,7 @@ class CreateConcretePointer(CreateObject):
 
     is_required: typing.Optional[bool] = None
     declared_overloaded: bool = False
-    target: typing.Optional[typing.Union[Expr, TypeExpr]]
+    target: typing.Optional[Expr | TypeExpr]
     cardinality: qltypes.SchemaCardinality
     bases: list[TypeName]
 
@@ -1129,7 +1129,7 @@ class GlobalCommand(ObjectDDL):
 
 class CreateGlobal(CreateObject, GlobalCommand):
     is_required: typing.Optional[bool] = None
-    target: typing.Optional[typing.Union[Expr, TypeExpr]]
+    target: typing.Optional[Expr | TypeExpr]
     cardinality: typing.Optional[qltypes.SchemaCardinality]
 
 
@@ -1516,7 +1516,7 @@ class ConfigReset(ConfigOp):
 class DescribeStmt(Command):
 
     language: qltypes.DescribeLanguage
-    object: typing.Union[ObjectRef, DescribeGlobal]
+    object: ObjectRef | DescribeGlobal
     options: Options
 
 
@@ -1556,11 +1556,11 @@ class ModuleDeclaration(SDL):
     # The 'name' is treated same as in CreateModule, for consistency,
     # since this declaration also implies creating a module.
     name: ObjectRef
-    declarations: list[typing.Union[ObjectDDL, ModuleDeclaration]]
+    declarations: list[ObjectDDL | ModuleDeclaration]
 
 
 class Schema(SDL, GrammarEntryPoint, Base):
-    declarations: list[typing.Union[ObjectDDL, ModuleDeclaration]]
+    declarations: list[ObjectDDL | ModuleDeclaration]
 
 
 #
@@ -1582,7 +1582,7 @@ def get_ddl_field_command(
 def get_ddl_field_value(
     ddlcmd: DDLOperation,
     name: str,
-) -> typing.Union[Expr, TypeExpr, None]:
+) -> Expr | TypeExpr | None:
     cmd = get_ddl_field_command(ddlcmd, name)
     return cmd.value if cmd is not None else None
 

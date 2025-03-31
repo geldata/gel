@@ -26,7 +26,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Union,
     Iterable,
     Sequence,
     NamedTuple,
@@ -158,8 +157,8 @@ def resolve_schema_name(
 
 
 def preserve_view_shape(
-    base: Union[s_types.Type, s_pointers.Pointer],
-    derived: Union[s_types.Type, s_pointers.Pointer],
+    base: s_types.Type | s_pointers.Pointer,
+    derived: s_types.Type | s_pointers.Pointer,
     *,
     derived_name_base: Optional[sn.Name] = None,
     ctx: context.ContextLevel,

@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Union, Iterable, Sequence
+from typing import Any, Optional, Iterable, Sequence
 from dataclasses import dataclass
 
 import itertools
@@ -136,7 +136,7 @@ class SourceGenerator(NodeVisitor):
     @classmethod
     def to_source(
         cls,
-        node: Union[base.AST, Sequence[base.AST]],
+        node: base.AST | Sequence[base.AST],
         indent_with: str = ' ' * 4,
         add_line_information: bool = False,
         pretty: bool = True,

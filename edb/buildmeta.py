@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Union,
     Mapping,
     Sequence,
     NamedTuple,
@@ -220,7 +219,7 @@ def get_extension_dir_path() -> pathlib.Path:
 def hash_dirs(
     dirs: Sequence[tuple[str, str]],
     *,
-    extra_files: Optional[Sequence[Union[str, pathlib.Path]]]=None,
+    extra_files: Optional[Sequence[str | pathlib.Path]]=None,
     extra_data: Optional[bytes] = None,
 ) -> bytes:
     def hash_dir(dirname, ext, paths):
