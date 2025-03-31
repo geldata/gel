@@ -52,6 +52,7 @@ from edb.server.compiler import sertypes
 from edb.server.dbview cimport dbview
 from edb.server.protocol cimport args_ser
 from edb.server.protocol cimport frontend
+from edb.server.protocol import ai_ext
 from edb.server.pgcon cimport pgcon
 from edb.server.pgcon import errors as pgerror
 
@@ -532,6 +533,34 @@ async def _convert_parameters(
             converted_args.append(
                 args_ser.ConvertedArgStr.new(
                     separator.join(decoded_param_data)
+                )
+            )
+
+        elif conversion_name == 'ai_text_embedding':
+            decoded_param_data = (
+                decode_str(conversion.get_data())
+                if conversion.get_source_value() is None
+                else conversion.get_source_value()
+            )
+
+            object_type_id = additional_info[0]
+
+            tenant = dbv.tenant
+            db = tenant.maybe_get_db(dbname=dbv.dbname)
+            assert db is not None
+            embeddings_result = await ai_ext.generate_embeddings_for_text(
+                db,
+                tenant.get_http_client(originator="ai/index"),
+                object_type_id,
+                decoded_param_data,
+            )
+            embeddings = json.loads(
+                embeddings_result.decode("utf-8")
+            )["data"][0]["embedding"]
+
+            converted_args.append(
+                args_ser.ConvertedArgListFloat32.new(
+                    embeddings
                 )
             )
 
