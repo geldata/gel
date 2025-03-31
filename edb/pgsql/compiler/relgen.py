@@ -28,7 +28,6 @@ from typing import (
     Iterable,
     Collection,
     NamedTuple,
-    Generic,
     TypeVar,
     cast,
 )
@@ -380,14 +379,14 @@ def _get_expr_set_rvar(
 T_expr = TypeVar('T_expr', contravariant=True, bound=irast.Expr)
 
 
-class _GetExprRvarFunc(Protocol, Generic[T_expr]):
+class _GetExprRvarFunc[T_expr](Protocol):
     def __call__(
         self, __ir_set: irast.SetE[T_expr], *, ctx: context.CompilerContextLevel
     ) -> SetRVars:
         pass
 
 
-def register_get_rvar(
+def register_get_rvar[T_expr](
     typ: type[T_expr],
 ) -> Callable[[_GetExprRvarFunc[T_expr]], _GetExprRvarFunc[T_expr]]:
     def func(f: _GetExprRvarFunc[T_expr]) -> _GetExprRvarFunc[T_expr]:
