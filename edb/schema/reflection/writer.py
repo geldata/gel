@@ -22,7 +22,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     Collection,
     cast,
 )
@@ -70,7 +69,7 @@ def generate_metadata_write_edgeql(
 
 def _hoist_if_unused_deletes(
     cmd: sd.Command,
-    target: Optional[sd.DeleteObject[so.Object]] = None,
+    target: sd.DeleteObject[so.Object] | None = None,
 ) -> None:
     """Hoist up if_unused deletes higher in the tree.
 
@@ -161,7 +160,7 @@ def _descend(
     internal_schema_mode: bool,
     stdmode: bool,
     prerequisites: bool = False,
-    cmd_filter: Optional[Callable[[sd.Command], bool]] = None,
+    cmd_filter: Callable[[sd.Command], bool] | None = None,
 ) -> None:
 
     if prerequisites:
@@ -232,9 +231,9 @@ def _build_object_mutation_shape(
     cmd: sd.ObjectCommand[so.Object],
     *,
     classlayout: dict[type[so.Object], sr_struct.SchemaTypeLayout],
-    lprop_fields: Optional[
-        dict[str, tuple[s_types.Type, sr_struct.FieldType]]
-    ] = None,
+    lprop_fields: dict[
+        str, tuple[s_types.Type, sr_struct.FieldType]
+    ] | None = None,
     lprops_only: bool = False,
     internal_schema_mode: bool,
     stdmode: bool,
@@ -584,11 +583,11 @@ def _build_object_mutation_shape(
 def _reflect_object_dict_value(
     *,
     schema: s_schema.Schema,
-    value: Optional[so.ObjectDict[str, so.Object]],
+    value: so.ObjectDict[str, so.Object] | None,
     is_ordered: bool,
     value_var_name: str,
     target: s_types.Type,
-    reflection_proxy: Optional[tuple[str, str]],
+    reflection_proxy: tuple[str, str] | None,
 ) -> tuple[str, Any]:
 
     if reflection_proxy is not None:

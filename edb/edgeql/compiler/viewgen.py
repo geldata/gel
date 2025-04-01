@@ -27,7 +27,6 @@ import dataclasses
 import functools
 from typing import (
     Callable,
-    Optional,
     AbstractSet,
     Mapping,
     Sequence,
@@ -86,7 +85,7 @@ class ShapeElementDesc(NamedTuple):
     #: Pointer source object
     source: s_sources.Source
     #: Target type intersection (if any)
-    target_typexpr: Optional[qlast.TypeExpr]
+    target_typexpr: qlast.TypeExpr | None
     #: Whether the source is a type intersection
     is_polymorphic: bool
     #: Whether the pointer is a link property
@@ -96,7 +95,7 @@ class ShapeElementDesc(NamedTuple):
 class EarlyShapePtr(NamedTuple):
     """Stage 1 shape processing result element"""
     ptrcls: s_pointers.Pointer
-    target_set: Optional[irast.Set]
+    target_set: irast.Set | None
     shape_origin: qlast.ShapeOrigin
 
 
@@ -105,18 +104,18 @@ class ShapePtr(NamedTuple):
     source_set: irast.Set
     ptrcls: s_pointers.Pointer
     shape_op: qlast.ShapeOp
-    target_set: Optional[irast.Set]
+    target_set: irast.Set | None
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class ShapeContext:
     # a helper object for passing shape compile parameters
 
-    path_id_namespace: Optional[irast.Namespace] = None
+    path_id_namespace: irast.Namespace | None = None
 
-    view_rptr: Optional[context.ViewRPtr] = None
+    view_rptr: context.ViewRPtr | None = None
 
-    view_name: Optional[sn.QualName] = None
+    view_name: sn.QualName | None = None
 
     exprtype: s_types.ExprType = s_types.ExprType.Select
 
@@ -126,11 +125,11 @@ def process_view(
     *,
     stype: s_objtypes.ObjectType,
     elements: Sequence[qlast.ShapeElement],
-    view_rptr: Optional[context.ViewRPtr] = None,
-    view_name: Optional[sn.QualName] = None,
+    view_rptr: context.ViewRPtr | None = None,
+    view_name: sn.QualName | None = None,
     exprtype: s_types.ExprType = s_types.ExprType.Select,
     ctx: context.ContextLevel,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
 ) -> tuple[s_objtypes.ObjectType, irast.Set]:
 
     cache_key = (stype, exprtype, tuple(elements))
@@ -176,10 +175,10 @@ def _process_view(
     ir_set: irast.Set,
     *,
     stype: s_objtypes.ObjectType,
-    elements: Optional[Sequence[qlast.ShapeElement]],
+    elements: Sequence[qlast.ShapeElement] | None,
     s_ctx: ShapeContext,
     ctx: context.ContextLevel,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
 ) -> tuple[s_objtypes.ObjectType, irast.Set]:
     path_id = ir_set.path_id
     view_rptr = s_ctx.view_rptr
@@ -419,7 +418,7 @@ def _process_view(
                 )
 
                 compexpr_uses_default = False
-                compexpr_default_span: Optional[parsing.Span] = None
+                compexpr_default_span: parsing.Span | None = None
                 for path_node in ast.find_children(
                     shape_el_desc.ql.compexpr, qlast.Path
                 ):
@@ -438,7 +437,7 @@ def _process_view(
 
                 if compexpr_uses_default:
                     def make_error(
-                        span: Optional[parsing.Span], hint: str
+                        span: parsing.Span | None, hint: str
                     ) -> errors.InvalidReferenceError:
                         return errors.InvalidReferenceError(
                             f'__default__ cannot be used in this expression',
@@ -446,7 +445,7 @@ def _process_view(
                             hint=hint,
                         )
 
-                    default_expr: Optional[s_expr.Expression] = (
+                    default_expr: s_expr.Expression | None = (
                         ptrcls.get_default(scopectx.env.schema)
                     )
                     if default_expr is None:
@@ -745,8 +744,8 @@ def _expand_splat(
     depth: int,
     skip_ptrs: AbstractSet[str] = frozenset(),
     skip_lprops: AbstractSet[str] = frozenset(),
-    rlink: Optional[s_links.Link] = None,
-    intersection: Optional[qlast.TypeIntersection] = None,
+    rlink: s_links.Link | None = None,
+    intersection: qlast.TypeIntersection | None = None,
     ctx: context.ContextLevel,
 ) -> list[qlast.ShapeElement]:
     """Expand a splat (possibly recursively) into a list of ShapeElements"""
@@ -843,7 +842,7 @@ def _gen_pointers_from_defaults(
         ):
             continue
 
-        default_expr: Optional[s_expr.Expression] = (
+        default_expr: s_expr.Expression | None = (
             ptrcls.get_default(ctx.env.schema)
         )
         if not default_expr:
@@ -930,9 +929,9 @@ def _gen_pointers_from_defaults(
 def _raise_on_missing(
     pointers: dict[s_pointers.Pointer, EarlyShapePtr],
     stype: s_objtypes.ObjectType,
-    rewrites: Optional[irast.Rewrites],
+    rewrites: irast.Rewrites | None,
     ctx: context.ContextLevel,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
 ) -> None:
     pointer_names = {
         ptr.get_local_name(ctx.env.schema) for ptr in pointers
@@ -997,7 +996,7 @@ def _compile_rewrites(
     stype: s_objtypes.ObjectType,
     s_ctx: ShapeContext,
     ctx: context.ContextLevel,
-) -> Optional[irast.Rewrites]:
+) -> irast.Rewrites | None:
     # init
     r_ctx = RewriteContext(
         specified_ptrs=specified_ptrs,
@@ -1139,8 +1138,9 @@ def _compile_rewrites_for_stype(
     get_anchors: Callable[[s_objtypes.ObjectType], RewriteAnchors],
     s_ctx: ShapeContext,
     *,
-    already_defined_rewrites: Optional[
-        Mapping[sn.UnqualName, EarlyShapePtr]] = None,
+    already_defined_rewrites: Mapping[
+        sn.UnqualName, EarlyShapePtr
+    ] | None = None,
     ctx: context.ContextLevel,
 ) -> dict[sn.UnqualName, EarlyShapePtr]:
     schema = ctx.env.schema
@@ -1186,7 +1186,7 @@ def _compile_rewrites_for_stype(
 
         anchors = get_anchors(stype)
 
-        rewrite_expr: Optional[s_expr.Expression] = (
+        rewrite_expr: s_expr.Expression | None = (
             rewrite.get_expr(ctx.env.schema)
         )
         assert rewrite_expr
@@ -1258,7 +1258,7 @@ def _compile_rewrites_for_stype(
 class RewriteAnchors:
     subject_set: irast.Set
     specified_set: irast.Set
-    old_set: Optional[irast.Set]
+    old_set: irast.Set | None
 
     rewrite_type: s_objtypes.ObjectType
 
@@ -1358,7 +1358,7 @@ def _compile_qlexpr(
     qlexpr: qlast.Base,
     view_scls: s_objtypes.ObjectType,
     *,
-    ptrcls: Optional[s_pointers.Pointer],
+    ptrcls: s_pointers.Pointer | None,
     ptrsource: s_sources.Source,
     ptr_name: sn.QualName,
     is_linkprop: bool,
@@ -1419,11 +1419,11 @@ def _normalize_view_ptr_expr(
     pending_pointers: Mapping[s_pointers.Pointer, EarlyShapePtr] | None = None,
     s_ctx: ShapeContext,
     ctx: context.ContextLevel,
-) -> tuple[s_pointers.Pointer, Optional[irast.Set]]:
+) -> tuple[s_pointers.Pointer, irast.Set | None]:
     is_mutation = s_ctx.exprtype.is_insert() or s_ctx.exprtype.is_update()
 
     materialized = None
-    qlexpr: Optional[qlast.Expr] = None
+    qlexpr: qlast.Expr | None = None
     base_ptrcls_is_alias = False
     irexpr = None
 
@@ -1436,14 +1436,14 @@ def _normalize_view_ptr_expr(
 
     is_independent_polymorphic = False
 
-    compexpr: Optional[qlast.Expr] = shape_el.compexpr
+    compexpr: qlast.Expr | None = shape_el.compexpr
     if compexpr is None and is_mutation:
         raise errors.QueryError(
             "mutation queries must specify values with ':='",
             span=shape_el.expr.steps[-1].span,
         )
 
-    ptrcls: Optional[s_pointers.Pointer]
+    ptrcls: s_pointers.Pointer | None
 
     if compexpr is None:
         ptrcls = setgen.resolve_ptr(
@@ -2124,7 +2124,7 @@ def _get_base_ptr_cardinality(
     ptrcls: s_pointers.Pointer,
     *,
     ctx: context.ContextLevel,
-) -> Optional[qltypes.SchemaCardinality]:
+) -> qltypes.SchemaCardinality | None:
     ptr_name = ptrcls.get_name(ctx.env.schema)
     if ptr_name in {
         sn.QualName('std', 'link'),
@@ -2184,7 +2184,7 @@ def _inline_type_computable(
     # Prevent it in general to find bugs faster.
     assert stype.is_view(ctx.env.schema)
 
-    ptr: Optional[s_pointers.Pointer]
+    ptr: s_pointers.Pointer | None
     try:
         ptr = setgen.resolve_ptr(stype, compname, track_ref=False, ctx=ctx)
         # The pointer might exist on the base type. That doesn't count,
@@ -2262,7 +2262,7 @@ def _get_shape_configuration_inner(
     shape_ptrs: list[ShapePtr],
     stype: s_types.Type,
     *,
-    parent_view_type: Optional[s_types.ExprType]=None,
+    parent_view_type: s_types.ExprType | None=None,
     ctx: context.ContextLevel
 ) -> None:
     is_objtype = ir_set.path_id.is_objtype_path()
@@ -2335,8 +2335,8 @@ def _get_early_shape_configuration(
     ir_set: irast.Set,
     in_shape_ptrs: list[ShapePtr],
     *,
-    rptrcls: Optional[s_pointers.Pointer],
-    parent_view_type: Optional[s_types.ExprType]=None,
+    rptrcls: s_pointers.Pointer | None,
+    parent_view_type: s_types.ExprType | None=None,
     ctx: context.ContextLevel
 ) -> list[ShapePtr]:
     """Return a list of (source_set, ptrcls) pairs as a shape for a given set.
@@ -2360,8 +2360,8 @@ def _get_early_shape_configuration(
 def _get_late_shape_configuration(
     ir_set: irast.Set,
     *,
-    rptr: Optional[irast.Pointer]=None,
-    parent_view_type: Optional[s_types.ExprType]=None,
+    rptr: irast.Pointer | None=None,
+    parent_view_type: s_types.ExprType | None=None,
     ctx: context.ContextLevel
 ) -> list[ShapePtr]:
 
@@ -2386,7 +2386,7 @@ def _get_late_shape_configuration(
             ir_set, expr=rptr.replace(expr=ir_set.expr, is_phony=True), ctx=ctx
         )
 
-    rptrcls: Optional[s_pointers.PointerLike]
+    rptrcls: s_pointers.PointerLike | None
     if rptr is not None:
         rptrcls = typegen.ptrcls_from_ptrref(rptr.ptrref, ctx=ctx)
     else:
@@ -2421,8 +2421,8 @@ def _get_late_shape_configuration(
 def late_compile_view_shapes(
     expr: irast.Base,
     *,
-    rptr: Optional[irast.Pointer] = None,
-    parent_view_type: Optional[s_types.ExprType] = None,
+    rptr: irast.Pointer | None = None,
+    parent_view_type: s_types.ExprType | None = None,
     ctx: context.ContextLevel,
 ) -> None:
     """Do a late insertion of any unprocessed shapes.
@@ -2438,8 +2438,8 @@ def late_compile_view_shapes(
 @late_compile_view_shapes.register(irast.Set)
 def _late_compile_view_shapes_in_set(
         ir_set: irast.Set, *,
-        rptr: Optional[irast.Pointer] = None,
-        parent_view_type: Optional[s_types.ExprType] = None,
+        rptr: irast.Pointer | None = None,
+        parent_view_type: s_types.ExprType | None = None,
         ctx: context.ContextLevel) -> None:
 
     shape_ptrs = _get_late_shape_configuration(
@@ -2557,8 +2557,8 @@ def _late_compile_view_shapes_in_set(
 def _late_compile_view_shapes_in_select(
     stmt: irast.SelectStmt,
     *,
-    rptr: Optional[irast.Pointer] = None,
-    parent_view_type: Optional[s_types.ExprType] = None,
+    rptr: irast.Pointer | None = None,
+    parent_view_type: s_types.ExprType | None = None,
     ctx: context.ContextLevel,
 ) -> None:
     late_compile_view_shapes(
@@ -2569,8 +2569,8 @@ def _late_compile_view_shapes_in_select(
 def _late_compile_view_shapes_in_call(
     expr: irast.Call,
     *,
-    rptr: Optional[irast.Pointer] = None,
-    parent_view_type: Optional[s_types.ExprType] = None,
+    rptr: irast.Pointer | None = None,
+    parent_view_type: s_types.ExprType | None = None,
     ctx: context.ContextLevel,
 ) -> None:
 
@@ -2590,8 +2590,8 @@ def _late_compile_view_shapes_in_call(
 def _late_compile_view_shapes_in_tuple(
     expr: irast.Tuple,
     *,
-    rptr: Optional[irast.Pointer] = None,
-    parent_view_type: Optional[s_types.ExprType] = None,
+    rptr: irast.Pointer | None = None,
+    parent_view_type: s_types.ExprType | None = None,
     ctx: context.ContextLevel,
 ) -> None:
     for element in expr.elements:
@@ -2602,8 +2602,8 @@ def _late_compile_view_shapes_in_tuple(
 def _late_compile_view_shapes_in_array(
     expr: irast.Array,
     *,
-    rptr: Optional[irast.Pointer] = None,
-    parent_view_type: Optional[s_types.ExprType] = None,
+    rptr: irast.Pointer | None = None,
+    parent_view_type: s_types.ExprType | None = None,
     ctx: context.ContextLevel,
 ) -> None:
     for element in expr.elements:

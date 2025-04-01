@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     TypeVar,
     Iterable,
     Mapping,
@@ -86,9 +85,9 @@ def ast_ref_to_unqualname(ref: qlast.ObjectRef) -> sn.UnqualName:
 def resolve_name(
     lname: sn.Name,
     *,
-    metaclass: Optional[type[so.Object]] = None,
-    span: Optional[parsing.Span] = None,
-    modaliases: Mapping[Optional[str], str],
+    metaclass: type[so.Object] | None = None,
+    span: parsing.Span | None = None,
+    modaliases: Mapping[str | None, str],
     schema: s_schema.Schema,
 ) -> sn.Name:
     obj = schema.get(
@@ -123,7 +122,7 @@ def ast_objref_to_object_shell(
     ref: qlast.ObjectRef,
     *,
     metaclass: type[so.Object_T],
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     schema: s_schema.Schema,
 ) -> so.ObjectShell[so.Object_T]:
     lname = ast_ref_to_name(ref)
@@ -147,7 +146,7 @@ def ast_objref_to_type_shell(
     ref: qlast.ObjectRef,
     *,
     metaclass: type[s_types.TypeT],
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     schema: s_schema.Schema,
 ) -> s_types.TypeShell[s_types.TypeT]:
     from . import types as s_types
@@ -178,8 +177,8 @@ def ast_to_type_shell(
     node: qlast.TypeExpr,
     *,
     metaclass: type[s_types.TypeT_co],
-    module: Optional[str] = None,
-    modaliases: Mapping[Optional[str], str],
+    module: str | None = None,
+    modaliases: Mapping[str | None, str],
     schema: s_schema.Schema,
     allow_generalized_bases: bool = False,
 ) -> s_types.TypeShell[s_types.TypeT_co]:
@@ -204,7 +203,7 @@ def ast_to_type_shell(
         assert node.subtypes
 
         elements: list[str] = []
-        element_spans: list[Optional[parsing.Span]] = []
+        element_spans: list[parsing.Span | None] = []
 
         if isinstance(node.subtypes[0], qlast.TypeExprLiteral):
             # handling enums as literals
@@ -401,8 +400,8 @@ def type_op_ast_to_type_shell(
     node: qlast.TypeOp,
     *,
     metaclass: type[s_types.TypeT],
-    module: Optional[str] = None,
-    modaliases: Mapping[Optional[str], str],
+    module: str | None = None,
+    modaliases: Mapping[str | None, str],
     schema: s_schema.Schema,
 ) -> s_types.TypeExprShell[s_types.TypeT]:
 
@@ -474,8 +473,8 @@ def ast_to_object_shell(
     node: qlast.ObjectRef | qlast.TypeName,
     *,
     metaclass: type[so.Object_T],
-    module: Optional[str] = None,
-    modaliases: Mapping[Optional[str], str],
+    module: str | None = None,
+    modaliases: Mapping[str | None, str],
     schema: s_schema.Schema,
 ) -> so.ObjectShell[so.Object_T]:
     from . import types as s_types
@@ -516,7 +515,7 @@ def typeref_to_ast(
     schema: s_schema.Schema,
     ref: so.Object_T | so.ObjectShell[so.Object_T],
     *,
-    _name: Optional[str] = None,
+    _name: str | None = None,
     disambiguate_std: bool=False,
 ) -> qlast.TypeExpr:
     from . import types as s_types
@@ -606,7 +605,7 @@ def shell_to_ast(
     schema: s_schema.Schema,
     t: so.ObjectShell[so.Object],
     *,
-    _name: Optional[str] = None,
+    _name: str | None = None,
 ) -> qlast.TypeExpr:
     from . import pseudo as s_pseudo
     from . import types as s_types
@@ -719,7 +718,7 @@ def shell_to_ast(
     return result
 
 
-def is_nontrivial_container(value: Any) -> Optional[Iterable[Any]]:
+def is_nontrivial_container(value: Any) -> Iterable[Any] | None:
     trivial_classes = (str, bytes, bytearray, memoryview)
     if (isinstance(value, collections.abc.Iterable) and
             not isinstance(value, trivial_classes)):
@@ -801,7 +800,7 @@ def merge_reduce(
     schema: s_schema.Schema,
     f: Callable[[T, T], T],
     type: type[T],
-) -> Optional[T]:
+) -> T | None:
     values: list[tuple[T, str]] = []
     if not ignore_local:
         ours = target.get_explicit_local_field_value(schema, field_name, None)
@@ -843,11 +842,11 @@ def get_nq_name(schema: s_schema.Schema, item: so.Object) -> str:
 
 def find_item_suggestions(
     name: sn.Name,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     schema: s_schema.Schema,
     *,
-    item_type: Optional[so.ObjectMeta] = None,
-    condition: Optional[Callable[[so.Object], bool]] = None,
+    item_type: so.ObjectMeta | None = None,
+    condition: Callable[[so.Object], bool] | None = None,
 ) -> Iterable[tuple[so.Object, str]]:
     from . import functions as s_func
     from . import properties as s_prop
@@ -937,8 +936,8 @@ def find_item_suggestions(
 
 def find_pointer_suggestions(
     schema: s_schema.Schema,
-    item_type: Optional[so.ObjectMeta],
-    parent: Optional[so.Object],
+    item_type: so.ObjectMeta | None,
+    parent: so.Object | None,
 ) -> Iterable[tuple[so.Object, str]]:
     from . import pointers as s_pointers
 
@@ -997,14 +996,14 @@ def pick_closest_suggestions(
 def enrich_schema_lookup_error(
     error: errors.EdgeDBError,
     item_name: sn.Name,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     schema: s_schema.Schema,
     *,
-    item_type: Optional[so.ObjectMeta] = None,
+    item_type: so.ObjectMeta | None = None,
     suggestion_limit: int = 3,
-    condition: Optional[Callable[[so.Object], bool]] = None,
-    span: Optional[parsing.Span] = None,
-    pointer_parent: Optional[so.Object] = None,
+    condition: Callable[[so.Object], bool] | None = None,
+    span: parsing.Span | None = None,
+    pointer_parent: so.Object | None = None,
     hint_text: str = 'did you mean'
 ) -> None:
 
@@ -1042,7 +1041,7 @@ def ensure_union_type(
     types: Sequence[s_types.Type],
     *,
     opaque: bool = False,
-    module: Optional[str] = None,
+    module: str | None = None,
     transient: bool = False,
 ) -> tuple[s_schema.Schema, s_types.Type, bool]:
 
@@ -1276,7 +1275,7 @@ def ensure_intersection_type(
     types: Sequence[s_types.Type],
     *,
     transient: bool = False,
-    module: Optional[str] = None,
+    module: str | None = None,
 ) -> tuple[s_schema.Schema, s_types.Type]:
 
     from edb.schema import objtypes as s_objtypes
@@ -1547,7 +1546,7 @@ def type_shell_substitute(
 
 def try_compile_irast_to_sql_tree(
     compiled_expr: s_expr.CompiledExpression,
-    span: Optional[parsing.Span]
+    span: parsing.Span | None
 ) -> None:
     # compile the expression to sql to preempt errors downstream
 

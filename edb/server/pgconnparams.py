@@ -15,7 +15,7 @@
 #
 
 from __future__ import annotations
-from typing import TypedDict, NotRequired, Optional, Unpack, Self, Any
+from typing import TypedDict, NotRequired, Unpack, Self, Any
 
 import enum
 import pathlib
@@ -68,15 +68,15 @@ class SSLMode(enum.IntEnum):
 
 class CreateParamsKwargs(TypedDict, total=False):
     dsn: NotRequired[str]
-    hosts: NotRequired[Optional[list[tuple[str, int]]]]
-    host: NotRequired[Optional[str]]
-    user: NotRequired[Optional[str]]
-    password: NotRequired[Optional[str]]
-    database: NotRequired[Optional[str]]
-    server_settings: NotRequired[Optional[dict[str, str]]]
-    sslmode: NotRequired[Optional[SSLMode]]
-    sslrootcert: NotRequired[Optional[str]]
-    connect_timeout: NotRequired[Optional[int]]
+    hosts: NotRequired[list[tuple[str, int]] | None]
+    host: NotRequired[str | None]
+    user: NotRequired[str | None]
+    password: NotRequired[str | None]
+    database: NotRequired[str | None]
+    server_settings: NotRequired[dict[str, str] | None]
+    sslmode: NotRequired[SSLMode | None]
+    sslrootcert: NotRequired[str | None]
+    connect_timeout: NotRequired[int | None]
 
 
 class ConnectionParams:
@@ -141,36 +141,36 @@ class ConnectionParams:
         return self._create(self._params.clone())
 
     @property
-    def hosts(self) -> Optional[list[tuple[dict[str, Any], int]]]:
+    def hosts(self) -> list[tuple[dict[str, Any], int]] | None:
         return self._params['hosts']  # type: ignore
 
     @property
-    def host(self) -> Optional[str]:
+    def host(self) -> str | None:
         return self._params['host']  # type: ignore
 
     @property
-    def port(self) -> Optional[int]:
+    def port(self) -> int | None:
         return self._params['port']  # type: ignore
 
     @property
-    def user(self) -> Optional[str]:
+    def user(self) -> str | None:
         return self._params['user']  # type: ignore
 
     @property
-    def password(self) -> Optional[str]:
+    def password(self) -> str | None:
         return self._params['password']  # type: ignore
 
     @property
-    def database(self) -> Optional[str]:
+    def database(self) -> str | None:
         return self._params['dbname']  # type: ignore
 
     @property
-    def connect_timeout(self) -> Optional[int]:
+    def connect_timeout(self) -> int | None:
         connect_timeout = self._params['connect_timeout']
         return int(connect_timeout) if connect_timeout else None
 
     @property
-    def sslmode(self) -> Optional[SSLMode]:
+    def sslmode(self) -> SSLMode | None:
         sslmode = self._params['sslmode']
         return SSLMode.parse(sslmode) if sslmode is not None else None
 

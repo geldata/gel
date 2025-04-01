@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Any
 
 import pickle
 
@@ -42,7 +42,7 @@ DBS: state.DatabasesState = immutables.Map()
 BACKEND_RUNTIME_PARAMS: pgparams.BackendRuntimeParams = \
     pgparams.get_default_runtime_params()
 COMPILER: compiler.Compiler
-LAST_STATE: Optional[compiler.dbstate.CompilerConnectionState] = None
+LAST_STATE: compiler.dbstate.CompilerConnectionState | None = None
 STD_SCHEMA: s_schema.FlatSchema
 GLOBAL_SCHEMA: s_schema.FlatSchema
 INSTANCE_CONFIG: immutables.Map[str, config.SettingValue]
@@ -104,11 +104,11 @@ def __init_worker__(
 
 def __sync__(
     dbname: str,
-    user_schema: Optional[bytes],
-    reflection_cache: Optional[bytes],
-    global_schema: Optional[bytes],
-    database_config: Optional[bytes],
-    system_config: Optional[bytes],
+    user_schema: bytes | None,
+    reflection_cache: bytes | None,
+    global_schema: bytes | None,
+    database_config: bytes | None,
+    system_config: bytes | None,
 ) -> state.DatabaseState:
     global DBS
     global GLOBAL_SCHEMA
@@ -159,11 +159,11 @@ def __sync__(
 
 def compile(
     dbname: str,
-    user_schema: Optional[bytes],
-    reflection_cache: Optional[bytes],
-    global_schema: Optional[bytes],
-    database_config: Optional[bytes],
-    system_config: Optional[bytes],
+    user_schema: bytes | None,
+    reflection_cache: bytes | None,
+    global_schema: bytes | None,
+    database_config: bytes | None,
+    system_config: bytes | None,
     *compile_args: Any,
     **compile_kwargs: Any,
 ):
@@ -196,7 +196,7 @@ def compile(
 
 
 def compile_in_tx(
-    dbname: Optional[str], user_schema: Optional[bytes], cstate, *args, **kwargs
+    dbname: str | None, user_schema: bytes | None, cstate, *args, **kwargs
 ):
     global LAST_STATE
     if cstate == state.REUSE_LAST_STATE_MARKER:
@@ -217,11 +217,11 @@ def compile_in_tx(
 
 def compile_notebook(
     dbname: str,
-    user_schema: Optional[bytes],
-    reflection_cache: Optional[bytes],
-    global_schema: Optional[bytes],
-    database_config: Optional[bytes],
-    system_config: Optional[bytes],
+    user_schema: bytes | None,
+    reflection_cache: bytes | None,
+    global_schema: bytes | None,
+    database_config: bytes | None,
+    system_config: bytes | None,
     *compile_args: Any,
     **compile_kwargs: Any,
 ):
@@ -247,11 +247,11 @@ def compile_notebook(
 
 def compile_graphql(
     dbname: str,
-    user_schema: Optional[bytes],
-    reflection_cache: Optional[bytes],
-    global_schema: Optional[bytes],
-    database_config: Optional[bytes],
-    system_config: Optional[bytes],
+    user_schema: bytes | None,
+    reflection_cache: bytes | None,
+    global_schema: bytes | None,
+    database_config: bytes | None,
+    system_config: bytes | None,
     *compile_args: Any,
     **compile_kwargs: Any,
 ) -> tuple[compiler.QueryUnitGroup, graphql.TranspiledOperation]:
@@ -309,11 +309,11 @@ def compile_graphql(
 
 def compile_sql(
     dbname: str,
-    user_schema: Optional[bytes],
-    reflection_cache: Optional[bytes],
-    global_schema: Optional[bytes],
-    database_config: Optional[bytes],
-    system_config: Optional[bytes],
+    user_schema: bytes | None,
+    reflection_cache: bytes | None,
+    global_schema: bytes | None,
+    database_config: bytes | None,
+    system_config: bytes | None,
     *compile_args: Any,
     **compile_kwargs: Any,
 ):

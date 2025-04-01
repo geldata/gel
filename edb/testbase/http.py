@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
 )
 
 import http.server
@@ -391,7 +390,7 @@ ResponseType = tuple[str, int] | tuple[str, int, dict[str, str]]
 class RequestDetails:
     headers: dict[str, str | Any]
     query_params: dict[str, list[str]]
-    body: Optional[str]
+    body: str | None
 
 
 class MockHttpServer:
@@ -410,7 +409,7 @@ class MockHttpServer:
             ),
         ] = {}
         self.requests: dict[tuple[str, str, str], list[RequestDetails]] = {}
-        self.url: Optional[str] = None
+        self.url: str | None = None
         self.handler_type = handler_type
 
     def get_base_url(self) -> str:

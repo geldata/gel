@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Sequence, Collection
+from typing import Sequence, Collection
 
 import itertools
 import dataclasses
@@ -69,14 +69,14 @@ def _get_exclusive_refs(tree: irast.Statement) -> Sequence[irast.Base] | None:
 
 @dataclasses.dataclass(kw_only=True, repr=False, eq=False, slots=True)
 class PGConstrData:
-    subject_db_name: Optional[tuple[str, str]]
+    subject_db_name: tuple[str, str] | None
     expressions: list[ExprData]
     relative_expressions: list[ExprData]
     table_type: str
-    except_data: Optional[ExprDataSources]
+    except_data: ExprDataSources | None
 
-    scope: Optional[str] = None
-    type: Optional[str] = None
+    scope: str | None = None
+    type: str | None = None
 
 
 @dataclasses.dataclass(kw_only=True, repr=False, eq=False, slots=True)
@@ -84,8 +84,8 @@ class ExprData:
     exprdata: ExprDataSources
     is_multicol: bool
     is_trivial: bool
-    subject_db_name: Optional[tuple[str, str]] = None
-    except_data: Optional[ExprDataSources] = None
+    subject_db_name: tuple[str, str] | None = None
+    except_data: ExprDataSources | None = None
 
 
 @dataclasses.dataclass(kw_only=True, repr=False, eq=False, slots=True)
@@ -107,7 +107,7 @@ def _to_source(sql_expr: pgast.Base) -> str:
 
 
 def _edgeql_tree_to_expr_data(
-    sql_expr: pgast.Base, refs: Optional[set[pgast.ColumnRef]] = None
+    sql_expr: pgast.Base, refs: set[pgast.ColumnRef] | None = None
 ) -> ExprDataSources:
     if refs is None:
         refs = set(
@@ -214,9 +214,9 @@ def _edgeql_ref_to_pg_constr(
 @dataclasses.dataclass(frozen=True)
 class CompiledConstraintData:
     subject: s_types.Type | s_pointers.Pointer
-    exclusive_expr_refs: Optional[Sequence[irast.Base]]
-    subject_db_name: Optional[tuple[str, str]]
-    except_data: Optional[ExprDataSources]
+    exclusive_expr_refs: Sequence[irast.Base] | None
+    subject_db_name: tuple[str, str] | None
+    except_data: ExprDataSources | None
     ir: irast.Statement
     subject_table_type: str
 
@@ -226,8 +226,8 @@ def _compile_constraint_data(
     schema: s_schema.Schema,
     is_optional: bool,
     *,
-    span: Optional[parsing.Span] = None,
-    type_remaps: Optional[dict[s_obj.Object, s_obj.Object]] = None,
+    span: parsing.Span | None = None,
+    type_remaps: dict[s_obj.Object, s_obj.Object] | None = None,
 ) -> CompiledConstraintData:
     sub = constraint.get_subject(schema)
     assert isinstance(
@@ -247,7 +247,7 @@ def _compile_constraint_data(
         type_remaps=type_remaps if type_remaps is not None else {},
     )
 
-    final_expr: Optional[s_expr.Expression] = constraint.get_finalexpr(schema)
+    final_expr: s_expr.Expression | None = constraint.get_finalexpr(schema)
     assert final_expr is not None and final_expr.parse() is not None
     ir = qlcompiler.compile_ast_to_ir(
         final_expr.parse(),
@@ -256,7 +256,7 @@ def _compile_constraint_data(
     )
     assert isinstance(ir, irast.Statement)
 
-    except_ir: Optional[irast.Statement] = None
+    except_ir: irast.Statement | None = None
     except_data = None
     if except_expr := constraint.get_except_expr(schema):
         assert isinstance(except_expr, s_expr.Expression)
@@ -292,7 +292,7 @@ def _compile_constraint_data(
     else:
         # the expression does don't have any refs: default to the subject table
 
-        subject_table: Optional[s_obj.InheritingObject] | s_types.Type
+        subject_table: s_obj.InheritingObject | None | s_types.Type
         if isinstance(subject, s_pointers.Pointer):
             subject_table = subject.get_source(schema)
         else:
@@ -361,7 +361,7 @@ def compile_constraint(
     subject: s_constraints.ConsistencySubject,
     constraint: s_constraints.Constraint,
     schema: s_schema.Schema,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
 ) -> SchemaDomainConstraint | SchemaTableConstraint:
     assert constraint.get_subject(schema) is not None
     assert isinstance(
@@ -753,7 +753,7 @@ def ptr_default_to_col_default(schema, ptr, expr):
 
 
 RefTables = dict[
-    Optional[tuple[str, str]],
+    tuple[str, str] | None,
     list[
         tuple[
             irast.Set,

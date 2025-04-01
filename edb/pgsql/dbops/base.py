@@ -24,7 +24,6 @@ from typing import (
     Iterable,
     Iterator,
     Mapping,
-    Optional,
     Sequence,
 )
 from collections.abc import MutableSequence
@@ -130,7 +129,7 @@ class PLBlock(SQLBlock):
     conditions: Iterable[str | Condition]
     neg_conditions: Iterable[str | Condition]
 
-    def __init__(self, top_block: Optional[PLTopBlock], level: int) -> None:
+    def __init__(self, top_block: PLTopBlock | None, level: int) -> None:
         super().__init__()
         self.top_block = top_block
         self.varcounter = collections.defaultdict(int)
@@ -202,8 +201,8 @@ class PLBlock(SQLBlock):
         self,
         cmd: str | PLBlock,
         *,
-        conditions: Optional[Iterable[str | Condition]] = None,
-        neg_conditions: Optional[Iterable[str | Condition]] = None
+        conditions: Iterable[str | Condition] | None = None,
+        neg_conditions: Iterable[str | Condition] | None = None
     ) -> None:
         stmt: str | PLBlock
         if conditions or neg_conditions:
@@ -240,7 +239,7 @@ class PLBlock(SQLBlock):
 
         super().add_command(stmt)
 
-    def get_var_name(self, hint: Optional[str] = None) -> str:
+    def get_var_name(self, hint: str | None = None) -> str:
         if hint is None:
             hint = 'v'
         self.varcounter[hint] += 1
@@ -306,8 +305,8 @@ class Command(BaseCommand):
     def __init__(
         self,
         *,
-        conditions: Optional[Iterable[str | Condition]] = None,
-        neg_conditions: Optional[Iterable[str | Condition]] = None,
+        conditions: Iterable[str | Condition] | None = None,
+        neg_conditions: Iterable[str | Condition] | None = None,
     ) -> None:
         self.opid = id(self)
         self.conditions = set(conditions) if conditions else set()
@@ -322,7 +321,7 @@ class Command(BaseCommand):
         self_block.conditions = self.conditions
         self_block.neg_conditions = self.neg_conditions
 
-    def generate_self_block(self, block: SQLBlock) -> Optional[PLBlock]:
+    def generate_self_block(self, block: SQLBlock) -> PLBlock | None:
         # Default implementation simply calls self.code_with_block()
         self_block = block.add_block()
         self_block.add_command(self.code_with_block(self_block))
@@ -344,8 +343,8 @@ class CommandGroup(Command):
     def __init__(
         self,
         *,
-        conditions: Optional[Iterable[str | Condition]] = None,
-        neg_conditions: Optional[Iterable[str | Condition]] = None,
+        conditions: Iterable[str | Condition] | None = None,
+        neg_conditions: Iterable[str | Condition] | None = None,
     ) -> None:
         super().__init__(conditions=conditions, neg_conditions=neg_conditions)
         self.commands = []
@@ -356,7 +355,7 @@ class CommandGroup(Command):
     def add_commands(self, cmds: Sequence[Command]) -> None:
         self.commands.extend(cmds)
 
-    def generate_self_block(self, block: SQLBlock) -> Optional[PLBlock]:
+    def generate_self_block(self, block: SQLBlock) -> PLBlock | None:
         if not self.commands:
             return None
 
@@ -397,8 +396,8 @@ class CompositeCommandGroup(Command):
     def __init__(
         self,
         *,
-        conditions: Optional[Iterable[str | Condition]] = None,
-        neg_conditions: Optional[Iterable[str | Condition]] = None,
+        conditions: Iterable[str | Condition] | None = None,
+        neg_conditions: Iterable[str | Condition] | None = None,
     ) -> None:
         super().__init__(conditions=conditions, neg_conditions=neg_conditions)
         self.commands = []
@@ -409,7 +408,7 @@ class CompositeCommandGroup(Command):
     def add_commands(self, cmds: Sequence[CompositeCommand]) -> None:
         self.commands.extend(cmds)
 
-    def generate_self_block(self, block: SQLBlock) -> Optional[PLBlock]:
+    def generate_self_block(self, block: SQLBlock) -> PLBlock | None:
         if not self.commands:
             return None
 
@@ -476,7 +475,7 @@ class Query(Command):
         self,
         text: str,
         *,
-        type: Optional[str | tuple[str, str]] = None,
+        type: str | tuple[str, str] | None = None,
         trampoline_fixup: bool = True,
     ) -> None:
         from ..import trampoline
@@ -522,7 +521,7 @@ class DBObject:
     def __init__(
         self,
         *,
-        metadata: Optional[Mapping[str, Any]] = None
+        metadata: Mapping[str, Any] | None = None
     ) -> None:
         self.metadata = dict(metadata) if metadata else None
 
@@ -553,7 +552,7 @@ class InheritableDBObject(DBObject):
         self,
         *,
         inherit: bool = False,
-        metadata: Optional[Mapping[str, Any]] = None,
+        metadata: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(metadata=metadata)
         if inherit:
@@ -565,5 +564,5 @@ class InheritableDBObject(DBObject):
 
 
 class NoOpCommand(Command):
-    def generate_self_block(self, block: SQLBlock) -> Optional[PLBlock]:
+    def generate_self_block(self, block: SQLBlock) -> PLBlock | None:
         return None

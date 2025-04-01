@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 class Entry:
     key: str
@@ -8,4 +8,4 @@ class Entry:
 
     def tokens(self) -> list[tuple[Any, int, int, int, int, Any]]: ...
 
-def rewrite(operation: Optional[str], text: str) -> Entry: ...
+def rewrite(operation: str | None, text: str) -> Entry: ...

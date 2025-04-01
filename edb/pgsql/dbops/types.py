@@ -24,7 +24,6 @@ from typing import (
     Collection,
     Iterable,
     Iterator,
-    Optional,
     TypeAlias,
 )
 
@@ -127,8 +126,8 @@ class CreateCompositeType(ddl.SchemaObjectOperation):
         self,
         type: CompositeType,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         super().__init__(
             type.name, conditions=conditions, neg_conditions=neg_conditions
@@ -159,8 +158,8 @@ class AlterCompositeTypeBase(AlterCompositeTypeBaseMixin, ddl.DDLOperation):
         self,
         name: CompositeTypeName,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         ddl.DDLOperation.__init__(
             self, conditions=conditions, neg_conditions=neg_conditions)
@@ -179,8 +178,8 @@ class AlterCompositeType(
         self,
         name: CompositeTypeName,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         base.CompositeCommandGroup.__init__(
             self, conditions=conditions, neg_conditions=neg_conditions)
@@ -212,8 +211,8 @@ class DropCompositeType(ddl.SchemaObjectOperation):
         name: CompositeTypeName,
         *,
         cascade: bool = False,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ):
         super().__init__(
             name, conditions=conditions, neg_conditions=neg_conditions

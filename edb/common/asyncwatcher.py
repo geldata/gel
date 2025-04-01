@@ -17,7 +17,6 @@
 #
 
 from __future__ import annotations
-from typing import Optional
 
 import asyncio
 import logging
@@ -33,14 +32,14 @@ class AsyncWatcherProtocol(asyncio.Protocol):
         self,
         watcher: AsyncWatcher,
     ) -> None:
-        self._transport: Optional[asyncio.Transport] = None
+        self._transport: asyncio.Transport | None = None
         self._watcher = watcher
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
         self._transport = transport  # type: ignore [assignment]
         self.request()
 
-    def connection_lost(self, exc: Optional[Exception]) -> None:
+    def connection_lost(self, exc: Exception | None) -> None:
         self._watcher.incr_metrics_counter("watch-disconnect")
         self._watcher.on_connection_lost()
 
@@ -53,9 +52,9 @@ class AsyncWatcherProtocol(asyncio.Protocol):
 
 class AsyncWatcher:
     def __init__(self) -> None:
-        self._waiter: Optional[asyncio.Future] = None
-        self._stop_waiter: Optional[asyncio.Future] = None
-        self._protocol: Optional[AsyncWatcherProtocol] = None
+        self._waiter: asyncio.Future | None = None
+        self._stop_waiter: asyncio.Future | None = None
+        self._protocol: AsyncWatcherProtocol | None = None
         self._watching = False
         self._retry_attempt = 0
         self._backoff = retryloop.exp_backoff()

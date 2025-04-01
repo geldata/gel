@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, TypeVar, TYPE_CHECKING
+from typing import TypeVar, TYPE_CHECKING
 
 from edb import errors
 from edb.common import parsing
@@ -99,7 +99,7 @@ class PseudoType(
         self,
         other: s_types.Type,
         schema: s_schema.Schema,
-    ) -> tuple[s_schema.Schema, Optional[PseudoType]]:
+    ) -> tuple[s_schema.Schema, PseudoType | None]:
         if self == other:
             return schema, self
         else:
@@ -125,7 +125,7 @@ class PseudoType(
 
     def _resolve_polymorphic(
         self, schema: s_schema.Schema, concrete_type: s_types.Type
-    ) -> Optional[s_types.Type]:
+    ) -> s_types.Type | None:
         if self.is_any(schema):
             return concrete_type
         if self.is_anyobject(schema):
@@ -153,7 +153,7 @@ class PseudoTypeShell(s_types.TypeShell[PseudoType]):
         self,
         *,
         name: sn.Name,
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
     ) -> None:
         super().__init__(
             name=name, schemaclass=PseudoType, span=span

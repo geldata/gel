@@ -23,7 +23,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     Sequence,
     cast
 )
@@ -76,7 +75,7 @@ from . import conflicts
 
 def try_desugar(
     expr: qlast.Query, *, ctx: context.ContextLevel
-) -> Optional[irast.Set]:
+) -> irast.Set | None:
     new_syntax = desugar_group.try_group_rewrite(expr, aliases=ctx.aliases)
     if new_syntax:
         return dispatch.compile(new_syntax, ctx=ctx)
@@ -84,7 +83,7 @@ def try_desugar(
 
 
 def _protect_expr(
-    expr: Optional[qlast.Expr], *, ctx: context.ContextLevel
+    expr: qlast.Expr | None, *, ctx: context.ContextLevel
 ) -> None:
     if ctx.no_factoring or ctx.warn_factoring:
         while isinstance(expr, qlast.Shape):
@@ -948,7 +947,7 @@ def compile_DescribeStmt(
 
                 modules.append(mod)
             else:
-                itemtype: Optional[type[s_obj.Object]] = None
+                itemtype: type[s_obj.Object] | None = None
 
                 name = s_utils.ast_ref_to_name(objref)
                 if itemclass is not None:
@@ -1253,8 +1252,8 @@ def fini_stmt(
     view_name = parent_ctx.toplevel_result_view_name
     t = setgen.get_expr_type(irstmt, ctx=ctx)
 
-    view: Optional[s_types.Type]
-    path_id: Optional[irast.PathId]
+    view: s_types.Type | None
+    path_id: irast.PathId | None
 
     if isinstance(irstmt, irast.MutatingStmt):
         ctx.env.dml_stmts.append(irstmt)
@@ -1354,11 +1353,11 @@ def process_with_block(
 def compile_result_clause(
     result: qlast.Expr,
     *,
-    view_scls: Optional[s_types.Type] = None,
-    view_rptr: Optional[context.ViewRPtr] = None,
-    view_name: Optional[s_name.QualName] = None,
+    view_scls: s_types.Type | None = None,
+    view_rptr: context.ViewRPtr | None = None,
+    view_name: s_name.QualName | None = None,
     exprtype: s_types.ExprType = s_types.ExprType.Select,
-    result_alias: Optional[str] = None,
+    result_alias: str | None = None,
     forward_rptr: bool = False,
     ctx: context.ContextLevel,
 ) -> irast.Set:
@@ -1385,7 +1384,7 @@ def compile_result_clause(
             )
 
         result_expr: qlast.Expr
-        shape: Optional[Sequence[qlast.ShapeElement]]
+        shape: Sequence[qlast.ShapeElement] | None
 
         if isinstance(result, qlast.Shape):
             result_expr = result.expr or qlutils.FREE_SHAPE_EXPR
@@ -1402,7 +1401,7 @@ def compile_result_clause(
                 span=result_expr.span,
             )
         elif astutils.is_ql_empty_array(result_expr):
-            type_hint: Optional[s_types.Type] = None
+            type_hint: s_types.Type | None = None
             if (
                 sctx.empty_result_type_hint is not None
                 and sctx.empty_result_type_hint.is_array()
@@ -1443,16 +1442,16 @@ def compile_result_clause(
 def compile_query_subject(
         set: irast.Set,
         *,
-        shape: Optional[list[qlast.ShapeElement]]=None,
-        view_rptr: Optional[context.ViewRPtr]=None,
-        view_name: Optional[s_name.QualName]=None,
-        result_alias: Optional[str]=None,
-        view_scls: Optional[s_types.Type]=None,
+        shape: list[qlast.ShapeElement] | None=None,
+        view_rptr: context.ViewRPtr | None=None,
+        view_name: s_name.QualName | None=None,
+        result_alias: str | None=None,
+        view_scls: s_types.Type | None=None,
         compile_views: bool=True,
         exprtype: s_types.ExprType = s_types.ExprType.Select,
         allow_select_shape_inject: bool=True,
         forward_rptr: bool=False,
-        span: Optional[qlast.Span],
+        span: qlast.Span | None,
         ctx: context.ContextLevel) -> irast.Set:
 
     set_stype = setgen.get_set_type(set, ctx=ctx)

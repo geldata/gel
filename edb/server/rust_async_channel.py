@@ -21,7 +21,7 @@ import io
 import logging
 
 
-from typing import Protocol, Optional, Any, Callable
+from typing import Protocol, Any, Callable
 
 logger = logging.getLogger("edb.server")
 
@@ -31,7 +31,7 @@ MAX_BATCH_SIZE = 16
 class RustPipeProtocol(Protocol):
     def _read(self) -> tuple[Any, ...]: ...
 
-    def _try_read(self) -> Optional[tuple[Any, ...]]: ...
+    def _try_read(self) -> tuple[Any, ...] | None: ...
 
     def _close_pipe(self) -> None: ...
 

@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Sequence, NamedTuple
+from typing import Any, Sequence, NamedTuple
 
 import collections
 import uuid
@@ -67,9 +67,9 @@ class FieldStorage(NamedTuple):
     #: Fully-qualified pointer target type.
     ptrtype: str
     #: Shadow pointer kind, if any.
-    shadow_ptrkind: Optional[str] = None
+    shadow_ptrkind: str | None = None
     #: Shadow pointer type, if any.
-    shadow_ptrtype: Optional[str] = None
+    shadow_ptrtype: str | None = None
 
 
 class SchemaFieldDesc(NamedTuple):
@@ -81,8 +81,8 @@ class SchemaFieldDesc(NamedTuple):
     fieldname: str
     schema_fieldname: str
     is_ordered: bool = False
-    reflection_proxy: Optional[tuple[str, str]] = None
-    storage: Optional[FieldStorage] = None
+    reflection_proxy: tuple[str, str] | None = None
+    storage: FieldStorage | None = None
     is_refdict: bool = False
 
 

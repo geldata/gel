@@ -12,7 +12,7 @@ except ImportError:
 from edb.common import debug
 from edb.edgeql import ast as qlast
 
-from typing import Optional, Any, Sequence
+from typing import Any, Sequence
 from .type_checking_tools import typechecking as tc
 from .back_to_ql import reverse_elab
 from .data import data_ops as e
@@ -37,7 +37,7 @@ from .type_checking_tools import name_resolution
 # sys.setrecursionlimit(10000)
 
 
-VariablesTp = Optional[dict[str, Val] | tuple[Val, ...]]
+VariablesTp = dict[str, Val] | tuple[Val, ...] | None
 
 
 def empty_db(schema: DBSchema) -> EdgeDatabase:
@@ -136,7 +136,7 @@ def run_prepared_statement(
     tp: e.ResultTp,
     dbschema: DBSchema,
     should_print: bool,
-    logs: Optional[list[Any]],
+    logs: list[Any] | None,
     variables: VariablesTp = None,
 ) -> MultiSetVal:
     result = eval_expr_toplevel(db, deduped, variables=variables, logs=logs)
@@ -153,7 +153,7 @@ def run_statement(
     stmt: qlast.Expr,
     dbschema: DBSchema,
     should_print: bool,
-    logs: Optional[list[Any]],
+    logs: list[Any] | None,
     variables: VariablesTp = None,
 ) -> tuple[MultiSetVal, e.ResultTp]:
 
@@ -169,7 +169,7 @@ def run_stmts(
     stmts: Sequence[qlast.Expr],
     dbschema: DBSchema,
     debug_print: bool,
-    logs: Optional[list[Any]],
+    logs: list[Any] | None,
 ) -> Sequence[MultiSetVal]:
     match stmts:
         case []:
@@ -207,7 +207,7 @@ def run_str(
     dbschema: DBSchema,
     s: str,
     print_asts: bool = False,
-    logs: Optional[list[str]] = None,
+    logs: list[str] | None = None,
 ) -> Sequence[MultiSetVal]:
 
     q = parse_ql(s)
@@ -350,11 +350,11 @@ def repl(
 
 
 def dbschema_and_db_with_initial_schema_and_queries(
-    initial_schema_defs: Optional[str],
+    initial_schema_defs: str | None,
     initial_queries: str,
-    sqlite_file_name: Optional[str] = None,
+    sqlite_file_name: str | None = None,
     debug_print=False,
-    logs: Optional[list[Any]] = None,
+    logs: list[Any] | None = None,
 ) -> tuple[DBSchema, EdgeDatabase]:
     if sqlite_file_name is not None:
         dbschema, db = sqlite_adapter.schema_and_db_from_sqlite(
@@ -373,8 +373,8 @@ class EdgeQLInterpreter:
 
     def __init__(
         self,
-        initial_schema_defs: Optional[str] = None,
-        sqlite_file_name: Optional[str] = None,
+        initial_schema_defs: str | None = None,
+        sqlite_file_name: str | None = None,
     ):
         interpreter_parser_init()
         dbschema, db = dbschema_and_db_with_initial_schema_and_queries(

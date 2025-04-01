@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Any
 
 import dataclasses
 import json
@@ -75,7 +75,7 @@ NIL_QUERY = b"SELECT LIMIT 0"
 def compile_and_apply_ddl_stmt(
     ctx: compiler.CompileContext,
     stmt: qlast.DDLCommand,
-    source: Optional[edgeql.Source] = None,
+    source: edgeql.Source | None = None,
 ) -> dbstate.DDLQuery:
     query, _ = _compile_and_apply_ddl_stmt(ctx, stmt, source)
     return query
@@ -84,8 +84,8 @@ def compile_and_apply_ddl_stmt(
 def _compile_and_apply_ddl_stmt(
     ctx: compiler.CompileContext,
     stmt: qlast.DDLCommand,
-    source: Optional[edgeql.Source] = None,
-) -> tuple[dbstate.DDLQuery, Optional[pg_dbops.SQLBlock]]:
+    source: edgeql.Source | None = None,
+) -> tuple[dbstate.DDLQuery, pg_dbops.SQLBlock | None]:
     if isinstance(stmt, qlast.GlobalObjectCommand):
         ctx._assert_not_in_migration_block(stmt)
 
@@ -234,7 +234,7 @@ def _compile_and_apply_ddl_stmt(
     # will also update the schema.
     block, new_types, config_ops = _process_delta(ctx, delta)
 
-    ddl_stmt_id: Optional[str] = None
+    ddl_stmt_id: str | None = None
     is_transactional = block.is_transactional()
     if not is_transactional:
         if not isinstance(stmt, qlast.DatabaseCommand):
@@ -890,7 +890,7 @@ def _commit_migration(
     else:
         last_migration_ref = None
 
-    target_sdl: Optional[str] = None
+    target_sdl: str | None = None
     store_migration_sdl = compiler._get_config_val(ctx, 'store_migration_sdl')
     if store_migration_sdl == 'AlwaysStore':
         target_sdl = s_ddl.sdl_text_from_schema(schema)
@@ -1316,7 +1316,7 @@ def produce_feature_used_metrics(
 
 def repair_schema(
     ctx: compiler.CompileContext,
-) -> Optional[tuple[bytes, s_schema.Schema, Any]]:
+) -> tuple[bytes, s_schema.Schema, Any] | None:
     """Repair inconsistencies in the schema caused by bug fixes
 
     Works by comparing the actual current schema to the schema we get

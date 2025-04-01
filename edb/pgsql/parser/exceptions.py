@@ -17,7 +17,7 @@
 #
 
 import re
-from typing import Any, Optional
+from typing import Any
 
 
 class PSqlParseError(Exception):
@@ -40,11 +40,11 @@ class PSqlSyntaxError(PSqlParseError):
 
 
 class PSqlUnsupportedError(PSqlParseError):
-    node: Optional[Any]
-    location: Optional[int]
+    node: Any | None
+    location: int | None
     message: str
 
-    def __init__(self, node: Optional[Any] = None, feat: Optional[str] = None):
+    def __init__(self, node: Any | None = None, feat: str | None = None):
         self.node = node
         self.location = None
         self.message = "not supported"

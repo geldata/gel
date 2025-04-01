@@ -20,7 +20,7 @@
 
 import functools
 import platform
-from typing import Optional, Sequence
+from typing import Sequence
 
 from edb import errors
 
@@ -42,7 +42,7 @@ Context = context.ResolverContextLevel
 
 
 @functools.singledispatch
-def eval(expr: pgast.BaseExpr, *, ctx: Context) -> Optional[pgast.BaseExpr]:
+def eval(expr: pgast.BaseExpr, *, ctx: Context) -> pgast.BaseExpr | None:
     """
     Tries to statically evaluate expr, recursing into sub-expressions.
     Returns None if that is not possible.
@@ -52,7 +52,7 @@ def eval(expr: pgast.BaseExpr, *, ctx: Context) -> Optional[pgast.BaseExpr]:
 
 def eval_list(
     exprs: list[pgast.BaseExpr], *, ctx: Context
-) -> Optional[list[pgast.BaseExpr]]:
+) -> list[pgast.BaseExpr] | None:
     """
     Tries to statically evaluate exprs, recursing into sub-expressions.
     Returns None if that is not possible.
@@ -67,7 +67,7 @@ def eval_list(
     return res
 
 
-def name_in_pg_catalog(name: Sequence[str]) -> Optional[str]:
+def name_in_pg_catalog(name: Sequence[str]) -> str | None:
     """
     Strips `pg_catalog.` schema name from an SQL ident. Because pg_catalog is
     always the first schema in search_path, every ident without schema name
@@ -82,14 +82,14 @@ def name_in_pg_catalog(name: Sequence[str]) -> Optional[str]:
 @eval.register
 def eval_BaseConstant(
     expr: pgast.BaseConstant, *, ctx: Context
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     return expr
 
 
 @eval.register
 def eval_TypeCast(
     expr: pgast.TypeCast, *, ctx: Context
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     if expr.type_name.array_bounds:
         return None
 
@@ -236,7 +236,7 @@ def eval_FuncCall(
     expr: pgast.FuncCall,
     *,
     ctx: Context,
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     if len(expr.name) >= 3:
         raise errors.QueryError("unknown function", span=expr.span)
 
@@ -555,7 +555,7 @@ def to_regclass(reg_class_name: str, ctx: Context) -> pgast.BaseExpr:
 
 def eval_current_schemas(
     expr: pgast.FuncCall, ctx: Context
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     include_implicit = require_bool_param(expr, ctx)
 
     res = []
@@ -619,7 +619,7 @@ def eval_ParamRef(
     _expr: pgast.ParamRef,
     *,
     ctx: Context,
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     if len(ctx.options.normalized_params) > 0:
         raise DisableNormalization()
     else:

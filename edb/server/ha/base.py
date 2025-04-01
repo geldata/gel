@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Callable, Optional
+from typing import Callable
 
 import urllib.parse
 
@@ -36,15 +36,15 @@ class ClusterProtocol:
 class HABackend(asyncwatcher.AsyncWatcher):
     def __init__(self) -> None:
         super().__init__()
-        self._failover_cb: Optional[Callable[[], None]] = None
+        self._failover_cb: Callable[[], None] | None = None
 
     async def get_cluster_consensus(self) -> tuple[str, int]:
         raise NotImplementedError
 
-    def get_master_addr(self) -> Optional[tuple[str, int]]:
+    def get_master_addr(self) -> tuple[str, int] | None:
         raise NotImplementedError
 
-    def set_failover_callback(self, cb: Optional[Callable[[], None]]) -> None:
+    def set_failover_callback(self, cb: Callable[[], None] | None) -> None:
         self._failover_cb = cb
 
     @property
@@ -55,7 +55,7 @@ class HABackend(asyncwatcher.AsyncWatcher):
         metrics.ha_events_total.inc(value, self.dsn, event)
 
 
-def get_backend(parsed_dsn: urllib.parse.ParseResult) -> Optional[HABackend]:
+def get_backend(parsed_dsn: urllib.parse.ParseResult) -> HABackend | None:
     backend, _, sub_scheme = parsed_dsn.scheme.partition("+")
     if backend == "stolon":
         from . import stolon

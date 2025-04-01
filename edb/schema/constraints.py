@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     TypeVar,
     Mapping,
     cast,
@@ -62,7 +61,7 @@ if TYPE_CHECKING:
 T = TypeVar('T')
 
 
-def _assert_not_none(value: Optional[T]) -> T:
+def _assert_not_none(value: T | None) -> T:
     if value is None:
         raise TypeError("A value is expected")
     return value
@@ -278,7 +277,7 @@ class Constraint(
     ) -> str:
         text = self.get_errmessage(schema)
         assert text
-        args: Optional[s_expr.ExpressionList] = self.get_args(schema)
+        args: s_expr.ExpressionList | None = self.get_args(schema)
         if args:
             args_ql: list[qlast.Base] = [
                 qlast.Path(steps=[qlast.ObjectRef(name=subject_name)]),
@@ -335,7 +334,7 @@ class Constraint(
     def get_ddl_identity(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[dict[str, str]]:
+    ) -> dict[str, str] | None:
         ddl_identity = super().get_ddl_identity(schema)
 
         if (
@@ -542,7 +541,7 @@ class ConstraintCommand(
     ) -> s_expr.CompiledExpression:
         from . import pointers as s_pointers
 
-        base: Optional[so.Object] = None
+        base: so.Object | None = None
         if isinstance(self, AlterConstraint):
             base = self.scls.get_subject(schema)
         else:
@@ -632,7 +631,7 @@ class ConstraintCommand(
         context: sd.CommandContext,
         field: so.Field[Any],
         value: Any,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         if field.name in {'expr', 'subjectexpr', 'finalexpr', 'except_expr'}:
             return s_expr.Expression(text='false')
         else:
@@ -668,7 +667,7 @@ class ConstraintCommand(
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if field in ('subjectexpr', 'args', 'except_expr'):
             return field
         elif (
@@ -737,10 +736,10 @@ class ConstraintCommand(
         subject_obj: so.Object,
         *,
         name: sn.QualName,
-        subjectexpr: Optional[s_expr.Expression] = None,
+        subjectexpr: s_expr.Expression | None = None,
         subjectexpr_inherited: bool = False,
-        span: Optional[c_parsing.Span] = None,
-        args: Optional[Iterable[s_expr.Expression]] = None,
+        span: c_parsing.Span | None = None,
+        args: Iterable[s_expr.Expression] | None = None,
         **kwargs: Any
     ) -> None:
         from edb.ir import ast as irast
@@ -997,7 +996,7 @@ class CreateConstraint(
     def _get_param_desc_from_ast(
         cls,
         schema: s_schema.Schema,
-        modaliases: Mapping[Optional[str], str],
+        modaliases: Mapping[str | None, str],
         astnode: qlast.ObjectDDL,
         *,
         param_offset: int=0
@@ -1031,8 +1030,8 @@ class CreateConstraint(
             # The checks below apply only to abstract constraints.
             return
 
-        base_params: Optional[s_func.FuncParameterList] = None
-        base_with_params: Optional[Constraint] = None
+        base_params: s_func.FuncParameterList | None = None
+        base_with_params: Constraint | None = None
 
         bases = self.get_resolved_attribute_value(
             'bases',
@@ -1491,8 +1490,8 @@ class AlterConstraint(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if self.scls.get_abstract(schema):
             return super()._get_ast(schema, context, parent_node=parent_node)
 

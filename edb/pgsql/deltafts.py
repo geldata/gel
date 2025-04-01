@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Optional, Iterable, Sequence, Collection
+from typing import Iterable, Sequence, Collection
 
 from edb import errors
 
@@ -48,7 +48,7 @@ from .compiler import enums as pgce
 def create_fts_index(
     index: s_indexes.Index,
     index_expr: irast.Set,
-    predicate_src: Optional[str],
+    predicate_src: str | None,
     sql_kwarg_exprs: dict[str, str],
     options: qlcompiler.CompilerOptions,
     schema: s_schema.Schema,
@@ -134,7 +134,7 @@ def _compile_ir_index_exprs(
 def _create_fts_document(
     index: s_indexes.Index,
     index_expr: irast.Set,
-    predicate_src: Optional[str],
+    predicate_src: str | None,
     sql_kwarg_exprs: dict[str, str],
     schema: s_schema.Schema,
     context: sd.CommandContext,
@@ -199,7 +199,7 @@ def update_fts_document(
     table_name = common.get_index_table_backend_name(index, schema)
 
     # compile the expression
-    index_sexpr: Optional[s_expr.Expression] = index.get_expr(schema)
+    index_sexpr: s_expr.Expression | None = index.get_expr(schema)
     assert index_sexpr
     index_expr = index_sexpr.ensure_compiled(
         schema=schema,
@@ -230,7 +230,7 @@ def _refresh_fts_document(
     table_name = common.get_index_table_backend_name(index, schema)
 
     # compile the expression
-    index_sexpr: Optional[s_expr.Expression] = index.get_expr(schema)
+    index_sexpr: s_expr.Expression | None = index.get_expr(schema)
     assert index_sexpr
     index_expr = index_sexpr.ensure_compiled(
         schema=schema,
@@ -275,7 +275,7 @@ def _raise_unsupported_language_error(
 def _pg_create_fts_document(
     index: s_indexes.Index,
     exprs: Sequence[pgast.BaseExpr],
-    predicate_src: Optional[str],
+    predicate_src: str | None,
     sql_kwarg_exprs: dict[str, str],
     schema: s_schema.Schema,
 ) -> dbops.Command:
@@ -432,7 +432,7 @@ def _pg_trigger_name(
 def _zombo_create_fts_document(
     index: s_indexes.Index,
     exprs: Sequence[pgast.BaseExpr],
-    predicate_src: Optional[str],
+    predicate_src: str | None,
     sql_kwarg_exprs: dict[str, str],
     schema: s_schema.Schema,
 ) -> dbops.Command:

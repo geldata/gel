@@ -25,7 +25,6 @@ from typing import (
     Generic,
     Iterable,
     Iterator,
-    Optional,
     Sequence,
     TypeAlias,
     TypeVar,
@@ -61,9 +60,9 @@ class Table(composites.CompositeDBObject):
         self,
         name: TableName,
         *,
-        columns: Optional[Iterable[Column]] = None,
-        bases: Optional[ordered.OrderedSet[Table]] = None,
-        constraints: Optional[ordered.OrderedSet[SingleTableConstraint]] = None
+        columns: Iterable[Column] | None = None,
+        bases: ordered.OrderedSet[Table] | None = None,
+        constraints: ordered.OrderedSet[SingleTableConstraint] | None = None
     ) -> None:
         self.bases = ordered.OrderedSet(bases or [])
         self.constraints = ordered.OrderedSet(constraints or [])
@@ -115,7 +114,7 @@ class Table(composites.CompositeDBObject):
     def add_constraint(self, const: SingleTableConstraint) -> None:
         self.constraints.add(const)
 
-    def get_column(self, name: ColumnName) -> Optional[Column]:
+    def get_column(self, name: ColumnName) -> Column | None:
         return self.all_columns.get(name)
 
     def get_type(self) -> str:
@@ -156,10 +155,10 @@ class Column(base.DBObject):
         name: ColumnName,
         type: str | tuple[str, str],
         required: bool = False,
-        default: Optional[str] = None,
+        default: str | None = None,
         constraints: Sequence[ColumnConstraint] = (),
         readonly: bool = False,
-        comment: Optional[str] = None,
+        comment: str | None = None,
     ) -> None:
         self.name = name
         self.type = type
@@ -405,8 +404,8 @@ class CreateTable(ddl.SchemaObjectOperation):
         table: Table,
         temporary: bool = False,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         super().__init__(
             table.name, conditions=conditions, neg_conditions=neg_conditions
@@ -475,8 +474,8 @@ class AlterTableBase(AlterTableBaseMixin, ddl.DDLOperation):
         name: TableName,
         *,
         contained: bool = False,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         ddl.DDLOperation.__init__(
             self, conditions=conditions, neg_conditions=neg_conditions)
@@ -504,8 +503,8 @@ class AlterTable(
         name: TableName,
         *,
         contained: bool = False,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ):
         base.CompositeCommandGroup.__init__(
             self, conditions=conditions, neg_conditions=neg_conditions)
@@ -573,7 +572,7 @@ class AlterTableAlterColumnNull(AlterTableFragment):
 
 
 class AlterTableAlterColumnDefault(AlterTableFragment):
-    def __init__(self, column_name: ColumnName, default: Optional[str]):
+    def __init__(self, column_name: ColumnName, default: str | None):
         self.column_name = column_name
         self.default = default
 

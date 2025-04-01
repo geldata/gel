@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
 import asyncio
 import collections
@@ -65,8 +65,8 @@ from . import results
 if TYPE_CHECKING:
     import edb.server.cluster as edb_cluster
 
-result: Optional[unittest.result.TestResult] = None
-coverage_run: Optional[Any] = None
+result: unittest.result.TestResult | None = None
+coverage_run: Any | None = None
 py_hash_secret: bytes = cpython_state.get_py_hash_secret()
 py_random_seed: bytes = random.SystemRandom().randbytes(8)
 
@@ -88,7 +88,7 @@ def init_worker(
     status_queue: multiprocessing.SimpleQueue,
     param_queue: multiprocessing.SimpleQueue,
     result_queue: multiprocessing.SimpleQueue,
-    additional_init: Optional[Callable]
+    additional_init: Callable | None
 ) -> None:
     global result
     global coverage_run
@@ -815,7 +815,7 @@ class ParallelTextTestResult(unittest.result.TestResult):
     def annotate_test(self, test, annotations: dict[str, Any]) -> None:
         self.test_annotations[test].update(annotations)
 
-    def get_test_annotations(self, test) -> Optional[dict[str, Any]]:
+    def get_test_annotations(self, test) -> dict[str, Any] | None:
         return self.test_annotations.get(test)
 
     def _exc_info_to_string(self, err, test):
@@ -943,7 +943,7 @@ class ParallelTextTestRunner:
         test: Any,
         selected_shard: int,
         total_shards: int,
-        running_times_log_file: Optional[Any],
+        running_times_log_file: Any | None,
     ) -> results.TestResult:
         session_start = time.monotonic()
         cases = tb.get_test_cases([test])
@@ -962,8 +962,8 @@ class ParallelTextTestRunner:
         worker_init = None
         bootstrap_time_taken = 0.0
         tests_time_taken = 0.0
-        result: Optional[ParallelTextTestResult] = None
-        cluster: Optional[edb_cluster.BaseCluster] = None
+        result: ParallelTextTestResult | None = None
+        cluster: edb_cluster.BaseCluster | None = None
         conn = None
         tempdir = None
         setup_stats = []

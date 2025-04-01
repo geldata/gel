@@ -22,7 +22,6 @@ in our internal Postgres instance."""
 
 from typing import (
     Iterable,
-    Optional,
     Iterator,
     Sequence,
     cast,
@@ -56,7 +55,7 @@ from . import command
 Context = context.ResolverContextLevel
 
 
-def infer_alias(res_target: pgast.ResTarget) -> Optional[str]:
+def infer_alias(res_target: pgast.ResTarget) -> str | None:
     if res_target.name:
         return res_target.name
 

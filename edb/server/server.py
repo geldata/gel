@@ -24,7 +24,6 @@ import re
 from typing import (
     Any,
     Callable,
-    Optional,
     Hashable,
     Iterator,
     Mapping,
@@ -150,7 +149,7 @@ class BaseServer:
         listen_sockets: tuple[socket.socket, ...] = (),
         testmode: bool = False,
         daemonized: bool = False,
-        pidfile_dir: Optional[pathlib.Path] = None,
+        pidfile_dir: pathlib.Path | None = None,
         binary_endpoint_security: srvargs.ServerEndpointSecurityMode = (
             srvargs.ServerEndpointSecurityMode.Tls),
         http_endpoint_security: srvargs.ServerEndpointSecurityMode = (
@@ -161,7 +160,7 @@ class BaseServer:
         default_auth_method: srvargs.ServerAuthMethods = (
             srvargs.DEFAULT_AUTH_METHODS),
         admin_ui: bool = False,
-        cors_always_allowed_origins: Optional[str] = None,
+        cors_always_allowed_origins: str | None = None,
         disable_dynamic_system_config: bool = False,
         compiler_state: edbcompiler.CompilerState,
         use_monitor_fs: bool = False,
@@ -752,8 +751,8 @@ class BaseServer:
         self,
         host: str,
         port: int,
-        sock: Optional[socket.socket] = None,
-    ) -> Optional[asyncio.base_events.Server]:
+        sock: socket.socket | None = None,
+    ) -> asyncio.base_events.Server | None:
         try:
             kwargs: dict[str, Any]
             if sock is not None:
@@ -1324,7 +1323,7 @@ class Server(BaseServer):
 
     async def _get_patch_log(
         self, conn: pgcon.PGConnection, idx: int
-    ) -> Optional[bootstrap.PatchEntry]:
+    ) -> bootstrap.PatchEntry | None:
         # We need to maintain a log in the system database of
         # patches that have been applied. This is so that if a
         # patch creates a new object, and then we succesfully

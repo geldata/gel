@@ -24,7 +24,6 @@ from typing import (
     Annotated,
     Any,
     ClassVar,
-    Optional,
     TypeVar,
     Union,
     Sequence,
@@ -192,7 +191,7 @@ def _translate_relation(name: str, ctx: explain.AnalyzeContext) -> Relation:
 
 def _translate_name(
     name: sn.Name,
-    reverse_mod_aliases: dict[str, Optional[str]],
+    reverse_mod_aliases: dict[str, str | None],
 ) -> str:
     if not isinstance(name, sn.QualName):
         return str(name)
@@ -306,12 +305,12 @@ class JitInfo(FromJson):
 
 class Worker(FromJson):
     worker_number: int
-    actual_startup_time: Optional[float]  # if timing
-    actual_total_time: Optional[float]  # if timing
-    actual_rows: Optional[float]
-    actual_loops: Optional[float]
+    actual_startup_time: float | None  # if timing
+    actual_total_time: float | None  # if timing
+    actual_rows: float | None
+    actual_loops: float | None
 
-    jit: Optional[JitInfo]  # if bunch of options
+    jit: JitInfo | None  # if bunch of options
 
 
 PlanT = TypeVar('PlanT', bound='Plan')
@@ -326,30 +325,30 @@ class CostMixin:
     plan_width: int
 
     # if analyze (zeros if never executed)
-    actual_startup_time: Optional[float] = None  # if timing
-    actual_total_time: Optional[float] = None  # if timing
-    actual_rows: Optional[float] = None
-    actual_loops: Optional[float] = None
+    actual_startup_time: float | None = None  # if timing
+    actual_total_time: float | None = None  # if timing
+    actual_rows: float | None = None
+    actual_loops: float | None = None
 
     # if buffers
-    shared_hit_blocks: Optional[int] = None
-    shared_read_blocks: Optional[int] = None
-    shared_dirtied_blocks: Optional[int] = None
-    shared_written_blocks: Optional[int] = None
-    local_hit_blocks: Optional[int] = None
-    local_read_blocks: Optional[int] = None
-    local_dirtied_blocks: Optional[int] = None
-    local_written_blocks: Optional[int] = None
-    temp_read_blocks: Optional[int] = None
-    temp_written_blocks: Optional[int] = None
+    shared_hit_blocks: int | None = None
+    shared_read_blocks: int | None = None
+    shared_dirtied_blocks: int | None = None
+    shared_written_blocks: int | None = None
+    local_hit_blocks: int | None = None
+    local_read_blocks: int | None = None
+    local_dirtied_blocks: int | None = None
+    local_written_blocks: int | None = None
+    temp_read_blocks: int | None = None
+    temp_written_blocks: int | None = None
 
 
 class Plan(FromJson, CostMixin):
     # TODO(tailhook) output is lost somewhere
     node_type: str
     plan_id: uuid.UUID
-    parent_relationship: Optional[str]
-    subplan_name: Optional[str]  # shown
+    parent_relationship: str | None
+    subplan_name: str | None  # shown
     parallel_aware: bool  # true always shown as a prefix of node name
     async_capable: bool  # true always shown as a prefix of node name
     workers: Sequence[Worker]  # shown if non-empty
@@ -409,24 +408,24 @@ class Plan(FromJson, CostMixin):
 # Base types
 
 class BaseScan(Plan):
-    schema: Optional[str]  # if verbose
+    schema: str | None  # if verbose
 
     # It should have been required, but in ModifyTable it's optional, so
     # we try to make it compatible. We don't rely on it being required in
     # the code anyways.
-    alias: Optional[str]
+    alias: str | None
 
 
 class RelationScan(BaseScan):
     # It should have been required, but in ModifyTable it's optional, so
     # we try to make it compatible. We don't rely on it being required in
     # the code anyways.
-    relation_name: Annotated[Optional[Relation], important]
+    relation_name: Annotated[Relation | None, important]
 
 
 class FilterScan(FromJson):  # mixin
     filter: Expr
-    rows_removed_by_filter: Annotated[Optional[float], important]
+    rows_removed_by_filter: Annotated[float | None, important]
 
 
 # Specific types
@@ -440,13 +439,13 @@ class ProjectSet(Plan):
 
 
 class TargetTable(FromJson):
-    schema: Optional[str]  # if verbose
-    alias: Optional[str]
-    relation_name: Annotated[Optional[Relation], important]
-    cte_name: Optional[str]
-    tuplestore_name: Optional[str]
-    tablefunction_name: Optional[str]
-    function_name: Optional[str]
+    schema: str | None  # if verbose
+    alias: str | None
+    relation_name: Annotated[Relation | None, important]
+    cte_name: str | None
+    tuplestore_name: str | None
+    tablefunction_name: str | None
+    function_name: str | None
     # Also pluggable explain FDW
 
 
@@ -458,13 +457,13 @@ class ModifyTable(RelationScan, TargetTable):
     # it's not clear
     #
     # if conflict
-    conflict_resolution: Optional[str]  # NOTHING, UPDATE
+    conflict_resolution: str | None  # NOTHING, UPDATE
     conflict_arbiter_indexes: list[str]
     conflict_filter: Expr
     rows_removed_by_conflict_filter: float
 
-    tuples_inserted: Optional[float]  # if analyze
-    conflicting_tuples: Optional[float]  # if analyze
+    tuples_inserted: float | None  # if analyze
+    conflicting_tuples: float | None  # if analyze
 
 
 class Append(Plan):
@@ -495,7 +494,7 @@ class UniqueJoin(Plan, FilterScan):
     join_type: Annotated[str, important]
 
     join_filter: Expr
-    rows_removed_by_join_filter: Optional[float]
+    rows_removed_by_join_filter: float | None
 
 
 class NestedLoop(UniqueJoin):
@@ -517,20 +516,20 @@ class SeqScan(RelationScan, FilterScan):
 class SampleScan(RelationScan, FilterScan):
     sampling_method: Annotated[Text, important]  # show
     sampling_parameters: list[str]
-    repeatable_seed: Annotated[Optional[str], important]  # show
+    repeatable_seed: Annotated[str | None, important]  # show
 
 
 class Gather(Plan, FilterScan):
     workers_planned: int
-    workers_launched: Optional[int]  # analyze
-    params_evaluated: Optional[list[str]]
+    workers_launched: int | None  # analyze
+    params_evaluated: list[str] | None
     single_copy: bool
 
 
 class GatherMerge(Plan, FilterScan):
     workers_planned: int
-    workers_launched: Optional[int]  # analyze
-    params_evaluated: Optional[list[str]]
+    workers_launched: int | None  # analyze
+    params_evaluated: list[str] | None
 
 
 class IndexScan(RelationScan, FilterScan):
@@ -539,12 +538,12 @@ class IndexScan(RelationScan, FilterScan):
 
     index_name: Annotated[Index, important]  # show
     index_cond: Expr
-    rows_removed_by_index_recheck: Annotated[Optional[float], important]
+    rows_removed_by_index_recheck: Annotated[float | None, important]
     order_by: Expr
 
 
 class IndexOnlyScan(IndexScan):
-    heap_fetches: Optional[float]  # if analyze
+    heap_fetches: float | None  # if analyze
 
 
 class BitmapIndexScan(Plan):
@@ -554,9 +553,9 @@ class BitmapIndexScan(Plan):
 
 class BitmapHeapScan(RelationScan, FilterScan):
     recheck_cond: Expr
-    rows_removed_by_index_recheck: Optional[float]
-    exact_heap_blocks: Optional[int]  # if analyze, show
-    lossy_heap_blocks: Optional[int]  # if analyze, show
+    rows_removed_by_index_recheck: float | None
+    exact_heap_blocks: int | None  # if analyze, show
+    lossy_heap_blocks: int | None  # if analyze, show
 
 
 class TidScan(RelationScan, FilterScan):
@@ -598,11 +597,11 @@ class WorkTableScan(BaseScan, FilterScan):
 
 
 class ForeignScan(RelationScan, FilterScan):
-    operation: Annotated[Optional[str], important]  # show: title
+    operation: Annotated[str | None, important]  # show: title
 
 
 class CustomScan(RelationScan, FilterScan):
-    custom_plan_provider: Optional[str]
+    custom_plan_provider: str | None
     # extra info that is gather via custom function :shrug:
 
 
@@ -669,16 +668,16 @@ class SortGroupsInfo(FromJson):
 
 
 class IncrementalSortWorker(Worker):
-    full_sort_groups: Optional[SortGroupsInfo]  # show
-    pre_sorted_groups: Optional[SortGroupsInfo]  # show
+    full_sort_groups: SortGroupsInfo | None  # show
+    pre_sorted_groups: SortGroupsInfo | None  # show
 
 
 class IncrementalSort(Plan):
     sort_key: Annotated[list[Expr], important]  # show
     presorted_key: list[Expr]
 
-    full_sort_groups: Optional[SortGroupsInfo]  # show
-    pre_sorted_groups: Optional[SortGroupsInfo]  # show
+    full_sort_groups: SortGroupsInfo | None  # show
+    pre_sorted_groups: SortGroupsInfo | None  # show
 
     workers: Sequence[SortWorker]  # overrides
 

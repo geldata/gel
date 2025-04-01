@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, cast, TYPE_CHECKING
+from typing import Any, cast, TYPE_CHECKING
 
 from edb import errors
 
@@ -284,7 +284,7 @@ class RewriteCommand(
         context: sd.CommandContext,
         field: so.Field[Any],
         value: Any,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         if field.name == 'expr':
             return s_types.type_dummy_expr(
                 self.scls.get_ptr_target(schema), schema)
@@ -375,7 +375,7 @@ class CreateRewrite(
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if field in ('kind', 'expr') and issubclass(
             astnode, qlast.CreateRewrite
         ):
@@ -475,8 +475,8 @@ class DeleteRewrite(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         node = super()._get_ast(schema, context, parent_node=parent_node)
         assert isinstance(node, qlast.DropRewrite)
         skind = sn.shortname_from_fullname(self.classname).name

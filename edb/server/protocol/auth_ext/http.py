@@ -34,7 +34,6 @@ import dataclasses
 
 from typing import (
     Any,
-    Optional,
     cast,
     TYPE_CHECKING,
     Callable,
@@ -73,7 +72,7 @@ logger = logging.getLogger('edb.server.ext.auth')
 
 
 class Router:
-    test_url: Optional[str]
+    test_url: str | None
 
     def __init__(
         self,
@@ -545,11 +544,11 @@ class Router:
         data = self._get_data_from_request(request)
 
         allowed_redirect_to = self._maybe_make_allowed_url(
-            cast(Optional[str], data.get("redirect_to"))
+            cast(str | None, data.get("redirect_to"))
         )
 
-        maybe_challenge = cast(Optional[str], data.get("challenge"))
-        register_provider_name = cast(Optional[str], data.get("provider"))
+        maybe_challenge = cast(str | None, data.get("challenge"))
+        register_provider_name = cast(str | None, data.get("provider"))
         if register_provider_name is None:
             raise errors.InvalidData('Missing "provider" in register request')
 
@@ -559,7 +558,7 @@ class Router:
             raise errors.InvalidData(
                 'Missing "challenge" in register request'
             )
-        pkce_code: Optional[str] = None
+        pkce_code: str | None = None
 
         try:
             email_factor = await email_password_client.register(data)
@@ -679,7 +678,7 @@ class Router:
         await pkce.create(self.db, challenge)
 
         allowed_redirect_to = self._maybe_make_allowed_url(
-            cast(Optional[str], data.get("redirect_to"))
+            cast(str | None, data.get("redirect_to"))
         )
 
         email_password_client = email_password.Client(db=self.db)
@@ -829,7 +828,7 @@ class Router:
         verify_url = request_data.get(
             "verify_url", f"{self.base_path}/ui/verify"
         )
-        email_factor: Optional[EmailFactor] = None
+        email_factor: EmailFactor | None = None
         if "verification_token" in request_data:
             token = jwt.VerificationToken.verify(
                 request_data["verification_token"],
@@ -1464,7 +1463,7 @@ class Router:
         user_handle_cookie = request.cookies.get(
             "edgedb-webauthn-registration-user-handle"
         )
-        user_handle_base64url: Optional[str] = (
+        user_handle_base64url: str | None = (
             user_handle_cookie.value
             if user_handle_cookie
             else data.get("user_handle")
@@ -1481,7 +1480,7 @@ class Router:
             raise errors.InvalidData("Failed to decode user_handle") from e
 
         require_verification = webauthn_client.provider.require_verification
-        pkce_code: Optional[str] = None
+        pkce_code: str | None = None
 
         try:
             email_factor = await webauthn_client.register(
@@ -1818,7 +1817,7 @@ class Router:
         password_provider = (
             self._get_password_provider() if ui_config is not None else None
         )
-        challenge: Optional[str] = None
+        challenge: str | None = None
 
         if ui_config is None or password_provider is None:
             response.status = http.HTTPStatus.NOT_FOUND
@@ -2133,7 +2132,7 @@ class Router:
     def _get_app_details_config(self) -> config.AppDetailsConfig:
         return util.get_app_details_config(self.db)
 
-    def _get_password_provider(self) -> Optional[config.ProviderConfig]:
+    def _get_password_provider(self) -> config.ProviderConfig | None:
         providers = cast(
             list[config.ProviderConfig],
             util.get_config(
@@ -2293,8 +2292,8 @@ class Router:
         return AllowedUrl(url)
 
     def _maybe_make_allowed_url(
-        self, url: Optional[str]
-    ) -> Optional[AllowedUrl]:
+        self, url: str | None
+    ) -> AllowedUrl | None:
         return self._make_allowed_url(url) if url else None
 
 
@@ -2336,7 +2335,7 @@ def _get_search_param(
     query_dict: dict[str, list[str]],
     key: str,
     *,
-    fallback_keys: Optional[list[str]] = None,
+    fallback_keys: list[str] | None = None,
 ) -> str:
     val = _maybe_get_search_param(query_dict, key)
     if val is None and fallback_keys is not None:
@@ -2384,7 +2383,7 @@ def _set_cookie(
     http_only: bool = True,
     secure: bool = True,
     same_site: str = "Strict",
-    path: Optional[str] = None,
+    path: str | None = None,
 ) -> None:
     val: http.cookies.Morsel[str] = http.cookies.SimpleCookie({name: value})[
         name

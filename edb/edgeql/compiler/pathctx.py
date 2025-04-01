@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, AbstractSet
+from typing import Literal, AbstractSet
 
 from edb import errors
 
@@ -39,7 +39,7 @@ from . import context
 def get_path_id(
     stype: s_types.Type,
     *,
-    typename: Optional[s_name.QualName] = None,
+    typename: s_name.QualName | None = None,
     ctx: context.ContextLevel,
 ) -> irast.PathId:
     return irast.PathId.from_type(
@@ -78,7 +78,7 @@ def get_tuple_indirection_path_id(
 
 def get_expression_path_id(
     stype: s_types.Type,
-    alias: Optional[str] = None,
+    alias: str | None = None,
     *,
     ctx: context.ContextLevel,
 ) -> irast.PathId:
@@ -91,7 +91,7 @@ def get_expression_path_id(
 def register_set_in_scope(
     ir_set: irast.Set,
     *,
-    path_scope: Optional[irast.ScopeTreeNode] = None,
+    path_scope: irast.ScopeTreeNode | None = None,
     optional: bool = False,
     ctx: context.ContextLevel,
 ) -> None:
@@ -108,7 +108,7 @@ def register_set_in_scope(
 
 def assign_set_scope(
     ir_set: irast.Set,
-    scope: Optional[irast.ScopeTreeNode],
+    scope: irast.ScopeTreeNode | None,
     *,
     ctx: context.ContextLevel,
 ) -> irast.Set:
@@ -129,7 +129,7 @@ def get_set_scope(
     ir_set: irast.Set,
     *,
     ctx: context.ContextLevel,
-) -> Optional[irast.ScopeTreeNode]:
+) -> irast.ScopeTreeNode | None:
     if ir_set.path_scope_id is None:
         return None
     else:

@@ -19,7 +19,7 @@
 """SQL resolver that compiles public SQL to internal SQL which is executable
 in our internal Postgres instance."""
 
-from typing import Optional, cast
+from typing import cast
 import uuid
 
 from edb import errors
@@ -292,7 +292,7 @@ def resolve_relation(
     schemas = [schema_name] if schema_name else ctx.options.search_path
     modules = [public_to_default(s) for s in schemas]
 
-    obj: Optional[s_sources.Source | s_properties.Property] = None
+    obj: s_sources.Source | s_properties.Property | None = None
     for module in modules:
         if obj:
             break
@@ -427,7 +427,7 @@ def _relation_of_inheritance_cte(
 
 def _lookup_pointer_table(
     module: str, name: str, ctx: Context
-) -> Optional[s_links.Link | s_properties.Property]:
+) -> s_links.Link | s_properties.Property | None:
     # Pointer tables are either:
     # - multi link tables
     # - single link tables with at least one property besides source and target

@@ -31,7 +31,7 @@ from __future__ import annotations
 import collections
 from types import GenericAlias, UnionType  # type: ignore
 from typing import _GenericAlias  # type: ignore
-from typing import Any, ClassVar, Generic, Optional, TypeVar, Union
+from typing import Any, ClassVar, Generic, TypeVar, Union
 
 
 __all__ = [
@@ -114,7 +114,7 @@ def get_parameters(t) -> tuple[TypeVar, ...]:
         return ()
 
 
-def get_origin(t) -> Optional[type]:
+def get_origin(t) -> type | None:
     if _is_genericalias(t):
         return t.__origin__ if t.__origin__ is not ClassVar else None
     if t is Generic:

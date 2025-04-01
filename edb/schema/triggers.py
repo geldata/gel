@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, AbstractSet, TYPE_CHECKING
+from typing import Any, AbstractSet, TYPE_CHECKING
 
 from edb import errors
 
@@ -261,7 +261,7 @@ class TriggerCommand(
         context: sd.CommandContext,
         field: so.Field[Any],
         value: Any,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         if field.name in {'expr', 'condition'}:
             return s_expr.Expression(text='false')
         else:
@@ -289,7 +289,7 @@ class CreateTrigger(
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if (
             field in ('timing', 'condition', 'kinds', 'scope', 'expr')
             and issubclass(astnode, qlast.CreateTrigger)

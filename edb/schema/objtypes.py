@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Iterable, cast
+from typing import Iterable, cast
 
 import collections
 
@@ -237,7 +237,7 @@ class ObjectType(
         self,
         other: s_types.Type,
         schema: s_schema.Schema,
-    ) -> tuple[s_schema.Schema, Optional[ObjectType]]:
+    ) -> tuple[s_schema.Schema, ObjectType | None]:
         if not isinstance(other, ObjectType):
             return schema, None
 
@@ -332,7 +332,7 @@ class ObjectType(
     def as_type_delete_if_unused(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[sd.DeleteObject[ObjectType]]:
+    ) -> sd.DeleteObject[ObjectType] | None:
         if not self._is_deletable(schema):
             return None
 
@@ -367,7 +367,7 @@ def get_or_create_union_type(
     *,
     transient: bool = False,
     opaque: bool = False,
-    module: Optional[str] = None,
+    module: str | None = None,
 ) -> tuple[s_schema.Schema, ObjectType, bool]:
 
     name = s_types.get_union_type_name(
@@ -410,7 +410,7 @@ def get_or_create_intersection_type(
     schema: s_schema.Schema,
     components: Iterable[ObjectType],
     *,
-    module: Optional[str] = None,
+    module: str | None = None,
     transient: bool = False,
 ) -> tuple[s_schema.Schema, ObjectType]:
 
@@ -536,8 +536,8 @@ class CreateObjectType(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if (self.get_attribute_value('expr_type')
                 and not self.get_attribute_value('expr')):
             # This is a nested view type, e.g
@@ -710,8 +710,8 @@ class DeleteObjectType(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if self.get_orig_attribute_value('expr_type'):
             # This is an alias type, appropriate DDL would be generated
             # from the corresponding DeleteAlias node.

@@ -155,8 +155,8 @@ class TransactionStmt(Nonterm):
 
 class DescribeFmt(typing.NamedTuple):
 
-    language: typing.Optional[qltypes.DescribeLanguage] = None
-    options: typing.Optional[qlast.Options] = None
+    language: qltypes.DescribeLanguage | None = None
+    options: qlast.Options | None = None
 
 
 class DescribeFormat(Nonterm):

@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Callable,
-    Optional,
 )
 
 import asyncio
@@ -56,7 +55,7 @@ class RetryLoop:
         ignore_regexp: str | None = None,
         wait_for: type[Exception] | tuple[type[Exception], ...] | None = None,
         wait_for_regexp: str | None = None,
-        retry_cb: Callable[[Optional[BaseException]], None] | None = None,
+        retry_cb: Callable[[BaseException | None], None] | None = None,
     ) -> None:
         self._iteration = 0
         self._backoff = backoff

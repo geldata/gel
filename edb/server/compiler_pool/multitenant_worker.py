@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, NamedTuple
+from typing import Any, NamedTuple
 
 import pickle
 
@@ -45,7 +45,7 @@ BACKEND_RUNTIME_PARAMS: pgparams.BackendRuntimeParams = (
     pgparams.get_default_runtime_params()
 )
 COMPILER: compiler.Compiler
-LAST_STATE: Optional[compiler.dbstate.CompilerConnectionState] = None
+LAST_STATE: compiler.dbstate.CompilerConnectionState | None = None
 STD_SCHEMA: s_schema.FlatSchema
 
 
@@ -217,9 +217,9 @@ def compile(
 
 def compile_in_tx(
     _,
-    client_id: Optional[int],
-    dbname: Optional[str],
-    user_schema: Optional[bytes],
+    client_id: int | None,
+    dbname: str | None,
+    user_schema: bytes | None,
     cstate,
     *args,
     **kwargs,

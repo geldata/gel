@@ -25,7 +25,7 @@ import logging
 import asyncio
 
 from typing import (
-    TypeVar, overload, Any, cast, Optional, TYPE_CHECKING, Callable,
+    TypeVar, overload, Any, cast, TYPE_CHECKING, Callable,
     Awaitable
 )
 
@@ -119,7 +119,7 @@ def escape_and_truncate(input_str: str | None, max_len: int) -> str | None:
 
 def get_app_details_config(db: Any) -> config.AppDetailsConfig:
     ui_config = cast(
-        Optional[config.UIConfig],
+        config.UIConfig | None,
         maybe_get_config(db, "ext::auth::AuthConfig::ui", CompositeConfigType),
     )
 

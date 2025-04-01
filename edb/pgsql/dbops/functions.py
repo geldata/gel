@@ -20,7 +20,7 @@
 from __future__ import annotations
 
 import textwrap
-from typing import Optional, Sequence, cast
+from typing import Sequence, cast
 
 from ..common import qname as qn
 from ..common import quote_literal as ql
@@ -30,11 +30,11 @@ from . import base
 from . import ddl
 
 FunctionArgType = str | tuple[str, ...]
-FunctionArgTyped = tuple[Optional[str], FunctionArgType]
-FunctionArgDefaulted = tuple[Optional[str], FunctionArgType, str]
+FunctionArgTyped = tuple[str | None, FunctionArgType]
+FunctionArgDefaulted = tuple[str | None, FunctionArgType, str]
 FunctionArg = FunctionArgTyped | FunctionArgDefaulted
 
-NormalizedFunctionArg = tuple[Optional[str], tuple[str, ...], Optional[str]]
+NormalizedFunctionArg = tuple[str | None, tuple[str, ...], str | None]
 
 
 class Function(base.DBObject):
@@ -42,12 +42,12 @@ class Function(base.DBObject):
         self,
         name: tuple[str, ...],
         *,
-        args: Optional[Sequence[FunctionArg]] = None,
+        args: Sequence[FunctionArg] | None = None,
         returns: str | tuple[str, ...],
         text: str,
         volatility: str = "volatile",
         language: str = "sql",
-        has_variadic: Optional[bool] = None,
+        has_variadic: bool | None = None,
         strict: bool = False,
         parallel_safe: bool = False,
         set_returning: bool = False,
@@ -101,7 +101,7 @@ class FunctionExists(base.Condition):
 class FunctionOperation:
     @staticmethod
     def normalize_args(
-        args: Optional[Sequence[FunctionArg]]
+        args: Sequence[FunctionArg] | None
     ) -> Sequence[NormalizedFunctionArg]:
         normed = []
 
@@ -126,8 +126,8 @@ class FunctionOperation:
 
     @staticmethod
     def format_args(
-        args: Optional[Sequence[FunctionArg]],
-        has_variadic: Optional[bool],
+        args: Sequence[FunctionArg] | None,
+        has_variadic: bool | None,
         *,
         include_defaults: bool = True,
     ) -> str:
@@ -195,8 +195,8 @@ class DropFunction(ddl.DDLOperation, FunctionOperation):
         *,
         if_exists: bool = False,
         has_variadic: bool = False,
-        conditions: Optional[list[str | base.Condition]] = None,
-        neg_conditions: Optional[list[str | base.Condition]] = None,
+        conditions: list[str | base.Condition] | None = None,
+        neg_conditions: list[str | base.Condition] | None = None,
     ):
         self.conditional = if_exists
         super().__init__(conditions=conditions, neg_conditions=neg_conditions)

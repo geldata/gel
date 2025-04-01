@@ -23,7 +23,6 @@ from typing import (
     Hashable,
     Iterator,
     Mapping,
-    Optional,
     TypeAlias,
 )
 
@@ -90,7 +89,7 @@ class Database:
     def lookup_compiled_sql(
         self,
         key: Hashable,
-    ) -> Optional[list[dbstate.SQLQueryUnit]]:
+    ) -> list[dbstate.SQLQueryUnit] | None:
         ...
 
     def set_state_serializer(
@@ -165,7 +164,7 @@ class DatabaseIndex:
     def get_db(self, dbname) -> Database:
         ...
 
-    def maybe_get_db(self, dbname) -> Optional[Database]:
+    def maybe_get_db(self, dbname) -> Database | None:
         ...
 
     def get_global_schema_pickle(self) -> bytes:
@@ -178,15 +177,15 @@ class DatabaseIndex:
         self,
         dbname: str,
         *,
-        user_schema_pickle: Optional[bytes],
-        schema_version: Optional[uuid.UUID],
-        db_config: Optional[Config],
-        reflection_cache: Optional[Mapping[str, tuple[str, ...]]],
-        backend_ids: Optional[Mapping[str, tuple[int, str]]],
-        extensions: Optional[set[str]],
-        ext_config_settings: Optional[list[config.Setting]],
+        user_schema_pickle: bytes | None,
+        schema_version: uuid.UUID | None,
+        db_config: Config | None,
+        reflection_cache: Mapping[str, tuple[str, ...]] | None,
+        backend_ids: Mapping[str, tuple[int, str]] | None,
+        extensions: set[str] | None,
+        ext_config_settings: list[config.Setting] | None,
         early: bool = False,
-        feature_used_metrics: Optional[Mapping[str, float]] = ...,
+        feature_used_metrics: Mapping[str, float] | None = ...,
     ) -> Database:
         ...
 

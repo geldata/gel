@@ -23,7 +23,6 @@ from typing import (
     Callable,
     Final,
     Generic,
-    Optional,
     TypeVar,
     Iterable,
     Iterator,
@@ -184,7 +183,7 @@ class StructMeta(type):
         setattr(cls, fa, myfields)
         return cls
 
-    def get_field(cls, name: str) -> Optional[Field[Any]]:
+    def get_field(cls, name: str) -> Field[Any] | None:
         return cls._fields.get(name)
 
     def get_fields(cls, sorted: bool = False) -> dict[str, Field[Any]]:

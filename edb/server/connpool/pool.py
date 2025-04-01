@@ -201,8 +201,8 @@ class Block(typing.Generic[C]):
         self.conn_acquired_num -= 1
 
     def try_steal(
-        self, only_older_than: typing.Optional[float] = None
-    ) -> typing.Optional[C]:
+        self, only_older_than: float | None = None
+    ) -> C | None:
         # Try to take one unused connection from the block without blocking.
         # If only_older_than is provided, only the connection that was put in
         # the stack before the given timestamp is returned. None will be
@@ -220,7 +220,7 @@ class Block(typing.Generic[C]):
 
         return self.conn_stack.popleft()
 
-    async def try_acquire(self, *, attempts: int = 1) -> typing.Optional[C]:
+    async def try_acquire(self, *, attempts: int = 1) -> C | None:
         self.conn_waiters_num += 1
         try:
             # Skip the waiters' queue if we can grab a connection from the
@@ -344,13 +344,13 @@ class BasePool(typing.Generic[C]):
 
     _connect_cb: Connector[C]
     _disconnect_cb: Disconnector[C]
-    _stats_cb: typing.Optional[StatsCollector]
+    _stats_cb: StatsCollector | None
 
     _max_capacity: int  # total number of connections allowed in the pool
     _cur_capacity: int  # counter of all connections (with pending) in the pool
 
-    _loop: typing.Optional[asyncio.AbstractEventLoop]
-    _current_snapshot: typing.Optional[Snapshot]
+    _loop: asyncio.AbstractEventLoop | None
+    _current_snapshot: Snapshot | None
 
     _blocks: collections.OrderedDict[str, Block[C]]
     # Mapping from dbname to the Block instances, also used as a queue in a
@@ -374,7 +374,7 @@ class BasePool(typing.Generic[C]):
         connect: Connector[C],
         disconnect: Disconnector[C],
         max_capacity: int,
-        stats_collector: typing.Optional[StatsCollector]=None,
+        stats_collector: StatsCollector | None=None,
     ) -> None:
         self._connect_cb = connect
         self._disconnect_cb = disconnect
@@ -675,7 +675,7 @@ class Pool(BasePool[C]):
     _new_blocks_waitlist: collections.OrderedDict[Block[C], bool]
     _blocks_over_quota: list[Block[C]]
     _nacquires: int
-    _htick: typing.Optional[asyncio.Handle]
+    _htick: asyncio.Handle | None
     _to_drop: list[Block[C]]
     _gc_interval: float  # minimum seconds between GC runs
     _gc_requests: int  # number of GC requests
@@ -686,7 +686,7 @@ class Pool(BasePool[C]):
         connect: Connector[C],
         disconnect: Disconnector[C],
         max_capacity: int,
-        stats_collector: typing.Optional[StatsCollector]=None,
+        stats_collector: StatsCollector | None=None,
         min_idle_time_before_gc: float = config.MIN_IDLE_TIME_BEFORE_GC,
     ) -> None:
         super().__init__(
@@ -1037,7 +1037,7 @@ class Pool(BasePool[C]):
 
     def _find_most_starving_block(
         self,
-    ) -> tuple[typing.Optional[str], typing.Optional[Block[C]]]:
+    ) -> tuple[str | None, Block[C] | None]:
         to_block = None
 
         # Find if there are any newly created blocks waiting for their
@@ -1290,7 +1290,7 @@ class _NaivePool(BasePool[C]):
         connect: Connector[C],
         disconnect: Disconnector[C],
         max_capacity: int,
-        stats_collector: typing.Optional[StatsCollector]=None,
+        stats_collector: StatsCollector | None=None,
         min_idle_time_before_gc: float = config.MIN_IDLE_TIME_BEFORE_GC,
     ) -> None:
         super().__init__(

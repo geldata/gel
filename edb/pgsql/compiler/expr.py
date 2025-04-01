@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Sequence
 
 from edb import errors
 
@@ -220,7 +220,7 @@ def compile_TypeCast(
 
     pg_expr = dispatch.compile(expr.expr, ctx=ctx)
 
-    detail: Optional[pgast.StringConstant] = None
+    detail: pgast.StringConstant | None = None
     if expr.error_message_context is not None:
         detail = pgast.StringConstant(
             val=(
@@ -477,7 +477,7 @@ def compile_operator(
         args: Sequence[pgast.BaseExpr], *,
         ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
     lexpr = rexpr = None
-    result: Optional[pgast.BaseExpr] = None
+    result: pgast.BaseExpr | None = None
 
     if expr.operator_kind is ql_ft.OperatorKind.Infix:
         lexpr, rexpr = args
@@ -568,10 +568,10 @@ def compile_operator(
 
 
 def _cast_operands(
-    lexpr: Optional[pgast.BaseExpr],
-    rexpr: Optional[pgast.BaseExpr],
+    lexpr: pgast.BaseExpr | None,
+    rexpr: pgast.BaseExpr | None,
     sql_types: Sequence[str],
-) -> tuple[Optional[pgast.BaseExpr], Optional[pgast.BaseExpr]]:
+) -> tuple[pgast.BaseExpr | None, pgast.BaseExpr | None]:
 
     if lexpr is not None:
         lexpr = pgast.TypeCast(

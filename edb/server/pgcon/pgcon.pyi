@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
 )
 
 import asyncio
@@ -62,7 +61,7 @@ class PGConnection(asyncio.Protocol):
         *,
         args: tuple[bytes, ...] | list[bytes] = (),
         use_prep_stmt: bool = False,
-        state: Optional[bytes] = None,
+        state: bytes | None = None,
         tx_isolation: edbdef.TxIsolationLevel | None = None,
     ) -> list[tuple[bytes, ...]]: ...
     async def sql_fetch_val(
@@ -71,7 +70,7 @@ class PGConnection(asyncio.Protocol):
         *,
         args: tuple[bytes, ...] | list[bytes] = (),
         use_prep_stmt: bool = False,
-        state: Optional[bytes] = None,
+        state: bytes | None = None,
         tx_isolation: edbdef.TxIsolationLevel | None = None,
     ) -> bytes: ...
     async def sql_fetch_col(
@@ -80,7 +79,7 @@ class PGConnection(asyncio.Protocol):
         *,
         args: tuple[bytes, ...] | list[bytes] = (),
         use_prep_stmt: bool = False,
-        state: Optional[bytes] = None,
+        state: bytes | None = None,
         tx_isolation: edbdef.TxIsolationLevel | None = None,
     ) -> list[bytes]: ...
     async def sql_describe(
@@ -90,7 +89,7 @@ class PGConnection(asyncio.Protocol):
     ) -> tuple[list[int], list[tuple[str, int]]]: ...
     def terminate(self) -> None: ...
     def add_log_listener(self, cb: Callable[[str, str], None]) -> None: ...
-    def get_server_parameter_status(self, parameter: str) -> Optional[str]: ...
+    def get_server_parameter_status(self, parameter: str) -> str | None: ...
     def set_stmt_cache_size(self, size: int) -> None: ...
     def set_server(self, server: object) -> None: ...
     async def signal_sysevent(self, event: str, *, dbname: str) -> None: ...

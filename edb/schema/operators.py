@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from edb import errors
 from edb.common import checked
@@ -127,7 +127,7 @@ class OperatorCommand(
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if field == 'abstract':
             return field
         elif field == 'operator_kind':

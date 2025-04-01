@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     Sequence,
 )
 
@@ -201,7 +200,7 @@ def _compile_schema_fixup(
 async def _upgrade_one(
     ctx: bootstrap.BootstrapContext,
     state: edbcompiler.CompilerState,
-    upgrade_data: Optional[Any],
+    upgrade_data: Any | None,
 ) -> None:
     if not upgrade_data:
         return
@@ -566,9 +565,9 @@ async def _finalize_all(
 
     async def go(
         message: str,
-        finish_message: Optional[str],
+        finish_message: str | None,
         final_command: bytes,
-        inject_failure_on: Optional[str]=None,
+        inject_failure_on: str | None=None,
     ) -> None:
         for database in databases:
             conn = await cluster.connect(

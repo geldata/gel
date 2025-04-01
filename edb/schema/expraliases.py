@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from edb import errors
 from edb.common import parsing
@@ -197,7 +197,7 @@ class AliasLikeCommand(
         context: sd.CommandContext,
         field: so.Field[Any],
         value: Any,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         if field.name in self.ALIAS_LIKE_EXPR_FIELDS:
             rt = self.get_type(self.scls, schema)
             return s_types.type_dummy_expr(rt, schema)
@@ -212,7 +212,7 @@ class AliasLikeCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         is_alter: bool = False,
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
     ) -> tuple[
         sd.Command,
         s_types.TypeShell[s_types.Type],
@@ -223,7 +223,7 @@ class AliasLikeCommand(
 
         # For alters, drop the alias first, use the schema without the alias
         # for compilation of the new alias expr
-        drop_old_types_cmd: Optional[sd.Command] = None
+        drop_old_types_cmd: sd.Command | None = None
         if is_alter:
             drop_old_types_cmd = self._delete_alias_types(
                 self.scls, schema, context)
@@ -471,9 +471,9 @@ def compile_alias_expr(
     classname: sn.QualName,
     schema: s_schema.Schema,
     context: sd.CommandContext,
-    span: Optional[parsing.Span] = None,
+    span: parsing.Span | None = None,
 ) -> irast.Statement:
-    cached: Optional[irast.Statement] = (
+    cached: irast.Statement | None = (
         context.get_cached((expr, classname)))
     if cached is not None:
         return cached
@@ -511,7 +511,7 @@ def _create_alias_types(
     classname: sn.QualName,
     schema: s_schema.Schema,
     is_global: bool,
-    span: Optional[parsing.Span] = None,
+    span: parsing.Span | None = None,
 ) -> tuple[
     sd.Command,
     s_types.TypeShell[s_types.Type],

@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Callable, Optional, Mapping
+from typing import Any, Callable, Mapping
 import pathlib
 
 from edb import errors
@@ -50,7 +50,7 @@ def append_module_aliases(tree, aliases):
 
 def parse_fragment(
     source: qltokenizer.Source | str,
-    filename: Optional[str] = None,
+    filename: str | None = None,
 ) -> qlast.Expr:
     res = parse(tokens.T_STARTFRAGMENT, source, filename=filename)
     assert isinstance(res, qlast.Expr)
@@ -59,7 +59,7 @@ def parse_fragment(
 
 def parse_query(
     source: qltokenizer.Source | str,
-    module_aliases: Optional[Mapping[Optional[str], str]] = None,
+    module_aliases: Mapping[str | None, str] | None = None,
 ) -> qlast.Query:
     """Parse some EdgeQL potentially adding some module aliases.
 
@@ -79,7 +79,7 @@ def parse_query(
 
 def parse_block(
     source: qltokenizer.Source | str,
-    module_aliases: Optional[Mapping[Optional[str], str]] = None,
+    module_aliases: Mapping[str | None, str] | None = None,
 ) -> list[qlast.Base]:
     trees = parse(tokens.T_STARTBLOCK, source)
     if module_aliases:
@@ -117,7 +117,7 @@ def parse_sdl(expr: str):
 def parse(
     start_token: type[tokens.Token],
     source: str | qltokenizer.Source,
-    filename: Optional[str] = None,
+    filename: str | None = None,
 ):
     if not SPEC_LOADED:
         preload_spec()
@@ -178,7 +178,7 @@ def _cst_to_ast(
     cst: rust_parser.CSTNode,
     productions: list[tuple[type, Callable]],
     source: qltokenizer.Source,
-    filename: Optional[str],
+    filename: str | None,
 ) -> Any:
     # Converts CST into AST by calling methods from the grammar classes.
     #

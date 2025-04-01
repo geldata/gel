@@ -21,7 +21,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
 
 import os
 import sys
@@ -38,7 +37,7 @@ def isatty(fileno):
     return os.isatty(fileno)
 
 
-_COLORS: Optional[int] = None
+_COLORS: int | None = None
 
 _colorize = 'auto'
 

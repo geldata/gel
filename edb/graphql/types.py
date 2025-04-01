@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     ClassVar,
-    Optional,
     cast,
 )
 
@@ -179,8 +178,8 @@ def coerce_bigint(value: Any) -> int:
 
 def parse_int_literal(
     ast: gql_ast.Node,
-    _variables: Optional[dict[str, Any]] = None,
-) -> Optional[int]:
+    _variables: dict[str, Any] | None = None,
+) -> int | None:
     if isinstance(ast, gql_ast.IntValueNode):
         return int(ast.value)
     else:
@@ -216,8 +215,8 @@ GraphQLJSON = GraphQLScalarType(
 
 def parse_decimal_literal(
     ast: gql_ast.Node,
-    _variables: Optional[dict[str, Any]] = None,
-) -> Optional[float]:
+    _variables: dict[str, Any] | None = None,
+) -> float | None:
     if isinstance(ast, (gql_ast.FloatValueNode, gql_ast.IntValueNode)):
         return float(ast.value)
     else:
@@ -447,7 +446,7 @@ class GQLCoreSchema:
         else:
             return name
 
-    def _get_description(self, edb_type: s_types.Type) -> Optional[str]:
+    def _get_description(self, edb_type: s_types.Type) -> str | None:
         description_anno = edb_type.get_annotations(self.edb_schema).get(
             self.edb_schema, s_name.QualName('std', 'description'), None)
         if description_anno is not None:
@@ -458,8 +457,8 @@ class GQLCoreSchema:
     def _convert_edb_type(
         self,
         edb_target: s_types.Type,
-    ) -> Optional[GraphQLOutputType]:
-        target: Optional[GraphQLOutputType] = None
+    ) -> GraphQLOutputType | None:
+        target: GraphQLOutputType | None = None
 
         if isinstance(edb_target, s_types.Array):
             subtype = edb_target.get_subtypes(self.edb_schema)[0]
@@ -521,7 +520,7 @@ class GQLCoreSchema:
     def _get_target(
         self,
         ptr: s_pointers.Pointer,
-    ) -> Optional[GraphQLOutputType]:
+    ) -> GraphQLOutputType | None:
         edb_target = ptr.get_target(self.edb_schema)
         if edb_target is None:
             raise AssertionError(f'unexpected abstract pointer: {ptr!r}')
@@ -931,7 +930,7 @@ class GQLCoreSchema:
         pointers = edb_type.get_pointers(self.edb_schema)
         names = sorted(pointers.keys(self.edb_schema))
         # This is just a heavily re-used type variable
-        target: GraphQLInputType | Optional[GraphQLOutputType]
+        target: GraphQLInputType | GraphQLOutputType | None
         for unqual_name in names:
             name = str(unqual_name)
             if name == '__type__':
@@ -1072,7 +1071,7 @@ class GQLCoreSchema:
         if not ptr.get_required(self.edb_schema):
             fields['clear'] = GraphQLInputField(GraphQLBoolean)
 
-        bt_name: Optional[s_name.QualName]
+        bt_name: s_name.QualName | None
         if isinstance(edb_target, s_scalars.ScalarType):
             base_target = edb_target.get_topmost_concrete_base(self.edb_schema)
             bt_name = base_target.get_name(self.edb_schema)
@@ -1610,9 +1609,9 @@ class GQLTypeMeta(type):
 
 class GQLBaseType(metaclass=GQLTypeMeta):
 
-    edb_type: ClassVar[Optional[s_name.QualName]] = None
-    _edb_base: Optional[s_types.Type]
-    _module: Optional[str]
+    edb_type: ClassVar[s_name.QualName | None] = None
+    _edb_base: s_types.Type | None
+    _module: str | None
     _fields: dict[tuple[str, bool], GQLBaseType]
     _shadow_fields: tuple[str, ...]
 
@@ -1620,8 +1619,8 @@ class GQLBaseType(metaclass=GQLTypeMeta):
         self,
         schema: GQLCoreSchema,
         *,
-        name: Optional[str] = None,
-        edb_base: Optional[s_types.Type] = None,
+        name: str | None = None,
+        edb_base: s_types.Type | None = None,
         dummy: bool = False,
     ) -> None:
         self._shadow_fields = ()
@@ -1736,15 +1735,15 @@ class GQLBaseType(metaclass=GQLTypeMeta):
         return self._name.split('::')[-1]
 
     @property
-    def module(self) -> Optional[str]:
+    def module(self) -> str | None:
         return self._module
 
     @property
-    def edb_base(self) -> Optional[s_types.Type]:
+    def edb_base(self) -> s_types.Type | None:
         return self._edb_base
 
     @property
-    def edb_base_name_ast(self) -> Optional[qlast.ObjectRef]:
+    def edb_base_name_ast(self) -> qlast.ObjectRef | None:
         if self.edb_base is None:
             return None
         if isinstance(self.edb_base, (s_types.Array,
@@ -1824,7 +1823,7 @@ class GQLBaseType(metaclass=GQLTypeMeta):
     def is_field_shadowed(self, name: str) -> bool:
         return name in self._shadow_fields
 
-    def get_field_type(self, name: str) -> Optional[GQLBaseType]:
+    def get_field_type(self, name: str) -> GQLBaseType | None:
         if self.dummy:
             return None
 
@@ -1880,7 +1879,7 @@ class GQLBaseType(metaclass=GQLTypeMeta):
 
     def get_template(
         self,
-    ) -> tuple[qlast.Base, Optional[qlast.Expr], Optional[qlast.SelectQuery]]:
+    ) -> tuple[qlast.Base, qlast.Expr | None, qlast.SelectQuery | None]:
         '''Provide an EQL AST template to be filled.
 
         Return the overall ast, a reference to where the shape element
@@ -1910,9 +1909,9 @@ class GQLBaseType(metaclass=GQLTypeMeta):
         parent: qlast.Base,
         has_shape: bool = False,
     ) -> tuple[
-        Optional[qlast.Base],
-        Optional[qlast.Expr],
-        Optional[qlast.SelectQuery],
+        qlast.Base | None,
+        qlast.Expr | None,
+        qlast.SelectQuery | None,
     ]:
         eql = shape = filterable = None
         if self.dummy:
@@ -1961,7 +1960,7 @@ class GQLBaseType(metaclass=GQLTypeMeta):
     def get_field_cardinality(
         self,
         name: str,
-    ) -> Optional[qltypes.SchemaCardinality]:
+    ) -> qltypes.SchemaCardinality | None:
         if not self.is_field_shadowed(name):
             return None
 
@@ -2003,8 +2002,8 @@ class GQLBaseQuery(GQLBaseType):
         self,
         schema: GQLCoreSchema,
         *,
-        name: Optional[str] = None,
-        edb_base: Optional[s_types.Type] = None,
+        name: str | None = None,
+        edb_base: s_types.Type | None = None,
         dummy: bool = False,
     ) -> None:
         self.modules = schema.modules
@@ -2031,7 +2030,7 @@ class GQLBaseQuery(GQLBaseType):
 class GQLQuery(GQLBaseQuery):
     edb_type = s_name.QualName(module='__graphql__', name='Query')
 
-    def get_field_type(self, name: str) -> Optional[GQLBaseType]:
+    def get_field_type(self, name: str) -> GQLBaseType | None:
         fkey = (name, self.dummy)
         target = None
 
@@ -2064,7 +2063,7 @@ class GQLQuery(GQLBaseQuery):
 class GQLMutation(GQLBaseQuery):
     edb_type = s_name.QualName(module='__graphql__', name='Mutation')
 
-    def get_field_type(self, name: str) -> Optional[GQLBaseType]:
+    def get_field_type(self, name: str) -> GQLBaseType | None:
         fkey = (name, self.dummy)
         target = None
 

@@ -1,6 +1,6 @@
 from . import data_ops as e
 from . import expr_ops as eops
-from typing import Optional, Callable
+from typing import Callable
 from . import module_ops as mops
 from ..data import expr_to_str as pp
 from functools import reduce
@@ -303,7 +303,7 @@ def recursive_instantiate_tp(
     Used to compute parametric function's return type.
     """
 
-    def inst_func(tp: e.Tp) -> Optional[e.Tp]:
+    def inst_func(tp: e.Tp) -> e.Tp | None:
         if isinstance(tp, e.SomeTp):
             if tp.index in some_tp_mapping:
                 return some_tp_mapping[tp.index]
@@ -327,7 +327,7 @@ def assert_cardinal_subtype(cm: e.CMMode, cm2: e.CMMode) -> None:
 def get_runtime_tp(tp: e.Tp) -> e.Tp:
     """Drops defaults and computed"""
 
-    def map_func(candidate: e.Tp) -> Optional[e.Tp]:
+    def map_func(candidate: e.Tp) -> e.Tp | None:
         match candidate:
             case e.ComputableTp(expr=_, tp=c_tp):
                 return get_runtime_tp(c_tp)

@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Callable,
-    Optional,
     Iterable,
     Mapping,
     Sequence,
@@ -254,7 +253,7 @@ class MetaCommand(sd.Command, metaclass=CommandMeta):
     @classmethod
     def maybe_trampoline(
         cls,
-        f: Optional[dbops.Function],
+        f: dbops.Function | None,
         context: sd.CommandContext,
     ) -> None:
         if isinstance(f, trampoline.VersionedFunction):
@@ -1340,7 +1339,7 @@ class FunctionCommand(MetaCommand):
         func: s_funcs.Function,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-    ) -> tuple[Optional[dbops.Function], bool]:
+    ) -> tuple[dbops.Function | None, bool]:
         if func.get_volatility(schema) == ql_ft.Volatility.Modifying:
             # Modifying functions cannot be compiled correctly and should be
             # inlined at the call point.
@@ -1557,7 +1556,7 @@ class FunctionCommand(MetaCommand):
         else:
             func_language = func.get_language(schema)
 
-            dbf: Optional[dbops.Function]
+            dbf: dbops.Function | None
             if func_language is ql_ast.Language.SQL:
                 dbf = self.compile_sql_function(func, schema)
             elif func_language is ql_ast.Language.EdgeQL:
@@ -2107,7 +2106,7 @@ class ConstraintCommand(MetaCommand):
         constraint: s_constr.Constraint,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
         *,
         create_triggers_if_needed: bool = True,
     ) -> dbops.Command:
@@ -2133,7 +2132,7 @@ class ConstraintCommand(MetaCommand):
         constraint: s_constr.Constraint,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
         *,
         create_triggers_if_needed: bool = True,
     ) -> dbops.CommandGroup:
@@ -2167,7 +2166,7 @@ class ConstraintCommand(MetaCommand):
         orig_schema: s_schema.Schema,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
     ) -> dbops.CommandGroup:
         orig_subject = constraint.get_subject(orig_schema)
         assert orig_subject is not None
@@ -2204,7 +2203,7 @@ class ConstraintCommand(MetaCommand):
         cls,
         constraint: s_constr.Constraint,
         schema: s_schema.Schema,
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
     ) -> dbops.Command:
         op = dbops.CommandGroup()
         if cls.constraint_is_effective(schema, constraint):
@@ -2224,7 +2223,7 @@ class ConstraintCommand(MetaCommand):
         cls,
         constraint: s_constr.Constraint,
         schema: s_schema.Schema,
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
     ) -> dbops.Command:
 
         if cls.constraint_is_effective(schema, constraint):
@@ -2411,7 +2410,7 @@ class CreateScalarType(ScalarTypeMetaCommand,
     def create_scalar(
         cls,
         scalar: s_scalars.ScalarType,
-        default: Optional[s_expr.Expression],
+        default: s_expr.Expression | None,
         schema: s_schema.Schema,
         context: sd.CommandContext,
     ) -> dbops.Command:
@@ -2555,10 +2554,10 @@ class RebaseScalarType(
 
 class AlterScalarType(ScalarTypeMetaCommand, adapts=s_scalars.AlterScalarType):
 
-    problematic_refs: Optional[tuple[
+    problematic_refs: tuple[
         tuple[so.Object, ...],
-        dict[s_props.Property, s_types.TypeShell],
-    ]]
+        dict[s_props.Property, s_types.TypeShell]
+    ] | None
 
     def _get_problematic_refs(
         self,
@@ -2566,10 +2565,10 @@ class AlterScalarType(ScalarTypeMetaCommand, adapts=s_scalars.AlterScalarType):
         context: sd.CommandContext,
         *,
         composite_only: bool,
-    ) -> Optional[tuple[
+    ) -> tuple[
         tuple[so.Object, ...],
-        dict[s_props.Property, s_types.TypeShell],
-    ]]:
+        dict[s_props.Property, s_types.TypeShell]
+    ] | None:
         """Find problematic references to this scalar type that need handled.
 
         This is used to work around two irritating limitations of Postgres:
@@ -3106,7 +3105,7 @@ if TYPE_CHECKING:
         dbops.Command
         | Callable[
             [s_schema.Schema, sd.CommandContext],
-            Optional[dbops.Command]
+            dbops.Command | None
         ]
     )
 
@@ -3292,7 +3291,7 @@ class CompositeMetaCommand(MetaCommand):
         schema: s_schema.Schema,
         obj: CompositeObject,
         aspect: str='table',
-    ) -> Optional[trampoline.TrampolineView]:
+    ) -> trampoline.TrampolineView | None:
         versioned_name = common.get_backend_name(
             schema, obj, aspect=aspect, catenate=False
         )
@@ -3337,8 +3336,8 @@ class IndexCommand(MetaCommand):
 def get_index_compile_options(
     index: s_indexes.Index,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
-    schema_object_context: Optional[type[so.Object_T]],
+    modaliases: Mapping[str | None, str],
+    schema_object_context: type[so.Object_T] | None,
 ) -> qlcompiler.CompilerOptions:
     subject = index.get_subject(schema)
     assert isinstance(subject, (s_types.Type, s_pointers.Pointer))
@@ -3357,7 +3356,7 @@ def get_reindex_sql(
     obj: s_objtypes.ObjectType,
     restore_desc: sertypes.ShapeDesc,
     schema: s_schema.Schema,
-) -> Optional[str]:
+) -> str | None:
     """Generate SQL statement that repopulates the index after a restore.
 
     Currently this only applies to FTS indexes, and it only fires if
@@ -3393,7 +3392,7 @@ class CreateIndex(IndexCommand, adapts=s_indexes.CreateIndex):
             index, schema, context.modaliases, cls.get_schema_metaclass()
         )
 
-        index_sexpr: Optional[s_expr.Expression] = index.get_expr(schema)
+        index_sexpr: s_expr.Expression | None = index.get_expr(schema)
         assert index_sexpr
         index_expr = index_sexpr.ensure_compiled(
             schema=schema,
@@ -3568,8 +3567,9 @@ class DeleteIndex(IndexCommand, adapts=s_indexes.DeleteIndex):
             # Don't do anything for abstract indexes
             return schema
 
-        source: Optional[
-            sd.CommandContextToken[s_sources.SourceCommand[s_sources.Source]]]
+        source: sd.CommandContextToken[
+            s_sources.SourceCommand[s_sources.Source]
+        ] | None
         # XXX: I think to make these work, the type vars in the Commands
         # would need to be covariant.
         source = context.get(s_links.LinkCommandContext)  # type: ignore
@@ -4179,7 +4179,7 @@ class PointerMetaCommand(
         orig_schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        fill_expr: Optional[s_expr.Expression],
+        fill_expr: s_expr.Expression | None,
         is_default: bool=False,
     ) -> None:
         new_required = self.scls.get_required(schema)
@@ -4586,7 +4586,7 @@ class PointerMetaCommand(
         allow_globals: bool=False,
     ) -> tuple[
         str,  # CTE SQL
-        Optional[str],  # Query SQL
+        str | None,  # Query SQL
         bool,  # is_nullable
     ]:
         """
@@ -5458,7 +5458,7 @@ class PropertyMetaCommand(PointerMetaCommand[s_props.Property]):
     def _create_property(
         self,
         prop: s_props.Property,
-        src: Optional[sd.ObjectCommandContext[s_sources.Source]],
+        src: sd.ObjectCommandContext[s_sources.Source] | None,
         schema: s_schema.Schema,
         orig_schema: s_schema.Schema,
         context: sd.CommandContext,

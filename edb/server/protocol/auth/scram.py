@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import NamedTuple, Optional, TYPE_CHECKING
+from typing import NamedTuple, TYPE_CHECKING
 import base64
 import collections
 import hashlib
@@ -100,7 +100,7 @@ def handle_request(
         try:
             bare_offset: int
             cb_flag: bool
-            authzid: Optional[bytes]
+            authzid: bytes | None
             username_bytes: bytes
             client_nonce: str
             (

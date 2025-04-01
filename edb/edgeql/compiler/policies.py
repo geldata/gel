@@ -22,7 +22,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
 
 from edb.ir import ast as irast
 
@@ -93,7 +92,7 @@ def get_access_policies(
 def has_own_policies(
     *,
     stype: s_objtypes.ObjectType,
-    skip_from: Optional[s_objtypes.ObjectType]=None,
+    skip_from: s_objtypes.ObjectType | None=None,
     ctx: context.ContextLevel,
 ) -> bool:
     # TODO: some kind of caching or precomputation
@@ -128,7 +127,7 @@ def compile_pol(
     """
     schema = ctx.env.schema
 
-    expr_field: Optional[s_expr.Expression] = pol.get_expr(schema)
+    expr_field: s_expr.Expression | None = pol.get_expr(schema)
     if expr_field:
         expr = expr_field.parse()
     else:
@@ -191,7 +190,7 @@ def get_rewrite_filter(
     *,
     mode: qltypes.AccessKind,
     ctx: context.ContextLevel,
-) -> Optional[qlast.Expr]:
+) -> qlast.Expr | None:
     schema = ctx.env.schema
     pols = get_access_policies(stype, ctx=ctx)
     if not pols:
@@ -372,7 +371,7 @@ def try_type_rewrite(
         ]
 
     # If we have multiple sets, union them together
-    rewritten_set: Optional[irast.Set]
+    rewritten_set: irast.Set | None
     if len(sets) > 1:
         with ctx.new() as subctx:
             subctx.expr_exposed = context.Exposure.UNEXPOSED
@@ -393,7 +392,7 @@ def compile_dml_write_policies(
     result: irast.Set,
     mode: qltypes.AccessKind, *,
     ctx: context.ContextLevel,
-) -> Optional[irast.WritePolicies]:
+) -> irast.WritePolicies | None:
     """Compile policy filters and wrap them into irast.WritePolicies"""
     pols = get_access_policies(stype, ctx=ctx)
     if not pols:
@@ -435,7 +434,7 @@ def compile_dml_read_policies(
     mode: qltypes.AccessKind,
     *,
     ctx: context.ContextLevel,
-) -> Optional[irast.ReadPolicyExpr]:
+) -> irast.ReadPolicyExpr | None:
     """Compile a policy filter for a DML statement at a particular type"""
     if not get_access_policies(stype, ctx=ctx):
         return None

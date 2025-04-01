@@ -18,7 +18,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
 import sys
 import click
 
@@ -34,7 +33,7 @@ from edb.tools.edb import edbcommands
     help="Use stdio for LSP. This is currently the only transport.",
 )
 @click.argument("options", type=str, default='{}')
-def main(options: Optional[str], *, version: bool, stdio: bool):
+def main(options: str | None, *, version: bool, stdio: bool):
     # import language_server only if we are using this command
     # otherwise this breaks when pygls is not installed
     from edb.language_server import main as ls_main

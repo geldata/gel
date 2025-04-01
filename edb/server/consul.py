@@ -17,7 +17,6 @@
 #
 
 from __future__ import annotations
-from typing import Optional
 
 import asyncio
 import json
@@ -46,7 +45,7 @@ class ConsulKVProtocol(asyncwatcher.AsyncWatcherProtocol):
         self._key = key
         self._watcher = watcher
         self._parser = httptools.HttpResponseParser(self)
-        self._last_modify_index: Optional[str] = None
+        self._last_modify_index: str | None = None
         self._buffers: list[bytes] = []
 
     def data_received(self, data: bytes) -> None:

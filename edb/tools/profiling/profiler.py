@@ -25,7 +25,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     TypeVar,
     AbstractSet,
     Iterator,
@@ -91,7 +90,7 @@ if TYPE_CHECKING:
     Stats = dict[FunctionID, StatWithCallers]
     Caller = FunctionID
     Callee = FunctionID
-    Call = tuple[Caller, Optional[Callee]]
+    Call = tuple[Caller, Callee | None]
     CallCounts = dict[Caller, dict[Callee, CallCount]]
 
 
@@ -103,7 +102,7 @@ class profile:
         *,
         prefix: str = PREFIX,
         suffix: str = PROF_SUFFIX,
-        dir: Optional[str] = None,
+        dir: str | None = None,
         save_every_n_calls: int = 1,
     ):
         """Create the decorator.
@@ -120,8 +119,8 @@ class profile:
         self.save_every_n_calls = save_every_n_calls
         self.n_calls = 0
         self._dir: str | pathlib.Path | None = dir
-        self._profiler: Optional[cProfile.Profile] = None
-        self._dump_file_path: Optional[str] = None
+        self._profiler: cProfile.Profile | None = None
+        self._dump_file_path: str | None = None
         self._profiler_enabled = False
 
     def __call__(self, func: T) -> T:
@@ -710,7 +709,7 @@ def build_svg_blocks(
         origin: float = 0,
         call_stack: tuple[FunctionID, ...] = (),
         parent_call_count: int = 1,
-        parent_block: Optional[Block] = None,
+        parent_block: Block | None = None,
     ) -> None:
         _, _, func_tt, func_tc = scaled_timings
         pcc = parent_call_count
@@ -780,7 +779,7 @@ def build_svg_blocks(
         ids: Sequence[FunctionID],
         *,
         level: int = 0,
-        to: Optional[FunctionID] = None,
+        to: FunctionID | None = None,
         origin: float = 0,
         visited: AbstractSet[Call] = frozenset(),
         parent_width: float = 0,
@@ -837,7 +836,7 @@ def build_svg_blocks_by_memory(
     maxw: int,
     level: int = 0,
     x: int = 0,
-    scope_cache: Optional[ScopeCache] = None,
+    scope_cache: ScopeCache | None = None,
 ) -> Iterator[Block]:
     if scope_cache is None:
         scope_cache = ScopeCache()

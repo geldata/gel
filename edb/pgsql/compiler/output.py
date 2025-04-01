@@ -20,7 +20,7 @@
 """Compilation helpers for output formatting and serialization."""
 
 from __future__ import annotations
-from typing import Optional, Sequence
+from typing import Sequence
 
 import itertools
 
@@ -45,7 +45,7 @@ _JSON_FORMATS = {context.OutputFormat.JSON, context.OutputFormat.JSON_ELEMENTS}
 def _get_json_func(
     name: str,
     *,
-    output_format: Optional[context.OutputFormat] = None,
+    output_format: context.OutputFormat | None = None,
     env: context.Environment,
 ) -> tuple[str, ...]:
 
@@ -69,7 +69,7 @@ def _build_json(
     *,
     null_safe: bool = False,
     ser_safe: bool = False,
-    nullable: Optional[bool] = None,
+    nullable: bool | None = None,
     env: context.Environment,
 ) -> pgast.BaseExpr:
     # PostgreSQL has a limit on the maximum number of arguments
@@ -658,7 +658,7 @@ def _row(
 
 def output_as_value(
         expr: pgast.BaseExpr, *,
-        ser_typeref: Optional[irast.TypeRef] = None,
+        ser_typeref: irast.TypeRef | None = None,
         env: context.Environment) -> pgast.BaseExpr:
     """Format an expression as a proper value.
 

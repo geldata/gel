@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, overload, TYPE_CHECKING
+from typing import overload, TYPE_CHECKING
 
 from edgedb import scram
 
@@ -167,7 +167,7 @@ class CreateRole(RoleCommand, inheriting.CreateInheritingObject[Role]):
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if (
             field == 'superuser'
             and issubclass(astnode, qlast.CreateRole)
@@ -202,9 +202,9 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        name: Optional[sn.Name] = None,
+        name: sn.Name | None = None,
         default: Role | so.NoDefaultT = so.NoDefault,
-        span: Optional[qlast.Span] = None,
+        span: qlast.Span | None = None,
     ) -> Role:
         ...
 
@@ -214,10 +214,10 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        name: Optional[sn.Name] = None,
+        name: sn.Name | None = None,
         default: None = None,
-        span: Optional[qlast.Span] = None,
-    ) -> Optional[Role]:
+        span: qlast.Span | None = None,
+    ) -> Role | None:
         ...
 
     def get_object(
@@ -225,10 +225,10 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        name: Optional[sn.Name] = None,
+        name: sn.Name | None = None,
         default: Role | so.NoDefaultT | None = so.NoDefault,
-        span: Optional[qlast.Span] = None,
-    ) -> Optional[Role]:
+        span: qlast.Span | None = None,
+    ) -> Role | None:
         # On an ALTER ROLE edgedb, if 'edgedb' doesn't exist, fall
         # back to 'admin'. This mirrors what we do for login and
         # avoids breaking setup scripts.

@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from edb import errors
 
@@ -238,7 +238,7 @@ class AccessPolicyCommand(
         context: sd.CommandContext,
         field: so.Field[Any],
         value: Any,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         if field.name in {'expr', 'condition'}:
             return s_expr.Expression(text='false')
         else:
@@ -289,7 +289,7 @@ class CreateAccessPolicy(
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if (
             field in ('expr', 'condition', 'action', 'access_kinds')
             and issubclass(astnode, qlast.CreateAccessPolicy)

@@ -24,7 +24,6 @@ import json
 from typing import (
     Any,
     Callable,
-    Optional,
     TypeVar,
     Iterable,
     Mapping,
@@ -220,7 +219,7 @@ class Operation(NamedTuple):
 
     def coerce_global_value(
         self, *, allow_missing: bool = False
-    ) -> Optional[bytes]:
+    ) -> bytes | None:
         if allow_missing and self.value is None:
             return None
         else:
@@ -446,7 +445,7 @@ def to_json_obj(
     spec: spec.Spec,
     storage: Mapping[str, SettingValue],
     *,
-    setting_filter: Optional[Callable[[SettingValue], bool]] = None,
+    setting_filter: Callable[[SettingValue], bool] | None = None,
     include_source: bool = True,
 ) -> dict[str, Any]:
     dct = {}
@@ -470,7 +469,7 @@ def to_json(
     spec: spec.Spec,
     storage: Mapping[str, SettingValue],
     *,
-    setting_filter: Optional[Callable[[SettingValue], bool]] = None,
+    setting_filter: Callable[[SettingValue], bool] | None = None,
     include_source: bool = True,
 ) -> str:
     dct = to_json_obj(

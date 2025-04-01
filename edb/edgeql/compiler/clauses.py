@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Sequence
 
 from edb.edgeql import ast as qlast
 from edb.ir import ast as irast
@@ -39,8 +39,8 @@ from . import pathctx
 
 
 def compile_where_clause(
-    where: Optional[qlast.Base], *, ctx: context.ContextLevel
-) -> Optional[irast.Set]:
+    where: qlast.Base | None, *, ctx: context.ContextLevel
+) -> irast.Set | None:
 
     if where is None:
         return None
@@ -60,8 +60,8 @@ def compile_where_clause(
 
 
 def compile_orderby_clause(
-    sortexprs: Optional[Sequence[qlast.SortExpr]], *, ctx: context.ContextLevel
-) -> Optional[list[irast.SortExpr]]:
+    sortexprs: Sequence[qlast.SortExpr] | None, *, ctx: context.ContextLevel
+) -> list[irast.SortExpr] | None:
 
     if not sortexprs:
         return None
@@ -130,8 +130,8 @@ def compile_orderby_clause(
 
 
 def compile_limit_offset_clause(
-    expr: Optional[qlast.Base], *, ctx: context.ContextLevel
-) -> Optional[irast.Set]:
+    expr: qlast.Base | None, *, ctx: context.ContextLevel
+) -> irast.Set | None:
     if expr is None:
         ir_set = None
     else:

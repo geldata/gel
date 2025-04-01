@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
@@ -146,7 +146,7 @@ class Link(
 
     def get_source(
         self, schema: s_schema.Schema
-    ) -> Optional[s_objtypes.ObjectType]:
+    ) -> s_objtypes.ObjectType | None:
         return self.get_field_value(  # type: ignore[no-any-return]
             schema, 'source')
 
@@ -309,8 +309,8 @@ class LinkCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         node = super()._get_ast(schema, context, parent_node=parent_node)
         # __type__ link is special, and while it exists on every object
         # it does not have a defined default in the schema (and therefore
@@ -365,7 +365,7 @@ class CreateLink(
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if (
             field == 'required'
             and issubclass(astnode, qlast.CreateConcreteLink)
@@ -393,7 +393,7 @@ class CreateLink(
             # AlterConcreteLink, which requires different handling.
             if isinstance(node, qlast.CreateConcreteLink):
                 if not node.target:
-                    expr: Optional[s_expr.Expression] = (
+                    expr: s_expr.Expression | None = (
                         self.get_attribute_value('expr')
                     )
                     if expr is not None:
@@ -727,8 +727,8 @@ class DeleteLink(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if self.get_orig_attribute_value('from_alias'):
             # This is an alias type, appropriate DDL would be generated
             # from the corresponding Alter/DeleteAlias node.

@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Sequence
 
 import random
 
@@ -46,10 +46,10 @@ def get_volatility_ref(
         path_id: irast.PathId,
         stmt: pgast.SelectStmt,
         *,
-        ctx: context.CompilerContextLevel) -> Optional[pgast.BaseExpr]:
+        ctx: context.CompilerContextLevel) -> pgast.BaseExpr | None:
     """Produce an appropriate volatility_ref from a path_id."""
 
-    ref: Optional[pgast.BaseExpr] = relctx.maybe_get_path_var(
+    ref: pgast.BaseExpr | None = relctx.maybe_get_path_var(
         stmt, path_id, aspect=pgce.PathAspect.ITERATOR, ctx=ctx)
     if not ref:
         ref = relctx.maybe_get_path_var(
@@ -86,7 +86,7 @@ def get_volatility_ref(
 
 
 def setup_iterator_volatility(
-        iterator: Optional[irast.Set | pgast.IteratorCTE], *,
+        iterator: irast.Set | pgast.IteratorCTE | None, *,
         ctx: context.CompilerContextLevel) -> None:
     if iterator is None:
         return
@@ -422,8 +422,8 @@ def compile_orderby_clause(
 
 
 def compile_limit_offset_clause(
-        ir_set: Optional[irast.Set], *,
-        ctx: context.CompilerContextLevel) -> Optional[pgast.BaseExpr]:
+        ir_set: irast.Set | None, *,
+        ctx: context.CompilerContextLevel) -> pgast.BaseExpr | None:
     if ir_set is None:
         return None
 

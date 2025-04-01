@@ -25,7 +25,6 @@ from typing import (
     ClassVar,
     Literal,
     NoReturn,
-    Optional,
     Sequence,
     TYPE_CHECKING,
 )
@@ -73,7 +72,7 @@ class AIExtError(Exception):
     def __init__(
         self,
         *args: object,
-        json: Optional[dict[str, Any]] = None,
+        json: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(*args)
         self._json = json
@@ -560,7 +559,7 @@ class ProviderScheduler(rs.Scheduler[EmbeddingsData]):
 
     async def get_params(
         self, context: rs.Context,
-    ) -> Optional[Sequence[EmbeddingsParams]]:
+    ) -> Sequence[EmbeddingsParams] | None:
         assert isinstance(context, ProviderContext)
         rv = await _generate_embeddings_params(
             context.db,
@@ -604,8 +603,8 @@ class EmbeddingsParams(rs.Params[EmbeddingsData]):
     model_name: str
     inputs: list[tuple[PendingEmbedding, str]]
     token_count: int
-    shortening: Optional[int]
-    user: Optional[str]
+    shortening: int | None
+    user: str | None
 
     def costs(self) -> dict[str, int]:
         return {
@@ -619,7 +618,7 @@ class EmbeddingsParams(rs.Params[EmbeddingsData]):
 
 class EmbeddingsRequest(rs.Request[EmbeddingsData]):
 
-    async def run(self) -> Optional[rs.Result[EmbeddingsData]]:
+    async def run(self) -> rs.Result[EmbeddingsData] | None:
         task_name = _task_name.get()
 
         try:
@@ -650,8 +649,8 @@ class EmbeddingsRequest(rs.Request[EmbeddingsData]):
 
 class EmbeddingsResult(rs.Result[EmbeddingsData]):
 
-    pgconn: Optional[Any] = None
-    pending_entries: Optional[list[PendingEmbedding]] = None
+    pgconn: Any | None = None
+    pending_entries: list[PendingEmbedding] | None = None
 
     async def finalize(self) -> None:
         if isinstance(self.data, rs.Error):
@@ -690,8 +689,8 @@ async def _generate_embeddings_params(
     provider_models: list[str],
     model_excluded_ids: dict[str, list[str]],
     *,
-    tokens_rate_limit: Optional[int | Literal['unlimited']],
-) -> Optional[list[EmbeddingsParams]]:
+    tokens_rate_limit: int | Literal["unlimited"] | None,
+) -> list[EmbeddingsParams] | None:
     task_name = _task_name.get()
 
     try:
@@ -871,7 +870,7 @@ class PendingEmbedding:
     text: str
     target_rel: str
     target_attr: str
-    target_dims_shortening: Optional[int]
+    target_dims_shortening: int | None
     truncate_to_max: bool
 
 
@@ -1069,8 +1068,8 @@ async def _generate_embeddings(
     provider: ProviderConfig,
     model_name: str,
     inputs: list[str],
-    shortening: Optional[int],
-    user: Optional[str],
+    shortening: int | None,
+    user: str | None,
     http_client: http.HttpClient,
 ) -> EmbeddingsResult:
     task_name = _task_name.get()
@@ -1096,8 +1095,8 @@ async def _generate_openai_embeddings(
     provider: ProviderConfig,
     model_name: str,
     inputs: list[str],
-    shortening: Optional[int],
-    user: Optional[str],
+    shortening: int | None,
+    user: str | None,
     http_client: http.HttpClient,
 ) -> EmbeddingsResult:
 
@@ -1150,7 +1149,7 @@ async def _generate_openai_embeddings(
 def _read_openai_header_field(
     result: Any,
     field_names: list[str],
-) -> Optional[int]:
+) -> int | None:
     # Return the value of the first requested field available
     try:
         for field_name in field_names:
@@ -1220,16 +1219,16 @@ async def _start_chat(
     model_name: str,
     messages: list[dict[str, Any]],
     stream: bool,
-    temperature: Optional[float],
-    top_p: Optional[float],
-    max_tokens: Optional[int],
-    seed: Optional[int],
-    safe_prompt: Optional[bool],
-    top_k: Optional[int],
-    logit_bias: Optional[dict[int, int]],
-    logprobs: Optional[bool],
-    user: Optional[str],
-    tools: Optional[list[dict[str, Any]]],
+    temperature: float | None,
+    top_p: float | None,
+    max_tokens: int | None,
+    seed: int | None,
+    safe_prompt: bool | None,
+    top_k: int | None,
+    logit_bias: dict[int, int] | None,
+    logprobs: bool | None,
+    user: str | None,
+    tools: list[dict[str, Any]] | None,
 ) -> None:
     if provider.api_style == "OpenAI":
         await _start_openai_chat(
@@ -1316,15 +1315,15 @@ async def _start_openai_like_chat(
     model_name: str,
     messages: list[dict[str, Any]],
     stream: bool,
-    temperature: Optional[float],
-    top_p: Optional[float],
-    max_tokens: Optional[int],
-    seed: Optional[int],
-    safe_prompt: Optional[bool],
-    logit_bias: Optional[dict[int, int]],
-    logprobs: Optional[bool],
-    user: Optional[str],
-    tools: Optional[list[dict[str, Any]]],
+    temperature: float | None,
+    top_p: float | None,
+    max_tokens: int | None,
+    seed: int | None,
+    safe_prompt: bool | None,
+    logit_bias: dict[int, int] | None,
+    logprobs: bool | None,
+    user: str | None,
+    tools: list[dict[str, Any]] | None,
 ) -> None:
     isOpenAI = provider_name == "builtin::openai"
 
@@ -1589,15 +1588,15 @@ async def _start_openai_chat(
     model_name: str,
     messages: list[dict[str, Any]],
     stream: bool,
-    temperature: Optional[float],
-    top_p: Optional[float],
-    max_tokens: Optional[int],
-    seed: Optional[int],
-    safe_prompt: Optional[bool],
-    logit_bias: Optional[dict[int, int]],
-    logprobs: Optional[bool],
-    user: Optional[str],
-    tools: Optional[list[dict[str, Any]]],
+    temperature: float | None,
+    top_p: float | None,
+    max_tokens: int | None,
+    seed: int | None,
+    safe_prompt: bool | None,
+    logit_bias: dict[int, int] | None,
+    logprobs: bool | None,
+    user: str | None,
+    tools: list[dict[str, Any]] | None,
 ) -> None:
     headers = {
         "Authorization": f"Bearer {provider.secret}",
@@ -1645,11 +1644,11 @@ async def _start_anthropic_chat(
     model_name: str,
     messages: list[dict[str, Any]],
     stream: bool,
-    temperature: Optional[float],
-    top_p: Optional[float],
-    top_k: Optional[int],
-    tools: Optional[list[dict[str, Any]]],
-    max_tokens: Optional[int],
+    temperature: float | None,
+    top_p: float | None,
+    top_k: int | None,
+    tools: list[dict[str, Any]] | None,
+    max_tokens: int | None,
 ) -> None:
     headers = {
         "x-api-key": f"{provider.secret}",
@@ -2370,8 +2369,8 @@ async def _edgeql_query_json(
     *,
     db: dbview.Database,
     query: str,
-    variables: Optional[dict[str, Any]] = None,
-    globals_: Optional[dict[str, Any]] = None,
+    variables: dict[str, Any] | None = None,
+    globals_: dict[str, Any] | None = None,
 ) -> list[Any]:
     try:
         result = await execute.parse_execute_json(
@@ -2396,8 +2395,8 @@ async def _db_error(
     db: dbview.Database,
     ex: Exception,
     *,
-    errcls: Optional[type[AIExtError]] = None,
-    context: Optional[str] = None,
+    errcls: type[AIExtError] | None = None,
+    context: str | None = None,
 ) -> NoReturn:
     if debug.flags.server:
         markup.dump(ex)

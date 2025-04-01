@@ -22,7 +22,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     TypeVar,
     AbstractSet,
     Mapping,
@@ -92,7 +91,7 @@ def is_union_expr(ir: irast.Base) -> bool:
     )
 
 
-def is_empty_array_expr(ir: Optional[irast.Base]) -> TypeGuard[irast.Array]:
+def is_empty_array_expr(ir: irast.Base | None) -> TypeGuard[irast.Array]:
     """Return True if the given *ir* expression is an empty array expression.
     """
     return (
@@ -102,7 +101,7 @@ def is_empty_array_expr(ir: Optional[irast.Base]) -> TypeGuard[irast.Array]:
 
 
 def is_untyped_empty_array_expr(
-    ir: Optional[irast.Base],
+    ir: irast.Base | None,
 ) -> TypeGuard[irast.Array]:
     """Return True if the given *ir* expression is an empty
        array expression of an uknown type.
@@ -143,7 +142,7 @@ def is_subquery_set(ir_expr: irast.Base) -> bool:
 
 
 def is_implicit_wrapper(
-    ir_expr: Optional[irast.Base],
+    ir_expr: irast.Base | None,
 ) -> TypeGuard[irast.SelectStmt]:
     """Return True if the given *ir_expr* expression is an implicit
        SELECT wrapper.
@@ -299,7 +298,7 @@ class ContainsDMLVisitor(ast.NodeVisitor):
         super().__init__()
         self.skip_bindings = skip_bindings
 
-    def combine_field_results(self, xs: Iterable[Optional[bool]]) -> bool:
+    def combine_field_results(self, xs: Iterable[bool | None]) -> bool:
         return any(
             x is True
             or (isinstance(x, (list, tuple)) and self.combine_field_results(x))
@@ -343,11 +342,11 @@ class FindPathScopes(ast.NodeVisitor):
     override process_set, and also collect the scope tree info.
     """
 
-    def __init__(self, init_scope: Optional[int] = None) -> None:
+    def __init__(self, init_scope: int | None = None) -> None:
         super().__init__()
-        self.path_scope_ids: list[Optional[int]] = [init_scope]
-        self.use_scopes: dict[irast.Set, Optional[int]] = {}
-        self.scopes: dict[irast.Set, Optional[int]] = {}
+        self.path_scope_ids: list[int | None] = [init_scope]
+        self.use_scopes: dict[irast.Set, int | None] = {}
+        self.scopes: dict[irast.Set, int | None] = {}
 
     def visit_Stmt(self, stmt: irast.Stmt) -> Any:
         # Sometimes there is sharing, so we want the official scope
@@ -390,7 +389,7 @@ class FindPathScopes(ast.NodeVisitor):
 
 def find_path_scopes(
     stmt: irast.Base | Sequence[irast.Base],
-) -> dict[irast.Set, Optional[int]]:
+) -> dict[irast.Set, int | None]:
     visitor = FindPathScopes()
     visitor.visit(stmt)
     return visitor.scopes
@@ -522,7 +521,7 @@ def returns_set_of(
 def find_set_of_op(
     ir: irast.Base,
     has_multi_param: bool,
-) -> Optional[irast.Call]:
+) -> irast.Call | None:
     def flt(n: irast.Call) -> bool:
         return (
             (has_multi_param or not is_singleton_set_of_call(n))
@@ -560,7 +559,7 @@ def ref_contains_multi(ref: irast.Set, singleton_id: uuid.UUID) -> bool:
     return False
 
 
-def sub_expr(ir: irast.Set) -> Optional[irast.Expr]:
+def sub_expr(ir: irast.Set) -> irast.Expr | None:
     """Fetch the "sub-expression" of a set.
 
     For a non-pointer Set, it's just the expr, but for a Pointer

@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     AbstractSet,
     Iterable,
     Mapping,
@@ -140,21 +139,23 @@ class CompileContext:
     inline_typeids: bool = False
     inline_typenames: bool = False
     inline_objectids: bool = True
-    schema_object_ids: Optional[
-        Mapping[tuple[s_name.Name, Optional[str]], uuid.UUID]] = None
-    source: Optional[edgeql.Source] = None
+    schema_object_ids: Mapping[
+        tuple[s_name.Name, str | None],
+        uuid.UUID
+    ] | None = None
+    source: edgeql.Source | None = None
     backend_runtime_params: pg_params.BackendRuntimeParams = dataclasses.field(
         default_factory=pg_params.get_default_runtime_params
     )
-    compat_ver: Optional[verutils.Version] = None
+    compat_ver: verutils.Version | None = None
     bootstrap_mode: bool = False
     internal_schema_mode: bool = False
     log_ddl_as_migrations: bool = True
     dump_restore_mode: bool = False
     notebook: bool = False
-    branch_name: Optional[str] = None
-    role_name: Optional[str] = None
-    cache_key: Optional[uuid.UUID] = None
+    branch_name: str | None = None
+    role_name: str | None = None
+    cache_key: uuid.UUID | None = None
 
     def get_cache_mode(self) -> config.QueryCacheMode:
         return config.QueryCacheMode.effective(
@@ -217,7 +218,7 @@ class CompileContext:
         )
 
 
-DEFAULT_MODULE_ALIASES_MAP: immutables.Map[Optional[str], str] = (
+DEFAULT_MODULE_ALIASES_MAP: immutables.Map[str | None, str] = (
     immutables.Map({None: s_mod.DEFAULT_MODULE_ALIAS}))
 
 
@@ -238,10 +239,10 @@ def new_compiler(
     reflection_schema: s_schema.Schema,
     schema_class_layout: s_refl.SchemaClassLayout,
     *,
-    backend_runtime_params: Optional[pg_params.BackendRuntimeParams] = None,
-    local_intro_query: Optional[str] = None,
-    global_intro_query: Optional[str] = None,
-    config_spec: Optional[config.Spec] = None,
+    backend_runtime_params: pg_params.BackendRuntimeParams | None = None,
+    local_intro_query: str | None = None,
+    global_intro_query: str | None = None,
+    config_spec: config.Spec | None = None,
 ) -> Compiler:
     """Create and return a compiler instance."""
 
@@ -293,7 +294,7 @@ def new_compiler_context(
     compiler_state: CompilerState,
     user_schema: s_schema.Schema,
     global_schema: s_schema.Schema=s_schema.EMPTY_SCHEMA,
-    modaliases: Optional[Mapping[Optional[str], str]] = None,
+    modaliases: Mapping[str | None, str] | None = None,
     expected_cardinality_one: bool = False,
     json_parameters: bool = False,
     schema_reflection_mode: bool = False,
@@ -302,7 +303,7 @@ def new_compiler_context(
     internal_schema_mode: bool = False,
     force_testmode: bool = False,
     protocol_version: defines.ProtocolVersion = defines.CURRENT_PROTOCOL,
-    backend_runtime_params: Optional[pg_params.BackendRuntimeParams] = None,
+    backend_runtime_params: pg_params.BackendRuntimeParams | None = None,
     log_ddl_as_migrations: bool = True,
 ) -> CompileContext:
     """Create and return an ad-hoc compiler context."""
@@ -401,8 +402,8 @@ class CompilerState:
     backend_runtime_params: pg_params.BackendRuntimeParams
     config_spec: config.Spec
 
-    local_intro_query: Optional[str]
-    global_intro_query: Optional[str]
+    local_intro_query: str | None
+    global_intro_query: str | None
 
     @functools.cached_property
     def state_serializer_factory(self) -> sertypes.StateSerializerFactory:
@@ -589,13 +590,13 @@ class Compiler:
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
         reflection_cache: immutables.Map[str, tuple[str, ...]],
-        database_config: Optional[immutables.Map[str, config.SettingValue]],
-        system_config: Optional[immutables.Map[str, config.SettingValue]],
+        database_config: immutables.Map[str, config.SettingValue] | None,
+        system_config: immutables.Map[str, config.SettingValue] | None,
         serialized_request: bytes,
         original_query: str,
     ) -> tuple[
         dbstate.QueryUnitGroup | SQLDescriptors,
-        Optional[dbstate.CompilerConnectionState]
+        dbstate.CompilerConnectionState | None
     ]:
         request = rpc.CompilationRequest.deserialize(
             serialized_request,
@@ -618,11 +619,11 @@ class Compiler:
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
         reflection_cache: immutables.Map[str, tuple[str, ...]],
-        database_config: Optional[immutables.Map[str, config.SettingValue]],
-        system_config: Optional[immutables.Map[str, config.SettingValue]],
+        database_config: immutables.Map[str, config.SettingValue] | None,
+        system_config: immutables.Map[str, config.SettingValue] | None,
         request: rpc.CompilationRequest,
     ) -> tuple[dbstate.QueryUnitGroup | SQLDescriptors,
-               Optional[dbstate.CompilerConnectionState]]:
+               dbstate.CompilerConnectionState | None]:
 
         if request.input_language is enums.InputLanguage.SQL_PARAMS:
             assert isinstance(request.source, rpc.SQLParamsSource)
@@ -710,7 +711,7 @@ class Compiler:
         expect_rollback: bool = False,
     ) -> tuple[
         dbstate.QueryUnitGroup | SQLDescriptors,
-        Optional[dbstate.CompilerConnectionState]
+        dbstate.CompilerConnectionState | None
     ]:
         request = rpc.CompilationRequest.deserialize(
             serialized_request,
@@ -733,7 +734,7 @@ class Compiler:
         expect_rollback: bool = False,
     ) -> tuple[
         dbstate.QueryUnitGroup | SQLDescriptors,
-        Optional[dbstate.CompilerConnectionState]
+        dbstate.CompilerConnectionState | None
     ]:
         if request.input_language is enums.InputLanguage.SQL_PARAMS:
             tx = state.current_tx()
@@ -1108,7 +1109,7 @@ class Compiler:
         user_schema_pickle: bytes,
         global_schema_pickle: bytes,
         dump_server_ver_str: str,
-        dump_catalog_version: Optional[int],
+        dump_catalog_version: int | None,
         schema_ddl: bytes,
         schema_ids: list[tuple[str, str, bytes]],
         blocks: list[tuple[bytes, bytes]],  # type_id, typespec
@@ -1209,7 +1210,7 @@ class Compiler:
             obj = schema.get_by_id(schema_object_id)
             desc = sertypes.parse(typedesc, protocol_version)
             elided_col_set = set()
-            mending_desc: list[Optional[DataMendingDescriptor]] = []
+            mending_desc: list[DataMendingDescriptor | None] = []
 
             if isinstance(obj, s_props.Property):
                 assert isinstance(desc, sertypes.NamedTupleDesc)
@@ -1423,7 +1424,7 @@ def compile_schema_storage_in_delta(
     ctx: CompileContext,
     delta: s_delta.Command,
     block: pg_dbops.SQLBlock,
-    context: Optional[s_delta.CommandContext] = None,
+    context: s_delta.CommandContext | None = None,
 ) -> None:
 
     current_tx = ctx.state.current_tx()
@@ -1553,7 +1554,7 @@ def _compile_schema_storage_stmt(
             )
 
         sql = sql_stmts[0].strip(b';').decode()
-        argmap: Optional[Sequence[dbstate.Param]] = unit_group[0].in_type_args
+        argmap: Sequence[dbstate.Param] | None = unit_group[0].in_type_args
         if argmap is None:
             argmap = ()
 
@@ -1648,7 +1649,7 @@ def _compile_ql_explain(
     ctx: CompileContext,
     ql: qlast.ExplainStmt,
     *,
-    script_info: Optional[irast.ScriptInfo] = None,
+    script_info: irast.ScriptInfo | None = None,
 ) -> dbstate.BaseQuery:
     args = {k: v for k, (_, v) in EXPLAIN_PARAMS.items()}
 
@@ -1739,7 +1740,7 @@ def _compile_ql_administer(
     ctx: CompileContext,
     ql: qlast.AdministerStmt,
     *,
-    script_info: Optional[irast.ScriptInfo] = None,
+    script_info: irast.ScriptInfo | None = None,
 ) -> dbstate.BaseQuery:
     if ql.expr.func == 'statistics_update':
         return ddl.administer_statistics_update(ctx, ql)
@@ -1762,8 +1763,8 @@ def _compile_ql_query(
     ctx: CompileContext,
     ql: qlast.Query | qlast.Command,
     *,
-    script_info: Optional[irast.ScriptInfo] = None,
-    source: Optional[edgeql.Source] = None,
+    script_info: irast.ScriptInfo | None = None,
+    source: edgeql.Source | None = None,
     cacheable: bool = True,
     migration_block_query: bool = False,
     explain_data: object = None,
@@ -2091,8 +2092,8 @@ def describe_params(
     ctx: CompileContext,
     ir: irast.Statement | irast.ConfigCommand,
     argmap: dict[str, pgast.Param],
-    script_info: Optional[irast.ScriptInfo],
-) -> tuple[Optional[list[dbstate.Param]], bytes, uuid.UUID]:
+    script_info: irast.ScriptInfo | None,
+) -> tuple[list[dbstate.Param] | None, bytes, uuid.UUID]:
     in_type_args = None
     params: list[tuple[str, s_types.Type, bool]] = []
     assert ir.schema
@@ -2120,9 +2121,9 @@ def _compile_ql_transaction(
     cacheable = True
 
     modaliases = None
-    final_user_schema: Optional[s_schema.Schema] = None
+    final_user_schema: s_schema.Schema | None = None
     final_cached_reflection = None
-    final_global_schema: Optional[s_schema.Schema] = None
+    final_global_schema: s_schema.Schema | None = None
     sp_name = None
     sp_id = None
 
@@ -2514,10 +2515,10 @@ def _compile_ql_config_op(
 def _compile_dispatch_ql(
     ctx: CompileContext,
     ql: qlast.Base,
-    source: Optional[edgeql.Source] = None,
+    source: edgeql.Source | None = None,
     *,
     in_script: bool=False,
-    script_info: Optional[irast.ScriptInfo] = None,
+    script_info: irast.ScriptInfo | None = None,
 ) -> tuple[dbstate.BaseQuery, enums.Capability]:
     if isinstance(ql, qlast.MigrationCommand):
         query = ddl.compile_dispatch_ql_migration(
@@ -2833,7 +2834,7 @@ def _try_compile_ast(
         non_trailing_ctx = dataclasses.replace(
             ctx, output_format=enums.OutputFormat.NONE)
 
-    final_user_schema: Optional[s_schema.Schema] = None
+    final_user_schema: s_schema.Schema | None = None
 
     for i, stmt in enumerate(statements):
         is_trailing_stmt = i == statements_len - 1
@@ -2943,7 +2944,7 @@ def _make_query_unit(
     is_trailing_stmt: bool,
     comp: dbstate.BaseQuery,
     capabilities: enums.Capability,
-) -> tuple[dbstate.QueryUnit, Optional[s_schema.Schema]]:
+) -> tuple[dbstate.QueryUnit, s_schema.Schema | None]:
 
     # Initialize user_schema_version with the version this query is
     # going to be compiled upon. This can be overwritten later by DDLs.
@@ -2982,7 +2983,7 @@ def _make_query_unit(
 
         unit.is_transactional = False
 
-    final_user_schema: Optional[s_schema.Schema] = None
+    final_user_schema: s_schema.Schema | None = None
 
     if isinstance(comp, dbstate.Query):
         unit.sql = comp.sql
@@ -3192,8 +3193,8 @@ def _extract_params(
     params: list[irast.Param],
     *,
     schema: s_schema.Schema,
-    argmap: Optional[dict[str, pgast.Param]],
-    script_info: Optional[irast.ScriptInfo],
+    argmap: dict[str, pgast.Param] | None,
+    script_info: irast.ScriptInfo | None,
     ctx: CompileContext,
 ) -> tuple[list[tuple[str, s_types.Type, bool]], list[dbstate.Param]]:
     first_param = next(iter(params)) if params else None
@@ -3217,9 +3218,9 @@ def _extract_params(
     else:
         outer_mapping = None
 
-    oparams: list[Optional[tuple[str, s_obj.Object, bool]]] = (
+    oparams: list[tuple[str, s_obj.Object, bool] | None] = (
         [None] * user_params)
-    in_type_args: list[Optional[dbstate.Param]] = [None] * user_params
+    in_type_args: list[dbstate.Param | None] = [None] * user_params
     for idx, param in enumerate(params):
         if param.is_sub_param:
             continue
@@ -3257,7 +3258,7 @@ def _extract_params(
 
         if param.sub_params:
             assert not ctx.json_parameters
-            array_tids: list[Optional[uuid.UUID]] = []
+            array_tids: list[uuid.UUID | None] = []
             for p in param.sub_params.params:
                 if isinstance(p.schema_type, s_types.Array):
                     el_type = p.schema_type.get_element_type(schema)
@@ -3472,7 +3473,7 @@ def _check_dump_layout(
 def _get_ptr_mending_desc(
     schema: s_schema.Schema,
     ptr: s_pointers.Pointer,
-) -> Optional[DataMendingDescriptor]:
+) -> DataMendingDescriptor | None:
     ptr_type = ptr.get_target(schema)
     if isinstance(ptr_type, (s_types.Array, s_types.Tuple)):
         return _get_data_mending_desc(schema, ptr_type)
@@ -3483,7 +3484,7 @@ def _get_ptr_mending_desc(
 def _get_data_mending_desc(
     schema: s_schema.Schema,
     typ: s_types.Type,
-) -> Optional[DataMendingDescriptor]:
+) -> DataMendingDescriptor | None:
     if isinstance(typ, (s_types.Tuple, s_types.Array)):
         elements = tuple(
             _get_data_mending_desc(schema, element)
@@ -3531,7 +3532,7 @@ def _add_fake_property(
 
 
 def maybe_force_database_error(
-    val: Optional[str],
+    val: str | None,
     *,
     scope: str,
 ) -> None:
@@ -3576,7 +3577,7 @@ def maybe_force_database_error(
 
 def _check_force_database_error(
     ctx: CompileContext,
-    ql: Optional[qlast.Base]=None,
+    ql: qlast.Base | None=None,
     *,
     scope: str='query',
 ) -> None:
@@ -3701,7 +3702,7 @@ class DataMendingDescriptor(NamedTuple):
     #: The kind of a type we are dealing with
     schema_object_class: qltypes.SchemaObjectClass
     #: If type is a collection, mending descriptors of element types
-    elements: tuple[Optional[DataMendingDescriptor], ...] = tuple()
+    elements: tuple[DataMendingDescriptor | None, ...] = tuple()
     #: Whether a datum represented by this descriptor will need mending
     needs_mending: bool = False
 
@@ -3718,4 +3719,4 @@ class RestoreBlockDescriptor(NamedTuple):
     #: If the tuple requires mending of unstable Postgres OIDs in data,
     #: this will contain the recursive descriptor on which parts of
     #: each datum need mending.
-    data_mending_desc: tuple[Optional[DataMendingDescriptor], ...]
+    data_mending_desc: tuple[DataMendingDescriptor | None, ...]

@@ -22,7 +22,7 @@ import decimal
 import io
 import os.path
 import subprocess
-from typing import Coroutine, Optional
+from typing import Coroutine
 import unittest
 import uuid
 
@@ -3153,7 +3153,7 @@ class TestSQLQueryNonTransactional(tb.SQLQueryTestCase):
         # database settings allow_user_specified_ids & apply_access_policies_pg
         # should be unified over EdgeQL and SQL adapter
 
-        async def set_current_database(val: Optional[bool]):
+        async def set_current_database(val: bool | None):
             # for this to have effect, it must not be ran within a transaction
             if val is None:
                 await self.con.execute(
@@ -3170,7 +3170,7 @@ class TestSQLQueryNonTransactional(tb.SQLQueryTestCase):
                     '''
                 )
 
-        async def set_sql(val: Optional[bool]):
+        async def set_sql(val: bool | None):
             if val is None:
                 await self.scon.execute(
                     f'''

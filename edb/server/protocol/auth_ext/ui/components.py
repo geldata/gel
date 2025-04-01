@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import html
 import urllib.parse
@@ -45,9 +45,9 @@ def base_page(
     content: str,
     title: str,
     cleanup_search_params: list[str],
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = DEFAULT_BRAND_COLOR,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = DEFAULT_BRAND_COLOR,
 ) -> bytes:
     logo = ''
     if logo_url:
@@ -105,7 +105,7 @@ def script(name: str) -> str:
     return f'<script type="module" src="_static/{name}.js"></script>'
 
 
-def title(title: str, *, app_name: Optional[str], join: str = 'to') -> str:
+def title(title: str, *, app_name: str | None, join: str = 'to') -> str:
     if app_name is None:
         return f'''<h1><span>{title}</span></h1>'''
 
@@ -116,7 +116,7 @@ def oauth_buttons(
     *,
     redirect_to: str,
     challenge: str,
-    redirect_to_on_signup: Optional[str],
+    redirect_to_on_signup: str | None,
     oauth_providers: list[auth_config.OAuthProviderConfig],
     label_prefix: str,
     collapsed: bool
@@ -176,11 +176,11 @@ def _oauth_button(
 
 
 def button(
-    text: Optional[str],
+    text: str | None,
     *,
-    id: Optional[str] = None,
-    secondary: Optional[bool] = False,
-    type: Optional[str] = 'submit'
+    id: str | None = None,
+    secondary: bool | None = False,
+    type: str | None = 'submit'
 ) -> str:
     classes = []
     if secondary:
@@ -274,7 +274,7 @@ def tabs_buttons(labels: list[str], selected_tab: int) -> str:
 
 
 def hidden_input(
-    *, name: str, value: str, secondary_value: Optional[str] = None
+    *, name: str, value: str, secondary_value: str | None = None
 ) -> str:
     return f'''<input type="hidden" name="{name}" value="{value}" {
         f'data-secondary-value="{secondary_value}"'
@@ -290,7 +290,7 @@ def bottom_note(message: str, *, link: str, href: str) -> str:
         """
 
 
-def error_message(message: Optional[str], escape: bool = True) -> str:
+def error_message(message: str | None, escape: bool = True) -> str:
     if message is None:
         return ''
 
@@ -334,8 +334,8 @@ def success_message(message: str) -> str:
 def base_default_email(
     *,
     content: str,
-    app_name: Optional[str],
-    logo_url: Optional[str],
+    app_name: str | None,
+    logo_url: str | None,
 ) -> str:
     logo_html = f"""
       <!--[if mso | IE]><table align="center" border="0" cellpadding="0" cellspacing="0" class="" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->

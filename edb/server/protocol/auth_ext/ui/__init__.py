@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import cast, Optional
+from typing import cast
 
 import html
 import email.message
@@ -31,17 +31,17 @@ def render_signin_page(
     *,
     base_path: str,
     providers: frozenset[auth_config.ProviderConfig],
-    error_message: Optional[str] = None,
-    email: Optional[str] = None,
+    error_message: str | None = None,
+    email: str | None = None,
     challenge: str,
-    selected_tab: Optional[str] = None,
+    selected_tab: str | None = None,
     # config
     redirect_to: str,
-    redirect_to_on_signup: Optional[str] = None,
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = None,
+    redirect_to_on_signup: str | None = None,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = None,
 ) -> bytes:
     password_provider = None
     webauthn_provider = None
@@ -207,14 +207,14 @@ def render_signin_page(
 
 def render_email_factor_form(
     *,
-    base_email_factor_form: Optional[str] = None,
+    base_email_factor_form: str | None = None,
     password_input: str = '',
-    selected_tab: Optional[str] = None,
+    selected_tab: str | None = None,
     single_form_fields: str = '',
-    password_form: Optional[str],
-    webauthn_form: Optional[str],
-    magic_link_form: Optional[str],
-) -> Optional[str]:
+    password_form: str | None,
+    webauthn_form: str | None,
+    magic_link_form: str | None,
+) -> str | None:
     if (
         password_form is None
         and webauthn_form is None
@@ -299,17 +299,17 @@ def render_signup_page(
     *,
     base_path: str,
     providers: frozenset[auth_config.ProviderConfig],
-    error_message: Optional[str] = None,
-    email: Optional[str] = None,
+    error_message: str | None = None,
+    email: str | None = None,
     challenge: str,
-    selected_tab: Optional[str] = None,
+    selected_tab: str | None = None,
     # config
     redirect_to: str,
-    redirect_to_on_signup: Optional[str] = None,
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = None,
+    redirect_to_on_signup: str | None = None,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = None,
 ) -> bytes:
     password_provider = None
     webauthn_provider = None
@@ -440,14 +440,14 @@ def render_forgot_password_page(
     base_path: str,
     provider_name: str,
     challenge: str,
-    error_message: Optional[str] = None,
-    email: Optional[str] = None,
-    email_sent: Optional[str] = None,
+    error_message: str | None = None,
+    email: str | None = None,
+    email_sent: str | None = None,
     # config
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = None,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = None,
 ) -> bytes:
     if email_sent is not None:
         content = render.success_message(
@@ -494,14 +494,14 @@ def render_reset_password_page(
     provider_name: str,
     is_valid: bool,
     redirect_to: str,
-    challenge: Optional[str] = None,
-    reset_token: Optional[str] = None,
-    error_message: Optional[str] = None,
+    challenge: str | None = None,
+    reset_token: str | None = None,
+    error_message: str | None = None,
     # config
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = None,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = None,
 ) -> bytes:
     if not is_valid and challenge is None:
         content = render.error_message(
@@ -551,12 +551,12 @@ def render_email_verification_page(
     *,
     is_valid: bool,
     error_messages: list[str],
-    verification_token: Optional[str] = None,
+    verification_token: str | None = None,
     # config
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = None,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = None,
 ) -> bytes:
     resend_url = None
     if verification_token:
@@ -596,10 +596,10 @@ def render_email_verification_page(
 def render_email_verification_expired_page(
     verification_token: str,
     # config
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = None,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = None,
 ) -> bytes:
     verification_token = html.escape(verification_token)
     content = render.error_message(
@@ -629,12 +629,12 @@ def render_email_verification_expired_page(
 def render_resend_verification_done_page(
     *,
     is_valid: bool,
-    verification_token: Optional[str] = None,
+    verification_token: str | None = None,
     # config
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = None,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = None,
 ) -> bytes:
     if verification_token is None:
         content = render.error_message(
@@ -673,10 +673,10 @@ def render_resend_verification_done_page(
 
 def render_magic_link_sent_page(
     *,
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = None,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = None,
 ) -> bytes:
     content = render.success_message(
         "A sign in link has been sent to your email. Please check your email."
@@ -701,10 +701,10 @@ def render_password_reset_email(
     *,
     to_addr: str,
     reset_url: str,
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = render.DEFAULT_BRAND_COLOR,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = render.DEFAULT_BRAND_COLOR,
 ) -> email.message.EmailMessage:
     brand_color = brand_color or render.DEFAULT_BRAND_COLOR
     msg = email.message.EmailMessage()
@@ -947,10 +947,10 @@ def render_verification_email(
     *,
     to_addr: str,
     verify_url: str,
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = render.DEFAULT_BRAND_COLOR,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = render.DEFAULT_BRAND_COLOR,
 ) -> email.message.EmailMessage:
     brand_color = brand_color or render.DEFAULT_BRAND_COLOR
     msg = email.message.EmailMessage()
@@ -1111,10 +1111,10 @@ def render_magic_link_email(
     *,
     to_addr: str,
     link: str,
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = render.DEFAULT_BRAND_COLOR,
+    app_name: str | None = None,
+    logo_url: str | None = None,
+    dark_logo_url: str | None = None,
+    brand_color: str | None = render.DEFAULT_BRAND_COLOR,
 ) -> email.message.EmailMessage:
     brand_color = brand_color or render.DEFAULT_BRAND_COLOR
     msg = email.message.EmailMessage()

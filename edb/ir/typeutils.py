@@ -23,7 +23,6 @@ from typing import (
     Any,
     Callable,
     Iterable,
-    Optional,
     TYPE_CHECKING,
     overload,
 )
@@ -228,11 +227,11 @@ def type_to_typeref(
     schema: s_schema.Schema,
     t: s_types.Type,
     *,
-    cache: Optional[dict[TypeRefCacheKey, irast.TypeRef]],
-    typename: Optional[s_name.QualName] = None,
+    cache: dict[TypeRefCacheKey, irast.TypeRef] | None,
+    typename: s_name.QualName | None = None,
     include_children: bool = False,
     include_ancestors: bool = False,
-    _name: Optional[str] = None,
+    _name: str | None = None,
 ) -> irast.TypeRef:
     """Return an instance of :class:`ir.ast.TypeRef` for a given type.
 
@@ -292,11 +291,11 @@ def _type_to_typeref(
     schema: s_schema.Schema,
     t: s_types.Type,
     *,
-    cache: Optional[dict[TypeRefCacheKey, irast.TypeRef]] = None,
-    typename: Optional[s_name.QualName] = None,
+    cache: dict[TypeRefCacheKey, irast.TypeRef] | None = None,
+    typename: s_name.QualName | None = None,
     include_children: bool = False,
     include_ancestors: bool = False,
-    _name: Optional[str] = None,
+    _name: str | None = None,
 ) -> irast.TypeRef:
 
     def _typeref(
@@ -340,10 +339,10 @@ def _type_to_typeref(
     elif not isinstance(t, s_types.Collection):
         assert isinstance(t, s_types.InheritingType)
 
-        union: Optional[frozenset[irast.TypeRef]] = None
+        union: frozenset[irast.TypeRef] | None = None
         union_is_exhaustive: bool = False
-        expr_intersection: Optional[frozenset[irast.TypeRef]] = None
-        expr_union: Optional[frozenset[irast.TypeRef]] = None
+        expr_intersection: frozenset[irast.TypeRef] | None = None
+        expr_union: frozenset[irast.TypeRef] | None = None
         if t.is_union_type(schema) or t.is_intersection_type(schema):
             union_types, union_is_exhaustive = (
                 s_utils.get_type_expr_non_overlapping_union(t, schema)
@@ -370,7 +369,7 @@ def _type_to_typeref(
 
         schema, material_type = t.material_type(schema)
 
-        material_typeref: Optional[irast.TypeRef]
+        material_typeref: irast.TypeRef | None
         if material_type != t:
             material_typeref = _typeref(material_type)
         else:
@@ -387,7 +386,7 @@ def _type_to_typeref(
         else:
             base_typeref = None
 
-        children: Optional[frozenset[irast.TypeRef]] = None
+        children: frozenset[irast.TypeRef] | None = None
         if (
             material_typeref is None
             and include_children
@@ -400,7 +399,7 @@ def _type_to_typeref(
                 and not child.is_compound_type(schema)
             )
 
-        ancestors: Optional[frozenset[irast.TypeRef]] = None
+        ancestors: frozenset[irast.TypeRef] | None = None
         if (
             material_typeref is None
             and include_ancestors
@@ -565,8 +564,8 @@ def ptrref_from_ptrcls(
     *,
     schema: s_schema.Schema,
     ptrcls: s_pointers.Pointer,
-    cache: Optional[PtrRefCache],
-    typeref_cache: Optional[TypeRefCache],
+    cache: PtrRefCache | None,
+    typeref_cache: TypeRefCache | None,
 ) -> irast.PointerRef:
     ...
 
@@ -576,8 +575,8 @@ def ptrref_from_ptrcls(
     *,
     schema: s_schema.Schema,
     ptrcls: s_pointers.PointerLike,
-    cache: Optional[PtrRefCache],
-    typeref_cache: Optional[TypeRefCache],
+    cache: PtrRefCache | None,
+    typeref_cache: TypeRefCache | None,
 ) -> irast.BasePointerRef:
     ...
 
@@ -586,8 +585,8 @@ def ptrref_from_ptrcls(
     *,
     schema: s_schema.Schema,
     ptrcls: s_pointers.PointerLike,
-    cache: Optional[PtrRefCache],
-    typeref_cache: Optional[TypeRefCache],
+    cache: PtrRefCache | None,
+    typeref_cache: TypeRefCache | None,
 ) -> irast.BasePointerRef:
     """Return an IR pointer descriptor for a given schema pointer.
 
@@ -617,9 +616,9 @@ def ptrref_from_ptrcls(
 
     ircls: type[irast.BasePointerRef]
 
-    source_ref: Optional[irast.TypeRef]
-    target_ref: Optional[irast.TypeRef]
-    out_source: Optional[irast.TypeRef]
+    source_ref: irast.TypeRef | None
+    target_ref: irast.TypeRef | None
+    out_source: irast.TypeRef | None
 
     if isinstance(ptrcls, irast.TupleIndirectionLink):
         ircls = irast.TupleIndirectionPointerRef
@@ -655,7 +654,7 @@ def ptrref_from_ptrcls(
 
     source = ptrcls.get_source(schema)
 
-    source_ptr: Optional[irast.BasePointerRef]
+    source_ptr: irast.BasePointerRef | None
     if (isinstance(ptrcls, s_props.Property)
             and isinstance(source, s_links.Link)):
         source_ptr = ptrref_from_ptrcls(
@@ -683,7 +682,7 @@ def ptrref_from_ptrcls(
         schema, ptrcls)
 
     schema, material_ptrcls = ptrcls.material_type(schema)
-    material_ptr: Optional[irast.BasePointerRef]
+    material_ptr: irast.BasePointerRef | None
     if material_ptrcls is not None and material_ptrcls != ptrcls:
         material_ptr = ptrref_from_ptrcls(
             ptrcls=material_ptrcls,
@@ -694,7 +693,7 @@ def ptrref_from_ptrcls(
     else:
         material_ptr = None
 
-    union_components: Optional[set[irast.BasePointerRef]] = None
+    union_components: set[irast.BasePointerRef] | None = None
     union_of = ptrcls.get_union_of(schema)
     union_is_exhaustive = False
     if union_of:
@@ -721,7 +720,7 @@ def ptrref_from_ptrcls(
             ) for p in non_overlapping
         }
 
-    intersection_components: Optional[set[irast.BasePointerRef]] = None
+    intersection_components: set[irast.BasePointerRef] | None = None
     intersection_of = ptrcls.get_intersection_of(schema)
     if intersection_of:
         intersection_ptrs = set()
@@ -748,7 +747,7 @@ def ptrref_from_ptrcls(
             break
 
     is_derived = ptrcls.get_is_derived(schema)
-    base_ptr: Optional[irast.BasePointerRef]
+    base_ptr: irast.BasePointerRef | None
     if is_derived:
         base_ptrcls = ptrcls.get_bases(schema).first(schema)
         top_ptr_name = type(base_ptrcls).get_default_base_name()
@@ -890,7 +889,7 @@ def ptrcls_from_ptrref(
 def cardinality_from_ptrcls(
     schema: s_schema.Schema,
     ptrcls: s_pointers.PointerLike,
-) -> tuple[Optional[qltypes.Cardinality], Optional[qltypes.Cardinality]]:
+) -> tuple[qltypes.Cardinality | None, qltypes.Cardinality | None]:
 
     out_card = ptrcls.get_cardinality(schema)
     required = ptrcls.get_required(schema)
@@ -1083,7 +1082,7 @@ def maybe_find_actual_ptrref(
     *,
     material: bool=True,
     dir: s_pointers.PointerDirection = s_pointers.PointerDirection.Outbound,
-) -> Optional[irast.BasePointerRef]:
+) -> irast.BasePointerRef | None:
     try:
         return find_actual_ptrref(
             source_typeref, parent_ptrref, material=material, dir=dir)
@@ -1105,7 +1104,7 @@ def maybe_lookup_obj_pointer(
     schema: s_schema.Schema,
     name: s_name.QualName,
     ptr_name: s_name.UnqualName,
-) -> Optional[s_pointers.Pointer]:
+) -> s_pointers.Pointer | None:
     base_object = schema.get(name, type=s_objtypes.ObjectType, default=None)
     if not base_object:
         return None
@@ -1117,8 +1116,8 @@ def lookup_obj_ptrref(
     schema: s_schema.Schema,
     name: s_name.QualName,
     ptr_name: s_name.UnqualName,
-    cache: Optional[dict[PtrRefCacheKey, irast.BasePointerRef]] = None,
-    typeref_cache: Optional[dict[TypeRefCacheKey, irast.TypeRef]] = None,
+    cache: dict[PtrRefCacheKey, irast.BasePointerRef] | None = None,
+    typeref_cache: dict[TypeRefCacheKey, irast.TypeRef] | None = None,
 ) -> irast.PointerRef:
     ptr = maybe_lookup_obj_pointer(schema, name, ptr_name)
     assert ptr

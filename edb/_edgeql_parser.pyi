@@ -3,13 +3,13 @@ import typing
 class SyntaxError(Exception): ...
 
 class ParserResult:
-    out: typing.Optional[CSTNode | list[OpaqueToken]]
+    out: CSTNode | list[OpaqueToken] | None
     errors: list[
         tuple[
             str,
-            tuple[int, typing.Optional[int]],
-            typing.Optional[str],
-            typing.Optional[str],
+            tuple[int, int | None],
+            str | None,
+            str | None,
         ]
     ]
 
@@ -33,7 +33,7 @@ class Entry:
 
     extra_blobs: list[bytes]
 
-    first_extra: typing.Optional[int]
+    first_extra: int | None
 
     extra_counts: list[int]
 
@@ -50,8 +50,8 @@ def preload_spec(spec_filepath: str) -> None: ...
 def save_spec(spec_json: str, dst: str) -> None: ...
 
 class CSTNode:
-    production: typing.Optional[Production]
-    terminal: typing.Optional[Terminal]
+    production: Production | None
+    terminal: Terminal | None
 
 class Production:
     id: int

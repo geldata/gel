@@ -22,7 +22,6 @@ from typing import (
     Any,
     Iterable,
     Mapping,
-    Optional,
     Sequence,
     TypeAlias,
 )
@@ -65,7 +64,7 @@ class Domain(base.DBObject):
         *,
         base: str | DomainName,
         constraints: Sequence[DomainConstraint] = (),
-        metadata: Optional[Mapping[str, Any]] = None
+        metadata: Mapping[str, Any] | None = None
     ):
         self.constraints = tuple(constraints)
         self.base = base
@@ -78,8 +77,8 @@ class CreateDomain(ddl.SchemaObjectOperation):
         self,
         domain: Domain,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         super().__init__(
             domain.name, conditions=conditions, neg_conditions=neg_conditions
@@ -103,8 +102,8 @@ class AlterDomain(ddl.DDLOperation):
         self,
         name: DomainName,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         super().__init__(conditions=conditions, neg_conditions=neg_conditions)
         self.name = name
@@ -120,7 +119,7 @@ class AlterDomainAlterDefault(AlterDomain):
     def __init__(
         self,
         name: DomainName,
-        default: Optional[str]
+        default: str | None
     ) -> None:
         super().__init__(name)
         self.default = default
@@ -158,8 +157,8 @@ class AlterDomainAlterConstraint(AlterDomain):
         name: DomainName,
         constraint: DomainConstraint,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         super().__init__(
             name, conditions=conditions, neg_conditions=neg_conditions)
@@ -179,7 +178,7 @@ class DomainCheckConstraint(DomainConstraint):
     def __init__(
         self,
         domain_name: DomainName,
-        constraint_name: Optional[str] = None,
+        constraint_name: str | None = None,
         *,
         expr: base.Query | str,
     ) -> None:

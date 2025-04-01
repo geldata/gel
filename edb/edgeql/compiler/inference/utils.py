@@ -20,7 +20,6 @@
 
 
 from __future__ import annotations
-from typing import Optional
 
 from edb import errors
 from edb.ir import ast as irast
@@ -50,7 +49,7 @@ def get_set_scope(
 def find_visible(
     ir: irast.Set,
     scope_tree: irast.ScopeTreeNode,
-) -> Optional[irast.ScopeTreeNode]:
+) -> irast.ScopeTreeNode | None:
     # We want to look one fence up from whatever our current fence is.
     # (Most of the time, scope_tree will be a fence, so this is equivalent
     # to parent_fence, but sometimes it will be a branch.)

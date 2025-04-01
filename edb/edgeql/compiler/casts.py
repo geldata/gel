@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import json
 from typing import (
-    Optional,
     Iterable,
     Mapping,
     cast,
@@ -68,9 +67,9 @@ def compile_cast(
     ir_expr: irast.Set | irast.Expr,
     new_stype: s_types.Type,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
-    cardinality_mod: Optional[qlast.CardinalityModifier] = None,
+    cardinality_mod: qlast.CardinalityModifier | None = None,
 ) -> irast.Set:
 
     if new_stype.is_polymorphic(ctx.env.schema) and span is not None:
@@ -391,7 +390,7 @@ def _has_common_concrete_scalar(
 
 def _get_concrete_scalar_base(
     stype: s_types.Type, ctx: context.ContextLevel
-) -> Optional[s_types.Type]:
+) -> s_types.Type | None:
     """Returns None if stype is not scalar or if it is already topmost"""
 
     if stype.is_enum(ctx.env.schema):
@@ -410,9 +409,9 @@ def _compile_cast(
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
-    cardinality_mod: Optional[qlast.CardinalityModifier],
+    cardinality_mod: qlast.CardinalityModifier | None,
 ) -> irast.Set:
 
     ir_set = setgen.ensure_set(ir_expr, ctx=ctx)
@@ -434,7 +433,7 @@ def _cast_to_ir(
     cast: s_casts.Cast,
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
-    cardinality_mod: Optional[qlast.CardinalityModifier] = None,
+    cardinality_mod: qlast.CardinalityModifier | None = None,
     *,
     ctx: context.ContextLevel,
 ) -> irast.Set:
@@ -462,7 +461,7 @@ def _inheritance_cast_to_ir(
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
     *,
-    cardinality_mod: Optional[qlast.CardinalityModifier],
+    cardinality_mod: qlast.CardinalityModifier | None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -507,7 +506,7 @@ class CastParamListWrapper(s_func.ParameterLikeList):
     def find_variadic(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[s_func.ParameterDesc]:
+    ) -> s_func.ParameterDesc | None:
         return None
 
     def has_polymorphic(
@@ -594,9 +593,9 @@ def _find_cast(
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
-) -> Optional[s_casts.Cast]:
+) -> s_casts.Cast | None:
 
     # Don't try to pick up casts when there is a direct subtyping
     # relationship.
@@ -640,9 +639,9 @@ def _cast_json_to_tuple(
     ir_set: irast.Set,
     orig_stype: s_types.Type,
     new_stype: s_types.Tuple,
-    cardinality_mod: Optional[qlast.CardinalityModifier],
+    cardinality_mod: qlast.CardinalityModifier | None,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -756,7 +755,7 @@ def _cast_tuple(
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -857,7 +856,7 @@ def _cast_range(
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -936,7 +935,7 @@ def _cast_multirange(
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -1005,9 +1004,9 @@ def _cast_json_to_range(
     ir_set: irast.Set,
     orig_stype: s_types.Type,
     new_stype: s_types.Range,
-    cardinality_mod: Optional[qlast.CardinalityModifier],
+    cardinality_mod: qlast.CardinalityModifier | None,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -1156,9 +1155,9 @@ def _cast_json_to_multirange(
     ir_set: irast.Set,
     orig_stype: s_types.Type,
     new_stype: s_types.MultiRange,
-    cardinality_mod: Optional[qlast.CardinalityModifier],
+    cardinality_mod: qlast.CardinalityModifier | None,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -1191,7 +1190,7 @@ def _cast_to_base_array(
     el_stype: s_scalars.ScalarType,
     orig_stype: s_types.Array,
     ctx: context.ContextLevel,
-    cardinality_mod: Optional[qlast.CardinalityModifier]=None
+    cardinality_mod: qlast.CardinalityModifier | None=None
 ) -> irast.Set:
 
     base_stype = el_stype.get_base_for_cast(ctx.env.schema)
@@ -1209,7 +1208,7 @@ def _cast_array(
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -1315,7 +1314,7 @@ def _cast_array_literal(
     orig_stype: s_types.Type,
     new_stype: s_types.Type,
     *,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -1473,7 +1472,7 @@ def _find_object_by_id(
         return dispatch.compile(for_query, ctx=subctx)
 
 
-def cast_message_context(ctx: context.ContextLevel) -> Optional[str]:
+def cast_message_context(ctx: context.ContextLevel) -> str | None:
     if (
         ctx.collection_cast_info is not None
         and ctx.collection_cast_info.path_elements
@@ -1496,7 +1495,7 @@ def cast_message_context(ctx: context.ContextLevel) -> Optional[str]:
 
 
 def _collection_element_message_context(
-    path_element: tuple[str, Optional[str]]
+    path_element: tuple[str, str | None]
 ) -> str:
     if path_element[0] == 'tuple':
         return f"at tuple element '{path_element[1]}', "

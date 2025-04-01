@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Sequence
 
 from .. import common
 from . import base
@@ -29,7 +29,7 @@ class Constraint(base.DBObject):
     def __init__(
         self,
         subject_name: Sequence[str],
-        constraint_name: Optional[str] = None,
+        constraint_name: str | None = None,
     ):
         self._subject_name = tuple(subject_name)
         self._constraint_name = constraint_name

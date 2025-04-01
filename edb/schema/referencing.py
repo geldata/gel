@@ -22,7 +22,6 @@ from typing import (
     Any,
     Callable,
     ClassVar,
-    Optional,
     TypeVar,
     AbstractSet,
     Iterable,
@@ -70,7 +69,7 @@ class ReferencedObject(so.DerivableObject):
         cls,
         name: sn.Name,
         *,
-        parent: Optional[str] = None,
+        parent: str | None = None,
     ) -> str:
         clsname = cls.get_schema_class_displayname()
         dname = cls.get_displayname_static(name)
@@ -82,12 +81,12 @@ class ReferencedObject(so.DerivableObject):
         else:
             return f"{clsname} '{dname}'"
 
-    def get_subject(self, schema: s_schema.Schema) -> Optional[so.Object]:
+    def get_subject(self, schema: s_schema.Schema) -> so.Object | None:
         # NB: classes that inherit ReferencedObject define a `get_subject`
         # method dynamically, with `subject = SchemaField`
         raise NotImplementedError
 
-    def get_referrer(self, schema: s_schema.Schema) -> Optional[so.Object]:
+    def get_referrer(self, schema: s_schema.Schema) -> so.Object | None:
         return self.get_subject(schema)
 
     def get_verbosename(
@@ -119,7 +118,7 @@ class ReferencedObject(so.DerivableObject):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        referrer: Optional[so.Object] = None,
+        referrer: so.Object | None = None,
     ) -> tuple[
         sd.CommandGroup,
         sd.Command,
@@ -134,7 +133,7 @@ class ReferencedObject(so.DerivableObject):
         if referrer is None:
             return root, parent, ctx_stack
 
-        obj: Optional[so.Object] = referrer
+        obj: so.Object | None = referrer
         object_stack: list[so.Object] = [referrer]
 
         while obj is not None:
@@ -288,14 +287,14 @@ class ReferencedInheritingObject(
         referrer: so.QualifiedObject,
         *qualifiers: str,
         mark_derived: bool = False,
-        attrs: Optional[dict[str, Any]] = None,
-        dctx: Optional[sd.CommandContext] = None,
-        derived_name_base: Optional[sn.Name] = None,
+        attrs: dict[str, Any] | None = None,
+        dctx: sd.CommandContext | None = None,
+        derived_name_base: sn.Name | None = None,
         inheritance_merge: bool = True,
-        inheritance_refdicts: Optional[AbstractSet[str]] = None,
+        inheritance_refdicts: AbstractSet[str] | None = None,
         transient: bool = False,
         preserve_endpoint_ptrs: bool = False,
-        name: Optional[sn.QualName] = None,
+        name: sn.QualName | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, ReferencedInheritingObjectT]:
         if name is None:
@@ -398,9 +397,9 @@ class ReferencedInheritingObject(
 
 class ReferencedObjectCommandBase(sd.QualifiedObjectCommand[ReferencedT]):
 
-    _referrer_context_class: ClassVar[Optional[
-        type[sd.ObjectCommandContext[so.Object]]
-    ]] = None
+    _referrer_context_class: ClassVar[
+        type[sd.ObjectCommandContext[so.Object]] | None
+    ] = None
 
     #: Whether the referenced command represents a "strong" reference,
     #: i.e. the one that must not be broken out of the enclosing parent
@@ -410,9 +409,9 @@ class ReferencedObjectCommandBase(sd.QualifiedObjectCommand[ReferencedT]):
     def __init_subclass__(
         cls,
         *,
-        referrer_context_class: Optional[
-            type[sd.ObjectCommandContext[so.Object]]
-        ] = None,
+        referrer_context_class: (
+            type[sd.ObjectCommandContext[so.Object]] | None
+        ) = None,
         **kwargs: Any,
     ) -> None:
         super().__init_subclass__(**kwargs)
@@ -432,7 +431,7 @@ class ReferencedObjectCommandBase(sd.QualifiedObjectCommand[ReferencedT]):
     def get_referrer_context(
         cls,
         context: sd.CommandContext,
-    ) -> Optional[sd.ObjectCommandContext[so.Object]]:
+    ) -> sd.ObjectCommandContext[so.Object] | None:
         """Get the context of the command for the referring object, if any.
 
         E.g. for a `create/alter/etc concrete link` command this would
@@ -454,7 +453,7 @@ class ReferencedObjectCommandBase(sd.QualifiedObjectCommand[ReferencedT]):
     def get_top_referrer_op(
         self,
         context: sd.CommandContext,
-    ) -> Optional[sd.ObjectCommand[so.Object]]:
+    ) -> sd.ObjectCommand[so.Object] | None:
         op: sd.ObjectCommand[so.Object] = self  # type: ignore
         while True:
             if not isinstance(op, ReferencedObjectCommandBase):
@@ -551,7 +550,7 @@ class ReferencedObjectCommand(ReferencedObjectCommandBase[ReferencedT]):
         self, schema: s_schema.Schema, context: sd.CommandContext
     ) -> type[qlast.DDLOperation]:
         subject_ctx = self.get_referrer_context(context)
-        ref_astnode: Optional[type[qlast.DDLOperation]] = (
+        ref_astnode: type[qlast.DDLOperation] | None = (
             getattr(self, 'referenced_astnode', None))
         if subject_ctx is not None and ref_astnode is not None:
             return ref_astnode
@@ -1003,8 +1002,8 @@ class CreateReferencedInheritingObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         refctx = type(self).get_referrer_context(context)
         if refctx is not None:
             if self.get_attribute_value('from_alias'):
@@ -1223,8 +1222,8 @@ class AlterReferencedInheritingObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if self.get_attribute_value('from_alias'):
             return None
         else:
@@ -1419,8 +1418,8 @@ class RenameReferencedInheritingObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if self.get_annotation('implicit_propagation'):
             return None
         else:
@@ -1554,8 +1553,8 @@ class DeleteReferencedInheritingObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         refctx = type(self).get_referrer_context(context)
         if (
             refctx is not None

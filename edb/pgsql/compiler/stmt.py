@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
 
 from edb import errors
 
@@ -62,7 +61,7 @@ def compile_SelectStmt(
         clauses.compile_materialized_exprs(query, stmt, ctx=ctx)
 
         iterator_set = stmt.iterator_stmt
-        last_iterator: Optional[irast.Set] = None
+        last_iterator: irast.Set | None = None
         if iterator_set:
             if irutils.contains_dml(stmt):
                 # If we have iterators and we contain nested DML

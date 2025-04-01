@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Iterable, Sequence, cast
+from typing import Iterable, Sequence, cast
 
 from edb import errors
 
@@ -131,7 +131,7 @@ class ScalarType(
         self,
         schema: s_schema.Schema,
         concrete_type: s_types.Type,
-    ) -> Optional[s_types.Type]:
+    ) -> s_types.Type | None:
         if (self.is_polymorphic(schema) and
                 concrete_type.is_scalar() and
                 not concrete_type.is_polymorphic(schema)):
@@ -221,7 +221,7 @@ class ScalarType(
         self,
         other: s_types.Type,
         schema: s_schema.Schema,
-    ) -> tuple[s_schema.Schema, Optional[ScalarType]]:
+    ) -> tuple[s_schema.Schema, ScalarType | None]:
 
         if not isinstance(other, ScalarType):
             return schema, None
@@ -238,7 +238,7 @@ class ScalarType(
             return (
                 schema,
                 cast(
-                    Optional[ScalarType],
+                    ScalarType | None,
                     s_casts.find_common_castable_type(schema, left, right),
                 )
             )
@@ -263,7 +263,7 @@ class ScalarType(
     def resolve_sql_type_scheme(
         self,
         schema: s_schema.Schema,
-    ) -> tuple[Optional[str], Optional[str]]:
+    ) -> tuple[str | None, str | None]:
         if sql := self.get_sql_type(schema):
             return sql, None
         if self.get_arg_values(schema) is None:
@@ -280,7 +280,7 @@ class ScalarType(
     def resolve_sql_type(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[str]:
+    ) -> str | None:
         type, scheme = self.resolve_sql_type_scheme(schema)
         if scheme:
             return constraints.interpolate_error_text(
@@ -340,7 +340,7 @@ class AnonymousEnumTypeShell(s_types.TypeShell[ScalarType]):
     def __init__(
         self,
         *,
-        name: Optional[s_name.Name] = None,
+        name: s_name.Name | None = None,
         elements: Iterable[str],
     ) -> None:
         name = name or s_name.QualName(module='std', name='anyenum')
@@ -831,8 +831,8 @@ class DeleteScalarType(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if self.get_orig_attribute_value('expr_type'):
             # This is an alias type, appropriate DDL would be generated
             # from the corresponding DeleteAlias node.

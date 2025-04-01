@@ -24,7 +24,7 @@ import functools
 import hashlib
 import base64
 import re
-from typing import Literal, Optional, overload
+from typing import Literal, overload
 import uuid
 
 from edb import buildmeta
@@ -336,7 +336,7 @@ def get_objtype_backend_name(
     *,
     catenate: bool = True,
     versioned: bool = False,
-    aspect: Optional[str] = None,
+    aspect: str | None = None,
 ):
     if aspect is None:
         aspect = 'table'
@@ -470,7 +470,7 @@ def get_index_table_backend_name(
     index: s_indexes.Index,
     schema: s_schema.Schema,
     *,
-    aspect: Optional[str] = None,
+    aspect: str | None = None,
 ) -> tuple[str, str]:
     subject = index.get_subject(schema)
     assert isinstance(subject, s_types.Type)
@@ -492,7 +492,7 @@ def get_backend_name(
     catenate: Literal[True]=True,
     *,
     versioned: bool=True,
-    aspect: Optional[str]=None
+    aspect: str | None=None
 ) -> str:
     ...
 
@@ -504,7 +504,7 @@ def get_backend_name(
     catenate: Literal[False],
     *,
     versioned: bool=True,
-    aspect: Optional[str]=None
+    aspect: str | None=None
 ) -> tuple[str, str]:
     ...
 
@@ -514,7 +514,7 @@ def get_backend_name(
     obj: so.Object,
     catenate: bool=True,
     *,
-    aspect: Optional[str]=None,
+    aspect: str | None=None,
     versioned: bool=True,
 ) -> str | tuple[str, str]:
     name: s_name.QualName | s_name.Name

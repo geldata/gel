@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Optional, Iterator
+from typing import Iterator
 
 import dataclasses
 import enum
@@ -68,7 +68,7 @@ class _Index:
 class _PlanInfo:
     plan: fine_grained.Plan
     ancestors: list[fine_grained.Plan]
-    shape_mark: Optional[str] = None
+    shape_mark: str | None = None
 
     @property
     def id(self) -> uuid.UUID:
@@ -84,7 +84,7 @@ class _PlanInfo:
 class Node(to_json.ToJson, pg_tree.CostMixin):
     plan_id: uuid.UUID
     relations: frozenset[str]
-    contexts: Optional[list[ir_analyze.ContextDesc]]
+    contexts: list[ir_analyze.ContextDesc] | None
     children: list[Child]
 
 
@@ -97,7 +97,7 @@ class ChildKind(enum.Enum):
 @dataclasses.dataclass
 class Child(to_json.ToJson):
     kind: ChildKind
-    name: Optional[str]  # currently set only for POINTER
+    name: str | None  # currently set only for POINTER
     node: Node
 
 
@@ -117,7 +117,7 @@ def _build_shape(
     path: str,
     plan: fine_grained.Plan,
     shape: ir_analyze.ShapeInfo,
-    contexts: Optional[list[ir_analyze.ContextDesc]],
+    contexts: list[ir_analyze.ContextDesc] | None,
     index: _Index,
 ) -> Node:
     # Coarse-grained tree is built like this:

@@ -60,9 +60,9 @@ def next_tx_state_id():
 
 
 class PickledState(typing.NamedTuple):
-    user_schema: typing.Optional[bytes]
-    reflection_cache: typing.Optional[bytes]
-    database_config: typing.Optional[bytes]
+    user_schema: bytes | None
+    reflection_cache: bytes | None
+    database_config: bytes | None
 
     def diff(self, other: PickledState):
         # Compare this state with the other state, generate a new state with
@@ -81,8 +81,8 @@ class PickledState(typing.NamedTuple):
 
 class ClientSchema(typing.NamedTuple):
     dbs: immutables.Map[str, PickledState]
-    global_schema: typing.Optional[bytes]
-    instance_config: typing.Optional[bytes]
+    global_schema: bytes | None
+    instance_config: bytes | None
     dropped_dbs: tuple
 
     def diff(self, other: ClientSchema):
@@ -280,11 +280,11 @@ class MultiSchemaPool(pool_mod.FixedPool):
         self,
         client_id: int,
         dbname: str,
-        user_schema: typing.Optional[bytes],
-        reflection_cache: typing.Optional[bytes],
-        global_schema: typing.Optional[bytes],
-        database_config: typing.Optional[bytes],
-        system_config: typing.Optional[bytes],
+        user_schema: bytes | None,
+        reflection_cache: bytes | None,
+        global_schema: bytes | None,
+        database_config: bytes | None,
+        system_config: bytes | None,
     ):
         # EdgeDB instance syncs the schema with the compiler server
         client = self._clients[client_id]

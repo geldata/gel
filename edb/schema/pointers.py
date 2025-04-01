@@ -19,7 +19,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     TypeVar,
     Iterable,
     Sequence,
@@ -87,7 +86,7 @@ def merge_cardinality(
     ignore_local: bool,
     schema: s_schema.Schema,
 ) -> Any:
-    current: Optional[qltypes.SchemaCardinality] = None
+    current: qltypes.SchemaCardinality | None = None
     current_from = None
 
     if not ignore_local:
@@ -100,7 +99,7 @@ def merge_cardinality(
         if base.is_non_concrete(schema):
             continue
 
-        nextval: Optional[qltypes.SchemaCardinality] = (
+        nextval: qltypes.SchemaCardinality | None = (
             base.get_field_value(schema, field_name))
         if nextval is None:
             continue
@@ -194,7 +193,7 @@ def merge_required(
     *,
     ignore_local: bool = False,
     schema: s_schema.Schema,
-) -> Optional[bool]:
+) -> bool | None:
     """Merge function for the REQUIRED qualifier on links and properties."""
 
     local_required = ptr.get_explicit_local_field_value(
@@ -239,7 +238,7 @@ def merge_target(
     *,
     ignore_local: bool = False,
     schema: s_schema.Schema,
-) -> Optional[s_types.Type]:
+) -> s_types.Type | None:
 
     target = None
     current_source = None
@@ -291,9 +290,9 @@ def _merge_types(
     t2: s_types.Type,
     *,
     t1_source: so.Object,
-    t2_source: Optional[so.Object],
+    t2_source: so.Object | None,
     allow_contravariant: bool = False,
-) -> tuple[s_schema.Schema, Optional[s_types.Type]]:
+) -> tuple[s_schema.Schema, s_types.Type | None]:
     if t1 == t2:
         return schema, t1
 
@@ -373,15 +372,15 @@ def _merge_types(
 
 
 def get_root_source(
-    obj: Optional[so.Object], schema: s_schema.Schema
-) -> Optional[so.Object]:
+    obj: so.Object | None, schema: s_schema.Schema
+) -> so.Object | None:
     while isinstance(obj, Pointer):
         obj = obj.get_source(schema)
     return obj
 
 
 def is_view_source(
-    source: Optional[so.Object], schema: s_schema.Schema
+    source: so.Object | None, schema: s_schema.Schema
 ) -> bool:
     source = get_root_source(source, schema)
     return isinstance(source, s_types.Type) and source.is_view(schema)
@@ -390,9 +389,9 @@ def is_view_source(
 def _get_target_name_in_diff(
     *,
     schema: s_schema.Schema,
-    orig_schema: Optional[s_schema.Schema],
-    object: Optional[so.Object],
-    orig_object: Optional[so.Object],
+    orig_schema: s_schema.Schema | None,
+    object: so.Object | None,
+    orig_object: so.Object | None,
 ) -> sn.Name:
     """Compute the target type name for a fill/conv expr
 
@@ -582,7 +581,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
     def is_generated(self, schema: s_schema.Schema) -> bool:
         return bool(self.get_from_alias(schema))
 
-    def get_subject(self, schema: s_schema.Schema) -> Optional[so.Object]:
+    def get_subject(self, schema: s_schema.Schema) -> so.Object | None:
         # Required by ReferencedObject
         return self.get_source(schema)
 
@@ -654,7 +653,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         self,
         schema: s_schema.Schema,
         direction: PointerDirection,
-    ) -> Optional[so.Object]:
+    ) -> so.Object | None:
         if direction == PointerDirection.Outbound:
             return self.get_source(schema)
         else:
@@ -664,7 +663,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         self,
         schema: s_schema.Schema,
         direction: PointerDirection,
-    ) -> Optional[so.Object]:
+    ) -> so.Object | None:
         if direction == PointerDirection.Outbound:
             return self.get_target(schema)
         else:
@@ -683,7 +682,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         source: s_sources.Source,
         target: s_types.Type,
         *,
-        derived_name_base: Optional[sn.Name] = None,
+        derived_name_base: sn.Name | None = None,
         **kwargs: Any
     ) -> tuple[s_schema.Schema, Pointer_T]:
         fqname = self.derive_name(
@@ -716,10 +715,10 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         schema: s_schema.Schema,
         referrer: so.QualifiedObject,
         *qualifiers: str,
-        target: Optional[s_types.Type] = None,
+        target: s_types.Type | None = None,
         mark_derived: bool = False,
-        attrs: Optional[dict[str, Any]] = None,
-        dctx: Optional[sd.CommandContext] = None,
+        attrs: dict[str, Any] | None = None,
+        dctx: sd.CommandContext | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, Pointer]:
         if target is None:
@@ -785,7 +784,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
     def is_non_concrete(self, schema: s_schema.Schema) -> bool:
         return self.get_source(schema) is None
 
-    def get_referrer(self, schema: s_schema.Schema) -> Optional[so.Object]:
+    def get_referrer(self, schema: s_schema.Schema) -> so.Object | None:
         return self.get_source(schema)
 
     def get_exclusive_constraints(
@@ -867,7 +866,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
     def get_schema_reflection_default(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Return the default expression if this is a reflection of a
            schema class field and the field has a defined default value.
         """
@@ -976,7 +975,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
 
     def get_local_rewrite(
         self, schema: s_schema.Schema, kind: qltypes.RewriteKind
-    ) -> Optional[s_rewrites.Rewrite]:
+    ) -> s_rewrites.Rewrite | None:
         rewrites = self.get_rewrites(schema)
         if rewrites:
             for rewrite in rewrites.objects(schema):
@@ -986,7 +985,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
 
     def get_rewrite(
         self, schema: s_schema.Schema, kind: qltypes.RewriteKind
-    ) -> Optional[s_rewrites.Rewrite]:
+    ) -> s_rewrites.Rewrite | None:
         if rw := self.get_local_rewrite(schema, kind):
             return rw
         for anc in self.get_ancestors(schema).objects(schema):
@@ -1055,10 +1054,10 @@ class PseudoPointer(s_abc.Pointer):
     def get_default(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         return None
 
-    def get_expr(self, schema: s_schema.Schema) -> Optional[s_expr.Expression]:
+    def get_expr(self, schema: s_schema.Schema) -> s_expr.Expression | None:
         return None
 
     def get_source(self, schema: s_schema.Schema) -> so.Object:
@@ -1122,7 +1121,7 @@ class PseudoPointer(s_abc.Pointer):
     def get_schema_reflection_default(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[str]:
+    ) -> str | None:
         return None
 
 
@@ -1134,7 +1133,7 @@ class ComputableRef:
     """A shell for a computed target type."""
 
     expr: qlast.Expr
-    specified_type: Optional[s_types.TypeShell[s_types.Type]] = (
+    specified_type: s_types.TypeShell[s_types.Type] | None = (
         dataclasses.field(default=None)
     )
 
@@ -1158,7 +1157,7 @@ class PointerCommandOrFragment(
     ) -> s_schema.Schema:
         schema = super().canonicalize_attributes(schema, context)
         target_ref = self.get_local_attribute_value('target')
-        inf_target_ref: Optional[s_types.TypeShell[s_types.Type]]
+        inf_target_ref: s_types.TypeShell[s_types.Type] | None
 
         # When cardinality/required is altered, we need to force a
         # reconsideration of expr if it exists in order to check
@@ -1345,13 +1344,15 @@ class PointerCommandOrFragment(
                 span=self.span,
             )
 
-        spec_target: Optional[
-            s_types.TypeShell[s_types.Type] | s_types.Type | ComputableRef
-        ] = (
-            self.get_specified_attribute_value('target', schema, context))
-        spec_required: Optional[bool] = (
+        spec_target: (
+            s_types.TypeShell[s_types.Type]
+            | s_types.Type
+            | ComputableRef
+            | None
+        ) = self.get_specified_attribute_value('target', schema, context)
+        spec_required: bool | None = (
             self.get_specified_attribute_value('required', schema, context))
-        spec_card: Optional[qltypes.SchemaCardinality] = (
+        spec_card: qltypes.SchemaCardinality | None = (
             self.get_specified_attribute_value('cardinality', schema, context))
 
         if (
@@ -1430,14 +1431,14 @@ class PointerCommandOrFragment(
         context: sd.CommandContext,
         expr: s_expr.Expression,
         *,
-        in_ddl_context_name: Optional[str] = None,
+        in_ddl_context_name: str | None = None,
         track_schema_ref_exprs: bool = False,
         singleton_result_expected: bool = False,
         target_as_singleton: bool = False,
-        expr_description: Optional[str] = None,
+        expr_description: str | None = None,
         no_query_rewrites: bool = False,
         make_globals_empty: bool = False,
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
         detached: bool = False,
         should_set_path_prefix_anchor: bool = True
     ) -> s_expr.CompiledExpression:
@@ -1574,7 +1575,7 @@ class PointerCommandOrFragment(
         context: sd.CommandContext,
         field: so.Field[Any],
         value: Any,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         if field.name == 'expr':
             return None
         elif field.name == 'default':
@@ -1737,7 +1738,7 @@ class PointerCommand(
         if not scls.get_owned(schema):
             return
 
-        default_expr: Optional[s_expr.Expression] = scls.get_default(schema)
+        default_expr: s_expr.Expression | None = scls.get_default(schema)
 
         if default_expr is not None:
 
@@ -2314,10 +2315,10 @@ class SetPointerType(
         self,
         *,
         schema: s_schema.Schema,
-        orig_schema: Optional[s_schema.Schema],
+        orig_schema: s_schema.Schema | None,
         context: so.ComparisonContext,
-        object: Optional[so.Object],
-        orig_object: Optional[so.Object],
+        object: so.Object | None,
+        orig_object: so.Object | None,
     ) -> None:
         super().record_diff_annotations(
             schema=schema,
@@ -2339,7 +2340,7 @@ class SetPointerType(
         assert isinstance(old_type_shell, s_types.TypeShell)
         assert isinstance(new_type_shell, s_types.TypeShell)
 
-        old_type: Optional[s_types.Type] = None
+        old_type: s_types.Type | None = None
 
         try:
             old_type = old_type_shell.resolve(schema)
@@ -2579,8 +2580,8 @@ class SetPointerType(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         set_field = super()._get_ast(schema, context, parent_node=parent_node)
         if set_field is None or self.is_attribute_computed('target'):
             return None
@@ -2609,10 +2610,10 @@ class AlterPointerUpperCardinality(
     def get_friendly_description(
         self,
         *,
-        parent_op: Optional[sd.Command] = None,
-        schema: Optional[s_schema.Schema] = None,
+        parent_op: sd.Command | None = None,
+        schema: s_schema.Schema | None = None,
         object: Any = None,
-        object_desc: Optional[str] = None,
+        object_desc: str | None = None,
     ) -> str:
         object_desc = self.get_friendly_object_name_for_description(
             parent_op=parent_op,
@@ -2732,10 +2733,10 @@ class AlterPointerUpperCardinality(
         self,
         *,
         schema: s_schema.Schema,
-        orig_schema: Optional[s_schema.Schema],
+        orig_schema: s_schema.Schema | None,
         context: so.ComparisonContext,
-        object: Optional[so.Object],
-        orig_object: Optional[so.Object],
+        object: so.Object | None,
+        orig_object: so.Object | None,
     ) -> None:
         super().record_diff_annotations(
             schema=schema,
@@ -2844,8 +2845,8 @@ class AlterPointerUpperCardinality(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         set_field = super()._get_ast(schema, context, parent_node=parent_node)
         if set_field is None:
             return None
@@ -2873,10 +2874,10 @@ class AlterPointerLowerCardinality(
     def get_friendly_description(
         self,
         *,
-        parent_op: Optional[sd.Command] = None,
-        schema: Optional[s_schema.Schema] = None,
+        parent_op: sd.Command | None = None,
+        schema: s_schema.Schema | None = None,
         object: Any = None,
-        object_desc: Optional[str] = None,
+        object_desc: str | None = None,
     ) -> str:
         object_desc = self.get_friendly_object_name_for_description(
             parent_op=parent_op,
@@ -2961,10 +2962,10 @@ class AlterPointerLowerCardinality(
         self,
         *,
         schema: s_schema.Schema,
-        orig_schema: Optional[s_schema.Schema],
+        orig_schema: s_schema.Schema | None,
         context: so.ComparisonContext,
-        object: Optional[so.Object],
-        orig_object: Optional[so.Object],
+        object: so.Object | None,
+        orig_object: so.Object | None,
     ) -> None:
         super().record_diff_annotations(
             schema=schema,
@@ -3062,8 +3063,8 @@ class AlterPointerLowerCardinality(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         set_field = super()._get_ast(schema, context, parent_node=parent_node)
         if set_field is None and not self.fill_expr:
             return None
@@ -3094,7 +3095,7 @@ def get_or_create_union_pointer(
     *,
     transient: bool = False,
     opaque: bool = False,
-    modname: Optional[str] = None,
+    modname: str | None = None,
 ) -> tuple[s_schema.Schema, Pointer]:
     from . import sources as s_sources
 
@@ -3208,7 +3209,7 @@ def get_or_create_intersection_pointer(
     ptrname: sn.UnqualName,
     source: s_objtypes.ObjectType,
     components: Iterable[Pointer], *,
-    modname: Optional[str] = None,
+    modname: str | None = None,
     transient: bool = False,
 ) -> tuple[s_schema.Schema, Pointer]:
 

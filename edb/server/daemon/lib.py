@@ -18,7 +18,6 @@
 
 
 from __future__ import annotations
-from typing import Optional
 
 import errno
 import io
@@ -219,7 +218,7 @@ def try_close_fileno(fileno: int):
                 'Failed to close file descriptor {}'.format(fileno))
 
 
-def close_all_open_files(exclude: Optional[set] = None):
+def close_all_open_files(exclude: set | None = None):
     """Close all open file descriptors."""
     maxfd = get_max_fileno()
     if exclude:

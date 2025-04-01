@@ -3635,8 +3635,8 @@ nested_ql_block(
 
 class MigrationNameAndParent(typing.NamedTuple):
 
-    name: typing.Optional[qlast.ObjectRef]
-    parent: typing.Optional[qlast.ObjectRef]
+    name: qlast.ObjectRef | None
+    parent: qlast.ObjectRef | None
 
 
 class OptMigrationNameParentName(Nonterm):

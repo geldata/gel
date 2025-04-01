@@ -21,7 +21,7 @@ from typing import ClassVar, Generic, TypeVar
 
 # I'm not really sure why this is needed here
 # These are things needed for ParametricType?
-from typing import Optional, Tuple, Dict, Any  # NoQA
+from typing import Tuple, Dict, Any  # NoQA
 
 import unittest
 

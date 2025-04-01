@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import copy
 import itertools
-from typing import Any, Optional, Mapping
+from typing import Any, Mapping
 
 from edb import errors
 from edb.common import ast
@@ -78,7 +78,7 @@ def index_parameters(
 ) -> dict[str, qlast.Base]:
 
     result: dict[str, qlast.Base] = {}
-    varargs: Optional[list[qlast.Expr]] = None
+    varargs: list[qlast.Expr] | None = None
     variadic = parameters.find_variadic(schema)
     variadic_num = variadic.get_num(schema) if variadic else -1  # type: ignore
 

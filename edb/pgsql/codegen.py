@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence
+from typing import Any, Sequence
 
 import abc
 import collections
@@ -153,7 +153,7 @@ class ChainedSourceMap(SourceMap):
 class SQLSource:
     text: str
     param_index: dict[int, list[int]]
-    source_map: Optional[SourceMap] = None
+    source_map: SourceMap | None = None
 
 
 class SQLSourceGenerator(codegen.SourceGenerator):
@@ -178,12 +178,12 @@ class SQLSourceGenerator(codegen.SourceGenerator):
         self.param_index: collections.defaultdict[int, list[int]] = (
             collections.defaultdict(list))
         self.write_index: int = 0
-        self.source_map: Optional[BaseSourceMap] = None
+        self.source_map: BaseSourceMap | None = None
 
     def write(
         self,
         *x: str,
-        delimiter: Optional[str] = None,
+        delimiter: str | None = None,
     ) -> None:
         self.is_toplevel = False
         start = len(self.result)
@@ -1272,7 +1272,7 @@ class GeneratorContext(markup.MarkupExceptionContext):
     def __init__(
         self,
         node: pgast.Base,
-        chunks_generated: Optional[Sequence[str]] = None,
+        chunks_generated: Sequence[str] | None = None,
     ):
         self.node = node
         self.chunks_generated = chunks_generated
@@ -1308,9 +1308,9 @@ class GeneratorError(errors.InternalServerError):
         self,
         msg: str,
         *,
-        node: Optional[pgast.Base] = None,
-        details: Optional[str] = None,
-        hint: Optional[str] = None,
+        node: pgast.Base | None = None,
+        details: str | None = None,
+        hint: str | None = None,
     ) -> None:
         super().__init__(msg, details=details, hint=hint)
         if node is not None:

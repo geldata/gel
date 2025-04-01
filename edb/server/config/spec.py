@@ -24,7 +24,7 @@ from abc import abstractmethod
 import collections.abc
 import dataclasses
 import json
-from typing import Any, Optional, Iterator, Sequence
+from typing import Any, Iterator, Sequence
 
 from edb.edgeql import compiler as qlcompiler
 from edb.ir import staeval
@@ -54,15 +54,15 @@ class Setting:
     name: str
     type: type | types.ConfigTypeSpec
     default: Any
-    schema_type_name: Optional[sn.Name] = None
+    schema_type_name: sn.Name | None = None
     set_of: bool = False
     system: bool = False
     internal: bool = False
     requires_restart: bool = False
-    backend_setting: Optional[str] = None
+    backend_setting: str | None = None
     report: bool = False
     affects_compilation: bool = False
-    enum_values: Optional[Sequence[str]] = None
+    enum_values: Sequence[str] | None = None
     required: bool = True
     secret: bool = False
     protected: bool = False

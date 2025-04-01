@@ -24,7 +24,6 @@ from typing import (
     ClassVar,
     Final,
     Generic,
-    Optional,
     Protocol,
     TypeVar,
     Iterable,
@@ -85,7 +84,7 @@ if TYPE_CHECKING:
         """An unknown collection that can be instantiated from an iterable."""
 
         def __init__(
-            self, from_iter: Optional[Iterable[CovT]] = None
+            self, from_iter: Iterable[CovT] | None = None
         ) -> None: ...
 
 
@@ -217,7 +216,7 @@ class ComparisonContext:
 
     renames: dict[tuple[type[Object], sn.Name], sd.RenameObject[Object]]
     deletions: dict[tuple[type[Object], sn.Name], sd.DeleteObject[Object]]
-    guidance: Optional[DeltaGuidance]
+    guidance: DeltaGuidance | None
     parent_ops: list[sd.ObjectCommand[Any]]
 
     def __init__(
@@ -225,7 +224,7 @@ class ComparisonContext:
         *,
         generate_prompts: bool = False,
         descriptive_mode: bool = False,
-        guidance: Optional[DeltaGuidance] = None,
+        guidance: DeltaGuidance | None = None,
     ) -> None:
         self.generate_prompts = generate_prompts
         self.descriptive_mode = descriptive_mode
@@ -290,7 +289,7 @@ class Field(struct.ProtoField, Generic[T]):
     coerce: bool
     #: The diffing coefficient to use when comparing field
     #: values in objects from 0 to 1.
-    compcoef: Optional[float]
+    compcoef: float | None
     #: Whether the field value can be inherited.
     inheritable: bool
     #: Wheter the field uses the generic AlterObjectProperty
@@ -329,7 +328,7 @@ class Field(struct.ProtoField, Generic[T]):
     #: direct link (for example, if the value is a non-distinct set),
     #: this specifies a (ProxyType, linkname) pair of a proxy object type
     #: and the name of the link within that proxy type.
-    reflection_proxy: Optional[tuple[str, str]]
+    reflection_proxy: tuple[str, str] | None
     #: Which patch for the current major version this field was introduced in.
     #: Ensures that the data tuples always get extended strictly at the end.
     patch_level: int
@@ -340,7 +339,7 @@ class Field(struct.ProtoField, Generic[T]):
         *,
         type_is_generic_self: bool = False,
         coerce: bool = False,
-        compcoef: Optional[float] = None,
+        compcoef: float | None = None,
         inheritable: bool = True,
         simpledelta: bool = True,
         merge_fn: MergeFunction = default_field_merge,
@@ -353,9 +352,9 @@ class Field(struct.ProtoField, Generic[T]):
         aux_cmd_data: bool = False,
         special_ddl_syntax: bool = False,
         reflection_method: ReflectionMethod = ReflectionMethod.REGULAR,
-        reflection_proxy: Optional[tuple[str, str]] = None,
-        name: Optional[str] = None,
-        reflection_name: Optional[str] = None,
+        reflection_proxy: tuple[str, str] | None = None,
+        name: str | None = None,
+        reflection_name: str | None = None,
         patch_level: int = -1,
         **kwargs: Any,
     ) -> None:
@@ -404,7 +403,7 @@ class Field(struct.ProtoField, Generic[T]):
         self,
         schema: s_schema.Schema,
         value: Any,
-    ) -> Optional[T]:
+    ) -> T | None:
         ftype = self.type
 
         if value is None or isinstance(value, ftype):
@@ -471,9 +470,9 @@ class Field(struct.ProtoField, Generic[T]):
 
     def __get__(
         self,
-        instance: Optional[Object],
+        instance: Object | None,
         owner: builtins.type[Object],
-    ) -> Optional[T]:
+    ) -> T | None:
         if instance is not None:
             return None
         else:
@@ -561,9 +560,9 @@ class SchemaField(Field[Type_T]):
 
     def __get__(
         self,
-        instance: Optional[Object],
+        instance: Object | None,
         owner: type[Object],
-    ) -> Optional[T]:
+    ) -> T | None:
         if instance is not None:
             raise FieldValueNotFoundError(self.name)
         else:
@@ -621,9 +620,9 @@ class ObjectMeta(type):
     _refdicts: collections.OrderedDict[str, RefDict]
     _refdicts_by_refclass: dict[type, RefDict]
     _refdicts_by_field: dict[str, RefDict]  # key is rd.attr
-    _ql_class: Optional[qltypes.SchemaObjectClass]
+    _ql_class: qltypes.SchemaObjectClass | None
     _reflection_method: ReflectionMethod
-    _reflection_link: Optional[str]
+    _reflection_link: str | None
     #: Indicates that ALL changes to this object class are safe from the
     #: standpoint of persistent data.  In other words, changes to the
     #: object are fully reversible without possible data loss.
@@ -631,7 +630,7 @@ class ObjectMeta(type):
 
     #: Whether the type should be abstract in EdgeDB schema.
     #: This only applies if the type wasn't specified in schema.edgeql.
-    _abstract: Optional[bool]
+    _abstract: bool | None
 
     def __new__(
         mcls,
@@ -639,11 +638,11 @@ class ObjectMeta(type):
         bases: tuple[type, ...],
         clsdict: dict[str, Any],
         *,
-        qlkind: Optional[qltypes.SchemaObjectClass] = None,
+        qlkind: qltypes.SchemaObjectClass | None = None,
         reflection: ReflectionMethod = ReflectionMethod.REGULAR,
-        reflection_link: Optional[str] = None,
+        reflection_link: str | None = None,
         data_safe: bool = False,
-        abstract: Optional[bool] = None,
+        abstract: bool | None = None,
         **kwargs: Any,
     ) -> ObjectMeta:
         refdicts: collections.OrderedDict[str, RefDict]
@@ -973,7 +972,7 @@ class ObjectMeta(type):
         return mcls._all_types[name]
 
     @classmethod
-    def maybe_get_schema_class(mcls, name: str) -> Optional[type[Object]]:
+    def maybe_get_schema_class(mcls, name: str) -> type[Object] | None:
         return mcls._all_types.get(name)
 
     @classmethod
@@ -985,7 +984,7 @@ class ObjectMeta(type):
             raise LookupError(f'no schema metaclass for {qlkind}')
         return cast(type[Object], cls)
 
-    def get_ql_class(cls) -> Optional[qltypes.SchemaObjectClass]:
+    def get_ql_class(cls) -> qltypes.SchemaObjectClass | None:
         return cls._ql_class
 
     def get_ql_class_or_die(cls) -> qltypes.SchemaObjectClass:
@@ -997,7 +996,7 @@ class ObjectMeta(type):
     def get_reflection_method(cls) -> ReflectionMethod:
         return cls._reflection_method
 
-    def get_reflection_link(cls) -> Optional[str]:
+    def get_reflection_link(cls) -> str | None:
         return cls._reflection_link
 
 
@@ -1100,7 +1099,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         cls,
         name: sn.Name,
         *,
-        parent: Optional[str] = None,
+        parent: str | None = None,
     ) -> str:
         clsname = cls.get_schema_class_displayname()
         dname = cls.get_displayname_static(name)
@@ -1177,7 +1176,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         schema: s_schema.Schema_T,
         stable_ids: bool = False,
         *,
-        id: Optional[uuid.UUID] = None,
+        id: uuid.UUID | None = None,
         **data: Any,
     ) -> tuple[s_schema.Schema_T, Object_T]:
 
@@ -1466,8 +1465,8 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
     @classmethod
     def compare_values(
         cls: type[Object_T],
-        ours: Optional[Object_T],
-        theirs: Optional[Object_T],
+        ours: Object_T | None,
+        theirs: Object_T | None,
         *,
         our_schema: s_schema.Schema,
         their_schema: s_schema.Schema,
@@ -1592,12 +1591,12 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
     def get_ddl_identity(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         ddl_id_fields = [
             fn for fn, f in type(self).get_fields().items() if f.ddl_identity
         ]
 
-        ddl_identity: Optional[dict[str, Any]]
+        ddl_identity: dict[str, Any] | None
         if ddl_id_fields:
             ddl_identity = {}
             for fn in ddl_id_fields:
@@ -1614,7 +1613,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         schema: s_schema.Schema,
         cmdtype: type[sd.ObjectCommand_T],
         *,
-        classname: Optional[sn.Name] = None,
+        classname: sn.Name | None = None,
         **kwargs: Any,
     ) -> sd.ObjectCommand_T:
         from . import delta as sd
@@ -1648,7 +1647,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        referrer: Optional[Object] = None,
+        referrer: Object | None = None,
     ) -> tuple[sd.CommandGroup, sd.Command, sd.ContextStack]:
         """Prepare a parent portion of a command tree for this object.
 
@@ -1671,9 +1670,9 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         context: sd.CommandContext,
         cmdtype: type[sd.ObjectCommand_T],
         *,
-        classname: Optional[sn.Name] = None,
-        referrer: Optional[Object] = None,
-        possible_parent: Optional[sd.ObjectCommand[Object]] = None,
+        classname: sn.Name | None = None,
+        referrer: Object | None = None,
+        possible_parent: sd.ObjectCommand[Object] | None = None,
         **kwargs: Any,
     ) -> tuple[sd.Command, sd.ObjectCommand_T, sd.ContextStack]:
         """Make a command subtree for this object.
@@ -1945,8 +1944,8 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         fname: str,
         value: Any,
         orig_value: Any,
-        orig_schema: Optional[s_schema.Schema],
-        orig_object: Optional[Object_T],
+        orig_schema: s_schema.Schema | None,
+        orig_object: Object_T | None,
         from_default: bool = False,
     ) -> None:
         computed_fields = self.get_computed_fields(schema)
@@ -2142,8 +2141,8 @@ class DerivableObject(QualifiedObject):
         schema: s_schema.Schema,
         source: QualifiedObject,
         *qualifiers: str,
-        derived_name_base: Optional[sn.Name] = None,
-        module: Optional[str] = None,
+        derived_name_base: sn.Name | None = None,
+        module: str | None = None,
     ) -> sn.QualName:
         source_name = source.get_name(schema)
         if module is None:
@@ -2170,8 +2169,8 @@ class DerivableObject(QualifiedObject):
         source: QualifiedObject,
         *qualifiers: str,
         mark_derived: bool = False,
-        derived_name_base: Optional[sn.Name] = None,
-        module: Optional[str] = None,
+        derived_name_base: sn.Name | None = None,
+        module: str | None = None,
     ) -> sn.QualName:
         return self.derive_name(
             schema, source, *qualifiers,
@@ -2197,9 +2196,9 @@ class ObjectShell(Shell, Generic[Object_T_co]):
         *,
         name: sn.Name,
         schemaclass: type[Object_T_co],
-        displayname: Optional[str] = None,
-        origname: Optional[sn.Name] = None,
-        span: Optional[parsing.Span] = None,
+        displayname: str | None = None,
+        origname: sn.Name | None = None,
+        span: parsing.Span | None = None,
     ) -> None:
         self.name = name
         self.origname = origname
@@ -2286,7 +2285,7 @@ class ObjectCollection(
     def __init_subclass__(
         cls,
         *,
-        container: Optional[builtins.type[CollectionFactory[Any]]] = None,
+        container: builtins.type[CollectionFactory[Any]] | None = None,
     ) -> None:
         super().__init_subclass__()
         if container is not None:
@@ -2333,7 +2332,7 @@ class ObjectCollection(
         self,
     ) -> tuple[
         str,
-        Optional[tuple[builtins.type, ...] | builtins.type],
+        tuple[builtins.type, ...] | builtins.type | None,
         tuple[uuid.UUID, ...],
         tuple[tuple[str, Any], ...],
     ]:
@@ -2350,7 +2349,7 @@ class ObjectCollection(
     def schema_restore(
         data: tuple[
             str,
-            Optional[tuple[builtins.type, ...] | builtins.type],
+            tuple[builtins.type, ...] | builtins.type | None,
             tuple[uuid.UUID, ...],
             tuple[tuple[str, Any], ...],
         ],
@@ -2364,7 +2363,7 @@ class ObjectCollection(
         cls,
         data: tuple[
             str,
-            Optional[tuple[builtins.type, ...] | builtins.type],
+            tuple[builtins.type, ...] | builtins.type | None,
             tuple[uuid.UUID, ...],
             tuple[tuple[str, Any], ...],
         ],
@@ -2374,7 +2373,7 @@ class ObjectCollection(
     def __reduce__(self) -> tuple[
         Callable[..., ObjectCollection[Any]],
         tuple[
-            Optional[tuple[builtins.type, ...] | builtins.type],
+            tuple[builtins.type, ...] | builtins.type | None,
             tuple[uuid.UUID, ...],
             dict[str, Any],
         ],
@@ -2383,7 +2382,7 @@ class ObjectCollection(
             f'{type(self)} parameters are not resolved'
 
         cls: type[ObjectCollection[Object_T]] = self.__class__
-        types: Optional[tuple[type, ...]] = self.orig_args
+        types: tuple[type, ...] | None = self.orig_args
         if types is None or not cls.is_anon_parametrized():
             typeargs = None
         else:
@@ -2397,7 +2396,7 @@ class ObjectCollection(
     @classmethod
     def __restore__(
         cls,
-        typeargs: Optional[tuple[builtins.type, ...] | builtins.type],
+        typeargs: tuple[builtins.type, ...] | builtins.type | None,
         ids: tuple[uuid.UUID, ...],
         attrs: dict[str, Any],
     ) -> ObjectCollection[Object_T]:
@@ -2570,7 +2569,7 @@ class ObjectIndexBase(
     def __init_subclass__(
         cls,
         *,
-        key: Optional[KeyFunction[Object_T, Key_T]] = None,
+        key: KeyFunction[Object_T, Key_T] | None = None,
     ) -> None:
         super().__init_subclass__()
         if key is not None:
@@ -2614,7 +2613,7 @@ class ObjectIndexBase(
     def __init__(
         self,
         _ids: Collection[uuid.UUID],
-        _keys: Optional[tuple[Key_T, ...]] = None,
+        _keys: tuple[Key_T, ...] | None = None,
         *,
         _private_init: bool,
     ) -> None:
@@ -2743,8 +2742,8 @@ class ObjectIndexBase(
         self,
         schema: s_schema.Schema,
         name: Key_T,
-        default: Optional[Object_T | NoDefaultT] = NoDefault,
-    ) -> Optional[Object_T]:
+        default: Object_T | NoDefaultT | None = NoDefault,
+    ) -> Object_T | None:
         # TODO: Should we store an actual dict?
         for key, item_id in zip(self.keys(schema), self._ids):
             if name == key:
@@ -3091,7 +3090,7 @@ class InheritingObject(SubclassableObject):
                 yield fn
 
     @classmethod
-    def get_default_base_name(self) -> Optional[sn.Name]:
+    def get_default_base_name(self) -> sn.Name | None:
         return None
 
     # Redefining bases and ancestors accessors to make them generic
@@ -3112,7 +3111,7 @@ class InheritingObject(SubclassableObject):
 
     def maybe_get_topmost_concrete_base(
         self: InheritingObjectT, schema: s_schema.Schema
-    ) -> Optional[InheritingObjectT]:
+    ) -> InheritingObjectT | None:
         """Get the topmost non-abstract base."""
         lineage = self.get_ancestors(schema).objects(schema)
         for ancestor in reversed(lineage):
@@ -3284,8 +3283,8 @@ class InheritingObject(SubclassableObject):
         fname: str,
         value: Any,
         orig_value: Any,
-        orig_schema: Optional[s_schema.Schema],
-        orig_object: Optional[InheritingObjectT],
+        orig_schema: s_schema.Schema | None,
+        orig_object: InheritingObjectT | None,
         from_default: bool = False,
     ) -> None:
         inherited_fields = self.get_inherited_fields(schema)
@@ -3528,8 +3527,8 @@ def derive_name(
     schema: s_schema.Schema,
     *qualifiers: str,
     module: str,
-    parent: Optional[DerivableObject] = None,
-    derived_name_base: Optional[sn.Name] = None,
+    parent: DerivableObject | None = None,
+    derived_name_base: sn.Name | None = None,
 ) -> sn.QualName:
     if derived_name_base is None:
         assert parent is not None

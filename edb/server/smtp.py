@@ -27,7 +27,6 @@ import hashlib
 import pickle
 import aiosmtplib
 
-from typing import Optional
 
 from edb.common import retryloop
 from edb.ir import statypes
@@ -43,11 +42,11 @@ logger = logging.getLogger('edb.server.smtp')
 @dataclasses.dataclass
 class SMTPProviderConfig:
     name: str
-    sender: Optional[str]
-    host: Optional[str]
-    port: Optional[int]
-    username: Optional[str]
-    password: Optional[str]
+    sender: str | None
+    host: str | None
+    port: int | None
+    username: str | None
+    password: str | None
     security: str
     validate_certs: bool
     timeout_per_email: statypes.Duration

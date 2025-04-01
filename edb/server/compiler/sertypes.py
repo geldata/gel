@@ -23,7 +23,6 @@ from typing import (
     Callable,
     ClassVar,
     Literal,
-    Optional,
     Iterable,
     Mapping,
     Sequence,
@@ -240,11 +239,11 @@ def _get_collection_type_id(
 def _get_object_shape_id(
     coll_type: str,
     subtypes: list[uuid.UUID],
-    element_names: Optional[list[str]] = None,
-    cardinalities: Optional[list[enums.Cardinality]] = None,
+    element_names: list[str] | None = None,
+    cardinalities: list[enums.Cardinality] | None = None,
     *,
-    links_props: Optional[list[bool]] = None,
-    links: Optional[list[bool]] = None,
+    links_props: list[bool] | None = None,
+    links: list[bool] | None = None,
     has_implicit_fields: bool = False,
 ) -> uuid.UUID:
     parts = [coll_type]
@@ -892,7 +891,7 @@ def describe_input_shape(
     *,
     prepare_state: bool = False,
     ctx: Context,
-) -> Optional[uuid.UUID]:
+) -> uuid.UUID | None:
     if t in input_shapes:
         element_names = []
         subtypes = []
@@ -1894,7 +1893,7 @@ class StateSerializer(InputShapeSerializer):
     def get_global_type_rep(
         self,
         global_name: str,
-    ) -> Optional[object]:
+    ) -> object | None:
         return self._global_reps.get(global_name)
 
 
@@ -1992,7 +1991,7 @@ class SetDesc(SequenceDesc):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ShapeDesc(TypeDesc):
-    type: Optional[TypeDesc]
+    type: TypeDesc | None
     fields: dict[str, TypeDesc]
     flags: dict[str, int]
     cardinalities: dict[str, enums.Cardinality]
@@ -2001,8 +2000,8 @@ class ShapeDesc(TypeDesc):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SchemaTypeDesc(TypeDesc):
-    name: Optional[str] = None
-    schema_defined: Optional[bool] = None
+    name: str | None = None
+    schema_defined: bool | None = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -2057,20 +2056,20 @@ class BaseScalarDesc(SchemaTypeDesc):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ScalarDesc(BaseScalarDesc):
-    fundamental_type: Optional[TypeDesc]
-    ancestors: Optional[list[TypeDesc]]
+    fundamental_type: TypeDesc | None
+    ancestors: list[TypeDesc] | None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class NamedTupleDesc(SchemaTypeDesc):
     fields: dict[str, TypeDesc]
-    ancestors: Optional[list[TypeDesc]]
+    ancestors: list[TypeDesc] | None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class TupleDesc(SchemaTypeDesc):
     fields: list[TypeDesc]
-    ancestors: Optional[list[TypeDesc]]
+    ancestors: list[TypeDesc] | None
 
     def encode(self, data: collections.abc.Sequence[Any]) -> bytes:
         bufs = [_uint32_packer(len(self.fields))]
@@ -2095,7 +2094,7 @@ class TupleDesc(SchemaTypeDesc):
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class EnumDesc(SchemaTypeDesc):
     names: list[str]
-    ancestors: Optional[list[TypeDesc]]
+    ancestors: list[TypeDesc] | None
 
     @functools.cached_property
     def _decoder(self) -> Callable[[bytes], Any]:
@@ -2124,20 +2123,20 @@ class EnumDesc(SchemaTypeDesc):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ArrayDesc(SequenceDesc, SchemaTypeDesc):
-    ancestors: Optional[list[TypeDesc]]
+    ancestors: list[TypeDesc] | None
     dim_len: int
     impl = list
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class RangeDesc(SchemaTypeDesc):
-    ancestors: Optional[list[TypeDesc]]
+    ancestors: list[TypeDesc] | None
     inner: TypeDesc
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MultiRangeDesc(SchemaTypeDesc):
-    ancestors: Optional[list[TypeDesc]]
+    ancestors: list[TypeDesc] | None
     inner: TypeDesc
 
 

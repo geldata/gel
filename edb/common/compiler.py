@@ -22,7 +22,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Generic,
-    Optional,
     TypeVar,
     ContextManager,
 )
@@ -37,12 +36,12 @@ ContextLevel_T = TypeVar('ContextLevel_T', bound='ContextLevel')
 class ContextLevel:
     _stack: CompilerContext[ContextLevel]
 
-    def __init__(self, prevlevel: Optional[ContextLevel], mode: Any) -> None:
+    def __init__(self, prevlevel: ContextLevel | None, mode: Any) -> None:
         pass
 
     def on_pop(
         self: ContextLevel_T,
-        prevlevel: Optional[ContextLevel_T],
+        prevlevel: ContextLevel_T | None,
     ) -> None:
         pass
 
@@ -63,7 +62,7 @@ class CompilerContextManager(ContextManager[ContextLevel_T]):
         self,
         context: CompilerContext[ContextLevel_T],
         mode: Any,
-        prevlevel: Optional[ContextLevel_T],
+        prevlevel: ContextLevel_T | None,
     ) -> None:
         self.context = context
         self.mode = mode
@@ -104,16 +103,16 @@ class CompilerContext(Generic[ContextLevel_T]):
     def push(
         self,
         mode: Any,
-        prevlevel: Optional[ContextLevel_T] = None,
+        prevlevel: ContextLevel_T | None = None,
     ) -> ContextLevel_T:
         return self._push(mode, prevlevel)
 
     def _push(
         self,
         mode: Any,
-        prevlevel: Optional[ContextLevel_T] = None,
+        prevlevel: ContextLevel_T | None = None,
         *,
-        initial: Optional[ContextLevel_T] = None,
+        initial: ContextLevel_T | None = None,
     ) -> ContextLevel_T:
         if initial is not None:
             level = initial
@@ -142,7 +141,7 @@ class CompilerContext(Generic[ContextLevel_T]):
     def new(
         self,
         mode: Any = None,
-        prevlevel: Optional[ContextLevel_T] = None,
+        prevlevel: ContextLevel_T | None = None,
     ) -> CompilerContextManager[ContextLevel_T]:
         if mode is None:
             mode = self.default_mode

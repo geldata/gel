@@ -25,7 +25,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     Iterable,
     Sequence,
     NamedTuple,
@@ -56,13 +55,13 @@ from . import context
 
 def get_schema_object(
     ref: qlast.BaseObjectRef,
-    module: Optional[str]=None,
+    module: str | None=None,
     *,
-    item_type: Optional[type[s_obj.Object]]=None,
-    condition: Optional[Callable[[s_obj.Object], bool]]=None,
-    label: Optional[str]=None,
+    item_type: type[s_obj.Object] | None=None,
+    condition: Callable[[s_obj.Object], bool] | None=None,
+    label: str | None=None,
     ctx: context.ContextLevel,
-    span: Optional[parsing.Span] = None,
+    span: parsing.Span | None = None,
 ) -> s_obj.Object:
 
     if isinstance(ref, qlast.ObjectRef):
@@ -116,7 +115,7 @@ def get_schema_object(
 
 def _get_partial_path_prefix_type(
     ctx: context.ContextLevel,
-) -> Optional[s_types.Type]:
+) -> s_types.Type | None:
     if ctx is None:
         return None
     ppp = ctx.partial_path_prefix
@@ -129,13 +128,13 @@ def _get_partial_path_prefix_type(
 
 def get_schema_type(
     name: qlast.BaseObjectRef,
-    module: Optional[str] = None,
+    module: str | None = None,
     *,
     ctx: context.ContextLevel,
-    label: Optional[str] = None,
-    condition: Optional[Callable[[s_obj.Object], bool]] = None,
-    item_type: Optional[type[s_obj.Object]] = None,
-    span: Optional[parsing.Span] = None,
+    label: str | None = None,
+    condition: Callable[[s_obj.Object], bool] | None = None,
+    item_type: type[s_obj.Object] | None = None,
+    span: parsing.Span | None = None,
 ) -> s_types.Type:
     if item_type is None:
         item_type = s_types.Type
@@ -148,7 +147,7 @@ def get_schema_type(
 
 def resolve_schema_name(
     name: str, module: str, *, ctx: context.ContextLevel
-) -> Optional[sn.QualName]:
+) -> sn.QualName | None:
     schema_module = ctx.modaliases.get(module)
     if schema_module is None:
         return None
@@ -160,7 +159,7 @@ def preserve_view_shape(
     base: s_types.Type | s_pointers.Pointer,
     derived: s_types.Type | s_pointers.Pointer,
     *,
-    derived_name_base: Optional[sn.Name] = None,
+    derived_name_base: sn.Name | None = None,
     ctx: context.ContextLevel,
 ) -> None:
     """Copy a view shape to a child type, updating the pointers"""
@@ -186,12 +185,12 @@ def preserve_view_shape(
 def derive_view(
     stype: s_types.Type,
     *,
-    derived_name: Optional[sn.QualName] = None,
-    derived_name_quals: Optional[Sequence[str]] = (),
+    derived_name: sn.QualName | None = None,
+    derived_name_quals: Sequence[str] | None = (),
     preserve_shape: bool = False,
     exprtype: s_types.ExprType = s_types.ExprType.Select,
     inheritance_merge: bool = True,
-    attrs: Optional[dict[str, Any]] = None,
+    attrs: dict[str, Any] | None = None,
     ctx: context.ContextLevel,
 ) -> s_types.Type:
 
@@ -298,14 +297,14 @@ def derive_view(
 def derive_ptr(
     ptr: s_pointers.Pointer,
     source: s_sources.Source,
-    target: Optional[s_types.Type] = None,
+    target: s_types.Type | None = None,
     *qualifiers: str,
-    derived_name: Optional[sn.QualName] = None,
-    derived_name_quals: Optional[Sequence[str]] = (),
+    derived_name: sn.QualName | None = None,
+    derived_name_quals: Sequence[str] | None = (),
     preserve_shape: bool = False,
     derive_backlink: bool = False,
     inheritance_merge: bool = True,
-    attrs: Optional[dict[str, Any]] = None,
+    attrs: dict[str, Any] | None = None,
     ctx: context.ContextLevel,
 ) -> s_pointers.Pointer:
 
@@ -365,9 +364,9 @@ def derive_ptr(
 
 
 def derive_view_name(
-    stype: Optional[s_obj.DerivableObject],
-    derived_name_quals: Optional[Sequence[str]] = (),
-    derived_name_base: Optional[sn.Name] = None,
+    stype: s_obj.DerivableObject | None,
+    derived_name_quals: Sequence[str] | None = (),
+    derived_name_base: sn.Name | None = None,
     *,
     ctx: context.ContextLevel,
 ) -> sn.QualName:
@@ -394,7 +393,7 @@ def get_union_type(
     opaque: bool = False,
     preserve_derived: bool = False,
     ctx: context.ContextLevel,
-    span: Optional[parsing.Span] = None,
+    span: parsing.Span | None = None,
 ) -> s_types.TypeT:
 
     targets: Sequence[s_types.Type]
@@ -603,7 +602,7 @@ def get_union_pointer(
     direction: s_pointers.PointerDirection,
     components: Iterable[s_pointers.Pointer],
     opaque: bool = False,
-    modname: Optional[str] = None,
+    modname: str | None = None,
     ctx: context.ContextLevel,
 ) -> s_pointers.Pointer:
 

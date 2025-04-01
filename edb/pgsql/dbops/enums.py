@@ -22,7 +22,6 @@ from typing import (
     Any,
     Iterable,
     Mapping,
-    Optional,
     Sequence,
     TypeAlias,
 )
@@ -64,7 +63,7 @@ class Enum(base.DBObject):
         name: EnumName,
         values: Sequence[str],
         *,
-        metadata: Optional[Mapping[str, Any]] = None,
+        metadata: Mapping[str, Any] | None = None,
     ) -> None:
         self.name = name
         self.values = values
@@ -76,8 +75,8 @@ class CreateEnum(ddl.SchemaObjectOperation):
         self,
         enum: Enum,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         super().__init__(
             enum.name, conditions=conditions, neg_conditions=neg_conditions)
@@ -93,8 +92,8 @@ class AlterEnum(ddl.DDLOperation):
         self,
         name: EnumName,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         super().__init__(conditions=conditions, neg_conditions=neg_conditions)
         self.name = name
@@ -112,8 +111,8 @@ class AlterEnumAddValue(AlterEnum):
         name: EnumName,
         value: str,
         *,
-        before: Optional[str] = None,
-        after: Optional[str] = None,
+        before: str | None = None,
+        after: str | None = None,
         conditional: bool = False,
     ):
         super().__init__(name)

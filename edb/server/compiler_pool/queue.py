@@ -51,7 +51,7 @@ class WorkerQueue(typing.Generic[W]):
     async def acquire(
         self,
         *,
-        condition: typing.Optional[_AcquireCondition[W]]=None,
+        condition: _AcquireCondition[W] | None=None,
         weighter=None,
     ) -> W:
         # There can be a race between a waiter scheduled for to wake up

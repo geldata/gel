@@ -23,7 +23,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     TypeVar,
 )
 
@@ -258,7 +257,7 @@ def _process_op_result(
     typeref: irast.TypeRef,
     schema: s_schema.Schema,
     *,
-    span: Optional[parsing.Span]=None,
+    span: parsing.Span | None=None,
 ) -> irast.ConstExpr:
     qlconst: qlast.BaseConstant
     if isinstance(value, str):
@@ -578,8 +577,8 @@ def object_type_to_spec(
     # We pass a spec_class so that users like the config system can ask for
     # their own subtyped versions of a spec.
     spec_class: type[T_spec],
-    parent: Optional[T_spec] = None,
-    _memo: Optional[dict[s_types.Type, T_spec | type]] = None,
+    parent: T_spec | None = None,
+    _memo: dict[s_types.Type, T_spec | type] | None = None,
 ) -> T_spec:
     if _memo is None:
         _memo = {}

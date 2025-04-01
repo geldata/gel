@@ -23,7 +23,6 @@ from typing import (
     AbstractSet,
     Any,
     Callable,
-    Optional,
     TypeVar,
     cast,
     TYPE_CHECKING,
@@ -115,7 +114,7 @@ class AnnotationSubject(so.Object):
         self,
         schema: s_schema.Schema,
         name: sn.QualName,
-    ) -> Optional[str]:
+    ) -> str | None:
         attrval = self.get_annotations(schema).get(schema, name, None)
         return attrval.get_value(schema) if attrval is not None else None
 
@@ -137,7 +136,7 @@ class AnnotationSubject(so.Object):
         schema: s_schema.Schema,
         name: sn.QualName,
         t: Callable[[Any], T],
-    ) -> Optional[T]:
+    ) -> T | None:
         annotation_text = self.get_annotation(schema, name)
         if annotation_text is None:
             return None
@@ -218,7 +217,7 @@ class AnnotationCommand(sd.QualifiedObjectCommand[Annotation],
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if field in {'abstract', 'inheritable'}:
             return field
         else:
@@ -481,8 +480,8 @@ class AlterAnnotationValue(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if (
             not self.has_attribute_value('value')
             and not self.has_attribute_value('owned')

@@ -20,7 +20,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Any
 
 import typing
 import functools
@@ -120,7 +120,7 @@ class DocTestMeta(type(unittest.TestCase)):
 
 class BaseDocTest(unittest.TestCase, metaclass=DocTestMeta):
     parser_debug_flag = ''
-    re_filter: Optional[typing.Pattern[str]] = None
+    re_filter: typing.Pattern[str] | None = None
 
     def _run_test(self, *, source, spec=None, expected=None):
         if spec and 'must_fail' in spec:
@@ -154,8 +154,8 @@ class BaseDocTest(unittest.TestCase, metaclass=DocTestMeta):
         expected,
         result,
         *,
-        re_filter: Optional[str] = None,
-        message: Optional[str] = None
+        re_filter: str | None = None,
+        message: str | None = None
     ) -> None:
         if re_filter is None:
             re_filter = self.re_filter
@@ -176,8 +176,8 @@ class BaseDocTest(unittest.TestCase, metaclass=DocTestMeta):
 
 
 class BaseSyntaxTest(BaseDocTest):
-    ast_to_source: Optional[Any] = None
-    markup_dump_lexer: Optional[str] = None
+    ast_to_source: Any | None = None
+    markup_dump_lexer: str | None = None
 
     @classmethod
     def get_grammar_token(cls) -> type[qlgrammar.tokens.GrammarToken]:
@@ -285,7 +285,7 @@ def new_compiler():
 
 class BaseSchemaTest(BaseDocTest):
     DEFAULT_MODULE = 'default'
-    SCHEMA: Optional[str] = None
+    SCHEMA: str | None = None
 
     schema: s_schema.Schema
 
@@ -437,7 +437,7 @@ class BaseSchemaTest(BaseDocTest):
 
     @classmethod
     def load_schema(
-        cls, source: str, modname: Optional[str] = None
+        cls, source: str, modname: str | None = None
     ) -> s_schema.Schema:
         if not modname:
             modname = cls.DEFAULT_MODULE

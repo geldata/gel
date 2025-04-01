@@ -20,7 +20,7 @@
 in our internal Postgres instance."""
 
 import functools
-from typing import Optional, Iterable, cast
+from typing import Iterable, cast
 
 from edb import errors
 from edb.common.parsing import Span
@@ -175,7 +175,7 @@ def _resolve_JoinExpr(
     rarg = resolve_BaseRangeVar(join.rarg, ctx=ctx)
     rtable = ctx.scope.tables[len(ctx.scope.tables) - 1]
 
-    quals: Optional[pgast.BaseExpr] = None
+    quals: pgast.BaseExpr | None = None
     if join.quals:
         quals = dispatch.resolve(join.quals, ctx=ctx)
 
@@ -283,7 +283,7 @@ def resolve_CommonTableExpr(
     return node, result
 
 
-def _infer_col_aliases(query: pgast.SelectStmt) -> Optional[list[str]]:
+def _infer_col_aliases(query: pgast.SelectStmt) -> list[str] | None:
     aliases = [expr.infer_alias(t) for t in query.target_list]
     if not all(aliases):
         return None
@@ -392,8 +392,8 @@ def _resolve_RangeFunction(
 def _zip_column_alias(
     columns: list[context.Column],
     alias: pgast.Alias,
-    ctx: Optional[Span],
-) -> Iterable[tuple[context.Column, Optional[str]]]:
+    ctx: Span | None,
+) -> Iterable[tuple[context.Column, str | None]]:
     if not alias.colnames:
         return map(lambda c: (c, None), columns)
 

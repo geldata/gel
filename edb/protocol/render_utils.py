@@ -17,7 +17,6 @@
 #
 
 from __future__ import annotations
-from typing import Optional
 
 import contextlib
 import textwrap
@@ -38,7 +37,7 @@ class RenderBuffer:
     def newline(self) -> None:
         self.buf.append('')
 
-    def lastline(self) -> Optional[str]:
+    def lastline(self) -> str | None:
         return self.buf[-1] if len(self.buf) else None
 
     def popline(self) -> str:

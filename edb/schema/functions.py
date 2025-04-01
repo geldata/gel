@@ -25,7 +25,6 @@ import uuid
 import builtins
 from typing import (
     Any,
-    Optional,
     TypeVar,
     Iterable,
     Mapping,
@@ -159,7 +158,7 @@ class ParameterLike(s_abc.Parameter):
     def get_kind(self, _: s_schema.Schema) -> ft.ParameterKind:
         raise NotImplementedError
 
-    def get_default(self, _: s_schema.Schema) -> Optional[s_expr.Expression]:
+    def get_default(self, _: s_schema.Schema) -> s_expr.Expression | None:
         raise NotImplementedError
 
     def get_type(self, _: s_schema.Schema) -> s_types.Type:
@@ -177,7 +176,7 @@ class ParameterDesc(ParameterLike):
 
     num: int
     name: sn.Name
-    default: Optional[s_expr.Expression]
+    default: s_expr.Expression | None
     type: s_types.TypeShell[s_types.Type]
     typemod: ft.TypeModifier
     kind: ft.ParameterKind
@@ -187,7 +186,7 @@ class ParameterDesc(ParameterLike):
         *,
         num: int,
         name: sn.Name,
-        default: Optional[s_expr.Expression],
+        default: s_expr.Expression | None,
         type: s_types.TypeShell[s_types.Type],
         typemod: ft.TypeModifier,
         kind: ft.ParameterKind,
@@ -203,7 +202,7 @@ class ParameterDesc(ParameterLike):
     def from_ast(
         cls,
         schema: s_schema.Schema,
-        modaliases: Mapping[Optional[str], str],
+        modaliases: Mapping[str | None, str],
         num: int,
         astnode: qlast.FuncParam,
     ) -> ParameterDesc:
@@ -248,7 +247,7 @@ class ParameterDesc(ParameterLike):
     def get_kind(self, _: s_schema.Schema) -> ft.ParameterKind:
         return self.kind
 
-    def get_default(self, _: s_schema.Schema) -> Optional[s_expr.Expression]:
+    def get_default(self, _: s_schema.Schema) -> s_expr.Expression | None:
         return self.default
 
     def get_type(self, schema: s_schema.Schema) -> s_types.Type:
@@ -338,7 +337,7 @@ def make_func_param(
     type: qlast.TypeExpr,
     typemod: qltypes.TypeModifier = qltypes.TypeModifier.SingletonType,
     kind: qltypes.ParameterKind,
-    default: Optional[qlast.Expr] = None,
+    default: qlast.Expr | None = None,
 ) -> qlast.FuncParam:
     # If the param is variadic, strip the array from the type in the schema
     if kind is ft.ParameterKind.VariadicParam:
@@ -514,8 +513,8 @@ class ParameterCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         # ParameterCommand cannot have its own AST because it is a
         # side-effect of a FunctionCommand.
         return None
@@ -559,7 +558,7 @@ class ParameterCommand(
         context: sd.CommandContext,
         field: so.Field[Any],
         value: Any,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         if field.name == 'default':
             type = self.scls.get_type(schema)
             return s_types.type_dummy_expr(type, schema)
@@ -614,7 +613,7 @@ class ParameterLikeList(abc.ABC):
         self,
         schema: s_schema.Schema,
         name: str,
-    ) -> Optional[ParameterLike]:
+    ) -> ParameterLike | None:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -644,7 +643,7 @@ class ParameterLikeList(abc.ABC):
     def find_variadic(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[ParameterLike]:
+    ) -> ParameterLike | None:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -675,7 +674,7 @@ class FuncParameterList(so.ObjectList[Parameter], ParameterLikeList):
         self,
         schema: s_schema.Schema,
         name: str,
-    ) -> Optional[Parameter]:
+    ) -> Parameter | None:
         for param in self.objects(schema):
             if param.get_parameter_name(schema) == name:
                 return param
@@ -717,7 +716,7 @@ class FuncParameterList(so.ObjectList[Parameter], ParameterLikeList):
 
         return types.MappingProxyType(named)
 
-    def find_variadic(self, schema: s_schema.Schema) -> Optional[Parameter]:
+    def find_variadic(self, schema: s_schema.Schema) -> Parameter | None:
         for param in self.objects(schema):
             if param.get_kind(schema) is ft.ParameterKind.VariadicParam:
                 return param
@@ -989,7 +988,7 @@ class ParametrizedCommand(sd.ObjectCommand[so.Object_T]):
     def _get_param_desc_from_params_ast(
         cls,
         schema: s_schema.Schema,
-        modaliases: Mapping[Optional[str], str],
+        modaliases: Mapping[str | None, str],
         params: list[qlast.FuncParam],
         *,
         param_offset: int=0,
@@ -1003,7 +1002,7 @@ class ParametrizedCommand(sd.ObjectCommand[so.Object_T]):
     def _get_param_desc_from_ast(
         cls,
         schema: s_schema.Schema,
-        modaliases: Mapping[Optional[str], str],
+        modaliases: Mapping[str | None, str],
         astnode: qlast.ObjectDDL,
         *,
         param_offset: int=0,
@@ -1088,10 +1087,10 @@ class AlterCallableObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.CallableObjectCommand]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.CallableObjectCommand | None:
         node = cast(
-            Optional[qlast.CallableObjectCommand],
+            qlast.CallableObjectCommand | None,
             # Skip AlterObject's _get_ast, since we don't want to
             # filter things without subcommands. (Since updating
             # nativecode isn't a subcommand in the AST.)
@@ -1190,7 +1189,7 @@ class CreateCallableObject(
                 continue
 
             num: int = props['num']
-            default: Optional[s_expr.Expression] = props.get('default')
+            default: s_expr.Expression | None = props.get('default')
             param = make_func_param(
                 name=Parameter.paramname_from_fullname(props['name']),
                 type=utils.typeref_to_ast(schema, props['type']),
@@ -1353,8 +1352,8 @@ class Function(
         self,
         schema: s_schema.Schema,
         *,
-        span: Optional[parsing.Span] = None,
-    ) -> Optional[tuple[list[Function], int]]:
+        span: parsing.Span | None = None,
+    ) -> tuple[list[Function], int] | None:
         """Find if this function overloads another in object parameter.
 
         If so, check the following rules:
@@ -1529,7 +1528,7 @@ class FunctionCommand(
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if field == 'nativecode':
             return 'nativecode'
         else:
@@ -1571,7 +1570,7 @@ class FunctionCommand(
         context: sd.CommandContext,
         field: so.Field[Any],
         value: Any,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         if field.name == 'nativecode':
             func = schema.get(self.classname, type=Function)
             rt = func.get_return_type(schema)
@@ -1657,7 +1656,7 @@ class FunctionCommand(
 
         ir = expr.irast
 
-        spec_volatility: Optional[ft.Volatility] = (
+        spec_volatility: ft.Volatility | None = (
             self.get_specified_attribute_value('volatility', schema, context))
 
         if spec_volatility is None:
@@ -2169,7 +2168,7 @@ class AlterFunction(AlterCallableObject[Function], FunctionCommand):
         # We also need to propagate changes to "parent"
         # overloads. This is mainly so they can get the proper global
         # variables updated.
-        extra_refs: Optional[dict[so.Object, list[str]]] = None
+        extra_refs: dict[so.Object, list[str]] | None = None
         if (overloaded := scls.find_object_param_overloads(schema)):
             ov_funcs, ov_idx = overloaded
             cur_type = (
@@ -2212,7 +2211,7 @@ class AlterFunction(AlterCallableObject[Function], FunctionCommand):
                     span=astnode.span
                 )
 
-            nativecode_expr: Optional[qlast.Expr] = None
+            nativecode_expr: qlast.Expr | None = None
             if astnode.nativecode is not None:
                 nativecode_expr = astnode.nativecode
             elif (
@@ -2590,7 +2589,7 @@ def get_compiler_options(
     func_name: sn.QualName,
     params: FuncParameterList,
     track_schema_ref_exprs: bool,
-    inlining_context: Optional[qlcontext.ContextLevel] = None,
+    inlining_context: qlcontext.ContextLevel | None = None,
 ) -> qlcompiler.CompilerOptions:
 
     has_inlined_defaults = (

@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Sequence, cast
+from typing import Callable, Sequence, cast
 import typing
 
 from .data_ops import (
@@ -44,7 +44,7 @@ from . import data_ops as e
 from ..interpreter_logging import print_warning
 
 
-def map_tp(f: Callable[[Tp], Optional[Tp]], tp: Tp) -> Tp:
+def map_tp(f: Callable[[Tp], Tp | None], tp: Tp) -> Tp:
     """maps a function over free variables and bound variables,
     and does not modify other nodes
 
@@ -105,7 +105,7 @@ def map_tp(f: Callable[[Tp], Optional[Tp]], tp: Tp) -> Tp:
 
 
 def map_edge_select_filter(
-    f: Callable[[Expr], Optional[Expr]],
+    f: Callable[[Expr], Expr | None],
     expr: e.Expr | e.EdgeDatabaseSelectFilter,
 ) -> e.Expr | e.EdgeDatabaseSelectFilter:
     tentative = f(expr)  # type: ignore[arg-type]
@@ -132,7 +132,7 @@ def map_edge_select_filter(
                 return expr
 
 
-def map_expr(f: Callable[[Expr], Optional[Expr]], expr: Expr) -> Expr:
+def map_expr(f: Callable[[Expr], Expr | None], expr: Expr) -> Expr:
     """maps a function over free variables and bound variables,
     and does not modify other nodes
 
@@ -148,11 +148,11 @@ def map_expr(f: Callable[[Expr], Optional[Expr]], expr: Expr) -> Expr:
     else:
 
         def recur_tp(expr):
-            def f_tp(tp: Tp) -> Optional[Tp]:
+            def f_tp(tp: Tp) -> Tp | None:
                 result = f(tp)
                 # if result is not None:
                 #     assert isinstance(result, Tp)
-                return cast(Optional[Tp], result)
+                return cast(Tp | None, result)
 
             return map_tp(f_tp, expr)
 
@@ -280,14 +280,14 @@ def map_expr(f: Callable[[Expr], Optional[Expr]], expr: Expr) -> Expr:
     raise ValueError("Not Implemented: map_expr ", expr)
 
 
-def map_var(f: Callable[[VarExpr], Optional[Expr]], expr: Expr) -> Expr:
+def map_var(f: Callable[[VarExpr], Expr | None], expr: Expr) -> Expr:
     """maps a function over free variables and bound variables,
     and does not modify other nodes
 
     f : if not None, replace with the result
     """
 
-    def map_func(e: Expr) -> Optional[Expr]:
+    def map_func(e: Expr) -> Expr | None:
         match e:
             case FreeVarExpr(var=_):
                 return f(e)
@@ -341,7 +341,7 @@ def subst_expr_for_expr(expr2: Expr, replace: Expr, subject: Expr):
 
     e2_free_vars = get_free_vars(expr2)
 
-    def map_func(candidate: Expr) -> Optional[Expr]:
+    def map_func(candidate: Expr) -> Expr | None:
         if candidate == replace:
             return expr2
         elif isinstance(candidate, BindingExpr):
@@ -366,7 +366,7 @@ def subst_expr_for_expr(expr2: Expr, replace: Expr, subject: Expr):
     return map_expr(map_func, subject)
 
 
-def abstract_over_expr(expr: Expr, var: Optional[str] = None) -> BindingExpr:
+def abstract_over_expr(expr: Expr, var: str | None = None) -> BindingExpr:
     """Construct a BindingExpr that binds var"""
 
     if var is None:
@@ -397,7 +397,7 @@ def appears_in_expr_pred(
     class ReturnTrue(Exception):
         pass
 
-    def map_func(candidate: Expr) -> Optional[Expr]:
+    def map_func(candidate: Expr) -> Expr | None:
         if search_pred(candidate):
             raise ReturnTrue()
         else:
@@ -412,7 +412,7 @@ def appears_in_expr_pred(
 
 def count_appearances_in_expr(search: Expr, subject: Expr):
 
-    expr_is_var: Optional[str]
+    expr_is_var: str | None
     match search:
         case FreeVarExpr(vname):
             expr_is_var = vname
@@ -423,7 +423,7 @@ def count_appearances_in_expr(search: Expr, subject: Expr):
 
     appearances = 0
 
-    def map_func(candidate: Expr) -> Optional[Expr]:
+    def map_func(candidate: Expr) -> Expr | None:
         nonlocal appearances
         if (
             expr_is_var is not None
@@ -448,7 +448,7 @@ def appears_in_expr(search: Expr, subject: Expr):
     class ReturnTrue(Exception):
         pass
 
-    expr_is_var: Optional[str]
+    expr_is_var: str | None
     match search:
         case FreeVarExpr(vname):
             expr_is_var = vname
@@ -457,7 +457,7 @@ def appears_in_expr(search: Expr, subject: Expr):
         case _:
             expr_is_var = None
 
-    def map_func(candidate: Expr) -> Optional[Expr]:
+    def map_func(candidate: Expr) -> Expr | None:
         if (
             expr_is_var is not None
             and isinstance(candidate, BindingExpr)
@@ -631,7 +631,7 @@ def get_path_head(e: Expr) -> e.FreeVarExpr:
             raise ValueError("not a path")
 
 
-def get_first_path_component(e: Expr) -> e.Optional[e.Expr]:
+def get_first_path_component(e: Expr) -> e.Expr | None:
     match e:
         case FreeVarExpr(_):
             return None
@@ -689,7 +689,7 @@ def collect_names_in_select_filter(
 ) -> list[str]:
     res: list[str] = []
 
-    def map_func(candidate: Expr) -> Optional[Expr]:
+    def map_func(candidate: Expr) -> Expr | None:
         if isinstance(candidate, e.EdgeDatabaseEqFilter):
             res.append(candidate.propname)
         return None

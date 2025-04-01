@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 from typing import (
-    Optional,
     TypeVar,
     Iterable,
     Sequence,
@@ -79,7 +78,7 @@ class Source(
         name: sn.UnqualName,
         *,
         type: type[s_pointers.Pointer_T],
-    ) -> Optional[s_pointers.Pointer_T]:
+    ) -> s_pointers.Pointer_T | None:
         ...
 
     @overload
@@ -88,8 +87,8 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[type[s_pointers.Pointer_T]] = None,
-    ) -> Optional[s_pointers.Pointer]:
+        type: type[s_pointers.Pointer_T] | None = None,
+    ) -> s_pointers.Pointer | None:
         ...
 
     def maybe_get_ptr(
@@ -97,8 +96,8 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[type[s_pointers.Pointer_T]] = None,
-    ) -> Optional[s_pointers.Pointer]:
+        type: type[s_pointers.Pointer_T] | None = None,
+    ) -> s_pointers.Pointer | None:
         ptr = self.get_pointers(schema).get(schema, name, None)
         if ptr is not None and type is not None and not isinstance(ptr, type):
             raise AssertionError(
@@ -124,7 +123,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[type[s_pointers.Pointer_T]] = None,
+        type: type[s_pointers.Pointer_T] | None = None,
     ) -> s_pointers.Pointer:
         ...
 
@@ -133,7 +132,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[type[s_pointers.Pointer_T]] = None,
+        type: type[s_pointers.Pointer_T] | None = None,
     ) -> s_pointers.Pointer:
         ptr = self.maybe_get_ptr(schema, name, type=type)
         if ptr is None:
@@ -220,7 +219,7 @@ def populate_pointer_set_for_source_union(
     components: list[Source],
     union: Source,
     *,
-    modname: Optional[str] = None,
+    modname: str | None = None,
 ) -> s_schema.Schema:
     if modname is None:
         modname = '__derived__'

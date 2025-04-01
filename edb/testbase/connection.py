@@ -531,7 +531,7 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
     def _clear_codecs_cache(self):
         self._query_cache.codecs_registry.clear_cache()
 
-    def _get_last_status(self) -> typing.Optional[str]:
+    def _get_last_status(self) -> str | None:
         if self._protocol is None:
             return None
         status = self._protocol.last_status
@@ -541,7 +541,7 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
 
     def _get_last_capabilities(
         self,
-    ) -> typing.Optional[edgedb_enums.Capability]:
+    ) -> edgedb_enums.Capability | None:
         if self._protocol is None:
             return None
         else:
@@ -696,19 +696,19 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
 
 
 async def async_connect_test_client(
-    dsn: typing.Optional[str] = None,
-    host: typing.Optional[str] = None,
-    port: typing.Optional[int] = None,
-    credentials: typing.Optional[str] = None,
-    credentials_file: typing.Optional[str] = None,
-    user: typing.Optional[str] = None,
-    password: typing.Optional[str] = None,
-    secret_key: typing.Optional[str] = None,
-    branch: typing.Optional[str] = None,
-    database: typing.Optional[str] = None,
-    tls_ca: typing.Optional[str] = None,
-    tls_ca_file: typing.Optional[str] = None,
-    tls_security: typing.Optional[str] = None,
+    dsn: str | None = None,
+    host: str | None = None,
+    port: int | None = None,
+    credentials: str | None = None,
+    credentials_file: str | None = None,
+    user: str | None = None,
+    password: str | None = None,
+    secret_key: str | None = None,
+    branch: str | None = None,
+    database: str | None = None,
+    tls_ca: str | None = None,
+    tls_ca_file: str | None = None,
+    tls_security: str | None = None,
     test_no_tls: bool = False,
     wait_until_available: int = 30,
     timeout: int = 10,

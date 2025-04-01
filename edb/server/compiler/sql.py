@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Mapping, Sequence, TYPE_CHECKING, Optional
+from typing import Mapping, Sequence, TYPE_CHECKING
 
 import dataclasses
 import functools
@@ -73,14 +73,14 @@ def compile_sql(
     prepared_stmt_map: Mapping[str, str],
     current_database: str,
     current_user: str,
-    allow_user_specified_id: Optional[bool],
-    apply_access_policies: Optional[bool],
+    allow_user_specified_id: bool | None,
+    apply_access_policies: bool | None,
     include_edgeql_io_format_alternative: bool = False,
     allow_prepared_statements: bool = True,
     disambiguate_column_names: bool,
     backend_runtime_params: pg_params.BackendRuntimeParams,
     protocol_version: defines.ProtocolVersion,
-    implicit_limit: Optional[int] = None,
+    implicit_limit: int | None = None,
 ) -> tuple[list[dbstate.SQLQueryUnit], bool]:
     def _try(
         q: str, normalized_params: list[int]
@@ -195,21 +195,21 @@ def _build_constant_extraction_map(
 def _compile_sql(
     query_str: str,
     *,
-    orig_query_str: Optional[str] = None,
+    orig_query_str: str | None = None,
     schema: s_schema.Schema,
     tx_state: dbstate.SQLTransactionState,
     prepared_stmt_map: Mapping[str, str],
     current_database: str,
     current_user: str,
-    allow_user_specified_id: Optional[bool],
-    apply_access_policies: Optional[bool],
+    allow_user_specified_id: bool | None,
+    apply_access_policies: bool | None,
     include_edgeql_io_format_alternative: bool = False,
     allow_prepared_statements: bool = True,
     disambiguate_column_names: bool,
     backend_runtime_params: pg_params.BackendRuntimeParams,
     protocol_version: defines.ProtocolVersion,
     normalized_params: list[int],
-    implicit_limit: Optional[int] = None,
+    implicit_limit: int | None = None,
 ) -> list[dbstate.SQLQueryUnit]:
     opts = ResolverOptionsPartial(
         query_str=query_str,
@@ -252,7 +252,7 @@ def _compile_sql(
                 from edb.pgsql import resolver as pg_resolver
                 pg_resolver.dispatch._raise_unsupported(stmt)
 
-            value: Optional[dbstate.SQLSetting]
+            value: dbstate.SQLSetting | None
             if isinstance(stmt, pgast.VariableSetStmt):
                 value = pg_arg_list_to_python(stmt.args)
             else:
@@ -556,12 +556,12 @@ class ResolverOptionsPartial:
     current_user: str
     current_database: str
     query_str: str
-    allow_user_specified_id: Optional[bool]
-    apply_access_policies: Optional[bool]
-    include_edgeql_io_format_alternative: Optional[bool]
+    allow_user_specified_id: bool | None
+    apply_access_policies: bool | None
+    include_edgeql_io_format_alternative: bool | None
     disambiguate_column_names: bool
     normalized_params: list[int]
-    implicit_limit: Optional[int]
+    implicit_limit: int | None
 
 
 def resolve_query(
@@ -572,7 +572,7 @@ def resolve_query(
 ) -> tuple[
     pg_resolver.ResolvedSQL,
     pg_codegen.SQLSource,
-    Optional[pg_codegen.SQLSource],
+    pg_codegen.SQLSource | None,
 ]:
     from edb.pgsql import resolver as pg_resolver
 
@@ -627,7 +627,7 @@ def resolve_query(
 
 def lookup_bool_setting(
     tx_state: dbstate.SQLTransactionState, name: str
-) -> Optional[bool]:
+) -> bool | None:
     try:
         setting = tx_state.get(name)
     except KeyError:

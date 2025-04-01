@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, NamedTuple
+from typing import NamedTuple
 
 import contextlib
 import json
@@ -50,7 +50,7 @@ class CoverageConfig(NamedTuple):
         })
 
     @classmethod
-    def from_environ(cls) -> Optional['CoverageConfig']:
+    def from_environ(cls) -> 'CoverageConfig' | None:
         config = os.environ.get('EDGEDB_TEST_COVERAGE')
         if config is None:
             return None

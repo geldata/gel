@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Mapping, TYPE_CHECKING
+from typing import Any, Mapping, TYPE_CHECKING
 
 import asyncio
 import json
@@ -56,21 +56,15 @@ class BaseCluster:
         runstate_dir: pathlib.Path,
         *,
         port: int = edgedb_defines.EDGEDB_PORT,
-        env: Optional[Mapping[str, str]] = None,
+        env: Mapping[str, str] | None = None,
         testmode: bool = False,
-        log_level: Optional[str] = None,
-        security: Optional[
-            edgedb_args.ServerSecurityMode
-        ] = None,
-        http_endpoint_security: Optional[
-            edgedb_args.ServerEndpointSecurityMode
-        ] = None,
-        compiler_pool_mode: Optional[
-            edgedb_args.CompilerPoolMode
-        ] = None,
-        net_worker_mode: Optional[
-            edgedb_args.NetWorkerMode
-        ] = None,
+        log_level: str | None = None,
+        security: edgedb_args.ServerSecurityMode | None = None,
+        http_endpoint_security: (
+            edgedb_args.ServerEndpointSecurityMode | None
+        ) = None,
+        compiler_pool_mode: edgedb_args.CompilerPoolMode | None = None,
+        net_worker_mode: edgedb_args.NetWorkerMode | None = None,
     ):
         self._edgedb_cmd = [sys.executable, '-m', 'edb.server.main']
 
@@ -126,9 +120,9 @@ class BaseCluster:
         self._log_level = log_level
         self._runstate_dir = runstate_dir
         self._edgedb_cmd.extend(['--runstate-dir', str(runstate_dir)])
-        self._pg_cluster: Optional[pgcluster.BaseCluster] = None
+        self._pg_cluster: pgcluster.BaseCluster | None = None
         self._pg_connect_args: pgconnparams.CreateParamsKwargs = {}
-        self._daemon_process: Optional[subprocess.Popen[str]] = None
+        self._daemon_process: subprocess.Popen[str] | None = None
         self._port = port
         self._effective_port = None
         self._tls_cert_file = None
@@ -182,7 +176,7 @@ class BaseCluster:
     async def init(
         self,
         *,
-        server_settings: Optional[Mapping[str, str]] = None,
+        server_settings: Mapping[str, str] | None = None,
     ) -> None:
         cluster_status = await self.get_status()
 
@@ -195,7 +189,7 @@ class BaseCluster:
         self,
         wait: int=60,
         *,
-        port: Optional[int] = None,
+        port: int | None = None,
         **settings: Any,
     ) -> None:
         if port is None:
@@ -214,7 +208,7 @@ class BaseCluster:
             status_r, status_w = socket.socketpair()
             extra_args.append(f'--emit-server-status=fd://{status_w.fileno()}')
 
-        env: Optional[dict[str, str]]
+        env: dict[str, str] | None
         if self._env:
             env = os.environ.copy()
             env.update(self._env)
@@ -248,7 +242,7 @@ class BaseCluster:
             self._pg_cluster.destroy()
 
     def _init(self) -> None:
-        env: Optional[dict[str, str]]
+        env: dict[str, str] | None
         if self._env:
             env = os.environ.copy()
             env.update(self._env)
@@ -277,7 +271,7 @@ class BaseCluster:
     async def _wait_for_server(
         self,
         timeout: float = 30.0,
-        status_sock: Optional[socket.socket] = None,
+        status_sock: socket.socket | None = None,
     ) -> None:
 
         async def _read_server_status(
@@ -397,19 +391,15 @@ class Cluster(BaseCluster):
         *,
         pg_superuser: str = 'postgres',
         port: int = edgedb_defines.EDGEDB_PORT,
-        runstate_dir: Optional[pathlib.Path] = None,
-        env: Optional[Mapping[str, str]] = None,
+        runstate_dir: pathlib.Path | None = None,
+        env: Mapping[str, str] | None = None,
         testmode: bool = False,
-        log_level: Optional[str] = None,
-        security: Optional[
-            edgedb_args.ServerSecurityMode
-        ] = None,
-        http_endpoint_security: Optional[
-            edgedb_args.ServerEndpointSecurityMode
-        ] = None,
-        compiler_pool_mode: Optional[
-            edgedb_args.CompilerPoolMode
-        ] = None,
+        log_level: str | None = None,
+        security: edgedb_args.ServerSecurityMode | None = None,
+        http_endpoint_security: (
+            edgedb_args.ServerEndpointSecurityMode | None
+        ) = None,
+        compiler_pool_mode: edgedb_args.CompilerPoolMode | None = None,
     ) -> None:
         self._data_dir = data_dir
         if runstate_dir is None:
@@ -427,7 +417,7 @@ class Cluster(BaseCluster):
         self._edgedb_cmd.extend(['-D', str(self._data_dir)])
         self._pg_connect_args['user'] = pg_superuser
         self._pg_connect_args['database'] = 'template1'
-        self._jws_key: Optional[auth.JWKSet] = None
+        self._jws_key: auth.JWKSet | None = None
 
     async def _new_pg_cluster(self) -> pgcluster.Cluster:
         return await pgcluster.get_local_pg_cluster(
@@ -442,7 +432,7 @@ class Cluster(BaseCluster):
     async def init(
         self,
         *,
-        server_settings: Optional[Mapping[str, str]] = None,
+        server_settings: Mapping[str, str] | None = None,
     ) -> None:
         cluster_status = await self.get_status()
 
@@ -458,21 +448,17 @@ class TempCluster(Cluster):
     def __init__(
         self,
         *,
-        data_dir_suffix: Optional[str] = None,
-        data_dir_prefix: Optional[str] = None,
-        data_dir_parent: Optional[str] = None,
-        env: Optional[Mapping[str, str]] = None,
+        data_dir_suffix: str | None = None,
+        data_dir_prefix: str | None = None,
+        data_dir_parent: str | None = None,
+        env: Mapping[str, str] | None = None,
         testmode: bool = False,
-        log_level: Optional[str] = None,
-        security: Optional[
-            edgedb_args.ServerSecurityMode
-        ] = None,
-        http_endpoint_security: Optional[
-            edgedb_args.ServerEndpointSecurityMode
-        ] = None,
-        compiler_pool_mode: Optional[
-            edgedb_args.CompilerPoolMode
-        ] = None,
+        log_level: str | None = None,
+        security: edgedb_args.ServerSecurityMode | None = None,
+        http_endpoint_security: (
+            edgedb_args.ServerEndpointSecurityMode | None
+        ) = None,
+        compiler_pool_mode: edgedb_args.CompilerPoolMode | None = None,
     ) -> None:
         tempdir = pathlib.Path(
             tempfile.mkdtemp(
@@ -512,7 +498,7 @@ class RunningCluster(BaseCluster):
     async def init(
         self,
         *,
-        server_settings: Optional[Mapping[str, str]] = None,
+        server_settings: Mapping[str, str] | None = None,
     ) -> None:
         pass
 
@@ -520,7 +506,7 @@ class RunningCluster(BaseCluster):
         self,
         wait: int=60,
         *,
-        port: Optional[int] = None,
+        port: int | None = None,
         **settings: Any,
     ) -> None:
         pass
@@ -543,21 +529,17 @@ class TempClusterWithRemotePg(BaseCluster):
         self,
         backend_dsn: str,
         *,
-        data_dir_suffix: Optional[str] = None,
-        data_dir_prefix: Optional[str] = None,
-        data_dir_parent: Optional[str] = None,
-        env: Optional[Mapping[str, str]] = None,
+        data_dir_suffix: str | None = None,
+        data_dir_prefix: str | None = None,
+        data_dir_parent: str | None = None,
+        env: Mapping[str, str] | None = None,
         testmode: bool = False,
-        log_level: Optional[str] = None,
-        security: Optional[
-            edgedb_args.ServerSecurityMode
-        ] = None,
-        http_endpoint_security: Optional[
-            edgedb_args.ServerEndpointSecurityMode
-        ] = None,
-        compiler_pool_mode: Optional[
-            edgedb_args.CompilerPoolMode
-        ] = None,
+        log_level: str | None = None,
+        security: edgedb_args.ServerSecurityMode | None = None,
+        http_endpoint_security: (
+            edgedb_args.ServerEndpointSecurityMode | None
+        ) = None,
+        compiler_pool_mode: edgedb_args.CompilerPoolMode | None = None,
     ) -> None:
         runstate_dir = pathlib.Path(
             tempfile.mkdtemp(

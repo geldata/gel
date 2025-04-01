@@ -30,7 +30,7 @@ import re
 import hashlib
 import hmac
 
-from typing import Optional, cast
+from typing import cast
 from email.message import EmailMessage
 
 from edgedb import QueryAssertionError
@@ -468,7 +468,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
     def maybe_get_cookie_value(
         self, headers: dict[str, str], name: str
-    ) -> Optional[str]:
+    ) -> str | None:
         set_cookie = headers.get("set-cookie")
         if set_cookie is not None:
             (k, v) = set_cookie.split(";", 1)[0].split("=", 1)
@@ -477,7 +477,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
         return None
 
-    def maybe_get_auth_token(self, headers: dict[str, str]) -> Optional[str]:
+    def maybe_get_auth_token(self, headers: dict[str, str]) -> str | None:
         return self.maybe_get_cookie_value(headers, "edgedb-session")
 
     def generate_and_serve_jwk(

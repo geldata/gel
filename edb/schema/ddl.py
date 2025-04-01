@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Callable,
-    Optional,
     Iterable,
     Mapping,
     cast,
@@ -60,13 +59,13 @@ if TYPE_CHECKING:
 
 
 def delta_schemas(
-    schema_a: Optional[s_schema.Schema],
+    schema_a: s_schema.Schema | None,
     schema_b: s_schema.Schema,
     *,
-    included_modules: Optional[Iterable[sn.Name]]=None,
-    excluded_modules: Optional[Iterable[sn.Name]]=None,
-    included_items: Optional[Iterable[sn.Name]]=None,
-    excluded_items: Optional[Iterable[sn.Name]]=None,
+    included_modules: Iterable[sn.Name] | None=None,
+    excluded_modules: Iterable[sn.Name] | None=None,
+    included_items: Iterable[sn.Name] | None=None,
+    excluded_items: Iterable[sn.Name] | None=None,
     schema_a_filters: Iterable[
         Callable[[s_schema.Schema, so.Object], bool]
     ] = (),
@@ -80,7 +79,7 @@ def delta_schemas(
     linearize_delta: bool=True,
     descriptive_mode: bool=False,
     generate_prompts: bool=False,
-    guidance: Optional[so.DeltaGuidance]=None,
+    guidance: so.DeltaGuidance | None=None,
 ) -> sd.DeltaRoot:
     """Return difference between *schema_a* and *schema_b*.
 
@@ -433,9 +432,9 @@ def delta_schemas(
 def cmd_from_ddl(
     stmt: qlast.DDLOperation,
     *,
-    context: Optional[sd.CommandContext]=None,
+    context: sd.CommandContext | None=None,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     testmode: bool=False
 ) -> sd.Command:
     ddl = s_expr.imprint_expr_context(stmt, modaliases)
@@ -466,7 +465,7 @@ def apply_sdl(
 
     def collect(
         decl: qlast.ObjectDDL | qlast.ModuleDeclaration,
-        module: Optional[str],
+        module: str | None,
     ) -> None:
         # declarations are either in a module block or fully-qualified
         if isinstance(decl, qlast.ModuleDeclaration):
@@ -590,7 +589,7 @@ def apply_ddl_script(
     ddl_text: str,
     *,
     schema: s_schema.Schema,
-    modaliases: Optional[Mapping[Optional[str], str]] = None,
+    modaliases: Mapping[str | None, str] | None = None,
     stdmode: bool = False,
     testmode: bool = False,
 ) -> s_schema.Schema:
@@ -610,15 +609,16 @@ def apply_ddl_script_ex(
     ddl_text: str,
     *,
     schema: s_schema.Schema,
-    modaliases: Optional[Mapping[Optional[str], str]] = None,
+    modaliases: Mapping[str | None, str] | None = None,
     stdmode: bool = False,
     internal_schema_mode: bool = False,
     testmode: bool = False,
     store_migration_sdl: bool=False,
-    schema_object_ids: Optional[
-        Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
-    ]=None,
-    compat_ver: Optional[verutils.Version] = None,
+    schema_object_ids: Mapping[
+        tuple[sn.Name, str | None],
+        uuid.UUID
+    ] | None=None,
+    compat_ver: verutils.Version | None = None,
 ) -> tuple[s_schema.Schema, sd.DeltaRoot]:
 
     delta = sd.DeltaRoot()
@@ -650,14 +650,15 @@ def delta_from_ddl(
     ddl_stmt: qlast.DDLCommand,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     stdmode: bool=False,
     testmode: bool=False,
     store_migration_sdl: bool=False,
-    schema_object_ids: Optional[
-        Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
-    ]=None,
-    compat_ver: Optional[verutils.Version] = None,
+    schema_object_ids: Mapping[
+        tuple[sn.Name, str | None],
+        uuid.UUID
+    ] | None=None,
+    compat_ver: verutils.Version | None = None,
 ) -> sd.DeltaRoot:
     _, cmd = delta_and_schema_from_ddl(
         ddl_stmt,
@@ -676,15 +677,16 @@ def delta_and_schema_from_ddl(
     ddl_stmt: qlast.DDLCommand,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     stdmode: bool=False,
     internal_schema_mode: bool=False,
     testmode: bool=False,
     store_migration_sdl: bool=False,
-    schema_object_ids: Optional[
-        Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
-    ]=None,
-    compat_ver: Optional[verutils.Version] = None,
+    schema_object_ids: Mapping[
+        tuple[sn.Name, str | None],
+        uuid.UUID
+    ] | None=None,
+    compat_ver: verutils.Version | None = None,
 ) -> tuple[s_schema.Schema, sd.DeltaRoot]:
     delta = sd.DeltaRoot()
     context = sd.CommandContext(
@@ -738,7 +740,7 @@ def delta_and_schema_from_ddl(
 
 
 def ddlast_from_delta(
-    schema_a: Optional[s_schema.Schema],
+    schema_a: s_schema.Schema | None,
     schema_b: s_schema.Schema,
     delta: sd.DeltaRoot,
     *,
@@ -780,7 +782,7 @@ def ddlast_from_delta(
 
 
 def statements_from_delta(
-    schema_a: Optional[s_schema.Schema],
+    schema_a: s_schema.Schema | None,
     schema_b: s_schema.Schema,
     delta: sd.DeltaRoot,
     *,
@@ -858,7 +860,7 @@ def statements_from_delta(
 
 
 def text_from_delta(
-    schema_a: Optional[s_schema.Schema],
+    schema_a: s_schema.Schema | None,
     schema_b: s_schema.Schema,
     delta: sd.DeltaRoot,
     *,
@@ -880,7 +882,7 @@ def text_from_delta(
 
 
 def ddl_text_from_delta(
-    schema_a: Optional[s_schema.Schema],
+    schema_a: s_schema.Schema | None,
     schema_b: s_schema.Schema,
     delta: sd.DeltaRoot,
     *,
@@ -910,7 +912,7 @@ def ddl_text_from_delta(
 
 
 def sdl_text_from_delta(
-    schema_a: Optional[s_schema.Schema],
+    schema_a: s_schema.Schema | None,
     schema_b: s_schema.Schema,
     delta: sd.DeltaRoot,
 ) -> str:
@@ -932,7 +934,7 @@ def sdl_text_from_delta(
 
 
 def descriptive_text_from_delta(
-    schema_a: Optional[s_schema.Schema],
+    schema_a: s_schema.Schema | None,
     schema_b: s_schema.Schema,
     delta: sd.DeltaRoot,
     *,
@@ -968,10 +970,10 @@ def descriptive_text_from_delta(
 def ddl_text_from_schema(
     schema: s_schema.Schema,
     *,
-    included_modules: Optional[Iterable[sn.Name]] = None,
-    excluded_modules: Optional[Iterable[sn.Name]] = None,
-    included_items: Optional[Iterable[sn.Name]] = None,
-    excluded_items: Optional[Iterable[sn.Name]] = None,
+    included_modules: Iterable[sn.Name] | None = None,
+    excluded_modules: Iterable[sn.Name] | None = None,
+    included_items: Iterable[sn.Name] | None = None,
+    excluded_items: Iterable[sn.Name] | None = None,
     included_ref_classes: Iterable[so.ObjectMeta] = tuple(),
     include_module_ddl: bool = True,
     include_std_ddl: bool = False,
@@ -1000,10 +1002,10 @@ def ddl_text_from_schema(
 def sdl_text_from_schema(
     schema: s_schema.Schema,
     *,
-    included_modules: Optional[Iterable[sn.Name]] = None,
-    excluded_modules: Optional[Iterable[sn.Name]] = None,
-    included_items: Optional[Iterable[sn.Name]] = None,
-    excluded_items: Optional[Iterable[sn.Name]] = None,
+    included_modules: Iterable[sn.Name] | None = None,
+    excluded_modules: Iterable[sn.Name] | None = None,
+    included_items: Iterable[sn.Name] | None = None,
+    excluded_items: Iterable[sn.Name] | None = None,
     included_ref_classes: Iterable[so.ObjectMeta] = tuple(),
     include_module_ddl: bool = True,
     include_std_ddl: bool = False,
@@ -1026,10 +1028,10 @@ def sdl_text_from_schema(
 def descriptive_text_from_schema(
     schema: s_schema.Schema,
     *,
-    included_modules: Optional[Iterable[sn.Name]] = None,
-    excluded_modules: Optional[Iterable[sn.Name]] = None,
-    included_items: Optional[Iterable[sn.Name]] = None,
-    excluded_items: Optional[Iterable[sn.Name]] = None,
+    included_modules: Iterable[sn.Name] | None = None,
+    excluded_modules: Iterable[sn.Name] | None = None,
+    included_items: Iterable[sn.Name] | None = None,
+    excluded_items: Iterable[sn.Name] | None = None,
     included_ref_classes: Iterable[so.ObjectMeta] = tuple(),
     include_module_ddl: bool = True,
     include_std_ddl: bool = False,

@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Generic,
-    Optional,
     Protocol,
     TypeVar,
     Iterable,
@@ -68,18 +67,18 @@ class DepGraphEntry(Generic[K, V, T]):
     #: that cause cycles are ignored.  Essentially, weak deps dictate
     #: a _preference_ in order rather than a requirement.
     weak_deps: MutableSet[K]
-    merge: Optional[MutableSet[K]]
+    merge: MutableSet[K] | None
     loop_control: MutableSet[K]
-    extra: Optional[T]
+    extra: T | None
 
     def __init__(
         self,
         item: V,
-        deps: Optional[MutableSet[K]] = None,
-        merge: Optional[MutableSet[K]] = None,
-        loop_control: Optional[MutableSet[K]] = None,
-        extra: Optional[T] = None,
-        weak_deps: Optional[MutableSet[K]] = None,
+        deps: MutableSet[K] | None = None,
+        merge: MutableSet[K] | None = None,
+        loop_control: MutableSet[K] | None = None,
+        extra: T | None = None,
+        weak_deps: MutableSet[K] | None = None,
     ) -> None:
         self.item = item
         if deps is None:

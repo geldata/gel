@@ -198,7 +198,7 @@ class DateTimeEncoder(json.JSONEncoder):
 async def send(
     db: edbtenant.dbview.Database,
     url: str,
-    secret: typing.Optional[str],
+    secret: str | None,
     event: Event,
 ) -> str:
     body = json.dumps(

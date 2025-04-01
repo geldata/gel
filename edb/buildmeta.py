@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     Mapping,
     Sequence,
     NamedTuple,
@@ -159,7 +158,7 @@ def parse_pg_version(version_string: str) -> BackendVersion:
     )
 
 
-_bundled_pg_version: Optional[BackendVersion] = None
+_bundled_pg_version: BackendVersion | None = None
 
 
 def get_pg_version() -> BackendVersion:
@@ -219,8 +218,8 @@ def get_extension_dir_path() -> pathlib.Path:
 def hash_dirs(
     dirs: Sequence[tuple[str, str]],
     *,
-    extra_files: Optional[Sequence[str | pathlib.Path]]=None,
-    extra_data: Optional[bytes] = None,
+    extra_files: Sequence[str | pathlib.Path] | None=None,
+    extra_data: bytes | None = None,
 ) -> bytes:
     def hash_dir(dirname, ext, paths):
         with os.scandir(dirname) as it:
@@ -255,7 +254,7 @@ def read_data_cache(
     path: str,
     *,
     pickled: bool=True,
-    source_dir: Optional[pathlib.Path] = None,
+    source_dir: pathlib.Path | None = None,
 ) -> Any:
     if source_dir is None:
         source_dir = get_shared_data_dir_path()
@@ -281,7 +280,7 @@ def write_data_cache(
     path: str,
     *,
     pickled: bool = True,
-    target_dir: Optional[pathlib.Path] = None,
+    target_dir: pathlib.Path | None = None,
 ):
     if target_dir is None:
         target_dir = get_shared_data_dir_path()
@@ -318,7 +317,7 @@ def get_version() -> verutils.Version:
     return version
 
 
-_version_dict: Optional[Mapping[str, Any]] = None
+_version_dict: Mapping[str, Any] | None = None
 
 
 def get_version_build_id(
@@ -363,7 +362,7 @@ def get_version_dict() -> Mapping[str, Any]:
     return _version_dict
 
 
-_version_json: Optional[str] = None
+_version_json: str | None = None
 
 
 def get_version_json() -> str:

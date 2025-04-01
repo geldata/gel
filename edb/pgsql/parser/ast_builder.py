@@ -21,7 +21,6 @@ import dataclasses
 from typing import (
     Any,
     Callable,
-    Optional,
     TypeVar,
     Sequence,
     cast,
@@ -75,7 +74,7 @@ def build_stmts(
 
 def _maybe(
     node: Node, ctx: Context, name: str, builder: Builder
-) -> Optional[T]:
+) -> T | None:
     if name in node:
         return builder(node[name], ctx)
     return None
@@ -92,7 +91,7 @@ def _list(
     builder: Builder,
     mapper: Callable[[T], U] = _ident,
     *,
-    unwrap: Optional[str] = None,
+    unwrap: str | None = None,
 ) -> list[U]:
     if unwrap is not None:
         return [
@@ -109,8 +108,8 @@ def _maybe_list(
     builder: Builder,
     mapper: Callable[[T], U] = _ident,
     *,
-    unwrap: Optional[str] = None,
-) -> Optional[list[U]]:
+    unwrap: str | None = None,
+) -> list[U] | None:
     return (
         _list(node, ctx, name, builder, mapper, unwrap=unwrap)
         if name in node
@@ -212,7 +211,7 @@ def _as_column_ref(name: str) -> pgast.ColumnRef:
     )
 
 
-def _build_span(n: Node, c: Context) -> Optional[Span]:
+def _build_span(n: Node, c: Context) -> Span | None:
     if 'location' not in n:
         return None
 
@@ -517,7 +516,7 @@ def _build_create_table_as(n: Node, c: Context) -> pgast.CreateTableAsStmt:
 
 
 def _build_create(n: Node, c: Context) -> pgast.CreateStmt:
-    def _build_on_commit(n: str, _c: Context) -> Optional[str]:
+    def _build_on_commit(n: str, _c: Context) -> str | None:
         on_commit = n[9:]
         return on_commit if on_commit != 'NOOP' else None
 

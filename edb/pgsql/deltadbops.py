@@ -20,7 +20,6 @@
 """Abstractions for low-level database DDL and DML operations."""
 
 from __future__ import annotations
-from typing import Optional
 
 import itertools
 
@@ -378,8 +377,8 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
         *,
         constraint: SchemaConstraintTableConstraint,
         contained: bool = False,
-        conditions: Optional[set[str | dbops.Condition]] = None,
-        neg_conditions: Optional[set[str | dbops.Condition]] = None,
+        conditions: set[str | dbops.Condition] | None = None,
+        neg_conditions: set[str | dbops.Condition] | None = None,
     ):
         dbops.CommandGroup.__init__(
             self, conditions=conditions, neg_conditions=neg_conditions

@@ -23,7 +23,6 @@ import asyncio
 import os
 import socket
 import struct
-import typing
 
 
 _uint64_unpacker = struct.Struct('!Q').unpack
@@ -211,7 +210,7 @@ class Server:
         self._pids[pid] = HubConnection(tr, proto, self._loop, version)
         self._proto.worker_connected(pid, version)
 
-    def _on_pid_disconnected(self, pid: typing.Optional[int]):
+    def _on_pid_disconnected(self, pid: int | None):
         if not pid:
             return
         if pid in self._pids:

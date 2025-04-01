@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Sequence, TypeVar
+from typing import Any, Callable, Sequence, TypeVar
 
 import collections.abc
 import functools
@@ -44,7 +44,7 @@ def downcast(typ: type[T], x: Any) -> T:
     return x
 
 
-def not_none(x: Optional[T]) -> T:
+def not_none(x: T | None) -> T:
     assert x is not None
     return x
 

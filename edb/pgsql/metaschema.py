@@ -22,7 +22,6 @@
 from __future__ import annotations
 from typing import (
     Callable,
-    Optional,
     Protocol,
     Iterable,
     Sequence,
@@ -7669,7 +7668,7 @@ def _generate_sql_information_schema(
 
     def construct_pg_view(
         table_name: str, backend_version: params.BackendVersion
-    ) -> Optional[dbops.View]:
+    ) -> dbops.View | None:
         pg_columns = sql_introspection.PG_CATALOG[table_name]
 
         columns = []
@@ -8104,8 +8103,8 @@ class LinksView(trampoline.VersionedView):
 def get_config_type_views(
     schema: s_schema.Schema,
     conf: s_objtypes.ObjectType,
-    scope: Optional[qltypes.ConfigScope],
-    existing_view_columns: Optional[dict[str, list[str]]]=None,
+    scope: qltypes.ConfigScope | None,
+    existing_view_columns: dict[str, list[str]] | None=None,
 ) -> dbops.CommandGroup:
     commands = dbops.CommandGroup()
 
@@ -8132,7 +8131,7 @@ def get_config_type_views(
 
 def get_config_views(
     schema: s_schema.Schema,
-    existing_view_columns: Optional[dict[str, list[str]]]=None,
+    existing_view_columns: dict[str, list[str]] | None=None,
 ) -> dbops.CommandGroup:
     commands = dbops.CommandGroup()
 
@@ -8358,7 +8357,7 @@ async def generate_more_support_functions(
 def _build_key_source(
     schema: s_schema.Schema,
     exc_props: Iterable[s_pointers.Pointer],
-    rptr: Optional[s_pointers.Pointer],
+    rptr: s_pointers.Pointer | None,
     source_idx: str,
 ) -> str:
     if exc_props:
@@ -8419,7 +8418,7 @@ def _build_data_source(
     source_idx: int,
     *,
     always_array: bool = False,
-    alias: Optional[str] = None,
+    alias: str | None = None,
 ) -> str:
 
     rptr_name = rptr.get_shortname(schema).name
@@ -8456,12 +8455,12 @@ def _generate_config_type_view(
     schema: s_schema.Schema,
     stype: s_objtypes.ObjectType,
     *,
-    scope: Optional[qltypes.ConfigScope],
+    scope: qltypes.ConfigScope | None,
     path: list[tuple[s_pointers.Pointer, list[s_pointers.Pointer]]],
-    rptr: Optional[s_pointers.Pointer],
-    existing_view_columns: Optional[dict[str, list[str]]],
-    override_exclusive_props: Optional[list[s_pointers.Pointer]] = None,
-    _memo: Optional[set[s_obj.Object]] = None,
+    rptr: s_pointers.Pointer | None,
+    existing_view_columns: dict[str, list[str]] | None,
+    override_exclusive_props: list[s_pointers.Pointer] | None = None,
+    _memo: set[s_obj.Object] | None = None,
 ) -> tuple[
     list[tuple[tuple[str, str], str]],
     list[s_pointers.Pointer],

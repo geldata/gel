@@ -76,7 +76,6 @@
 from __future__ import annotations
 from typing import (
     cast,
-    Optional,
 )
 
 import collections
@@ -129,7 +128,7 @@ def get_ext_ai_pre_restore_script(
 
 def create_ext_ai_index(
     index: s_indexes.Index,
-    predicate_src: Optional[str],
+    predicate_src: str | None,
     sql_kwarg_exprs: dict[str, str],
     options: qlcompiler.CompilerOptions,
     schema: s_schema.Schema,
@@ -204,7 +203,7 @@ def _compile_ai_embeddings_source_view_expr(
     # WHERE
     #   eval(get_index_except_expr(Object, 'ext::ai::index')) IS NOT TRUE
     #   AND Object.embedding_column IS NULL
-    index_sexpr: Optional[s_expr.Expression] = index.get_expr(schema)
+    index_sexpr: s_expr.Expression | None = index.get_expr(schema)
     assert index_sexpr
     ql = qlast.SelectQuery(
         result=qlast.Tuple(
@@ -286,7 +285,7 @@ def _compile_ai_embeddings_source_view_expr(
 
 def _create_ai_embeddings(
     index: s_indexes.Index,
-    predicate_src: Optional[str],
+    predicate_src: str | None,
     sql_kwarg_exprs: dict[str, str],
     options: qlcompiler.CompilerOptions,
     schema: s_schema.Schema,
@@ -346,7 +345,7 @@ def _delete_ai_embeddings(
 def _pg_create_ai_embeddings(
     index: s_indexes.Index,
     options: qlcompiler.CompilerOptions,
-    predicate_src: Optional[str],
+    predicate_src: str | None,
     sql_kwarg_exprs: dict[str, str],
     schema: s_schema.Schema,
     context: sd.CommandContext,
@@ -580,7 +579,7 @@ def _pg_drop_trigger(
     index: s_indexes.Index,
     table_name: tuple[str, str],
     schema: s_schema.Schema,
-    override_id: Optional[str] = None,
+    override_id: str | None = None,
 ) -> dbops.Command:
     idx_id = override_id or _get_index_root_id(schema, index)
     ops = dbops.CommandGroup()

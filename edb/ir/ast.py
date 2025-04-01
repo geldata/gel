@@ -100,7 +100,7 @@ class Base(ast.AST):
     __abstract_node__ = True
     __ast_hidden__ = {'span'}
 
-    span: typing.Optional[Span] = None
+    span: Span | None = None
 
     def __repr__(self) -> str:
         return (
@@ -141,35 +141,35 @@ class TypeRef(ImmutableBase):
     name_hint: sn.Name
     # Name hint of the real underlying type, if the type ref was created
     # with an explicitly specified typename.
-    orig_name_hint: typing.Optional[sn.Name] = None
+    orig_name_hint: sn.Name | None = None
     # The ref of the underlying material type, if this is a view type,
     # else None.
-    material_type: typing.Optional[TypeRef] = None
+    material_type: TypeRef | None = None
     # If this is a scalar type, base_type would be the highest
     # non-abstract base type.
-    base_type: typing.Optional[TypeRef] = None
+    base_type: TypeRef | None = None
     # A set of type children descriptors, if necessary for
     # this type description.
-    children: typing.Optional[frozenset[TypeRef]] = None
+    children: frozenset[TypeRef] | None = None
     # A set of type ancestor descriptors, if necessary for
     # this type description.
-    ancestors: typing.Optional[frozenset[TypeRef]] = None
+    ancestors: frozenset[TypeRef] | None = None
     # If this is a compound type, this is a non-overlapping set of
     # constituent types.
-    union: typing.Optional[frozenset[TypeRef]] = None
+    union: frozenset[TypeRef] | None = None
     # Whether the union is specified by an exhaustive list of
     # types, and type inheritance should not be considered.
     union_is_exhaustive: bool = False
     # If this is a complex type, record the expression used to generate the
     # type. This is used later to get the correct rvar in `get_path_var`.
-    expr_intersection: typing.Optional[frozenset[TypeRef]] = None
-    expr_union: typing.Optional[frozenset[TypeRef]] = None
+    expr_intersection: frozenset[TypeRef] | None = None
+    expr_union: frozenset[TypeRef] | None = None
     # If this node is an element of a collection, and the
     # collection elements are named, this would be then
     # name of the element.
-    element_name: typing.Optional[str] = None
+    element_name: str | None = None
     # The kind of the collection type if this is a collection
-    collection: typing.Optional[str] = None
+    collection: str | None = None
     # Collection subtypes if this is a collection
     subtypes: tuple[TypeRef, ...] = ()
     # True, if this describes a scalar type
@@ -187,9 +187,9 @@ class TypeRef(ImmutableBase):
     # Does this need to call a custom json cast function
     needs_custom_json_cast: bool = False
     # If this has a schema-configured backend type, what is it
-    sql_type: typing.Optional[str] = None
+    sql_type: str | None = None
     # If this has a schema-configured custom sql serialization, what is it
-    custom_sql_serialization: typing.Optional[str] = None
+    custom_sql_serialization: str | None = None
 
     def __repr__(self) -> str:
         return f'<ir.TypeRef \'{self.name_hint}\' at 0x{id(self):x}>'
@@ -240,15 +240,15 @@ class BasePointerRef(ImmutableBase):
     # The defaults set here are mostly to try to reduce debug spew output.
     name: sn.QualName
     shortname: sn.QualName
-    std_parent_name: typing.Optional[sn.QualName] = None
+    std_parent_name: sn.QualName | None = None
     out_source: TypeRef
     out_target: TypeRef
-    source_ptr: typing.Optional[PointerRef] = None
-    base_ptr: typing.Optional[BasePointerRef] = None
-    material_ptr: typing.Optional[BasePointerRef] = None
+    source_ptr: PointerRef | None = None
+    base_ptr: BasePointerRef | None = None
+    material_ptr: BasePointerRef | None = None
     children: frozenset[BasePointerRef] = frozenset()
-    union_components: typing.Optional[set[BasePointerRef]] = None
-    intersection_components: typing.Optional[set[BasePointerRef]] = None
+    union_components: set[BasePointerRef] | None = None
+    intersection_components: set[BasePointerRef] | None = None
     union_is_exhaustive: bool = False
     has_properties: bool = False
     is_derived: bool = False
@@ -258,8 +258,8 @@ class BasePointerRef(ImmutableBase):
     # Inbound cardinality of the pointer.
     in_cardinality: qltypes.Cardinality = qltypes.Cardinality.MANY
     defined_here: bool = False
-    computed_link_alias: typing.Optional[BasePointerRef] = None
-    computed_link_alias_is_backward: typing.Optional[bool] = None
+    computed_link_alias: BasePointerRef | None = None
+    computed_link_alias_is_backward: bool | None = None
 
     def dir_target(self, direction: s_pointers.PointerDirection) -> TypeRef:
         if direction is s_pointers.PointerDirection.Outbound:
@@ -467,8 +467,7 @@ class Expr(Base):
             raise NotImplementedError
 
     # Sets to materialize at this point, keyed by the type/ptr id.
-    materialized_sets: typing.Optional[
-        dict[uuid.UUID, MaterializedSet]] = None
+    materialized_sets: dict[uuid.UUID, MaterializedSet] | None = None
 
 
 class Pointer(Expr):
@@ -479,14 +478,14 @@ class Pointer(Expr):
 
     # If the pointer is a computed pointer (or a computed pointer
     # definition), the expression.
-    expr: typing.Optional[Expr] = None
+    expr: Expr | None = None
 
     is_definition: bool
     # Set when we have placed an rptr to help route link properties
     # but it is not a genuine pointer use.
     is_phony: bool = False
-    anchor: typing.Optional[str] = None
-    show_as_anchor: typing.Optional[str] = None
+    anchor: str | None = None
+    show_as_anchor: str | None = None
 
     @property
     def is_inbound(self) -> bool:
@@ -577,17 +576,17 @@ class SetE(Base, typing.Generic[T_expr_co]):
     # N.B: Make sure to add new fields to setgen.new_set_from_set!
 
     path_id: PathId
-    path_scope_id: typing.Optional[int] = None
+    path_scope_id: int | None = None
     typeref: TypeRef
     expr: T_expr_co
     shape: tuple[tuple[SetE[Pointer], qlast.ShapeOp], ...] = ()
 
-    anchor: typing.Optional[str] = None
-    show_as_anchor: typing.Optional[str] = None
+    anchor: str | None = None
+    show_as_anchor: str | None = None
     # A pointer to a set nested within this one has a shape and the same
     # typeref, if such a set exists.
-    shape_source: typing.Optional[Set] = None
-    is_binding: typing.Optional[BindingKind] = None
+    shape_source: Set | None = None
+    is_binding: BindingKind | None = None
     is_schema_alias: bool = False
 
     is_materialized_ref: bool = False
@@ -707,7 +706,7 @@ class ParamScalar(ParamTransType):
 
 @dataclasses.dataclass(eq=False)
 class ParamTuple(ParamTransType):
-    typs: tuple[tuple[typing.Optional[str], ParamTransType], ...]
+    typs: tuple[tuple[str | None, ParamTransType], ...]
 
     def flatten(self) -> tuple[typing.Any, ...]:
         return (
@@ -776,10 +775,10 @@ MaterializeReason = MaterializeVolatile | MaterializeVisible
 class ComputableInfo(typing.NamedTuple):
 
     qlexpr: qlast.Expr
-    irexpr: typing.Optional[Set | Expr]
+    irexpr: Set | Expr | None
     context: compiler.ContextLevel
     path_id: PathId
-    path_id_ns: typing.Optional[Namespace]
+    path_id_ns: Namespace | None
     shape_op: qlast.ShapeOp
     should_materialize: typing.Sequence[MaterializeReason]
 
@@ -798,8 +797,7 @@ class Statement(Command):
     view_shapes_metadata: dict[s_types.Type, ViewShapeMetadata]
     schema: s_schema.Schema
     schema_refs: frozenset[so.Object]
-    schema_ref_exprs: typing.Optional[
-        dict[so.Object, set[qlast.Base]]]
+    schema_ref_exprs: dict[so.Object, set[qlast.Base]] | None
     scope_tree: ScopeTreeNode
     dml_exprs: list[qlast.Base]
     type_rewrites: dict[tuple[uuid.UUID, bool], Set]
@@ -891,7 +889,7 @@ class Parameter(ImmutableExpr):
     typeref: TypeRef
     # None means not a global. Otherwise, whether this is an implicitly
     # created global for a function call.
-    is_implicit_global: typing.Optional[bool] = None
+    is_implicit_global: bool | None = None
 
     @property
     def is_global(self) -> bool:
@@ -902,7 +900,7 @@ class TupleElement(ImmutableBase):
 
     name: str
     val: Set
-    path_id: typing.Optional[PathId] = None
+    path_id: PathId | None = None
 
 
 class Tuple(ImmutableExpr):
@@ -923,15 +921,15 @@ class TypeCheckOp(ImmutableExpr):
     left: Set
     right: TypeRef
     op: str
-    result: typing.Optional[bool] = None
+    result: bool | None = None
     typeref: TypeRef
 
 
 class SortExpr(Base):
 
     expr: Set
-    direction: typing.Optional[qlast.SortOrder]
-    nones_order: typing.Optional[qlast.NonesOrder]
+    direction: qlast.SortOrder | None
+    nones_order: qlast.NonesOrder | None
 
 
 class CallArg(ImmutableBase):
@@ -942,7 +940,7 @@ class CallArg(ImmutableBase):
 
     expr: Set
     """PathId for the __type__ link of object type arguments."""
-    expr_type_path_id: typing.Optional[PathId] = None
+    expr_type_path_id: PathId | None = None
     cardinality: qltypes.Cardinality = qltypes.Cardinality.UNKNOWN
     multiplicity: qltypes.Multiplicity = qltypes.Multiplicity.UNKNOWN
     is_default: bool = False
@@ -996,7 +994,7 @@ class Call(ImmutableExpr):
     prefer_subquery_args: bool = False
 
     # If this is a set of call but is allowed in singleton expressions.
-    is_singleton_set_of: typing.Optional[bool] = None
+    is_singleton_set_of: bool | None = None
 
 
 class FunctionCall(Call):
@@ -1007,11 +1005,11 @@ class FunctionCall(Call):
 
     # If the bound callable is a "USING SQL" callable, this
     # attribute will be set to the name of the SQL function.
-    func_sql_function: typing.Optional[str]
+    func_sql_function: str | None
 
     # initial value needed for aggregate function calls to correctly
     # handle empty set
-    func_initial_value: typing.Optional[Set] = None
+    func_initial_value: Set | None = None
 
     # True if the bound function has a variadic parameter and
     # there are no arguments that are bound to it.
@@ -1021,10 +1019,10 @@ class FunctionCall(Call):
     sql_func_has_out_params: bool = False
 
     # backend_name for the underlying function
-    backend_name: typing.Optional[uuid.UUID] = None
+    backend_name: uuid.UUID | None = None
 
     # Error to raise if the underlying SQL function returns NULL.
-    error_on_null_result: typing.Optional[str] = None
+    error_on_null_result: str | None = None
 
     # Whether the generic function preserves optionality of the generic
     # argument(s).
@@ -1036,16 +1034,16 @@ class FunctionCall(Call):
 
     # Set to the type of the variadic parameter of the bound function
     # (or None, if the function has no variadic parameters.)
-    variadic_param_type: typing.Optional[TypeRef] = None
+    variadic_param_type: TypeRef | None = None
 
     # Additional arguments representing global variables
-    global_args: typing.Optional[list[Set]] = None
+    global_args: list[Set] | None = None
 
     # Any extra information useful for compilation of special-case callables.
-    extras: typing.Optional[dict[str, typing.Any]] = None
+    extras: dict[str, typing.Any] | None = None
 
     # Inline body of the callable.
-    body: typing.Optional[Set] = None
+    body: Set | None = None
 
 
 class OperatorCall(Call):
@@ -1055,18 +1053,18 @@ class OperatorCall(Call):
 
     # If the bound callable is a "USING SQL FUNCTION" callable, this
     # attribute will be set to the name of the SQL function.
-    sql_function: typing.Optional[tuple[str, ...]] = None
+    sql_function: tuple[str, ...] | None = None
 
     # If this operator maps directly onto an SQL operator, this
     # will contain the operator name, and, optionally, backend
     # operand types.
-    sql_operator: typing.Optional[tuple[str, ...]] = None
+    sql_operator: tuple[str, ...] | None = None
 
     # The name of the origin operator if this is a derivative operator.
-    origin_name: typing.Optional[sn.QualName] = None
+    origin_name: sn.QualName | None = None
 
     # The module id of the origin operator if this is a derivative operator.
-    origin_module_id: typing.Optional[uuid.UUID] = None
+    origin_module_id: uuid.UUID | None = None
 
 
 class IndexIndirection(ImmutableExpr):
@@ -1079,8 +1077,8 @@ class IndexIndirection(ImmutableExpr):
 class SliceIndirection(ImmutableExpr):
 
     expr: Set
-    start: typing.Optional[Base]
-    stop: typing.Optional[Base]
+    start: Base | None
+    stop: Base | None
     typeref: TypeRef
 
 
@@ -1088,14 +1086,14 @@ class TypeCast(ImmutableExpr):
     """<Type>ImmutableExpr"""
 
     expr: Set
-    cast_name: typing.Optional[sn.QualName] = None
+    cast_name: sn.QualName | None = None
     from_type: TypeRef
     to_type: TypeRef
-    cardinality_mod: typing.Optional[qlast.CardinalityModifier] = None
-    sql_function: typing.Optional[str] = None
+    cardinality_mod: qlast.CardinalityModifier | None = None
+    sql_function: str | None = None
     sql_cast: bool
     sql_expr: bool
-    error_message_context: typing.Optional[str] = None
+    error_message_context: str | None = None
 
     @property
     def typeref(self) -> TypeRef:
@@ -1138,14 +1136,14 @@ class Stmt(Expr):
     # Hide parent_stmt to reduce debug spew and to hide it from find_children
     __ast_hidden__ = {'parent_stmt'}
 
-    name: typing.Optional[str] = None
+    name: str | None = None
     # Parts of the edgeql->IR compiler need to create statements and fill in
     # the result later, but making it Optional would cause lots of errors,
     # so we stick a dummy set set in.
     result: Set = DUMMY_SET
-    parent_stmt: typing.Optional[Stmt] = None
-    iterator_stmt: typing.Optional[Set] = None
-    bindings: typing.Optional[list[tuple[Set, qltypes.Volatility]]] = None
+    parent_stmt: Stmt | None = None
+    iterator_stmt: Set | None = None
+    bindings: list[tuple[Set, qltypes.Volatility]] | None = None
 
     @property
     def typeref(self) -> TypeRef:
@@ -1154,22 +1152,22 @@ class Stmt(Expr):
 
 class FilteredStmt(Stmt):
     __abstract_node__ = True
-    where: typing.Optional[Set] = None
+    where: Set | None = None
     where_card: qltypes.Cardinality = qltypes.Cardinality.UNKNOWN
 
 
 class SelectStmt(FilteredStmt):
 
-    orderby: typing.Optional[list[SortExpr]] = None
-    offset: typing.Optional[Set] = None
-    limit: typing.Optional[Set] = None
+    orderby: list[SortExpr] | None = None
+    offset: Set | None = None
+    limit: Set | None = None
     implicit_wrapper: bool = False
 
     # An expression to use instead of this one for the purpose of
     # cardinality/multiplicity inference. This is used for when something
     # is desugared in a way that doesn't preserve cardinality, but we
     # need to anyway.
-    card_inference_override: typing.Optional[Set] = None
+    card_inference_override: Set | None = None
 
 
 class GroupStmt(FilteredStmt):
@@ -1179,11 +1177,11 @@ class GroupStmt(FilteredStmt):
     by: list[qlast.GroupingElement]
     result: Set = DUMMY_SET
     group_binding: Set = DUMMY_SET
-    grouping_binding: typing.Optional[Set] = None
-    orderby: typing.Optional[list[SortExpr]] = None
+    grouping_binding: Set | None = None
+    orderby: list[SortExpr] | None = None
     # Optimization information
     group_aggregate_sets: dict[
-        typing.Optional[Set], frozenset[PathId]
+        Set | None, frozenset[PathId]
     ] = ast.field(factory=dict)
 
 
@@ -1217,7 +1215,7 @@ class MutatingStmt(Stmt, MutatingLikeStmt):
     subject: Set = DUMMY_SET
     # Conflict checks that we should manually raise constraint violations
     # for.
-    conflict_checks: typing.Optional[list[OnConflictClause]] = None
+    conflict_checks: list[OnConflictClause] | None = None
     # Access policy checks that we should raise errors on
     write_policies: dict[uuid.UUID, WritePolicies] = ast.field(
         factory=dict
@@ -1228,7 +1226,7 @@ class MutatingStmt(Stmt, MutatingLikeStmt):
     )
 
     # Rewrites of the subject shape
-    rewrites: typing.Optional[Rewrites] = None
+    rewrites: Rewrites | None = None
 
     @property
     def material_type(self) -> TypeRef:
@@ -1252,7 +1250,7 @@ class WritePolicy(Base):
     expr: Set
     action: qltypes.AccessPolicyAction
     name: str
-    error_msg: typing.Optional[str]
+    error_msg: str | None
 
     cardinality: qltypes.Cardinality = qltypes.Cardinality.UNKNOWN
 
@@ -1271,21 +1269,21 @@ class Trigger(Base):
     # implementation (identical to the old set), to help make the
     # implementation more uniform.
     new_set: Set
-    old_set: typing.Optional[Set]
+    old_set: Set | None
 
 
 class OnConflictClause(Base):
-    constraint: typing.Optional[ConstraintRef]
+    constraint: ConstraintRef | None
     select_ir: Set
     always_check: bool
-    else_ir: typing.Optional[Set]
-    update_query_set: typing.Optional[Set] = None
-    else_fail: typing.Optional[MutatingStmt] = None
+    else_ir: Set | None
+    update_query_set: Set | None = None
+    else_fail: MutatingStmt | None = None
 
 
 class InsertStmt(MutatingStmt):
-    on_conflict: typing.Optional[OnConflictClause] = None
-    final_typeref: typing.Optional[TypeRef] = None
+    on_conflict: OnConflictClause | None = None
+    final_typeref: TypeRef | None = None
 
     @property
     def material_type(self) -> TypeRef:
@@ -1302,7 +1300,7 @@ RewritesOfType = dict[str, tuple[SetE[Pointer], BasePointerRef]]
 
 @dataclasses.dataclass(kw_only=True, frozen=True, slots=True)
 class Rewrites:
-    old_path_id: typing.Optional[PathId]
+    old_path_id: PathId | None
 
     by_type: dict[TypeRef, RewritesOfType]
 
@@ -1334,7 +1332,7 @@ class DeleteStmt(MutatingStmt, FilteredStmt):
 
 class SessionStateCmd(Command):
 
-    modaliases: dict[typing.Optional[str], s_mod.Module]
+    modaliases: dict[str | None, s_mod.Module]
     testmode: bool
 
 
@@ -1344,20 +1342,20 @@ class ConfigCommand(Command, Expr):
     scope: qltypes.ConfigScope
     cardinality: qltypes.SchemaCardinality
     requires_restart: bool
-    backend_setting: typing.Optional[str]
+    backend_setting: str | None
     is_system_config: bool
-    globals: typing.Optional[list[Global]] = None
-    scope_tree: typing.Optional[ScopeTreeNode] = None
+    globals: list[Global] | None = None
+    scope_tree: ScopeTreeNode | None = None
 
     params: list[Param] = ast.field(factory=list)
-    schema: typing.Optional[s_schema.Schema] = None
+    schema: s_schema.Schema | None = None
 
 
 class ConfigSet(ConfigCommand):
 
     expr: Set
     required: bool
-    backend_expr: typing.Optional[Set] = None
+    backend_expr: Set | None = None
 
     @property
     def typeref(self) -> TypeRef:
@@ -1366,7 +1364,7 @@ class ConfigSet(ConfigCommand):
 
 class ConfigReset(ConfigCommand):
 
-    selector: typing.Optional[Set] = None
+    selector: Set | None = None
 
     @property
     def typeref(self) -> TypeRef:
@@ -1398,7 +1396,7 @@ class FTSDocument(ImmutableExpr):
 
     language_domain: set[str]
 
-    weight: typing.Optional[str]
+    weight: str | None
 
     typeref: TypeRef
 

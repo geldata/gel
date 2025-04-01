@@ -20,7 +20,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     Iterable,
     Mapping,
     Sequence,
@@ -100,13 +99,13 @@ class BaseCluster:
     def __init__(
         self,
         *,
-        instance_params: Optional[pgparams.BackendInstanceParams] = None,
+        instance_params: pgparams.BackendInstanceParams | None = None,
     ) -> None:
-        self._connection_addr: Optional[tuple[str, int]] = None
+        self._connection_addr: tuple[str, int] | None = None
         self._connection_params: pgconnparams.ConnectionParams = \
             pgconnparams.ConnectionParams(server_settings=EDGEDB_SERVER_SETTINGS)
         self._pg_config_data: dict[str, str] = {}
-        self._pg_bin_dir: Optional[pathlib.Path] = None
+        self._pg_bin_dir: pathlib.Path | None = None
         if instance_params is None:
             self._instance_params = (
                 pgparams.get_default_runtime_params().instance_params)
@@ -150,7 +149,7 @@ class BaseCluster:
         self,
         wait: int = 60,
         *,
-        server_settings: Optional[Mapping[str, str]] = None,
+        server_settings: Mapping[str, str] | None = None,
         **opts: Any,
     ) -> None:
         raise NotImplementedError
@@ -186,7 +185,7 @@ class BaseCluster:
         return conn
 
     async def start_watching(
-        self, failover_cb: Optional[Callable[[], None]] = None
+        self, failover_cb: Callable[[], None] | None = None
     ) -> None:
         pass
 
@@ -195,7 +194,7 @@ class BaseCluster:
 
     def get_runtime_params(self) -> pgparams.BackendRuntimeParams:
         params = self.get_connection_params()
-        login_role: Optional[str] = params.user
+        login_role: str | None = params.user
         sup_role = self.get_role_name(defines.EDGEDB_SUPERUSER)
         return pgparams.BackendRuntimeParams(
             instance_params=self._instance_params,
@@ -231,7 +230,7 @@ class BaseCluster:
         assert self._connection_params is not None
         return self._connection_params
 
-    def _get_connection_addr(self) -> Optional[tuple[str, int]]:
+    def _get_connection_addr(self) -> tuple[str, int] | None:
         return self._connection_addr
 
     def is_managed(self) -> bool:
@@ -404,7 +403,7 @@ class BaseCluster:
         self,
         name: str,
         exitcode: int,
-        stderr: Optional[bytes],
+        stderr: bytes | None,
     ) -> ClusterError:
         if stderr:
             return ClusterError(
@@ -428,17 +427,17 @@ class Cluster(BaseCluster):
         self,
         data_dir: pathlib.Path,
         *,
-        runstate_dir: Optional[pathlib.Path] = None,
-        instance_params: Optional[pgparams.BackendInstanceParams] = None,
+        runstate_dir: pathlib.Path | None = None,
+        instance_params: pgparams.BackendInstanceParams | None = None,
         log_level: str = 'i',
     ):
         super().__init__(instance_params=instance_params)
         self._data_dir = data_dir
         self._runstate_dir = (
             runstate_dir if runstate_dir is not None else data_dir)
-        self._daemon_pid: Optional[int] = None
-        self._daemon_process: Optional[asyncio.subprocess.Process] = None
-        self._daemon_supervisor: Optional[supervisor.Supervisor] = None
+        self._daemon_pid: int | None = None
+        self._daemon_process: asyncio.subprocess.Process | None = None
+        self._daemon_supervisor: supervisor.Supervisor | None = None
         self._log_level = log_level
 
     def is_managed(self) -> bool:
@@ -447,7 +446,7 @@ class Cluster(BaseCluster):
     def get_data_dir(self) -> pathlib.Path:
         return self._data_dir
 
-    def get_main_pid(self) -> Optional[int]:
+    def get_main_pid(self) -> int | None:
         return self._daemon_pid
 
     async def get_status(self) -> str:
@@ -532,7 +531,7 @@ class Cluster(BaseCluster):
         self,
         wait: int = 60,
         *,
-        server_settings: Optional[Mapping[str, str]] = None,
+        server_settings: Mapping[str, str] | None = None,
         **opts: str,
     ) -> None:
         """Start the cluster."""
@@ -671,9 +670,9 @@ class Cluster(BaseCluster):
         type: str = 'host',
         database: str,
         user: str,
-        address: Optional[str] = None,
+        address: str | None = None,
         auth_method: str,
-        auth_options: Optional[Mapping[str, Any]] = None,
+        auth_options: Mapping[str, Any] | None = None,
     ) -> None:
         """Add a record to pg_hba.conf."""
         if type not in {'local', 'host', 'hostssl', 'hostnossl'}:
@@ -852,8 +851,8 @@ class RemoteCluster(BaseCluster):
         *,
         connection_addr: tuple[str, int],
         connection_params: pgconnparams.ConnectionParams,
-        instance_params: Optional[pgparams.BackendInstanceParams] = None,
-        ha_backend: Optional[ha_base.HABackend] = None,
+        instance_params: pgparams.BackendInstanceParams | None = None,
+        ha_backend: ha_base.HABackend | None = None,
     ):
         super().__init__(instance_params=instance_params)
         self._connection_params = connection_params
@@ -863,7 +862,7 @@ class RemoteCluster(BaseCluster):
         self._connection_addr = connection_addr
         self._ha_backend = ha_backend
 
-    def _get_connection_addr(self) -> Optional[tuple[str, int]]:
+    def _get_connection_addr(self) -> tuple[str, int] | None:
         if self._ha_backend is not None:
             return self._ha_backend.get_master_addr()
         return self._connection_addr
@@ -877,14 +876,14 @@ class RemoteCluster(BaseCluster):
     async def get_status(self) -> str:
         return 'running'
 
-    def init(self, **settings: str) -> Optional[str]:
+    def init(self, **settings: str) -> str | None:
         pass
 
     async def start(
         self,
         wait: int = 60,
         *,
-        server_settings: Optional[Mapping[str, str]] = None,
+        server_settings: Mapping[str, str] | None = None,
         **opts: Any,
     ) -> None:
         pass
@@ -904,14 +903,14 @@ class RemoteCluster(BaseCluster):
         type: str = 'host',
         database: str,
         user: str,
-        address: Optional[str] = None,
+        address: str | None = None,
         auth_method: str,
-        auth_options: Optional[Mapping[str, Any]] = None,
+        auth_options: Mapping[str, Any] | None = None,
     ) -> None:
         raise ClusterError('cannot modify HBA records of unmanaged cluster')
 
     async def start_watching(
-        self, failover_cb: Optional[Callable[[], None]] = None
+        self, failover_cb: Callable[[], None] | None = None
     ) -> None:
         if self._ha_backend is not None:
             self._ha_backend.set_failover_callback(failover_cb)
@@ -965,10 +964,10 @@ async def get_pg_config() -> dict[str, str]:
 async def get_local_pg_cluster(
     data_dir: pathlib.Path,
     *,
-    runstate_dir: Optional[pathlib.Path] = None,
-    max_connections: Optional[int] = None,
-    tenant_id: Optional[str] = None,
-    log_level: Optional[str] = None,
+    runstate_dir: pathlib.Path | None = None,
+    max_connections: int | None = None,
+    tenant_id: str | None = None,
+    log_level: str | None = None,
 ) -> Cluster:
     if log_level is None:
         log_level = 'i'
@@ -993,8 +992,8 @@ async def get_local_pg_cluster(
 async def get_remote_pg_cluster(
     dsn: str,
     *,
-    tenant_id: Optional[str] = None,
-    specified_capabilities: Optional[srvargs.BackendCapabilitySets] = None,
+    tenant_id: str | None = None,
+    specified_capabilities: srvargs.BackendCapabilitySets | None = None,
 ) -> RemoteCluster:
     from edb.server import pgcon
     parsed = urllib.parse.urlparse(dsn)
@@ -1036,7 +1035,7 @@ async def get_remote_pg_cluster(
 
     async def _get_cluster_type(
         conn: pgcon.PGConnection,
-    ) -> tuple[type[RemoteCluster], Optional[str]]:
+    ) -> tuple[type[RemoteCluster], str | None]:
         managed_clouds = {
             'rds_superuser': RemoteCluster,    # Amazon RDS
             'cloudsqlsuperuser': RemoteCluster,    # GCP Cloud SQL
@@ -1340,7 +1339,7 @@ async def _run_logged_text_subprocess(
     level: int = logging.DEBUG,
     check: bool = True,
     log_stdout: bool = True,
-    timeout: Optional[float] = None,
+    timeout: float | None = None,
     **kwargs: Any,
 ) -> tuple[list[str], list[str], int]:
     stdout_lines, stderr_lines, exit_code = await _run_logged_subprocess(
@@ -1369,7 +1368,7 @@ async def _run_logged_subprocess(
     log_stderr: bool = True,
     capture_stdout: bool = True,
     capture_stderr: bool = True,
-    timeout: Optional[float] = None,
+    timeout: float | None = None,
     stdin: Any = asyncio.subprocess.PIPE,
     **kwargs: Any,
 ) -> tuple[list[bytes], list[bytes], int]:
@@ -1415,7 +1414,7 @@ async def _start_logged_subprocess(
     capture_stdout: bool = True,
     capture_stderr: bool = True,
     stdin: Any = asyncio.subprocess.PIPE,
-    log_processor: Optional[Callable[[str], tuple[str, int]]] = None,
+    log_processor: Callable[[str], tuple[str, int]] | None = None,
     **kwargs: Any,
 ) -> tuple[
     asyncio.subprocess.Process,
@@ -1486,7 +1485,7 @@ async def _capture_and_log_subprocess_output(
     stream: asyncio.StreamReader,
     logger: logging.Logger,
     level: int,
-    log_processor: Optional[Callable[[str], tuple[str, int]]] = None,
+    log_processor: Callable[[str], tuple[str, int]] | None = None,
     *,
     capture_output: bool,
     log_output: bool,

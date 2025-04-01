@@ -16,7 +16,6 @@
 # limitations under the License.
 #
 
-from typing import Optional
 
 import asyncio
 import enum
@@ -95,7 +94,7 @@ class AdaptiveHASupport:
     #   * (and) sys_pgcon is healthy.
 
     _state: State
-    _unhealthy_timer_handle: Optional[asyncio.TimerHandle]
+    _unhealthy_timer_handle: asyncio.TimerHandle | None
 
     def __init__(self, cluster_protocol: base.ClusterProtocol, tag: str):
         self._cluster_protocol = cluster_protocol

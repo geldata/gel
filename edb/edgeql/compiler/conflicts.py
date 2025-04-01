@@ -21,7 +21,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Iterable, Sequence
+from typing import Iterable, Sequence
 
 from edb import errors
 
@@ -59,7 +59,7 @@ def _get_needed_ptrs(
 ) -> tuple[set[str], dict[str, qlast.Expr]]:
     needed_ptrs = set(initial_ptrs)
     for constr in obj_constrs:
-        subjexpr: Optional[s_expr.Expression] = (
+        subjexpr: s_expr.Expression | None = (
             constr.get_subjectexpr(ctx.env.schema)
         )
         assert subjexpr
@@ -89,12 +89,12 @@ def _compile_conflict_select_for_obj_type(
     subject_typ: s_objtypes.ObjectType,
     *,
     for_inheritance: bool,
-    fake_dml_set: Optional[irast.Set],
+    fake_dml_set: irast.Set | None,
     obj_constrs: Sequence[s_constr.Constraint],
     constrs: dict[str, tuple[s_pointers.Pointer, list[s_constr.Constraint]]],
-    span: Optional[irast.Span],
+    span: irast.Span | None,
     ctx: context.ContextLevel,
-) -> tuple[Optional[qlast.Expr], bool]:
+) -> tuple[qlast.Expr | None, bool]:
     """Synthesize a select of conflicting objects
 
     ... for a single object type. This gets called once for each ancestor
@@ -239,7 +239,7 @@ def _compile_conflict_select_for_obj_type(
     ))
 
     for constr in obj_constrs:
-        subject_expr: Optional[s_expr.Expression] = (
+        subject_expr: s_expr.Expression | None = (
             constr.get_subjectexpr(ctx.env.schema)
         )
         assert subject_expr and isinstance(subject_expr.parse(), qlast.Expr)
@@ -386,10 +386,10 @@ def _compile_conflict_select(
     subject_typ: s_objtypes.ObjectType,
     *,
     for_inheritance: bool=False,
-    fake_dml_set: Optional[irast.Set]=None,
+    fake_dml_set: irast.Set | None=None,
     obj_constrs: Sequence[s_constr.Constraint],
     constrs: PointerConstraintMap,
-    span: Optional[irast.Span],
+    span: irast.Span | None,
     ctx: context.ContextLevel,
 ) -> tuple[irast.Set, bool, bool]:
     """Synthesize a select of conflicting objects
@@ -499,7 +499,7 @@ def compile_insert_unless_conflict_on(
     stmt: irast.InsertStmt,
     typ: s_objtypes.ObjectType,
     constraint_spec: qlast.Expr,
-    else_branch: Optional[qlast.Expr],
+    else_branch: qlast.Expr | None,
     *, ctx: context.ContextLevel,
 ) -> irast.OnConflictClause:
 
@@ -742,7 +742,7 @@ def compile_inheritance_conflict_checks(
     stmt: irast.MutatingStmt,
     subject_stype: s_objtypes.ObjectType,
     *, ctx: context.ContextLevel,
-) -> Optional[list[irast.OnConflictClause]]:
+) -> list[irast.OnConflictClause] | None:
 
     has_id_write = _has_explicit_id_write(stmt)
 

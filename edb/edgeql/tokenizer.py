@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Optional, Sequence
+from typing import Any, Sequence
 
 import re
 import hashlib
@@ -68,7 +68,7 @@ class Source:
     def tokens(self) -> list[ql_parser.OpaqueToken]:
         return self._tokens
 
-    def first_extra(self) -> Optional[int]:
+    def first_extra(self) -> int | None:
         return None
 
     def extra_counts(self) -> Sequence[int]:
@@ -127,7 +127,7 @@ class NormalizedSource(Source):
     def tokens(self) -> list[ql_parser.OpaqueToken]:
         return self._tokens
 
-    def first_extra(self) -> Optional[int]:
+    def first_extra(self) -> int | None:
         return self._first_extra
 
     def extra_counts(self) -> Sequence[int]:
@@ -146,8 +146,8 @@ class NormalizedSource(Source):
 
 
 def inflate_span(
-    source: str, span: tuple[int, Optional[int]]
-) -> tuple[ql_parser.SourcePoint, Optional[ql_parser.SourcePoint]]:
+    source: str, span: tuple[int, int | None]
+) -> tuple[ql_parser.SourcePoint, ql_parser.SourcePoint | None]:
     (start, end) = span
     source_bytes = source.encode('utf-8')
 
@@ -166,8 +166,8 @@ def inflate_span(
 
 
 def inflate_position(
-    source: str, span: tuple[int, Optional[int]]
-) -> tuple[int, int, int, Optional[int]]:
+    source: str, span: tuple[int, int | None]
+) -> tuple[int, int, int, int | None]:
     (start, end) = inflate_span(source, span)
     return (
         start.column,
@@ -222,8 +222,8 @@ def _normalize(eql: str) -> ql_parser.Entry:
 def _derive_hint(
     input: str,
     message: str,
-    position: tuple[int, int, int, Optional[int]],
-) -> Optional[str]:
+    position: tuple[int, int, int, int | None],
+) -> str | None:
     _, _, off, _ = position
 
     if message.endswith(

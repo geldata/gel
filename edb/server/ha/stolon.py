@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Any
 
 import asyncio
 import base64
@@ -38,7 +38,7 @@ logger = logging.getLogger("edb.server")
 
 
 class StolonBackend(base.HABackend):
-    _master_addr: Optional[tuple[str, int]]
+    _master_addr: tuple[str, int] | None
 
     def __init__(self) -> None:
         super().__init__()
@@ -58,7 +58,7 @@ class StolonBackend(base.HABackend):
         assert self._master_addr
         return self._master_addr
 
-    def get_master_addr(self) -> Optional[tuple[str, int]]:
+    def get_master_addr(self) -> tuple[str, int] | None:
         return self._master_addr
 
     def _on_update(self, payload: bytes) -> None:
@@ -121,7 +121,7 @@ class StolonConsulBackend(StolonBackend):
         *,
         host: str = "127.0.0.1",
         port: int = 8500,
-        ssl: Optional[ssl.SSLContext] = None,
+        ssl: ssl.SSLContext | None = None,
     ) -> None:
         super().__init__()
         self._cluster_name = cluster_name

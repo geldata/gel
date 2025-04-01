@@ -22,7 +22,6 @@
 from __future__ import annotations
 from typing import (
     Callable,
-    Optional,
     Mapping,
     ChainMap,
     Generator,
@@ -174,7 +173,7 @@ class RelOverlays:
     #: Relations used to "overlay" the main table for
     #: the type.  Mostly used with DML statements.
     type: immu.Map[
-        Optional[irast.MutatingLikeStmt],
+        irast.MutatingLikeStmt | None,
         immu.Map[
             uuid.UUID,
             tuple[OverlayEntry, ...],
@@ -184,7 +183,7 @@ class RelOverlays:
     #: Relations used to "overlay" the main table for
     #: the pointer.  Mostly used with DML statements.
     ptr: immu.Map[
-        Optional[irast.MutatingLikeStmt],
+        irast.MutatingLikeStmt | None,
         immu.Map[
             tuple[uuid.UUID, str],
             tuple[
@@ -263,32 +262,32 @@ class CompilerContextLevel(compiler.ContextLevel):
 
     #: The logical parent of the current query in the
     #: query hierarchy
-    parent_rel: Optional[pgast.Query]
+    parent_rel: pgast.Query | None
 
     #: Query to become current in the next SUBSTMT switch.
-    pending_query: Optional[pgast.SelectStmt]
+    pending_query: pgast.SelectStmt | None
 
     #: Sets currently being materialized
     materializing: frozenset[irast.Stmt]
 
     #: Whether the expression currently being processed is
     #: directly exposed to the output of the statement.
-    expr_exposed: Optional[bool]
+    expr_exposed: bool | None
 
     #: A hack that indicates a tuple element that should be treated as
     #: exposed. This enables us to treat 'bar' in (foo, bar).1 as exposed,
     #: which eta-expansion and some casts rely on.
-    expr_exposed_tuple_cheat: Optional[irast.TupleElement]
+    expr_exposed_tuple_cheat: irast.TupleElement | None
 
     #: Expression to use to force SQL expression volatility in this context
     #: (Delayed with a lambda to avoid inserting it when not used.)
     volatility_ref: tuple[
         Callable[[pgast.SelectStmt, CompilerContextLevel],
-                 Optional[pgast.BaseExpr]], ...]
+                 pgast.BaseExpr | None], ...]
 
     # Current path_id we are INSERTing, so that we can avoid creating
     # a bogus volatility ref to it...
-    current_insert_path_id: Optional[irast.PathId]
+    current_insert_path_id: irast.PathId | None
 
     #: Paths, for which semi-join is banned in this context.
     disable_semi_join: frozenset[irast.PathId]
@@ -307,7 +306,7 @@ class CompilerContextLevel(compiler.ContextLevel):
     intersection_narrowing: dict[irast.Set, irast.Set]
 
     #: Which SQL query holds the SQL scope for the given PathId
-    path_scope: ChainMap[irast.PathId, Optional[pgast.SelectStmt]]
+    path_scope: ChainMap[irast.PathId, pgast.SelectStmt | None]
 
     #: Relevant IR scope for this context.
     scope_tree: irast.ScopeTreeNode
@@ -332,7 +331,7 @@ class CompilerContextLevel(compiler.ContextLevel):
     #: The CTE and some metadata of any enclosing iterator-like
     #: construct (which includes iterators, insert/update, and INSERT
     #: ELSE select clauses) currently being compiled.
-    enclosing_cte_iterator: Optional[pgast.IteratorCTE]
+    enclosing_cte_iterator: pgast.IteratorCTE | None
 
     #: Sets to force shape compilation on, because the values are
     #: needed by DML.
@@ -340,11 +339,11 @@ class CompilerContextLevel(compiler.ContextLevel):
 
     def __init__(
         self,
-        prevlevel: Optional[CompilerContextLevel],
+        prevlevel: CompilerContextLevel | None,
         mode: ContextSwitchMode,
         *,
-        env: Optional[Environment] = None,
-        scope_tree: Optional[irast.ScopeTreeNode] = None,
+        env: Environment | None = None,
+        scope_tree: irast.ScopeTreeNode | None = None,
     ) -> None:
         if prevlevel is None:
             assert env is not None
@@ -478,7 +477,7 @@ class CompilerContextLevel(compiler.ContextLevel):
             elif mode == ContextSwitchMode.NEWSCOPE:
                 self.path_scope = prevlevel.path_scope.new_child()
 
-    def get_current_dml_stmt(self) -> Optional[irast.MutatingLikeStmt]:
+    def get_current_dml_stmt(self) -> irast.MutatingLikeStmt | None:
         if len(self.dml_stmt_stack) == 0:
             return None
         return self.dml_stmt_stack[-1]
@@ -505,8 +504,8 @@ class CompilerContextLevel(compiler.ContextLevel):
 
     def up_hierarchy(
         self,
-        n: int, q: Optional[pgast.Query]=None
-    ) -> Optional[pgast.Query]:
+        n: int, q: pgast.Query | None=None
+    ) -> pgast.Query | None:
         # mostly intended as a debugging helper
         q = q or self.rel
         for _ in range(n):
@@ -522,19 +521,19 @@ class CompilerContext(compiler.CompilerContext[CompilerContextLevel]):
 
 RewriteKey = tuple[uuid.UUID, bool]
 FullRewriteKey = tuple[
-    uuid.UUID, bool, Optional[frozenset['irast.MutatingLikeStmt']]]
+    uuid.UUID, bool, frozenset['irast.MutatingLikeStmt'] | None]
 
 
 class Environment:
     """Static compilation environment."""
 
     aliases: pg_aliases.AliasGenerator
-    output_format: Optional[OutputFormat]
-    named_param_prefix: Optional[tuple[str, ...]]
+    output_format: OutputFormat | None
+    named_param_prefix: tuple[str, ...] | None
     ptrref_source_visibility: dict[irast.BasePointerRef, bool]
     expected_cardinality_one: bool
     ignore_object_shapes: bool
-    explicit_top_cast: Optional[irast.TypeRef]
+    explicit_top_cast: irast.TypeRef | None
     singleton_mode: bool
     query_params: list[irast.Param]
     type_rewrites: dict[RewriteKey, irast.Set]
@@ -553,20 +552,21 @@ class Environment:
     def __init__(
         self,
         *,
-        alias_generator: Optional[pg_aliases.AliasGenerator] = None,
-        output_format: Optional[OutputFormat],
-        named_param_prefix: Optional[tuple[str, ...]],
+        alias_generator: pg_aliases.AliasGenerator | None = None,
+        output_format: OutputFormat | None,
+        named_param_prefix: tuple[str, ...] | None,
         expected_cardinality_one: bool,
         ignore_object_shapes: bool,
         singleton_mode: bool,
         is_explain: bool,
-        explicit_top_cast: Optional[irast.TypeRef],
+        explicit_top_cast: irast.TypeRef | None,
         query_params: list[irast.Param],
         type_rewrites: dict[RewriteKey, irast.Set],
         scope_tree_nodes: dict[int, irast.ScopeTreeNode],
-        external_rvars: Optional[
-            Mapping[tuple[irast.PathId, pgce.PathAspect], pgast.PathRangeVar]
-        ] = None,
+        external_rvars: Mapping[
+            tuple[irast.PathId, pgce.PathAspect],
+            pgast.PathRangeVar
+        ] | None = None,
         backend_runtime_params: pgparams.BackendRuntimeParams,
         # XXX: TRAMPOLINE: THIS IS WRONG
         versioned_stdlib: bool = True,

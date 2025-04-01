@@ -21,7 +21,6 @@ from typing import (
     Any,
     ClassVar,
     Generic,
-    Optional,
     TypeVar,
     get_type_hints,
 )
@@ -52,8 +51,8 @@ except ImportError:
 
 class ParametricType:
 
-    types: ClassVar[Optional[tuple[type, ...]]] = None
-    orig_args: ClassVar[Optional[tuple[type, ...]]] = None
+    types: ClassVar[tuple[type, ...] | None] = None
+    orig_args: ClassVar[tuple[type, ...] | None] = None
     _forward_refs: ClassVar[dict[str, tuple[int, str]]] = {}
     _type_param_map: ClassVar[dict[Any, str]] = {}
     _non_type_params: ClassVar[dict[int, type]] = {}

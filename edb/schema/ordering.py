@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     Sequence,
     NamedTuple,
     TYPE_CHECKING,
@@ -62,7 +61,7 @@ DepGraph = dict[DepGraphKey, DepGraphEntry]
 
 def linearize_delta(
     delta: sd.DeltaRoot,
-    old_schema: Optional[s_schema.Schema],
+    old_schema: s_schema.Schema | None,
     new_schema: s_schema.Schema,
 ) -> sd.DeltaRoot:
     """Reorder the *delta* tree in-place to satisfy command dependency order.
@@ -502,7 +501,7 @@ def _trace_op(
     renames: dict[sn.Name, sn.Name],
     renames_r: dict[sn.Name, sn.Name],
     strongrefs: dict[sn.Name, sn.Name],
-    old_schema: Optional[s_schema.Schema],
+    old_schema: s_schema.Schema | None,
     new_schema: s_schema.Schema,
 ) -> None:
     def get_deps(key: DepGraphKey) -> DepGraphEntry:
@@ -939,7 +938,7 @@ def _trace_op(
 def get_object(
     schema: s_schema.Schema,
     op: sd.ObjectCommand[so.Object],
-    name: Optional[sn.Name] = None,
+    name: sn.Name | None = None,
 ) -> so.Object:
     metaclass = op.get_schema_metaclass()
     if name is None:

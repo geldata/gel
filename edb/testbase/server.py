@@ -22,7 +22,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     Iterable,
     Literal,
     Sequence,
@@ -473,10 +472,10 @@ class TestCaseWithHttpClient(TestCase):
     def http_con_send_request(
         cls,
         http_con: http.client.HTTPConnection,
-        params: Optional[dict[str, str]] = None,
+        params: dict[str, str] | None = None,
         *,
-        prefix: Optional[str] = None,
-        headers: Optional[dict[str, str]] = None,
+        prefix: str | None = None,
+        headers: dict[str, str] | None = None,
         method: str = "GET",
         body: bytes = b"",
         path: str = "",
@@ -508,10 +507,10 @@ class TestCaseWithHttpClient(TestCase):
     def http_con_request(
         cls,
         http_con: http.client.HTTPConnection,
-        params: Optional[dict[str, str]] = None,
+        params: dict[str, str] | None = None,
         *,
-        prefix: Optional[str] = None,
-        headers: Optional[dict[str, str]] = None,
+        prefix: str | None = None,
+        headers: dict[str, str] | None = None,
         method: str = "GET",
         body: bytes = b"",
         path: str = "",
@@ -531,10 +530,10 @@ class TestCaseWithHttpClient(TestCase):
     def http_con_json_request(
         cls,
         http_con: http.client.HTTPConnection,
-        params: Optional[dict[str, str]] = None,
+        params: dict[str, str] | None = None,
         *,
-        prefix: Optional[str] = None,
-        headers: Optional[dict[str, str]] = None,
+        prefix: str | None = None,
+        headers: dict[str, str] | None = None,
         body: Any,
         path: str = "",
     ):
@@ -564,7 +563,7 @@ class TestCaseWithHttpClient(TestCase):
         http_con: http.client.HTTPConnection,
         query: str,
         proto_ver=edgedb_defines.CURRENT_PROTOCOL,
-        bearer_token: Optional[str] = None,
+        bearer_token: str | None = None,
         user: str = "edgedb",
         database: str = "main",
     ):
@@ -783,7 +782,7 @@ async def drop_db(conn, dbname):
 class ClusterTestCase(TestCaseWithHttpClient):
 
     BASE_TEST_CLASS = True
-    backend_dsn: Optional[str] = None
+    backend_dsn: str | None = None
 
     # Some tests may want to manage transactions manually,
     # or affect non-transactional state, in which case
@@ -1359,9 +1358,9 @@ class ConnectedTestCase(ClusterTestCase):
 
 class DatabaseTestCase(ConnectedTestCase):
 
-    SETUP: Optional[str | pathlib.Path | list[str] | list[pathlib.Path]] = None
-    TEARDOWN: Optional[str] = None
-    SCHEMA: Optional[str | pathlib.Path] = None
+    SETUP: str | pathlib.Path | list[str] | list[pathlib.Path] | None = None
+    TEARDOWN: str | None = None
+    SCHEMA: str | pathlib.Path | None = None
     DEFAULT_MODULE: str = 'default'
     EXTENSIONS: list[str] = []
 
@@ -1698,13 +1697,13 @@ class SQLQueryTestCase(BaseQueryTestCase):
 
 class CLITestCaseMixin:
 
-    def run_cli(self, *args, input: Optional[str] = None) -> None:
+    def run_cli(self, *args, input: str | None = None) -> None:
         conn_args = self.get_connect_args()
         self.run_cli_on_connection(conn_args, *args, input=input)
 
     @classmethod
     def run_cli_on_connection(
-        cls, conn_args: dict[str, Any], *args, input: Optional[str] = None
+        cls, conn_args: dict[str, Any], *args, input: str | None = None
     ) -> None:
         cmd_args = [
             '--host', conn_args['host'],
@@ -1932,13 +1931,13 @@ class StablePGDumpTestCase(BaseQueryTestCase):
     BASE_TEST_CLASS = True
     TRANSACTION_ISOLATION = False
 
-    def run_pg_dump(self, *args, input: Optional[str] = None) -> None:
+    def run_pg_dump(self, *args, input: str | None = None) -> None:
         conargs = self.get_connect_args()
         self.run_pg_dump_on_connection(conargs, *args, input=input)
 
     @classmethod
     def run_pg_dump_on_connection(
-        cls, dsn: str, *args, input: Optional[str] = None
+        cls, dsn: str, *args, input: str | None = None
     ) -> None:
         cmd = [cls._pg_bin_dir / 'pg_dump', '--dbname', dsn]
         cmd += args
@@ -2088,7 +2087,7 @@ class StablePGDumpTestCase(BaseQueryTestCase):
         source: str,
         link: str,
         target: str,
-        link_props: Optional[Iterable[str]] = None
+        link_props: Iterable[str] | None = None
     ) -> str:
         """Propduce a subquery fetching a single link as a record.
 
@@ -2117,7 +2116,7 @@ class StablePGDumpTestCase(BaseQueryTestCase):
         source: str,
         link: str,
         target: str,
-        link_props: Optional[Iterable[str]] = None
+        link_props: Iterable[str] | None = None
     ) -> str:
         """Propduce a subquery fetching a multi link as an array or records.
 
@@ -2346,50 +2345,52 @@ class _EdgeDBServerData(NamedTuple):
 
 class _EdgeDBServer:
 
-    proc: Optional[asyncio.Process]
+    proc: asyncio.Process | None
 
     def __init__(
         self,
         *,
         bind_addrs: tuple[str, ...] = ('localhost',),
-        bootstrap_command: Optional[str],
-        auto_shutdown_after: Optional[int],
-        adjacent_to: Optional[tconn.Connection],
-        max_allowed_connections: Optional[int],
+        bootstrap_command: str | None,
+        auto_shutdown_after: int | None,
+        adjacent_to: tconn.Connection | None,
+        max_allowed_connections: int | None,
         compiler_pool_size: int,
-        compiler_pool_mode: Optional[edgedb_args.CompilerPoolMode] = None,
+        compiler_pool_mode: edgedb_args.CompilerPoolMode | None = None,
         debug: bool,
-        backend_dsn: Optional[str] = None,
-        data_dir: Optional[str] = None,
-        runstate_dir: Optional[str] = None,
-        reset_auth: Optional[bool] = None,
-        tenant_id: Optional[str] = None,
+        backend_dsn: str | None = None,
+        data_dir: str | None = None,
+        runstate_dir: str | None = None,
+        reset_auth: bool | None = None,
+        tenant_id: str | None = None,
         security: edgedb_args.ServerSecurityMode,
-        default_auth_method: Optional[
-            edgedb_args.ServerAuthMethod | edgedb_args.ServerAuthMethods
-        ] = None,
-        binary_endpoint_security: Optional[
-            edgedb_args.ServerEndpointSecurityMode] = None,
-        http_endpoint_security: Optional[
-            edgedb_args.ServerEndpointSecurityMode] = None,  # see __aexit__
+        default_auth_method: (
+            edgedb_args.ServerAuthMethod | edgedb_args.ServerAuthMethods | None
+         ) = None,
+        binary_endpoint_security: (
+            edgedb_args.ServerEndpointSecurityMode | None
+        ) = None,
+        http_endpoint_security: (
+            edgedb_args.ServerEndpointSecurityMode | None
+        ) = None,  # see __aexit__
         enable_backend_adaptive_ha: bool = False,
         ignore_other_tenants: bool = False,
-        readiness_state_file: Optional[str] = None,
-        tls_cert_file: Optional[os.PathLike] = None,
-        tls_key_file: Optional[os.PathLike] = None,
+        readiness_state_file: str | None = None,
+        tls_cert_file: os.PathLike | None = None,
+        tls_key_file: os.PathLike | None = None,
         tls_cert_mode: edgedb_args.ServerTlsCertMode = (
             edgedb_args.ServerTlsCertMode.SelfSigned),
-        tls_client_ca_file: Optional[os.PathLike] = None,
-        jws_key_file: Optional[os.PathLike] = None,
-        jwt_sub_allowlist_file: Optional[os.PathLike] = None,
-        jwt_revocation_list_file: Optional[os.PathLike] = None,
-        multitenant_config: Optional[str] = None,
-        config_file: Optional[os.PathLike] = None,
-        default_branch: Optional[str] = None,
-        env: Optional[dict[str, str]] = None,
-        extra_args: Optional[list[str]] = None,
-        net_worker_mode: Optional[str] = None,
-        password: Optional[str] = None,
+        tls_client_ca_file: os.PathLike | None = None,
+        jws_key_file: os.PathLike | None = None,
+        jwt_sub_allowlist_file: os.PathLike | None = None,
+        jwt_revocation_list_file: os.PathLike | None = None,
+        multitenant_config: str | None = None,
+        config_file: os.PathLike | None = None,
+        default_branch: str | None = None,
+        env: dict[str, str] | None = None,
+        extra_args: list[str] | None = None,
+        net_worker_mode: str | None = None,
+        password: str | None = None,
     ) -> None:
         self.bind_addrs = bind_addrs
         self.auto_shutdown_after = auto_shutdown_after
@@ -2448,7 +2449,7 @@ class _EdgeDBServer:
         except TimeoutError:
             proc.kill()
 
-    async def _shutdown(self, exc: Optional[Exception] = None):
+    async def _shutdown(self, exc: Exception | None = None):
         if self.proc is None:
             return
 
@@ -2720,44 +2721,46 @@ class _EdgeDBServer:
 def start_edgedb_server(
     *,
     bind_addrs: tuple[str, ...] = ('localhost',),
-    auto_shutdown_after: Optional[int]=None,
-    bootstrap_command: Optional[str]=None,
-    max_allowed_connections: Optional[int]=5,
+    auto_shutdown_after: int | None=None,
+    bootstrap_command: str | None=None,
+    max_allowed_connections: int | None=5,
     compiler_pool_size: int=2,
-    compiler_pool_mode: Optional[edgedb_args.CompilerPoolMode] = None,
-    adjacent_to: Optional[tconn.Connection]=None,
+    compiler_pool_mode: edgedb_args.CompilerPoolMode | None = None,
+    adjacent_to: tconn.Connection | None=None,
     debug: bool=debug.flags.server,
-    backend_dsn: Optional[str] = None,
-    runstate_dir: Optional[str] = None,
-    data_dir: Optional[str] = None,
-    reset_auth: Optional[bool] = None,
-    tenant_id: Optional[str] = None,
+    backend_dsn: str | None = None,
+    runstate_dir: str | None = None,
+    data_dir: str | None = None,
+    reset_auth: bool | None = None,
+    tenant_id: str | None = None,
     security: edgedb_args.ServerSecurityMode = (
         edgedb_args.ServerSecurityMode.Strict),
-    default_auth_method: Optional[
-        edgedb_args.ServerAuthMethod | edgedb_args.ServerAuthMethods
-    ] = None,
-    binary_endpoint_security: Optional[
-        edgedb_args.ServerEndpointSecurityMode] = None,
-    http_endpoint_security: Optional[
-        edgedb_args.ServerEndpointSecurityMode] = None,
+    default_auth_method: (
+        edgedb_args.ServerAuthMethod | edgedb_args.ServerAuthMethods | None
+    ) = None,
+    binary_endpoint_security: (
+        edgedb_args.ServerEndpointSecurityMode | None
+    ) = None,
+    http_endpoint_security: (
+        edgedb_args.ServerEndpointSecurityMode | None
+    ) = None,
     enable_backend_adaptive_ha: bool = False,
     ignore_other_tenants: bool = False,
-    readiness_state_file: Optional[str] = None,
-    tls_cert_file: Optional[os.PathLike] = None,
-    tls_key_file: Optional[os.PathLike] = None,
+    readiness_state_file: str | None = None,
+    tls_cert_file: os.PathLike | None = None,
+    tls_key_file: os.PathLike | None = None,
     tls_cert_mode: edgedb_args.ServerTlsCertMode = (
         edgedb_args.ServerTlsCertMode.SelfSigned),
-    tls_client_ca_file: Optional[os.PathLike] = None,
-    jws_key_file: Optional[os.PathLike] = None,
-    jwt_sub_allowlist_file: Optional[os.PathLike] = None,
-    jwt_revocation_list_file: Optional[os.PathLike] = None,
-    multitenant_config: Optional[str] = None,
-    config_file: Optional[os.PathLike] = None,
-    env: Optional[dict[str, str]] = None,
-    extra_args: Optional[list[str]] = None,
-    default_branch: Optional[str] = None,
-    net_worker_mode: Optional[str] = None,
+    tls_client_ca_file: os.PathLike | None = None,
+    jws_key_file: os.PathLike | None = None,
+    jwt_sub_allowlist_file: os.PathLike | None = None,
+    jwt_revocation_list_file: os.PathLike | None = None,
+    multitenant_config: str | None = None,
+    config_file: os.PathLike | None = None,
+    env: dict[str, str] | None = None,
+    extra_args: list[str] | None = None,
+    default_branch: str | None = None,
+    net_worker_mode: str | None = None,
     force_new: bool = False,  # True for ignoring multitenant config env
 ):
     if (not devmode.is_in_dev_mode() or adjacent_to) and not runstate_dir:

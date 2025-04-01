@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Iterator
+from typing import Iterator
 
 from edb.common import span as edb_span
 from edb.common import exceptions as ex
@@ -67,7 +67,7 @@ class EdgeDBErrorMeta(type):
 
 class EdgeDBMessage(Warning):
 
-    _code: Optional[int] = None
+    _code: int | None = None
 
     @classmethod
     def get_code(cls):
@@ -79,20 +79,20 @@ class EdgeDBMessage(Warning):
 
 class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
-    _code: Optional[int] = None
+    _code: int | None = None
     _attrs: dict[int, str]
-    _pgext_code: Optional[str] = None
+    _pgext_code: str | None = None
 
     def __init__(
         self,
-        msg: Optional[str] = None,
+        msg: str | None = None,
         *,
-        hint: Optional[str] = None,
-        details: Optional[str] = None,
-        span: Optional[edb_span.Span] = None,
-        position: Optional[tuple[int, int, int, int | None]] = None,
-        filename: Optional[str] = None,
-        pgext_code: Optional[str] = None,
+        hint: str | None = None,
+        details: str | None = None,
+        span: edb_span.Span | None = None,
+        position: tuple[int, int, int, int | None] | None = None,
+        filename: str | None = None,
+        pgext_code: str | None = None,
     ):
         if type(self) is EdgeDBError:
             raise RuntimeError(
@@ -141,8 +141,8 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
     def set_linecol(
         self,
-        line: Optional[int],  # one-based
-        col: Optional[int],  # one-based
+        line: int | None,  # one-based
+        col: int | None,  # one-based
     ):
         if line is not None:
             self._attrs[FIELD_LINE_START] = str(line)
@@ -177,7 +177,7 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
     def has_span(self):
         return FIELD_POSITION_START in self._attrs
 
-    def set_span(self, span: Optional[edb_span.Span]):
+    def set_span(self, span: edb_span.Span | None):
         if not span:
             return
 
@@ -201,7 +201,7 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
     def set_position(
         self,
         start: int,  # zero-based
-        end: Optional[int],  # zero-based
+        end: int | None,  # zero-based
     ):
         self._attrs[FIELD_POSITION_START] = str(start)
         self._attrs[FIELD_POSITION_END] = str(end or start)
@@ -248,7 +248,7 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
 
 @contextlib.contextmanager
-def ensure_span(span: Optional[edb_span.Span]) -> Iterator[None]:
+def ensure_span(span: edb_span.Span | None) -> Iterator[None]:
     try:
         yield
     except EdgeDBError as e:

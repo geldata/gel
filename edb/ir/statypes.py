@@ -24,7 +24,6 @@ from typing import (
     ClassVar,
     Generic,
     Mapping,
-    Optional,
     Self,
     TypeVar,
     TYPE_CHECKING,
@@ -69,7 +68,7 @@ class CompositeTypeSpecField:
 class CompositeTypeSpec:
     name: str
     fields: immutables.Map[str, CompositeTypeSpecField]
-    parent: Optional[CompositeTypeSpec] = None
+    parent: CompositeTypeSpec | None = None
     children: list[CompositeTypeSpec] = dataclasses.field(
         default_factory=list, hash=False, compare=False
     )
@@ -97,9 +96,9 @@ class CompositeTypeSpec:
     def __name__(self) -> str:
         return self.name
 
-    def get_field_unique_site(self, name: str) -> Optional[CompositeTypeSpec]:
-        typ: Optional[CompositeTypeSpec] = self
-        site: Optional[CompositeTypeSpec] = None
+    def get_field_unique_site(self, name: str) -> CompositeTypeSpec | None:
+        typ: CompositeTypeSpec | None = self
+        site: CompositeTypeSpec | None = None
         while typ:
             if name in typ.fields and typ.fields[name].unique:
                 site = typ
@@ -126,7 +125,7 @@ class ScalarType:
         raise NotImplementedError("{cls}.to_backend_expr()")
 
     @classmethod
-    def to_frontend_expr(cls, expr: str) -> Optional[str]:
+    def to_frontend_expr(cls, expr: str) -> str | None:
         raise NotImplementedError("{cls}.to_frontend_expr()")
 
     def to_json(self) -> str:
@@ -245,7 +244,7 @@ class Duration(ScalarType):
     _value: int  # microseconds
 
     def __init__(
-        self, pg_text: str = '', /, *, microseconds: Optional[int] = None
+        self, pg_text: str = '', /, *, microseconds: int | None = None
     ) -> None:
         if pg_text == '' and microseconds is not None:
             self._value = microseconds
@@ -337,7 +336,7 @@ class Duration(ScalarType):
         return value
 
     @classmethod
-    def _parse_iso8601(cls, input: str, /) -> Optional[int]:
+    def _parse_iso8601(cls, input: str, /) -> int | None:
         m = cls._iso_parser.match(input)
         if not m:
             return None
@@ -409,7 +408,7 @@ class Duration(ScalarType):
         return f"edgedb_VER._interval_to_ms(({expr})::interval)::text || 'ms'"
 
     @classmethod
-    def to_frontend_expr(cls, expr: str) -> Optional[str]:
+    def to_frontend_expr(cls, expr: str) -> str | None:
         return None
 
     def to_json(self) -> str:
@@ -536,7 +535,7 @@ class ConfigMemory(ScalarType):
         return f"edgedb_VER.cfg_memory_to_str({expr})"
 
     @classmethod
-    def to_frontend_expr(cls, expr: str) -> Optional[str]:
+    def to_frontend_expr(cls, expr: str) -> str | None:
         return f"(edgedb_VER.str_to_cfg_memory({expr})::text || 'B')"
 
     def to_json(self) -> str:
@@ -569,7 +568,7 @@ typemap = {
 }
 
 
-def maybe_get_python_type_for_scalar_type_name(name: str) -> Optional[type]:
+def maybe_get_python_type_for_scalar_type_name(name: str) -> type | None:
     return typemap.get(name)
 
 
@@ -590,12 +589,12 @@ class EnumScalarType(
     """
 
     _val: E
-    _eql_type: ClassVar[Optional[s_name.QualName]]
+    _eql_type: ClassVar[s_name.QualName | None]
 
     def __init_subclass__(
         cls,
         *,
-        edgeql_type: Optional[str] = None,
+        edgeql_type: str | None = None,
         **kwargs: Any,
     ) -> None:
         global typemap
@@ -654,7 +653,7 @@ class EnumScalarType(
     def __reduce__(self) -> tuple[
         Callable[..., EnumScalarType[Any]],
         tuple[
-            Optional[tuple[type, ...] | type],
+            tuple[type, ...] | type | None,
             E,
         ],
     ]:
@@ -662,7 +661,7 @@ class EnumScalarType(
             f'{type(self)} parameters are not resolved'
 
         cls: type[EnumScalarType[E]] = self.__class__
-        types: Optional[tuple[type, ...]] = self.orig_args
+        types: tuple[type, ...] | None = self.orig_args
         if types is None or not cls.is_anon_parametrized():
             typeargs = None
         else:
@@ -672,7 +671,7 @@ class EnumScalarType(
     @classmethod
     def __restore__(
         cls,
-        typeargs: Optional[tuple[type, ...] | type],
+        typeargs: tuple[type, ...] | type | None,
         val: E,
     ) -> Self:
         if typeargs is None or cls.is_anon_parametrized():
@@ -711,7 +710,7 @@ class EnumScalarType(
         )
 
     @classmethod
-    def to_frontend_expr(cls, expr: str) -> Optional[str]:
+    def to_frontend_expr(cls, expr: str) -> str | None:
         """Convert dynamic frontend config value to backend config value."""
         cases_list = []
         for fe_val, be_val in cls.get_translation_map().items():

@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from edb import errors
 
@@ -141,9 +141,9 @@ class GlobalCommand(
 
         required, card = expression.irast.cardinality.to_schema_value()
 
-        spec_required: Optional[bool] = (
+        spec_required: bool | None = (
             self.get_specified_attribute_value('required', schema, context))
-        spec_card: Optional[qltypes.SchemaCardinality] = (
+        spec_card: qltypes.SchemaCardinality | None = (
             self.get_specified_attribute_value('cardinality', schema, context))
 
         glob_name = self.get_verbosename()
@@ -318,7 +318,7 @@ class CreateGlobal(
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if (
             field == 'required'
             and issubclass(astnode, qlast.CreateGlobal)
@@ -342,7 +342,7 @@ class CreateGlobal(
         assert isinstance(node, qlast.CreateGlobal)
         if op.property == 'target':
             if not node.target:
-                expr: Optional[s_expr.Expression] = (
+                expr: s_expr.Expression | None = (
                     self.get_attribute_value('expr')
                 )
                 if expr is not None:
@@ -567,8 +567,8 @@ class SetGlobalType(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         set_field = super()._get_ast(schema, context, parent_node=parent_node)
         if set_field is None or self.is_attribute_computed('target'):
             return None
@@ -591,10 +591,10 @@ class SetGlobalType(
         self,
         *,
         schema: s_schema.Schema,
-        orig_schema: Optional[s_schema.Schema],
+        orig_schema: s_schema.Schema | None,
         context: so.ComparisonContext,
-        object: Optional[so.Object],
-        orig_object: Optional[so.Object],
+        object: so.Object | None,
+        orig_object: so.Object | None,
     ) -> None:
         super().record_diff_annotations(
             schema=schema,

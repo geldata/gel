@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     AbstractSet,
     Iterable,
     Mapping,
@@ -77,8 +76,8 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
     def __init__(
         self,
         *args: Any,
-        _qlast: Optional[qlast_.Expr] = None,
-        _irast: Optional[irast_.Statement] = None,
+        _qlast: qlast_.Expr | None = None,
+        _irast: irast_.Statement | None = None,
         **kwargs: Any
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -116,7 +115,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
         return self._qlast
 
     @property
-    def irast(self) -> Optional[irast_.Statement]:
+    def irast(self) -> irast_.Statement | None:
         return self._irast
 
     def set_origin(self, id: uuid.UUID, field: str) -> None:
@@ -173,7 +172,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
         cls: type[Expression],
         qltree: qlast_.Expr,
         schema: s_schema.Schema,
-        modaliases: Optional[Mapping[Optional[str], str]] = None,
+        modaliases: Mapping[str | None, str] | None = None,
         localnames: AbstractSet[str] = frozenset(),
         *,
         as_fragment: bool = False,
@@ -202,13 +201,11 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
         self,
         schema: s_schema.Schema,
         *,
-        options: Optional[qlcompiler.CompilerOptions] = None,
+        options: qlcompiler.CompilerOptions | None = None,
         as_fragment: bool = False,
         detached: bool = False,
-        find_extra_refs: Optional[
-            Callable[[irast_.Set], set[so.Object]]
-        ] = None,
-        context: Optional[sd.CommandContext],
+        find_extra_refs: Callable[[irast_.Set], set[so.Object]] | None = None,
+        context: sd.CommandContext | None,
     ) -> CompiledExpression:
 
         from edb.ir import ast as irast_
@@ -261,9 +258,9 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
         self,
         schema: s_schema.Schema,
         *,
-        options: Optional[qlcompiler.CompilerOptions] = None,
+        options: qlcompiler.CompilerOptions | None = None,
         as_fragment: bool = False,
-        context: Optional[sd.CommandContext],
+        context: sd.CommandContext | None,
     ) -> CompiledExpression:
         if self._irast:
             return self  # type: ignore
@@ -309,11 +306,11 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
         str,
         tuple[
             str,
-            Optional[tuple[type, ...] | type],
+            tuple[type, ...] | type | None,
             tuple[uuid.UUID, ...],
             tuple[tuple[str, Any], ...],
         ],
-        Optional[str],
+        str | None,
     ]:
         assert self.refs is not None, 'expected expression to be compiled'
         return (
@@ -329,11 +326,11 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
             str,
             tuple[
                 str,
-                Optional[tuple[type, ...] | type],
+                tuple[type, ...] | type | None,
                 tuple[uuid.UUID, ...],
                 tuple[tuple[str, Any], ...],
             ],
-            Optional[str],
+            str | None,
         ],
     ) -> Expression:
         text, refs_data, origin = data
@@ -350,7 +347,7 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
             str,
             tuple[
                 str,
-                Optional[tuple[type, ...] | type],
+                tuple[type, ...] | type | None,
                 tuple[uuid.UUID, ...],
                 tuple[tuple[str, Any], ...],
             ],
@@ -394,7 +391,7 @@ class CompiledExpression(Expression):
     def __init__(
         self,
         *args: Any,
-        _qlast: Optional[qlast_.Expr] = None,
+        _qlast: qlast_.Expr | None = None,
         _irast: irast_.Statement,
         **kwargs: Any
     ) -> None:
@@ -415,9 +412,9 @@ class ExpressionShell(so.Shell):
         self,
         *,
         text: str,
-        refs: Optional[Iterable[so.ObjectShell[so.Object]]],
-        _qlast: Optional[qlast_.Expr] = None,
-        _irast: Optional[irast_.Statement] = None,
+        refs: Iterable[so.ObjectShell[so.Object]] | None,
+        _qlast: qlast_.Expr | None = None,
+        _irast: irast_.Statement | None = None,
     ) -> None:
         self.text = text
         self.refs = tuple(refs) if refs is not None else None
@@ -477,8 +474,8 @@ class ExpressionList(checked.FrozenCheckedList[Expression]):
     @classmethod
     def compare_values(
         cls: type[ExpressionList],
-        ours: Optional[ExpressionList],
-        theirs: Optional[ExpressionList],
+        ours: ExpressionList | None,
+        theirs: ExpressionList | None,
         *,
         our_schema: s_schema.Schema,
         their_schema: s_schema.Schema,
@@ -540,8 +537,8 @@ class ExpressionDict(checked.CheckedDict[str, Expression]):
     @classmethod
     def compare_values(
         cls: type[ExpressionDict],
-        ours: Optional[ExpressionDict],
-        theirs: Optional[ExpressionDict],
+        ours: ExpressionDict | None,
+        theirs: ExpressionDict | None,
         *,
         our_schema: s_schema.Schema,
         their_schema: s_schema.Schema,
@@ -582,7 +579,7 @@ EXPRESSION_TYPES = (
 
 def imprint_expr_context(
     qltree: qlast_.Base,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
 ) -> qlast_.Base:
     # Imprint current module aliases as explicit
     # alias declarations in the expression.
@@ -606,7 +603,7 @@ def imprint_expr_context(
             list(qltree.aliases) if qltree.aliases is not None else None)
     assert isinstance(qltree, (qlast_.Query, qlast_.Command))
 
-    existing_aliases: dict[Optional[str], str] = {}
+    existing_aliases: dict[str | None, str] = {}
     for alias in (qltree.aliases or ()):
         if isinstance(alias, qlast_.ModuleAliasDecl):
             existing_aliases[alias.alias] = alias.module

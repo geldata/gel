@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Iterator, Sequence, TYPE_CHECKING
+from typing import Iterator, Sequence, TYPE_CHECKING
 
 from edb.ir import typeutils as irtyputils
 
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 def tuple_element_for_shape_el(
     shape_el: irast.Set,
-    value: Optional[pgast.BaseExpr]=None,
+    value: pgast.BaseExpr | None=None,
     *,
     ctx: context.CompilerContextLevel
 ) -> pgast.TupleElementBase:
@@ -191,7 +191,7 @@ def new_binop(
 
 
 def extend_binop(
-    binop: Optional[pgast.BaseExpr],
+    binop: pgast.BaseExpr | None,
     *exprs: pgast.BaseExpr,
     op: str = 'AND',
 ) -> pgast.BaseExpr:
@@ -230,10 +230,10 @@ def new_coalesce(
 
 
 def extend_select_op(
-    stmt: Optional[pgast.SelectStmt],
+    stmt: pgast.SelectStmt | None,
     *stmts: pgast.SelectStmt,
     op: str = 'UNION',
-) -> Optional[pgast.SelectStmt]:
+) -> pgast.SelectStmt | None:
     stmt_list = list(stmts)
     result: pgast.SelectStmt
 
@@ -311,7 +311,7 @@ def get_column(
     colspec: str | pgast.ColumnRef,
     *,
     is_packed_multi: bool = True,
-    nullable: Optional[bool] = None,
+    nullable: bool | None = None,
 ) -> pgast.ColumnRef:
 
     if isinstance(colspec, pgast.ColumnRef):
@@ -404,8 +404,8 @@ def get_rvar_var(
 def strip_output_var(
     var: pgast.OutputVar,
     *,
-    optional: Optional[bool] = None,
-    nullable: Optional[bool] = None,
+    optional: bool | None = None,
+    nullable: bool | None = None,
 ) -> pgast.OutputVar:
 
     result: pgast.OutputVar
@@ -476,7 +476,7 @@ def is_row_expr(expr: pgast.BaseExpr) -> bool:
 
 def _get_target_from_range(
     target: pgast.BaseExpr, rvar: pgast.BaseRangeVar
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     """Try to read a target out of a very simple rvar.
 
     The goal here is to allow collapsing trivial pass-through subqueries.

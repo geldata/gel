@@ -19,7 +19,7 @@
 """SQL resolver that compiles public SQL to internal SQL which is executable
 in our internal Postgres instance."""
 
-from typing import Optional, Iterable, Mapping
+from typing import Iterable, Mapping
 import dataclasses
 import functools
 import uuid
@@ -64,7 +64,7 @@ Context = context.ResolverContextLevel
 @dispatch._resolve.register
 def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
 
-    query: Optional[pgast.Query]
+    query: pgast.Query | None
 
     if stmt.query:
         query = dispatch.resolve(stmt.query, ctx=ctx)
@@ -122,7 +122,7 @@ def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
 
 def _pull_columns_from_table(
     table: context.Table,
-    col_names: Optional[Iterable[tuple[str, pgast.Span | None]]],
+    col_names: Iterable[tuple[str, pgast.Span | None]] | None,
 ) -> list[context.Column]:
     if not col_names:
         return [c for c in table.columns if not c.hidden]
@@ -681,7 +681,7 @@ def _uncompile_insert_pointer_stmt(
     )
     value_columns: list[tuple[str, bool]] = []
     for index, expected_col in enumerate(expected_columns):
-        ptr: Optional[s_pointers.Pointer] = None
+        ptr: s_pointers.Pointer | None = None
         if expected_col.name == 'source':
             ptr_name = 'source'
             is_link = True
@@ -895,8 +895,8 @@ def _compile_standalone_default(
 
 
 def _uncompile_default_value(
-    value_query: Optional[pgast.Query],
-    value_ctes: Optional[list[pgast.CommonTableExpr]],
+    value_query: pgast.Query | None,
+    value_ctes: list[pgast.CommonTableExpr] | None,
     expected_columns: list[context.Column],
     sub: s_objtypes.ObjectType | s_links.Link | s_properties.Property,
     *,
@@ -1989,7 +1989,7 @@ def _resolve_returning_rows(
     output_relation_name: str,
     output_namespace: Mapping[str, pgast.BaseExpr],
     subject_name: str,
-    subject_alias: Optional[str],
+    subject_alias: str | None,
     ctx: context.ResolverContextLevel,
 ) -> tuple[pgast.Query, context.Table]:
     # relation that provides the values of inserted pointers

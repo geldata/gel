@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Sequence, Optional, TYPE_CHECKING
+from typing import Any, Sequence, TYPE_CHECKING
 import json
 
 from dataclasses import dataclass
@@ -803,7 +803,7 @@ class SQLiteEdgeDatabaseStorageProvider(EdgeDatabaseStorageProviderInterface):
 
 
 def schema_and_db_from_sqlite(
-    sdl_file_content: Optional[str], sqlite_file_name: str
+    sdl_file_content: str | None, sqlite_file_name: str
 ):
     import sqlite3
 

@@ -23,7 +23,6 @@ from __future__ import annotations
 from typing import (
     Callable,
     Literal,
-    Optional,
     Mapping,
     MutableMapping,
     Sequence,
@@ -88,20 +87,20 @@ class ContextSwitchMode(enum.Enum):
 @dataclasses.dataclass(kw_only=True)
 class ViewRPtr:
     source: s_sources.Source
-    ptrcls: Optional[s_pointers.Pointer]
-    ptrcls_name: Optional[s_name.QualName] = None
-    base_ptrcls: Optional[s_pointers.Pointer] = None
+    ptrcls: s_pointers.Pointer | None
+    ptrcls_name: s_name.QualName | None = None
+    base_ptrcls: s_pointers.Pointer | None = None
     ptrcls_is_linkprop: bool = False
     ptrcls_is_alias: bool = False
     exprtype: s_types.ExprType = s_types.ExprType.Select
-    rptr_dir: Optional[s_pointers.PointerDirection] = None
+    rptr_dir: s_pointers.PointerDirection | None = None
 
 
 @dataclasses.dataclass
 class ScopeInfo:
     path_scope: irast.ScopeTreeNode
-    binding_kind: Optional[irast.BindingKind]
-    pinned_path_id_ns: Optional[frozenset[str]] = None
+    binding_kind: irast.BindingKind | None
+    pinned_path_id_ns: frozenset[str] | None = None
 
 
 class PointerRefCache(dict[irtyputils.PtrRefCacheKey, irast.BasePointerRef]):
@@ -123,7 +122,7 @@ class PointerRefCache(dict[irtyputils.PtrRefCacheKey, irast.BasePointerRef]):
     def get_ptrcls_for_ref(
         self,
         ref: irast.BasePointerRef,
-    ) -> Optional[s_pointers.PointerLike]:
+    ) -> s_pointers.PointerLike | None:
         return self._rcache.get(ref)
 
 
@@ -167,7 +166,7 @@ class Environment:
     set_types: dict[irast.Set, s_types.Type]
     """A dictionary of all Set instances and their schema types."""
 
-    type_origins: dict[s_types.Type, Optional[parsing.Span]]
+    type_origins: dict[s_types.Type, parsing.Span | None]
     """A dictionary of notable types and their source origins.
 
     This is used to trace where a particular type instance originated in
@@ -194,9 +193,9 @@ class Environment:
     pointer_specified_info: dict[
         s_pointers.Pointer,
         tuple[
-            Optional[qltypes.SchemaCardinality],
-            Optional[bool],
-            Optional[parsing.Span],
+            qltypes.SchemaCardinality | None,
+            bool | None,
+            parsing.Span | None,
         ],
     ]
     """Cardinality/source context for pointers with unclear cardinality."""
@@ -206,7 +205,7 @@ class Environment:
     schema_refs: set[s_obj.Object]
     """A set of all schema objects referenced by an expression."""
 
-    schema_ref_exprs: Optional[dict[s_obj.Object, set[qlast.Base]]]
+    schema_ref_exprs: dict[s_obj.Object, set[qlast.Base]] | None
     """Map from all schema objects referenced to the ast referants.
 
     This is used for rewriting expressions in the schema after a rename. """
@@ -238,7 +237,7 @@ class Environment:
     compiled_stmts: dict[qlast.Statement, irast.Stmt]
     """A mapping of from input edgeql to compiled IR"""
 
-    alias_result_view_name: Optional[s_name.QualName]
+    alias_result_view_name: s_name.QualName | None
     """The name of a view being defined as an alias."""
 
     script_params: dict[str, irast.Param]
@@ -283,9 +282,9 @@ class Environment:
         self,
         *,
         schema: s_schema.Schema,
-        path_scope: Optional[irast.ScopeTreeNode] = None,
-        alias_result_view_name: Optional[s_name.QualName] = None,
-        options: Optional[GlobalCompilerOptions] = None,
+        path_scope: irast.ScopeTreeNode | None = None,
+        alias_result_view_name: s_name.QualName | None = None,
+        options: GlobalCompilerOptions | None = None,
     ) -> None:
         if options is None:
             options = GlobalCompilerOptions()
@@ -329,7 +328,7 @@ class Environment:
         self.warnings = []
 
     def add_schema_ref(
-        self, sobj: s_obj.Object, expr: Optional[qlast.Base]
+        self, sobj: s_obj.Object, expr: qlast.Base | None
     ) -> None:
         self.schema_refs.add(sobj)
         if self.schema_ref_exprs is not None and expr:
@@ -339,13 +338,13 @@ class Environment:
     def get_schema_object_and_track(
         self,
         name: s_name.Name,
-        expr: Optional[qlast.Base],
+        expr: qlast.Base | None,
         *,
-        modaliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Optional[type[s_obj.Object]] = None,
+        modaliases: Mapping[str | None, str] | None = None,
+        type: type[s_obj.Object] | None = None,
         default: s_obj.Object | s_obj.NoDefaultT = s_obj.NoDefault,
-        label: Optional[str] = None,
-        condition: Optional[Callable[[s_obj.Object], bool]] = None,
+        label: str | None = None,
+        condition: Callable[[s_obj.Object], bool] | None = None,
     ) -> s_obj.Object:
         ...
 
@@ -353,27 +352,27 @@ class Environment:
     def get_schema_object_and_track(
         self,
         name: s_name.Name,
-        expr: Optional[qlast.Base],
+        expr: qlast.Base | None,
         *,
-        modaliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Optional[type[s_obj.Object]] = None,
+        modaliases: Mapping[str | None, str] | None = None,
+        type: type[s_obj.Object] | None = None,
         default: s_obj.Object | s_obj.NoDefaultT | None = s_obj.NoDefault,
-        label: Optional[str] = None,
-        condition: Optional[Callable[[s_obj.Object], bool]] = None,
-    ) -> Optional[s_obj.Object]:
+        label: str | None = None,
+        condition: Callable[[s_obj.Object], bool] | None = None,
+    ) -> s_obj.Object | None:
         ...
 
     def get_schema_object_and_track(
         self,
         name: s_name.Name,
-        expr: Optional[qlast.Base],
+        expr: qlast.Base | None,
         *,
-        modaliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Optional[type[s_obj.Object]] = None,
+        modaliases: Mapping[str | None, str] | None = None,
+        type: type[s_obj.Object] | None = None,
         default: s_obj.Object | s_obj.NoDefaultT | None = s_obj.NoDefault,
-        label: Optional[str] = None,
-        condition: Optional[Callable[[s_obj.Object], bool]] = None,
-    ) -> Optional[s_obj.Object]:
+        label: str | None = None,
+        condition: Callable[[s_obj.Object], bool] | None = None,
+    ) -> s_obj.Object | None:
         sobj = self.schema.get(
             name, module_aliases=modaliases, type=type,
             condition=condition, label=label,
@@ -401,12 +400,12 @@ class Environment:
     def get_schema_type_and_track(
         self,
         name: s_name.Name,
-        expr: Optional[qlast.Base]=None,
+        expr: qlast.Base | None=None,
         *,
-        modaliases: Optional[Mapping[Optional[str], str]] = None,
+        modaliases: Mapping[str | None, str] | None = None,
         default: None | s_obj.Object | s_obj.NoDefaultT = s_obj.NoDefault,
-        label: Optional[str]=None,
-        condition: Optional[Callable[[s_obj.Object], bool]]=None,
+        label: str | None=None,
+        condition: Callable[[s_obj.Object], bool] | None=None,
     ) -> s_types.Type:
 
         stype = self.get_schema_object_and_track(
@@ -422,7 +421,7 @@ class ContextLevel(compiler.ContextLevel):
     env: Environment
     """Compilation environment common for all context levels."""
 
-    derived_target_module: Optional[str]
+    derived_target_module: str | None
     """The name of the module for classes derived by views."""
 
     anchors: dict[
@@ -433,7 +432,7 @@ class ContextLevel(compiler.ContextLevel):
     to the compiler programmatically).
     """
 
-    modaliases: dict[Optional[str], str]
+    modaliases: dict[str | None, str]
     """A combined list of module name aliases declared in the WITH block,
     or passed to the compiler programmatically.
     """
@@ -453,16 +452,16 @@ class ContextLevel(compiler.ContextLevel):
     class_view_overrides: dict[uuid.UUID, s_types.Type]
     """Object mapping used by implicit view override in SELECT."""
 
-    clause: Optional[str]
+    clause: str | None
     """Statement clause the compiler is currently in."""
 
-    toplevel_stmt: Optional[irast.Stmt]
+    toplevel_stmt: irast.Stmt | None
     """Top-level statement."""
 
-    stmt: Optional[irast.Stmt]
+    stmt: irast.Stmt | None
     """Statement node currently being built."""
 
-    qlstmt: Optional[qlast.Statement]
+    qlstmt: qlast.Statement | None
     """Statement source node currently being built."""
 
     path_id_namespace: frozenset[str]
@@ -497,7 +496,7 @@ class ContextLevel(compiler.ContextLevel):
     path_scope: irast.ScopeTreeNode
     """Path scope tree, with per-lexical-scope levels."""
 
-    iterator_ctx: Optional[ContextLevel]
+    iterator_ctx: ContextLevel | None
     """The context of the statement where all iterators should be placed."""
 
     iterator_path_ids: frozenset[irast.PathId]
@@ -506,16 +505,16 @@ class ContextLevel(compiler.ContextLevel):
     scope_id_ctr: compiler.SimpleCounter
     """Path scope id counter."""
 
-    view_rptr: Optional[ViewRPtr]
+    view_rptr: ViewRPtr | None
     """Pointer information for the top-level view of the substatement."""
 
-    view_scls: Optional[s_types.Type]
+    view_scls: s_types.Type | None
     """Schema class for the top-level set of the substatement."""
 
-    toplevel_result_view_name: Optional[s_name.QualName]
+    toplevel_result_view_name: s_name.QualName | None
     """The name to use for the view that is the result of the top statement."""
 
-    partial_path_prefix: Optional[irast.Set]
+    partial_path_prefix: irast.Set | None
     """The set used as a prefix for partial paths."""
 
     implicit_id_in_shapes: bool
@@ -534,10 +533,10 @@ class ContextLevel(compiler.ContextLevel):
     special_computables_in_mutation_shape: frozenset[str]
     """A set of "special" computable pointers allowed in mutation shape."""
 
-    empty_result_type_hint: Optional[s_types.Type]
+    empty_result_type_hint: s_types.Type | None
     """Type to use if the statement result expression is an empty set ctor."""
 
-    defining_view: Optional[s_objtypes.ObjectType]
+    defining_view: s_objtypes.ObjectType | None
     """Whether a view is currently being defined (as opposed to be compiled)"""
 
     current_schema_views: tuple[s_types.Type, ...]
@@ -555,7 +554,7 @@ class ContextLevel(compiler.ContextLevel):
     allow_endpoint_linkprops: bool
     """Whether to allow references to endpoint linkpoints (@source, @target)."""
 
-    disallow_dml: Optional[str]
+    disallow_dml: str | None
     """Whether we are currently in a place where no dml is allowed,
         if not None, then it is of the form `in a FILTER clause`  """
 
@@ -565,7 +564,7 @@ class ContextLevel(compiler.ContextLevel):
     active_defaults: frozenset[s_objtypes.ObjectType]
     """For detecting cycles in defaults"""
 
-    collection_cast_info: Optional[CollectionCastInfo]
+    collection_cast_info: CollectionCastInfo | None
     """For generating errors messages when casting to collections.
 
     This will be set by the outermost cast and then shared between all
@@ -580,10 +579,10 @@ class ContextLevel(compiler.ContextLevel):
 
     def __init__(
         self,
-        prevlevel: Optional[ContextLevel],
+        prevlevel: ContextLevel | None,
         mode: ContextSwitchMode,
         *,
-        env: Optional[Environment] = None,
+        env: Environment | None = None,
     ) -> None:
 
         self.mode = mode
@@ -828,7 +827,7 @@ class CollectionCastInfo(NamedTuple):
     from_type: s_types.Type
     to_type: s_types.Type
 
-    path_elements: list[tuple[str, Optional[str]]]
+    path_elements: list[tuple[str, str | None]]
     """Represents a path to the current collection element being cast.
 
     A path element is a tuple of the collection type and an optional

@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Optional, Iterable
+from typing import Any, Iterable
 
 import uuid
 import dataclasses
@@ -35,7 +35,7 @@ PropValue = str | int | float | list[str | int | float]
 class Prop(to_json.ToJson):
     title: str
     value: PropValue
-    type: Optional[pg_tree.PropType]
+    type: pg_tree.PropType | None
     important: bool
 
     @property
@@ -70,10 +70,10 @@ class Stage(to_json.ToJson, pg_tree.CostMixin):
 
 @dataclasses.dataclass
 class Plan(to_json.ToJson):
-    contexts: Optional[list[ir_analyze.ContextDesc]]
+    contexts: list[ir_analyze.ContextDesc] | None
     pipeline: list[Stage]
     subplans: list[Plan]
-    alias: Optional[str] = None
+    alias: str | None = None
 
 
 @dataclasses.dataclass
@@ -83,8 +83,8 @@ class Index:
 
 
 def context_diff(
-    left: Optional[list[ir_analyze.ContextDesc]],
-    right: Optional[list[ir_analyze.ContextDesc]],
+    left: list[ir_analyze.ContextDesc] | None,
+    right: list[ir_analyze.ContextDesc] | None,
 ) -> list[ir_analyze.ContextDesc]:
     if not left:
         return []
@@ -95,8 +95,8 @@ def context_diff(
 
 
 def context_intersect(
-    left: Optional[list[ir_analyze.ContextDesc]],
-    right: Optional[list[ir_analyze.ContextDesc]],
+    left: list[ir_analyze.ContextDesc] | None,
+    right: list[ir_analyze.ContextDesc] | None,
 ) -> list[ir_analyze.ContextDesc]:
     if not left:
         return []
@@ -106,8 +106,8 @@ def context_intersect(
 
 
 def context_optimize(
-    items: Optional[list[ir_analyze.ContextDesc]],
-) -> Optional[list[ir_analyze.ContextDesc]]:
+    items: list[ir_analyze.ContextDesc] | None,
+) -> list[ir_analyze.ContextDesc] | None:
     if not items:
         return None
     # We assume that context are ordered:
@@ -224,7 +224,7 @@ class TreeBuilder:
     def _get_contexts(
         self,
         plan: pg_tree.Plan,
-    ) -> Optional[list[ir_analyze.ContextDesc]]:
+    ) -> list[ir_analyze.ContextDesc] | None:
         if not (alias := getattr(plan, 'alias', None)):
             return None
         if not (ainfo := self.alias_info.get(alias)):

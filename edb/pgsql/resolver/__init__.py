@@ -17,7 +17,6 @@
 #
 
 from __future__ import annotations
-from typing import Optional
 
 import copy
 import dataclasses
@@ -45,10 +44,10 @@ class ResolvedSQL:
 
     # Optionally, AST representing the query returning data in EdgeQL
     # format (i.e. single-column output).
-    edgeql_output_format_ast: Optional[pgast.Base]
+    edgeql_output_format_ast: pgast.Base | None
 
     # Special behavior for "tag" of "CommandComplete" message of this query.
-    command_complete_tag: Optional[dbstate.CommandCompleteTag]
+    command_complete_tag: dbstate.CommandCompleteTag | None
 
     # query parameters
     params: list[dbstate.SQLParam]
@@ -101,7 +100,7 @@ def resolve(
     # the CommandComplete message that describes the number of modified rows.
     # Since our resolved SQL does not have a top-level DML stmt, we need to
     # override that tag.
-    command_complete_tag: Optional[dbstate.CommandCompleteTag] = None
+    command_complete_tag: dbstate.CommandCompleteTag | None = None
     if isinstance(query, pgast.DMLQuery):
         prefix: str
         if isinstance(query, pgast.InsertStmt):
@@ -169,9 +168,9 @@ def resolve(
 
 def as_plain_select(
     query: pgast.Base,
-    table: Optional[context.Table],
+    table: context.Table | None,
     ctx: context.ResolverContextLevel,
-) -> Optional[pgast.SelectStmt]:
+) -> pgast.SelectStmt | None:
     if not isinstance(query, pgast.Query):
         return None
     assert table
@@ -204,7 +203,7 @@ def as_plain_select(
 def apply_implicit_limit(
     expr: pgast.Base,
     limit: int,
-    table: Optional[context.Table],
+    table: context.Table | None,
     ctx: context.ResolverContextLevel,
 ) -> pgast.Base:
     e = as_plain_select(expr, table, ctx)

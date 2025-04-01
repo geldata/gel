@@ -1,4 +1,3 @@
-from typing import Optional
 
 from ..data import data_ops as e
 from ..data import casts as casts
@@ -8,7 +7,7 @@ from ..basis import server_funcs as server_funcs
 
 def check_castable(
     ctx: e.TcCtx, from_tp: e.Tp, to_tp: e.Tp
-) -> Optional[e.TpCast]:
+) -> e.TpCast | None:
     if to_tp == e.ScalarTp(e.QualifiedName(["std", "json"])):
         return casts.get_json_cast(from_tp, ctx.schema)
     if (from_tp, to_tp) in ctx.schema.casts:

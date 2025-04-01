@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable
 
 from .data_ops import (
     BackLinkExpr,
@@ -64,7 +64,7 @@ def path_lexicographic_key(e: Expr) -> str:
 def get_all_paths(e: Expr) -> list[Expr]:
     all_paths: list[Expr] = []
 
-    def populate(sub: Expr) -> Optional[Expr]:
+    def populate(sub: Expr) -> Expr | None:
         nonlocal all_paths
         if isinstance(sub, DetachedExpr):  # skip detached
             return sub
@@ -81,7 +81,7 @@ def get_all_paths(e: Expr) -> list[Expr]:
 def get_all_pre_top_level_paths(e: Expr, dbschema: e.TcCtx) -> list[Expr]:
     all_paths: list[Expr] = []
 
-    def populate(sub: Expr, level: QueryLevel) -> Optional[Expr]:
+    def populate(sub: Expr, level: QueryLevel) -> Expr | None:
         nonlocal all_paths
         if isinstance(sub, DetachedExpr):  # skip detached
             return sub
@@ -103,7 +103,7 @@ def get_all_proper_top_level_paths(e: Expr, dbschema: e.TcCtx) -> list[Expr]:
     sub_paths: list[Expr] = []
     sub_sub_paths: list[list[Expr]] = []
 
-    def populate(sub: Expr, level: QueryLevel) -> Optional[Expr]:
+    def populate(sub: Expr, level: QueryLevel) -> Expr | None:
         nonlocal definite_top_paths, semi_sub_paths, sub_paths, sub_sub_paths
         if isinstance(sub, DetachedExpr):  # skip detached
             return sub
@@ -159,10 +159,10 @@ def get_all_proper_top_level_paths(e: Expr, dbschema: e.TcCtx) -> list[Expr]:
     return definite_top_paths + selected_semi_sub_paths
 
 
-def common_longest_path_prefix(e1: Expr, e2: Expr) -> Optional[Expr]:
+def common_longest_path_prefix(e1: Expr, e2: Expr) -> Expr | None:
     pending = None
 
-    def find_longest(pp1: list[Expr], pp2: list[Expr]) -> Optional[Expr]:
+    def find_longest(pp1: list[Expr], pp2: list[Expr]) -> Expr | None:
         nonlocal pending
         match (pp1, pp2):
             case ([], []):

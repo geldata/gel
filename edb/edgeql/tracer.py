@@ -20,8 +20,7 @@
 from __future__ import annotations
 
 # Import specific things to avoid name clashes
-from typing import (Generator, Mapping, Optional,
-                    Iterable, Generic, TypeVar, Sequence,
+from typing import (Generator, Mapping, Iterable, Generic, TypeVar, Sequence,
                     AbstractSet)
 
 import functools
@@ -146,7 +145,7 @@ class Source(NamedObject):
         self,
         schema: s_schema.Schema,
         name: sn.UnqualName,
-    ) -> Optional[s_pointers.Pointer | Pointer]:
+    ) -> s_pointers.Pointer | Pointer | None:
         return self.pointers.get(name)
 
     def getptr(
@@ -207,9 +206,9 @@ class Pointer(Source):
         self,
         name: sn.QualName,
         *,
-        source: Optional[SourceLike] = None,
-        target: Optional[TypeLike] = None,
-        target_expr: Optional[qlast.Expr] = None,
+        source: SourceLike | None = None,
+        target: TypeLike | None = None,
+        target_expr: qlast.Expr | None = None,
     ) -> None:
         super().__init__(name)
         self.source = source
@@ -229,7 +228,7 @@ class Pointer(Source):
         self,
         schema: s_schema.Schema,
         name: sn.UnqualName,
-    ) -> Optional[s_pointers.Pointer | Pointer]:
+    ) -> s_pointers.Pointer | Pointer | None:
         if (not (res := super().maybe_get_ptr(schema, name))
                 and isinstance(self.target, (Source, s_sources.Source))):
             res = self.target.maybe_get_ptr(schema, name)
@@ -238,13 +237,13 @@ class Pointer(Source):
     def get_target(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[TypeLike]:
+    ) -> TypeLike | None:
         return self.target
 
     def get_source(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[SourceLike]:
+    ) -> SourceLike | None:
         return self.source
 
 
@@ -282,7 +281,7 @@ class AccessPolicy(NamedObject):
         self,
         name: sn.QualName,
         *,
-        source: Optional[SourceLike] = None,
+        source: SourceLike | None = None,
     ) -> None:
         super().__init__(name)
         self.source = source
@@ -290,7 +289,7 @@ class AccessPolicy(NamedObject):
     def get_source(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[SourceLike]:
+    ) -> SourceLike | None:
         return self.source
 
 
@@ -300,7 +299,7 @@ class Trigger(NamedObject):
         self,
         name: sn.QualName,
         *,
-        source: Optional[SourceLike] = None,
+        source: SourceLike | None = None,
     ) -> None:
         super().__init__(name)
         self.source = source
@@ -308,7 +307,7 @@ class Trigger(NamedObject):
     def get_source(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[SourceLike]:
+    ) -> SourceLike | None:
         return self.source
 
 
@@ -318,7 +317,7 @@ class Rewrite(NamedObject):
         self,
         name: sn.QualName,
         *,
-        source: Optional[SourceLike] = None,
+        source: SourceLike | None = None,
     ) -> None:
         super().__init__(name)
         self.source = source
@@ -326,7 +325,7 @@ class Rewrite(NamedObject):
     def get_source(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[SourceLike]:
+    ) -> SourceLike | None:
         return self.source
 
 
@@ -338,10 +337,10 @@ def trace_refs(
     qltree: qlast.Base,
     *,
     schema: s_schema.Schema,
-    anchors: Optional[Mapping[str, sn.QualName]] = None,
-    path_prefix: Optional[sn.QualName] = None,
+    anchors: Mapping[str, sn.QualName] | None = None,
+    path_prefix: sn.QualName | None = None,
     module: str,
-    objects: dict[sn.QualName, Optional[ObjectLike]],
+    objects: dict[sn.QualName, ObjectLike | None],
     pointers: Mapping[sn.UnqualName, set[sn.QualName]],
     params: Mapping[str, sn.QualName],
     local_modules: AbstractSet[str]
@@ -373,8 +372,8 @@ def resolve_name(
     *,
     current_module: str,
     schema: s_schema.Schema,
-    objects: dict[sn.QualName, Optional[ObjectLike]],
-    modaliases: Optional[dict[Optional[str], str]],
+    objects: dict[sn.QualName, ObjectLike | None],
+    modaliases: dict[str | None, str] | None,
     local_modules: AbstractSet[str],
     declaration: bool=False,
 ) -> sn.QualName:
@@ -446,11 +445,11 @@ class TracerContext:
         *,
         schema: s_schema.Schema,
         module: str,
-        objects: dict[sn.QualName, Optional[ObjectLike]],
+        objects: dict[sn.QualName, ObjectLike | None],
         pointers: Mapping[sn.UnqualName, set[sn.QualName]],
         anchors: Mapping[str, sn.QualName],
-        path_prefix: Optional[sn.QualName],
-        modaliases: dict[Optional[str], str],
+        path_prefix: sn.QualName | None,
+        modaliases: dict[str | None, str],
         params: Mapping[str, sn.QualName],
         visited: set[s_pointers.Pointer | Pointer],
         local_modules: AbstractSet[str],
@@ -528,8 +527,7 @@ def _fork_context(ctx: TracerContext) -> TracerContext:
 @contextmanager
 def alias_context(
     ctx: TracerContext,
-    aliases: Optional[
-        Sequence[qlast.Alias]],
+    aliases: Sequence[qlast.Alias] | None,
 ) -> Generator[TracerContext, None, None]:
     ctx = _fork_context(ctx)
 
@@ -559,10 +557,10 @@ def alias_context(
 def result_alias_context(
     ctx: TracerContext,
     node: qlast.ReturningQuery | qlast.SubjectQuery,
-    obj: Optional[ObjectLike],
+    obj: ObjectLike | None,
 ) -> Generator[TracerContext, None, None]:
 
-    alias: Optional[str] = None
+    alias: str | None = None
     if isinstance(node, qlast.SelectQuery):
         alias = node.result_alias
     elif isinstance(node, qlast.GroupQuery):
@@ -597,10 +595,10 @@ def result_alias_context(
 
 @functools.singledispatch
 def trace(
-    node: Optional[qlast.Base],
+    node: qlast.Base | None,
     *,
     ctx: TracerContext,
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     raise NotImplementedError(f"do not know how to trace {node!r}")
 
 
@@ -673,7 +671,7 @@ def trace_UnaryOp(node: qlast.UnaryOp, *, ctx: TracerContext) -> None:
 @trace.register
 def trace_Detached(
     node: qlast.DetachedExpr, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     # DETACHED works with partial paths same as its inner expression.
     return trace(node.expr, ctx=ctx)
 
@@ -681,7 +679,7 @@ def trace_Detached(
 @trace.register
 def trace_Global(
     node: qlast.GlobalExpr, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     refname = ctx.get_ref_name(node.name)
     if refname in ctx.objects:
         ctx.refs.add(refname)
@@ -694,9 +692,9 @@ def trace_Global(
 def check_type_exists(
     typename: sn.QualName,
     ctx: TracerContext,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     *,
-    hint: Optional[str] = None,
+    hint: str | None = None,
 ) -> None:
     if typename in ctx.objects:
         return
@@ -727,7 +725,7 @@ def trace_IsOp(node: qlast.IsOp, *, ctx: TracerContext) -> None:
         if not node.right.subtypes:
             typename: sn.QualName = ctx.get_ref_name(node.right.maintype)
 
-            hint: Optional[str] = None
+            hint: str | None = None
             if typename.name.lower() in ['null', 'none']:
                 hint = (
                     'Did you mean to use `exists` to check if a set is empty?'
@@ -789,9 +787,9 @@ def trace_Path(
     node: qlast.Path,
     *,
     ctx: TracerContext,
-) -> Optional[ObjectLike]:
-    tip: Optional[ObjectLike] = None
-    ptr: Optional[Pointer | s_pointers.Pointer] = None
+) -> ObjectLike | None:
+    tip: ObjectLike | None = None
+    ptr: Pointer | s_pointers.Pointer | None = None
     plen = len(node.steps)
 
     # HACK: This isn't very smart, and can't properly track types
@@ -981,7 +979,7 @@ def trace_Path(
 @trace.register
 def trace_Anchor(
     node: qlast.Anchor, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     if name := ctx.anchors.get(node.name):
         return ctx.objects[name]
     return None
@@ -1079,7 +1077,7 @@ def trace_IfElse(node: qlast.IfElse, *, ctx: TracerContext) -> None:
 @trace.register
 def trace_Shape(
     node: qlast.Shape, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     tip = trace(node.expr, ctx=ctx)
     if isinstance(node.expr, qlast.Path):
         orig_prefix = ctx.path_prefix
@@ -1114,7 +1112,7 @@ def trace_ShapeElement(node: qlast.ShapeElement, *, ctx: TracerContext) -> None:
     trace(node.compexpr, ctx=ctx)
 
 
-def _update_path_prefix(tip: Optional[ObjectLike], ctx: TracerContext) -> None:
+def _update_path_prefix(tip: ObjectLike | None, ctx: TracerContext) -> None:
     if tip is not None:
         tip_name = tip.get_name(ctx.schema)
         assert isinstance(tip_name, sn.QualName)
@@ -1126,7 +1124,7 @@ def _update_path_prefix(tip: Optional[ObjectLike], ctx: TracerContext) -> None:
 @trace.register
 def trace_Select(
     node: qlast.SelectQuery, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     with alias_context(ctx, node.aliases) as ctx:
         tip = trace(node.result, ctx=ctx)
         _update_path_prefix(tip, ctx=ctx)
@@ -1181,20 +1179,20 @@ def trace_GroupingOperation(
 @trace.register
 def trace_Group(
     node: qlast.GroupQuery, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     return _trace_GroupQuery(node, ctx=ctx)
 
 
 @trace.register
 def trace_InternalGroupQuery(
     node: qlast.InternalGroupQuery, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     return _trace_GroupQuery(node, ctx=ctx)
 
 
 def _trace_GroupQuery(
     node: qlast.GroupQuery | qlast.InternalGroupQuery, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     with alias_context(ctx, node.aliases) as ctx:
         tip = trace(node.subject, ctx=ctx)
         if tip is not None:
@@ -1243,7 +1241,7 @@ def trace_InsertQuery(node: qlast.InsertQuery, *, ctx: TracerContext) -> None:
 @trace.register
 def trace_UpdateQuery(
     node: qlast.UpdateQuery, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     with alias_context(ctx, node.aliases) as ctx:
         tip = trace(node.subject, ctx=ctx)
         _update_path_prefix(tip, ctx=ctx)
@@ -1261,7 +1259,7 @@ def trace_UpdateQuery(
 @trace.register
 def trace_DeleteQuery(
     node: qlast.DeleteQuery, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     with alias_context(ctx, node.aliases) as ctx:
         tip = trace(node.subject, ctx=ctx)
         _update_path_prefix(tip, ctx=ctx)
@@ -1284,7 +1282,7 @@ def trace_DeleteQuery(
 @trace.register
 def trace_For(
     node: qlast.ForQuery, *, ctx: TracerContext
-) -> Optional[ObjectLike]:
+) -> ObjectLike | None:
     with alias_context(ctx, node.aliases) as ctx:
         obj = trace(node.iterator, ctx=ctx)
         if obj is None:

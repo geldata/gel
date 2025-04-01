@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Iterator, cast
+from typing import Any, Iterator, cast
 
 import collections
 import contextlib
@@ -177,7 +177,7 @@ class Extension(
         schema: s_schema.Schema_T,
         stable_ids: bool = False,
         *,
-        id: Optional[uuid.UUID] = None,
+        id: uuid.UUID | None = None,
         **data: Any,
     ) -> tuple[s_schema.Schema_T, Extension]:
         name = data['name']
@@ -223,7 +223,7 @@ class ExtensionPackageCommand(
 
 
 def get_package(
-    name: sn.Name, version: Optional[verutils.Version], schema: s_schema.Schema
+    name: sn.Name, version: verutils.Version | None, schema: s_schema.Schema
 ) -> ExtensionPackage:
     filters = [
         lambda schema, pkg: (
@@ -703,8 +703,8 @@ class CreateExtension(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         node = super()._get_ast(schema, context, parent_node=parent_node)
         assert isinstance(node, qlast.CreateExtension)
         pkg = self.get_resolved_attribute_value(
@@ -757,8 +757,8 @@ class AlterExtension(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         # HACK: AlterObject insists on filtering out any ALTERs
         # without subcommands, but we don't have any, so skip
         # AlterObject.

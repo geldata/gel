@@ -92,7 +92,7 @@ class Pool(typing.Generic[C]):
     _successful_disconnects: int
     _cur_capacity: int
     _max_capacity: int
-    _task: typing.Optional[asyncio.Task[None]]
+    _task: asyncio.Task[None] | None
     _acquires: dict[int, asyncio.Future[int]]
     _prunes: dict[int, asyncio.Future[None]]
     _conns: dict[int, C]
@@ -100,7 +100,7 @@ class Pool(typing.Generic[C]):
     _conns_held: dict[C, int]
     _loop: asyncio.AbstractEventLoop
     _counts: typing.Any
-    _stats_collector: typing.Optional[StatsCollector]
+    _stats_collector: StatsCollector | None
 
     def __init__(
         self,
@@ -108,7 +108,7 @@ class Pool(typing.Generic[C]):
         connect: Connector[C],
         disconnect: Disconnector[C],
         max_capacity: int,
-        stats_collector: typing.Optional[StatsCollector] = None,
+        stats_collector: StatsCollector | None = None,
         min_idle_time_before_gc: float = config.MIN_IDLE_TIME_BEFORE_GC,
     ) -> None:
         # Re-load the logger if it's been mocked for testing

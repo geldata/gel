@@ -52,7 +52,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     Protocol,
     TypeVar,
     Iterable,
@@ -117,8 +116,8 @@ class Obj:
     def __init__(
         self,
         id: uuid.UUID,
-        shape: Optional[dict[str, Data]]=None,
-        data: Optional[dict[str, Data]]=None,
+        shape: dict[str, Data] | None=None,
+        data: dict[str, Data] | None=None,
     ) -> None:
         self.id = id
         if shape is None:
@@ -132,7 +131,7 @@ class Obj:
     def __repr__(self) -> str:
         return f'Obj{self.shape!r}'
 
-    def get(self, name: str, db: DB) -> Optional[Data]:
+    def get(self, name: str, db: DB) -> Data | None:
         if name in self.data:
             return self.data[name]
         else:
@@ -163,8 +162,8 @@ def bslink(n: int, **kwargs: Data) -> Data:
 
 
 def mk_free_object(
-    shape: Optional[dict[str, Data]]=None,
-    data: Optional[dict[str, Data]]=None,
+    shape: dict[str, Data] | None=None,
+    data: dict[str, Data] | None=None,
 ) -> Obj:
     id = uuid.uuid4()
     base_data = {'id': id, '__type__': 'FreeObject'}
@@ -236,7 +235,7 @@ class ITypeIntersection(IPathElement):
 @dataclass(frozen=True, order=True)
 class IPtr(IPathElement):
     name: str
-    direction: Optional[str] = None
+    direction: str | None = None
     is_link_property: bool = False
 
 
@@ -416,7 +415,7 @@ BASIS_IMPLS: dict[tuple[str, str], LiftedFunc] = {
 class EvalContext:
     query_input_list: list[IPath]
     input_tuple: tuple[Data, ...]
-    cur_path: Optional[qlast.Path]
+    cur_path: qlast.Path | None
     db: DB
 
 
@@ -430,7 +429,7 @@ def _eval(
 
 
 def graft(
-    prefix: Optional[qlast.Path], new: qlast.Path, always_partial: bool = False
+    prefix: qlast.Path | None, new: qlast.Path, always_partial: bool = False
 ) -> qlast.Path:
     if new.partial or always_partial:
         assert prefix is not None
@@ -441,10 +440,10 @@ def graft(
 
 
 def update_path(
-    prefix: Optional[qlast.Path],
-    query: Optional[qlast.Expr],
+    prefix: qlast.Path | None,
+    query: qlast.Expr | None,
     subject: bool = False,
-) -> Optional[qlast.Path]:
+) -> qlast.Path | None:
     if query is None:
         return None
     elif subject and isinstance(
@@ -495,7 +494,7 @@ def ensure_ql_query(expr: qlast.Expr) -> qlast.Query:
 
 
 def eval_filter(
-    where: Optional[qlast.Expr],
+    where: qlast.Expr | None,
     qil: list[IPath],
     out: list[Row],
     ctx: EvalContext
@@ -550,7 +549,7 @@ def eval_orderby(
 
 
 def eval_offset(
-    offset: Optional[qlast.Expr], out: list[Row], ctx: EvalContext
+    offset: qlast.Expr | None, out: list[Row], ctx: EvalContext
 ) -> list[Row]:
     if offset:
         res = subquery(offset, ctx=ctx)
@@ -560,7 +559,7 @@ def eval_offset(
 
 
 def eval_limit(
-    limit: Optional[qlast.Expr], out: list[Row], ctx: EvalContext
+    limit: qlast.Expr | None, out: list[Row], ctx: EvalContext
 ) -> list[Row]:
     if limit:
         res = subquery(limit, ctx=ctx)
@@ -1041,7 +1040,7 @@ def eval(node: qlast.Base, ctx: EvalContext) -> Result:
 # Query setup
 
 
-def fix_links(links: Optional[Data]) -> Result:
+def fix_links(links: Data | None) -> Result:
     if links is None:
         links = []
     if not isinstance(links, list):
@@ -1051,7 +1050,7 @@ def fix_links(links: Optional[Data]) -> Result:
 
 def lookup_computed(
     obj: Obj, name: str, ctx: EvalContext
-) -> Optional[tuple[qlast.Expr, str, Obj]]:
+) -> tuple[qlast.Expr, str, Obj] | None:
     """Lookup a schema-computed property
 
     Return (code, source type name, source object).
@@ -1221,12 +1220,12 @@ def build_input_tuples(
 
 
 class PathFinder(NodeVisitor):
-    def __init__(self, cur_path: Optional[qlast.Path]) -> None:
+    def __init__(self, cur_path: qlast.Path | None) -> None:
         super().__init__()
         self.in_optional = False
         self.optional_counter = 0
         self.in_subquery = False
-        self.paths: list[tuple[qlast.Path, Optional[int], bool]] = []
+        self.paths: list[tuple[qlast.Path, int | None, bool]] = []
         self.current_path = cur_path
 
     def _update(self, **kwargs: Any) -> Iterator[None]:
@@ -1246,7 +1245,7 @@ class PathFinder(NodeVisitor):
     @contextlib.contextmanager
     def update_path(
         self,
-        query: Optional[qlast.Expr],
+        query: qlast.Expr | None,
         subject: bool = False,
     ) -> Iterator[None]:
         yield from self._update(
@@ -1357,10 +1356,10 @@ class PathFinder(NodeVisitor):
 
 def find_paths(
     e: qlast.Expr,
-    cur_path: Optional[qlast.Path],
+    cur_path: qlast.Path | None,
     extra_subqs: Iterable[
-        tuple[Optional[qlast.Path], Optional[qlast.Base]]] = (),
-) -> list[tuple[qlast.Path, Optional[int], bool]]:
+        tuple[qlast.Path | None, qlast.Base | None]] = (),
+) -> list[tuple[qlast.Path, int | None, bool]]:
     pf = PathFinder(cur_path)
     pf.visit(e)
     pf.in_subquery = True
@@ -1389,8 +1388,8 @@ def dedup(old: Collection[T]) -> list[T]:
 
 
 def find_common_prefixes(
-    direct_refs: list[tuple[IPath, Optional[int]]],
-    subquery_refs: list[tuple[IPath, Optional[int]]],
+    direct_refs: list[tuple[IPath, int | None]],
+    subquery_refs: list[tuple[IPath, int | None]],
 ) -> set[IPath]:
     prefixes = set()
     for i, (x, ox) in enumerate(direct_refs):
@@ -1415,8 +1414,8 @@ def _contains_non_alias_path(paths: Sequence[IPath], new: IPath) -> bool:
 
 
 def make_query_input_list(
-    direct_refs: list[tuple[IPath, Optional[int]]],
-    subquery_refs: list[tuple[IPath, Optional[int]]],
+    direct_refs: list[tuple[IPath, int | None]],
+    subquery_refs: list[tuple[IPath, int | None]],
     old: list[IPath],
 ) -> list[IPath]:
     direct_refs = [x for x in direct_refs if isinstance(x[0][0], IORef)]
@@ -1466,11 +1465,11 @@ def parse_fragment(querystr: str) -> qlast.Expr:
 def analyze_paths(
     q: qlast.Expr,
     extra_subqs: Iterable[
-        tuple[Optional[qlast.Path], Optional[qlast.Base]]],
-    cur_path: Optional[qlast.Path],
+        tuple[qlast.Path | None, qlast.Base | None]],
+    cur_path: qlast.Path | None,
 ) -> tuple[
-    list[tuple[IPath, Optional[int]]],
-    list[tuple[IPath, Optional[int]]],
+    list[tuple[IPath, int | None]],
+    list[tuple[IPath, int | None]],
     dict[IPath, bool],
 ]:
     paths_opt = [(simplify_path(p), optional, subq)
@@ -1508,7 +1507,7 @@ def subquery_full(
     q: qlast.Expr,
     *,
     extra_subqs: Iterable[
-        tuple[Optional[qlast.Path], Optional[qlast.Base]]] = (),
+        tuple[qlast.Path | None, qlast.Base | None]] = (),
     ctx: EvalContext
 ) -> tuple[list[IPath], list[Row]]:
     direct_paths, subquery_paths, always_optional = analyze_paths(

@@ -23,7 +23,6 @@
 from __future__ import annotations
 from typing import (
     Callable,
-    Optional,
     AbstractSet,
     Iterable,
     Sequence,
@@ -140,10 +139,10 @@ def pull_path_namespace(
 def find_rvar(
         stmt: pgast.Query, *,
         flavor: str='normal',
-        source_stmt: Optional[pgast.Query]=None,
+        source_stmt: pgast.Query | None=None,
         path_id: irast.PathId,
         ctx: context.CompilerContextLevel) -> \
-        Optional[pgast.PathRangeVar]:
+        pgast.PathRangeVar | None:
     """Find an existing range var for a given *path_id* in stmt hierarchy.
 
     If a range var is visible in a given SQL scope denoted by *stmt*, or,
@@ -217,10 +216,11 @@ def include_rvar(
     pull_namespace: bool=True,
     update_mask: bool=True,
     flavor: str='normal',
-    aspects: Optional[
+    aspects: (
         tuple[pgce.PathAspect, ...]
         | AbstractSet[pgce.PathAspect]
-    ]=None,
+        | None
+    ) = None,
     ctx: context.CompilerContextLevel,
 ) -> pgast.PathRangeVar:
     """Ensure that *rvar* is visible in *stmt* as a value/source aspect.
@@ -337,7 +337,7 @@ def has_rvar(
         stmt: pgast.Query, rvar: pgast.PathRangeVar, *,
         ctx: context.CompilerContextLevel) -> bool:
 
-    curstmt: Optional[pgast.Query] = stmt
+    curstmt: pgast.Query | None = stmt
 
     if ctx.env.external_rvars and has_external_rvar(rvar, ctx=ctx):
         return True
@@ -365,12 +365,12 @@ def _maybe_get_path_rvar(
     flavor: str='normal',
     aspect: pgce.PathAspect,
     ctx: context.CompilerContextLevel,
-) -> Optional[tuple[pgast.PathRangeVar, irast.PathId]]:
+) -> tuple[pgast.PathRangeVar, irast.PathId] | None:
     rvar = ctx.env.external_rvars.get((path_id, aspect))
     if rvar:
         return rvar, path_id
 
-    qry: Optional[pgast.Query] = stmt
+    qry: pgast.Query | None = stmt
     while qry is not None:
         rvar = pathctx.maybe_get_path_rvar(
             qry, path_id, aspect=aspect, flavor=flavor
@@ -439,7 +439,7 @@ def maybe_get_path_rvar(
     flavor: str='normal',
     aspect: pgce.PathAspect,
     ctx: context.CompilerContextLevel,
-) -> Optional[pgast.PathRangeVar]:
+) -> pgast.PathRangeVar | None:
     result = _maybe_get_path_rvar(stmt, path_id,
                                   aspect=aspect, flavor=flavor, ctx=ctx)
     return result[0] if result is not None else None
@@ -451,7 +451,7 @@ def maybe_get_path_var(
     *,
     aspect: pgce.PathAspect,
     ctx: context.CompilerContextLevel,
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     result = _maybe_get_path_rvar(stmt, path_id, aspect=aspect, ctx=ctx)
     if result is None:
         return None
@@ -617,7 +617,7 @@ def new_root_rvar(
     ir_set: irast.Set,
     *,
     lateral: bool = False,
-    path_id: Optional[irast.PathId] = None,
+    path_id: irast.PathId | None = None,
     ctx: context.CompilerContextLevel,
 ) -> pgast.PathRangeVar:
 
@@ -843,9 +843,9 @@ def create_iterator_identity_for_path(
 def get_scope(
     ir_set: irast.Set, *,
     ctx: context.CompilerContextLevel,
-) -> Optional[irast.ScopeTreeNode]:
+) -> irast.ScopeTreeNode | None:
 
-    result: Optional[irast.ScopeTreeNode] = None
+    result: irast.ScopeTreeNode | None = None
 
     if ir_set.path_scope_id is not None:
         result = ctx.env.scope_tree_nodes.get(ir_set.path_scope_id)
@@ -917,7 +917,7 @@ def maybe_get_scope_stmt(
     path_id: irast.PathId,
     *,
     ctx: context.CompilerContextLevel,
-) -> Optional[pgast.SelectStmt]:
+) -> pgast.SelectStmt | None:
     stmt = ctx.path_scope.get(path_id)
     if stmt is None and path_id.is_ptr_path():
         stmt = ctx.path_scope.get(path_id.tgt_path())
@@ -940,7 +940,7 @@ def set_to_array(
     aspects = pathctx.list_path_aspects(subrvar.query, path_id)
     include_rvar(result, subrvar, path_id=path_id, aspects=aspects, ctx=ctx)
 
-    val: Optional[pgast.BaseExpr] = (
+    val: pgast.BaseExpr | None = (
         pathctx.maybe_get_path_serialized_var(
             result, path_id, env=ctx.env)
     )
@@ -1028,7 +1028,7 @@ class UnpackElement(NamedTuple):
     colname: str
     packed: bool
     multi: bool
-    ref: Optional[pgast.BaseExpr]
+    ref: pgast.BaseExpr | None
 
 
 def unpack_rvar(
@@ -1995,7 +1995,7 @@ def wrap_set_op_query(
 
 def anti_join(
     lhs: pgast.SelectStmt, rhs: pgast.SelectStmt,
-    path_id: Optional[irast.PathId], *,
+    path_id: irast.PathId | None, *,
     aspect: pgce.PathAspect=pgce.PathAspect.IDENTITY,
     ctx: context.CompilerContextLevel,
 ) -> None:
@@ -2022,10 +2022,10 @@ def range_from_queryset(
     *,
     prep_filter: Callable[
         [pgast.SelectStmt, pgast.SelectStmt], None]=lambda a, b: None,
-    path_id: Optional[irast.PathId]=None,
+    path_id: irast.PathId | None=None,
     lateral: bool=False,
-    typeref: Optional[irast.TypeRef]=None,
-    tag: Optional[str]=None,
+    typeref: irast.TypeRef | None=None,
+    tag: str | None=None,
     ctx: context.CompilerContextLevel,
 ) -> pgast.PathRangeVar:
 
@@ -2092,7 +2092,7 @@ def range_for_ptrref(
     dml_source: Sequence[irast.MutatingLikeStmt]=(),
     for_mutation: bool=False,
     only_self: bool=False,
-    path_id: Optional[irast.PathId]=None,
+    path_id: irast.PathId | None=None,
     ctx: context.CompilerContextLevel,
 ) -> pgast.PathRangeVar:
     """"Return a Range subclass corresponding to a given ptr step.
@@ -2179,7 +2179,7 @@ def _range_for_component_ptrref(
     dml_source: Sequence[irast.MutatingLikeStmt],
     include_descendants: bool,
     for_mutation: bool,
-    path_id: Optional[irast.PathId],
+    path_id: irast.PathId | None,
     ctx: context.CompilerContextLevel,
 ) -> pgast.PathRangeVar:
     ptrref_descendants = _get_ptrref_descendants(
@@ -2411,7 +2411,7 @@ def _selects_for_ptrref_descendants(
     ptrref_descendants: Sequence[irast.PointerRef],
     output_cols: Iterable[str],
     *,
-    path_id: Optional[irast.PathId],
+    path_id: irast.PathId | None,
     ctx: context.CompilerContextLevel,
 ) -> list[pgast.SelectStmt]:
     selects = []
@@ -2540,12 +2540,12 @@ def range_for_pointer(
 def rvar_for_rel(
     rel: pgast.BaseRelation | pgast.CommonTableExpr,
     *,
-    alias: Optional[str] = None,
-    typeref: Optional[irast.TypeRef] = None,
+    alias: str | None = None,
+    typeref: irast.TypeRef | None = None,
     lateral: bool = False,
-    colnames: Optional[list[str]] = None,
-    ctx: Optional[context.CompilerContextLevel] = None,
-    env: Optional[context.Environment] = None,
+    colnames: list[str] | None = None,
+    ctx: context.CompilerContextLevel | None = None,
+    env: context.Environment | None = None,
 ) -> pgast.PathRangeVar:
     if ctx:
         env = ctx.env
@@ -2604,7 +2604,7 @@ def add_type_rel_overlay(
     typeref: irast.TypeRef,
     op: context.OverlayOp,
     rel: pgast.BaseRelation | pgast.CommonTableExpr, *,
-    stop_ref: Optional[irast.TypeRef]=None,
+    stop_ref: irast.TypeRef | None=None,
     dml_stmts: Iterable[irast.MutatingLikeStmt] = (),
     path_id: irast.PathId,
     ctx: context.CompilerContextLevel

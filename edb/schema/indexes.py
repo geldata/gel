@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     TypeVar,
     Mapping,
     Sequence,
@@ -137,7 +136,7 @@ def merge_deferrability(
     *,
     ignore_local: bool = False,
     schema: s_schema.Schema,
-) -> Optional[qltypes.IndexDeferrability]:
+) -> qltypes.IndexDeferrability | None:
     """Merge function for abstract index deferrability."""
 
     return utils.merge_reduce(
@@ -158,7 +157,7 @@ def merge_deferred(
     *,
     ignore_local: bool = False,
     schema: s_schema.Schema,
-) -> Optional[bool]:
+) -> bool | None:
     """Merge function for the DEFERRED qualifier on indexes."""
 
     if idx.is_non_concrete(schema):
@@ -426,7 +425,7 @@ class Index(
     def get_ddl_identity(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         v = super().get_ddl_identity(schema) or {}
         v['kwargs'] = self.get_all_kwargs(schema)
         return v
@@ -665,9 +664,9 @@ class IndexCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        name: Optional[sn.Name] = None,
+        name: sn.Name | None = None,
         default: Index | so.NoDefaultT = so.NoDefault,
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
     ) -> Index:
         ...
 
@@ -677,10 +676,10 @@ class IndexCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        name: Optional[sn.Name] = None,
+        name: sn.Name | None = None,
         default: None = None,
-        span: Optional[parsing.Span] = None,
-    ) -> Optional[Index]:
+        span: parsing.Span | None = None,
+    ) -> Index | None:
         ...
 
     def get_object(
@@ -688,10 +687,10 @@ class IndexCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        name: Optional[sn.Name] = None,
+        name: sn.Name | None = None,
         default: Index | so.NoDefaultT | None = so.NoDefault,
-        span: Optional[parsing.Span] = None,
-    ) -> Optional[Index]:
+        span: parsing.Span | None = None,
+    ) -> Index | None:
         try:
             return super().get_object(
                 schema, context, name=name,
@@ -730,11 +729,11 @@ class IndexCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         astnode = super()._get_ast(schema, context, parent_node=parent_node)
 
-        kwargs: Optional[Mapping[str, s_expr.Expression]] = (
+        kwargs: Mapping[str, s_expr.Expression] | None = (
             self.get_resolved_attribute_value(
                 'kwargs',
                 schema=schema,
@@ -754,7 +753,7 @@ class IndexCommand(
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if field in ('kwargs', 'expr', 'except_expr'):
             return field
         elif (
@@ -787,14 +786,14 @@ class IndexCommand(
     def get_friendly_object_name_for_description(
         self,
         *,
-        parent_op: Optional[sd.Command] = None,
-        schema: Optional[s_schema.Schema] = None,
-        object: Optional[so.Object_T] = None,
-        object_desc: Optional[str] = None,
+        parent_op: sd.Command | None = None,
+        schema: s_schema.Schema | None = None,
+        object: so.Object_T | None = None,
+        object_desc: str | None = None,
     ) -> str:
         friendly_name: str = 'index'
 
-        expr: Optional[s_expr.Expression] = None
+        expr: s_expr.Expression | None = None
         if (
             self.has_ddl_identity('expr') and
             (expr := self.get_ddl_identity('expr'))
@@ -927,7 +926,7 @@ class IndexCommand(
         context: sd.CommandContext,
         field: so.Field[Any],
         value: Any,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         if field.name == 'expr':
             return s_expr.Expression(text='0')
         else:
@@ -1754,8 +1753,8 @@ def get_effective_object_index(
     schema: s_schema.Schema,
     subject: IndexableSubject,
     base_idx_name: sn.QualName,
-    span: Optional[parsing.Span] = None,
-) -> tuple[Optional[Index], Sequence[Index]]:
+    span: parsing.Span | None = None,
+) -> tuple[Index | None, Sequence[Index]]:
     """
     Returns the effective index of a subject and any overridden fs indexes
     """
@@ -2013,7 +2012,7 @@ _model_name = sn.QualName("ext::ai", "model_name")
 
 def get_defined_ext_ai_embedding_models(
     schema: s_schema.Schema,
-    model_name: Optional[str] = None,
+    model_name: str | None = None,
 ) -> dict[str, s_objtypes.ObjectType]:
     from . import objtypes as s_objtypes
 

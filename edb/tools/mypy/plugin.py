@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, AbstractSet, NamedTuple
+from typing import AbstractSet, NamedTuple
 
 from mypy import exprtotype
 import mypy.plugin as mypy_plugin
@@ -246,7 +246,7 @@ class BaseTransformer:
         stmt: nodes.AssignmentStmt,
         name: nodes.NameExpr,
         sym: nodes.SymbolTableNode,
-    ) -> Optional[Field]:
+    ) -> Field | None:
         raise NotImplementedError
 
     def _collect_fields(self) -> list[Field]:
@@ -387,7 +387,7 @@ class BaseStructTransformer(BaseTransformer):
         stmt: nodes.AssignmentStmt,
         name: nodes.NameExpr,
         sym: nodes.SymbolTableNode,
-    ) -> Optional[Field]:
+    ) -> Field | None:
         ctx = self._ctx
 
         rhs = stmt.rvalue
@@ -460,7 +460,7 @@ class BaseStructTransformer(BaseTransformer):
             type=ftype,
         )
 
-    def _get_default(self, call) -> Optional[nodes.Expression]:
+    def _get_default(self, call) -> nodes.Expression | None:
         for (n, v) in zip(call.arg_names, call.args):
             if n == 'default':
                 return v
@@ -545,7 +545,7 @@ class ASTClassTransformer(BaseTransformer):
         stmt: nodes.AssignmentStmt,
         name: nodes.NameExpr,
         sym: nodes.SymbolTableNode,
-    ) -> Optional[Field]:
+    ) -> Field | None:
 
         if sym.type is None:
             # If the assignment has a type annotation but the symbol

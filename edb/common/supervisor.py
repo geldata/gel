@@ -18,7 +18,6 @@
 
 
 from __future__ import annotations
-from typing import Optional
 
 import asyncio
 import itertools
@@ -41,7 +40,7 @@ class Supervisor:
         self._on_completed_fut = None
 
     @classmethod
-    async def create(cls, *, name: Optional[str] = None):
+    async def create(cls, *, name: str | None = None):
         loop = asyncio.get_running_loop()
         return cls(_loop=loop, _name=name, _private=True)
 

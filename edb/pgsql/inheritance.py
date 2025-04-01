@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, AbstractSet, Iterator
+from typing import AbstractSet, Iterator
 
 from edb.schema import links as s_links
 from edb.schema import name as sn
@@ -116,7 +116,7 @@ def _get_select_from(
     schema: s_schema.Schema,
     obj: s_sources.Source | s_pointers.Pointer,
     ptr_names: dict[sn.UnqualName, tuple[list[str], tuple[str, ...]]],
-) -> Optional[pgast.SelectStmt]:
+) -> pgast.SelectStmt | None:
     schema_name, table_name = common.get_backend_name(
         schema,
         obj,

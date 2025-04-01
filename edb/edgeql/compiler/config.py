@@ -21,7 +21,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, NamedTuple
+from typing import NamedTuple
 
 import json
 
@@ -62,7 +62,7 @@ class SettingInfo(NamedTuple):
     backend_setting: str | None
     affects_compilation: bool
     is_system_config: bool
-    ptr: Optional[s_pointers.Pointer]
+    ptr: s_pointers.Pointer | None
 
 
 @dispatch.compile.register
@@ -339,7 +339,7 @@ def _enforce_pointer_constraints(
             sctx.anchors = ctx.anchors.copy()
             sctx.anchors['__subject__'] = expr
 
-            final_expr: Optional[s_expr.Expression] = (
+            final_expr: s_expr.Expression | None = (
                 constraint.get_finalexpr(ctx.env.schema)
             )
             assert final_expr is not None and final_expr.parse() is not None
@@ -420,7 +420,7 @@ def _validate_op(
             )
 
         assert isinstance(cfg_type, s_objtypes.ObjectType)
-        ptr_candidate: Optional[s_pointers.Pointer] = None
+        ptr_candidate: s_pointers.Pointer | None = None
 
         mro = [cfg_type] + list(
             cfg_type.get_ancestors(ctx.env.schema).objects(ctx.env.schema))

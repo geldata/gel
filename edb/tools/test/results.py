@@ -46,11 +46,11 @@ class TestCase:
     id: str
     description: str
 
-    py_HashSecret: typing.Optional[str]
-    py_random_seed: typing.Optional[str]
+    py_HashSecret: str | None
+    py_random_seed: str | None
 
-    error_message: typing.Optional[str]
-    server_traceback: typing.Optional[str]
+    error_message: str | None
+    server_traceback: str | None
 
 
 def _collect_case_data(
@@ -296,7 +296,7 @@ def render_result(
     _echo(file)
 
 
-def _result_log_path(path_template: str) -> typing.Optional[pathlib.Path]:
+def _result_log_path(path_template: str) -> pathlib.Path | None:
     now = str(datetime.datetime.now()).replace(' ', '_')
     path = pathlib.Path(path_template.replace('%TIMESTAMP%', now))
 
@@ -378,7 +378,7 @@ if __name__ == '__main__':
     result = functools.reduce(
         lambda acc, r: _combine_test_results(acc, r) if acc else r,
         results,
-        typing.cast(typing.Optional[TestResult], None),
+        typing.cast(TestResult | None, None),
     )
     if not result:
         raise ValueError(

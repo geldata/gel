@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     TypeVar,
     AbstractSet,
     Sequence,
@@ -96,7 +95,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         uppercase: bool = False,
         unsorted: bool = False,
         limit_ref_classes:
-            Optional[AbstractSet[qltypes.SchemaObjectClass]] = None,
+            AbstractSet[qltypes.SchemaObjectClass] | None = None,
         **kwargs: Any
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -132,7 +131,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         # before traversing the AST.  Since it's not an attribute that
         # can be inferred by static typing we ignore typing for this
         # function.
-        parent: Optional[qlast.Base] = node._parent
+        parent: qlast.Base | None = node._parent
         return (
             parent is not None
             and not isinstance(parent, qlast.DDL)
@@ -1028,7 +1027,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         self,
         node: qlast.CreateObject,
         *object_keywords: str,
-        after_name: Optional[Callable[[], None]] = None,
+        after_name: Callable[[], None] | None = None,
         render_commands: bool = True,
         unqualified: bool = False,
         named: bool = True,
@@ -1063,10 +1062,10 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         node: qlast.AlterObject,
         *object_keywords: str,
         allow_short: bool = True,
-        after_name: Optional[Callable[[], None]] = None,
+        after_name: Callable[[], None] | None = None,
         unqualified: bool = False,
         named: bool = True,
-        ignored_cmds: Optional[AbstractSet[qlast.DDLOperation]] = None,
+        ignored_cmds: AbstractSet[qlast.DDLOperation] | None = None,
         group_by_system_comment: bool = False,
     ) -> None:
         self._visit_aliases(node)
@@ -1101,7 +1100,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         node: qlast.DropObject,
         *object_keywords: str,
         unqualified: bool = False,
-        after_name: Optional[Callable[[], None]] = None,
+        after_name: Callable[[], None] | None = None,
         named: bool = True,
     ) -> None:
         self._visit_aliases(node)
@@ -1849,7 +1848,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
     def visit_CreateConcretePointer(
         self,
         node: qlast.CreateConcretePointer,
-        kind: Optional[str],
+        kind: str | None,
     ) -> None:
         keywords = []
 
@@ -1915,12 +1914,12 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
     def visit_AlterConcretePointer(
         self,
         node: qlast.AlterObject,
-        kind: Optional[str],
+        kind: str | None,
     ) -> None:
         keywords = []
         ignored_cmds: set[qlast.DDLOperation] = set()
 
-        after_name: Optional[Callable[[], None]]
+        after_name: Callable[[], None] | None
 
         if self.sdlmode:
             if (not self.descmode
@@ -2616,7 +2615,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         # Uppercase keywords for backwards compatibility with older migrations.
         uppercase: bool = False,
         limit_ref_classes:
-            Optional[AbstractSet[qltypes.SchemaObjectClass]] = None,
+            AbstractSet[qltypes.SchemaObjectClass] | None = None,
         unsorted: bool = False,
     ) -> str:
         if isinstance(node, (list, tuple)):

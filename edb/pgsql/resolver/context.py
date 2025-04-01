@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Optional, Sequence, Mapping
+from typing import Sequence, Mapping
 from dataclasses import dataclass, field
 import enum
 import uuid
@@ -53,7 +53,7 @@ class Options:
     apply_access_policies: bool
 
     # whether to generate an EdgeQL-compatible single-column output variant.
-    include_edgeql_io_format_alternative: Optional[bool]
+    include_edgeql_io_format_alternative: bool | None
 
     # makes sure that output does not contain duplicated column names
     disambiguate_column_names: bool
@@ -65,7 +65,7 @@ class Options:
     normalized_params: list[int]
 
     # Apply a limit to the number of rows in the top-level query
-    implicit_limit: Optional[int]
+    implicit_limit: int | None
 
 
 @dataclass(kw_only=True)
@@ -98,16 +98,16 @@ class Scope:
 @dataclass(kw_only=True)
 class Table:
     # The schema id of the object that is the source of this table
-    schema_id: Optional[uuid.UUID] = None
+    schema_id: uuid.UUID | None = None
 
     # Public SQL
-    name: Optional[str] = None
-    alias: Optional[str] = None
+    name: str | None = None
+    alias: str | None = None
 
     columns: list[Column] = field(default_factory=lambda: [])
 
     # Internal SQL
-    reference_as: Optional[str] = None
+    reference_as: str | None = None
 
     # For ambiguous references, this fields determines lookup order.
     # Higher value is matched before lower.
@@ -130,7 +130,7 @@ class Table:
 
 @dataclass(kw_only=True)
 class CTE:
-    name: Optional[str] = None
+    name: str | None = None
     columns: list[Column] = field(default_factory=lambda: [])
 
 
@@ -196,7 +196,7 @@ class CompiledDML:
     value_columns: list[tuple[str, bool]]
 
     # name of the column in the value relation, that should provide the identity
-    value_iterator_name: Optional[str]
+    value_iterator_name: str | None
 
     # CTEs that perform the operation
     output_ctes: list[pgast.CommonTableExpr]
@@ -245,11 +245,11 @@ class ResolverContextLevel(compiler.ContextLevel):
 
     def __init__(
         self,
-        prevlevel: Optional[ResolverContextLevel],
+        prevlevel: ResolverContextLevel | None,
         mode: ContextSwitchMode,
         *,
-        schema: Optional[s_schema.Schema] = None,
-        options: Optional[Options] = None,
+        schema: s_schema.Schema | None = None,
+        options: Options | None = None,
     ) -> None:
         if prevlevel is None:
             assert schema

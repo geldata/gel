@@ -1,5 +1,5 @@
 from functools import singledispatch
-from typing import Any, Optional, Sequence, cast
+from typing import Any, Sequence, cast
 
 from edb import errors
 
@@ -70,7 +70,7 @@ def elab_expr_with_default_head(node: qlast.Expr) -> BindingExpr:
     return abstract_over_expr(elab(node), DEFAULT_HEAD_NAME)
 
 
-def elab_error(msg: str, ctx: Optional[qlast.Span]) -> Any:
+def elab_error(msg: str, ctx: qlast.Span | None) -> Any:
     raise errors.QueryError(msg, span=ctx)
 
 
@@ -343,7 +343,7 @@ def elab_Constant(expr: qlast.Constant) -> e.ScalarVal:
             raise ValueError("Unknown Constant Kind", expr.kind)
 
 
-def elab_where(where: Optional[qlast.Expr]) -> BindingExpr:
+def elab_where(where: qlast.Expr | None) -> BindingExpr:
     if where is None:
         return abstract_over_expr(BoolVal(True))
     else:
@@ -351,7 +351,7 @@ def elab_where(where: Optional[qlast.Expr]) -> BindingExpr:
 
 
 def elab_orderby(
-    qle: Optional[Sequence[qlast.SortExpr]],
+    qle: Sequence[qlast.SortExpr] | None,
 ) -> dict[str, BindingExpr]:
     if qle is None:
         return {}
@@ -530,7 +530,7 @@ def elab_param_modifier(mod: qltypes.TypeModifier) -> e.ParamModifier:
             raise ValueError("Unknown Param Modifier", mod)
 
 
-def elab_single_type_str(name: str, module_name: Optional[str]) -> Tp:
+def elab_single_type_str(name: str, module_name: str | None) -> Tp:
     if name.startswith("any") and module_name is None:
         return e.AnyTp(name[3:])
     else:
@@ -543,7 +543,7 @@ def elab_single_type_str(name: str, module_name: Optional[str]) -> Tp:
 def elab_CompositeTp(
     basetp: qlast.ObjectRef,
     sub_tps: list[Tp],
-    labels: Optional[list[str]] = None,
+    labels: list[str] | None = None,
 ) -> Tp:
     if labels is None:
         labels = []
@@ -675,7 +675,7 @@ def elab_Set(qle: qlast.Set):
 
 
 def elab_aliases(
-    aliases: Optional[Sequence[qlast.Alias]],
+    aliases: Sequence[qlast.Alias] | None,
     tail_expr: Expr,
 ) -> Expr:
     if aliases is None:

@@ -45,7 +45,7 @@ from . import schema as s_schema
 from . import utils
 
 if typing.TYPE_CHECKING:
-    from typing import Any, Iterable, Iterator, Mapping, Optional
+    from typing import Any, Iterable, Iterator, Mapping
     from typing import AbstractSet, Sequence, Callable
     from edb.common import parsing
 
@@ -172,11 +172,11 @@ class Type(
         *,
         name: s_name.QualName,
         mark_derived: bool = False,
-        attrs: Optional[Mapping[str, Any]] = None,
+        attrs: Mapping[str, Any] | None = None,
         inheritance_merge: bool = True,
         transient: bool = False,
         preserve_endpoint_ptrs: bool = False,
-        inheritance_refdicts: Optional[AbstractSet[str]] = None,
+        inheritance_refdicts: AbstractSet[str] | None = None,
         stdmode: bool = False,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, TypeT]:
@@ -295,7 +295,7 @@ class Type(
         self,
         pred: Callable[[Type], bool],
         schema: s_schema.Schema,
-    ) -> Optional[Type]:
+    ) -> Type | None:
         if pred(self):
             return self
         else:
@@ -308,7 +308,7 @@ class Type(
     ) -> bool:
         return bool(self.find_predicate(pred, schema))
 
-    def find_generic(self, schema: s_schema.Schema) -> Optional[Type]:
+    def find_generic(self, schema: s_schema.Schema) -> Type | None:
         return self.find_predicate(
             lambda x: x.is_any(schema) or x.is_anyobject(schema), schema
         )
@@ -319,7 +319,7 @@ class Type(
     def contains_json(self, schema: s_schema.Schema) -> bool:
         return self.contains_predicate(lambda x: x.is_json(schema), schema)
 
-    def find_array(self, schema: s_schema.Schema) -> Optional[Type]:
+    def find_array(self, schema: s_schema.Schema) -> Type | None:
         return self.find_predicate(lambda x: x.is_array(), schema)
 
     def contains_array_of_tuples(self, schema: s_schema.Schema) -> bool:
@@ -350,7 +350,7 @@ class Type(
 
     def resolve_polymorphic(
         self, schema: s_schema.Schema, other: Type
-    ) -> Optional[Type]:
+    ) -> Type | None:
         """Resolve the polymorphic type component.
 
         Examples:
@@ -384,7 +384,7 @@ class Type(
         self,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> Optional[Type]:
+    ) -> Type | None:
         raise NotImplementedError(
             f'{type(self)} does not support resolve_polymorphic()')
 
@@ -432,13 +432,13 @@ class Type(
         self,
         other: Type,
         schema: s_schema.Schema,
-    ) -> tuple[s_schema.Schema, Optional[Type]]:
+    ) -> tuple[s_schema.Schema, Type | None]:
         return schema, None
 
     def get_union_of(
         self: TypeT,
         schema: s_schema.Schema,
-    ) -> Optional[so.ObjectSet[TypeT]]:
+    ) -> so.ObjectSet[TypeT] | None:
         return None
 
     def get_is_opaque_union(self, schema: s_schema.Schema) -> bool:
@@ -447,7 +447,7 @@ class Type(
     def get_intersection_of(
         self: TypeT,
         schema: s_schema.Schema,
-    ) -> Optional[so.ObjectSet[TypeT]]:
+    ) -> so.ObjectSet[TypeT] | None:
         return None
 
     def material_type(
@@ -522,7 +522,7 @@ class Type(
     def as_type_delete_if_unused(
         self: TypeT,
         schema: s_schema.Schema,
-    ) -> Optional[sd.DeleteObject[TypeT]]:
+    ) -> sd.DeleteObject[TypeT] | None:
         """If this is type is owned by other objects, delete it if unused.
 
         For types that get created behind the scenes as part of
@@ -599,11 +599,11 @@ class TypeShell(so.ObjectShell[TypeT_co]):
         self,
         *,
         name: s_name.Name,
-        origname: Optional[s_name.Name] = None,
-        displayname: Optional[str] = None,
-        expr: Optional[str] = None,
+        origname: s_name.Name | None = None,
+        displayname: str | None = None,
+        expr: str | None = None,
         schemaclass: type[TypeT_co],
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
         extra_args: tuple[qlast.Expr] | None = None,
     ) -> None:
         super().__init__(
@@ -624,8 +624,8 @@ class TypeShell(so.ObjectShell[TypeT_co]):
         self,
         schema: s_schema.Schema,
         *,
-        view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[dict[str, Any]] = None,
+        view_name: s_name.QualName | None = None,
+        attrs: dict[str, Any] | None = None,
     ) -> sd.Command:
         raise errors.UnsupportedFeatureError(
             f'unsupported type intersection in schema {str(view_name)}',
@@ -645,7 +645,7 @@ class TypeExprShell(TypeShell[TypeT_co]):
         name: s_name.Name,
         components: Iterable[TypeShell[TypeT_co]],
         schemaclass: type[TypeT_co],
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -676,7 +676,7 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
         components: Iterable[TypeShell[TypeT_co]],
         opaque: bool = False,
         schemaclass: type[TypeT_co],
-        span: Optional[parsing.Span] = None,
+        span: parsing.Span | None = None,
     ) -> None:
         name = get_union_type_name(
             (c.name for c in components),
@@ -695,8 +695,8 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
         self,
         schema: s_schema.Schema,
         *,
-        view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[dict[str, Any]] = None,
+        view_name: s_name.QualName | None = None,
+        attrs: dict[str, Any] | None = None,
     ) -> sd.Command:
         assert isinstance(self.name, s_name.QualName)
         cmd = CreateUnionType(classname=self.name)
@@ -719,8 +719,8 @@ class AlterType(sd.AlterObject[TypeT]):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if hasattr(self, 'scls') and self.scls.get_from_alias(schema):
             # This is a nested view type, e.g
             # __FooAlias_bar produced by  FooAlias := (SELECT Foo { bar: ... })
@@ -824,8 +824,8 @@ class RenameType(sd.RenameObject[TypeT]):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if (
             self.maybe_get_object_aux_data('is_compound_type')
             or self.scls.is_view(schema)
@@ -842,8 +842,8 @@ class DeleteType(sd.DeleteObject[TypeT]):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if self.maybe_get_object_aux_data('is_compound_type'):
             return None
         else:
@@ -953,7 +953,7 @@ _collection_impls: dict[str, type[Collection]] = {}
 
 class Collection(Type, s_abc.Collection):
 
-    _schema_name: typing.ClassVar[typing.Optional[str]] = None
+    _schema_name: typing.ClassVar[str | None] = None
 
     #: True for collection types that are stored in schema persistently
     is_persistent = so.SchemaField(
@@ -965,7 +965,7 @@ class Collection(Type, s_abc.Collection):
     def __init_subclass__(
         cls,
         *,
-        schema_name: typing.Optional[str] = None,
+        schema_name: str | None = None,
     ) -> None:
         super().__init_subclass__()
         if schema_name is not None:
@@ -1038,7 +1038,7 @@ class Collection(Type, s_abc.Collection):
         self,
         pred: Callable[[Type], bool],
         schema: s_schema.Schema,
-    ) -> Optional[Type]:
+    ) -> Type | None:
         if pred(self):
             return self
         for st in self.get_subtypes(schema):
@@ -1151,7 +1151,7 @@ class Collection(Type, s_abc.Collection):
     def as_type_delete_if_unused(
         self: CollectionTypeT,
         schema: s_schema.Schema,
-    ) -> Optional[sd.DeleteObject[CollectionTypeT]]:
+    ) -> sd.DeleteObject[CollectionTypeT] | None:
         if not self._is_deletable(schema):
             return None
 
@@ -1211,7 +1211,7 @@ class CollectionExprAlias(QualifiedType, Collection):
     def as_type_delete_if_unused(
         self: CollectionExprAliasT,
         schema: s_schema.Schema,
-    ) -> Optional[sd.DeleteObject[CollectionExprAliasT]]:
+    ) -> sd.DeleteObject[CollectionExprAliasT] | None:
         if not self._is_deletable(schema):
             return None
 
@@ -1254,8 +1254,8 @@ class Array(
         cls: type[Array_T],
         schema: s_schema.Schema,
         *,
-        name: Optional[s_name.Name] = None,
-        id: Optional[uuid.UUID] = None,
+        name: s_name.Name | None = None,
+        id: uuid.UUID | None = None,
         dimensions: Sequence[int] = (),
         element_type: Any,
         **kwargs: Any,
@@ -1309,7 +1309,7 @@ class Array(
         schema: s_schema.Schema,
         *,
         name: s_name.QualName,
-        attrs: Optional[Mapping[str, Any]] = None,
+        attrs: Mapping[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, ArrayExprAlias]:
         assert not kwargs
@@ -1385,7 +1385,7 @@ class Array(
         self,
         other: Type,
         schema: s_schema.Schema,
-    ) -> tuple[s_schema.Schema, Optional[Array]]:
+    ) -> tuple[s_schema.Schema, Array | None]:
 
         if not isinstance(other, Array):
             return schema, None
@@ -1406,7 +1406,7 @@ class Array(
         self,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> Optional[Type]:
+    ) -> Type | None:
         if not isinstance(concrete_type, Array):
             return None
 
@@ -1444,7 +1444,7 @@ class Array(
         subtypes: Sequence[Type],
         typemods: Any = None,
         *,
-        name: Optional[s_name.QualName] = None,
+        name: s_name.QualName | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, Array_T]:
         if len(subtypes) != 1:
@@ -1475,8 +1475,8 @@ class Array(
         *,
         subtypes: Sequence[TypeShell[Type]],
         typemods: Any = None,
-        name: Optional[s_name.Name] = None,
-        expr: Optional[str] = None,
+        name: s_name.Name | None = None,
+        expr: str | None = None,
     ) -> ArrayTypeShell[Array_T]:
         if not typemods:
             typemods = ([-1],)
@@ -1530,8 +1530,8 @@ class ArrayTypeShell(CollectionTypeShell[Array_T_co]):
     def __init__(
         self,
         *,
-        name: Optional[s_name.Name],
-        expr: Optional[str] = None,
+        name: s_name.Name | None,
+        expr: str | None = None,
         subtype: TypeShell[Type],
         typemods: tuple[typing.Any, ...],
         schemaclass: type[Array_T_co],
@@ -1556,8 +1556,8 @@ class ArrayTypeShell(CollectionTypeShell[Array_T_co]):
         self,
         schema: s_schema.Schema,
         *,
-        view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[dict[str, Any]] = None,
+        view_name: s_name.QualName | None = None,
+        attrs: dict[str, Any] | None = None,
     ) -> sd.CommandGroup:
         ca: CreateArray | CreateArrayExprAlias
         cmd = sd.CommandGroup()
@@ -1651,8 +1651,8 @@ class Tuple(
         cls: type[Tuple_T],
         schema: s_schema.Schema,
         *,
-        name: Optional[s_name.Name] = None,
-        id: Optional[uuid.UUID] = None,
+        name: s_name.Name | None = None,
+        id: uuid.UUID | None = None,
         element_types: Mapping[str, Type],
         named: bool = False,
         **kwargs: Any,
@@ -1768,7 +1768,7 @@ class Tuple(
         schema: s_schema.Schema,
         *,
         name: s_name.QualName,
-        attrs: Optional[Mapping[str, Any]] = None,
+        attrs: Mapping[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, TupleExprAlias]:
         assert not kwargs
@@ -1787,7 +1787,7 @@ class Tuple(
         subtypes: Iterable[Type] | Mapping[str, Type],
         typemods: Any = None,
         *,
-        name: Optional[s_name.QualName] = None,
+        name: s_name.QualName | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, Tuple_T]:
         named = False
@@ -1810,7 +1810,7 @@ class Tuple(
         *,
         subtypes: Mapping[str, TypeShell[Type]],
         typemods: Any = None,
-        name: Optional[s_name.Name] = None,
+        name: s_name.Name | None = None,
     ) -> TupleTypeShell[Tuple_T]:
         return TupleTypeShell(
             subtypes=subtypes,
@@ -1948,7 +1948,7 @@ class Tuple(
         self,
         other: Type,
         schema: s_schema.Schema,
-    ) -> tuple[s_schema.Schema, Optional[Tuple]]:
+    ) -> tuple[s_schema.Schema, Tuple | None]:
 
         if not isinstance(other, Tuple):
             return schema, None
@@ -1987,7 +1987,7 @@ class Tuple(
         self,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> Optional[Type]:
+    ) -> Type | None:
         if not isinstance(concrete_type, Tuple):
             return None
 
@@ -2068,7 +2068,7 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
     def __init__(
         self,
         *,
-        name: Optional[s_name.Name],
+        name: s_name.Name | None,
         subtypes: Mapping[str, TypeShell[Type]],
         typemods: Any = None,
         schemaclass: type[Tuple_T_co],
@@ -2108,8 +2108,8 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
         self,
         schema: s_schema.Schema,
         *,
-        view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[dict[str, Any]] = None,
+        view_name: s_name.QualName | None = None,
+        attrs: dict[str, Any] | None = None,
     ) -> CreateTuple | CreateTupleExprAlias:
         ct: CreateTuple | CreateTupleExprAlias
 
@@ -2146,7 +2146,7 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
         schema: s_schema.Schema,
         ct: CreateTuple | CreateTupleExprAlias,
         *,
-        attrs: Optional[dict[str, Any]] = None,
+        attrs: dict[str, Any] | None = None,
     ) -> None:
         named = self.is_named()
         ct.set_attribute_value('name', ct.classname)
@@ -2204,8 +2204,8 @@ class Range(
         cls: type[Range_T],
         schema: s_schema.Schema,
         *,
-        name: Optional[s_name.Name] = None,
-        id: Optional[uuid.UUID] = None,
+        name: s_name.Name | None = None,
+        id: uuid.UUID | None = None,
         element_type: Any,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, Range_T]:
@@ -2245,7 +2245,7 @@ class Range(
         schema: s_schema.Schema,
         *,
         name: s_name.QualName,
-        attrs: Optional[Mapping[str, Any]] = None,
+        attrs: Mapping[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, RangeExprAlias]:
         assert not kwargs
@@ -2312,7 +2312,7 @@ class Range(
         self,
         other: Type,
         schema: s_schema.Schema,
-    ) -> tuple[s_schema.Schema, Optional[RangeLike]]:
+    ) -> tuple[s_schema.Schema, RangeLike | None]:
 
         if not isinstance(other, (Range, MultiRange)):
             return schema, None
@@ -2358,7 +2358,7 @@ class Range(
         self,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> Optional[Type]:
+    ) -> Type | None:
         if not isinstance(concrete_type, Range):
             return None
 
@@ -2389,7 +2389,7 @@ class Range(
         subtypes: Sequence[Type],
         typemods: Any = None,
         *,
-        name: Optional[s_name.QualName] = None,
+        name: s_name.QualName | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, Range_T]:
         if len(subtypes) != 1:
@@ -2417,7 +2417,7 @@ class Range(
         *,
         subtypes: Sequence[TypeShell[Type]],
         typemods: Any = None,
-        name: Optional[s_name.Name] = None,
+        name: s_name.Name | None = None,
     ) -> RangeTypeShell[Range_T]:
         st = next(iter(subtypes))
 
@@ -2464,7 +2464,7 @@ class RangeTypeShell(CollectionTypeShell[Range_T_co]):
     def __init__(
         self,
         *,
-        name: Optional[s_name.Name],
+        name: s_name.Name | None,
         subtype: TypeShell[Type],
         typemods: tuple[typing.Any, ...],
         schemaclass: type[Range_T_co],
@@ -2489,8 +2489,8 @@ class RangeTypeShell(CollectionTypeShell[Range_T_co]):
         self,
         schema: s_schema.Schema,
         *,
-        view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[dict[str, Any]] = None,
+        view_name: s_name.QualName | None = None,
+        attrs: dict[str, Any] | None = None,
     ) -> sd.CommandGroup:
         ca: CreateRange | CreateRangeExprAlias
         cmd = sd.CommandGroup()
@@ -2567,8 +2567,8 @@ class MultiRange(
         cls: type[MultiRange_T],
         schema: s_schema.Schema,
         *,
-        name: Optional[s_name.Name] = None,
-        id: Optional[uuid.UUID] = None,
+        name: s_name.Name | None = None,
+        id: uuid.UUID | None = None,
         element_type: Any,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, MultiRange_T]:
@@ -2608,7 +2608,7 @@ class MultiRange(
         schema: s_schema.Schema,
         *,
         name: s_name.QualName,
-        attrs: Optional[Mapping[str, Any]] = None,
+        attrs: Mapping[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, MultiRangeExprAlias]:
         assert not kwargs
@@ -2667,7 +2667,7 @@ class MultiRange(
         self: MultiRange,
         other: Type,
         schema: s_schema.Schema,
-    ) -> tuple[s_schema.Schema, Optional[MultiRange]]:
+    ) -> tuple[s_schema.Schema, MultiRange | None]:
 
         if not isinstance(other, MultiRange):
             return schema, None
@@ -2688,7 +2688,7 @@ class MultiRange(
         self,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> Optional[Type]:
+    ) -> Type | None:
         # polymorphic multiranges can resolve using concrete multiranges and
         # ranges because ranges are implicitly castable into multiranges.
         if not isinstance(concrete_type, (Range, MultiRange)):
@@ -2721,7 +2721,7 @@ class MultiRange(
         subtypes: Sequence[Type],
         typemods: Any = None,
         *,
-        name: Optional[s_name.QualName] = None,
+        name: s_name.QualName | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, MultiRange_T]:
         if len(subtypes) != 1:
@@ -2749,7 +2749,7 @@ class MultiRange(
         *,
         subtypes: Sequence[TypeShell[Type]],
         typemods: Any = None,
-        name: Optional[s_name.Name] = None,
+        name: s_name.Name | None = None,
     ) -> MultiRangeTypeShell[MultiRange_T]:
         st = next(iter(subtypes))
 
@@ -2823,8 +2823,8 @@ class MultiRangeTypeShell(CollectionTypeShell[MultiRange_T_co]):
         self,
         schema: s_schema.Schema,
         *,
-        view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[dict[str, Any]] = None,
+        view_name: s_name.QualName | None = None,
+        attrs: dict[str, Any] | None = None,
     ) -> sd.CommandGroup:
         ca: CreateMultiRange | CreateMultiRangeExprAlias
         cmd = sd.CommandGroup()
@@ -2876,7 +2876,7 @@ def get_union_type_name(
     component_names: typing.Iterable[s_name.Name],
     *,
     opaque: bool = False,
-    module: typing.Optional[str] = None,
+    module: str | None = None,
 ) -> s_name.QualName:
     sorted_name_list = sorted(
         str(name).replace('::', ':') for name in component_names)
@@ -2890,7 +2890,7 @@ def get_union_type_name(
 def get_intersection_type_name(
     component_names: typing.Iterable[s_name.Name],
     *,
-    module: typing.Optional[str] = None,
+    module: str | None = None,
 ) -> s_name.QualName:
     sorted_name_list = sorted(
         str(name).replace('::', ':') for name in component_names)
@@ -2903,9 +2903,9 @@ def ensure_schema_type_expr_type(
     type_shell: TypeExprShell[Type],
     parent_cmd: sd.Command,
     *,
-    span: typing.Optional[parsing.Span] = None,
+    span: parsing.Span | None = None,
     context: sd.CommandContext,
-) -> Optional[sd.Command]:
+) -> sd.Command | None:
 
     name = type_shell.get_name(schema)
     texpr_type = schema.get(name, default=None, type=Type)
@@ -2921,7 +2921,7 @@ def ensure_schema_type_expr_type(
 def type_dummy_expr(
     typ: Type,
     schema: s_schema.Schema,
-) -> Optional[s_expr.Expression]:
+) -> s_expr.Expression | None:
     if isinstance(typ, so.DerivableInheritingObject):
         typ = typ.get_nearest_non_derived_parent(schema)
 
@@ -2955,8 +2955,8 @@ class TypeCommand(sd.ObjectCommand[TypeT]):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if self.get_attribute_value('expr'):
             return None
         elif (
@@ -2997,7 +2997,7 @@ class TypeCommand(sd.ObjectCommand[TypeT]):
         context: sd.CommandContext,
         field: so.Field[Any],
         value: Any,
-    ) -> Optional[s_expr.Expression]:
+    ) -> s_expr.Expression | None:
         if field.name == 'expr':
             return type_dummy_expr(self.scls, schema)
         else:
@@ -3109,8 +3109,8 @@ class CollectionTypeCommand(TypeCommand[CollectionTypeT],
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         # CollectionTypeCommand cannot have its own AST because it is a
         # side-effect of some other command.
         return None
@@ -3127,8 +3127,8 @@ class CollectionExprAliasCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         # CollectionTypeCommand cannot have its own AST because it is a
         # side-effect of some other command.
         return None

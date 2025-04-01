@@ -17,7 +17,6 @@
 #
 
 from __future__ import annotations
-from typing import Optional
 
 import errno
 import logging
@@ -32,7 +31,7 @@ SD_LISTEN_FDS_START = 3
 logger = logging.getLogger('edb.server')
 
 
-def _stream_socket_from_fd(fd: int) -> Optional[socket.socket]:
+def _stream_socket_from_fd(fd: int) -> socket.socket | None:
     try:
         sock = socket.socket(fileno=fd)
     except OSError:

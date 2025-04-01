@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import (
     NamedTuple,
     Sequence,
-    Optional,
     Callable,
     Any,
 )
@@ -171,7 +170,7 @@ class UncheckedComputableTp:
 class OverloadedTargetTp:
     """place holder for a overloaded type"""
 
-    linkprop: Optional[ObjectTp]  # overloaded or additional link props
+    linkprop: ObjectTp | None  # overloaded or additional link props
 
 
 @dataclass(frozen=True)
@@ -185,7 +184,7 @@ class DefaultTp:
 
 @dataclass(frozen=True)
 class AnyTp:
-    specifier: Optional[str] = None
+    specifier: str | None = None
 
 
 @dataclass(frozen=True)
@@ -439,7 +438,7 @@ class ParameterExpr:
 @dataclass(frozen=True)
 class FunAppExpr:
     fun: UnqualifiedName | QualifiedName
-    overloading_index: Optional[int]
+    overloading_index: int | None
     args: Sequence[Expr]
     kwargs: dict[str, Expr]
 

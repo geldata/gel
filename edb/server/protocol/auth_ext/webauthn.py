@@ -23,7 +23,7 @@ import base64
 import json
 import webauthn
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from webauthn.helpers import (
     parse_authentication_credential_json,
     structs as webauthn_structs,
@@ -74,7 +74,7 @@ class Client(local.Client):
             provider_name, f"Provider is not configured"
         )
 
-    def _get_app_name(self) -> Optional[str]:
+    def _get_app_name(self) -> str | None:
         app_config = util.get_app_details_config(self.db)
         return app_config.app_name
 
@@ -105,7 +105,7 @@ class Client(local.Client):
 
     async def _maybe_get_existing_user_handle(
         self, email: str,
-    ) -> Optional[bytes]:
+    ) -> bytes | None:
         result = await execute.parse_execute_json(
             self.db,
             """
@@ -512,7 +512,7 @@ filter .factors.email = email and .factors.credential_id = credential_id;""",
     async def get_email_factor_by_credential_id(
         self,
         credential_id: bytes,
-    ) -> Optional[data.EmailFactor]:
+    ) -> data.EmailFactor | None:
         result = await execute.parse_execute_json(
             self.db,
             """

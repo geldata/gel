@@ -27,7 +27,6 @@ from typing import (
     Callable,
     Final,
     Literal,
-    Optional,
     AbstractSet,
     ContextManager,
     Iterable,
@@ -128,9 +127,9 @@ def new_set(
 
 def new_empty_set(
     *,
-    stype: Optional[s_types.Type]=None, alias: str='e',
+    stype: s_types.Type | None=None, alias: str='e',
     ctx: context.ContextLevel,
-    span: Optional[qlast.Span]=None
+    span: qlast.Span | None=None
 ) -> irast.Set:
     if stype is None:
         stype = s_pseudo.PseudoType.get(ctx.env.schema, 'anytype')
@@ -170,16 +169,16 @@ KeepCurrent: Final = KeepCurrentT.KeepCurrent
 def new_set_from_set(
         ir_set: irast.Set, *,
         merge_current_ns: bool=False,
-        path_scope_id: Optional[int | KeepCurrentT]=KeepCurrent,
-        path_id: Optional[irast.PathId]=None,
-        stype: Optional[s_types.Type]=None,
+        path_scope_id: int | KeepCurrentT | None=KeepCurrent,
+        path_id: irast.PathId | None=None,
+        stype: s_types.Type | None=None,
         expr: irast.Expr | KeepCurrentT=KeepCurrent,
-        span: Optional[qlast.Span]=None,
-        is_binding: Optional[irast.BindingKind]=None,
-        is_schema_alias: Optional[bool]=None,
-        is_materialized_ref: Optional[bool]=None,
-        is_visible_binding_ref: Optional[bool]=None,
-        ignore_rewrites: Optional[bool]=None,
+        span: qlast.Span | None=None,
+        is_binding: irast.BindingKind | None=None,
+        is_schema_alias: bool | None=None,
+        is_materialized_ref: bool | None=None,
+        is_visible_binding_ref: bool | None=None,
+        ignore_rewrites: bool | None=None,
         ctx: context.ContextLevel) -> irast.Set:
     """Create a new ir.Set from another ir.Set.
 
@@ -259,9 +258,9 @@ def new_tuple_set(
 def new_array_set(
     elements: Sequence[irast.Set],
     *,
-    stype: Optional[s_types.Type] = None,
+    stype: s_types.Type | None = None,
     ctx: context.ContextLevel,
-    span: Optional[qlast.Span]=None
+    span: qlast.Span | None=None
 ) -> irast.Set:
 
     if elements:
@@ -291,7 +290,7 @@ def new_array_set(
 
 def raise_self_insert_error(
     stype: s_obj.Object,
-    span: Optional[qlast.Span],
+    span: qlast.Span | None,
     *,
     ctx: context.ContextLevel,
 ) -> NoReturn:
@@ -705,7 +704,7 @@ def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
 
 def resolve_name(
     name: qlast.ObjectRef, *, ctx: context.ContextLevel
-) -> tuple[Optional[irast.Set], s_types.Type]:
+) -> tuple[irast.Set | None, s_types.Type]:
 
     view_set = None
     stype = None
@@ -760,10 +759,10 @@ def ptr_step_set(
     *,
     upcoming_intersections: Sequence[s_types.Type] = (),
     source: s_obj.Object,
-    expr: Optional[qlast.Base],
+    expr: qlast.Base | None,
     ptr_name: str,
     direction: PtrDir = PtrDir.Outbound,
-    span: Optional[qlast.Span],
+    span: qlast.Span | None,
     ignore_computable: bool = False,
     ctx: context.ContextLevel,
 ) -> irast.Set:
@@ -784,7 +783,7 @@ def ptr_step_set(
 
 
 def _add_target_schema_refs(
-    stype: Optional[s_obj.Object],
+    stype: s_obj.Object | None,
     ctx: context.ContextLevel,
 ) -> None:
     """Add the appropriate schema dependencies for a pointer target.
@@ -808,8 +807,8 @@ def resolve_ptr(
     direction: s_pointers.PointerDirection = (
         s_pointers.PointerDirection.Outbound
     ),
-    span: Optional[qlast.Span] = None,
-    track_ref: Optional[qlast.Base | Literal[False]],
+    span: qlast.Span | None = None,
+    track_ref: qlast.Base | Literal[False] | None,
     ctx: context.ContextLevel,
 ) -> s_pointers.Pointer:
     return resolve_ptr_with_intersections(
@@ -827,8 +826,8 @@ def resolve_ptr_with_intersections(
     direction: s_pointers.PointerDirection = (
         s_pointers.PointerDirection.Outbound
     ),
-    span: Optional[qlast.Span] = None,
-    track_ref: Optional[qlast.Base | Literal[False]],
+    span: qlast.Span | None = None,
+    track_ref: qlast.Base | Literal[False] | None,
     ctx: context.ContextLevel,
 ) -> tuple[s_pointers.Pointer, s_pointers.Pointer]:
     """Resolve a pointer, taking into account upcoming intersections.
@@ -845,7 +844,7 @@ def resolve_ptr_with_intersections(
         msg = 'invalid property reference on a primitive type expression'
         raise errors.InvalidReferenceError(msg, span=span)
 
-    ptr: Optional[s_pointers.Pointer] = None
+    ptr: s_pointers.Pointer | None = None
 
     if direction is s_pointers.PointerDirection.Outbound:
         path_id_ptr = ptr = near_endpoint.maybe_get_ptr(
@@ -1020,7 +1019,7 @@ def resolve_ptr_with_intersections(
 def _check_secret_ptr(
     ptrcls: s_pointers.Pointer,
     *,
-    span: Optional[qlast.Span]=None,
+    span: qlast.Span | None=None,
     ctx: context.ContextLevel,
 ) -> None:
     module = ptrcls.get_name(ctx.env.schema).module
@@ -1050,10 +1049,10 @@ def extend_path(
     ptrcls: s_pointers.Pointer,
     direction: PtrDir = PtrDir.Outbound,
     *,
-    path_id_ptrcls: Optional[s_pointers.Pointer] = None,
+    path_id_ptrcls: s_pointers.Pointer | None = None,
     ignore_computable: bool = False,
     same_computable_scope: bool = False,
-    span: Optional[qlast.Span]=None,
+    span: qlast.Span | None=None,
     ctx: context.ContextLevel,
 ) -> irast.SetE[irast.Pointer]:
     """Return a Set node representing the new path tip."""
@@ -1254,7 +1253,7 @@ def enum_indirection_set(
     *,
     source: s_types.Type,
     ptr_name: str,
-    span: Optional[qlast.Span],
+    span: qlast.Span | None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -1276,7 +1275,7 @@ def tuple_indirection_set(
     *,
     source: s_types.Type,
     ptr_name: str,
-    span: Optional[qlast.Span] = None,
+    span: qlast.Span | None = None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -1309,7 +1308,7 @@ def type_intersection_set(
     stype: s_types.Type,
     *,
     optional: bool,
-    span: Optional[qlast.Span] = None,
+    span: qlast.Span | None = None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
     """Return an interesection of *source_set* with type *stype*."""
@@ -1399,7 +1398,7 @@ def type_intersection_set(
 def class_set(
     stype: s_types.Type,
     *,
-    path_id: Optional[irast.PathId] = None,
+    path_id: irast.PathId | None = None,
     skip_subtypes: bool = False,
     ignore_rewrites: bool = False,
     ctx: context.ContextLevel,
@@ -1429,9 +1428,9 @@ def class_set(
 
 def expression_set(
     expr: irast.Expr,
-    path_id: Optional[irast.PathId] = None,
+    path_id: irast.PathId | None = None,
     *,
-    type_override: Optional[s_types.Type] = None,
+    type_override: s_types.Type | None = None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -1460,9 +1459,9 @@ def expression_set(
 def scoped_set(
     expr: irast.Set | irast.Expr,
     *,
-    type_override: Optional[s_types.Type] = None,
-    typehint: Optional[s_types.Type] = None,
-    path_id: Optional[irast.PathId] = None,
+    type_override: s_types.Type | None = None,
+    typehint: s_types.Type | None = None,
+    path_id: irast.PathId | None = None,
     force_reassign: bool = False,
     ctx: context.ContextLevel,
 ) -> irast.Set:
@@ -1498,10 +1497,10 @@ def scoped_set(
 def ensure_set(
     expr: irast.Set | irast.Expr,
     *,
-    type_override: Optional[s_types.Type] = None,
-    typehint: Optional[s_types.Type] = None,
-    path_id: Optional[irast.PathId] = None,
-    span: Optional[qlast.Span] = None,
+    type_override: s_types.Type | None = None,
+    typehint: s_types.Type | None = None,
+    path_id: irast.PathId | None = None,
+    span: qlast.Span | None = None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -1587,7 +1586,7 @@ def computable_ptr_set(
     path_id: irast.PathId,
     *,
     same_computable_scope: bool=False,
-    span: Optional[qlast.Span]=None,
+    span: qlast.Span | None=None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
     """Return ir.Set for a pointer defined as a computable."""
@@ -1596,7 +1595,7 @@ def computable_ptr_set(
     source_set = fixup_computable_source_set(rptr.source, ctx=ctx)
     ptrcls_to_shadow = None
 
-    qlctx: Optional[context.ContextLevel]
+    qlctx: context.ContextLevel | None
 
     try:
         comp_info = ctx.env.source_map[ptrcls]
@@ -1606,8 +1605,8 @@ def computable_ptr_set(
         inner_source_path_id = comp_info.path_id
         path_id_ns = comp_info.path_id_ns
     except KeyError:
-        comp_expr: Optional[s_expr.Expression] = ptrcls.get_expr(ctx.env.schema)
-        schema_qlexpr: Optional[qlast.Expr] = None
+        comp_expr: s_expr.Expression | None = ptrcls.get_expr(ctx.env.schema)
+        schema_qlexpr: qlast.Expr | None = None
         if comp_expr is None and ctx.env.options.apply_query_rewrites:
             assert isinstance(ptrcls, s_pointers.Pointer)
             ptrcls_n = ptrcls.get_shortname(ctx.env.schema).name
@@ -1807,7 +1806,7 @@ def update_view_map(
 
 def get_view_map_remapping(
     path_id: irast.PathId, ctx: context.ContextLevel
-) -> Optional[irast.Set]:
+) -> irast.Set | None:
     """Perform path_id remapping based on outer views
 
     This is a little fiddly, since we may have
@@ -1857,7 +1856,7 @@ def _get_computable_ctx(
     source: irast.Set,
     source_scls: s_types.Type,
     inner_source_path_id: irast.PathId,
-    path_id_ns: Optional[irast.Namespace],
+    path_id_ns: irast.Namespace | None,
     same_scope: bool,
     qlctx: context.ContextLevel,
     ctx: context.ContextLevel
@@ -1967,7 +1966,7 @@ def maybe_materialize(
 def should_materialize(
     ir: irast.Base,
     *,
-    ptrcls: Optional[s_pointers.Pointer] = None,
+    ptrcls: s_pointers.Pointer | None = None,
     materialize_visible: bool = False,
     skipped_bindings: AbstractSet[irast.PathId] = frozenset(),
     ctx: context.ContextLevel,
@@ -2062,7 +2061,7 @@ def get_global_param_sets(
     *,
     ctx: context.ContextLevel,
     is_implicit_global: bool = False,
-) -> tuple[irast.Set, Optional[irast.Set]]:
+) -> tuple[irast.Set, irast.Set | None]:
     param = get_global_param(glob, ctx=ctx)
     default = glob.get_default(ctx.env.schema)
 
@@ -2125,7 +2124,7 @@ def get_func_global_param_sets(
     glob: s_globals.Global,
     *,
     ctx: context.ContextLevel,
-) -> tuple[qlast.Expr, Optional[qlast.Expr]]:
+) -> tuple[qlast.Expr, qlast.Expr | None]:
     # NB: updates ctx anchors
 
     if ctx.env.options.func_params is not None:
@@ -2163,7 +2162,7 @@ def get_globals_as_json(
     globs: Sequence[s_globals.Global],
     *,
     ctx: context.ContextLevel,
-    span: Optional[qlast.Span],
+    span: qlast.Span | None,
 ) -> irast.Set:
     """Build a json object that contains the values of `globs`
 

@@ -42,7 +42,7 @@ class Scalar(CType):
     cname = None
 
     def __init__(
-        self, doc: typing.Optional[str] = None, *, default: typing.Any = None
+        self, doc: str | None = None, *, default: typing.Any = None
     ) -> None:
         self.doc = doc
         self.default = default
@@ -219,7 +219,7 @@ class FixedArrayOf(CType):
         self,
         length: int,
         element: CType | type[Struct],
-        doc: typing.Optional[str]=None
+        doc: str | None=None
     ) -> None:
         self.length = length
         self.element = element
@@ -258,7 +258,7 @@ class EnumOf(CType):
         self,
         value_in: type[Scalar],
         enum: type[enum.Enum],
-        doc: typing.Optional[str]=None,
+        doc: str | None=None,
     ) -> None:
         self.value_in = value_in()
         self.enum = enum

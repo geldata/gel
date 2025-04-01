@@ -18,7 +18,6 @@
 
 
 from __future__ import annotations
-from typing import Optional
 
 import dataclasses
 import json
@@ -60,8 +59,8 @@ class Arguments(to_json.ToJson):
 @dataclasses.dataclass(frozen=True)
 class AnalyzeContext:
     schema: s_schema.Schema
-    modaliases: immutables.Map[Optional[str], str]
-    reverse_mod_aliases: dict[str, Optional[str]]
+    modaliases: immutables.Map[str | None, str]
+    reverse_mod_aliases: dict[str, str | None]
 
 
 def analyze_explain_output(

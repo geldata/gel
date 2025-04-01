@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Optional, Sequence
+from typing import Sequence
 
 import asyncio
 import unittest
@@ -42,13 +42,13 @@ from edb.testbase.asyncutils import with_fake_event_loop
 @dataclass
 class TestScheduler(rs.Scheduler):
 
-    params: Optional[list[TestParams]] = None
+    params: list[TestParams] | None = None
 
-    execution_report: Optional[rs.ExecutionReport] = None
+    execution_report: rs.ExecutionReport | None = None
 
     async def get_params(
         self, context: rs.Context,
-    ) -> Optional[Sequence[rs.Params]]:
+    ) -> Sequence[rs.Params] | None:
         return self.params
 
     def finalize(self, execution_report: rs.ExecutionReport) -> None:
@@ -66,11 +66,11 @@ class TestResult(rs.Result[TestData]):
     time: float = -1
 
     # when finalized, log the data value and time
-    finalize_target: Optional[dict[int, float]] = None
+    finalize_target: dict[int, float] | None = None
 
     def __init__(
         self,
-        finalize_target: Optional[dict[int, float]] = None,
+        finalize_target: dict[int, float] | None = None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -107,7 +107,7 @@ class TestTask(rs.Request[TestData]):
     def __init__(self, params: TestParams):
         super().__init__(params=params)
 
-    async def run(self) -> Optional[TestResult]:
+    async def run(self) -> TestResult | None:
         assert isinstance(self.params, TestParams)
         if self.params._try_index < len(self.params._results):
             result = self.params._results[self.params._try_index]

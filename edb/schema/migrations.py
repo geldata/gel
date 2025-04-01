@@ -21,7 +21,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from edb import errors
 
@@ -106,7 +106,7 @@ class CreateMigration(MigrationCommand, sd.CreateObject[Migration]):
 
         parent_migration = schema.get_last_migration()
 
-        parent: Optional[so.ObjectShell[Migration]]
+        parent: so.ObjectShell[Migration] | None
 
         if parent_migration is not None:
             parent = parent_migration.as_shell(schema)
@@ -134,7 +134,7 @@ class CreateMigration(MigrationCommand, sd.CreateObject[Migration]):
         hasher.add_source(ddl_text)
         name = hasher.make_migration_id()
 
-        sdl_text: Optional[str] = astnode.target_sdl
+        sdl_text: str | None = astnode.target_sdl
 
         if specified_name is not None and name != specified_name:
             raise errors.SchemaDefinitionError(
@@ -249,8 +249,8 @@ class CreateMigration(MigrationCommand, sd.CreateObject[Migration]):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         node = super()._get_ast(schema, context, parent_node=parent_node)
         assert isinstance(node, qlast.CreateMigration)
         node.metadata_only = True

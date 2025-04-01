@@ -20,7 +20,7 @@
 from __future__ import annotations
 
 from typing import (
-    AbstractSet, Any, Callable, Collection, Optional, Iterable, TypeVar
+    AbstractSet, Any, Callable, Collection, Iterable, TypeVar
 )
 
 from edb.common import typeutils
@@ -38,7 +38,7 @@ _T = TypeVar('_T')
 def find_children(
     node: base.AST | Collection[base.AST],
     type: type[_T],
-    test_func: Optional[Callable[[_T], bool]] = None,
+    test_func: Callable[[_T], bool] | None = None,
     terminate_early=False,
     extra_skips: AbstractSet[str] = frozenset(),
 ) -> list[_T]:

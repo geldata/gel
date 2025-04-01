@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Mapping, cast
+from typing import Any, Mapping, cast
 
 import functools
 
@@ -94,7 +94,7 @@ def find_common_castable_type(
     schema: s_schema.Schema,
     source: s_types.Type,
     target: s_types.Type,
-) -> Optional[s_types.Type]:
+) -> s_types.Type | None:
 
     if get_implicit_cast_distance(schema, target, source) >= 0:
         return source
@@ -254,7 +254,7 @@ class CastCommand(sd.QualifiedObjectCommand[Cast],
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if field in {'allow_assignment', 'allow_implicit'}:
             return field
         else:

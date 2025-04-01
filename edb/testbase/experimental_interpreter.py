@@ -2,7 +2,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
 )
 import unittest
 
@@ -14,8 +13,8 @@ bag = assert_data_shape.bag
 
 
 class ExperimentalInterpreterTestCase(unittest.TestCase):
-    SCHEMA: Optional[str] = None
-    SETUP: Optional[str] = None
+    SCHEMA: str | None = None
+    SETUP: str | None = None
     INTERPRETER_USE_SQLITE = False
 
     client: EdgeQLInterpreter
@@ -64,8 +63,8 @@ class ExperimentalInterpreterTestCase(unittest.TestCase):
                                   exp_result_json,
                                   exp_result_binary=...,
                                   *,
-                                  msg: Optional[str] = None,
-                                  sort: Optional[bool] = None,
+                                  msg: str | None = None,
+                                  sort: bool | None = None,
                                   variables=None,
                                   ):
         if (hasattr(self, "use_experimental_interpreter") and

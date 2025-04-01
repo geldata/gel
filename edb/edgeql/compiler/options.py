@@ -21,7 +21,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Mapping, Collection, TYPE_CHECKING
+from typing import Any, Mapping, Collection, TYPE_CHECKING
 
 from dataclasses import dataclass, field as dc_field
 
@@ -68,14 +68,14 @@ class GlobalCompilerOptions:
     #: If the expression is being processed in the context of a certain
     #: schema object, i.e. a constraint expression, or a pointer default,
     #: this contains the type of the schema object.
-    schema_object_context: Optional[type[s_obj.Object]] = None
+    schema_object_context: type[s_obj.Object] | None = None
 
     #: When compiling a function body, the function name.
-    func_name: Optional[s_name.QualName] = None
+    func_name: s_name.QualName | None = None
 
     #: When compiling a function body, specifies function parameter
     #: definitions.
-    func_params: Optional[s_func.ParameterLikeList] = None
+    func_params: s_func.ParameterLikeList | None = None
 
     #: Should the backend compiler expand inheritance CTEs in place.
     #: This is needed by EXPLAIN to maintain alias names in
@@ -84,7 +84,7 @@ class GlobalCompilerOptions:
 
     #: The name that can be used in a "DML is disallowed in ..."
     #: error. When this is not None, any DML should cause an error.
-    in_ddl_context_name: Optional[str] = None
+    in_ddl_context_name: str | None = None
 
     #: Whether to just treat all globals as empty instead of compiling them
     make_globals_empty: bool = False
@@ -106,19 +106,19 @@ class GlobalCompilerOptions:
 class CompilerOptions(GlobalCompilerOptions):
 
     #: Module name aliases.
-    modaliases: Mapping[Optional[str], str] = dc_field(default_factory=dict)
+    modaliases: Mapping[str | None, str] = dc_field(default_factory=dict)
 
     #: External symbol table.
     anchors: Mapping[str, Any] = dc_field(default_factory=dict)
 
     #: The symbol to assume as the prefix for abbreviated paths.
-    path_prefix_anchor: Optional[str] = None
+    path_prefix_anchor: str | None = None
 
     #: Module to put derived schema objects to.
-    derived_target_module: Optional[str] = None
+    derived_target_module: str | None = None
 
     #: The name to use for the top-level type variant.
-    result_view_name: Optional[s_name.QualName] = None
+    result_view_name: s_name.QualName | None = None
 
     #: If > 0, Inject implicit LIMIT to every SELECT query.
     implicit_limit: int = 0
@@ -151,11 +151,11 @@ class CompilerOptions(GlobalCompilerOptions):
     #: In order to prevent recursive triggers, these fields are used to track
     #: the sources of a given trigger. These will only be present if
     #: schema_object_context is set to Trigger.
-    trigger_type: Optional[s_types.Type] = None
-    trigger_kinds: Optional[Collection[qltypes.TriggerKind]] = None
+    trigger_type: s_types.Type | None = None
+    trigger_kinds: Collection[qltypes.TriggerKind] | None = None
 
     #: These represent the *configured* values of
     #: simple_scoping/warn_old_scoping. If they are None, we check the
     #: presence of the futures in the schema.
-    simple_scoping: Optional[bool] = None
-    warn_old_scoping: Optional[bool] = None
+    simple_scoping: bool | None = None
+    warn_old_scoping: bool | None = None

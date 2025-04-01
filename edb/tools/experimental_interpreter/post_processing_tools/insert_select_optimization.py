@@ -1,18 +1,17 @@
-from typing import Optional
 from ..data import data_ops as e
 from ..data import expr_ops as eops
 
 
 def try_collect_constraints_from_filter(
     expr: e.Expr,
-) -> Optional[e.EdgeDatabaseSelectFilter]:
+) -> e.EdgeDatabaseSelectFilter | None:
     if not isinstance(expr, e.BindingExpr):
         return None
     bnd_name = expr.var
 
     def try_iterative_collection(
         expr_body: e.Expr,
-    ) -> Optional[e.EdgeDatabaseSelectFilter]:
+    ) -> e.EdgeDatabaseSelectFilter | None:
         match expr_body:
             case e.FunAppExpr(
                 fun=e.QualifiedName(["std", "="]),
@@ -103,14 +102,14 @@ def is_trivial_shape_element(shape: e.ShapeExpr, label: str) -> bool:
 
 def refine_subject_with_filter(
     subject: e.Expr, filter: e.EdgeDatabaseSelectFilter
-) -> Optional[e.Expr]:
+) -> e.Expr | None:
     all_labels = eops.collect_names_in_select_filter(filter)
     match subject:
         case e.QualifiedName(name):
             bindings = {}
             binding_extraction_failed = False
 
-            def extract_expression_bindings(expr: e.Expr) -> Optional[e.Expr]:
+            def extract_expression_bindings(expr: e.Expr) -> e.Expr | None:
                 nonlocal binding_extraction_failed
                 if isinstance(expr, e.EdgeDatabaseSelectFilter):  # type: ignore
                     return None
@@ -159,7 +158,7 @@ def refine_subject_with_filter(
 
 
 def select_optimize(expr: e.Expr) -> e.Expr:
-    def sub_f(sub: e.Expr) -> Optional[e.Expr]:
+    def sub_f(sub: e.Expr) -> e.Expr | None:
         match sub:
             case e.FilterOrderExpr(
                 subject=subject, filter=filter, order=order

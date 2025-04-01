@@ -26,7 +26,6 @@ cardinality fields and performing cardinality checks.
 
 from __future__ import annotations
 from typing import (
-    Optional,
     Iterable,
     Sequence,
     NamedTuple,
@@ -350,13 +349,13 @@ def __infer_cleared(
 def _infer_pointer_cardinality(
     *,
     ptrcls: s_pointers.Pointer,
-    ptrref: Optional[irast.BasePointerRef],
+    ptrref: irast.BasePointerRef | None,
     irexpr: irast.Base,
-    specified_required: Optional[bool] = None,
-    specified_card: Optional[qltypes.SchemaCardinality] = None,
+    specified_required: bool | None = None,
+    specified_card: qltypes.SchemaCardinality | None = None,
     is_mut_assignment: bool = False,
     shape_op: qlast.ShapeOp = qlast.ShapeOp.ASSIGN,
-    source_ctx: Optional[parsing.Span] = None,
+    source_ctx: parsing.Span | None = None,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,
 ) -> None:
@@ -1132,7 +1131,7 @@ def _analyse_filter_clause(
 
 
 def _infer_matset_cardinality(
-    materialized_sets: Optional[dict[uuid.UUID, irast.MaterializedSet]],
+    materialized_sets: dict[uuid.UUID, irast.MaterializedSet] | None,
     *,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,

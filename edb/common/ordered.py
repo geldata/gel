@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     TypeVar,
     Hashable,
     Iterable,
@@ -39,7 +38,7 @@ class OrderedSet(MutableSet[K]):
 
     map: dict[K, None]
 
-    def __init__(self, iterable: Optional[Iterable[K]] = None) -> None:
+    def __init__(self, iterable: Iterable[K] | None = None) -> None:
         if iterable is not None:
             self.map = {v: None for v in iterable}
         else:

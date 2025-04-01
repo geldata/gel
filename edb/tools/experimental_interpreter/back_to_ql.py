@@ -1,4 +1,4 @@
-from typing import Any, Optional, Sequence
+from typing import Any, Sequence
 
 from edb.edgeql import ast as qlast
 from edb.schema.pointers import PointerDirection
@@ -139,7 +139,7 @@ def reverse_elab_type_name(tp: Tp | e.RawName) -> qlast.TypeName:
 
 def reverse_elab_order(
     order: dict[str, Expr]
-) -> Optional[list[qlast.SortExpr]]:
+) -> list[qlast.SortExpr] | None:
     keys = sorted(
         [
             (idx, spec, k)

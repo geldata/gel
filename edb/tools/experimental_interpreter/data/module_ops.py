@@ -1,5 +1,4 @@
 from . import data_ops as e
-from typing import Optional
 
 default_open_scopes = [("std",)]
 
@@ -18,7 +17,7 @@ def resolve_module_in_schema(
 
 def try_resolve_module_entity(
     ctx: e.TcCtx | e.DBSchema, name: e.QualifiedName
-) -> Optional[e.ModuleEntity]:
+) -> e.ModuleEntity | None:
     """
     Resolve a module entity using the ABS method.
     https://github.com/edgedb/edgedb/discussions/4883
@@ -43,7 +42,7 @@ def try_resolve_module_entity(
 
 def try_resolve_type_name(
     ctx: e.TcCtx | e.DBSchema, name: e.QualifiedName
-) -> Optional[e.ObjectTp | e.ScalarTp]:
+) -> e.ObjectTp | e.ScalarTp | None:
     me = try_resolve_module_entity(ctx, name)
     if me is not None:
         if isinstance(me, e.ModuleEntityTypeDef):
@@ -92,7 +91,7 @@ def resolve_func_name(
 
 def try_resolve_simple_name(
     ctx: e.TcCtx | e.DBSchema, unq_name: e.UnqualifiedName
-) -> Optional[e.QualifiedName]:
+) -> e.QualifiedName | None:
     """
     Resolve the name (may refer to a type or a function) in this order:
     1. Current module

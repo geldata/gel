@@ -23,7 +23,6 @@
 from __future__ import annotations
 from typing import (
     Callable,
-    Optional,
     Protocol,
     Iterable,
     Collection,
@@ -107,7 +106,7 @@ def new_stmt_set_rvar(
     ir_set: irast.Set,
     stmt: pgast.Query,
     *,
-    aspects: Optional[Iterable[pgce.PathAspect]]=None,
+    aspects: Iterable[pgce.PathAspect] | None=None,
     ctx: context.CompilerContextLevel,
 ) -> SetRVars:
     rvar = relctx.new_rel_rvar(ir_set, stmt, ctx=ctx)
@@ -131,8 +130,8 @@ class OptionalRel(NamedTuple):
 
 def _lookup_set_rvar(
         ir_set: irast.Set, *,
-        scope_stmt: Optional[pgast.SelectStmt]=None,
-        ctx: context.CompilerContextLevel) -> Optional[pgast.PathRangeVar]:
+        scope_stmt: pgast.SelectStmt | None=None,
+        ctx: context.CompilerContextLevel) -> pgast.PathRangeVar | None:
     path_id = ir_set.path_id
 
     rvar = relctx.find_rvar(ctx.rel, source_stmt=scope_stmt,
@@ -485,7 +484,7 @@ def ensure_source_rvar(
 def set_as_subquery(
         ir_set: irast.Set, *,
         as_value: bool=False,
-        explicit_cast: Optional[tuple[str, ...]] = None,
+        explicit_cast: tuple[str, ...] | None = None,
         ctx: context.CompilerContextLevel) -> pgast.Query:
     # Compile *ir_set* into a subquery as follows:
     #     (
@@ -852,7 +851,7 @@ def process_set_as_link_property_ref(
         link_path_id = ir_set.path_id.src_path()
         assert link_path_id is not None
 
-        rptr_specialization: Optional[set[irast.PointerRef]] = None
+        rptr_specialization: set[irast.PointerRef] | None = None
 
         if link_path_id.is_type_intersection_path():
             rptr_specialization = set()
@@ -1360,8 +1359,8 @@ def _new_subquery_stmt_set_rvar(
 
 def _lookup_set_rvar_in_source(
         ir_set: irast.Set,
-        src_rvar: Optional[pgast.PathRangeVar], *,
-        ctx: context.CompilerContextLevel) -> Optional[pgast.PathRangeVar]:
+        src_rvar: pgast.PathRangeVar | None, *,
+        ctx: context.CompilerContextLevel) -> pgast.PathRangeVar | None:
     if not (
         ir_set.is_materialized_ref
         and isinstance(src_rvar, pgast.RangeSubselect)
@@ -1415,7 +1414,7 @@ def process_set_as_subquery(
         expr = ir_set.expr
         rptr = None
 
-    ir_source: Optional[irast.Set]
+    ir_source: irast.Set | None
 
     source_set_rvar = None
     if rptr is not None:
@@ -2254,7 +2253,7 @@ def process_set_as_type_cast(
 
             set_expr = dispatch.compile(inner_set, ctx=subctx)
 
-            serialized: Optional[pgast.BaseExpr] = (
+            serialized: pgast.BaseExpr | None = (
                 pathctx.maybe_get_path_serialized_var(
                     stmt, inner_set.path_id, env=subctx.env)
             )
@@ -3699,7 +3698,7 @@ def process_set_as_agg_expr_inner(
     ir_set: irast.SetE[irast.FunctionCall],
     *,
     aspect: pgce.PathAspect,
-    wrapper: Optional[pgast.SelectStmt],
+    wrapper: pgast.SelectStmt | None,
     for_group_by: bool = False,
     ctx: context.CompilerContextLevel,
 ) -> SetRVars:
@@ -4091,7 +4090,7 @@ def process_set_as_array_expr(
         elements.append(element)
 
         if serializing:
-            s_var: Optional[pgast.BaseExpr]
+            s_var: pgast.BaseExpr | None
 
             s_var = pathctx.maybe_get_path_serialized_var(
                 ctx.rel, ir_element.path_id, env=ctx.env
@@ -4184,7 +4183,7 @@ _ObjectSearchInnerCallback = Callable[
         context.CompilerContextLevel,
         context.CompilerContextLevel,
     ],
-    tuple[pgast.BaseExpr, Optional[pgast.BaseExpr]],
+    tuple[pgast.BaseExpr, pgast.BaseExpr | None],
 ]
 
 
@@ -4220,7 +4219,7 @@ def _ext_ai_search_inner_pgvector(
     _ctx: context.CompilerContextLevel,
     newctx: context.CompilerContextLevel,
     _inner_ctx: context.CompilerContextLevel,
-) -> tuple[pgast.BaseExpr, Optional[pgast.BaseExpr]]:
+) -> tuple[pgast.BaseExpr, pgast.BaseExpr | None]:
     assert isinstance(call, irast.FunctionCall)
     if call.extras is None:
         raise AssertionError(

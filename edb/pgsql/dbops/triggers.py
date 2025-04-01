@@ -23,7 +23,6 @@ import textwrap
 from typing import (
     Any,
     Mapping,
-    Optional,
     TypeAlias,
 )
 
@@ -91,7 +90,7 @@ class Trigger(tables.InheritableTableObject):
         is_constraint: bool = False,
         deferred: bool = False,
         inherit: bool = False,
-        metadata: Optional[Mapping[str, Any]] = None,
+        metadata: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(inherit=inherit, metadata=metadata)
 

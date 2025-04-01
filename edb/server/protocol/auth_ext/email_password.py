@@ -22,7 +22,7 @@ import hashlib
 import base64
 import dataclasses
 
-from typing import Any, Optional
+from typing import Any
 from edb.errors import ConstraintViolationError
 from edb.server.protocol import execute
 
@@ -184,7 +184,7 @@ select ext::auth::EmailPasswordFactor { ** } filter .email = email""",
         self,
         identity_id: str,
         secret: str,
-    ) -> Optional[data.LocalIdentity]:
+    ) -> data.LocalIdentity | None:
         r = await execute.parse_execute_json(
             db=self.db,
             query="""\

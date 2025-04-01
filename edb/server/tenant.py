@@ -25,7 +25,6 @@ from typing import (
     Mapping,
     Coroutine,
     AsyncGenerator,
-    Optional,
     TypedDict,
     TYPE_CHECKING,
 )
@@ -679,7 +678,7 @@ class Tenant(ha_base.ClusterProtocol):
         coro: Coroutine,
         *,
         interruptable: bool,
-        name: Optional[str] = None,
+        name: str | None = None,
     ) -> asyncio.Task:
         # Interruptable tasks are regular asyncio tasks that may be interrupted
         # randomly in the middle when the event loop stops; while tasks with
@@ -711,7 +710,7 @@ class Tenant(ha_base.ClusterProtocol):
             # Hint: add `if tenant.accept_new_tasks` before `.create_task()`
             raise RuntimeError("task cannot be created at this time")
 
-    def get_task(self, name: str) -> Optional[asyncio.Task]:
+    def get_task(self, name: str) -> asyncio.Task | None:
         return self._named_tasks.get(name)
 
     def stop(self) -> None:
@@ -1209,7 +1208,7 @@ class Tenant(ha_base.ClusterProtocol):
         self,
         dbname: str,
         *,
-        conn: Optional[pgcon.PGConnection]=None,
+        conn: pgcon.PGConnection | None=None,
         reintrospection: bool=False,
     ) -> None:
         """Use this method to (re-)introspect a DB.
@@ -2002,7 +2001,7 @@ class Tenant(ha_base.ClusterProtocol):
     async def _load_query_cache(
         self,
         conn: pgcon.PGConnection,
-        keys: Optional[Iterable[uuid.UUID]] = None,
+        keys: Iterable[uuid.UUID] | None = None,
     ) -> list[tuple[bytes, ...]] | None:
         if keys is None:
             return await conn.sql_fetch(
@@ -2056,7 +2055,7 @@ class Tenant(ha_base.ClusterProtocol):
     def on_remote_query_cache_change(
         self,
         dbname: str,
-        keys: Optional[list[str]],
+        keys: list[str] | None,
     ) -> None:
         if not self.is_db_ready(dbname):
             return

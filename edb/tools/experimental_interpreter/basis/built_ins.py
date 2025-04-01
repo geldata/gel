@@ -1,9 +1,9 @@
-from typing import Callable, Any, Optional, Sequence
+from typing import Callable, Any, Sequence
 from ..data import data_ops as e
 
 
 def lift_binary_scalar_op(
-    f: Callable[[Any, Any], Any], override_ret_tp: Optional[e.ScalarTp] = None
+    f: Callable[[Any, Any], Any], override_ret_tp: e.ScalarTp | None = None
 ) -> Callable[[Sequence[Sequence[e.Val]]], Sequence[e.Val]]:
 
     def op_impl(arg: Sequence[Sequence[e.Val]]) -> Sequence[e.Val]:

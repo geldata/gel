@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence, TypeGuard
+from typing import Sequence, TypeGuard
 
 from edb.ir import ast as irast
 from edb.ir import typeutils as irtyputils
@@ -55,7 +55,7 @@ PRIMITIVE_ASPECT_SPECIFICITY_MAP = {
 def get_less_specific_aspect(
     path_id: irast.PathId,
     aspect: pgce.PathAspect,
-) -> Optional[pgce.PathAspect]:
+) -> pgce.PathAspect | None:
     if path_id.is_objtype_path():
         mapping = OBJECT_ASPECT_SPECIFICITY_MAP
     else:
@@ -151,7 +151,7 @@ def get_path_var(
     ptrref_dir = path_id.rptr_dir()
     is_type_intersection = path_id.is_type_intersection_path()
 
-    src_path_id: Optional[irast.PathId] = None
+    src_path_id: irast.PathId | None = None
     if ptrref is not None and not is_type_intersection:
         ptr_info = pg_types.get_ptrref_storage_info(
             ptrref, resolve_type=False, link_bias=False, allow_missing=True)
@@ -202,7 +202,7 @@ def get_path_var(
         ptr_info = None
         ptr_dir = None
 
-    var: Optional[pgast.BaseExpr]
+    var: pgast.BaseExpr | None
 
     if ptrref is None:
         if len(path_id) == 1:
@@ -294,7 +294,7 @@ def _find_rel_rvar(
     *,
     aspect: pgce.PathAspect,
     flavor: str,
-) -> tuple[str, Optional[pgast.PathRangeVar], Optional[pgast.BaseExpr]]:
+) -> tuple[str, pgast.PathRangeVar | None, pgast.BaseExpr | None]:
     """Rummage around rel looking for an appropriate rvar for path_id.
 
     Somewhat unfortunately, some checks to find the actual path var
@@ -411,7 +411,7 @@ def _get_path_var_in_setop(
     counts = [len(x.target_list) for x in astutils.each_query_in_set(rel)]
     assert counts == [counts[0]] * len(counts)
 
-    first: Optional[pgast.OutputVar] = None
+    first: pgast.OutputVar | None = None
     optional = False
     all_null = True
     nullable = False
@@ -495,7 +495,7 @@ def _find_rvar_in_intersection_by_typeref(
 
 def _find_in_output_tuple(
     rel: pgast.Query, path_id: irast.PathId, aspect: pgce.PathAspect
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     """Try indirecting a source tuple already present as an output.
 
     Normally tuple indirections are handled by
@@ -584,7 +584,7 @@ def maybe_get_path_var(
     aspect: pgce.PathAspect,
     flavor: str='normal',
     env: context.Environment,
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     try:
         return get_path_var(
             rel, path_id, aspect=aspect, flavor=flavor, env=env)
@@ -597,7 +597,7 @@ def maybe_get_path_identity_var(
     path_id: irast.PathId,
     *,
     env: context.Environment,
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     try:
         return get_path_var(
             rel, path_id, aspect=pgce.PathAspect.IDENTITY, env=env
@@ -611,7 +611,7 @@ def maybe_get_path_value_var(
     path_id: irast.PathId,
     *,
     env: context.Environment,
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     try:
         return get_path_var(
             rel, path_id, aspect=pgce.PathAspect.VALUE, env=env
@@ -625,7 +625,7 @@ def maybe_get_path_serialized_var(
     path_id: irast.PathId,
     *,
     env: context.Environment,
-) -> Optional[pgast.BaseExpr]:
+) -> pgast.BaseExpr | None:
     try:
         return get_path_var(
             rel, path_id, aspect=pgce.PathAspect.SERIALIZED, env=env
@@ -804,7 +804,7 @@ def maybe_get_rvar_path_var(
     aspect: pgce.PathAspect,
     flavor: str='normal',
     env: context.Environment,
-) -> Optional[pgast.OutputVar]:
+) -> pgast.OutputVar | None:
     try:
         return get_rvar_path_var(
             rvar, path_id, aspect=aspect, flavor=flavor, env=env)
@@ -931,7 +931,7 @@ def maybe_get_path_rvar(
     *,
     aspect: pgce.PathAspect,
     flavor: str = 'normal',
-) -> Optional[pgast.PathRangeVar]:
+) -> pgast.PathRangeVar | None:
     rvar = None
     path_rvar_map = stmt.maybe_get_rvar_map(flavor)
     if path_rvar_map is not None:
@@ -982,7 +982,7 @@ def list_path_aspects(
 
 def maybe_get_path_value_rvar(
     stmt: pgast.Query, path_id: irast.PathId
-) -> Optional[pgast.BaseRangeVar]:
+) -> pgast.BaseRangeVar | None:
     return maybe_get_path_rvar(stmt, path_id, aspect=pgce.PathAspect.VALUE)
 
 
@@ -1197,7 +1197,7 @@ def link_needs_type_rewrite(
 
 def find_path_output(
     rel: pgast.BaseRelation, ref: pgast.BaseExpr
-) -> Optional[pgast.OutputVar]:
+) -> pgast.OutputVar | None:
     if isinstance(ref, pgast.TupleVarBase):
         return None
 
@@ -1410,7 +1410,7 @@ def maybe_get_path_output(
     disable_output_fusion: bool=False,
     flavor: str='normal',
     env: context.Environment,
-) -> Optional[pgast.OutputVar]:
+) -> pgast.OutputVar | None:
     try:
         return get_path_output(rel, path_id=path_id, aspect=aspect,
                                allow_nullable=allow_nullable,
@@ -1590,7 +1590,7 @@ def get_path_output_or_null(
 
 def is_nullable(
         expr: pgast.BaseExpr, *,
-        env: context.Environment) -> Optional[bool]:
+        env: context.Environment) -> bool | None:
     try:
         return expr.nullable
     except AttributeError:

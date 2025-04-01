@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, AbstractSet
+from typing import AbstractSet
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import desugar_group
@@ -369,7 +369,7 @@ def _compile_group(
 
     vol_ref = None
 
-    def _get_volatility_ref() -> Optional[pgast.BaseExpr]:
+    def _get_volatility_ref() -> pgast.BaseExpr | None:
         nonlocal vol_ref
         if vol_ref:
             return vol_ref

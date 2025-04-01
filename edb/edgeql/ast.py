@@ -88,10 +88,10 @@ class Base(ast.AST):
     __abstract_node__ = True
     __ast_hidden__ = {'span', 'system_comment'}
 
-    span: typing.Optional[Span] = None
+    span: Span | None = None
 
     # System-generated comment.
-    system_comment: typing.Optional[str] = None
+    system_comment: str | None = None
 
     def dump_edgeql(self) -> None:
         from edb.common.debug import dump_edgeql
@@ -153,8 +153,8 @@ class Placeholder(Expr):
 
 class SortExpr(Base):
     path: Expr
-    direction: typing.Optional[SortOrder] = None
-    nones_order: typing.Optional[NonesOrder] = None
+    direction: SortOrder | None = None
+    nones_order: NonesOrder | None = None
 
 
 class Alias(Base):
@@ -168,7 +168,7 @@ class AliasedExpr(Alias):
 
 class ModuleAliasDecl(Alias):
     module: str
-    alias: typing.Optional[str]
+    alias: str | None
 
 
 class GroupingAtom(Base):
@@ -181,8 +181,8 @@ class BaseObjectRef(Base):
 
 class ObjectRef(BaseObjectRef, GroupingAtom):
     name: str
-    module: typing.Optional[str] = None
-    itemclass: typing.Optional[qltypes.SchemaObjectClass] = None
+    module: str | None = None
+    itemclass: qltypes.SchemaObjectClass | None = None
 
 
 class PseudoObjectRef(BaseObjectRef):
@@ -221,8 +221,8 @@ class Index(Base):
 
 
 class Slice(Base):
-    start: typing.Optional[Expr]
-    stop: typing.Optional[Expr]
+    start: Expr | None
+    stop: Expr | None
 
 
 class Indirection(Expr):
@@ -248,7 +248,7 @@ class FunctionCall(Expr):
     func: tuple[str, str] | str
     args: list[Expr] = ast.field(factory=list)
     kwargs: dict[str, Expr] = ast.field(factory=dict)
-    window: typing.Optional[WindowSpec] = None
+    window: WindowSpec | None = None
 
 
 class StrInterpFragment(Base):
@@ -313,7 +313,7 @@ class UnaryOp(Expr):
 class TypeExpr(Base):
     __abstract_node__ = True
 
-    name: typing.Optional[str] = None  # name is used for types in named tuples
+    name: str | None = None  # name is used for types in named tuples
 
 
 class TypeOf(TypeExpr):
@@ -327,8 +327,8 @@ class TypeExprLiteral(TypeExpr):
 
 class TypeName(TypeExpr):
     maintype: BaseObjectRef
-    subtypes: typing.Optional[list[TypeExpr]] = None
-    dimensions: typing.Optional[list[int]] = None
+    subtypes: list[TypeExpr] | None = None
+    dimensions: list[int] | None = None
 
 
 class TypeOp(TypeExpr):
@@ -344,7 +344,7 @@ class FuncParam(Base):
     type: TypeExpr
     typemod: qltypes.TypeModifier = qltypes.TypeModifier.SingletonType
     kind: qltypes.ParameterKind
-    default: typing.Optional[Expr] = None
+    default: Expr | None = None
 
 
 class IsOp(Expr):
@@ -359,8 +359,8 @@ class TypeIntersection(Base):
 
 class Ptr(Base):
     name: str
-    direction: typing.Optional[str] = None
-    type: typing.Optional[str] = None
+    direction: str | None = None
+    type: str | None = None
 
 
 class Splat(Base):
@@ -369,10 +369,10 @@ class Splat(Base):
     #: Expansion depth
     depth: int
     #: Source type expression, e.g in Type.**
-    type: typing.Optional[TypeExpr] = None
+    type: TypeExpr | None = None
     #: Type intersection on the source which would result
     #: in polymorphic expansion, e.g. [is Type].**
-    intersection: typing.Optional[TypeIntersection] = None
+    intersection: TypeIntersection | None = None
 
 
 PathElement = Expr | Ptr | TypeIntersection | ObjectRef | Splat
@@ -387,7 +387,7 @@ class Path(Expr, GroupingAtom):
 class TypeCast(Expr):
     expr: Expr
     type: TypeExpr
-    cardinality_mod: typing.Optional[CardinalityModifier] = None
+    cardinality_mod: CardinalityModifier | None = None
 
 
 class Introspect(Expr):
@@ -436,7 +436,7 @@ class Command(GrammarEntryPoint, Base):
     """
 
     __abstract_node__ = True
-    aliases: typing.Optional[list[Alias]] = None
+    aliases: list[Alias] | None = None
 
 
 class SessionSetAliasDecl(Command):
@@ -490,23 +490,23 @@ class ShapeOrigin(s_enum.StrEnum):
 
 class ShapeElement(Expr):
     expr: Path
-    elements: typing.Optional[list[ShapeElement]] = None
-    compexpr: typing.Optional[Expr] = None
-    cardinality: typing.Optional[qltypes.SchemaCardinality] = None
-    required: typing.Optional[bool] = None
+    elements: list[ShapeElement] | None = None
+    compexpr: Expr | None = None
+    cardinality: qltypes.SchemaCardinality | None = None
+    required: bool | None = None
     operation: ShapeOperation = ShapeOperation(op=ShapeOp.ASSIGN)
     origin: ShapeOrigin = ShapeOrigin.EXPLICIT
 
-    where: typing.Optional[Expr] = None
+    where: Expr | None = None
 
-    orderby: typing.Optional[list[SortExpr]] = None
+    orderby: list[SortExpr] | None = None
 
-    offset: typing.Optional[Expr] = None
-    limit: typing.Optional[Expr] = None
+    offset: Expr | None = None
+    limit: Expr | None = None
 
 
 class Shape(Expr):
-    expr: typing.Optional[Expr]
+    expr: Expr | None
     elements: list[ShapeElement]
     allow_factoring: bool = False
 
@@ -514,19 +514,19 @@ class Shape(Expr):
 class Query(Expr, GrammarEntryPoint):
     __abstract_node__ = True
 
-    aliases: typing.Optional[list[Alias]] = None
+    aliases: list[Alias] | None = None
 
 
 class SelectQuery(Query):
-    result_alias: typing.Optional[str] = None
+    result_alias: str | None = None
     result: Expr
 
-    where: typing.Optional[Expr] = None
+    where: Expr | None = None
 
-    orderby: typing.Optional[list[SortExpr]] = None
+    orderby: list[SortExpr] | None = None
 
-    offset: typing.Optional[Expr] = None
-    limit: typing.Optional[Expr] = None
+    offset: Expr | None = None
+    limit: Expr | None = None
 
     # This is a hack, indicating that rptr should be forwarded through
     # this select. Used when we generate implicit selects that need to
@@ -558,38 +558,36 @@ class GroupingOperation(GroupingElement):
 
 
 class GroupQuery(Query):
-    subject_alias: typing.Optional[str] = None
-    using: typing.Optional[list[AliasedExpr]]
+    subject_alias: str | None = None
+    using: list[AliasedExpr] | None
     by: list[GroupingElement]
 
     subject: Expr
 
 
 class InternalGroupQuery(Query):
-    subject_alias: typing.Optional[str] = None
-    using: typing.Optional[list[AliasedExpr]]
+    subject_alias: str | None = None
+    using: list[AliasedExpr] | None
     by: list[GroupingElement]
 
     subject: Expr
 
     group_alias: str
-    grouping_alias: typing.Optional[str]
+    grouping_alias: str | None
     from_desugaring: bool = False
 
-    result_alias: typing.Optional[str] = None
+    result_alias: str | None = None
     result: Expr
 
-    where: typing.Optional[Expr] = None
+    where: Expr | None = None
 
-    orderby: typing.Optional[list[SortExpr]] = None
+    orderby: list[SortExpr] | None = None
 
 
 class InsertQuery(Query):
     subject: ObjectRef
     shape: list[ShapeElement]
-    unless_conflict: typing.Optional[
-        tuple[typing.Optional[Expr], typing.Optional[Expr]]
-    ] = None
+    unless_conflict: tuple[Expr | None, Expr | None] | None = None
 
 
 class UpdateQuery(Query):
@@ -597,7 +595,7 @@ class UpdateQuery(Query):
 
     subject: Expr
 
-    where: typing.Optional[Expr] = None
+    where: Expr | None = None
 
     sql_mode_link_only: bool = False
 
@@ -605,12 +603,12 @@ class UpdateQuery(Query):
 class DeleteQuery(Query):
     subject: Expr
 
-    where: typing.Optional[Expr] = None
+    where: Expr | None = None
 
-    orderby: typing.Optional[list[SortExpr]] = None
+    orderby: list[SortExpr] | None = None
 
-    offset: typing.Optional[Expr] = None
-    limit: typing.Optional[Expr] = None
+    offset: Expr | None = None
+    limit: Expr | None = None
 
 
 class ForQuery(Query):
@@ -621,7 +619,7 @@ class ForQuery(Query):
     iterator: Expr
     iterator_alias: str
 
-    result_alias: typing.Optional[str] = None
+    result_alias: str | None = None
     result: Expr
 
 
@@ -636,9 +634,9 @@ class Transaction(Base):
 
 
 class StartTransaction(Transaction):
-    isolation: typing.Optional[qltypes.TransactionIsolationLevel] = None
-    access: typing.Optional[qltypes.TransactionAccessMode] = None
-    deferrable: typing.Optional[qltypes.TransactionDeferMode] = None
+    isolation: qltypes.TransactionIsolationLevel | None = None
+    access: qltypes.TransactionAccessMode | None = None
+    deferrable: qltypes.TransactionDeferMode | None = None
 
 
 class CommitTransaction(Transaction):
@@ -674,7 +672,7 @@ class DDL(Base):
 
 
 class Position(DDL):
-    ref: typing.Optional[ObjectRef] = None
+    ref: ObjectRef | None = None
     position: str
 
 
@@ -694,7 +692,7 @@ class NonTransactionalDDLCommand(DDLCommand):
 
 
 class AlterAddInherit(DDLOperation):
-    position: typing.Optional[Position] = None
+    position: Position | None = None
     bases: list[TypeName]
 
 
@@ -703,11 +701,11 @@ class AlterDropInherit(DDLOperation):
 
 
 class OnTargetDelete(DDLOperation):
-    cascade: typing.Optional[qltypes.LinkTargetDeleteAction]
+    cascade: qltypes.LinkTargetDeleteAction | None
 
 
 class OnSourceDelete(DDLOperation):
-    cascade: typing.Optional[qltypes.LinkSourceDeleteAction]
+    cascade: qltypes.LinkSourceDeleteAction | None
 
 
 class SetField(DDLOperation):
@@ -724,20 +722,20 @@ class SetField(DDLOperation):
 class SetPointerType(SetField):
     name: str = 'target'
     special_syntax: bool = True
-    value: typing.Optional[TypeExpr]
-    cast_expr: typing.Optional[Expr] = None
+    value: TypeExpr | None
+    cast_expr: Expr | None = None
 
 
 class SetPointerCardinality(SetField):
     name: str = 'cardinality'
     special_syntax: bool = True
-    conv_expr: typing.Optional[Expr] = None
+    conv_expr: Expr | None = None
 
 
 class SetPointerOptionality(SetField):
     name: str = 'required'
     special_syntax: bool = True
-    fill_expr: typing.Optional[Expr] = None
+    fill_expr: Expr | None = None
 
 
 class ObjectDDL(DDLCommand):
@@ -783,7 +781,7 @@ class Rename(ObjectDDL):
 class NestedQLBlock(DDL):
 
     commands: list[DDLOperation]
-    text: typing.Optional[str] = None
+    text: str | None = None
 
 
 class MigrationCommand(DDLCommand):
@@ -794,12 +792,12 @@ class MigrationCommand(DDLCommand):
 class CreateMigration(CreateObject, MigrationCommand, GrammarEntryPoint):
 
     body: NestedQLBlock
-    parent: typing.Optional[ObjectRef] = None
+    parent: ObjectRef | None = None
     metadata_only: bool = False
 
     # Sometimes the target SDL of a migration can be known in advance.
     # eg. when doing `start migration to`
-    target_sdl: typing.Optional[str] = None
+    target_sdl: str | None = None
 
 
 class CommittedSchema(DDL):
@@ -887,7 +885,7 @@ class DatabaseCommand(ExternalObjectCommand, NonTransactionalDDLCommand):
 
 class CreateDatabase(CreateObject, DatabaseCommand):
 
-    template: typing.Optional[ObjectRef] = None
+    template: ObjectRef | None = None
     branch_type: BranchType
 
 
@@ -938,16 +936,16 @@ class ExtensionCommand(UnqualifiedObjectCommand):
 
 
 class CreateExtension(CreateObject, ExtensionCommand):
-    version: typing.Optional[Constant] = None
+    version: Constant | None = None
 
 
 class AlterExtension(DropObject, ExtensionCommand):
-    version: typing.Optional[Constant] = None
+    version: Constant | None = None
     to_version: Constant
 
 
 class DropExtension(DropObject, ExtensionCommand):
-    version: typing.Optional[Constant] = None
+    version: Constant | None = None
 
 
 class FutureCommand(UnqualifiedObjectCommand):
@@ -1003,7 +1001,7 @@ class AnnotationCommand(ObjectDDL):
 
 
 class CreateAnnotation(CreateExtendingObject, AnnotationCommand):
-    type: typing.Optional[TypeExpr]
+    type: TypeExpr | None
     inheritable: bool
 
 
@@ -1061,9 +1059,9 @@ class DropProperty(DropObject, PropertyCommand):
 class CreateConcretePointer(CreateObject):
     __abstract_node__ = True
 
-    is_required: typing.Optional[bool] = None
+    is_required: bool | None = None
     declared_overloaded: bool = False
-    target: typing.Optional[Expr | TypeExpr]
+    target: Expr | TypeExpr | None
     cardinality: qltypes.SchemaCardinality
     bases: list[TypeName]
 
@@ -1128,9 +1126,9 @@ class GlobalCommand(ObjectDDL):
 
 
 class CreateGlobal(CreateObject, GlobalCommand):
-    is_required: typing.Optional[bool] = None
-    target: typing.Optional[Expr | TypeExpr]
-    cardinality: typing.Optional[qltypes.SchemaCardinality]
+    is_required: bool | None = None
+    target: Expr | TypeExpr | None
+    cardinality: qltypes.SchemaCardinality | None
 
 
 class AlterGlobal(AlterObject, GlobalCommand):
@@ -1144,8 +1142,8 @@ class DropGlobal(DropObject, GlobalCommand):
 class SetGlobalType(SetField):
     name: str = 'target'
     special_syntax: bool = True
-    value: typing.Optional[TypeExpr]
-    cast_expr: typing.Optional[Expr] = None
+    value: TypeExpr | None
+    cast_expr: Expr | None = None
     reset_value: bool = False
 
 
@@ -1191,7 +1189,7 @@ class CreateConstraint(
     CreateExtendingObject,
     ConstraintCommand,
 ):
-    subjectexpr: typing.Optional[Expr]
+    subjectexpr: Expr | None
     abstract: bool = True
     params: list[FuncParam] = ast.field(factory=list)
 
@@ -1208,8 +1206,8 @@ class ConcreteConstraintOp(ConstraintCommand):
 
     __abstract_node__ = True
     args: list[Expr]
-    subjectexpr: typing.Optional[Expr]
-    except_expr: typing.Optional[Expr] = None
+    subjectexpr: Expr | None
+    except_expr: Expr | None = None
 
 
 class CreateConcreteConstraint(ConcreteConstraintOp, CreateObject):
@@ -1246,7 +1244,7 @@ class CreateIndex(
 ):
     kwargs: dict[str, Expr] = ast.field(factory=dict)
     index_types: list[IndexType]
-    code: typing.Optional[IndexCode] = None
+    code: IndexCode | None = None
     params: list[FuncParam] = ast.field(factory=list)
 
 
@@ -1280,8 +1278,8 @@ class ConcreteIndexCommand(IndexCommand):
     __abstract_node__ = True
     kwargs: dict[str, Expr] = ast.field(factory=dict)
     expr: Expr
-    except_expr: typing.Optional[Expr] = None
-    deferred: typing.Optional[bool] = None
+    except_expr: Expr | None = None
+    deferred: bool | None = None
 
 
 class CreateConcreteIndex(ConcreteIndexCommand, CreateObject):
@@ -1301,7 +1299,7 @@ class CreateAnnotationValue(AnnotationCommand, CreateObject):
 
 
 class AlterAnnotationValue(AnnotationCommand, AlterObject):
-    value: typing.Optional[Expr]
+    value: Expr | None
 
 
 class DropAnnotationValue(AnnotationCommand, DropObject):
@@ -1314,10 +1312,10 @@ class AccessPolicyCommand(ObjectDDL):
 
 
 class CreateAccessPolicy(CreateObject, AccessPolicyCommand):
-    condition: typing.Optional[Expr]
+    condition: Expr | None
     action: qltypes.AccessPolicyAction
     access_kinds: list[qltypes.AccessKind]
-    expr: typing.Optional[Expr]
+    expr: Expr | None
 
 
 class SetAccessPerms(DDLOperation):
@@ -1343,7 +1341,7 @@ class CreateTrigger(CreateObject, TriggerCommand):
     kinds: list[qltypes.TriggerKind]
     scope: qltypes.TriggerScope
     expr: Expr
-    condition: typing.Optional[Expr]
+    condition: Expr | None
 
 
 class AlterTrigger(AlterObject, TriggerCommand):
@@ -1389,9 +1387,9 @@ class Language(s_enum.StrEnum):
 
 class FunctionCode(DDL):
     language: Language = Language.EdgeQL
-    code: typing.Optional[str] = None
-    nativecode: typing.Optional[Expr] = None
-    from_function: typing.Optional[str] = None
+    code: str | None = None
+    nativecode: Expr | None = None
+    from_function: str | None = None
     from_expr: bool = False
 
 
@@ -1405,14 +1403,14 @@ class CreateFunction(CreateObject, FunctionCommand):
 
     returning: TypeExpr
     code: FunctionCode
-    nativecode: typing.Optional[Expr]
+    nativecode: Expr | None
     returning_typemod: qltypes.TypeModifier = qltypes.TypeModifier.SingletonType
 
 
 class AlterFunction(AlterObject, FunctionCommand):
 
     code: FunctionCode = FunctionCode  # type: ignore
-    nativecode: typing.Optional[Expr]
+    nativecode: Expr | None
 
 
 class DropFunction(DropObject, FunctionCommand):
@@ -1421,10 +1419,10 @@ class DropFunction(DropObject, FunctionCommand):
 
 class OperatorCode(DDL):
     language: Language
-    from_operator: typing.Optional[tuple[str, ...]]
-    from_function: typing.Optional[tuple[str, ...]]
+    from_operator: tuple[str, ...] | None
+    from_function: tuple[str, ...] | None
     from_expr: bool
-    code: typing.Optional[str]
+    code: str | None
 
 
 class OperatorCommand(DDLCommand):
@@ -1505,7 +1503,7 @@ class ConfigInsert(ConfigOp):
 
 
 class ConfigReset(ConfigOp):
-    where: typing.Optional[Expr] = None
+    where: Expr | None = None
 
 
 #
@@ -1527,7 +1525,7 @@ class DescribeStmt(Command):
 
 class ExplainStmt(Command):
 
-    args: typing.Optional[NamedTuple]
+    args: NamedTuple | None
     query: Query
 
 
@@ -1571,7 +1569,7 @@ class Schema(SDL, GrammarEntryPoint, Base):
 def get_ddl_field_command(
     ddlcmd: DDLOperation,
     name: str,
-) -> typing.Optional[SetField]:
+) -> SetField | None:
     for cmd in ddlcmd.commands:
         if isinstance(cmd, SetField) and cmd.name == name:
             return cmd
@@ -1590,7 +1588,7 @@ def get_ddl_field_value(
 def get_ddl_subcommand(
     ddlcmd: DDLOperation,
     cmdtype: type[DDLOperation],
-) -> typing.Optional[DDLOperation]:
+) -> DDLOperation | None:
     for cmd in ddlcmd.commands:
         if isinstance(cmd, cmdtype):
             return cmd

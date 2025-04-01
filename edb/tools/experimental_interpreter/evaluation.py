@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Sequence, cast
+from typing import Any, Callable, Sequence, cast
 
 import itertools
 
@@ -299,7 +299,7 @@ class EvaluationLogsWrapper:
         self.original_eval_expr = None
         self.reset_logs(None)
 
-    def reset_logs(self, logs: Optional[list[Any]]):
+    def reset_logs(self, logs: list[Any] | None):
         self.logs = logs
         self.indexes: list[int] = []
 
@@ -448,7 +448,7 @@ def eval_expr(ctx: EvalEnv, db: EdgeDatabase, expr: Expr) -> MultiSetVal:
             return e.ResultMultiSetVal(all_ids)
         case e.QualifiedNameWithFilter(name=name, filter=filter):
 
-            def filter_map(filter_expr: Expr) -> Optional[Expr]:
+            def filter_map(filter_expr: Expr) -> Expr | None:
                 if isinstance(filter_expr, e.EdgeDatabaseSelectFilter):  # type: ignore
                     return None
                 match filter_expr:
@@ -804,8 +804,8 @@ def eval_ctx_from_variables(variables) -> EvalEnv:
 def eval_expr_toplevel(
     db: EdgeDatabase,
     expr: Expr,
-    variables: Optional[dict[str, Val] | tuple[Val, ...]] = None,
-    logs: Optional[Any] = None,
+    variables: dict[str, Val] | tuple[Val, ...] | None = None,
+    logs: Any | None = None,
 ) -> MultiSetVal:
 
     # on exception, this is not none

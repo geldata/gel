@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence, cast, overload
+from typing import Sequence, cast, overload
 
 from edb import errors
 
@@ -62,7 +62,7 @@ def amend_empty_set_type(
 
 def infer_common_type(
     irs: Sequence[irast.Set], env: context.Environment
-) -> Optional[s_types.Type]:
+) -> s_types.Type | None:
     if not irs:
         raise errors.QueryError(
             'cannot determine common type of an empty set',
@@ -139,7 +139,7 @@ def infer_common_type(
 def type_to_ql_typeref(
     t: s_types.Type,
     *,
-    _name: Optional[str] = None,
+    _name: str | None = None,
     ctx: context.ContextLevel,
 ) -> qlast.TypeExpr:
     return s_utils.typeref_to_ast(
@@ -170,7 +170,7 @@ def ql_typeexpr_to_type(
 
 
 def _ql_typeexpr_combine_types(
-        op: Optional[str], types: list[s_types.Type], *,
+        op: str | None, types: list[s_types.Type], *,
         ctx: context.ContextLevel
 ) -> s_types.Type:
     if len(types) == 1:
@@ -185,7 +185,7 @@ def _ql_typeexpr_combine_types(
 
 def _ql_typeexpr_get_types(
     ql_t: qlast.TypeExpr, *, ctx: context.ContextLevel
-) -> tuple[Optional[str], bool, list[s_types.Type]]:
+) -> tuple[str | None, bool, list[s_types.Type]]:
 
     if isinstance(ql_t, qlast.TypeOf):
         with ctx.new() as subctx:

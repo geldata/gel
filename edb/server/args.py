@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     ItemsView,
     Mapping,
     NamedTuple,
@@ -228,20 +227,20 @@ class ServerConfig(NamedTuple):
     data_dir: pathlib.Path
     backend_dsn: str
     backend_adaptive_ha: bool
-    tenant_id: Optional[str]
+    tenant_id: str | None
     ignore_other_tenants: bool
-    multitenant_config_file: Optional[pathlib.Path]
+    multitenant_config_file: pathlib.Path | None
     log_level: str
     log_to: str
     bootstrap_only: bool
-    inplace_upgrade_prepare: Optional[pathlib.Path]
+    inplace_upgrade_prepare: pathlib.Path | None
     inplace_upgrade_finalize: bool
     inplace_upgrade_rollback: bool
     bootstrap_command: str
     bootstrap_command_file: pathlib.Path
-    default_branch: Optional[str]
-    default_database: Optional[str]
-    default_database_user: Optional[str]
+    default_branch: str | None
+    default_database: str | None
+    default_database_user: str | None
     devmode: bool
     testmode: bool
     bind_addresses: list[str]
@@ -252,7 +251,7 @@ class ServerConfig(NamedTuple):
     daemon_group: str
     runstate_dir: pathlib.Path
     extensions_dir: tuple[pathlib.Path, ...]
-    max_backend_connections: Optional[int]
+    max_backend_connections: int | None
     compiler_pool_size: int
     compiler_pool_mode: CompilerPoolMode
     compiler_pool_addr: str
@@ -261,24 +260,24 @@ class ServerConfig(NamedTuple):
     emit_server_status: str
     temp_dir: bool
     auto_shutdown_after: float
-    readiness_state_file: Optional[pathlib.Path]
+    readiness_state_file: pathlib.Path | None
     disable_dynamic_system_config: bool
     reload_config_files: ReloadTrigger
     net_worker_mode: NetWorkerMode
-    config_file: Optional[pathlib.Path]
+    config_file: pathlib.Path | None
 
-    startup_script: Optional[StartupScript]
+    startup_script: StartupScript | None
     status_sinks: list[Callable[[str], None]]
 
     tls_cert_file: pathlib.Path
     tls_key_file: pathlib.Path
     tls_cert_mode: ServerTlsCertMode
-    tls_client_ca_file: Optional[pathlib.Path]
+    tls_client_ca_file: pathlib.Path | None
 
     jws_key_file: pathlib.Path
     jose_key_mode: JOSEKeyMode
-    jwt_sub_allowlist_file: Optional[pathlib.Path]
-    jwt_revocation_list_file: Optional[pathlib.Path]
+    jwt_sub_allowlist_file: pathlib.Path | None
+    jwt_revocation_list_file: pathlib.Path | None
 
     default_auth_method: ServerAuthMethods
     security: ServerSecurityMode
@@ -291,7 +290,7 @@ class ServerConfig(NamedTuple):
 
     admin_ui: bool
 
-    cors_always_allowed_origins: Optional[str]
+    cors_always_allowed_origins: str | None
 
 
 class PathPath(click.Path):
@@ -380,7 +379,7 @@ class CompilerPoolModeChoice(click.Choice):
 
 
 def _get_runstate_dir_default() -> str:
-    runstate_dir: Optional[str]
+    runstate_dir: str | None
 
     try:
         runstate_dir = buildmeta.get_build_metadata_value("RUNSTATE_DIR")
@@ -1573,7 +1572,7 @@ def parse_args(**kwargs: Any):
             abort("must use --compiler-pool-mode=fixed_multi_tenant "
                   "in multi-tenant mode")
 
-    bootstrap_script_text: Optional[str]
+    bootstrap_script_text: str | None
     if kwargs['bootstrap_command_file']:
         with open(kwargs['bootstrap_command_file']) as f:
             bootstrap_script_text = f.read()

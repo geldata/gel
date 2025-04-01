@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
@@ -56,8 +56,8 @@ class Property(
         schema: s_schema.Schema,
         referrer: so.QualifiedObject,
         *qualifiers: str,
-        target: Optional[s_types.Type] = None,
-        attrs: Optional[dict[str, Any]] = None,
+        target: s_types.Type | None = None,
+        attrs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> tuple[s_schema.Schema, Property]:
         from . import links as s_links
@@ -183,7 +183,7 @@ class Property(
         schema: s_schema.Schema,
         cmdtype: type[sd.ObjectCommand_T],
         *,
-        classname: Optional[sn.Name] = None,
+        classname: sn.Name | None = None,
         **kwargs: Any,
     ) -> sd.ObjectCommand_T:
         delta = super().init_delta_command(
@@ -330,7 +330,7 @@ class CreateProperty(
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if (
             field == 'required'
             and issubclass(astnode, qlast.CreateConcreteProperty)
@@ -355,7 +355,7 @@ class CreateProperty(
 
         if op.property == 'target' and link:
             if isinstance(node, qlast.CreateConcreteProperty):
-                expr: Optional[s_expr.Expression] = (
+                expr: s_expr.Expression | None = (
                     self.get_attribute_value('expr')
                 )
                 if expr is not None:
@@ -471,8 +471,8 @@ class AlterProperty(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if self.maybe_get_object_aux_data('from_alias'):
             # This is an alias type, appropriate DDL would be generated
             # from the corresponding Alter/DeleteAlias node.
@@ -495,8 +495,8 @@ class DeleteProperty(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         if self.maybe_get_object_aux_data('from_alias'):
             # This is an alias type, appropriate DDL would be generated
             # from the corresponding Alter/DeleteAlias node.

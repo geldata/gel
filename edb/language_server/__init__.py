@@ -17,7 +17,7 @@
 #
 
 import dataclasses
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 
 T = TypeVar('T', covariant=True)
@@ -26,8 +26,8 @@ E = TypeVar('E', covariant=True)
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
 class Result(Generic[T, E]):
-    ok: Optional[T] = None
-    err: Optional[E] = None
+    ok: T | None = None
+    err: E | None = None
 
 
 def is_schema_file(path: str) -> bool:

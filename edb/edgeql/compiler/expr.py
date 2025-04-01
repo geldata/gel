@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Sequence, cast
+from typing import Callable, Sequence, cast
 
 from edb import errors
 
@@ -97,10 +97,10 @@ def compile_Path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
 def _balance(
     elements: Sequence[qlast.Expr],
     ctor: Callable[
-        [qlast.Expr, qlast.Expr, Optional[qlast.Span]],
+        [qlast.Expr, qlast.Expr, qlast.Span | None],
         qlast.Expr
     ],
-    span: Optional[qlast.Span],
+    span: qlast.Span | None,
 ) -> qlast.Expr:
     mid = len(elements) // 2
     ls, rs = elements[:mid], elements[mid:]
@@ -630,7 +630,7 @@ def compile_GlobalExpr(
 
         return target
 
-    default: Optional[s_expr.Expression] = glob.get_default(ctx.env.schema)
+    default: s_expr.Expression | None = glob.get_default(ctx.env.schema)
 
     # If we are compiling with globals suppressed but still allowed, always
     # treat it as being empty.
@@ -861,7 +861,7 @@ def compile_TypeCast(
 def _infer_type_introspection(
     typeref: irast.TypeRef,
     env: context.Environment,
-    span: Optional[parsing.Span]=None,
+    span: parsing.Span | None=None,
 ) -> s_types.Type:
     if irtyputils.is_scalar(typeref):
         return cast(s_objtypes.ObjectType,
@@ -1007,8 +1007,8 @@ def _infer_index_type(
 
 def _infer_slice_type(
     expr: irast.Set,
-    start: Optional[irast.Set],
-    stop: Optional[irast.Set],
+    start: irast.Set | None,
+    stop: irast.Set | None,
     *, ctx: context.ContextLevel,
 ) -> s_types.Type:
     env = ctx.env
@@ -1066,8 +1066,8 @@ def compile_Indirection(
                 expr=node, index=idx, typeref=typeref, span=expr.span
             )
         elif isinstance(indirection_el, qlast.Slice):
-            start: Optional[irast.Base]
-            stop: Optional[irast.Base]
+            start: irast.Base | None
+            stop: irast.Base | None
 
             if indirection_el.start:
                 start = dispatch.compile(indirection_el.start, ctx=ctx)
@@ -1162,10 +1162,10 @@ def collect_binop(expr: qlast.BinOp) -> list[qlast.Expr]:
     return elements
 
 
-def try_constant_set(expr: irast.Base) -> Optional[irast.ConstantSet]:
+def try_constant_set(expr: irast.Base) -> irast.ConstantSet | None:
     elements = []
 
-    stack: list[Optional[irast.Base]] = [expr]
+    stack: list[irast.Base | None] = [expr]
     while stack:
         el = stack.pop()
         if isinstance(el, irast.Set):

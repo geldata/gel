@@ -1,4 +1,4 @@
-from typing import Any, Optional, Sequence, cast
+from typing import Any, Sequence, cast
 
 from edb.edgeql import ast as qlast
 
@@ -22,8 +22,8 @@ def elab_schema_error(obj: Any) -> Any:
 
 
 def elab_schema_cardinality(
-    is_required: Optional[bool],
-    cardinality: Optional[qlast.qltypes.SchemaCardinality],
+    is_required: bool | None,
+    cardinality: qlast.qltypes.SchemaCardinality | None,
 ) -> CMMode:
     return CMMode(
         e.CardNumOne if is_required else e.CardNumZero,
@@ -36,7 +36,7 @@ def elab_schema_cardinality(
 
 
 def elab_schema_target_tp(
-    target: Optional[qlast.Expr | qlast.TypeExpr]
+    target: qlast.Expr | qlast.TypeExpr | None
 ) -> Tp:
     return (
         elab_single_type_expr(target)
@@ -108,7 +108,7 @@ def elab_create_object_tp(
                 else:
                     print_warning("WARNING: not implemented ptarget", ptarget)
                 link_property_tps: dict[str, ResultTp] = {}
-                p_has_set_default: Optional[e.BindingExpr] = None
+                p_has_set_default: e.BindingExpr | None = None
                 for pcmd in pcommands:
                     match pcmd:
                         case qlast.CreateConcretePointer(
@@ -119,7 +119,7 @@ def elab_create_object_tp(
                             cardinality=pl_cardinality,
                             commands=plcommands,
                         ):
-                            pl_has_set_default: Optional[e.BindingExpr] = None
+                            pl_has_set_default: e.BindingExpr | None = None
                             if plcommands:
                                 for plcommand in plcommands:
                                     match plcommand:

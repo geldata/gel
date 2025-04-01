@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Generic,
-    Optional,
     AbstractSet,
     Iterable,
     Mapping,
@@ -85,7 +84,7 @@ class InheritingObjectCommand(sd.ObjectCommand[so.InheritingObjectT]):
         context: sd.CommandContext,
         bases: tuple[so.Object, ...],
         *,
-        fields: Optional[Iterable[str]] = None,
+        fields: Iterable[str] | None = None,
         ignore_local: bool = False,
         apply: bool = True,
     ) -> s_schema.Schema:
@@ -481,7 +480,7 @@ class InheritingObjectCommand(sd.ObjectCommand[so.InheritingObjectT]):
         scls: s_referencing.ReferencedInheritingObject,
         old_bases: Sequence[so.InheritingObject],
         new_bases: Sequence[so.InheritingObject],
-    ) -> tuple[sd.Command, Optional[sd.Command]]:
+    ) -> tuple[sd.Command, sd.Command | None]:
         from . import referencing as s_referencing
 
         old_base_names = [b.get_name(schema) for b in old_bases]
@@ -592,7 +591,7 @@ class InheritingObjectCommand(sd.ObjectCommand[so.InheritingObjectT]):
         self,
         field: str,
         astnode: type[qlast.DDLOperation],
-    ) -> Optional[str]:
+    ) -> str | None:
         if (
             field in {'abstract'}
             and issubclass(astnode, qlast.CreateObject)
@@ -669,7 +668,7 @@ class AlterInherit(sd.Command, Generic[so.InheritingObjectT]):
     # so the positioning is maintained.
     added_bases = struct.Field(list[tuple[
         list[so.ObjectShell[so.InheritingObjectT]],
-        Optional[str | tuple[str, so.ObjectShell[so.InheritingObjectT]]],
+        str | tuple[str, so.ObjectShell[so.InheritingObjectT]] | None,
     ]])
     dropped_bases = struct.Field(list[so.ObjectShell[so.InheritingObjectT]])
 
@@ -710,9 +709,7 @@ class AlterInherit(sd.Command, Generic[so.InheritingObjectT]):
             ]
 
             pos_node = astcmd.position
-            pos: Optional[
-                str | tuple[str, so.ObjectShell[so.InheritingObjectT]]
-            ]
+            pos: str | tuple[str, so.ObjectShell[so.InheritingObjectT]] | None
             if pos_node is not None:
                 if pos_node.ref is not None:
                     ref = so.ObjectShell(
@@ -1021,7 +1018,7 @@ class AlterInheritingObjectOrFragment(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        val: Optional[bool],
+        val: bool | None,
     ) -> None:
         self.set_attribute_value('is_derived', val)
         self._propagate_field_alter(schema, context, self.scls, ('is_derived',))
@@ -1040,7 +1037,7 @@ class AlterInheritingObjectOrFragment(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        val: Optional[bool],
+        val: bool | None,
     ) -> None:
         self._propagate_is_derived_flat(schema, context, val)
         for descendant in self.scls.ordered_descendants(schema):
@@ -1261,7 +1258,7 @@ class RebaseInheritingObject(
         default_base_name = mcls.get_default_base_name()
         ori_bases = list(orig_bases.objects(schema))
         if default_base_name:
-            default_base: Optional[so.InheritingObjectT] = self.get_object(
+            default_base: so.InheritingObjectT | None = self.get_object(
                 schema, context, name=default_base_name)
             if ori_bases == [default_base]:
                 ori_bases = []
@@ -1307,8 +1304,8 @@ class RebaseInheritingObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
-        parent_node: Optional[qlast.DDLOperation] = None,
-    ) -> Optional[qlast.DDLOperation]:
+        parent_node: qlast.DDLOperation | None = None,
+    ) -> qlast.DDLOperation | None:
         assert parent_node is not None
 
         dropped = self._get_bases_for_ast(schema, context, self.removed_bases)

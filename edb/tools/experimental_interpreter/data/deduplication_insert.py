@@ -10,7 +10,6 @@ there are eventually a link property projection M.l.....@l
 
 from . import data_ops as e
 from . import expr_ops as eops
-from typing import Optional
 
 
 def insert_conditional_dedup(expr: e.Expr):
@@ -47,7 +46,7 @@ def insert_conditional_dedup(expr: e.Expr):
             case _:
                 return insert_conditional_dedup(sub)
 
-    def insert_function_top(sub: e.Expr) -> Optional[e.Expr]:
+    def insert_function_top(sub: e.Expr) -> e.Expr | None:
         if isinstance(sub, e.LinkPropProjExpr):
             return do_not_recursive_insert(sub)
         elif isinstance(sub, e.ObjectProjExpr):

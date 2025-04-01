@@ -22,7 +22,6 @@ from typing import (
     Any,
     Iterable,
     Mapping,
-    Optional,
     TypeAlias,
 )
 
@@ -50,9 +49,9 @@ class Role(base.DBObject):
         allow_createrole: bool | base.NotSpecifiedT = base.NotSpecified,
         password: None | str | base.NotSpecifiedT = base.NotSpecified,
         superuser: bool | base.NotSpecifiedT = base.NotSpecified,
-        membership: Optional[Iterable[str]] = None,
-        members: Optional[Iterable[str]] = None,
-        metadata: Optional[Mapping[str, Any]] = None,
+        membership: Iterable[str] | None = None,
+        members: Iterable[str] | None = None,
+        metadata: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(metadata=metadata)
         self.name = name
@@ -76,7 +75,7 @@ class SingleRole(Role):
         self,
         *,
         password: None | str | base.NotSpecifiedT = base.NotSpecified,
-        metadata: Optional[Mapping[str, Any]] = None,
+        metadata: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__('current_user', password=password)
         self.single_role_metadata = metadata
@@ -188,8 +187,8 @@ class AlterRoleAddMember(ddl.SchemaObjectOperation):
         name: RoleName,
         member: str,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ):
         super().__init__(
             name, conditions=conditions, neg_conditions=neg_conditions
@@ -207,8 +206,8 @@ class AlterRoleDropMember(ddl.SchemaObjectOperation):
         name: RoleName,
         member: str,
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ) -> None:
         super().__init__(
             name, conditions=conditions, neg_conditions=neg_conditions
@@ -226,8 +225,8 @@ class AlterRoleAddMembership(ddl.SchemaObjectOperation):
         name: RoleName,
         membership: Iterable[str],
         *,
-        conditions: Optional[Iterable[str | base.Condition]] = None,
-        neg_conditions: Optional[Iterable[str | base.Condition]] = None,
+        conditions: Iterable[str | base.Condition] | None = None,
+        neg_conditions: Iterable[str | base.Condition] | None = None,
     ):
         super().__init__(
             name, conditions=conditions, neg_conditions=neg_conditions

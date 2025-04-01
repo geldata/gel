@@ -24,7 +24,6 @@ from __future__ import annotations
 
 from typing import (
     Any,
-    Optional,
     Mapping,
     Sequence,
 )
@@ -76,7 +75,7 @@ def init_context(
     *,
     schema: s_schema.Schema,
     options: coptions.CompilerOptions,
-    inlining_context: Optional[context.ContextLevel] = None,
+    inlining_context: context.ContextLevel | None = None,
 ) -> context.ContextLevel:
 
     if not schema.get_global(s_mod.Module, '__derived__', None):
@@ -501,7 +500,7 @@ def _rewrite_weak_namespaces(
     scopes = irutils.find_path_scopes(irs)
 
     for ir_set in ctx.env.set_types:
-        path_scope_id: Optional[int] = scopes.get(ir_set)
+        path_scope_id: int | None = scopes.get(ir_set)
         if path_scope_id is not None:
             # Some entries in set_types are from compiling views
             # in temporary scopes, so we need to just skip those.
@@ -711,7 +710,7 @@ def declare_view(
     factoring_fence: bool=False,
     fully_detached: bool=False,
     binding_kind: irast.BindingKind,
-    path_id_namespace: Optional[frozenset[str]]=None,
+    path_id_namespace: frozenset[str] | None=None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 

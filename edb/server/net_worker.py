@@ -158,8 +158,8 @@ class ScheduledRequest:
     id: str
     method: str
     url: str
-    body: typing.Optional[bytes]
-    headers: typing.Optional[list[dict]]
+    body: bytes | None
+    headers: list[dict] | None
 
     def __post_init__(self):
         if self.body is not None:

@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 from __future__ import annotations
-from typing import Any, Optional, Iterator, cast
+from typing import Any, Iterator, cast
 
 import dataclasses
 
@@ -58,7 +58,7 @@ class AliasInfo(to_json.ToJson):
 class ShapeInfo(to_json.ToJson):
     aliases: set[str]
     pointers: dict[str, ShapeInfo]
-    main_alias: Optional[str] = None
+    main_alias: str | None = None
 
     @property
     def all_aliases(self) -> Iterator[str]:

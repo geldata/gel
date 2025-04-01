@@ -19,7 +19,6 @@
 from typing import (
     Any,
     Mapping,
-    Optional,
 )
 import immutables
 
@@ -33,7 +32,7 @@ async def describe(
     db: dbview.Database,
     query: str,
     *,
-    query_cache_enabled: Optional[bool] = None,
+    query_cache_enabled: bool | None = None,
     allow_capabilities: compiler.Capability = (
         compiler.Capability.MODIFICATIONS),
     query_tag: str | None = None,
@@ -45,9 +44,9 @@ async def parse_execute_json(
     query: str,
     *,
     variables: Mapping[str, Any] = immutables.Map(),
-    globals_: Optional[Mapping[str, Any]] = None,
+    globals_: Mapping[str, Any] | None = None,
     output_format: compiler.OutputFormat = compiler.OutputFormat.JSON,
-    query_cache_enabled: Optional[bool] = None,
+    query_cache_enabled: bool | None = None,
     cached_globally: bool = False,
     use_metrics: bool = True,
     tx_isolation: edbdef.TxIsolationLevel | None = None,

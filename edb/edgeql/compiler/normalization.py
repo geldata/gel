@@ -23,7 +23,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     AbstractSet,
     Mapping,
     Collection,
@@ -47,7 +46,7 @@ def normalize(
     node: Any,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> None:
     raise AssertionError(f'normalize: cannot handle {node!r}')
@@ -70,7 +69,7 @@ def renormalize_compat(
     """
     orig_qltree = qlparser.parse_fragment(orig_text)
 
-    norm_aliases: dict[Optional[str], str] = {}
+    norm_aliases: dict[str | None, str] = {}
     assert isinstance(norm_qltree, (
         qlast.Query, qlast.Command, qlast.DDLCommand
     ))
@@ -81,7 +80,7 @@ def renormalize_compat(
     if isinstance(orig_qltree, (
         qlast.Query, qlast.Command, qlast.DDLCommand
     )):
-        orig_aliases: dict[Optional[str], str] = {}
+        orig_aliases: dict[str | None, str] = {}
         for alias in (orig_qltree.aliases or ()):
             if isinstance(alias, qlast.ModuleAliasDecl):
                 orig_aliases[alias.alias] = alias.module
@@ -110,7 +109,7 @@ def _normalize_recursively(
     value: Any,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> None:
     # We only want to handle fields that need to be traversed
@@ -139,7 +138,7 @@ def normalize_generic(
     node: qlast.Base,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
     skip: Collection[str] = frozenset(),
 ) -> None:
@@ -160,7 +159,7 @@ def normalize_ObjectRef(
     ref: qlast.ObjectRef,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> None:
     if ref.name not in localnames:
@@ -188,15 +187,15 @@ def _normalize_with_block(
     *,
     field: str='aliases',
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
-) -> tuple[Mapping[Optional[str], str], AbstractSet[str]]:
+) -> tuple[Mapping[str | None, str], AbstractSet[str]]:
 
     # Update the default aliases, modaliases, and localnames.
     modaliases = dict(modaliases)
     newaliases: list[qlast.AliasedExpr | qlast.ModuleAliasDecl] = []
 
-    aliases: Optional[list[qlast.AliasedExpr]] = getattr(node, field)
+    aliases: list[qlast.AliasedExpr] | None = getattr(node, field)
     for alias in (aliases or ()):
         if isinstance(alias, qlast.ModuleAliasDecl):
             if alias.alias:
@@ -224,7 +223,7 @@ def _normalize_aliased_field(
     fname: str,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> AbstractSet[str]:
 
@@ -249,7 +248,7 @@ def normalize_SelectQuery(
     node: qlast.SelectQuery,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> None:
 
@@ -286,7 +285,7 @@ def normalize_DML(
     node: qlast.InsertQuery | qlast.UpdateQuery | qlast.DeleteQuery,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> None:
 
@@ -312,7 +311,7 @@ def normalize_ForQuery(
     node: qlast.ForQuery,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> None:
 
@@ -348,7 +347,7 @@ def normalize_GroupQuery(
     node: qlast.GroupQuery,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> None:
     # Process WITH block
@@ -390,7 +389,7 @@ def normalize_FunctionCall(
     node: qlast.FunctionCall,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> None:
 
@@ -457,7 +456,7 @@ def compile_TypeName(
     node: qlast.TypeName,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> None:
 

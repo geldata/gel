@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 from typing import (
-    Any, Callable, Optional, cast
+    Any, Callable, cast
 )
 
 import json
@@ -244,7 +244,7 @@ class ListNonterm(Nonterm, is_internal=True):
             lambda self, el: ListNonterm._reduce_el(self, el))
 
     @staticmethod
-    def component_name(component: type) -> Optional[str]:
+    def component_name(component: type) -> str | None:
         if component is None:
             return None
         elif issubclass(component, Token):

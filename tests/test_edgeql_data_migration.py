@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Optional, Iterable, Iterator
+from typing import Iterable, Iterator
 
 import json
 import os.path
@@ -87,8 +87,8 @@ class EdgeQLDataMigrationTestCase(tb.DDLTestCase):
     async def fast_forward_describe_migration(
         self,
         *,
-        limit: Optional[int] = None,
-        user_input: Optional[Iterable[str]] = None,
+        limit: int | None = None,
+        user_input: Iterable[str] | None = None,
         commit: bool = True,
     ):
         '''Repeatedly get the next step from DESCRIBE and execute it.
@@ -207,7 +207,7 @@ class EdgeQLDataMigrationTestCase(tb.DDLTestCase):
         populate: bool = False,
         module: str = 'test',
         explicit_modules: bool = False,
-        user_input: Optional[Iterable[str]] = None,
+        user_input: Iterable[str] | None = None,
     ):
         async with self.con.transaction():
             await self.start_migration(

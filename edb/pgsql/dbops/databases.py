@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Mapping
+from typing import Any, Mapping
 
 import textwrap
 
@@ -60,12 +60,12 @@ class Database(AbstractDatabase):
         self,
         name: str,
         *,
-        owner: Optional[str] = None,
+        owner: str | None = None,
         is_template: bool = False,
-        encoding: Optional[str] = None,
-        lc_collate: Optional[str] = None,
-        lc_ctype: Optional[str] = None,
-        metadata: Optional[Mapping[str, Any]] = None,
+        encoding: str | None = None,
+        lc_collate: str | None = None,
+        lc_ctype: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(metadata=metadata)
         self.name = name

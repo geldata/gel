@@ -297,7 +297,7 @@ class SimpleGroup(Nonterm):
 
 
 class OptGroupingAlias(Nonterm):
-    val: typing.Optional[qlast.GroupQuery]
+    val: qlast.GroupQuery | None
 
     @parsing.inline(1)
     def reduce_COMMA_Identifier(self, *kids):
@@ -775,8 +775,8 @@ class ShapePointer(Nonterm):
 
 
 class PtrQualsSpec(typing.NamedTuple):
-    required: typing.Optional[bool] = None
-    cardinality: typing.Optional[qltypes.SchemaCardinality] = None
+    required: bool | None = None
+    cardinality: qltypes.SchemaCardinality | None = None
 
 
 class PtrQuals(Nonterm):

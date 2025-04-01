@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     TypeVar,
     Iterable,
     Mapping,
@@ -119,10 +118,10 @@ class PGConnectionProxy:
         cluster: pgcluster.BaseCluster,
         *,
         source_description: str,
-        dbname: Optional[str] = None,
-        log_listener: Optional[Callable[[str, str], None]] = None,
+        dbname: str | None = None,
+        log_listener: Callable[[str, str], None] | None = None,
     ):
-        self._conn: Optional[pgcon.PGConnection] = None
+        self._conn: pgcon.PGConnection | None = None
         self._cluster = cluster
         self._dbname = dbname
         self._log_listener = log_listener or _pg_log_listener
@@ -145,7 +144,7 @@ class PGConnectionProxy:
         if self._log_listener is not None:
             self._conn.add_log_listener(self._log_listener)
 
-    def _on_retry(self, exc: Optional[BaseException]) -> None:
+    def _on_retry(self, exc: BaseException | None) -> None:
         logger.warning(
             f'Retrying bootstrap SQL query due to connection error: '
             f'{type(exc)}({exc})',
@@ -224,7 +223,7 @@ class BootstrapContext:
     cluster: pgcluster.BaseCluster
     conn: PGConnectionProxy | pgcon.PGConnection
     args: edbargs.ServerConfig
-    mode: Optional[ClusterMode] = None
+    mode: ClusterMode | None = None
 
 
 async def _execute(conn, query):
@@ -304,7 +303,7 @@ async def _ensure_edgedb_role(
     *,
     superuser: bool = False,
     builtin: bool = False,
-    objid: Optional[uuid.UUID] = None,
+    objid: uuid.UUID | None = None,
 ) -> uuid.UUID:
     member_of = set()
     if superuser:
@@ -640,7 +639,7 @@ def compile_single_query(
 
 
 def _get_all_subcommands(
-    cmd: sd.Command, type: Optional[type[sd.Command]] = None
+    cmd: sd.Command, type: type[sd.Command] | None = None
 ) -> list[sd.Command]:
     cmds = []
 
@@ -656,7 +655,7 @@ def _get_all_subcommands(
 
 def _get_schema_object_ids(
     delta: sd.Command,
-) -> Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]:
+) -> Mapping[tuple[sn.Name, str | None], uuid.UUID]:
     schema_object_ids = {}
     for cmd in _get_all_subcommands(delta, sd.CreateObject):
         assert isinstance(cmd, sd.CreateObject)
@@ -715,7 +714,7 @@ async def gather_patch_info(
     kind: str,
     patch: str,
     conn: pgcon.PGConnection,
-) -> Optional[dict[str, list[str]]]:
+) -> dict[str, list[str]] | None:
     """Fetch info for a patch that needs to use the connection.
 
     Currently, the only thing we need is, for config updates, the
@@ -785,11 +784,11 @@ def prepare_patch(
     reflschema: s_schema.Schema,
     schema_class_layout: s_refl.SchemaClassLayout,
     backend_params: params.BackendRuntimeParams,
-    patch_info: Optional[dict[str, list[str]]],
-    user_schema: Optional[s_schema.Schema]=None,
-    global_schema: Optional[s_schema.Schema]=None,
+    patch_info: dict[str, list[str]] | None,
+    user_schema: s_schema.Schema | None=None,
+    global_schema: s_schema.Schema | None=None,
     *,
-    dbname: Optional[str]=None,
+    dbname: str | None=None,
 ) -> PatchEntry:
     val = f'{pg_common.quote_literal(json.dumps(num + 1))}::jsonb'
     # TODO: This is an INSERT because 2.0 shipped without num_patches.
@@ -2262,7 +2261,7 @@ async def _create_edgedb_database(
     owner: str,
     *,
     builtin: bool = False,
-    objid: Optional[uuid.UUID] = None,
+    objid: uuid.UUID | None = None,
 ) -> uuid.UUID:
     logger.info(f'Creating database: {database}')
     block = dbops.SQLBlock()
@@ -2300,7 +2299,7 @@ async def _set_edgedb_database_metadata(
     ctx: BootstrapContext,
     database: str,
     *,
-    objid: Optional[uuid.UUID] = None,
+    objid: uuid.UUID | None = None,
 ) -> uuid.UUID:
     logger.info(f'Configuring database: {database}')
     block = dbops.SQLBlock()

@@ -17,14 +17,13 @@
 #
 
 
-import typing
 import json
 
 from edb.testbase import http as tb
 
 
 class StdNetTestCase(tb.BaseHttpTest):
-    mock_server: typing.Optional[tb.MockHttpServer] = None
+    mock_server: tb.MockHttpServer | None = None
     base_url: str
 
     # Queries need to run outside of transactions here, but we *also*

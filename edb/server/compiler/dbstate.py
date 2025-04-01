@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     Iterator,
     NamedTuple,
     Self,
@@ -80,10 +79,10 @@ class BaseQuery:
     sql: bytes
     is_transactional: bool = True
     has_dml: bool = False
-    cache_sql: Optional[tuple[bytes, bytes]] = dataclasses.field(
+    cache_sql: tuple[bytes, bytes] | None = dataclasses.field(
         kw_only=True, default=None
     )  # (persist, evict)
-    cache_func_call: Optional[tuple[bytes, bytes]] = dataclasses.field(
+    cache_func_call: tuple[bytes, bytes] | None = dataclasses.field(
         kw_only=True, default=None
     )
     warnings: tuple[errors.EdgeDBError, ...] = dataclasses.field(
@@ -106,9 +105,9 @@ class Query(BaseQuery):
     out_type_id: bytes
     in_type_data: bytes
     in_type_id: bytes
-    in_type_args: Optional[list[Param]] = None
+    in_type_args: list[Param] | None = None
 
-    globals: Optional[list[tuple[str, bool]]] = None
+    globals: list[tuple[str, bool]] | None = None
 
     cacheable: bool = True
     is_explain: bool = False
@@ -119,39 +118,39 @@ class Query(BaseQuery):
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SimpleQuery(BaseQuery):
     # XXX: Temporary hack, since SimpleQuery will die
-    in_type_args: Optional[list[Param]] = None
+    in_type_args: list[Param] | None = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SessionStateQuery(BaseQuery):
     sql: bytes = b""
-    config_scope: Optional[qltypes.ConfigScope] = None
+    config_scope: qltypes.ConfigScope | None = None
     is_backend_setting: bool = False
     requires_restart: bool = False
     is_system_config: bool = False
-    config_op: Optional[config.Operation] = None
+    config_op: config.Operation | None = None
     is_transactional: bool = True
-    globals: Optional[list[tuple[str, bool]]] = None
+    globals: list[tuple[str, bool]] | None = None
 
-    in_type_data: Optional[bytes] = None
-    in_type_id: Optional[bytes] = None
-    in_type_args: Optional[list[Param]] = None
+    in_type_data: bytes | None = None
+    in_type_id: bytes | None = None
+    in_type_args: list[Param] | None = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class DDLQuery(BaseQuery):
-    user_schema: Optional[s_schema.FlatSchema]
-    feature_used_metrics: Optional[dict[str, float]]
-    global_schema: Optional[s_schema.FlatSchema] = None
+    user_schema: s_schema.FlatSchema | None
+    feature_used_metrics: dict[str, float] | None
+    global_schema: s_schema.FlatSchema | None = None
     cached_reflection: Any = None
     is_transactional: bool = True
-    create_db: Optional[str] = None
-    drop_db: Optional[str] = None
+    create_db: str | None = None
+    drop_db: str | None = None
     drop_db_reset_connections: bool = False
-    create_db_template: Optional[str] = None
-    create_db_mode: Optional[qlast.BranchType] = None
+    create_db_template: str | None = None
+    create_db_mode: qlast.BranchType | None = None
     db_op_trailer: tuple[bytes, ...] = ()
-    ddl_stmt_id: Optional[str] = None
+    ddl_stmt_id: str | None = None
     config_ops: list[config.Operation] = dataclasses.field(default_factory=list)
 
 
@@ -160,28 +159,28 @@ class TxControlQuery(BaseQuery):
     action: TxAction
     cacheable: bool
 
-    modaliases: Optional[immutables.Map[Optional[str], str]]
+    modaliases: immutables.Map[str | None, str] | None
 
-    user_schema: Optional[s_schema.Schema] = None
-    global_schema: Optional[s_schema.Schema] = None
+    user_schema: s_schema.Schema | None = None
+    global_schema: s_schema.Schema | None = None
     cached_reflection: Any = None
-    feature_used_metrics: Optional[dict[str, float]] = None
+    feature_used_metrics: dict[str, float] | None = None
 
-    sp_name: Optional[str] = None
-    sp_id: Optional[int] = None
+    sp_name: str | None = None
+    sp_id: int | None = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MigrationControlQuery(BaseQuery):
     action: MigrationAction
-    tx_action: Optional[TxAction]
+    tx_action: TxAction | None
     cacheable: bool
 
-    modaliases: Optional[immutables.Map[Optional[str], str]]
+    modaliases: immutables.Map[str | None, str] | None
 
-    user_schema: Optional[s_schema.FlatSchema] = None
+    user_schema: s_schema.FlatSchema | None = None
     cached_reflection: Any = None
-    ddl_stmt_id: Optional[str] = None
+    ddl_stmt_id: str | None = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -193,9 +192,9 @@ class MaintenanceQuery(BaseQuery):
 class Param:
     name: str
     required: bool
-    array_type_id: Optional[uuid.UUID]
-    outer_idx: Optional[int]
-    sub_params: Optional[tuple[list[Optional[uuid.UUID]], tuple[Any, ...]]]
+    array_type_id: uuid.UUID | None
+    outer_idx: int | None
+    sub_params: tuple[list[uuid.UUID | None], tuple[Any, ...]] | None
 
 
 #############################
@@ -205,7 +204,7 @@ class Param:
 class QueryUnit:
     sql: bytes
 
-    introspection_sql: Optional[bytes] = None
+    introspection_sql: bytes | None = None
 
     # Status-line for the compiled command; returned to front-end
     # in a CommandComplete protocol message if the command is
@@ -213,9 +212,9 @@ class QueryUnit:
     # EdgeQL queries, the status reflects the last query in the unit.
     status: bytes
 
-    cache_key: Optional[uuid.UUID] = None
-    cache_sql: Optional[tuple[bytes, bytes]] = None  # (persist, evict)
-    cache_func_call: Optional[tuple[bytes, bytes]] = None  # (sql, hash)
+    cache_key: uuid.UUID | None = None
+    cache_sql: tuple[bytes, bytes] | None = None  # (persist, evict)
+    cache_func_call: tuple[bytes, bytes] | None = None  # (sql, hash)
 
     # Output format of this query unit
     output_format: enums.OutputFormat = enums.OutputFormat.NONE
@@ -236,7 +235,7 @@ class QueryUnit:
 
     # If tx_id is set, it means that the unit
     # starts a new transaction.
-    tx_id: Optional[int] = None
+    tx_id: int | None = None
 
     # True if this unit is single 'COMMIT' command.
     # 'COMMIT' is always compiled to a separate QueryUnit.
@@ -256,8 +255,8 @@ class QueryUnit:
     tx_abort_migration: bool = False
 
     # For SAVEPOINT commands, the name and sp_id
-    sp_name: Optional[str] = None
-    sp_id: Optional[int] = None
+    sp_name: str | None = None
+    sp_id: int | None = None
 
     # True if it is safe to cache this unit.
     cacheable: bool = False
@@ -266,15 +265,15 @@ class QueryUnit:
     # created/deleted. If it's the former, the IO process needs to
     # introspect the new db. If it's the later, the server should
     # close all inactive unused pooled connections to it.
-    create_db: Optional[str] = None
-    drop_db: Optional[str] = None
+    create_db: str | None = None
+    drop_db: str | None = None
     drop_db_reset_connections: bool = False
 
     # If non-None, contains a name of the DB that will be used as
     # a template database to create the database. The server should
     # close all inactive unused pooled connections to the template db.
-    create_db_template: Optional[str] = None
-    create_db_mode: Optional[str] = None
+    create_db_template: str | None = None
+    create_db_mode: str | None = None
 
     # If a branch command needs extra SQL commands to be performed,
     # those would end up here.
@@ -282,7 +281,7 @@ class QueryUnit:
 
     # If non-None, the DDL statement will emit data packets marked
     # with the indicated ID.
-    ddl_stmt_id: Optional[str] = None
+    ddl_stmt_id: str | None = None
 
     # Cardinality of the result set.  Set to NO_RESULT if the
     # unit represents multiple queries compiled as one script.
@@ -292,9 +291,9 @@ class QueryUnit:
     out_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
     in_type_data: bytes = sertypes.NULL_TYPE_DESC
     in_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
-    in_type_args: Optional[list[Param]] = None
+    in_type_args: list[Param] | None = None
     in_type_args_real_count: int = 0
-    globals: Optional[list[tuple[str, bool]]] = None
+    globals: list[tuple[str, bool]] | None = None
 
     warnings: tuple[errors.EdgeDBError, ...] = ()
 
@@ -315,26 +314,26 @@ class QueryUnit:
     # alters a system configuration setting.
     is_system_config: bool = False
     config_ops: list[config.Operation] = dataclasses.field(default_factory=list)
-    modaliases: Optional[immutables.Map[Optional[str], str]] = None
+    modaliases: immutables.Map[str | None, str] | None = None
 
     # If present, represents the future schema state after
     # the command is run. The schema is pickled.
-    user_schema: Optional[bytes] = None
+    user_schema: bytes | None = None
     # If present, represents updated metrics about feature use induced
     # by the new user_schema.
-    feature_used_metrics: Optional[dict[str, float]] = None
+    feature_used_metrics: dict[str, float] | None = None
 
     # Unlike user_schema, user_schema_version usually exist, pointing to the
     # latest user schema, which is self.user_schema if changed, or the user
     # schema this QueryUnit was compiled upon.
     user_schema_version: uuid.UUID | None = None
-    cached_reflection: Optional[bytes] = None
-    extensions: Optional[set[str]] = None
-    ext_config_settings: Optional[list[config.Setting]] = None
+    cached_reflection: bytes | None = None
+    extensions: set[str] | None = None
+    ext_config_settings: list[config.Setting] | None = None
 
     # If present, represents the future global schema state
     # after the command is run. The schema is pickled.
-    global_schema: Optional[bytes] = None
+    global_schema: bytes | None = None
     roles: immutables.Map[str, immutables.Map[str, Any]] | None = None
 
     is_explain: bool = False
@@ -343,7 +342,7 @@ class QueryUnit:
     append_tx_op: bool = False
 
     # Translation source map.
-    source_map: Optional[pgcodegen.SourceMap] = None
+    source_map: pgcodegen.SourceMap | None = None
     # For SQL queries, the length of the query prefix applied
     # after translation.
     sql_prefix_len: int = 0
@@ -403,11 +402,11 @@ class QueryUnitGroup:
     out_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
     in_type_data: bytes = sertypes.NULL_TYPE_DESC
     in_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
-    in_type_args: Optional[list[Param]] = None
+    in_type_args: list[Param] | None = None
     in_type_args_real_count: int = 0
-    globals: Optional[list[tuple[str, bool]]] = None
+    globals: list[tuple[str, bool]] | None = None
 
-    warnings: Optional[list[errors.EdgeDBError]] = None
+    warnings: list[errors.EdgeDBError] | None = None
 
     # Cacheable QueryUnit is serialized in the compiler, so that the I/O server
     # doesn't need to serialize it again for persistence.
@@ -415,7 +414,7 @@ class QueryUnitGroup:
     # This is a I/O server-only cache for unpacked QueryUnits
     _unpacked_units: list[QueryUnit] | None = None
 
-    state_serializer: Optional[sertypes.StateSerializer] = None
+    state_serializer: sertypes.StateSerializer | None = None
 
     cache_state: int = 0
     tx_seq_id: int = 0
@@ -498,7 +497,7 @@ class PrepareData(PreparedStmtOpData):
 
     query: str
     """Translated query string"""
-    source_map: Optional[pgcodegen.SourceMap] = None
+    source_map: pgcodegen.SourceMap | None = None
     """Translation source map"""
 
 
@@ -522,10 +521,10 @@ class SQLQueryUnit:
     """Translated query text."""
 
     prefix_len: int = 0
-    source_map: Optional[pgcodegen.SourceMap] = None
+    source_map: pgcodegen.SourceMap | None = None
     """Translation source map."""
 
-    eql_format_query: Optional[str] = dataclasses.field(
+    eql_format_query: str | None = dataclasses.field(
         repr=False, default=None)
     """Translated query text returning data in single-column format."""
 
@@ -542,16 +541,16 @@ class SQLQueryUnit:
     fe_settings: SQLSettings
     """Frontend-only settings effective during translation of this unit."""
 
-    tx_action: Optional[TxAction] = None
+    tx_action: TxAction | None = None
     tx_chain: bool = False
-    sp_name: Optional[str] = None
+    sp_name: str | None = None
 
-    prepare: Optional[PrepareData] = None
-    execute: Optional[ExecuteData] = None
-    deallocate: Optional[DeallocateData] = None
+    prepare: PrepareData | None = None
+    execute: ExecuteData | None = None
+    deallocate: DeallocateData | None = None
 
-    set_vars: Optional[dict[Optional[str], Optional[SQLSetting]]] = None
-    get_var: Optional[str] = None
+    set_vars: dict[str | None, SQLSetting | None] | None = None
+    get_var: str | None = None
     is_local: bool = False
 
     stmt_name: bytes = b""
@@ -561,12 +560,12 @@ class SQLQueryUnit:
     """Whether the query is completely emulated outside of backend and so
     the response should be synthesized also."""
 
-    command_complete_tag: Optional[CommandCompleteTag] = None
+    command_complete_tag: CommandCompleteTag | None = None
     """When set, CommandComplete for this query will be overridden.
     This is useful, for example, for setting the tag of DML statements,
     which return the number of modified rows."""
 
-    params: Optional[list[SQLParam]] = None
+    params: list[SQLParam] | None = None
 
 
 class CommandCompleteTag:
@@ -644,7 +643,7 @@ class ParsedDatabase:
 
 
 SQLSetting = tuple[str | int | float, ...]
-SQLSettings = immutables.Map[Optional[str], Optional[SQLSetting]]
+SQLSettings = immutables.Map[str | None, SQLSetting | None]
 DEFAULT_SQL_SETTINGS: SQLSettings = immutables.Map()
 DEFAULT_SQL_FE_SETTINGS: SQLSettings = immutables.Map(
     {
@@ -661,8 +660,8 @@ DEFAULT_SQL_FE_SETTINGS: SQLSettings = immutables.Map(
 class SQLTransactionState:
     in_tx: bool
     settings: SQLSettings
-    in_tx_settings: Optional[SQLSettings]
-    in_tx_local_settings: Optional[SQLSettings]
+    in_tx_settings: SQLSettings | None
+    in_tx_local_settings: SQLSettings | None
     savepoints: list[tuple[str, SQLSettings, SQLSettings]]
 
     def current_fe_settings(self) -> SQLSettings:
@@ -671,7 +670,7 @@ class SQLTransactionState:
         else:
             return self.settings or DEFAULT_SQL_FE_SETTINGS
 
-    def get(self, name: str) -> Optional[SQLSetting]:
+    def get(self, name: str) -> SQLSetting | None:
         if self.in_tx:
             # For easier access, in_tx_local_settings is always a superset of
             # in_tx_settings; in_tx_settings only keeps track of non-local
@@ -731,7 +730,7 @@ class SQLTransactionState:
                 self.set(name, value, query_unit.is_local)
 
     def set(
-        self, name: Optional[str], value: Optional[SQLSetting], is_local: bool
+        self, name: str | None, value: SQLSetting | None, is_local: bool
     ) -> None:
         def _set(attr_name: str) -> None:
             settings = getattr(self, attr_name)
@@ -776,34 +775,34 @@ class ProposedMigrationStep(NamedTuple):
 
 
 class MigrationState(NamedTuple):
-    parent_migration: Optional[s_migrations.Migration]
+    parent_migration: s_migrations.Migration | None
     initial_schema: s_schema.Schema
-    initial_savepoint: Optional[str]
+    initial_savepoint: str | None
     target_schema: s_schema.Schema
     guidance: s_obj.DeltaGuidance
     accepted_cmds: tuple[qlast.Base, ...]
-    last_proposed: Optional[tuple[ProposedMigrationStep, ...]]
+    last_proposed: tuple[ProposedMigrationStep, ...] | None
 
 
 class MigrationRewriteState(NamedTuple):
-    initial_savepoint: Optional[str]
+    initial_savepoint: str | None
     target_schema: s_schema.Schema
     accepted_migrations: tuple[qlast.CreateMigration, ...]
 
 
 class TransactionState(NamedTuple):
     id: int
-    name: Optional[str]
+    name: str | None
     local_user_schema: s_schema.FlatSchema | None
     global_schema: s_schema.FlatSchema
-    modaliases: immutables.Map[Optional[str], str]
+    modaliases: immutables.Map[str | None, str]
     session_config: immutables.Map[str, config.SettingValue]
     database_config: immutables.Map[str, config.SettingValue]
     system_config: immutables.Map[str, config.SettingValue]
     cached_reflection: immutables.Map[str, tuple[str, ...]]
     tx: Transaction
-    migration_state: Optional[MigrationState] = None
-    migration_rewrite_state: Optional[MigrationRewriteState] = None
+    migration_state: MigrationState | None = None
+    migration_rewrite_state: MigrationRewriteState | None = None
 
     @property
     def user_schema(self) -> s_schema.FlatSchema:
@@ -823,7 +822,7 @@ class Transaction:
         *,
         user_schema: s_schema.FlatSchema,
         global_schema: s_schema.FlatSchema,
-        modaliases: immutables.Map[Optional[str], str],
+        modaliases: immutables.Map[str | None, str],
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
@@ -954,7 +953,7 @@ class Transaction:
     def get_user_schema(self) -> s_schema.FlatSchema:
         return self._current.user_schema
 
-    def get_user_schema_if_updated(self) -> Optional[s_schema.FlatSchema]:
+    def get_user_schema_if_updated(self) -> s_schema.FlatSchema | None:
         if self._current.user_schema is self._state0.user_schema:
             return None
         else:
@@ -963,13 +962,13 @@ class Transaction:
     def get_global_schema(self) -> s_schema.FlatSchema:
         return self._current.global_schema
 
-    def get_global_schema_if_updated(self) -> Optional[s_schema.FlatSchema]:
+    def get_global_schema_if_updated(self) -> s_schema.FlatSchema | None:
         if self._current.global_schema is self._state0.global_schema:
             return None
         else:
             return self._current.global_schema
 
-    def get_modaliases(self) -> immutables.Map[Optional[str], str]:
+    def get_modaliases(self) -> immutables.Map[str | None, str]:
         return self._current.modaliases
 
     def get_session_config(self) -> immutables.Map[str, config.SettingValue]:
@@ -983,7 +982,7 @@ class Transaction:
 
     def get_cached_reflection_if_updated(
         self,
-    ) -> Optional[immutables.Map[str, tuple[str, ...]]]:
+    ) -> immutables.Map[str, tuple[str, ...]] | None:
         if self._current.cached_reflection == self._state0.cached_reflection:
             return None
         else:
@@ -992,10 +991,10 @@ class Transaction:
     def get_cached_reflection(self) -> immutables.Map[str, tuple[str, ...]]:
         return self._current.cached_reflection
 
-    def get_migration_state(self) -> Optional[MigrationState]:
+    def get_migration_state(self) -> MigrationState | None:
         return self._current.migration_state
 
-    def get_migration_rewrite_state(self) -> Optional[MigrationRewriteState]:
+    def get_migration_rewrite_state(self) -> MigrationRewriteState | None:
         return self._current.migration_rewrite_state
 
     def update_schema(self, new_schema: s_schema.Schema) -> None:
@@ -1010,7 +1009,7 @@ class Transaction:
         )
 
     def update_modaliases(
-        self, new_modaliases: immutables.Map[Optional[str], str]
+        self, new_modaliases: immutables.Map[str | None, str]
     ) -> None:
         self._current = self._current._replace(modaliases=new_modaliases)
 
@@ -1030,11 +1029,11 @@ class Transaction:
     ) -> None:
         self._current = self._current._replace(cached_reflection=new)
 
-    def update_migration_state(self, mstate: Optional[MigrationState]) -> None:
+    def update_migration_state(self, mstate: MigrationState | None) -> None:
         self._current = self._current._replace(migration_state=mstate)
 
     def update_migration_rewrite_state(
-        self, mrstate: Optional[MigrationRewriteState]
+        self, mrstate: MigrationRewriteState | None
     ) -> None:
         self._current = self._current._replace(migration_rewrite_state=mrstate)
 
@@ -1046,14 +1045,14 @@ class CompilerConnectionState:
     __slots__ = ("_savepoints_log", "_current_tx", "_tx_count", "_user_schema")
 
     _savepoints_log: dict[int, TransactionState]
-    _user_schema: Optional[s_schema.FlatSchema]
+    _user_schema: s_schema.FlatSchema | None
 
     def __init__(
         self,
         *,
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
-        modaliases: immutables.Map[Optional[str], str],
+        modaliases: immutables.Map[str | None, str],
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
@@ -1097,7 +1096,7 @@ class CompilerConnectionState:
         *,
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
-        modaliases: immutables.Map[Optional[str], str],
+        modaliases: immutables.Map[str | None, str],
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],

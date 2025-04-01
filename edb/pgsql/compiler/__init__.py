@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Mapping, TYPE_CHECKING
+from typing import Mapping, TYPE_CHECKING
 from dataclasses import dataclass
 
 from edb import errors
@@ -55,34 +55,33 @@ class CompileResult:
 
     argmap: dict[str, pgast.Param]
 
-    detached_params: Optional[list[tuple[str, ...]]] = None
+    detached_params: list[tuple[str, ...]] | None = None
 
 
 def compile_ir_to_sql_tree(
     ir_expr: irast.Base,
     *,
-    output_format: Optional[OutputFormat] = None,
+    output_format: OutputFormat | None = None,
     ignore_shapes: bool = False,
-    explicit_top_cast: Optional[irast.TypeRef] = None,
+    explicit_top_cast: irast.TypeRef | None = None,
     singleton_mode: bool = False,
-    named_param_prefix: Optional[tuple[str, ...]] = None,
+    named_param_prefix: tuple[str, ...] | None = None,
     expected_cardinality_one: bool = False,
     is_explain: bool = False,
-    external_rvars: Optional[
-        Mapping[tuple[irast.PathId, pgce.PathAspect], pgast.PathRangeVar]
-    ] = None,
-    external_rels: Optional[
-        Mapping[
-            irast.PathId,
-            tuple[
-                pgast.BaseRelation | pgast.CommonTableExpr,
-                tuple[pgce.PathAspect, ...]
-            ],
+    external_rvars: Mapping[
+        tuple[irast.PathId, pgce.PathAspect],
+        pgast.PathRangeVar
+    ] | None = None,
+    external_rels: Mapping[
+        irast.PathId,
+        tuple[
+            pgast.BaseRelation | pgast.CommonTableExpr,
+            tuple[pgce.PathAspect, ...]
         ]
-    ] = None,
-    backend_runtime_params: Optional[pgparams.BackendRuntimeParams]=None,
+    ] | None = None,
+    backend_runtime_params: pgparams.BackendRuntimeParams | None=None,
     detach_params: bool = False,
-    alias_generator: Optional[aliases.AliasGenerator] = None,
+    alias_generator: aliases.AliasGenerator | None = None,
     versioned_stdlib: bool = True,
     # HACK?
     versioned_singleton: bool = False,

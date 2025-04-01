@@ -14,7 +14,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Mapping, NamedTuple
+from typing import Any, Mapping, NamedTuple
 
 import enum
 import functools
@@ -59,21 +59,21 @@ class BackendInstanceParams(NamedTuple):
     capabilities: BackendCapabilities
     version: BackendVersion
     tenant_id: str
-    base_superuser: Optional[str] = None
+    base_superuser: str | None = None
     max_connections: int = 500
     reserved_connections: int = 0
 
     ext_schema: str = "edgedbext"
     """A Postgres schema where extensions can be created."""
 
-    existing_exts: Optional[Mapping[str, str]] = None
+    existing_exts: Mapping[str, str] | None = None
     """A map of preexisting extensions in the target backend with schemas."""
 
 
 class BackendRuntimeParams(NamedTuple):
 
     instance_params: BackendInstanceParams
-    session_authorization_role: Optional[str] = None
+    session_authorization_role: str | None = None
 
     @property
     def tenant_id(self) -> str:

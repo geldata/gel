@@ -22,7 +22,6 @@ See README.md in this package for more details.
 """
 
 from __future__ import annotations
-from typing import Optional
 
 import pathlib
 
@@ -94,7 +93,7 @@ def perfviz(
     if len(dirs) > 1:
         raise click.UsageError("Specify at most one directory")
 
-    dir: Optional[str] = dirs[0] if dirs else None
+    dir: str | None = dirs[0] if dirs else None
     prof = profiler.profile(
         dir=dir, prefix=prefix, suffix=suffix, save_every_n_calls=1
     )

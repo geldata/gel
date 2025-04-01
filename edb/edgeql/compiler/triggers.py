@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Collection
+from typing import Collection
 
 from edb import errors
 
@@ -101,13 +101,13 @@ def compile_trigger(
                 sctx.iterator_path_ids |= {ir.path_id}
             sctx.anchors[name] = ir
 
-        trigger_expr: Optional[s_expr.Expression] = trigger.get_expr(schema)
+        trigger_expr: s_expr.Expression | None = trigger.get_expr(schema)
         assert trigger_expr
         trigger_ast = trigger_expr.parse()
 
         # A conditional trigger desugars to a FOR query that puts the
         # condition in the FILTER of a trivial SELECT.
-        condition: Optional[s_expr.Expression] = trigger.get_condition(schema)
+        condition: s_expr.Expression | None = trigger.get_condition(schema)
         if condition:
             trigger_ast = qlast.ForQuery(
                 iterator_alias='__',
@@ -142,8 +142,8 @@ def compile_trigger(
 
 def compile_triggers_phase(
     dml_stmts: Collection[irast.MutatingStmt],
-    defining_trigger_on: Optional[s_types.Type],
-    defining_trigger_kinds: Optional[Collection[qltypes.TriggerKind]],
+    defining_trigger_on: s_types.Type | None,
+    defining_trigger_kinds: Collection[qltypes.TriggerKind] | None,
     *,
     ctx: context.ContextLevel,
 ) -> tuple[irast.Trigger, ...]:

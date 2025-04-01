@@ -22,7 +22,7 @@ from __future__ import annotations
 import functools
 import dataclasses
 import uuid
-from typing import Literal, Optional, cast, overload
+from typing import Literal, cast, overload
 
 from edb.common.typeutils import not_none
 
@@ -539,7 +539,7 @@ def get_pointer_storage_info(
     pointer: s_pointers.Pointer,
     *,
     schema: s_schema.Schema,
-    source: Optional[s_obj.InheritingObject] = None,
+    source: s_obj.InheritingObject | None = None,
     resolve_type: bool = True,
     versioned: bool = True,
     link_bias: bool = False,
@@ -617,7 +617,7 @@ def get_pointer_storage_info(
 @dataclasses.dataclass(kw_only=True, eq=False, slots=True)
 class PointerStorageInfo:
 
-    table_name: Optional[tuple[str, str]]
+    table_name: tuple[str, str] | None
     table_type: str
     column_name: str
     column_type: tuple[str, str]
@@ -642,7 +642,7 @@ def get_ptrref_storage_info(
     link_bias: bool = ...,
     allow_missing: bool = ...,
     versioned: bool = True,
-) -> Optional[PointerStorageInfo]: ...
+) -> PointerStorageInfo | None: ...
 
 
 def get_ptrref_storage_info(
@@ -653,7 +653,7 @@ def get_ptrref_storage_info(
     allow_missing: bool = False,
     # XXX
     versioned: bool = True,
-) -> Optional[PointerStorageInfo]:
+) -> PointerStorageInfo | None:
     # We wrap the real version because of bad mypy interactions
     # with lru_cache.
     return _get_ptrref_storage_info(
@@ -673,7 +673,7 @@ def _get_ptrref_storage_info(
     link_bias: bool = False,
     allow_missing: bool = False,
     versioned: bool = False,
-) -> Optional[PointerStorageInfo]:
+) -> PointerStorageInfo | None:
 
     if ptrref.material_ptr:
         ptrref = ptrref.material_ptr
@@ -783,7 +783,7 @@ def _ptrref_storable_in_pointer(ptrref: irast.BasePointerRef) -> bool:
 
 
 def has_table(
-    obj: Optional[s_obj.InheritingObject], schema: s_schema.Schema
+    obj: s_obj.InheritingObject | None, schema: s_schema.Schema
 ) -> bool:
     """Returns True for all schema objects that need a postgres table"""
     assert obj

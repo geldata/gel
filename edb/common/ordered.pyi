@@ -30,7 +30,6 @@ from typing import (
     Iterable,
     Iterator,
     MutableSet,
-    Optional,
     TypeVar,
 )
 
@@ -39,7 +38,7 @@ _T = TypeVar("_T")
 _H = TypeVar("_H", bound=Hashable)
 
 class OrderedSet(MutableSet[_H]):
-    def __init__(self, iterable: Optional[Iterable[_H]] = None) -> None: ...
+    def __init__(self, iterable: Iterable[_H] | None = None) -> None: ...
     def __and__(self, s: AbstractSet[Any]) -> OrderedSet[_H]: ...
     def __or__(self, s: AbstractSet[_T]) -> OrderedSet[_H | _T]: ...
     def __sub__(self, s: AbstractSet[Any]) -> OrderedSet[_H]: ...

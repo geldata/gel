@@ -25,7 +25,7 @@ though if that starts becoming a problem it should just be abandoned.
 from __future__ import annotations
 
 
-from typing import Optional, AbstractSet
+from typing import AbstractSet
 
 from edb import errors
 
@@ -211,7 +211,7 @@ def _count_alias_uses(
 def try_group_rewrite(
     node: qlast.Query,
     aliases: AliasGenerator,
-) -> Optional[qlast.Query]:
+) -> qlast.Query | None:
     """
     Try to apply some syntactic rewrites of GROUP expressions so we
     can generate better code.

@@ -92,7 +92,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from typing import Optional, Sequence, TYPE_CHECKING
+from typing import Sequence, TYPE_CHECKING
 
 from edb import errors
 from edb.common.typeutils import not_none
@@ -227,7 +227,7 @@ def _index(expr: qlast.Expr, idx: qlast.Expr) -> qlast.Indirection:
 
 
 def _make_tuple(
-    fields: Sequence[tuple[Optional[str], qlast.Expr]]
+    fields: Sequence[tuple[str | None, qlast.Expr]]
 ) -> qlast.NamedTuple | qlast.Tuple:
     is_named = fields and fields[0][0]
     if is_named:
@@ -263,7 +263,7 @@ def make_decoder(
         for param in qparams
     ]
 
-    def mk(typ: irast.ParamTransType, idx: Optional[qlast.Expr]) -> qlast.Expr:
+    def mk(typ: irast.ParamTransType, idx: qlast.Expr | None) -> qlast.Expr:
         if isinstance(typ, irast.ParamScalar):
             expr = params[typ.idx]
             if idx is not None:
@@ -367,7 +367,7 @@ def create_sub_params(
     pt: s_types.Type,
     *,
     ctx: context.ContextLevel,
-) -> Optional[irast.SubParams]:
+) -> irast.SubParams | None:
     """Create sub parameters for a new param, if needed.
 
     We need to do this if there is a tuple in the type.
@@ -404,7 +404,7 @@ def finish_sub_params(
     subps: irast.SubParams,
     *,
     ctx: context.ContextLevel,
-) -> Optional[irast.SubParams]:
+) -> irast.SubParams | None:
     """Finalize the subparams by compiling the IR in the proper context.
 
     We can't just compile it when doing create_sub_params, since that is

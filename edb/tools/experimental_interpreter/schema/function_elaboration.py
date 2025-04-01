@@ -7,7 +7,6 @@ from ..basis.server_funcs import get_default_func_impl_for_function
 from edb.edgeql import qltypes as qltypes
 from .. import elab_schema as elab_schema
 from ..type_checking_tools import name_resolution as name_res
-from typing import Optional
 
 
 def fun_arg_type_polymorphism_post_processing(tp: e.Tp) -> e.Tp:
@@ -17,7 +16,7 @@ def fun_arg_type_polymorphism_post_processing(tp: e.Tp) -> e.Tp:
     This is how the current polymorphism status quo.
     """
 
-    def replace_any(tp: e.Tp) -> Optional[e.Tp]:
+    def replace_any(tp: e.Tp) -> e.Tp | None:
         match tp:
             case e.AnyTp(spec):
                 if spec == "type":

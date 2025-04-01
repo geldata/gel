@@ -23,7 +23,6 @@ from typing import (
     Generic,
     Iterable,
     Literal,
-    Optional,
     Sequence,
     TypeVar,
 )
@@ -47,13 +46,13 @@ class Timer:
     (10, False) = execute any time after 10s
     """
 
-    time: Optional[float] = None
+    time: float | None = None
 
     # Whether the action should be taken as soon as possible after the time.
     urgent: bool = True
 
     @staticmethod
-    def create_delay(delay: Optional[float], urgent: bool) -> Timer:
+    def create_delay(delay: float | None, urgent: bool) -> Timer:
         now = asyncio.get_running_loop().time()
         if delay is None:
             time = None
@@ -87,7 +86,7 @@ class Timer:
             return max_delay
 
     @staticmethod
-    def combine(timers: Iterable[Timer]) -> Optional[Timer]:
+    def combine(timers: Iterable[Timer]) -> Timer | None:
         """Combine the timers to determine the when to take the next action.
 
         If the timers are (1, False), (2, False), (3, True), it may be wasteful
@@ -137,7 +136,7 @@ class Scheduler(abc.ABC, Generic[_T]):
     @abc.abstractmethod
     async def get_params(
         self, context: Context,
-    ) -> Optional[Sequence[Params[_T]]]:
+    ) -> Sequence[Params[_T]] | None:
         """Get parameters for the requests to run."""
         raise NotImplementedError
 
@@ -145,7 +144,7 @@ class Scheduler(abc.ABC, Generic[_T]):
         if not self.timer.is_ready():
             return False
 
-        request_params: Optional[Sequence[Params[_T]]]
+        request_params: Sequence[Params[_T]] | None
         try:
             request_params = await self.get_params(context)
         except Exception:
@@ -239,7 +238,7 @@ class Service:
     # Information about the service's rate limits
     # Even if no Limit is available, the presence of a key indicates that a
     # limit is used at least sometimes.
-    limits: dict[str, Optional[Limits]] = field(default_factory=dict)
+    limits: dict[str, Limits | None] = field(default_factory=dict)
 
     # The maximum number of times to retry requests
     max_retry_count: Final[int] = 4
@@ -261,7 +260,7 @@ class Service:
 
         if self.limits is not None:
             # Find the limit with the largest delay
-            limit_delays: dict[str, Optional[float]] = {}
+            limit_delays: dict[str, float | None] = {}
             for limit_names, service_limit in self.limits.items():
                 if service_limit is None:
                     # If no information is available, assume no limits
@@ -324,7 +323,7 @@ class Limits:
     """Information about a service's rate limits."""
 
     # Total limit of a resource per minute for a service.
-    total: Optional[int | Literal['unlimited']] = None
+    total: int | Literal['unlimited'] | None = None
 
     # Remaining resources before the limit is hit.
     # It is assumed to be decreasing during a call to execute_no_sleep.
@@ -335,7 +334,7 @@ class Limits:
     #
     # Finally, it is reset after requests are executed since we don't know when
     # the next call will be.
-    remaining: Optional[int] = None
+    remaining: int | None = None
 
     # A delay factor to implement exponential backoff
     delay_factor: float = 1
@@ -345,7 +344,7 @@ class Limits:
         request_cost: int,
         *,
         guess: float,
-    ) -> Optional[float]:
+    ) -> float | None:
         if self.total == 'unlimited':
             return None
 
@@ -393,14 +392,14 @@ class Request(abc.ABC, Generic[_T]):
     """Represents an async request"""
 
     params: Params[_T]
-    _inner: asyncio.Task[Optional[Result[_T]]]
+    _inner: asyncio.Task[Result[_T] | None]
 
     def __init__(self, params: Params[_T]):
         self.params = params
         self._inner = asyncio.create_task(self.run())
 
     @abc.abstractmethod
-    async def run(self) -> Optional[Result[_T]]:
+    async def run(self) -> Result[_T] | None:
         """Run the request and return a result."""
         raise NotImplementedError
 
@@ -408,7 +407,7 @@ class Request(abc.ABC, Generic[_T]):
         """Wait for the request to complete."""
         await self._inner
 
-    def get_result(self) -> Optional[Result[_T]]:
+    def get_result(self) -> Result[_T] | None:
         """Get the result of the request."""
         result = self._inner.result()
         return result
@@ -688,7 +687,7 @@ def _get_limit_base_delays(
     limits: dict[str, Limits],
     request_indexes: Sequence[int],
     guess_delay: float,
-) -> dict[str, Optional[float]]:
+) -> dict[str, float | None]:
     base_delays = {}
     for limit_name, limit in limits.items():
         pending_limit_cost = sum(
@@ -704,9 +703,9 @@ def _get_limit_base_delays(
 
 
 def _get_maximum_delay(
-    delays: dict[str, Optional[float]]
-) -> Optional[float]:
-    result: Optional[float] = None
+    delays: dict[str, float | None]
+) -> float | None:
+    result: float | None = None
     for delay in delays.values():
         if result is None:
             result = delay

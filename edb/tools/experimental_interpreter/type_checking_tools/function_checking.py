@@ -3,7 +3,7 @@ from ..data import type_ops as tops
 from ..data import expr_to_str as pp
 from ..data import module_ops as mops
 from ..interpreter_logging import print_warning
-from typing import Optional, Sequence
+from typing import Sequence
 from functools import reduce
 import operator
 
@@ -27,7 +27,7 @@ def refine_candidate_tp(tp: e.Tp) -> e.Tp:
 
 def try_match_and_get_arg_mods(
     expr: e.FunAppExpr, fun_def: e.FuncDef
-) -> Optional[Sequence[e.ParamModifier]]:
+) -> Sequence[e.ParamModifier] | None:
     """
     Returns None if the expr does not match the fun_def.
     """
@@ -61,7 +61,7 @@ def try_match_and_get_arg_mods(
 
 def check_args_ret_type_match(
     ctx: e.TcCtx, tps_syn: list[e.Tp], tps_ck: e.FunArgRetType
-) -> Optional[e.Tp]:  # Returns the result Tp if matches
+) -> e.Tp | None:  # Returns the result Tp if matches
     """
     If matches, return the result type.
     Need to return result type because we have parametric ploymorphism.

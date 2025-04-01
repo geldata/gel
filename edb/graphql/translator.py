@@ -27,7 +27,6 @@ import json
 import re
 from typing import (
     Any,
-    Optional,
     Mapping,
     NamedTuple,
 )
@@ -153,7 +152,7 @@ class Operation(NamedTuple):
 class TranspiledOperation(NamedTuple):
 
     edgeql_ast: qlast.Base
-    cache_deps_vars: Optional[frozenset[str]]
+    cache_deps_vars: frozenset[str] | None
     variables_desc: dict
 
 
@@ -1899,7 +1898,7 @@ def parse_tokens(
 def convert_errors(
     errs: list[gql_error.GraphQLError],
     *,
-    substitutions: Optional[dict[str, tuple[str, int, int]]],
+    substitutions: dict[str, tuple[str, int, int]] | None,
 ) -> list[gql_error.GraphQLErrors]:
     result = []
     for err in errs:
@@ -1927,9 +1926,9 @@ def translate_ast(
     gqlcore: gt.GQLCoreSchema,
     document_ast: graphql.Document,
     *,
-    operation_name: Optional[str]=None,
-    variables: Optional[Mapping[str, Any]]=None,
-    substitutions: Optional[dict[str, tuple[str, int, int]]],
+    operation_name: str | None=None,
+    variables: Mapping[str, Any] | None=None,
+    substitutions: dict[str, tuple[str, int, int]] | None,
 ) -> TranspiledOperation:
 
     if variables is None:

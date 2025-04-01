@@ -24,7 +24,6 @@ from __future__ import annotations
 from typing import (
     Callable,
     Final,
-    Optional,
     Protocol,
     Iterable,
     Sequence,
@@ -296,7 +295,7 @@ def compile_FunctionCall(
         # form of the function is actually used.
         env.add_schema_ref(func, expr)
 
-    func_initial_value: Optional[irast.Set]
+    func_initial_value: irast.Set | None
 
     if matched_func_initial_value is not None:
         frag = qlparser.parse_fragment(matched_func_initial_value.text)
@@ -629,7 +628,7 @@ def compile_operator(
     # Check if the operator is a derived operator, and if so,
     # find the origins.
     origin_op = opers[0].get_derivative_of(env.schema)
-    derivative_op: Optional[s_oper.Operator]
+    derivative_op: s_oper.Operator | None
     if origin_op is not None:
         # If this is a derived operator, there should be
         # exactly one form of it.  This is enforced at the DDL
@@ -855,8 +854,8 @@ def compile_operator(
     ):
         sql_operator = tuple(from_op)
 
-    origin_name: Optional[sn.QualName]
-    origin_module_id: Optional[uuid.UUID]
+    origin_name: sn.QualName | None
+    origin_module_id: uuid.UUID | None
     if derivative_op is not None:
         origin_name = oper_name
         origin_module_id = env.schema.get_global(
@@ -1066,7 +1065,7 @@ def finalize_args(
     for i, barg in enumerate(bound_call.args):
         param = barg.param
         arg_val = barg.val
-        arg_type_path_id: Optional[irast.PathId] = None
+        arg_type_path_id: irast.PathId | None = None
         if param is None:
             # defaults bitmask
             param_name_to_arg['__defaults_mask__'] = -1
@@ -1326,7 +1325,7 @@ def _validate_object_search_call(
 def _validate_has_object_index(
     stype: s_types.Type,
     schema: s_schema.Schema,
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     context: str,
     index_name: sn.QualName,
 ) -> s_indexes.Index:

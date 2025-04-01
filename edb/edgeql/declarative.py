@@ -30,7 +30,6 @@ EdgeQL AST visitor.
 
 from __future__ import annotations
 from typing import (
-    Optional,
     AbstractSet,
     Iterable,
     Mapping,
@@ -77,8 +76,8 @@ class TraceContextBase:
     schema: s_schema.Schema
     module: str
     depstack: list[tuple[qlast.DDLOperation, s_name.QualName]]
-    modaliases: dict[Optional[str], str]
-    objects: dict[s_name.QualName, Optional[qltracer.ObjectLike]]
+    modaliases: dict[str | None, str]
+    objects: dict[s_name.QualName, qltracer.ObjectLike | None]
     pointers: dict[s_name.UnqualName, set[s_name.QualName]]
     parents: dict[s_name.QualName, set[s_name.QualName]]
     ancestors: dict[s_name.QualName, set[s_name.QualName]]
@@ -310,7 +309,7 @@ class DepTraceContext(TraceContextBase):
         self,
         schema: s_schema.Schema,
         ddlgraph: DDLGraph,
-        objects: dict[s_name.QualName, Optional[qltracer.ObjectLike]],
+        objects: dict[s_name.QualName, qltracer.ObjectLike | None],
         pointers: dict[s_name.UnqualName, set[s_name.QualName]],
         parents: dict[s_name.QualName, set[s_name.QualName]],
         ancestors: dict[s_name.QualName, set[s_name.QualName]],
@@ -599,8 +598,8 @@ def trace_layout_CreateProperty(
 def _trace_item_layout(
     node: qlast.CreateObject,
     *,
-    obj: Optional[qltracer.NamedObject] = None,
-    fq_name: Optional[s_name.QualName] = None,
+    obj: qltracer.NamedObject | None = None,
+    fq_name: s_name.QualName | None = None,
     ctx: LayoutTraceContext,
 ) -> None:
     if obj is None:
@@ -658,8 +657,8 @@ def _trace_item_layout(
         if isinstance(decl, qlast.CreateConcretePointer):
             assert isinstance(obj, qltracer.Source)
 
-            target: Optional[qltracer.TypeLike]
-            target_expr: Optional[qlast.Expr]
+            target: qltracer.TypeLike | None
+            target_expr: qlast.Expr | None
             if isinstance(decl.target, qlast.TypeExpr):
                 target = _resolve_type_expr(decl.target, ctx=ctx)
                 target_expr = None
@@ -863,7 +862,7 @@ def trace_ConcreteConstraint(
             assert isinstance(cmd.value, qlast.Expr)
             exprs.append(ExprDependency(expr=cmd.value))
 
-    loop_control: Optional[s_name.QualName]
+    loop_control: s_name.QualName | None
     if isinstance(ctx.depstack[-1][0], qlast.AlterScalarType):
         # Scalars are tightly bound to their constraints, so
         # we must prohibit any possible reference to this scalar
@@ -1110,12 +1109,12 @@ def _clear_nonessential_subcommands(node: qlast.DDLOperation) -> None:
 def _register_item(
     decl: qlast.DDLOperation,
     *,
-    deps: Optional[AbstractSet[s_name.QualName]] = None,
-    hard_dep_exprs: Optional[Iterable[Dependency]] = None,
-    loop_control: Optional[s_name.QualName] = None,
-    anchors: Optional[Mapping[str, s_name.QualName]] = None,
-    source: Optional[s_name.QualName] = None,
-    subject: Optional[s_name.QualName] = None,
+    deps: AbstractSet[s_name.QualName] | None = None,
+    hard_dep_exprs: Iterable[Dependency] | None = None,
+    loop_control: s_name.QualName | None = None,
+    anchors: Mapping[str, s_name.QualName] | None = None,
+    source: s_name.QualName | None = None,
+    subject: s_name.QualName | None = None,
     ctx: DepTraceContext,
 ) -> None:
 
@@ -1519,10 +1518,10 @@ TRACER_TO_REAL_TYPE_MAP = {
 def _get_local_obj(
     refname: s_name.QualName,
     tracer_type: type[qltracer.NamedObject],
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     *,
     ctx: LayoutTraceContext | DepTraceContext,
-) -> Optional[qltracer.NamedObject]:
+) -> qltracer.NamedObject | None:
 
     obj = ctx.objects.get(refname)
 
@@ -1571,9 +1570,9 @@ def _resolve_type_name(
 
 def _get_tracer_type(
     decl: qlast.CreateObject,
-) -> Optional[type[qltracer.NamedObject]]:
+) -> type[qltracer.NamedObject] | None:
 
-    tracer_type: Optional[type[qltracer.NamedObject]] = None
+    tracer_type: type[qltracer.NamedObject] | None = None
 
     if isinstance(decl, qlast.CreateObjectType):
         tracer_type = qltracer.ObjectType
@@ -1629,7 +1628,7 @@ def _validate_schema_ref(
 def _resolve_schema_ref(
     name: s_name.Name,
     type: type[qltracer.NamedObject],
-    span: Optional[parsing.Span],
+    span: parsing.Span | None,
     *,
     ctx: LayoutTraceContext | DepTraceContext,
 ) -> s_obj.SubclassableObject:

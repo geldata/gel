@@ -100,12 +100,12 @@ class ASTBaseTests(unittest.TestCase):
             field_typing_union_list: list[
                 str | bytes] = ast.field(factory=list)
             field_typing_str: str
-            field_typing_optional_str: typing.Optional[str]
+            field_typing_optional_str: str | None
             field_typing_mapping: dict[
                 int, str] = ast.field(factory=dict)
             field_typing_mapping_opt_key: \
                 dict[
-                    typing.Optional[int], str] = ast.field(factory=dict)
+                    int | None, str] = ast.field(factory=dict)
 
         self.assertEqual(Node().field_list, [])
         self.assertEqual(Node().field_typing_list, [])

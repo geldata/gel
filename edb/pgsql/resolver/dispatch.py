@@ -46,8 +46,8 @@ def resolve(expr: Base_T, *, ctx: context.ResolverContextLevel) -> Base_T:
 
 
 def resolve_opt(
-    node: typing.Optional[Base_T], *, ctx: context.ResolverContextLevel
-) -> typing.Optional[Base_T]:
+    node: Base_T | None, *, ctx: context.ResolverContextLevel
+) -> Base_T | None:
     if not node:
         return None
     return resolve(node, ctx=ctx)
@@ -60,10 +60,10 @@ def resolve_list(
 
 
 def resolve_opt_list(
-    exprs: typing.Optional[list[Base_T]],
+    exprs: list[Base_T] | None,
     *,
     ctx: context.ResolverContextLevel,
-) -> typing.Optional[list[Base_T]]:
+) -> list[Base_T] | None:
     if not exprs:
         return None
     return resolve_list(exprs, ctx=ctx)

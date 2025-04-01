@@ -129,7 +129,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
     TypeVar,
     AbstractSet,
     Mapping,
@@ -195,8 +194,8 @@ def compile_ast_to_ir(
     tree: qlast.Expr | qlast.Command,
     schema: s_schema.Schema,
     *,
-    script_info: Optional[irast.ScriptInfo] = None,
-    options: Optional[CompilerOptions] = None,
+    script_info: irast.ScriptInfo | None = None,
+    options: CompilerOptions | None = None,
 ) -> irast.Statement:
     pass
 
@@ -206,8 +205,8 @@ def compile_ast_to_ir(
     tree: qlast.ConfigOp,
     schema: s_schema.Schema,
     *,
-    script_info: Optional[irast.ScriptInfo] = None,
-    options: Optional[CompilerOptions] = None,
+    script_info: irast.ScriptInfo | None = None,
+    options: CompilerOptions | None = None,
 ) -> irast.ConfigCommand:
     pass
 
@@ -217,8 +216,8 @@ def compile_ast_to_ir(
     tree: qlast.Base,
     schema: s_schema.Schema,
     *,
-    script_info: Optional[irast.ScriptInfo] = None,
-    options: Optional[CompilerOptions] = None,
+    script_info: irast.ScriptInfo | None = None,
+    options: CompilerOptions | None = None,
 ) -> irast.Statement | irast.ConfigCommand:
     pass
 
@@ -228,8 +227,8 @@ def compile_ast_to_ir(
     tree: qlast.Base,
     schema: s_schema.Schema,
     *,
-    script_info: Optional[irast.ScriptInfo] = None,
-    options: Optional[CompilerOptions] = None,
+    script_info: irast.ScriptInfo | None = None,
+    options: CompilerOptions | None = None,
 ) -> irast.Statement | irast.ConfigCommand:
     """Compile given EdgeQL AST into Gel IR.
 
@@ -312,7 +311,7 @@ def compile_ast_fragment_to_ir(
     tree: qlast.Base,
     schema: s_schema.Schema,
     *,
-    options: Optional[CompilerOptions] = None,
+    options: CompilerOptions | None = None,
 ) -> irast.Statement:
     """Compile given EdgeQL AST fragment into Gel IR.
 
@@ -382,7 +381,7 @@ def evaluate_to_python_val(
     expr: str,
     schema: s_schema.Schema,
     *,
-    modaliases: Optional[Mapping[Optional[str], str]] = None,
+    modaliases: Mapping[str | None, str] | None = None,
 ) -> Any:
     """Evaluate the given EdgeQL string as a constant expression.
 
@@ -435,7 +434,7 @@ def evaluate_ast_to_python_val_and_ir(
     tree: qlast.Base,
     schema: s_schema.Schema,
     *,
-    modaliases: Optional[Mapping[Optional[str], str]] = None,
+    modaliases: Mapping[str | None, str] | None = None,
 ) -> tuple[Any, irast.Statement]:
     """Evaluate the given EdgeQL AST as a constant expression.
 
@@ -476,7 +475,7 @@ def evaluate_ast_to_python_val(
     tree: qlast.Base,
     schema: s_schema.Schema,
     *,
-    modaliases: Optional[Mapping[Optional[str], str]] = None,
+    modaliases: Mapping[str | None, str] | None = None,
 ) -> Any:
     """Evaluate the given EdgeQL AST as a constant expression.
 
@@ -511,7 +510,7 @@ def compile_constant_tree_to_ir(
     const: qlast.BaseConstant,
     schema: s_schema.Schema,
     *,
-    styperef: Optional[irast.TypeRef] = None,
+    styperef: irast.TypeRef | None = None,
 ) -> irast.Expr:
     """Compile an EdgeQL constant into an IR ConstExpr.
 
@@ -551,7 +550,7 @@ def normalize(
     tree: qlast.Base,
     *,
     schema: s_schema.Schema,
-    modaliases: Mapping[Optional[str], str],
+    modaliases: Mapping[str | None, str],
     localnames: AbstractSet[str] = frozenset(),
 ) -> None:
     """Normalize the given AST *tree* by explicitly qualifying identifiers.

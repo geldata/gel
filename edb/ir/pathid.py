@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     AbstractSet,
     Iterator,
     cast,
@@ -90,7 +89,7 @@ class PathId:
 
     #: If this PathId has a prefix from another namespace, this will
     #: contain said prefix.
-    _prefix: Optional[PathId]
+    _prefix: PathId | None
 
     #: True if this PathId represents the link portion of a link property path.
     _is_ptr: bool
@@ -100,10 +99,10 @@ class PathId:
 
     def __init__(
         self,
-        initializer: Optional[PathId] = None,
+        initializer: PathId | None = None,
         *,
         namespace: AbstractSet[str] = frozenset(),
-        typename: Optional[str] = None,
+        typename: str | None = None,
     ) -> None:
         if isinstance(initializer, PathId):
             self._path = initializer._path
@@ -145,9 +144,9 @@ class PathId:
         schema: s_schema.Schema,
         t: s_types.Type,
         *,
-        env: Optional[qlcompiler_ctx.Environment],
+        env: qlcompiler_ctx.Environment | None,
         namespace: AbstractSet[Namespace] = frozenset(),
-        typename: Optional[s_name.QualName] = None,
+        typename: s_name.QualName | None = None,
     ) -> PathId:
         """Return a ``PathId`` instance for a given :class:`schema.types.Type`
 
@@ -189,7 +188,7 @@ class PathId:
         pointer: s_pointers.Pointer,
         *,
         namespace: AbstractSet[Namespace] = frozenset(),
-        env: Optional[qlcompiler_ctx.Environment],
+        env: qlcompiler_ctx.Environment | None,
     ) -> PathId:
         """Return a ``PathId`` instance for a given link or property.
 
@@ -238,7 +237,7 @@ class PathId:
         typeref: irast.TypeRef,
         *,
         namespace: AbstractSet[Namespace] = frozenset(),
-        typename: Optional[s_name.Name | uuid.UUID] = None,
+        typename: s_name.Name | uuid.UUID | None = None,
     ) -> PathId:
         """Return a ``PathId`` instance for a given :class:`ir.ast.TypeRef`
 
@@ -548,7 +547,7 @@ class PathId:
 
         return result
 
-    def rptr(self) -> Optional[irast.BasePointerRef]:
+    def rptr(self) -> irast.BasePointerRef | None:
         """Return the descriptor of a pointer for the last path step, if any.
 
            If this PathId represents a non-path expression, ``rptr()``
@@ -559,7 +558,7 @@ class PathId:
         else:
             return None
 
-    def rptr_dir(self) -> Optional[s_pointers.PointerDirection]:
+    def rptr_dir(self) -> s_pointers.PointerDirection | None:
         """Return the direction of a pointer for the last path step, if any.
 
            If this PathId represents a non-path expression, ``rptr_dir()``
@@ -570,7 +569,7 @@ class PathId:
         else:
             return None
 
-    def rptr_name(self) -> Optional[s_name.QualName]:
+    def rptr_name(self) -> s_name.QualName | None:
         """Return the name of a pointer for the last path step, if any.
 
            If this PathId represents a non-path expression, ``rptr_name()``
@@ -582,7 +581,7 @@ class PathId:
         else:
             return None
 
-    def src_path(self) -> Optional[PathId]:
+    def src_path(self) -> PathId | None:
         """Return a ``PathId`` instance representing an immediate path prefix
            of this ``PathId``, i.e
            ``PathId('Foo.bar.baz').src_path() == PathId('Foo.bar')``.
@@ -780,8 +779,8 @@ class PathId:
 
     def _get_minimal_prefix(
         self,
-        prefix: Optional[PathId],
-    ) -> Optional[PathId]:
+        prefix: PathId | None,
+    ) -> PathId | None:
         while prefix is not None:
             if prefix._namespace == self._namespace:
                 prefix = prefix._prefix

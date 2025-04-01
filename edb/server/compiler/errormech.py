@@ -20,7 +20,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, NamedTuple
+from typing import Any, NamedTuple
 
 import json
 import re
@@ -62,14 +62,14 @@ SCHEMA_CODES = frozenset({
 
 class ErrorDetails(NamedTuple):
     message: str
-    detail: Optional[str] = None
-    detail_json: Optional[dict[str, Any]] = None
-    code: Optional[str] = None
-    schema_name: Optional[str] = None
-    table_name: Optional[str] = None
-    column_name: Optional[str] = None
-    constraint_name: Optional[str] = None
-    errcls: Optional[type[errors.EdgeDBError]] = None
+    detail: str | None = None
+    detail_json: dict[str, Any] | None = None
+    code: str | None = None
+    schema_name: str | None = None
+    table_name: str | None = None
+    column_name: str | None = None
+    constraint_name: str | None = None
+    errcls: type[errors.EdgeDBError] | None = None
 
 
 constraint_errors = frozenset({
@@ -550,7 +550,7 @@ def _interpret_constraint_errors(
     code: str,
     schema: s_schema.Schema,
     err_details: ErrorDetails,
-    hint: Optional[str],
+    hint: str | None,
     from_graphql: bool = False,
 ):
     details = None
@@ -682,7 +682,7 @@ def _interpret_invalid_text_repr(
     code: str,
     schema: s_schema.Schema,
     err_details: ErrorDetails,
-    hint: Optional[str],
+    hint: str | None,
     from_graphql: bool = False,
 ):
     return errors.InvalidValueError(
@@ -696,7 +696,7 @@ def _interpret_numeric_out_of_range(
     code: str,
     schema: s_schema.Schema,
     err_details: ErrorDetails,
-    hint: Optional[str],
+    hint: str | None,
     from_graphql: bool = False,
 ):
     return errors.NumericOutOfRangeError(
@@ -711,7 +711,7 @@ def _interpret_invalid_datetime(
     code: str,
     schema: s_schema.Schema,
     err_details: ErrorDetails,
-    hint: Optional[str],
+    hint: str | None,
     from_graphql: bool = False,
 ):
     return errors.InvalidValueError(
@@ -726,7 +726,7 @@ def _interpret_wrong_object_type(
     code: str,
     schema: s_schema.Schema,
     err_details: ErrorDetails,
-    hint: Optional[str],
+    hint: str | None,
     from_graphql: bool = False,
 ):
     # NOTE: this should never occur in GraphQL mode due to schema/query

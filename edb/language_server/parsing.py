@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Any, Optional
+from typing import Any
 
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
@@ -85,7 +85,7 @@ def parse(
 
 def parse_and_suggest(
     doc: TextDocument, position: lsp_types.Position
-) -> Optional[lsp_types.CompletionItem]:
+) -> lsp_types.CompletionItem | None:
     sdl = doc.filename.endswith('.esdl') if doc.filename else False
 
     source, result, _productions = _parse_inner(doc.source, sdl)

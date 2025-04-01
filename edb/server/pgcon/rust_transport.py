@@ -27,7 +27,7 @@ to the caller.
 """
 
 from __future__ import annotations
-from typing import Optional, Protocol, Callable, Any, TypeVar
+from typing import Protocol, Callable, Any, TypeVar
 
 import asyncio
 import ssl as ssl_module
@@ -71,9 +71,9 @@ class Authentication(Enum):
 @dataclass
 class PGState:
     parameters: dict[str, str]
-    cancellation_key: Optional[tuple[int, int]]
-    auth: Optional[Authentication]
-    server_error: Optional[list[tuple[str, str]]]
+    cancellation_key: tuple[int, int] | None
+    auth: Authentication | None
+    server_error: list[tuple[str, str]] | None
     ssl: bool
 
 
@@ -145,7 +145,7 @@ class PGConnectionProtocol(asyncio.Protocol):
 
     def __init__(
         self,
-        hostname: Optional[str],
+        hostname: str | None,
         state: pgrust.PyConnectionState,
         pg_state: PGState,
         complete_callback: Callable[
@@ -157,7 +157,7 @@ class PGConnectionProtocol(asyncio.Protocol):
         self.ready_future: asyncio.Future = asyncio.Future()
         self._complete_callback = complete_callback
         self._host = hostname
-        self._transport: Optional[asyncio.Transport] = None
+        self._transport: asyncio.Transport | None = None
 
     def data_received(self, data: bytes):
         if self.ready_future.done():
@@ -253,7 +253,7 @@ class PGConnectionProtocol(asyncio.Protocol):
 class PGRawConn(asyncio.Transport):
     def __init__(
         self,
-        source_description: Optional[str],
+        source_description: str | None,
         connection: ConnectionParams,
         raw_transport: asyncio.Transport,
         pg_state: PGState,
@@ -324,7 +324,7 @@ class PGRawConn(asyncio.Transport):
 
 
 async def _create_connection_to(
-    protocol_factory: Callable[[Optional[str], str, int], PGConnectionProtocol],
+    protocol_factory: Callable[[str | None, str, int], PGConnectionProtocol],
     address_family: str,
     host: str | bytes,
     hostname: str,
@@ -344,8 +344,8 @@ async def _create_connection_to(
 
 
 async def _create_connection(
-    protocol_factory: Callable[[Optional[str], str, int], PGConnectionProtocol],
-    connect_timeout: Optional[int],
+    protocol_factory: Callable[[str | None, str, int], PGConnectionProtocol],
+    connect_timeout: int | None,
     host_candidates: list[tuple[str, str | bytes, str, int]],
 ) -> tuple[asyncio.Transport, PGConnectionProtocol]:
     e = None
@@ -434,7 +434,7 @@ async def create_postgres_connection(
     dsn: str | ConnectionParams,
     protocol_factory: Callable[[], P],
     *,
-    source_description: Optional[str] = None,
+    source_description: str | None = None,
 ) -> tuple[PGRawConn, P]:
     """
     Open a PostgreSQL connection to the address specified by the DSN or

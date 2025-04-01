@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 
 T = TypeVar("T")
@@ -33,7 +33,7 @@ _adapters: dict[Any, dict[type, Adapter]] = {}
 
 
 class Adapter(type):
-    __edb_adaptee__: Optional[type]
+    __edb_adaptee__: type | None
 
     def __new__(
         mcls: type[Adapter_T],
@@ -41,7 +41,7 @@ class Adapter(type):
         bases: tuple[type, ...],
         clsdict: dict[str, Any],
         *,
-        adapts: Optional[type] = None,
+        adapts: type | None = None,
         **kwargs: Any,
     ) -> Adapter_T:
 
@@ -71,7 +71,7 @@ class Adapter(type):
         bases: tuple[type, ...],
         clsdict: dict[str, Any],
         *,
-        adapts: Optional[type] = None,
+        adapts: type | None = None,
         **kwargs: Any,
     ):
         super().__init__(name, bases, clsdict, **kwargs)
@@ -82,7 +82,7 @@ class Adapter(type):
         obj: type,
         adaptee: type,
         adapter: Adapter,
-    ) -> Optional[Adapter]:
+    ) -> Adapter | None:
         if issubclass(obj, adapter) and obj is not adapter:
             # mypy bug below
             return obj  # type: ignore
@@ -95,7 +95,7 @@ class Adapter(type):
     def _get_adapter(
         mcls,
         reversed_mro: tuple[type, ...],
-    ) -> Optional[Adapter]:
+    ) -> Adapter | None:
         adapters = _adapters.get(mcls)
         if adapters is None:
             return None
@@ -113,7 +113,7 @@ class Adapter(type):
         return result
 
     @classmethod
-    def get_adapter(mcls, obj: Any) -> Optional[Adapter]:
+    def get_adapter(mcls, obj: Any) -> Adapter | None:
         mro = obj.__mro__
 
         reversed_mro = tuple(reversed(mro))

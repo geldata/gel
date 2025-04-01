@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Mapping
+from typing import Any, Mapping
 
 import functools
 
@@ -51,11 +51,10 @@ def compile_graphql(
     database_config: Mapping[str, Any],
     system_config: Mapping[str, Any],
     gql: str,
-    tokens: Optional[
-        list[tuple[gql_lexer.TokenKind, int, int, int, int, str]]],
-    substitutions: Optional[dict[str, tuple[str, int, int]]],
-    operation_name: Optional[str] = None,
-    variables: Optional[Mapping[str, object]] = None,
+    tokens: list[tuple[gql_lexer.TokenKind, int, int, int, int, str]] | None,
+    substitutions: dict[str, tuple[str, int, int]] | None,
+    operation_name: str | None = None,
+    variables: Mapping[str, object] | None = None,
 ) -> graphql.TranspiledOperation:
     if tokens is None:
         ast = graphql.parse_text(gql)

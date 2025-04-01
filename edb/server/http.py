@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Mapping,
-    Optional,
     Self,
     Callable,
 )
@@ -38,7 +37,7 @@ from edb.server._rust_native._http import Http
 from . import rust_async_channel
 
 logger = logging.getLogger("edb.server")
-HeaderType = Optional[list[tuple[str, str]] | dict[str, str]]
+HeaderType = list[tuple[str, str]] | dict[str, str] | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -61,13 +60,13 @@ class HttpClient:
         self,
         limit: int,
         user_agent: str = "EdgeDB",
-        stat_callback: Optional[StatCallback] = None,
+        stat_callback: StatCallback | None = None,
     ):
         self._task = None
         self._client = None
         self._limit = limit
         self._skip_reads = 0
-        self._loop: Optional[asyncio.AbstractEventLoop] = (
+        self._loop: asyncio.AbstractEventLoop | None = (
             asyncio.get_running_loop()
         )
         self._task = None
@@ -156,9 +155,9 @@ class HttpClient:
     def with_context(
         self,
         *,
-        base_url: Optional[str] = None,
+        base_url: str | None = None,
         headers: HeaderType = None,
-        url_munger: Optional[Callable[[str], str]] = None,
+        url_munger: Callable[[str], str] | None = None,
     ) -> Self:
         """Create an HttpClient with common optional base URL and headers that
         will be applied to all requests."""
@@ -424,7 +423,7 @@ class HttpClientContext(HttpClient):
 
 
 class CaseInsensitiveDict(dict):
-    def __init__(self, data: Optional[list[tuple[str, str]]] = None):
+    def __init__(self, data: list[tuple[str, str]] | None = None):
         super().__init__()
         if data:
             for k, v in data:
@@ -508,7 +507,7 @@ class ResponseSSE:
     class SSEEvent:
         event: str
         data: str
-        id: Optional[str] = None
+        id: str | None = None
 
         def json(self):
             return json_lib.loads(self.data)

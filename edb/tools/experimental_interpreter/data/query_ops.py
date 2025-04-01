@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Callable, Optional, Sequence
+from typing import Callable, Sequence
 
 from . import data_ops as e
 from .data_ops import (
@@ -60,7 +60,7 @@ def enter_sub_query(level: QueryLevel) -> QueryLevel:
 
 
 def map_query(
-    f: Callable[[Expr, QueryLevel], Optional[Expr]],
+    f: Callable[[Expr, QueryLevel], Expr | None],
     expr: Expr,
     schema: e.TcCtx,
     level: QueryLevel = QueryLevel.TOP_LEVEL,
@@ -250,9 +250,9 @@ def map_query(
 
 
 def map_sub_and_semisub_queries(
-    f: Callable[[Expr], Optional[Expr]], expr: Expr, schema: e.TcCtx
+    f: Callable[[Expr], Expr | None], expr: Expr, schema: e.TcCtx
 ) -> Expr:
-    def map_fun(sub: Expr, level: QueryLevel) -> Optional[Expr]:
+    def map_fun(sub: Expr, level: QueryLevel) -> Expr | None:
         if level == QueryLevel.SEMI_SUBQUERY or level == QueryLevel.SUBQUERY:
             return f(sub)
         else:

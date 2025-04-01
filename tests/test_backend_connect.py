@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 import warnings
-from typing import Optional, Unpack
+from typing import Unpack
 
 import asyncio
 import contextlib
@@ -116,7 +116,7 @@ class TempCluster(pgcluster.Cluster):
 
 
 class ClusterTestCase(tb.TestCase):
-    cluster: Optional[TempCluster]
+    cluster: TempCluster | None
     loop: asyncio.AbstractEventLoop
 
     @classmethod

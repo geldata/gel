@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
     Iterator,
     Mapping,
     NoReturn,
@@ -89,8 +88,8 @@ def abort(msg, *args, exit_code=1) -> NoReturn:
 
 @contextlib.contextmanager
 def _ensure_runstate_dir(
-    default_runstate_dir: Optional[pathlib.Path],
-    specified_runstate_dir: Optional[pathlib.Path]
+    default_runstate_dir: pathlib.Path | None,
+    specified_runstate_dir: pathlib.Path | None
 ) -> Iterator[pathlib.Path]:
     temp_runstate_dir = None
 
@@ -808,7 +807,7 @@ def server_main(**kwargs: Any) -> None:
     else:
         default_runstate_dir = None
 
-    specified_runstate_dir: Optional[pathlib.Path]
+    specified_runstate_dir: pathlib.Path | None
     if server_args.runstate_dir:
         specified_runstate_dir = server_args.runstate_dir
     elif server_args.bootstrap_only:

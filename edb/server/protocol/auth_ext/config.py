@@ -17,7 +17,7 @@
 #
 
 
-from typing import Literal, Optional
+from typing import Literal
 from dataclasses import dataclass
 import urllib.parse
 
@@ -26,20 +26,20 @@ from edb.ir import statypes
 
 
 class UIConfig:
-    app_name: Optional[str]
-    logo_url: Optional[str]
-    dark_logo_url: Optional[str]
-    brand_color: Optional[str]
+    app_name: str | None
+    logo_url: str | None
+    dark_logo_url: str | None
+    brand_color: str | None
     redirect_to: str
-    redirect_to_on_signup: Optional[str]
+    redirect_to_on_signup: str | None
 
 
 @dataclass
 class AppDetailsConfig:
-    app_name: Optional[str]
-    logo_url: Optional[str]
-    dark_logo_url: Optional[str]
-    brand_color: Optional[str]
+    app_name: str | None
+    logo_url: str | None
+    dark_logo_url: str | None
+    brand_color: str | None
 
 
 @dataclass
@@ -52,9 +52,9 @@ class OAuthProviderConfig(ProviderConfig):
     display_name: str
     client_id: str
     secret: str
-    additional_scope: Optional[str]
-    issuer_url: Optional[str]
-    logo_url: Optional[str]
+    additional_scope: str | None
+    issuer_url: str | None
+    logo_url: str | None
 
 
 class WebAuthnProviderConfig(ProviderConfig):
@@ -92,4 +92,4 @@ class MagicLinkProviderConfig(ProviderConfig):
 class WebhookConfig:
     events: list[str]
     url: str
-    signing_secret_key: Optional[str]
+    signing_secret_key: str | None

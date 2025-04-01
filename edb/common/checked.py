@@ -21,7 +21,6 @@ from typing import (
     Any,
     ClassVar,
     Generic,
-    Optional,
     TypeVar,
     AbstractSet,
     Iterable,
@@ -58,7 +57,7 @@ V = TypeVar("V")
 
 class ParametricContainer:
 
-    types: ClassVar[Optional[tuple[type, ...]]] = None
+    types: ClassVar[tuple[type, ...] | None] = None
 
     def __reduce__(self) -> tuple[Any, ...]:
         assert self.types is not None, f'missing parameters in {type(self)}'
@@ -609,7 +608,7 @@ class CheckedDict(
 
     @classmethod
     def fromkeys(
-        cls, iterable: Iterable[K], value: Optional[V] = None
+        cls, iterable: Iterable[K], value: V | None = None
     ) -> CheckedDict[K, V]:
         new: CheckedDict[K, V] = cls()
         for key in iterable:

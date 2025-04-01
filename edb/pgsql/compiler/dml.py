@@ -33,7 +33,6 @@
 from __future__ import annotations
 
 from typing import (
-    Optional,
     Mapping,
     Sequence,
     Collection,
@@ -75,9 +74,9 @@ class DMLParts(NamedTuple):
         tuple[pgast.CommonTableExpr, pgast.PathRangeVar],
     ]
 
-    else_cte: Optional[tuple[pgast.CommonTableExpr, pgast.PathRangeVar]]
+    else_cte: tuple[pgast.CommonTableExpr, pgast.PathRangeVar] | None
 
-    range_cte: Optional[pgast.CommonTableExpr]
+    range_cte: pgast.CommonTableExpr | None
 
 
 def init_dml_stmt(
@@ -95,8 +94,8 @@ def init_dml_stmt(
         A ``DMLParts`` tuple containing a map of DML CTEs as well as the
         common range CTE for UPDATE/DELETE statements.
     """
-    range_cte: Optional[pgast.CommonTableExpr]
-    range_rvar: Optional[pgast.RelRangeVar]
+    range_cte: pgast.CommonTableExpr | None
+    range_rvar: pgast.RelRangeVar | None
 
     clauses.compile_volatile_bindings(ir_stmt, ctx=ctx)
 
@@ -239,7 +238,7 @@ def gen_dml_union(
 def gen_dml_cte(
     ir_stmt: irast.MutatingStmt,
     *,
-    range_rvar: Optional[pgast.RelRangeVar],
+    range_rvar: pgast.RelRangeVar | None,
     typeref: irast.TypeRef,
     ctx: context.CompilerContextLevel,
 ) -> tuple[pgast.CommonTableExpr, pgast.PathRangeVar]:
@@ -365,7 +364,7 @@ def wrap_dml_cte(
 
 
 def put_iterator_bond(
-    iterator: Optional[pgast.IteratorCTE],
+    iterator: pgast.IteratorCTE | None,
     select: pgast.Query,
 ) -> None:
     if iterator:
@@ -374,7 +373,7 @@ def put_iterator_bond(
 
 
 def merge_iterator_scope(
-    iterator: Optional[pgast.IteratorCTE],
+    iterator: pgast.IteratorCTE | None,
     select: pgast.SelectStmt,
     *,
     ctx: context.CompilerContextLevel
@@ -385,7 +384,7 @@ def merge_iterator_scope(
 
 
 def merge_iterator(
-    iterator: Optional[pgast.IteratorCTE],
+    iterator: pgast.IteratorCTE | None,
     select: pgast.SelectStmt,
     *,
     ctx: context.CompilerContextLevel
@@ -555,7 +554,7 @@ def compile_iterator_cte(
     iterator_set: irast.Set,
     *,
     ctx: context.CompilerContextLevel
-) -> Optional[pgast.IteratorCTE]:
+) -> pgast.IteratorCTE | None:
 
     last_iterator = ctx.enclosing_cte_iterator
 
@@ -602,7 +601,7 @@ def compile_iterator_cte(
 def _mk_dynamic_get_path(
     ptr_map: dict[sn.Name, pgast.BaseExpr],
     typeref: irast.TypeRef,
-    fallback_rvar: Optional[pgast.PathRangeVar] = None,
+    fallback_rvar: pgast.PathRangeVar | None = None,
 ) -> pgast.DynamicRangeVarFunc:
     """A dynamic rvar function for insert/update.
 
@@ -615,7 +614,7 @@ def _mk_dynamic_get_path(
         rel: pgast.Query, path_id: irast.PathId, *,
         flavor: str,
         aspect: str, env: context.Environment
-    ) -> Optional[pgast.BaseExpr | pgast.PathRangeVar]:
+    ) -> pgast.BaseExpr | pgast.PathRangeVar | None:
         if (
             flavor != 'normal'
             or aspect not in (
@@ -913,8 +912,8 @@ def process_insert_rewrites(
     ir_stmt: irast.InsertStmt,
     *,
     contents_cte: pgast.CommonTableExpr,
-    iterator: Optional[pgast.IteratorCTE],
-    inner_iterator: Optional[pgast.IteratorCTE],
+    iterator: pgast.IteratorCTE | None,
+    inner_iterator: pgast.IteratorCTE | None,
     rewrites: irast.RewritesOfType,
     single_external: list[irast.SetE[irast.Pointer]],
     elements: Sequence[tuple[irast.SetE[irast.Pointer], irast.BasePointerRef]],
@@ -1017,8 +1016,8 @@ def process_insert_shape(
     select: pgast.SelectStmt,
     ptr_map: dict[sn.Name, pgast.BaseExpr],
     elements: Sequence[tuple[irast.SetE[irast.Pointer], irast.BasePointerRef]],
-    iterator: Optional[pgast.IteratorCTE],
-    inner_iterator: Optional[pgast.IteratorCTE],
+    iterator: pgast.IteratorCTE | None,
+    inner_iterator: pgast.IteratorCTE | None,
     ctx: context.CompilerContextLevel,
     force_optional: bool=False,
 ) -> list[irast.SetE[irast.Pointer]]:
@@ -1097,7 +1096,7 @@ def compile_insert_shape_element(
     shape_el: irast.SetE[irast.Pointer],
     *,
     ir_stmt: irast.MutatingStmt,
-    iterator_id: Optional[pgast.BaseExpr],
+    iterator_id: pgast.BaseExpr | None,
     force_optional: bool,
     ctx: context.CompilerContextLevel,
 ) -> None:
@@ -1261,8 +1260,8 @@ def compile_policy_check(
 
 
 def _conditional_string_agg(
-    pairs: Sequence[tuple[Optional[str], pgast.BaseExpr]],
-) -> Optional[pgast.BaseExpr]:
+    pairs: Sequence[tuple[str | None, pgast.BaseExpr]],
+) -> pgast.BaseExpr | None:
 
     selects = [
         pgast.SelectStmt(
@@ -1317,7 +1316,7 @@ def force_policy_checks(
         lexpr=clauses.make_check_scan(policy_cte, ctx=ctx),
         rexpr=pgast.NumericConstant(val="-1"),
     )
-    stmt: Optional[pgast.Query]
+    stmt: pgast.Query | None
     for stmt in queries:
         if isinstance(stmt, pgast.InsertStmt):
             stmt = stmt.select_stmt
@@ -1394,14 +1393,13 @@ def insert_needs_conflict_cte(
 
 
 def compile_insert_else_body(
-        stmt: Optional[pgast.InsertStmt],
+        stmt: pgast.InsertStmt | None,
         ir_stmt: irast.MutatingStmt,
         on_conflict: irast.OnConflictClause,
-        enclosing_cte_iterator: Optional[pgast.IteratorCTE],
-        else_cte_rvar: Optional[
-            tuple[pgast.CommonTableExpr, pgast.PathRangeVar]],
+        enclosing_cte_iterator: pgast.IteratorCTE | None,
+        else_cte_rvar: tuple[pgast.CommonTableExpr, pgast.PathRangeVar] | None,
         *,
-        ctx: context.CompilerContextLevel) -> Optional[pgast.IteratorCTE]:
+        ctx: context.CompilerContextLevel) -> pgast.IteratorCTE | None:
 
     else_select = on_conflict.select_ir
     else_branch = on_conflict.else_ir
@@ -1846,7 +1844,7 @@ def process_update_rewrites(
     typeref: irast.TypeRef,
     contents_cte: pgast.CommonTableExpr,
     contents_rvar: pgast.PathRangeVar,
-    iterator: Optional[pgast.IteratorCTE],
+    iterator: pgast.IteratorCTE | None,
     contents_select: pgast.SelectStmt,
     table_relation: pgast.RelRangeVar,
     range_relation: pgast.PathRangeVar,
@@ -2276,10 +2274,10 @@ def process_link_update(
     shape_op: qlast.ShapeOp = qlast.ShapeOp.ASSIGN,
     source_typeref: irast.TypeRef,
     dml_cte: pgast.CommonTableExpr,
-    iterator: Optional[pgast.IteratorCTE] = None,
+    iterator: pgast.IteratorCTE | None = None,
     ctx: context.CompilerContextLevel,
-    policy_ctx: Optional[context.CompilerContextLevel],
-) -> tuple[Optional[pgast.CommonTableExpr], Optional[pgast.CommonTableExpr]]:
+    policy_ctx: context.CompilerContextLevel | None,
+) -> tuple[pgast.CommonTableExpr | None, pgast.CommonTableExpr | None]:
     """Perform updates to a link relation as part of a DML statement.
 
     Args:
@@ -2354,7 +2352,7 @@ def process_link_update(
 
     toplevel.append_cte(data_cte)
 
-    delqry: Optional[pgast.DeleteStmt]
+    delqry: pgast.DeleteStmt | None
 
     data_select = pgast.SelectStmt(
         target_list=[
@@ -2879,7 +2877,7 @@ def process_link_values(
     source_typeref: irast.TypeRef,
     target_is_scalar: bool,
     enforce_cardinality: bool,
-    iterator: Optional[pgast.IteratorCTE],
+    iterator: pgast.IteratorCTE | None,
     ctx: context.CompilerContextLevel,
 ) -> tuple[pgast.CommonTableExpr, list[str]]:
     """Produce a pointer relation for a given body element of an INSERT/UPDATE.

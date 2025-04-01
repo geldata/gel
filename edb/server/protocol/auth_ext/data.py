@@ -21,7 +21,7 @@ import dataclasses
 import datetime
 import base64
 
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclasses.dataclass
@@ -32,26 +32,26 @@ class UserInfo:
     """
 
     sub: str
-    name: Optional[str] = None
-    given_name: Optional[str] = None
-    family_name: Optional[str] = None
-    middle_name: Optional[str] = None
-    nickname: Optional[str] = None
-    preferred_username: Optional[str] = None
-    profile: Optional[str] = None
-    picture: Optional[str] = None
-    website: Optional[str] = None
-    email: Optional[str] = None
-    email_verified: Optional[bool] = None
-    gender: Optional[str] = None
-    birthdate: Optional[str] = None
-    zoneinfo: Optional[str] = None
-    locale: Optional[str] = None
-    phone_number: Optional[str] = None
-    phone_number_verified: Optional[bool] = None
-    address: Optional[dict[str, str]] = None
-    updated_at: Optional[float] = None
-    source_id_token: Optional[str] = None
+    name: str | None = None
+    given_name: str | None = None
+    family_name: str | None = None
+    middle_name: str | None = None
+    nickname: str | None = None
+    preferred_username: str | None = None
+    profile: str | None = None
+    picture: str | None = None
+    website: str | None = None
+    email: str | None = None
+    email_verified: bool | None = None
+    gender: str | None = None
+    birthdate: str | None = None
+    zoneinfo: str | None = None
+    locale: str | None = None
+    phone_number: str | None = None
+    phone_number_verified: bool | None = None
+    address: dict[str, str] | None = None
+    updated_at: float | None = None
+    source_id_token: str | None = None
 
     def __str__(self) -> str:
         return self.sub
@@ -146,7 +146,7 @@ class EmailFactor:
     modified_at: datetime.datetime
     identity: LocalIdentity
     email: str
-    verified_at: Optional[datetime.datetime]
+    verified_at: datetime.datetime | None
 
     def __init__(
         self,
@@ -156,7 +156,7 @@ class EmailFactor:
         modified_at: datetime.datetime,
         identity: LocalIdentity,
         email: str,
-        verified_at: Optional[datetime.datetime],
+        verified_at: datetime.datetime | None,
     ):
         self.id = id
         self.created_at = created_at
@@ -184,7 +184,7 @@ class WebAuthnFactor(EmailFactor):
         modified_at: datetime.datetime,
         identity: LocalIdentity,
         email: str,
-        verified_at: Optional[datetime.datetime],
+        verified_at: datetime.datetime | None,
         user_handle: bytes,
         credential_id: bytes,
         public_key: bytes,

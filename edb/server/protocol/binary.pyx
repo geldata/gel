@@ -30,7 +30,7 @@ import sys
 cimport cython
 cimport cpython
 
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 from edb.server.protocol cimport cpythonx
 
 from libc.stdint cimport int8_t, uint8_t, int16_t, uint16_t, \

@@ -23,7 +23,6 @@
 from __future__ import annotations
 
 from typing import (
-    Optional,
     AbstractSet,
     Iterable,
     Mapping,
@@ -55,18 +54,18 @@ from . import typegen
 
 class BoundArg(NamedTuple):
 
-    param: Optional[s_func.ParameterLike]
+    param: s_func.ParameterLike | None
     param_type: s_types.Type
     val: irast.Set
     valtype: s_types.Type
     cast_distance: int
-    arg_id: Optional[int | str]
+    arg_id: int | str | None
     is_default: bool = False
 
 
 class MissingArg(NamedTuple):
 
-    param: Optional[s_func.ParameterLike]
+    param: s_func.ParameterLike | None
     param_type: s_types.Type
 
 
@@ -76,8 +75,8 @@ class BoundCall(NamedTuple):
     args: list[BoundArg]
     null_args: set[str]
     return_type: s_types.Type
-    variadic_arg_id: Optional[int]
-    variadic_arg_count: Optional[int]
+    variadic_arg_id: int | None
+    variadic_arg_count: int | None
 
 
 _VARIADIC = ft.ParameterKind.VariadicParam
@@ -213,11 +212,11 @@ def try_bind_call_args(
     basic_matching_only: bool,
     *,
     ctx: context.ContextLevel,
-) -> Optional[BoundCall]:
+) -> BoundCall | None:
 
     return_type = func.get_return_type(ctx.env.schema)
     is_abstract = func.get_abstract(ctx.env.schema)
-    resolved_poly_base_type: Optional[s_types.Type] = None
+    resolved_poly_base_type: s_types.Type | None = None
 
     def _get_cast_distance(
         arg: irast.Set,
@@ -305,8 +304,8 @@ def try_bind_call_args(
         ctx.env.options.func_params.has_polymorphic(schema)
     )
 
-    variadic_arg_id: Optional[int] = None
-    variadic_arg_count: Optional[int] = None
+    variadic_arg_id: int | None = None
+    variadic_arg_count: int | None = None
     no_args_call = not args and not kwargs
     has_inlined_defaults = (
         func.has_inlined_defaults(schema)
@@ -497,7 +496,7 @@ def try_bind_call_args(
                 defaults_mask |= 1 << i
 
                 if not has_inlined_defaults:
-                    param_default: Optional[s_expr.Expression] = (
+                    param_default: s_expr.Expression | None = (
                         param.get_default(schema)
                     )
                     assert param_default is not None
