@@ -1,10 +1,10 @@
 [submodule "postgres"]
 	path = postgres
-	url = https://github.com/edgedb/postgres.git
+	url = https://github.com/geldata/postgres.git
 	ignore = untracked
 [submodule "edb/server/pgproto"]
 	path = edb/server/pgproto
 	url = https://github.com/MagicStack/py-pgproto.git
 [submodule "edb/pgsql/parser/libpg_query"]
 	path = edb/pgsql/parser/libpg_query
-	url = https://github.com/edgedb/libpg_query.git
+	url = https://github.com/geldata/libpg_query.git
