@@ -855,9 +855,7 @@ The valid SDL sub-declarations are listed below:
     The expression must be :ref:`Stable <ref_reference_volatility>`.
 
 :eql:synopsis:`readonly := {true | false}`
-    If ``true``, the link is considered *read-only*.  Modifications
-    of this link are prohibited once an object is created.  All of the
-    derived links **must** preserve the original *read-only* value.
+    If ``true``, the link is considered *read-only*.  Modifications of this link using ``update`` are prohibited once an object is created. All of the derived links **must** preserve the original *read-only* value. Changes to this link **can** occur if a link is deleted and the appropriate deletion policy allows it.
 
 :sdl:synopsis:`<annotation-declarations>`
     Set link :ref:`annotation <ref_eql_sdl_annotations>`
