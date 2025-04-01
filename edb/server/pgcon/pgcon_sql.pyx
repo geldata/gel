@@ -410,7 +410,7 @@ cdef class PGSQLConnection:
                         msg_buf.write_int16(1)  # number of column values
                         setting = dbv.current_fe_settings()[setting_name]
                         msg_buf.write_len_prefixed_utf8(
-                            setting_to_sql(setting_name, setting)
+                            pgcommon.setting_to_sql(setting_name, setting)
                         )
                         buf.write_buffer(msg_buf.end_message())
 
