@@ -2221,7 +2221,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         asdf = obj.getptr(schema, s_name.UnqualName('asdf'))
         expr_ast = asdf.get_expr(schema).parse()
         self.assertEqual(
-            expr_ast.span.name,
+            expr_ast.span.filename,
             f'<{asdf.id} expr>'
         )
 
@@ -2233,7 +2233,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         x = obj.getptr(schema, s_name.UnqualName('x'))
         default_ast = x.get_default(schema).parse()
         self.assertEqual(
-            default_ast.span.name,
+            default_ast.span.filename,
             f'<{x.id} default>'
         )
 
