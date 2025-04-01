@@ -609,6 +609,13 @@ class TestSQLParse(tb.BaseDocTest):
         DO UPDATE SET key = '_', value = DEFAULT
         """
 
+    def test_sql_parse_insert_18(self):
+        """
+        INSERT INTO map VALUES ('x', 3)
+        ON CONFLICT (mod(key, 5) DESC NULLS LAST)
+        DO NOTHING
+        """
+
     def test_sql_parse_update_00(self):
         """
         UPDATE my_table SET the_value = DEFAULT
