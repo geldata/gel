@@ -46,7 +46,7 @@ INIT_CON_SCRIPT: bytes | None = None
 #
 # * 'S': a session-level pg-ext config setting (frontend-only)
 # * 'P': a session-level pg-ext config setting that's implemented by setting
-#   a corresponding backend config setting.
+#   a corresponding backend config setting (not stored in _edgecon_state)
 #
 # Please also update ConStateType in edb/server/config/__init__.py if changed.
 SETUP_TEMP_TABLE_SCRIPT = '''
@@ -55,7 +55,7 @@ SETUP_TEMP_TABLE_SCRIPT = '''
             value jsonb NOT NULL,
             type text NOT NULL CHECK(
                 type = 'C' OR type = 'B' OR type = 'A' OR type = 'E'
-                OR type = 'F' OR type = 'S' OR type = 'P'),
+                OR type = 'F' OR type = 'S'),
             UNIQUE(name, type)
         );
 '''.strip()
@@ -113,7 +113,7 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
                 DELETE FROM _config_cache
             )
             DELETE FROM _edgecon_state
-                WHERE type = 'C' OR type = 'B' or type = 'S' OR type = 'P';
+                WHERE type = 'C' OR type = 'B' or type = 'S';
 
         PREPARE _apply_state(jsonb) AS
             INSERT INTO
@@ -133,19 +133,30 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
             SELECT edgedb._reset_session_config();
 
         PREPARE _apply_sql_state(jsonb) AS
-            INSERT INTO
-                _edgecon_state(name, value, type)
-            SELECT
-                e->>'name' AS name,
-                (CASE
-                    WHEN e->'type' = '"P"'::jsonb
-                    THEN pg_catalog.to_jsonb(pg_catalog.set_config(
-                        e->>'name', e->>'value', false))
-                    ELSE e->'value'
-                END) AS value,
-                e->>'type' AS type
-            FROM
-                jsonb_array_elements($1::jsonb) AS e;
+            WITH be AS (
+                SELECT
+                    pg_catalog.set_config(
+                        e->>'name', e->>'value', false
+                    ) AS value
+                FROM
+                    jsonb_array_elements($1::jsonb) AS e
+                WHERE
+                    e->'type' = '"P"'::jsonb
+            ),
+            fe AS (
+                INSERT INTO
+                    _edgecon_state(name, value, type)
+                SELECT
+                    e->>'name' AS name,
+                    e->'value' AS value,
+                    e->>'type' AS type
+                FROM
+                    jsonb_array_elements($1::jsonb) AS e
+                WHERE
+                    e->'type' = '"S"'::jsonb
+                RETURNING 1
+            )
+            SELECT 1 FROM be, fe;
     ''').strip().encode('utf-8')
 
 
