@@ -38,6 +38,7 @@ from libc.stdint cimport int32_t, int16_t, uint32_t
 from edb import errors
 from edb.common import debug
 from edb.common.log import current_tenant
+from edb.pgsql.common import setting_to_sql
 from edb.pgsql.parser import exceptions as parser_errors
 import edb.pgsql.parser.parser as pg_parser
 cimport edb.pgsql.parser.parser as pg_parser
@@ -46,7 +47,7 @@ from edb.server import defines, metrics
 from edb.server import tenant as edbtenant
 from edb.server.compiler import dbstate
 from edb.server.pgcon import errors as pgerror
-from edb.server.pgcon.pgcon cimport PGAction, PGMessage, setting_to_sql
+from edb.server.pgcon.pgcon cimport PGAction, PGMessage
 from edb.server.protocol cimport frontend
 
 DEFAULT_SETTINGS = dbstate.DEFAULT_SQL_SETTINGS
