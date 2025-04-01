@@ -564,6 +564,51 @@ class TestSQLParse(tb.BaseDocTest):
         RETURNING (a)[1:3] AS a, b.x AS b
         """
 
+    def test_sql_parse_insert_13(self):
+        """
+        INSERT INTO map (key, value) VALUES ('x', 3)
+        ON CONFLICT (key)
+        DO UPDATE SET value = map.value + excluded.value
+        WHERE map.value < 20
+% OK %
+        INSERT INTO map (key, value) VALUES ('x', 3)
+        ON CONFLICT (key)
+        DO UPDATE SET value = (map.value + excluded.value)
+        WHERE (map.value < 20)
+        """
+
+    def test_sql_parse_insert_14(self):
+        """
+        INSERT INTO map VALUES ('x', 3)
+        ON CONFLICT ON CONSTRAINT my_constraint
+        DO UPDATE SET value = 42
+        """
+
+    def test_sql_parse_insert_15(self):
+        """
+        INSERT INTO map VALUES ('x', 3)
+        ON CONFLICT (key) WHERE key < 100
+        DO UPDATE SET value = 42
+% OK %
+        INSERT INTO map VALUES ('x', 3)
+        ON CONFLICT (key) WHERE (key < 100)
+        DO UPDATE SET value = 42
+        """
+
+    def test_sql_parse_insert_16(self):
+        """
+        INSERT INTO map VALUES ('x', 3)
+        ON CONFLICT (key)
+        DO UPDATE SET (key, value) = ('_', 0)
+        """
+
+    def test_sql_parse_insert_17(self):
+        """
+        INSERT INTO map VALUES ('x', 3)
+        ON CONFLICT (key)
+        DO UPDATE SET key = '_', value = DEFAULT
+        """
+
     def test_sql_parse_update_00(self):
         """
         UPDATE my_table SET the_value = DEFAULT

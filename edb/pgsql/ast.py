@@ -528,24 +528,34 @@ class UpdateTarget(ImmutableBaseExpr):
     indirection: typing.Optional[list[IndirectionOp]] = None
 
 
-class InferClause(ImmutableBaseExpr):
-
+class OnConflictTarget(ImmutableBaseExpr):
     # IndexElems to infer unique index
-    index_elems: typing.Optional[list] = None
+    index_elems: typing.Optional[list[IndexElem]] = None
     # Partial-index predicate
-    where_clause: typing.Optional[BaseExpr] = None
+    index_where: typing.Optional[BaseExpr] = None
+
     # Constraint name
-    conname: typing.Optional[str] = None
+    constraint_name: typing.Optional[str] = None
+
+
+class IndexElem(ImmutableBaseExpr):
+    expr: BaseExpr
+    ordering: typing.Optional[qlast.SortOrder] = None
+    nulls_ordering: typing.Optional[qlast.NonesOrder] = None
+
+
+class OnConflictAction(enum.StrEnum):
+    DO_NOTHING = "DO_NOTHING"
+    DO_UPDATE = "DO_UPDATE"
 
 
 class OnConflictClause(ImmutableBaseExpr):
 
-    action: str
-    infer: typing.Optional[InferClause] = None
-    target_list: typing.Optional[
-        list[InsertTarget | MultiAssignRef]
-    ] = None
-    where: typing.Optional[BaseExpr] = None
+    action: OnConflictAction
+    target: typing.Optional[OnConflictTarget] = None
+
+    update_list: typing.Optional[list[UpdateTarget | MultiAssignRef]] = None
+    update_where: typing.Optional[BaseExpr] = None
 
 
 class ReturningQuery(BaseRelation):

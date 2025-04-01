@@ -171,38 +171,38 @@ def _unwrap(node: Node, name: str) -> Node:
 
 
 def _unwrap_boolean(n: Node) -> Node:
-    n = _unwrap(n, 'Boolean')
-    n = _unwrap(n, 'str')
-    n = _unwrap(n, 'boolval')
-    n = _unwrap(n, 'boolval')
+    n = _unwrap(n, "Boolean")
+    n = _unwrap(n, "str")
+    n = _unwrap(n, "boolval")
+    n = _unwrap(n, "boolval")
     if isinstance(n, dict) and len(n) == 0:
         n = False
     return n
 
 
 def _unwrap_int(n: Node) -> Node:
-    n = _unwrap(n, 'Integer')
-    n = _unwrap(n, 'str')
-    n = _unwrap(n, 'ival')
-    n = _unwrap(n, 'ival')
+    n = _unwrap(n, "Integer")
+    n = _unwrap(n, "str")
+    n = _unwrap(n, "ival")
+    n = _unwrap(n, "ival")
     if isinstance(n, dict) and len(n) == 0:
         n = 0
     return n
 
 
 def _unwrap_float(n: Node) -> Node:
-    n = _unwrap(n, 'Float')
-    n = _unwrap(n, 'str')
-    n = _unwrap(n, 'fval')
-    n = _unwrap(n, 'fval')
+    n = _unwrap(n, "Float")
+    n = _unwrap(n, "str")
+    n = _unwrap(n, "fval")
+    n = _unwrap(n, "fval")
     return n
 
 
 def _unwrap_string(n: Node) -> Node:
-    n = _unwrap(n, 'String')
-    n = _unwrap(n, 'str')
-    n = _unwrap(n, 'sval')
-    n = _unwrap(n, 'sval')
+    n = _unwrap(n, "String")
+    n = _unwrap(n, "str")
+    n = _unwrap(n, "sval")
+    n = _unwrap(n, "sval")
     return n
 
 
@@ -213,7 +213,7 @@ def _as_column_ref(name: str) -> pgast.ColumnRef:
 
 
 def _build_span(n: Node, c: Context) -> Optional[Span]:
-    if 'location' not in n:
+    if "location" not in n:
         return None
 
     return Span(
@@ -333,20 +333,20 @@ def _build_delete_stmt(n: Node, c: Context) -> pgast.DeleteStmt:
 
 def _build_lock(n: Node, c: Context) -> pgast.LockStmt:
     MODES = {
-        1: 'ACCESS SHARE',
-        2: 'ROW SHARE',
-        3: 'ROW EXCLUSIVE',
-        4: 'SHARE UPDATE EXCLUSIVE',
-        5: 'SHARE',
-        6: 'SHARE ROW EXCLUSIVE',
-        7: 'EXCLUSIVE',
-        8: 'ACCESS EXCLUSIVE',
+        1: "ACCESS SHARE",
+        2: "ROW SHARE",
+        3: "ROW EXCLUSIVE",
+        4: "SHARE UPDATE EXCLUSIVE",
+        5: "SHARE",
+        6: "SHARE ROW EXCLUSIVE",
+        7: "EXCLUSIVE",
+        8: "ACCESS EXCLUSIVE",
     }
 
     return pgast.LockStmt(
         relations=_list(n, c, "relations", _build_base_range_var),
-        mode=MODES[n['mode']],
-        no_wait=_bool_or_false(n, 'nowait'),
+        mode=MODES[n["mode"]],
+        no_wait=_bool_or_false(n, "nowait"),
     )
 
 
@@ -510,25 +510,25 @@ def _build_deallocate(n: Node, c: Context) -> pgast.DeallocateStmt:
 
 def _build_create_table_as(n: Node, c: Context) -> pgast.CreateTableAsStmt:
     return pgast.CreateTableAsStmt(
-        into=_build_create(n['into'], c),
-        query=_build_query(n['query'], c),
-        with_no_data=_bool_or_false(n['into'], 'skipData'),
+        into=_build_create(n["into"], c),
+        query=_build_query(n["query"], c),
+        with_no_data=_bool_or_false(n["into"], "skipData"),
     )
 
 
 def _build_create(n: Node, c: Context) -> pgast.CreateStmt:
     def _build_on_commit(n: str, _c: Context) -> Optional[str]:
         on_commit = n[9:]
-        return on_commit if on_commit != 'NOOP' else None
+        return on_commit if on_commit != "NOOP" else None
 
-    relation = n['relation'] if 'relation' in n else n['rel']
+    relation = n["relation"] if "relation" in n else n["rel"]
 
     return pgast.CreateStmt(
         relation=_build_relation(relation, c),
-        table_elements=_maybe_list(n, c, 'tableElts', _build_table_element)
+        table_elements=_maybe_list(n, c, "tableElts", _build_table_element)
         or [],
         span=_build_span(n, c),
-        on_commit=_maybe(n, c, 'oncommit', _build_on_commit),
+        on_commit=_maybe(n, c, "oncommit", _build_on_commit),
     )
 
 
@@ -546,19 +546,19 @@ def _build_table_element(n: Node, c: Context) -> pgast.TableElement:
 def _build_column_def(n: Node, c: Context) -> pgast.ColumnDef:
     is_not_null = False
     default_expr = None
-    if 'constraints' in n:
-        for constraint in n['constraints']:
-            constraint = _unwrap(constraint, 'Constraint')
+    if "constraints" in n:
+        for constraint in n["constraints"]:
+            constraint = _unwrap(constraint, "Constraint")
 
-            if constraint['contype'] == 'CONSTR_NOTNULL':
+            if constraint["contype"] == "CONSTR_NOTNULL":
                 is_not_null = True
-            if constraint['contype'] == 'CONSTR_DEFAULT':
+            if constraint["contype"] == "CONSTR_DEFAULT":
                 is_not_null = True
-                default_expr = _maybe(n, c, 'raw_expr', _build_base_expr)
+                default_expr = _maybe(n, c, "raw_expr", _build_base_expr)
 
     return pgast.ColumnDef(
-        name=n['colname'],
-        typename=_build_type_name(n['typeName'], c),
+        name=n["colname"],
+        typename=_build_type_name(n["typeName"], c),
         default_expr=default_expr,
         is_not_null=is_not_null,
         span=_build_span(n, c),
@@ -618,8 +618,8 @@ def _build_distinct(nodes: list[Node], c: Context) -> list[pgast.Base]:
 
 def _build_indirection(n: Node, c: Context) -> pgast.Indirection:
     return pgast.Indirection(
-        arg=_build_base_expr(n['arg'], c),
-        indirection=_list(n, c, 'indirection', _build_indirection_op),
+        arg=_build_base_expr(n["arg"], c),
+        indirection=_list(n, c, "indirection", _build_indirection_op),
     )
 
 
@@ -629,10 +629,10 @@ def _build_indirection_op(n: Node, c: Context) -> pgast.IndirectionOp:
         n,
         c,
         {
-            'A_Indices': _build_index_or_slice,
-            'Star': _build_star,
-            'ColumnRef': _build_column_ref,
-            'String': _build_record_indirection_op,
+            "A_Indices": _build_index_or_slice,
+            "Star": _build_star,
+            "ColumnRef": _build_column_ref,
+            "String": _build_record_indirection_op,
         },
     )
 
@@ -644,7 +644,7 @@ def _build_record_indirection_op(
 
 
 def _build_ctes(n: Node, c: Context) -> list[pgast.CommonTableExpr]:
-    is_recursive = _maybe(n, c, 'recursive', lambda x, _: bool(x)) or False
+    is_recursive = _maybe(n, c, "recursive", lambda x, _: bool(x)) or False
 
     ctes: list[pgast.CommonTableExpr] = _list(n, c, "ctes", _build_cte)
     for cte in ctes:
@@ -681,24 +681,23 @@ def _build_param_ref(n: Node, c: Context) -> pgast.ParamRef:
 
 def _build_collate_clause(n: Node, c: Context) -> pgast.CollateClause:
     return pgast.CollateClause(
-        arg=_build_base_expr(n['arg'], c),
-        collname='.'.join(_list(n, c, 'collname', _build_str)),
+        arg=_build_base_expr(n["arg"], c),
+        collname=".".join(_list(n, c, "collname", _build_str)),
         span=_build_span(n, c),
     )
 
 
 def _build_min_max_expr(n: Node, c: Context) -> pgast.MinMaxExpr:
-
-    if n['op'] == 'IS_GREATEST':
-        op = 'GREATEST'
-    elif n['op'] == 'IS_LEAST':
-        op = 'LEAST'
+    if n["op"] == "IS_GREATEST":
+        op = "GREATEST"
+    elif n["op"] == "IS_LEAST":
+        op = "LEAST"
     else:
         raise PSqlUnsupportedError(n)
 
     return pgast.MinMaxExpr(
         op=op,
-        args=_list(n, c, 'args', _build_base_expr),
+        args=_list(n, c, "args", _build_base_expr),
         span=_build_span(n, c),
     )
 
@@ -752,7 +751,7 @@ def _build_sub_link(n: Node, c: Context) -> pgast.SubLink:
     return pgast.SubLink(
         operator=operator,
         expr=_build_query(n["subselect"], c),
-        test_expr=_maybe(n, c, 'testexpr', _build_base_expr),
+        test_expr=_maybe(n, c, "testexpr", _build_base_expr),
         span=_build_span(n, c),
     )
 
@@ -762,8 +761,8 @@ def _build_row_expr(n: Node, c: Context) -> pgast.BaseExpr:
         _maybe_list(n, c, "args", _build_base_expr) or []
     )
 
-    format = n.get('row_format', None)
-    if format in {'COERCE_EXPLICIT_CALL', 'COERCE_EXPLICIT_CAST'}:
+    format = n.get("row_format", None)
+    if format in {"COERCE_EXPLICIT_CALL", "COERCE_EXPLICIT_CAST"}:
         return pgast.RowExpr(args=args, span=_build_span(n, c))
     else:
         return pgast.ImplicitRowExpr(args=args, span=_build_span(n, c))
@@ -885,10 +884,10 @@ def _build_const(n: Node, c: Context) -> pgast.BaseConstant:
     if "String" in n or "sval" in n:
         return pgast.StringConstant(val=_unwrap_string(n), span=span)
     if "BitString" in n or "bsval" in n:
-        n = _unwrap(n, 'BitString')
-        n = _unwrap(n, 'str')
-        n = _unwrap(n, 'bsval')
-        n = _unwrap(n, 'bsval')
+        n = _unwrap(n, "BitString")
+        n = _unwrap(n, "str")
+        n = _unwrap(n, "bsval")
+        n = _unwrap(n, "bsval")
         return pgast.BitStringConstant(kind=n[0], val=n[1:], span=span)
     raise PSqlUnsupportedError(n)
 
@@ -965,7 +964,7 @@ def _build_relation(n: Node, c: Context) -> pgast.Relation:
         name=_maybe(n, c, "relname", _build_str),
         catalogname=_maybe(n, c, "catalogname", _build_str),
         schemaname=_maybe(n, c, "schemaname", _build_str),
-        is_temporary=_maybe(n, c, "relpersistence", lambda n, _c: n == 't'),
+        is_temporary=_maybe(n, c, "relpersistence", lambda n, _c: n == "t"),
         span=_build_span(n, c),
     )
 
@@ -985,8 +984,8 @@ def _build_array_expr(n: Node, c: Context) -> pgast.ArrayExpr:
 
 
 def _build_a_expr(n: Node, c: Context) -> pgast.BaseExpr:
-    names: list[str] = _list(n, c, 'name', _build_str)
-    if names[0] == 'pg_catalog':
+    names: list[str] = _list(n, c, "name", _build_str)
+    if names[0] == "pg_catalog":
         names.pop(0)
     name = names.pop(0)
 
@@ -1014,18 +1013,18 @@ def _build_a_expr(n: Node, c: Context) -> pgast.BaseExpr:
             expr=_build_base_expr(n["rexpr"], c),
             span=_build_span(n, c),
         )
-    elif n['kind'] == 'AEXPR_NULLIF':
+    elif n["kind"] == "AEXPR_NULLIF":
         return pgast.FuncCall(
-            name=('nullif',),
+            name=("nullif",),
             args=[
-                _build_base_expr(n['lexpr'], c),
-                _build_base_expr(n['rexpr'], c),
+                _build_base_expr(n["lexpr"], c),
+                _build_base_expr(n["rexpr"], c),
             ],
         )
-    elif n['kind'] == 'AEXPR_DISTINCT':
-        name = 'IS DISTINCT FROM'
-    elif n['kind'] == 'AEXPR_NOT_DISTINCT':
-        name = 'IS NOT DISTINCT FROM'
+    elif n["kind"] == "AEXPR_DISTINCT":
+        name = "IS DISTINCT FROM"
+    elif n["kind"] == "AEXPR_NOT_DISTINCT":
+        name = "IS NOT DISTINCT FROM"
     else:
         raise PSqlUnsupportedError(n)
 
@@ -1060,13 +1059,13 @@ def _build_coalesce(n: Node, c: Context) -> pgast.CoalesceExpr:
 
 
 def _build_index_or_slice(n: Node, c: Context) -> pgast.Slice | pgast.Index:
-    if 'is_slice' in n and n['is_slice']:
+    if "is_slice" in n and n["is_slice"]:
         return pgast.Slice(
-            lidx=_build_base_expr(n['lidx'], c),
-            ridx=_build_base_expr(n['uidx'], c),
+            lidx=_build_base_expr(n["lidx"], c),
+            ridx=_build_base_expr(n["uidx"], c),
         )
     else:
-        idx = n['lidx'] if 'lidx' in n else n['uidx']
+        idx = n["lidx"] if "lidx" in n else n["uidx"]
         return pgast.Index(
             idx=_build_base_expr(idx, c),
         )
@@ -1084,7 +1083,7 @@ def _build_res_target(n: Node, c: Context) -> pgast.ResTarget:
 def _build_insert_target(n: Node, c: Context) -> pgast.InsertTarget:
     n = _unwrap(n, "ResTarget")
     return pgast.InsertTarget(
-        name=_build_str(n['name'], c),
+        name=_build_str(n["name"], c),
         span=_build_span(n, c),
     )
 
@@ -1096,19 +1095,19 @@ def _build_update_targets(
     while len(target_list) > 0:
         val: dict = target_list[0]["ResTarget"]["val"]
         if first_mar := val.get("MultiAssignRef", None):
-            ncolumns = first_mar['ncolumns']
+            ncolumns = first_mar["ncolumns"]
 
             columns: list[str] = []
             for _ in range(ncolumns):
                 target = target_list.pop(0)
-                mar = target['ResTarget']
+                mar = target["ResTarget"]
 
-                if 'indirection' in mar:
+                if "indirection" in mar:
                     raise PSqlUnsupportedError(
                         val, f"multi-assign SET with indirection"
                     )
 
-                columns.append(mar['name'])
+                columns.append(mar["name"])
 
             targets.append(_build_multi_assign_ref(first_mar, columns, c))
         else:
@@ -1122,7 +1121,7 @@ def _build_multi_assign_ref(
     n: Node, columns: list[str], c: Context
 ) -> pgast.MultiAssignRef:
     return pgast.MultiAssignRef(
-        source=_build_base_expr(n['source'], c),
+        source=_build_base_expr(n["source"], c),
         columns=columns,
         span=_build_span(n, c),
     )
@@ -1133,8 +1132,8 @@ def _build_update_target(
 ) -> pgast.UpdateTarget | pgast.MultiAssignRef:
     n = _unwrap(n, "ResTarget")
     return pgast.UpdateTarget(
-        name=_build_str(n['name'], c),
-        val=_build_base_expr(n['val'], c),
+        name=_build_str(n["name"], c),
+        val=_build_base_expr(n["val"], c),
         indirection=_maybe_list(n, c, "indirection", _build_indirection_op),
         span=_build_span(n, c),
     )
@@ -1194,16 +1193,22 @@ def _build_locking_clause(n: Node, c: Context) -> pgast.LockingClause:
     )
 
 
-def _build_nones_order(n: Node, _c: Context) -> qlast.NonesOrder:
+def _build_nones_order(n: Node, _c: Context) -> Optional[qlast.NonesOrder]:
     if n == "SORTBY_NULLS_FIRST":
         return qlast.NonesFirst
-    return qlast.NonesLast
+    if n == "SORTBY_NULLS_LAST":
+        return qlast.NonesLast
+    return None
 
 
-def _build_sort_order(n: Node, _c: Context) -> qlast.SortOrder:
+def _build_sort_order(n: Node, _c: Context) -> Optional[qlast.SortOrder]:
     if n == "SORTBY_DESC":
         return qlast.SortOrder.Desc
-    return qlast.SortOrder.Asc
+    if n == "SORTBY_ASC":
+        return qlast.SortOrder.Asc
+    if n == "SORTBY_DEFAULT":
+        return None
+    raise PSqlUnsupportedError(n)
 
 
 def _build_column_ref(n: Node, c: Context) -> pgast.ColumnRef:
@@ -1214,21 +1219,55 @@ def _build_column_ref(n: Node, c: Context) -> pgast.ColumnRef:
     )
 
 
-def _build_infer_clause(n: Node, c: Context) -> pgast.InferClause:
-    return pgast.InferClause(
-        index_elems=_maybe_list(n, c, "indexElems", _build_str),
-        where_clause=_maybe(n, c, "whereClause", _build_base_expr),
-        conname=_maybe(n, c, "conname", _build_str),
+def _build_on_conflict(n: Node, c: Context) -> pgast.OnConflictClause:
+    action_str = _build_str(n["action"], c)
+    if action_str == "ONCONFLICT_NOTHING":
+        action = pgast.OnConflictAction.DO_NOTHING
+    elif action_str == "ONCONFLICT_UPDATE":
+        action = pgast.OnConflictAction.DO_UPDATE
+    else:
+        raise PSqlUnsupportedError(n, f"ON CONFLICT {action_str}")
+
+    return pgast.OnConflictClause(
+        action=action,
+        target=_maybe(n, c, "infer", _build_on_conflict_target),
+        update_list=_maybe(n, c, "targetList", _build_update_targets) or [],
+        update_where=_maybe(n, c, "whereClause", _build_base_expr),
         span=_build_span(n, c),
     )
 
 
-def _build_on_conflict(n: Node, c: Context) -> pgast.OnConflictClause:
-    return pgast.OnConflictClause(
-        action=_build_str(n["action"], c).removeprefix('ONCONFLICT_'),
-        infer=_maybe(n, c, "infer", _build_infer_clause),
-        target_list=_maybe(n, c, "targetList", _build_update_targets) or [],
-        where=_maybe(n, c, "where", _build_base_expr),
+def _build_on_conflict_target(n: Node, c: Context) -> pgast.OnConflictTarget:
+    return pgast.OnConflictTarget(
+        index_elems=_maybe_list(n, c, "indexElems", _build_index_elem),
+        index_where=_maybe(n, c, "whereClause", _build_base_expr),
+        constraint_name=_maybe(n, c, "conname", _build_str),
+        span=_build_span(n, c),
+    )
+
+
+def _build_index_elem(n: Node, c: Context) -> pgast.IndexElem:
+    n = _unwrap(n, 'IndexElem')
+
+    expr: pgast.BaseExpr
+    if 'name' in n:
+        expr = pgast.ColumnRef(name=(n['name'],))
+    elif 'indexcolname' in n:
+        expr = pgast.ColumnRef(name=(n['name'],))
+    elif 'expr' in n:
+        expr = _build_base_expr(n['expr'], c)
+    else:
+        raise PSqlUnsupportedError(n)
+
+    # TODO:
+    # collation
+    # opclass
+    # opclassopts
+
+    return pgast.IndexElem(
+        expr=expr,
+        ordering=_build_sort_order(n['ordering'], c),
+        nulls_ordering=_build_nones_order(n['nulls_ordering'], c),
         span=_build_span(n, c),
     )
 
@@ -1248,11 +1287,11 @@ def _build_string_or_star(node: Node, c: Context) -> pgast.Star | str:
 
 def _build_copy_format(n: Node, c: Context) -> pgast.CopyFormat:
     val = _build_str(n, c)
-    if val == 'text':
+    if val == "text":
         return pgast.CopyFormat.TEXT
-    if val == 'csv':
+    if val == "csv":
         return pgast.CopyFormat.CSV
-    if val == 'binary':
+    if val == "binary":
         return pgast.CopyFormat.BINARY
     raise PSqlUnsupportedError(val, f"{val} format")
 
@@ -1260,60 +1299,60 @@ def _build_copy_format(n: Node, c: Context) -> pgast.CopyFormat:
 def _build_copy_options(nodes: list[Node], c: Context) -> pgast.CopyOptions:
     opt = pgast.CopyOptions()
     for n in nodes:
-        if 'DefElem' not in n or 'defname' not in n['DefElem']:
+        if "DefElem" not in n or "defname" not in n["DefElem"]:
             continue
-        n = n['DefElem']
-        def_name = n['defname']
-        arg = n['arg'] if 'arg' in n else None
+        n = n["DefElem"]
+        def_name = n["defname"]
+        arg = n["arg"] if "arg" in n else None
 
-        if def_name == 'format' and arg:
+        if def_name == "format" and arg:
             opt.format = _build_copy_format(arg, c)
 
-        elif def_name == 'freeze':
-            opt.freeze = _build_str(arg, c) == 'true' if arg else True
+        elif def_name == "freeze":
+            opt.freeze = _build_str(arg, c) == "true" if arg else True
 
-        elif def_name == 'delimiter' and arg:
+        elif def_name == "delimiter" and arg:
             opt.delimiter = _build_str(arg, c)
 
-        elif def_name == 'null' and arg:
+        elif def_name == "null" and arg:
             opt.null = _build_str(arg, c)
 
-        elif def_name == 'header' and arg:
-            opt.header = _build_str(arg, c) == 'true' if arg else True
+        elif def_name == "header" and arg:
+            opt.header = _build_str(arg, c) == "true" if arg else True
 
-        elif def_name == 'quote' and arg:
+        elif def_name == "quote" and arg:
             opt.quote = _build_str(arg, c)
 
-        elif def_name == 'escape' and arg:
+        elif def_name == "escape" and arg:
             opt.escape = _build_str(arg, c)
 
-        elif def_name == 'force_quote':
-            arg = _unwrap(arg, 'List')
-            opt.force_quote = _list(arg, c, 'items', _build_str)
+        elif def_name == "force_quote":
+            arg = _unwrap(arg, "List")
+            opt.force_quote = _list(arg, c, "items", _build_str)
 
-        elif def_name == 'force_not_null':
-            arg = _unwrap(arg, 'List')
-            opt.force_not_null = _list(arg, c, 'items', _build_str)
+        elif def_name == "force_not_null":
+            arg = _unwrap(arg, "List")
+            opt.force_not_null = _list(arg, c, "items", _build_str)
 
-        elif def_name == 'force_null':
-            arg = _unwrap(arg, 'List')
-            opt.force_null = _list(arg, c, 'items', _build_str)
+        elif def_name == "force_null":
+            arg = _unwrap(arg, "List")
+            opt.force_null = _list(arg, c, "items", _build_str)
 
-        elif def_name == 'encoding':
+        elif def_name == "encoding":
             opt.encoding = _build_str(arg, c)
     return opt
 
 
 def _build_copy(n: Node, c: Context) -> pgast.CopyStmt:
     return pgast.CopyStmt(
-        relation=_maybe(n, c, 'relation', _build_relation),
-        colnames=_maybe_list(n, c, 'attlist', _build_str),
-        query=_maybe(n, c, 'query', _build_query),
-        is_from=_bool_or_false(n, 'is_from'),
-        is_program=_bool_or_false(n, 'is_program'),
-        filename=_maybe(n, c, 'filename', _build_str),
+        relation=_maybe(n, c, "relation", _build_relation),
+        colnames=_maybe_list(n, c, "attlist", _build_str),
+        query=_maybe(n, c, "query", _build_query),
+        is_from=_bool_or_false(n, "is_from"),
+        is_program=_bool_or_false(n, "is_program"),
+        filename=_maybe(n, c, "filename", _build_str),
         options=(
-            _maybe(n, c, 'options', _build_copy_options) or pgast.CopyOptions()
+            _maybe(n, c, "options", _build_copy_options) or pgast.CopyOptions()
         ),
         where_clause=_maybe(n, c, "whereClause", _build_base_expr),
         span=_build_span(n, c),
