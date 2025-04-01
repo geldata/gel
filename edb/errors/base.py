@@ -195,8 +195,8 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
         self._attrs[FIELD_LINE_END] = str(end.line)
         self._attrs[FIELD_COLUMN_END] = str(end.column)
         self._attrs[FIELD_UTF16_COLUMN_END] = str(end.utf16column)
-        if span.name and span.name != '<string>':
-            self._attrs[FIELD_FILENAME] = span.name
+        if span.filename and span.filename != '<string>':
+            self._attrs[FIELD_FILENAME] = span.filename
 
     def set_position(
         self,

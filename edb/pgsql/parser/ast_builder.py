@@ -217,7 +217,7 @@ def _build_span(n: Node, c: Context) -> Optional[Span]:
         return None
 
     return Span(
-        name="<string>",
+        filename=None,
         buffer=c.source_sql,
         start=n["location"],
         end=n["location"],

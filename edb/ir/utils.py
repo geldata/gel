@@ -197,7 +197,7 @@ def get_span_as_json(
             # TODO(tailhook) should we add offset, utf16column here?
             'line': expr.span.start_point.line,
             'column': expr.span.start_point.column,
-            'name': expr.span.name,
+            'name': expr.span.filename,
             'code': exctype.get_code(),
         })
 

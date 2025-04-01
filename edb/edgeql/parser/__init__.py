@@ -203,7 +203,7 @@ def _cst_to_ast(
             if terminal := node.terminal:
                 # Terminal is simple: just convert to parsing.Token
                 span = parsing.Span(
-                    name=filename,
+                    filename=filename,
                     buffer=source.text(),
                     start=terminal.start,
                     end=terminal.end,
