@@ -252,6 +252,17 @@ You can configure webhooks with the UI or via query.
   to send multiple events to the same URL, you can do so by adding multiple
   ``ext::auth::WebhookEvent`` values to the ``events`` set.
 
+Troubleshooting webhooks
+------------------------
+
+If you are having trouble receiving webhooks, you might need to look for any responses from the requests that are being scheduled by the :ref:`std::net::http <ref_std_net>` module. You can list all of the :eql:type:`net::http::ScheduledRequest` objects, and any returned responses with the following query:
+
+.. code-block:: edgeql
+
+    select net::http::ScheduledRequest {
+        **,
+        response: { ** }
+    }
 
 Configuring SMTP
 ================
