@@ -332,6 +332,11 @@ def serialize_to_markup(ast, *, ctx):
     include_meta = ctx.kwargs.get('_ast_include_meta', True)
     exclude_unset = ctx.kwargs.get('_ast_exclude_unset', True)
 
+    if debug.flags.ast_span:
+        s = getattr(ast, 'span', None)
+        if s:
+            node.add_child(label='span', node=markup.serialize(str(s), ctx=ctx))
+
     fields = iter_fields(
         ast, include_meta=include_meta, exclude_unset=exclude_unset)
     for fieldname, field in fields:
