@@ -7788,10 +7788,10 @@ BEGIN
         RETURN namelist;
     END IF;
 
-	-- At the top of the loop, we are at start of a new identifier.
+    -- At the top of the loop, we are at start of a new identifier.
     LOOP
         IF substring(rawstring FROM pos FOR 1) = '"' THEN
-			-- Quoted name --- collapse quote-quote pairs, no downcasing
+            -- Quoted name --- collapse quote-quote pairs, no downcasing
             pos := pos + 1;
             curname := '';
             in_quote := TRUE;
@@ -7823,7 +7823,7 @@ BEGIN
             END IF;
 
         ELSE
-			-- Unquoted name --- extends to separator or whitespace
+            -- Unquoted name --- extends to separator or whitespace
             curname := '';
             WHILE pos <= len LOOP
                 c := substring(rawstring FROM pos FOR 1);
@@ -7842,7 +7842,7 @@ BEGIN
             curname := lower(curname);
         END IF;
 
-		-- Truncate name if it's overlength
+        -- Truncate name if it's overlength
         IF octet_length(curname) > 63 THEN
             RAISE NOTICE 'identifier "%" will be truncated', curname;
             curname := convert_from(
@@ -7851,7 +7851,7 @@ BEGIN
             );
         END IF;
 
-		-- Finished isolating current name --- add it to list
+        -- Finished isolating current name --- add it to list
         namelist := array_append(namelist, curname);
 
         -- Skip trailing whitespace
