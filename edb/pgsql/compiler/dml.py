@@ -163,7 +163,7 @@ def init_dml_stmt(
         dml_cte = pgast.CommonTableExpr(
             query=pgast.SelectStmt(),
             name=ctx.env.aliases.get(hint='melse'),
-            for_dml_stmt=ctx.get_current_dml_stmt(),
+            for_dml_stmt=ir_stmt,
         )
         dml_rvar = relctx.rvar_for_rel(dml_cte, ctx=ctx)
         else_cte = (dml_cte, dml_rvar)
