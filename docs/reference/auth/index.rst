@@ -274,9 +274,10 @@ The easiest way to configure SMTP is to use the built-in UI. Here is an example 
 
 .. code-block:: edgeql
 
-    # Create a new SMTP provider
+    # Create a new SMTP provider:
+    #
     configure current branch
-    insert cfg::SMTPProviderConfig {
+      insert cfg::SMTPProviderConfig {
         # This name must be unique and is used to reference the provider
         name := 'local_mailpit',
         sender := 'hello@example.com',
@@ -288,11 +289,12 @@ The easiest way to configure SMTP is to use the built-in UI. Here is an example 
         validate_certs := false,
         timeout_per_email := <duration>'60 seconds',
         timeout_per_attempt := <duration>'15 seconds',
-    };
+      };
 
-    # Set this provider as the current email provider by name
+    # Set this provider as the current email provider by name:
+    #
     configure current branch
-    set current_email_provider_name := 'local_mailpit';
+      set current_email_provider_name := 'local_mailpit';
 
 
 Enabling authentication providers
