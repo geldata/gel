@@ -6559,7 +6559,7 @@ def _generate_sql_information_schema(
     # pg_settings is a function because "_edgecon_state" is a temporary table
     # and therefore cannot be used in a view.
     fe_pg_settings = trampoline.VersionedFunction(
-        name=('edgedbsql', '_pg_settings'),
+        name=('edgedbsql', 'pg_show_all_settings'),
         args=[],
         returns=('pg_catalog', 'pg_settings'),
         set_returning=True,
@@ -7635,7 +7635,7 @@ def _generate_sql_information_schema(
         trampoline.VersionedView(
             name=("edgedbsql", "pg_settings"),
             query="""
-            select * from edgedbsql_VER._pg_settings()
+            select * from edgedbsql_VER.pg_show_all_settings()
         """,
         ),
     ]

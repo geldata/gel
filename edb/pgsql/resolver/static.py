@@ -229,6 +229,13 @@ ALLOWED_ADMIN_FUNCTIONS = frozenset(
     }
 )
 
+WRAPPED_FUNCTIONS = frozenset(
+    {
+        "to_regclass",
+        'pg_show_all_settings',
+    }
+)
+
 
 @eval.register
 def eval_FuncCall(
@@ -347,7 +354,7 @@ def eval_FuncCall(
         # we do not expose sequences, so any calls to this function returns NULL
         return pgast.NullConstant()
 
-    if fn_name == "to_regclass":
+    if fn_name in WRAPPED_FUNCTIONS:
         args = eval_list(expr.args, ctx=ctx)
         return pgast.FuncCall(
             name=(V('edgedbsql'), fn_name),
