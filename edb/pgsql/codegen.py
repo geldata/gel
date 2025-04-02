@@ -471,17 +471,23 @@ class SQLSourceGenerator(codegen.SourceGenerator):
             self.new_lines = 1
             self.write('ON CONFLICT')
 
-            if node.on_conflict.infer:
-                self.visit(node.on_conflict.infer)
+            if node.on_conflict.target:
+                self.visit(node.on_conflict.target)
 
             self.write(' DO ')
-            self.write(node.on_conflict.action.upper())
+            self.write(node.on_conflict.action[3:])
 
-            if node.on_conflict.target_list:
+            if node.on_conflict.update_list:
                 self.write(' SET')
                 self.new_lines = 1
                 self.indentation += 1
-                self.visit_list(node.on_conflict.target_list)
+                self.visit_list(node.on_conflict.update_list)
+                self.indentation -= 1
+
+            if node.on_conflict.update_where:
+                self.write(' WHERE ')
+                self.indentation += 1
+                self.visit(node.on_conflict.update_where)
                 self.indentation -= 1
 
         if node.returning_list:
@@ -573,15 +579,31 @@ class SQLSourceGenerator(codegen.SourceGenerator):
             self.visit_list(node.returning_list)
             self.indentation -= 1
 
-    def visit_InferClause(self, node: pgast.InferClause) -> None:
-        assert not node.conname or not node.index_elems
-        if node.conname:
+    def visit_OnConflictTarget(self, node: pgast.OnConflictTarget) -> None:
+        assert not node.constraint_name or not node.index_elems
+        if node.constraint_name:
             self.write(' ON CONSTRAINT ')
-            self.write(node.conname)
+            self.write(node.constraint_name)
         if node.index_elems:
             self.write(' (')
-            self.visit_list(node.index_elems, newlines=False)
+            self.visit_list(node.index_elems)
             self.write(')')
+            if node.index_where:
+                self.write(' WHERE ')
+                self.visit(node.index_where)
+
+    def visit_IndexElem(self, node: pgast.IndexElem) -> None:
+        self.visit(node.expr)
+
+        if node.ordering == pgast.SortAsc:
+            self.write(' ASC')
+        elif node.ordering == pgast.SortDesc:
+            self.write(' DESC')
+
+        if node.nulls_ordering == pgast.NullsFirst:
+            self.write(' NULLS FIRST')
+        elif node.nulls_ordering == pgast.NullsLast:
+            self.write(' NULLS LAST')
 
     def visit_MultiAssignRef(self, node: pgast.MultiAssignRef) -> None:
         self.write('(')
