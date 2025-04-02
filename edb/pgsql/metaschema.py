@@ -7640,6 +7640,7 @@ def _generate_sql_information_schema(
         ),
         # A helper view for the `SHOW` SQL command.
         # See also NormalizedPgSettingsView, InterpretConfigValueToJsonFunction
+        # as well as the Postgres C function ShowGUCOption.
         trampoline.VersionedView(
             name=("edgedbsql", "pg_settings_for_show"),
             query=r"""
@@ -7659,7 +7660,13 @@ def _generate_sql_information_schema(
                 THEN setting
 
                 WHEN vartype = 'integer' OR vartype = 'real'
-                THEN (setting::numeric * unit.multiplier)::text || unit.unit
+                THEN (
+                    CASE
+                    WHEN setting::numeric > 0 AND unit.unit IS NOT NULL
+                    THEN (setting::numeric * unit.multiplier)::text || unit.unit
+                    ELSE setting
+                    END
+                )
 
                 ELSE
                     edgedb_VER.raise(
