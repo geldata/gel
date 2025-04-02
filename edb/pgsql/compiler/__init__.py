@@ -103,7 +103,7 @@ def compile_ir_to_sql_tree(
             scope_tree = ir_expr.scope_tree
             query_params = list(ir_expr.params)
             query_globals = list(ir_expr.globals)
-            server_param_conversion_params = list(
+            server_param_conversion_params = (
                 ir_expr.server_param_conversion_params
             )
             type_rewrites = ir_expr.type_rewrites

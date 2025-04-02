@@ -195,6 +195,20 @@ def compile_FunctionCall(
     func = matched_call.func
     assert isinstance(func, s_func.Function)
 
+    if matched_call.server_param_conversions:
+        for param_name, conversions in (
+            matched_call.server_param_conversions.items()
+        ):
+            if param_name not in ctx.env.server_param_conversions:
+                ctx.env.server_param_conversions[param_name] = {}
+            ctx.env.server_param_conversions[param_name].update(
+                conversions
+            )
+        ctx.env.server_param_conversion_calls.append((
+            func.get_signature_as_str(env.schema),
+            expr.span,
+        ))
+
     inline_func = None
     if (
         func.get_language(ctx.env.schema) == qlast.Language.EdgeQL

@@ -695,15 +695,16 @@ cdef list[ParamConversion] get_param_conversions(
 
     # Next extract bytes from the bind_args
     param_datas: dict[str, bytes] = {}
-    for param in in_type_args:
-        assert isinstance(param, dbstate.Param)
-        frb_read(&in_buf, 4)  # reserved
-        in_len = hton.unpack_int32(frb_read(&in_buf, 4))
-        data_str = frb_read(&in_buf, in_len)
+    if in_type_args is not None:
+        for param in in_type_args:
+            assert isinstance(param, dbstate.Param)
+            frb_read(&in_buf, 4)  # reserved
+            in_len = hton.unpack_int32(frb_read(&in_buf, 4))
+            data_str = frb_read(&in_buf, in_len)
 
-        if param.name in param_names:
-            data = cpython.PyBytes_FromStringAndSize(data_str, in_len)
-            param_datas[param.name] = data
+            if param.name in param_names:
+                data = cpython.PyBytes_FromStringAndSize(data_str, in_len)
+                param_datas[param.name] = data
 
     if frb_get_len(&in_buf):
         raise errors.InputDataError('unexpected trailing data in buffer')

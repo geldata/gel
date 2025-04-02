@@ -1931,6 +1931,8 @@ def _compile_ql_query(
                 conversion_name=p.conversion_name,
                 additional_info=p.additional_info,
                 source_value=(
+                    p.constant_value
+                    if p.constant_value is not None else
                     source_variables[p.param_name]
                     if p.param_name in source_variables else
                     None

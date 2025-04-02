@@ -778,6 +778,9 @@ class ServerParamConversion:
     conversion_name: str
     additional_info: tuple[str, ...]
 
+    # If the parameter is a constant value, pass to directly to the server.
+    constant_value: typing.Optional[typing.Any] = None
+
 
 class Statement(Command):
 

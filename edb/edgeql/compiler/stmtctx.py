@@ -92,6 +92,7 @@ def init_context(
         env.alias_result_view_name = options.result_view_name
         env.query_parameters = {}
         env.server_param_conversions = {}
+        env.server_param_conversion_calls = []
         env.script_params = {}
 
         ctx = context.ContextLevel(
@@ -277,9 +278,11 @@ def fini_expression(
         ir.expr.params = params
         ir.expr.schema = ctx.env.schema
 
-        if server_param_conversions:
-            raise RuntimeError(
-                'Config commands cannot use server param conversions'
+        if ctx.env.server_param_conversion_calls:
+            func_name, func_span = ctx.env.server_param_conversion_calls[0]
+            raise errors.QueryError(
+                f"Function '{func_name}' is not allowed in a config statement.",
+                span=func_span,
             )
 
         return ir.expr
@@ -389,29 +392,40 @@ def collect_server_param_conversions(
         (
             param_name,
             conversion_name,
-            conversion.ir_param,
-            conversion.additional_info,
+            conversion,
         )
         for param_name, conversions in ctx.env.server_param_conversions.items()
-        for conversion_name, (conversion) in conversions.items()
+        for conversion_name, conversion in conversions.items()
         if not conversion.ir_param.is_sub_param
     ]
     script_ordering = {k: i for i, k in enumerate(ctx.env.script_params)}
+
+    # Add ordering for param conversions which don't match query params.
+    # This can happen for constants.
+    extra_ordering: dict[str, int] = {}
+    for param_name in sorted(ctx.env.server_param_conversions.keys()):
+        if param_name not in script_ordering:
+            extra_ordering[param_name] = (
+                len(script_ordering) + len(extra_ordering)
+            )
+    script_ordering.update(extra_ordering)
+
     lparams.sort(key=lambda x: (script_ordering[x[0]], x[1]))
 
     conversions = []
     params = []
     # Now flatten it out, including all sub_params, making sure subparams
     # appear in the right order.
-    for param_name, conversion_name, ir_param, additional_info in lparams:
+    for param_name, conversion_name, conversion in lparams:
         conversions.append(irast.ServerParamConversion(
             param_name=param_name,
             conversion_name=conversion_name,
-            additional_info=additional_info,
+            additional_info=conversion.additional_info,
+            constant_value=conversion.constant_value,
         ))
-        params.append(ir_param)
-        if ir_param.sub_params:
-            params.extend(ir_param.sub_params.params)
+        params.append(conversion.ir_param)
+        if conversion.ir_param.sub_params:
+            params.extend(conversion.ir_param.sub_params.params)
     return conversions, params
 
 

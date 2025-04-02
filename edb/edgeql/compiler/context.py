@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 from typing import (
+    Any,
     Callable,
     Literal,
     Optional,
@@ -141,6 +142,9 @@ class ServerParamConversion:
     ir_param: irast.Param
     additional_info: tuple[str, ...]
 
+    # If the parameter is a constant value, pass to directly to the server.
+    constant_value: Optional[Any] = None
+
 
 class Environment:
     """Compilation environment."""
@@ -183,6 +187,9 @@ class Environment:
 
     Used by ext::ai:search to get embeddings from text before running a query.
     """
+
+    server_param_conversion_calls: list[tuple[str, Optional[parsing.Span]]]
+    """Used to generate errors related to server param conversions."""
 
     set_types: dict[irast.Set, s_types.Type]
     """A dictionary of all Set instances and their schema types."""
@@ -321,6 +328,7 @@ class Environment:
         self.query_parameters = {}
         self.query_globals = {}
         self.server_param_conversions = {}
+        self.server_param_conversion_calls = []
         self.set_types = {}
         self.type_origins = {}
         self.inferred_volatility = {}
