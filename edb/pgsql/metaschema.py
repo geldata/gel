@@ -5070,6 +5070,27 @@ class ResetQueryStatsFunction(trampoline.VersionedFunction):
         )
 
 
+# This is not a VersionedFunction because the VersionedFunction wrapper - which
+# is a SQL function - cannot return type trigger.
+class ClearFELocalSQLSettingsFunction(dbops.Function):
+    text = r"""
+    BEGIN
+        DELETE FROM _edgecon_state WHERE type = 'L' AND name = NEW.name;
+        RETURN NEW;
+    END;
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            name=('edgedb', '_clear_fe_local_sql_settings'),
+            args=[],
+            returns='trigger',
+            language='plpgsql',
+            volatility='volatile',
+            text=self.text,
+        )
+
+
 def _maybe_trampoline(
     cmd: dbops.Command, out: list[trampoline.Trampoline]
 ) -> None:
@@ -5294,6 +5315,7 @@ def get_bootstrap_commands(
         dbops.CreateFunction(FTSToRegconfig()),
         dbops.CreateFunction(PadBase64StringFunction()),
         dbops.CreateFunction(ResetQueryStatsFunction(False)),
+        dbops.CreateFunction(ClearFELocalSQLSettingsFunction()),
     ]
 
     commands = dbops.CommandGroup()
@@ -6544,26 +6566,49 @@ def _generate_sql_information_schema(
         volatility='volatile',
         text='''
             SELECT
-                s.name,
-                COALESCE(c.value #>> '{}', s.setting) AS setting,
+                p.name,
+                COALESCE(
+                    COALESCE(l.value, s.value, d.value) #>> '{}',
+                    p.setting
+                ) AS setting,
                 unit,
                 category,
                 short_desc,
                 extra_desc,
                 context,
                 vartype,
-                source,
+                CASE
+                    WHEN l.value IS NOT NULL THEN 'session'
+                    WHEN s.value IS NOT NULL THEN 'session'
+                    WHEN d.value IS NOT NULL THEN 'default'
+                    ELSE p.source
+                END AS source,
                 min_val,
                 max_val,
                 enumvals,
                 boot_val,
-                reset_val,
+                CASE
+                    WHEN d.value IS NOT NULL THEN d.value #>> '{}'
+                    ELSE p.reset_val
+                END AS reset_val,
                 sourcefile,
                 sourceline,
                 pending_restart
-            FROM pg_settings s
-            LEFT JOIN _edgecon_state c
-                ON s.name = c.name AND c.type = 'S'
+            FROM
+                pg_settings p
+                LEFT JOIN _edgecon_state l ON p.name = l.name AND l.type = 'L'
+                LEFT JOIN _edgecon_state s ON p.name = s.name AND s.type = 'S'
+                LEFT JOIN (
+                    SELECT
+                        (j->>'name') AS name,
+                        (j->'value') AS value
+                    FROM
+                        edgedbinstdata_VER.instdata
+                        CROSS JOIN LATERAL
+                            jsonb_array_elements(instdata.json) AS j
+                    WHERE
+                        key = 'sql_default_fe_settings'
+                ) d ON p.name = d.name
         '''
     )
 
