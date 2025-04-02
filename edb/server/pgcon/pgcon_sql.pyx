@@ -386,41 +386,6 @@ cdef class PGSQLConnection:
                         else:
                             msg_buf.write_bytestring(b'SET')
                         buf.write_buffer(msg_buf.end_message())
-                    elif action.query_unit.get_var is not None:
-                        setting_name = action.query_unit.get_var
-
-                        # RowDescription
-                        msg_buf = WriteBuffer.new_message(b'T')
-                        msg_buf.write_int16(1)  # number of fields
-                        # field name
-                        msg_buf.write_str(setting_name, "utf-8")
-                        # object ID of the table to identify the field
-                        msg_buf.write_int32(0)
-                        # attribute number of the column in prev table
-                        msg_buf.write_int16(0)
-                        # object ID of the field's data type
-                        msg_buf.write_int32(TEXT_OID)
-                        # data type size
-                        msg_buf.write_int16(-1)
-                        # type modifier
-                        msg_buf.write_int32(-1)
-                        # format code being used for the field
-                        msg_buf.write_int16(0)
-                        buf.write_buffer(msg_buf.end_message())
-
-                        # DataRow
-                        msg_buf = WriteBuffer.new_message(b'D')
-                        msg_buf.write_int16(1)  # number of column values
-                        setting = dbv.current_fe_settings()[setting_name]
-                        msg_buf.write_len_prefixed_utf8(
-                            pgcommon.setting_to_sql(setting_name, setting)
-                        )
-                        buf.write_buffer(msg_buf.end_message())
-
-                        # CommandComplete
-                        msg_buf = WriteBuffer.new_message(b'C')
-                        msg_buf.write_bytestring(b'SHOW')
-                        buf.write_buffer(msg_buf.end_message())
                     elif not action.is_injected():
                         # NoData
                         msg_buf = WriteBuffer.new_message(b'n')
@@ -452,25 +417,6 @@ cdef class PGSQLConnection:
                 ):
                     if action.query_unit.set_vars is not None:
                         msg_buf = WriteBuffer.new_message(b'n')  # NoData
-                        buf.write_buffer(msg_buf.end_message())
-                    elif action.query_unit.get_var is not None:
-                        # RowDescription
-                        msg_buf = WriteBuffer.new_message(b'T')
-                        msg_buf.write_int16(1)  # number of fields
-                        # field name
-                        msg_buf.write_str(action.query_unit.get_var, "utf-8")
-                        # object ID of the table to identify the field
-                        msg_buf.write_int32(0)
-                        # attribute number of the column in prev table
-                        msg_buf.write_int16(0)
-                        # object ID of the field's data type
-                        msg_buf.write_int32(TEXT_OID)
-                        # data type size
-                        msg_buf.write_int16(-1)
-                        # type modifier
-                        msg_buf.write_int32(-1)
-                        # format code being used for the field
-                        msg_buf.write_int16(0)
                         buf.write_buffer(msg_buf.end_message())
                 continue
 

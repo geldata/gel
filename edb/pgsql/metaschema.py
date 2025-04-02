@@ -7638,6 +7638,62 @@ def _generate_sql_information_schema(
             select * from edgedbsql_VER.pg_show_all_settings()
         """,
         ),
+        # A helper view for the `SHOW` SQL command.
+        # See also NormalizedPgSettingsView, InterpretConfigValueToJsonFunction
+        trampoline.VersionedView(
+            name=("edgedbsql", "pg_settings_for_show"),
+            query=r"""
+        SELECT
+            s.name AS name,
+            CASE
+                WHEN vartype = 'bool'
+                THEN (
+                    CASE
+                    WHEN lower(setting) = any(ARRAY['on', 'true', 'yes', '1'])
+                    THEN 'on'
+                    ELSE 'off'
+                    END
+                )
+
+                WHEN vartype = 'enum' OR vartype = 'string'
+                THEN setting
+
+                WHEN vartype = 'integer' OR vartype = 'real'
+                THEN (setting::numeric * unit.multiplier)::text || unit.unit
+
+                ELSE
+                    edgedb_VER.raise(
+                        NULL::text,
+                        msg => (
+                            'unknown configuration type "' ||
+                            COALESCE(vartype, '<NULL>') ||
+                            '"'
+                        )
+                    )
+            END AS setting,
+            short_desc AS description
+
+        FROM
+            edgedbsql_VER.pg_settings AS s,
+
+            LATERAL (
+                SELECT regexp_match(
+                    s.unit, '^(\d*)\s*([a-zA-Z]{1,3})$') AS v
+            ) AS _unit,
+
+            LATERAL (
+                SELECT
+                    COALESCE(
+                        CASE
+                            WHEN _unit.v[1] = '' THEN 1
+                            ELSE _unit.v[1]::int
+                        END,
+                        1
+                    ) AS multiplier,
+                    COALESCE(_unit.v[2], '') AS unit
+            ) AS unit
+        """
+        ),
     ]
 
     # We expose most of the views as empty tables, just to prevent errors when

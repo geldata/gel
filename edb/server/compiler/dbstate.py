@@ -554,7 +554,6 @@ class SQLQueryUnit:
     deallocate: Optional[DeallocateData] = None
 
     set_vars: Optional[dict[Optional[str], Optional[SQLSetting]]] = None
-    get_var: Optional[str] = None
     is_local: bool = False
 
     stmt_name: bytes = b""
