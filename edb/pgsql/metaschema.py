@@ -6568,10 +6568,10 @@ def _generate_sql_information_schema(
             vt_table_schema::{sql_ident} AS table_schema,
             vt_table_name::{sql_ident} AS table_name,
             v_column_name::{sql_ident} as column_name,
-            ROW_NUMBER() OVER (
+            cast(ROW_NUMBER() OVER (
                 PARTITION BY vt_table_schema, vt_table_name
                 ORDER BY position, v_column_name
-            ) AS ordinal_position,
+            ) AS INT) AS ordinal_position,
             column_default,
             is_nullable,
             data_type,

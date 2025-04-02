@@ -1437,6 +1437,28 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ],
         )
 
+    async def test_sql_query_introspection_06(self):
+        res = await self.squery_values(
+            '''
+            SELECT column_name, col_description(
+                'public.novel'::regclass::oid, ordinal_position)
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'novel'
+            ORDER BY ordinal_position
+            '''
+        )
+        self.assertEqual(
+            res,
+            [
+                ['id', '__::pages'],
+                ['__type__', '__::id'],
+                ['foo', '__::title'],
+                ['genre_id', '__::genre'],
+                ['pages', '__::foo'],
+                ['title', None],
+            ]
+        )
+
     async def test_sql_query_schemas_01(self):
         await self.scon.fetch('SELECT id FROM "inventory"."Item";')
         await self.scon.fetch('SELECT id FROM "public"."Person";')
