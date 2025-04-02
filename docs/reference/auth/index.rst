@@ -272,6 +272,10 @@ For email-based factors, you can configure SMTP to allow the extension to send e
 
 The easiest way to configure SMTP is to use the built-in UI. Here is an example of configuring SMTP for local development using EdgeQL directly, using something like `Mailpit <https://mailpit.axllent.org/docs/>`__.
 
+.. note:: Gel Cloud users, rejoice!
+
+  If you are using Gel Cloud, you can use the built-in development SMTP provider without any configuration. This special provider is already configured for development usage and is ready to send emails while you are developing your application. This provider is severely rate limited, and the sender is hardcoded, so you must not use it in production.
+
 .. code-block:: edgeql
 
     # Create a new SMTP provider:
