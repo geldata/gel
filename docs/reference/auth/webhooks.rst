@@ -193,7 +193,7 @@ When a user verifies their email address, this event is triggered.
 Email verification requested
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When an ``ext::auth::EmailFactor`` object requests verification, like when a user first signs up, or requests to resend the verification email, this event is triggered.
+When a user requests to verify their email address, like when they first sign up, or requests to resend the verification email, this event is triggered.
 
 **Example payload:**
 
@@ -214,7 +214,7 @@ When an ``ext::auth::EmailFactor`` object requests verification, like when a use
 Password reset requested
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-When an ``ext::auth::Identity`` object requests a password reset, like when a user requests to reset their password, this event is triggered.
+When a user requests to reset their password, this event is triggered.
 
 **Example payload:**
 
@@ -235,7 +235,7 @@ When an ``ext::auth::Identity`` object requests a password reset, like when a us
 Magic link requested
 ^^^^^^^^^^^^^^^^^^^^
 
-When an ``ext::auth::MagicLink`` object is requested, like when a user requests a magic link for signing in, or signs up for the first time, this event is triggered.
+When a user requests to send a magic link email, like for signing in, or signing up for the first time, this event is triggered.
 
 **Example payload:**
 
