@@ -140,8 +140,6 @@ class TestSQLParse(tb.BaseDocTest):
     def test_sql_parse_select_11(self):
         """
         SELECT * FROM my_table ORDER BY field
-% OK %
-        SELECT * FROM my_table ORDER BY field ASC NULLS LAST
         """
 
     def test_sql_parse_select_12(self):
@@ -153,9 +151,6 @@ class TestSQLParse(tb.BaseDocTest):
         """
         SELECT salary, sum(salary)
         OVER (ORDER BY salary) FROM empsalary
-% OK %
-        SELECT salary, sum(salary)
-        OVER (ORDER BY salary ASC NULLS LAST) FROM empsalary
         """
 
     def test_sql_parse_select_14(self):
