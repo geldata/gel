@@ -28,6 +28,7 @@ import uuid
 from edb import errors
 
 from edb.common import checked
+from edb.common import parsing
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
@@ -47,7 +48,6 @@ from . import utils
 if typing.TYPE_CHECKING:
     from typing import Any, Iterable, Iterator, Mapping, Optional
     from typing import AbstractSet, Sequence, Callable
-    from edb.common import parsing
 
 
 MAX_TYPE_DISTANCE = 1_000_000_000
@@ -203,6 +203,10 @@ class Type(
 
         for k, v in derived_attrs.items():
             cmd.set_attribute_value(k, v)
+
+        if span := derived_attrs.get('span', None):
+            assert isinstance(span, parsing.Span)
+            cmd.span = span
 
         context = sd.CommandContext(
             modaliases={},
