@@ -1194,16 +1194,22 @@ def _build_locking_clause(n: Node, c: Context) -> pgast.LockingClause:
     )
 
 
-def _build_nones_order(n: Node, _c: Context) -> qlast.NonesOrder:
+def _build_nones_order(n: Node, _c: Context) -> Optional[qlast.NonesOrder]:
     if n == "SORTBY_NULLS_FIRST":
         return qlast.NonesFirst
-    return qlast.NonesLast
+    if n == "SORTBY_NULLS_LAST":
+        return qlast.NonesLast
+    return None
 
 
-def _build_sort_order(n: Node, _c: Context) -> qlast.SortOrder:
+def _build_sort_order(n: Node, _c: Context) -> Optional[qlast.SortOrder]:
     if n == "SORTBY_DESC":
         return qlast.SortOrder.Desc
-    return qlast.SortOrder.Asc
+    if n == "SORTBY_ASC":
+        return qlast.SortOrder.Asc
+    if n == "SORTBY_DEFAULT":
+        return None
+    raise PSqlUnsupportedError(n)
 
 
 def _build_column_ref(n: Node, c: Context) -> pgast.ColumnRef:
@@ -1214,21 +1220,55 @@ def _build_column_ref(n: Node, c: Context) -> pgast.ColumnRef:
     )
 
 
-def _build_infer_clause(n: Node, c: Context) -> pgast.InferClause:
-    return pgast.InferClause(
-        index_elems=_maybe_list(n, c, "indexElems", _build_str),
-        where_clause=_maybe(n, c, "whereClause", _build_base_expr),
-        conname=_maybe(n, c, "conname", _build_str),
+def _build_on_conflict(n: Node, c: Context) -> pgast.OnConflictClause:
+    action_str = _build_str(n["action"], c)
+    if action_str == "ONCONFLICT_NOTHING":
+        action = pgast.OnConflictAction.DO_NOTHING
+    elif action_str == "ONCONFLICT_UPDATE":
+        action = pgast.OnConflictAction.DO_UPDATE
+    else:
+        raise PSqlUnsupportedError(n, f"ON CONFLICT {action_str}")
+
+    return pgast.OnConflictClause(
+        action=action,
+        target=_maybe(n, c, "infer", _build_on_conflict_target),
+        update_list=_maybe(n, c, "targetList", _build_update_targets) or [],
+        update_where=_maybe(n, c, "whereClause", _build_base_expr),
         span=_build_span(n, c),
     )
 
 
-def _build_on_conflict(n: Node, c: Context) -> pgast.OnConflictClause:
-    return pgast.OnConflictClause(
-        action=_build_str(n["action"], c).removeprefix('ONCONFLICT_'),
-        infer=_maybe(n, c, "infer", _build_infer_clause),
-        target_list=_maybe(n, c, "targetList", _build_update_targets) or [],
-        where=_maybe(n, c, "where", _build_base_expr),
+def _build_on_conflict_target(n: Node, c: Context) -> pgast.OnConflictTarget:
+    return pgast.OnConflictTarget(
+        index_elems=_maybe_list(n, c, "indexElems", _build_index_elem),
+        index_where=_maybe(n, c, "whereClause", _build_base_expr),
+        constraint_name=_maybe(n, c, "conname", _build_str),
+        span=_build_span(n, c),
+    )
+
+
+def _build_index_elem(n: Node, c: Context) -> pgast.IndexElem:
+    n = _unwrap(n, 'IndexElem')
+
+    expr: pgast.BaseExpr
+    if 'name' in n:
+        expr = pgast.ColumnRef(name=(n['name'],))
+    elif 'indexcolname' in n:
+        expr = pgast.ColumnRef(name=(n['name'],))
+    elif 'expr' in n:
+        expr = _build_base_expr(n['expr'], c)
+    else:
+        raise PSqlUnsupportedError(n)
+
+    # TODO:
+    # collation
+    # opclass
+    # opclassopts
+
+    return pgast.IndexElem(
+        expr=expr,
+        ordering=_build_sort_order(n['ordering'], c),
+        nulls_ordering=_build_nones_order(n['nulls_ordering'], c),
         span=_build_span(n, c),
     )
 

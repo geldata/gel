@@ -1434,16 +1434,18 @@ def compile_insert_else_body(
     needs_conflict_cte = insert_needs_conflict_cte(
         ir_stmt, on_conflict, ctx=ctx)
     if not needs_conflict_cte and not else_fail:
-        infer = None
+        target = None
         if on_conflict.constraint:
             constraint_name = common.get_constraint_raw_name(
                 on_conflict.constraint.id)
-            infer = pgast.InferClause(conname=f'"{constraint_name}"')
+            target = pgast.OnConflictTarget(
+                constraint_name=f'"{constraint_name}"'
+            )
 
         assert isinstance(stmt, pgast.InsertStmt)
         stmt.on_conflict = pgast.OnConflictClause(
-            action='nothing',
-            infer=infer,
+            action=pgast.OnConflictAction.DO_NOTHING,
+            target=target,
         )
 
     if not else_branch and not needs_conflict_cte and not else_fail:
@@ -2758,10 +2760,11 @@ def process_link_update(
         )
 
         conflict_clause = pgast.OnConflictClause(
-            action='nothing',
-            infer=pgast.InferClause(
+            action=pgast.OnConflictAction.DO_NOTHING,
+            target=pgast.OnConflictTarget(
                 index_elems=[
-                    pgast.ColumnRef(name=[col]) for col in conflict_cols
+                    pgast.IndexElem(expr=pgast.ColumnRef(name=[col]))
+                    for col in conflict_cols
                 ]
             ),
         )
@@ -2772,7 +2775,7 @@ def process_link_update(
         # the link table is not visible.  Hence, we need to use
         # the ON CONFLICT clause to resolve this.
         conflict_inference = [
-            pgast.ColumnRef(name=[col])
+            pgast.IndexElem(expr=pgast.ColumnRef(name=[col]))
             for col in conflict_cols
         ]
 
@@ -2784,8 +2787,8 @@ def process_link_update(
 
         if len(target_cols) == 0:
             conflict_clause = pgast.OnConflictClause(
-                action='nothing',
-                infer=pgast.InferClause(
+                action=pgast.OnConflictAction.DO_NOTHING,
+                target=pgast.OnConflictTarget(
                     index_elems=conflict_inference
                 )
             )
@@ -2797,11 +2800,11 @@ def process_link_update(
                 ],
             )
             conflict_clause = pgast.OnConflictClause(
-                action='update',
-                infer=pgast.InferClause(
+                action=pgast.OnConflictAction.DO_UPDATE,
+                target=pgast.OnConflictTarget(
                     index_elems=conflict_inference
                 ),
-                target_list=[
+                update_list=[
                     pgast.MultiAssignRef(
                         columns=target_cols,
                         source=conflict_data
