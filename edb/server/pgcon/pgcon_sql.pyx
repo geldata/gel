@@ -26,11 +26,14 @@ cdef class PGMessage:
         query_unit=None,
         fe_settings=None,
         injected=False,
+        bytes force_portal_name=None,
     ):
         self.action = action
         self.stmt_name = stmt_name
         self.orig_portal_name = portal_name
-        if portal_name:
+        if force_portal_name is not None:
+            self.portal_name = force_portal_name
+        elif portal_name:
             self.portal_name = b'u' + portal_name.encode("utf-8")
         else:
             self.portal_name = b''

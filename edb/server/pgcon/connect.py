@@ -45,6 +45,7 @@ INIT_CON_SCRIPT: bytes | None = None
 # * 'F': an instance/tenant-level config setting from the TOML config file
 #
 # * 'S': a session-level pg-ext config setting (frontend-only)
+# * 'L': a transaction-level pg-ext config setting (frontend-only)
 # * 'P': a session-level pg-ext config setting that's implemented by setting
 #   a corresponding backend config setting (not stored in _edgecon_state)
 #
@@ -55,7 +56,7 @@ SETUP_TEMP_TABLE_SCRIPT = '''
             value jsonb NOT NULL,
             type text NOT NULL CHECK(
                 type = 'C' OR type = 'B' OR type = 'A' OR type = 'E'
-                OR type = 'F' OR type = 'S'),
+                OR type = 'F' OR type = 'S' OR type = 'L'),
             UNIQUE(name, type)
         );
 '''.strip()
@@ -108,6 +109,11 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
         {SETUP_CONFIG_CACHE_SCRIPT}
         {SETUP_DML_DUMMY_TABLE_SCRIPT}
 
+        CREATE CONSTRAINT TRIGGER _edgecon_state_local_reset
+        AFTER INSERT ON _edgecon_state
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW EXECUTE FUNCTION edgedb._clear_fe_local_sql_settings();
+
         PREPARE _clear_state AS
             WITH x1 AS (
                 DELETE FROM _config_cache
@@ -157,6 +163,26 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
                 RETURNING 1
             )
             SELECT 1 FROM be, fe;
+
+        PREPARE _set_sql_state(text, text, text) AS
+            INSERT INTO
+                _edgecon_state(name, type, value)
+            VALUES
+                ($1, $2, pg_catalog.to_jsonb($3))
+            ON CONFLICT (name, type) DO UPDATE
+                SET value = pg_catalog.to_jsonb($3);
+
+        PREPARE _reset_sql_state(text, text) AS
+            DELETE FROM
+                _edgecon_state
+            WHERE
+                name = $1 AND type = $2;
+
+        PREPARE _reset_sql_state_all AS
+            DELETE FROM
+                _edgecon_state
+            WHERE
+                type = 'S' OR type = 'L';
     ''').strip().encode('utf-8')
 
 

@@ -1037,6 +1037,8 @@ cdef class PgConnection(frontend.FrontendConnection):
                     injected_action=True,
                 )
             parse_unit = stmt.parse_action.query_unit
+            if parse_unit.set_vars:
+                actions.extend(self._build_sql_settings_actions(parse_unit))
             actions.append(stmt.parse_action)
 
             # 2 bytes: number of format codes (1)
@@ -1248,6 +1250,8 @@ cdef class PgConnection(frontend.FrontendConnection):
                 self._query_count += 1
                 with managed_error():
                     unit = dbv.find_portal(portal_name)
+                    if unit.set_vars:
+                        actions.extend(self._build_sql_settings_actions(unit))
                     actions.append(
                         PGMessage(
                             PGAction.EXECUTE,
@@ -1491,6 +1495,94 @@ cdef class PgConnection(frontend.FrontendConnection):
                 injected=True,
             )
         )
+        return actions
+
+    def _build_sql_settings_actions(self, qu):
+        actions = []
+        if qu.set_vars == {None: None}:  # RESET ALL
+            actions.append(
+                PGMessage(
+                    PGAction.BIND,
+                    force_portal_name=b"injected",
+                    stmt_name=b"_reset_sql_state_all",
+                    # 2 bytes: number of format codes (0)
+                    # 2 bytes: number of parameters (0)
+                    # 2 bytes: number of result format codes (0)
+                    args=b"\x00\x00\x00\x00\x00\x00",
+                    injected=True,
+                )
+            )
+            actions.append(
+                PGMessage(
+                    PGAction.EXECUTE,
+                    args=0,
+                    force_portal_name=b"injected",
+                    injected=True,
+                )
+            )
+            actions.append(
+                PGMessage(
+                    PGAction.CLOSE_PORTAL,
+                    force_portal_name=b"injected",
+                    injected=True,
+                )
+            )
+        elif qu.frontend_only:
+            for k, v in qu.set_vars.items():
+                buf = WriteBuffer.new()
+
+                buf.write_int16(0)  # number of format codes
+
+                # number of parameters:
+                if v is None:
+                    buf.write_int16(2)
+                else:
+                    buf.write_int16(3)
+
+                buf.write_len_prefixed_utf8(k)  # 1st param: name
+                buf.write_len_prefixed_utf8(  # 2nd param: type
+                    "L" if qu.is_local else "S")
+                if v is not None:
+                    buf.write_len_prefixed_utf8(  # 3rd param: value
+                        setting_to_sql(k, v))
+
+                buf.write_int16(0)  # number of result format codes
+
+                if v is None:
+                    actions.append(
+                        PGMessage(
+                            PGAction.BIND,
+                            force_portal_name=b"injected",
+                            stmt_name=b"_reset_sql_state",
+                            args=bytes(buf),
+                            injected=True,
+                        )
+                    )
+                else:
+                    actions.append(
+                        PGMessage(
+                            PGAction.BIND,
+                            force_portal_name=b"injected",
+                            stmt_name=b"_set_sql_state",
+                            args=bytes(buf),
+                            injected=True,
+                        )
+                    )
+                actions.append(
+                    PGMessage(
+                        PGAction.EXECUTE,
+                        args=0,
+                        force_portal_name=b"injected",
+                        injected=True,
+                    )
+                )
+                actions.append(
+                    PGMessage(
+                        PGAction.CLOSE_PORTAL,
+                        force_portal_name=b"injected",
+                        injected=True,
+                    )
+                )
         return actions
 
     async def _parse_statement(
