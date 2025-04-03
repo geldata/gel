@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Optional,
-    TypeVar,
     Iterable,
     Sequence,
     overload,
@@ -41,10 +40,7 @@ if TYPE_CHECKING:
     from . import schema as s_schema
 
 
-Source_T = TypeVar('Source_T', bound='Source')
-
-
-class SourceCommandContext(
+class SourceCommandContext[Source_T: Source](
     sd.ObjectCommandContext[Source_T],
     indexes.IndexSourceCommandContext,
 ):
@@ -52,7 +48,9 @@ class SourceCommandContext(
     pass
 
 
-class SourceCommand(indexes.IndexSourceCommand[Source_T]):
+class SourceCommand[Source_T: Source](
+    indexes.IndexSourceCommand[Source_T]
+):
     pass
 
 

@@ -27,7 +27,6 @@ import sys
 from typing import (
     Any,
     Callable,
-    TypeVar,
     cast,
     get_type_hints,
     TYPE_CHECKING,
@@ -37,9 +36,6 @@ from typing import (
 from edb.common import debug
 from edb.common import markup
 from edb.common import typing_inspect
-
-
-T = TypeVar('T')
 
 
 class ASTError(Exception):
@@ -69,7 +65,7 @@ class _FieldSpec:
         self.factory = factory
 
 
-def field(*, factory: Callable[[], T]) -> T:
+def field[T](*, factory: Callable[[], T]) -> T:
     return cast(T, _FieldSpec(factory=factory))
 
 
@@ -275,7 +271,7 @@ class AST:
     def _init_copy(self):
         return self.__class__()
 
-    def replace(self: T, **changes) -> T:
+    def replace[T](self: T, **changes) -> T:
         copied = copy.copy(self)
         for field, value in changes.items():
             object.__setattr__(copied, field, value)
