@@ -44,6 +44,7 @@
 0x_03_04_00_00   CapabilityError
 0x_03_04_01_00   UnsupportedCapabilityError
 0x_03_04_02_00   DisabledCapabilityError
+0x_03_04_03_00   UnsafeIsolationLevelError
 
 
 ####

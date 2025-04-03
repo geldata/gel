@@ -360,6 +360,7 @@ def fini_expression(
         singletons=ctx.env.singletons,
         triggers=ir_triggers,
         warnings=tuple(ctx.env.warnings),
+        unsafe_isolation_dangers=tuple(ctx.env.unsafe_isolation_dangers),
     )
     return result
 

@@ -887,3 +887,78 @@ def compile_inheritance_conflict_checks(
         )
 
     return conflicters or None
+
+
+def check_for_isolation_conflicts(
+    stmt: irast.MutatingStmt,
+    typ: s_objtypes.ObjectType,
+    update_typ: Optional[s_objtypes.ObjectType] = None,
+    *, ctx: context.ContextLevel,
+) -> None:
+    schema = ctx.env.schema
+
+    entries = _get_type_conflict_constraint_entries(stmt, typ, ctx=ctx)
+    constrs = [cnstr for cnstr, _ in entries]
+
+    for constr in constrs:
+        subject = constr.get_subject(schema)
+        assert subject
+
+        # Find the origin type; if we are the only origin type and we
+        # don't have children, then we are good.
+        all_objs = []
+        match constr.get_constraint_origins(schema):
+            case []:
+                continue
+            case [root_constr, *_]:
+                root_subject = root_constr.get_subject(schema)
+                if isinstance(root_subject, s_pointers.Pointer):
+                    root_subject_obj = root_subject.get_source(schema)
+                else:
+                    root_subject_obj = root_subject
+                assert isinstance(root_subject_obj, s_objtypes.ObjectType)
+                all_objs = list(
+                    schemactx.get_all_concrete(root_subject_obj, ctx=ctx)
+                )
+                if root_subject_obj == typ and len(all_objs) == 1:
+                    continue
+                if root_subject_obj == typ and constr.get_delegated(schema):
+                    continue
+                # If this is an UPDATE and we are processing some
+                # subtype, and the actual type being updated is
+                # covered by this same constraint, don't report it for
+                # the child: it will be reported for an ancestor,
+                # which is less noisy.
+                if (
+                    update_typ
+                    and update_typ != typ
+                    and update_typ in all_objs
+                ):
+                    continue
+
+        op = 'INSERT' if isinstance(stmt, irast.InsertStmt) else 'UPDATE'
+        vn = f'{op} to {typ.get_verbosename(schema)} '
+
+        subj_vn = subject.get_verbosename(schema, with_parent=True)
+        vn += f'affects an exclusive constraint on {subj_vn}'
+        if expr := constr.get_subjectexpr(schema):
+            vn += f" with expression '{expr.text}'"
+
+        assert root_subject_obj
+        if root_subject_obj != typ:
+            msg = (
+                f"{vn} that is defined in ancestor "
+                f"{root_subject_obj.get_verbosename(schema)}"
+            )
+        else:
+            all_objs_s = ', '.join(sorted(
+                f"'{o.get_displayname(schema)}'" for o in all_objs if o != typ
+            ))
+            msg = (
+                f"{vn} that is shared with "
+                f"descendant types: {all_objs_s}"
+            )
+
+        ctx.log_repeatable_read_danger(
+            errors.UnsafeIsolationLevelError(msg, span=stmt.span)
+        )

@@ -2002,6 +2002,7 @@ def _compile_ql_query(
         has_dml=bool(ir.dml_exprs),
         query_asts=query_asts,
         warnings=ir.warnings,
+        unsafe_isolation_dangers=ir.unsafe_isolation_dangers,
     )
 
 
@@ -2162,6 +2163,7 @@ def _compile_ql_transaction(
     final_global_schema: Optional[s_schema.Schema] = None
     sp_name = None
     sp_id = None
+    iso = None
 
     if ctx.expect_rollback and not isinstance(
         ql, (qlast.RollbackTransaction, qlast.RollbackToSavepoint)
@@ -2194,18 +2196,6 @@ def _compile_ql_transaction(
                 access = access_mode.to_qltypes()
             else:
                 access = qltypes.TransactionAccessMode.READ_ONLY
-
-        # Guard against unsupported isolation + access combinations
-        if (
-            iso is not qltypes.TransactionIsolationLevel.SERIALIZABLE
-            and access is not qltypes.TransactionAccessMode.READ_ONLY
-        ):
-            raise errors.TransactionError(
-                f"{iso.value} transaction isolation level is only "
-                "supported in read-only transactions",
-                span=ql.span,
-                hint=f"specify READ ONLY access mode",
-            )
 
         sqls = f'START TRANSACTION ISOLATION LEVEL {iso.value} {access.value}'
         if ql.deferrable is not None:
@@ -2281,6 +2271,7 @@ def _compile_ql_transaction(
         global_schema=final_global_schema,
         sp_name=sp_name,
         sp_id=sp_id,
+        isolation_level=iso,
         feature_used_metrics=(
             ddl.produce_feature_used_metrics(
                 ctx.compiler_state, final_user_schema
@@ -3000,6 +2991,7 @@ def _make_query_unit(
         cache_key=ctx.cache_key,
         user_schema_version=schema_version,
         warnings=comp.warnings,
+        unsafe_isolation_dangers=comp.unsafe_isolation_dangers,
     )
 
     if not comp.is_transactional:
@@ -3090,6 +3082,7 @@ def _make_query_unit(
             )
         unit.sql = comp.sql
         unit.cacheable = comp.cacheable
+        unit.tx_isolation_level = comp.isolation_level
 
         if not ctx.dump_restore_mode:
             if comp.user_schema is not None:
@@ -3222,6 +3215,9 @@ def _make_query_unit(
 
     if unit.warnings:
         for warning in unit.warnings:
+            warning.__traceback__ = None
+    if unit.unsafe_isolation_dangers:
+        for warning in unit.unsafe_isolation_dangers:
             warning.__traceback__ = None
 
     return unit, final_user_schema

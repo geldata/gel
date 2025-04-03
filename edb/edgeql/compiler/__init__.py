@@ -366,6 +366,7 @@ def compile_ast_fragment_to_ir(
         singletons=[],
         triggers=(),
         warnings=tuple(ctx.env.warnings),
+        unsafe_isolation_dangers=tuple(ctx.env.unsafe_isolation_dangers),
     )
 
 

@@ -806,6 +806,7 @@ class Statement(Command):
     singletons: list[PathId]
     triggers: tuple[tuple[Trigger, ...], ...]
     warnings: tuple[errors.EdgeDBError, ...]
+    unsafe_isolation_dangers: tuple[errors.UnsafeIsolationLevelError, ...]
 
 
 class TypeIntrospection(ImmutableExpr):
