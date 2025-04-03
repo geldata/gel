@@ -177,22 +177,10 @@ def document_definition(
 
             if isinstance(ql_ast, list):
 
-                # <DEBUG>
-                from edb.common import markup
-                with open('ql_stmt.txt', 'w') as file:
-                    markup.dump(ql_ast, file=file)
-                # </DEBUG>
-
                 _, ir_stmts = ls_server.compile(ls, document, ql_ast)
 
                 ir_stmt: irast.Statement
                 for ir_stmt in ir_stmts:
-
-                    # <DEBUG>
-                    from edb.common import markup
-                    with open('ir_stmt.txt', 'w') as file:
-                        markup.dump(ir_stmt, file=file)
-                    # </DEBUG>
 
                     node = edb_span.find_by_source_position(ir_stmt, position)
                     if not node:
