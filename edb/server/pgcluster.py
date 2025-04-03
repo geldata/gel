@@ -497,11 +497,18 @@ class Cluster(BaseCluster):
                 locale='C.UTF-8' if have_c_utf8 else 'en_US.UTF-8',
                 lc_collate='C',
                 encoding='UTF8',
+                summarize_wal='on',
             )
             self.reset_hba()
             self.add_hba_entry(
                 type='local',
                 database='all',
+                user='postgres',
+                auth_method='trust'
+            )
+            self.add_hba_entry(
+                type='local',
+                database='replication',
                 user='postgres',
                 auth_method='trust'
             )
