@@ -22,7 +22,7 @@ from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
 from lsprotocol import types as lsp_types
 
-
+from edb import errors
 from edb.edgeql import ast as qlast
 from edb.edgeql import tokenizer
 from edb.edgeql import parser as qlparser
@@ -63,9 +63,18 @@ def parse(
     # parsing successful
     assert isinstance(result.out, rust_parser.CSTNode)
 
-    ast = qlparser._cst_to_ast(
-        result.out, productions, source, doc.filename
-    ).val
+    try:
+        ast = qlparser._cst_to_ast(
+            result.out, productions, source, doc.filename
+        ).val
+    except errors.EdgeDBError as e:
+        return Result(err=[
+            lsp_types.Diagnostic(
+                range=ls_utils.span_to_lsp(source.text(), e.get_span()),
+                severity=lsp_types.DiagnosticSeverity.Error,
+                message=e.args[0],
+            )
+        ])
     if sdl:
         assert isinstance(ast, qlast.Schema), ast
     else:
