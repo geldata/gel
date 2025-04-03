@@ -743,6 +743,33 @@ Client Reference
               // ...
             });
 
+    .. js:method:: withWarningHandler(handler: (warnings: errors.GelError[]) => void): Client
+
+        Returns a clone of the ``Client`` instance with the specified warning handler. Some queries may generate warnings while still returning a result. The ``handler`` function will be called with an array of ``GelError`` objects whenever the client encounters warnings during query execution.
+
+        By default, the warnings are logged to the console with ``console.warn``.
+
+        :arg handler: A function that takes an array of ``GelError`` objects as its argument.
+
+        :returns: ``Client``
+
+        Example:
+
+        .. code-block:: typescript
+
+            const warningHandler = (warnings: errors.GelError[]) => {
+              warnings.forEach((gelError) => {
+                console.warn("Warning:", gelError.message);
+              });
+            };
+
+            const clientWithWarningHandler = client.withWarningHandler(warningHandler);
+
+            await clientWithWarningHandler.query(`
+              select User filter .friends.name = "John";
+            `);
+            // Warning: Gel warning: possibly more than one element returned by an expression in a FILTER clause
+
     .. js:method:: close(): Promise<void>
 
         Close the client's open connections gracefully. When a client is closed, all its underlying connections are awaited to complete their pending operations, then closed. A warning is produced if the pool takes more than 60 seconds to close.
