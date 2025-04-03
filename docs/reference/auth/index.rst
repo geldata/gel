@@ -274,7 +274,7 @@ The easiest way to configure SMTP is to use the built-in UI. Here is an example 
 
 .. note:: Gel Cloud users, rejoice!
 
-  If you are using Gel Cloud, you can use the built-in development SMTP provider without any configuration. This special provider is already configured for development usage and is ready to send emails while you are developing your application. This provider is severely rate limited, and the sender is hardcoded, so you must not use it in production.
+  If you are using Gel Cloud, you can use the built-in development SMTP provider without any configuration. This special provider is already configured for development usage and is ready to send emails while you are developing your application. This provider is tuned specifically for development: it is  rate limited and the sender is hardcoded. Do not use it in production, it will not work for that purpose.
 
 .. code-block:: edgeql
 
