@@ -497,7 +497,6 @@ class Cluster(BaseCluster):
                 locale='C.UTF-8' if have_c_utf8 else 'en_US.UTF-8',
                 lc_collate='C',
                 encoding='UTF8',
-                summarize_wal='on',
             )
             self.reset_hba()
             self.add_hba_entry(
@@ -578,6 +577,8 @@ class Cluster(BaseCluster):
                 ]
             ),
             "edb_stat_statements.track_planning": "true",
+            # Required for pg_basebackup --incremental to work
+            "summarize_wal": "on",
         }
 
         if os.getenv('EDGEDB_DEBUG_PGSERVER'):
