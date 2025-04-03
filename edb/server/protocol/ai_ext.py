@@ -1421,6 +1421,21 @@ async def _start_openai_like_chat(
                             + b'data: ' + event_data + b'\n\n'
                         )
                         protocol.write_raw(event)
+
+                        event_data = json.dumps({
+                            "type": "content_block_start",
+                            "index": 0,
+                            "content_block": {
+                                "type": "text",
+                                "text": ""
+                            }
+                        }).encode("utf-8")
+                        event = (
+                            b'event: content_block_start\n'
+                            + b'data: ' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+
                         # if there's only one openai tool call it shows up here
                         if tool_calls:
                             for tool_call in tool_calls:
