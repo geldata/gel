@@ -95,7 +95,6 @@ Performance analysis statement:
     for
     group
     with
-    analyze
 
     tx_start
     tx_commit
