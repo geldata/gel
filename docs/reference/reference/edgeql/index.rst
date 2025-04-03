@@ -91,7 +91,6 @@ Performance analysis statement:
     select
     insert
     update
-    delete
     for
     group
     with
