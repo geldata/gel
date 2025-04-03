@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Mapping, Iterable
+from typing import Mapping, Iterable, Optional
 import dataclasses
 import pathlib
 import os
@@ -28,6 +28,7 @@ from lsprotocol import types as lsp_types
 
 
 from edb import errors
+from edb.common import span as edb_span
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import compiler as qlcompiler
@@ -35,6 +36,7 @@ from edb.edgeql import compiler as qlcompiler
 from edb.ir import ast as irast
 
 from edb.schema import schema as s_schema
+from edb.schema import objects as s_objects
 from edb.schema import std as s_std
 from edb.schema import ddl as s_ddl
 import pygls.workspace
@@ -42,6 +44,7 @@ import pygls.workspace
 from . import parsing as ls_parsing
 from . import is_schema_file
 from . import project
+from . import utils as ls_utils
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -67,7 +70,7 @@ class GelLanguageServer(LanguageServer):
     config: Config
 
     def __init__(self, config: Config):
-        super().__init__('Gel Language Server', 'v0.1')
+        super().__init__("Gel Language Server", "v0.1")
         self.state = State()
         self.config = config
 
@@ -128,9 +131,8 @@ def compile(
 
     diagnostics: list[lsp_types.Diagnostic] = []
     ir_stmts: list[irast.Statement] = []
-    modaliases: Mapping[str | None, str] = {None: 'default'}
+    modaliases: Mapping[str | None, str] = {None: "default"}
     for ql_stmt in stmts:
-
         try:
             if isinstance(ql_stmt, qlast.DDLCommand):
                 schema, _delta = s_ddl.delta_and_schema_from_ddl(
@@ -145,7 +147,7 @@ def compile(
                 if isinstance(ir_res, irast.Statement):
                     ir_stmts.append(ir_res)
             else:
-                ls.show_message_log(f'skip compile of {ql_stmt}')
+                ls.show_message_log(f"skip compile of {ql_stmt}")
         except errors.EdgeDBError as error:
             diagnostics.append(_convert_error(error))
 
@@ -198,7 +200,6 @@ def get_schema(
 def update_schema_doc(
     ls: GelLanguageServer, doc: pygls.workspace.TextDocument
 ) -> list[lsp_types.Diagnostic]:
-
     schema_dir = _determine_schema_dir(ls)
     if not schema_dir:
         return [_new_diagnostic_at_the_top("cannot find schema-dir")]
@@ -235,7 +236,6 @@ def update_schema_doc(
 
 def _get_workspace_path(ls: GelLanguageServer) -> pathlib.Path | None:
     if len(ls.workspace.folders) != 1:
-
         if len(ls.workspace.folders) > 1:
             ls.show_message_log(
                 "WARNING: workspaces with multiple root folders "
@@ -262,7 +262,7 @@ def _load_schema_docs(ls: GelLanguageServer, schema_dir: pathlib.Path):
     for entry in entries:
         if not is_schema_file(entry):
             continue
-        doc = ls.workspace.get_text_document(f'file://{schema_dir / entry}')
+        doc = ls.workspace.get_text_document(f"file://{schema_dir / entry}")
         ls.state.schema_docs.append(doc)
 
 
@@ -281,7 +281,7 @@ def _determine_schema_dir(ls: GelLanguageServer) -> pathlib.Path | None:
     if manifest.project:
         schema_dir = project_dir / manifest.project.schema_dir
     else:
-        schema_dir = project_dir / 'dbschema'
+        schema_dir = project_dir / "dbschema"
 
     if schema_dir.is_dir():
         return schema_dir
@@ -324,13 +324,10 @@ def _compile_schema(
     std_schema = _load_std_schema(ls.state)
 
     # apply SDL to std schema
-    ls.show_message_log('compiling schema ..')
+    ls.show_message_log("compiling schema ..")
     try:
-        schema, _warnings = s_ddl.apply_sdl(
-            sdl,
-            base_schema=std_schema
-        )
-        ls.show_message_log('.. done')
+        schema, _warnings = s_ddl.apply_sdl(sdl, base_schema=std_schema)
+        ls.show_message_log(".. done")
     except errors.EdgeDBError as error:
         schema = None
 
@@ -341,8 +338,8 @@ def _compile_schema(
         )
         if do is None:
             ls.show_message_log(
-                f'cannot find original doc of the error ({error.filename}), '
-                'using first schema file'
+                f"cannot find original doc of the error ({error.filename}), "
+                "using first schema file"
             )
             do = ls.state.schema_docs[0]
 
@@ -365,3 +362,72 @@ def _load_std_schema(state: State) -> s_schema.Schema:
 
     state.std_schema = schema
     return state.std_schema
+
+
+def get_definition_in_ql(
+    ls: GelLanguageServer,
+    document: pygls.workspace.TextDocument,
+    ql_ast: list[qlast.Base],
+    position: int,
+) -> lsp_types.Location | None:
+    # compile the whole doc
+    # TODO: search ql ast before compiling all stmts
+    _, ir_stmts = compile(ls, document, ql_ast)
+
+    # find the ir node at the position
+    node = None
+    for ir_stmt in ir_stmts:
+        node = edb_span.find_by_source_position(ir_stmt, position)
+        if node:
+            break
+
+    if not node:
+        ls.show_message_log(f"cannot find span in {len(ir_stmts)} stmts")
+        return None
+
+    assert isinstance(node, irast.Base), node
+    ls.show_message_log(f"node: {str(node)}")
+    ls.show_message_log(f"span: {str(node.span)}")
+
+    schema = ir_stmt.schema
+    assert schema
+
+    # lookup schema objects depending on which ir node we are over
+    target: Optional[s_objects.Object] = None
+    if isinstance(node, irast.Set):
+        node = node.expr
+    if isinstance(node, irast.TypeRoot):
+        target = schema.get_by_id(node.typeref.id)
+    elif isinstance(node, irast.Pointer):
+        if isinstance(node.ptrref, irast.PointerRef):
+            target = schema.get_by_id(node.ptrref.id)
+    if not target:
+        ls.show_message_log(f"don't know how to lookup schema by {node}")
+        return None
+
+    span: edb_span.Span | None = target.get_span(schema)
+    if not span:
+        name = target.get_name(schema)
+        ls.show_message_log(f"schema object found, but no span: {name}")
+        return None
+
+    # find originating document
+    doc: Optional[pygls.workspace.TextDocument] = None
+
+    # is doc the current document?
+    if span.filename == document.filename:
+        doc = document
+
+    # find schema docs with this filename
+    if not doc:
+        docs = ls.state.schema_docs
+        doc = next((d for d in docs if d.filename == span.filename), None)
+
+    if not doc:
+        ls.show_message_log(f"Cannot find doc: {span.filename}")
+        return None
+
+    return lsp_types.Location(
+        uri=doc.uri,
+        range=ls_utils.span_to_lsp(doc.source, (span.start, span.end)),
+    )
