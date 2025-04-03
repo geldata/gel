@@ -21,6 +21,8 @@ import threading
 import io
 import unittest
 import time
+import typing
+import json
 
 try:
     from edb.language_server import main as ls_main
@@ -29,58 +31,151 @@ except ImportError:
     pass
 
 
-@unittest.skipIf(ls_main is None, 'edgedb-ls dependencies are missing')
-class TestLanguageServer(unittest.TestCase):
+class LspReader:
+    def __init__(self, stream: io.BytesIO):
+        self.stream = stream
+        self.offset = 0
 
-    def test_language_server_01(self):
+    def get_next(self) -> dict:
+        val = self.try_get_next()
+        while val is None:
+            time.sleep(1)
+            val = self.try_get_next()
+        return val
 
-        message = '''{
+    def try_get_next(self) -> dict | None:
+        headers = {}
+        buf = self.stream.getvalue()
+        while True:
+            end = buf.find(b"\r\n", self.offset)
+            if end < 0:
+                return None
+            line = str(buf[self.offset : end], encoding="ascii")
+            self.offset = end + 2
+
+            parts = line.split(": ", maxsplit=1)
+            if len(parts) <= 1:
+                break
+            else:
+                headers[parts[0].lower()] = parts[1]
+
+        assert (
+            headers["content-type"]
+            == "application/vscode-jsonrpc; charset=utf-8"
+        )
+
+        content_length = int(headers["content-length"])
+        end = self.offset + content_length
+        body = buf[self.offset : (self.offset + content_length)]
+        self.offset = end
+
+        return json.loads(body)
+
+
+class LspRunner:
+    def __init__(
+        self,
+    ):
+        stream_in = io.BytesIO()
+        stream_out = io.BytesIO()
+
+        self.stream_in = stream_in
+        self.stream_reader = LspReader(stream_out)
+        self.ls = ls_main.init(None)
+
+        def run_server():
+            try:
+                print(len(self.stream_in.getvalue()) - self.stream_in.tell())
+                self.ls.start_io(stdin=stream_in, stdout=stream_out)
+            except ValueError as e:
+                if str(e) != "I/O operation on closed file.":
+                    raise
+
+        self.runner_thread = threading.Thread(target=run_server)
+        self.send({
             "jsonrpc": "2.0",
             "method": "initialize",
             "id": 1,
             "params": {
-                "processId": null,
-                "rootUri": null,
-                "capabilities": { }
+                "processId": None,
+                "rootUri": None,
+                "capabilities": {}
             }
-        }'''
+        })
 
-        bytes_msg = bytes(message, encoding='utf-8')
-        stream_in = io.BytesIO(
-            bytes(f"Content-Length: {len(bytes_msg)}\r\n\r\n", encoding='ascii')
-            + bytes_msg
-        )
-        stream_out = io.BytesIO()
+        self.runner_thread.start()
 
-        ls = ls_main.init(None)
+    def send(self, request: typing.Any):
+        body = json.dumps(request).encode('utf-8')
+        head = bytes(f"Content-Length: {len(body)}\r\n\r\n", encoding="ascii")
 
-        def stop_server():
-            time.sleep(1)
-            ls.shutdown()
+        current_pos = self.stream_in.tell()
+        self.stream_in.write(head + body)
+        self.stream_in.seek(current_pos)
 
-        threading.Thread(target=stop_server).start()
-        ls.start_io(stdin=stream_in, stdout=stream_out)
+    def recv(self) -> typing.Any:
+        return self.stream_reader.get_next()
 
-        expected = (
-            'Content-Length: 95\r\n'
-            'Content-Type: application/vscode-jsonrpc; charset=utf-8\r\n'
-            '\r\n'
-            '{"params": {"type": 4, "message": "Starting"}, "method": '
-            '"window/logMessage", "jsonrpc": "2.0"}Content-Length: 94\r\n'
-            'Content-Type: application/vscode-jsonrpc; charset=utf-8\r\n'
-            '\r\n'
-            '{"params": {"type": 4, "message": "Started"}, "method": '
-            '"window/logMessage", "jsonrpc": "2.0"}Content-Length: 425\r\n'
-            'Content-Type: application/vscode-jsonrpc; charset=utf-8\r\n'
-            '\r\n'
-            '{"id": 1, "jsonrpc": "2.0", "result": {"capabilities": '
-            '{"positionEncoding": "utf-16", "textDocumentSync": {"openClose": '
-            'true, "change": 2, "save": false}, "completionProvider": '
-            '{"triggerCharacters": [","]}, "executeCommandProvider": '
-            '{"commands": []}, "workspace": {"workspaceFolders": {"supported":'
-            ' true, "changeNotifications": true}, "fileOperations": {}}}, '
-            '"serverInfo": {"name": "Gel Language Server", "version": "v0.1"'
-            '}}}'
+    def stop(self):
+        self.stream_in.close()
+        self.runner_thread.join()
+
+
+@unittest.skipIf(ls_main is None, "edgedb-ls dependencies are missing")
+class TestLanguageServer(unittest.TestCase):
+    maxDiff = None
+
+    def test_language_server_01(self):
+        runner = LspRunner()
+
+        self.assertEqual(
+            runner.recv(),
+            {
+                "params": {"type": 4, "message": "Starting"},
+                "method": "window/logMessage",
+                "jsonrpc": "2.0",
+            },
         )
 
-        self.assertEqual(str(stream_out.getvalue(), encoding='ascii'), expected)
+        self.assertEqual(
+            runner.recv(),
+            {
+                "params": {"type": 4, "message": "Started"},
+                "method": "window/logMessage",
+                "jsonrpc": "2.0",
+            },
+        )
+
+        self.assertEqual(
+            runner.recv(),
+            {
+                "id": 1,
+                "jsonrpc": "2.0",
+                "result": {
+                    "capabilities": {
+                        "positionEncoding": "utf-16",
+                        "textDocumentSync": {
+                            "openClose": True,
+                            "change": 2,
+                            "save": False,
+                        },
+                        "completionProvider": {"triggerCharacters": [","]},
+                        "definitionProvider": True,
+                        "executeCommandProvider": {"commands": []},
+                        "workspace": {
+                            "workspaceFolders": {
+                                "supported": True,
+                                "changeNotifications": True,
+                            },
+                            "fileOperations": {},
+                        },
+                    },
+                    "serverInfo": {
+                        "name": "Gel Language Server",
+                        "version": "v0.1",
+                    },
+                },
+            },
+        )
+
+        runner.stop()
