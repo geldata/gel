@@ -142,6 +142,8 @@ class ServerParamConversion:
     ir_param: irast.Param
     additional_info: tuple[str, ...]
 
+    volatility: qltypes.Volatility
+
     # If the parameter is a constant value, pass to directly to the server.
     constant_value: Optional[Any] = None
 

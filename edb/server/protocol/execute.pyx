@@ -491,7 +491,10 @@ async def _convert_parameters(
             conversion.get_additional_info()
         )
 
-        if conversion_name == 'cast_int64_to_str':
+        if (
+            conversion_name == 'cast_int64_to_str'
+            or conversion_name == 'cast_int64_to_str_volatile'
+        ):
             decoded_param_data = (
                 decode_int(conversion.get_data())
                 if conversion.get_source_value() is None

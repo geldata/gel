@@ -764,15 +764,24 @@ def _check_server_arg_conversion(
             # Get info about the conversion
             converted_type: s_types.Type
             additional_info: tuple[str, ...] = tuple()
+            conversion_volatility: ft.Volatility
             if conversion_name == 'cast_int64_to_str':
                 converted_type = schema.get(
                     'std::str', type=s_scalars.ScalarType
                 )
+                conversion_volatility = ft.Volatility.Immutable
+
+            elif conversion_name == 'cast_int64_to_str_volatile':
+                converted_type = schema.get(
+                    'std::str', type=s_scalars.ScalarType
+                )
+                conversion_volatility = ft.Volatility.Volatile
 
             elif conversion_name == 'cast_int64_to_float64':
                 converted_type = schema.get(
                     'std::float64', type=s_scalars.ScalarType
                 )
+                conversion_volatility = ft.Volatility.Immutable
 
             elif conversion_name == 'join_str_array':
                 assert isinstance(conversion_info, list)
@@ -782,6 +791,7 @@ def _check_server_arg_conversion(
                     'std::str', type=s_scalars.ScalarType
                 )
                 additional_info = (separator,)
+                conversion_volatility = ft.Volatility.Immutable
 
             else:
                 raise RuntimeError(
@@ -876,6 +886,7 @@ def _check_server_arg_conversion(
                             sub_params=sub_params,
                         ),
                         additional_info=additional_info,
+                        volatility=conversion_volatility,
                         constant_value=constant_value,
                     )
                 )
