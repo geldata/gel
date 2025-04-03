@@ -88,7 +88,6 @@ Performance analysis statement:
     cardinality
     volatility
 
-    select
     insert
     update
     for
