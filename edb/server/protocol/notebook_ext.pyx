@@ -194,6 +194,7 @@ async def execute(db, tenant, queries: list):
                         ALLOWED_CAPABILITIES,
                         errors.UnsupportedCapabilityError,
                         "disallowed in notebook",
+                        query_unit_group.unsafe_isolation_dangers,
                     )
                     try:
                         if query_unit.in_type_args:
