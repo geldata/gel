@@ -249,7 +249,7 @@ def document_definition(
 
                     return lsp_types.Location(
                         uri=doc.uri,
-                        range=ls_utils.convert_span(
+                        range=ls_utils.span_to_lsp(
                             doc.source, (span.start, span.end)
                         ),
                     )

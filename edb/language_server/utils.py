@@ -3,7 +3,8 @@ from lsprotocol import types as lsp_types
 from edb.edgeql import tokenizer
 
 
-def convert_span(source: str, span: tuple[int, int | None]) -> lsp_types.Range:
+# Convert a Span to LSP Range
+def span_to_lsp(source: str, span: tuple[int, int | None]) -> lsp_types.Range:
     (start, end) = tokenizer.inflate_span(source, span)
     assert end
 

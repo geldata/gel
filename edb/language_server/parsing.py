@@ -52,7 +52,7 @@ def parse(
 
             diagnostics.append(
                 lsp_types.Diagnostic(
-                    range=ls_utils.convert_span(source.text(), span),
+                    range=ls_utils.span_to_lsp(source.text(), span),
                     severity=lsp_types.DiagnosticSeverity.Error,
                     message=message,
                 )

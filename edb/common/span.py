@@ -302,6 +302,9 @@ class SpanValidator(ast.NodeVisitor):
         super().generic_visit(node)
 
 
+# Finds the node in AST by position within the source.
+# It returns the first node whose span contains the target offset in a
+# post-order traversal of the AST.
 def find_by_source_position(
     node: ast.AST, target_offset: int
 ) -> ast.AST | None:
