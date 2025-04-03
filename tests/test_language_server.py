@@ -52,7 +52,7 @@ class TestLanguageServer(unittest.TestCase):
         )
         stream_out = io.BytesIO()
 
-        ls = ls_main.init()
+        ls = ls_main.init(None)
 
         def stop_server():
             time.sleep(1)

@@ -97,6 +97,8 @@ __all__ = base.__all__ + (  # type: ignore
     'UnsupportedBackendFeatureError',
     'LogMessage',
     'WarningMessage',
+    'StatusMessage',
+    'MigrationStatusMessage',
 )
 
 
@@ -450,3 +452,11 @@ class LogMessage(EdgeDBMessage):
 
 class WarningMessage(LogMessage):
     _code = 0x_F0_01_00_00
+
+
+class StatusMessage(LogMessage):
+    _code = 0x_F0_02_00_00
+
+
+class MigrationStatusMessage(StatusMessage):
+    _code = 0x_F0_02_00_01

@@ -21,11 +21,8 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Union,
     AbstractSet,
     Iterator,
-    FrozenSet,
     cast,
     TYPE_CHECKING,
 )
@@ -74,28 +71,22 @@ class PathId:
                  '_is_ptr', '_is_linkprop', '_hash')
 
     #: Actual path information.
-    _path: Tuple[
-        Union[
-            irast.TypeRef,
-            Tuple[irast.BasePointerRef, s_pointers.PointerDirection]
-        ],
+    _path: tuple[
+        irast.TypeRef
+        | tuple[irast.BasePointerRef, s_pointers.PointerDirection],
         ...
     ]
 
     #: Normalized path data, used for PathId hashing and comparisons.
-    _norm_path: Tuple[
-        Union[
-            uuid.UUID,
-            s_name.Name,
-            Tuple[
-                s_name.QualName, s_pointers.PointerDirection, bool
-            ],
-        ],
+    _norm_path: tuple[
+        uuid.UUID
+        | s_name.Name
+        | tuple[s_name.QualName, s_pointers.PointerDirection, bool],
         ...
     ]
 
     #: A set of namespace identifiers which this PathId belongs to.
-    _namespace: FrozenSet[str]
+    _namespace: frozenset[str]
 
     #: If this PathId has a prefix from another namespace, this will
     #: contain said prefix.
@@ -247,7 +238,7 @@ class PathId:
         typeref: irast.TypeRef,
         *,
         namespace: AbstractSet[Namespace] = frozenset(),
-        typename: Optional[Union[s_name.Name, uuid.UUID]] = None,
+        typename: Optional[s_name.Name | uuid.UUID] = None,
     ) -> PathId:
         """Return a ``PathId`` instance for a given :class:`ir.ast.TypeRef`
 
@@ -480,7 +471,7 @@ class PathId:
 
         for i in range(1, len(path) - 1, 2):
             ptrspec = cast(
-                Tuple[irast.BasePointerRef, s_pointers.PointerDirection],
+                tuple[irast.BasePointerRef, s_pointers.PointerDirection],
                 path[i],
             )
 
@@ -535,7 +526,7 @@ class PathId:
 
         for i in range(1, len(path) - 1, 2):
             ptrspec = cast(
-                Tuple[irast.BasePointerRef, s_pointers.PointerDirection],
+                tuple[irast.BasePointerRef, s_pointers.PointerDirection],
                 path[i],
             )
 
@@ -755,7 +746,7 @@ class PathId:
             )
 
     @property
-    def namespace(self) -> FrozenSet[str]:
+    def namespace(self) -> frozenset[str]:
         """The namespace of this ``PathId``"""
         return self._namespace
 

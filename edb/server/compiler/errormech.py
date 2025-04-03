@@ -20,7 +20,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Type, Dict, NamedTuple
+from typing import Any, Optional, NamedTuple
 
 import json
 import re
@@ -63,13 +63,13 @@ SCHEMA_CODES = frozenset({
 class ErrorDetails(NamedTuple):
     message: str
     detail: Optional[str] = None
-    detail_json: Optional[Dict[str, Any]] = None
+    detail_json: Optional[dict[str, Any]] = None
     code: Optional[str] = None
     schema_name: Optional[str] = None
     table_name: Optional[str] = None
     column_name: Optional[str] = None
     constraint_name: Optional[str] = None
-    errcls: Optional[Type[errors.EdgeDBError]] = None
+    errcls: Optional[type[errors.EdgeDBError]] = None
 
 
 constraint_errors = frozenset({

@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Sequence, Dict, List
+from typing import Any, Optional, Sequence
 
 import re
 import hashlib
@@ -48,7 +48,7 @@ class Source:
     def __init__(
         self,
         text: str,
-        tokens: List[ql_parser.OpaqueToken],
+        tokens: list[ql_parser.OpaqueToken],
         serialized: bytes,
     ) -> None:
         self._cache_key = hashlib.blake2b(serialized).digest()
@@ -62,10 +62,10 @@ class Source:
     def cache_key(self) -> bytes:
         return self._cache_key
 
-    def variables(self) -> Dict[str, Any]:
+    def variables(self) -> dict[str, Any]:
         return {}
 
-    def tokens(self) -> List[ql_parser.OpaqueToken]:
+    def tokens(self) -> list[ql_parser.OpaqueToken]:
         return self._tokens
 
     def first_extra(self) -> Optional[int]:
@@ -90,9 +90,7 @@ class Source:
     def from_string(text: str) -> Source:
         result = _tokenize(text)
         assert isinstance(result.out, list)
-        return Source(
-            text=text, tokens=result.out, serialized=result.pack()
-        )
+        return Source(text=text, tokens=result.out, serialized=result.pack())
 
     def __repr__(self):
         return f'<edgeql.Source text={self._text!r}>'
@@ -123,10 +121,10 @@ class NormalizedSource(Source):
     def cache_key(self) -> bytes:
         return self._cache_key
 
-    def variables(self) -> Dict[str, Any]:
+    def variables(self) -> dict[str, Any]:
         return self._variables
 
-    def tokens(self) -> List[ql_parser.OpaqueToken]:
+    def tokens(self) -> list[ql_parser.OpaqueToken]:
         return self._tokens
 
     def first_extra(self) -> Optional[int]:
@@ -148,8 +146,8 @@ class NormalizedSource(Source):
 
 
 def inflate_span(
-    source: str, span: Tuple[int, Optional[int]]
-) -> Tuple[ql_parser.SourcePoint, Optional[ql_parser.SourcePoint]]:
+    source: str, span: tuple[int, Optional[int]]
+) -> tuple[ql_parser.SourcePoint, Optional[ql_parser.SourcePoint]]:
     (start, end) = span
     source_bytes = source.encode('utf-8')
 
@@ -168,8 +166,8 @@ def inflate_span(
 
 
 def inflate_position(
-    source: str, span: Tuple[int, Optional[int]]
-) -> Tuple[int, int, int, Optional[int]]:
+    source: str, span: tuple[int, Optional[int]]
+) -> tuple[int, int, int, Optional[int]]:
     (start, end) = inflate_span(source, span)
     return (
         start.column,
@@ -177,6 +175,17 @@ def inflate_position(
         start.offset,
         end.offset if end else None,
     )
+
+
+def line_col_to_source_point(
+    source: str,
+    line: int,  # zero-based
+    col: int,  # zero-based, in utf16 code points
+) -> ql_parser.SourcePoint:
+    points = ql_parser.SourcePoint.from_lines_cols(
+        source.encode('utf-8'), [(line, col)]
+    )
+    return points[0]
 
 
 def _tokenize(eql: str) -> ql_parser.ParserResult:
@@ -213,7 +222,7 @@ def _normalize(eql: str) -> ql_parser.Entry:
 def _derive_hint(
     input: str,
     message: str,
-    position: Tuple[int, int, int, Optional[int]],
+    position: tuple[int, int, int, Optional[int]],
 ) -> Optional[str]:
     _, _, off, _ = position
 

@@ -20,7 +20,7 @@
 """Abstractions for low-level database DDL and DML operations."""
 
 from __future__ import annotations
-from typing import Optional, Tuple, List, Set
+from typing import Optional
 
 import itertools
 
@@ -120,7 +120,7 @@ class SchemaConstraintTableConstraint(ConstraintCommon, dbops.TableConstraint):
         self._table_type = table_type
         self._except_data = except_data
 
-    def constraint_code(self, block: dbops.PLBlock) -> str | List[str]:
+    def constraint_code(self, block: dbops.PLBlock) -> str | list[str]:
         if self._scope == 'row':
             if len(self._exprdata) == 1:
                 expr = self._exprdata[0].exprdata.plain
@@ -374,12 +374,12 @@ class AlterTableDropMultiConstraint(dbops.AlterTableDropConstraint):
 class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
     def __init__(
         self,
-        name: Tuple[str, ...],
+        name: tuple[str, ...],
         *,
         constraint: SchemaConstraintTableConstraint,
         contained: bool = False,
-        conditions: Optional[Set[str | dbops.Condition]] = None,
-        neg_conditions: Optional[Set[str | dbops.Condition]] = None,
+        conditions: Optional[set[str | dbops.Condition]] = None,
+        neg_conditions: Optional[set[str | dbops.Condition]] = None,
     ):
         dbops.CommandGroup.__init__(
             self, conditions=conditions, neg_conditions=neg_conditions
@@ -392,10 +392,10 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
     def _get_triggers(
         self,
-        table_name: Tuple[str, ...],
+        table_name: tuple[str, ...],
         constraint: SchemaConstraintTableConstraint,
         proc_name='null',
-    ) -> Tuple[dbops.Trigger, ...]:
+    ) -> tuple[dbops.Trigger, ...]:
         cname = constraint.raw_constraint_name()
 
         ins_trigger_name = cname + '_instrigger'
@@ -415,10 +415,10 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
     def create_constr_trigger(
         self,
-        table_name: Tuple[str, ...],
+        table_name: tuple[str, ...],
         constraint: SchemaConstraintTableConstraint,
         proc_name: str,
-    ) -> List[dbops.CreateTrigger]:
+    ) -> list[dbops.CreateTrigger]:
         ins_trigger, upd_trigger = self._get_triggers(
             table_name, constraint, proc_name
         )
@@ -430,9 +430,9 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
     def drop_constr_trigger(
         self,
-        table_name: Tuple[str, ...],
+        table_name: tuple[str, ...],
         constraint: SchemaConstraintTableConstraint,
-    ) -> List[dbops.DDLOperation]:
+    ) -> list[dbops.DDLOperation]:
         ins_trigger, upd_trigger = self._get_triggers(table_name, constraint)
 
         return [
@@ -442,9 +442,9 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
     def enable_constr_trigger(
         self,
-        table_name: Tuple[str, ...],
+        table_name: tuple[str, ...],
         constraint: SchemaConstraintTableConstraint,
-    ) -> List[dbops.DDLOperation]:
+    ) -> list[dbops.DDLOperation]:
         ins_trigger, upd_trigger = self._get_triggers(table_name, constraint)
 
         return [
@@ -454,9 +454,9 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
     def disable_constr_trigger(
         self,
-        table_name: Tuple[str, ...],
+        table_name: tuple[str, ...],
         constraint: SchemaConstraintTableConstraint,
-    ) -> List[dbops.DDLOperation]:
+    ) -> list[dbops.DDLOperation]:
         ins_trigger, upd_trigger = self._get_triggers(table_name, constraint)
 
         return [
@@ -484,7 +484,7 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
         return [dbops.CreateFunction(func, or_replace=True)]
 
-    def drop_constr_trigger_function(self, proc_name: Tuple[str, ...]):
+    def drop_constr_trigger_function(self, proc_name: tuple[str, ...]):
         return [dbops.DropFunction(
             name=proc_name,
             args=(),

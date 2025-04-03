@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Type, TypeVar, List, NamedTuple, TYPE_CHECKING
+from typing import Any, TypeVar, NamedTuple, TYPE_CHECKING
 
 import abc
 import functools
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
         name: str
 
         @classmethod
-        def from_string(cls: Type[NameT], name: str) -> NameT:
+        def from_string(cls: type[NameT], name: str) -> NameT:
             ...
 
         def get_local_name(self) -> UnqualName:
@@ -81,7 +81,7 @@ if TYPE_CHECKING:
 
         @classmethod
         def from_string(
-            cls: Type[QualNameT],
+            cls: type[QualNameT],
             name: str,
         ) -> QualNameT:
             ...
@@ -103,7 +103,7 @@ if TYPE_CHECKING:
 
         @classmethod
         def from_string(
-            cls: Type[UnqualNameT],
+            cls: type[UnqualNameT],
             name: str,
         ) -> UnqualNameT:
             ...
@@ -126,7 +126,7 @@ else:
 
         @classmethod
         def from_string(
-            cls: Type[QualNameT],
+            cls: type[QualNameT],
             name: str,
         ) -> QualNameT:
 
@@ -165,7 +165,7 @@ else:
 
         @classmethod
         def from_string(
-            cls: Type[UnqualNameT],
+            cls: type[UnqualNameT],
             name: str,
         ) -> UnqualNameT:
             return cls(name)
@@ -228,7 +228,7 @@ def shortname_from_fullname(fullname: Name) -> Name:
 
 
 @functools.lru_cache(4096)
-def quals_from_fullname(fullname: QualName) -> List[str]:
+def quals_from_fullname(fullname: QualName) -> list[str]:
     _, _, mangled_quals = fullname.name.partition('@')
     return (
         [unmangle_name(p) for p in mangled_quals.split('@')]

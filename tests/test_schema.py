@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Type, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import random
 import re
@@ -2221,7 +2221,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         asdf = obj.getptr(schema, s_name.UnqualName('asdf'))
         expr_ast = asdf.get_expr(schema).parse()
         self.assertEqual(
-            expr_ast.span.name,
+            expr_ast.span.filename,
             f'<{asdf.id} expr>'
         )
 
@@ -2233,7 +2233,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         x = obj.getptr(schema, s_name.UnqualName('x'))
         default_ast = x.get_default(schema).parse()
         self.assertEqual(
-            default_ast.span.name,
+            default_ast.span.filename,
             f'<{x.id} default>'
         )
 
@@ -3214,7 +3214,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         self,
         schema_text: str,
         invalid_queries: list[str],
-        error_type: Type,
+        error_type: type,
         error_message: str,
     ) -> None:
         for query in invalid_queries:
@@ -10099,7 +10099,6 @@ class BaseDescribeTest(tb.BaseSchemaLoadTest):
             schema, _ = s_ddl.apply_sdl(
                 sdl_schema,
                 base_schema=schema,
-                current_schema=schema,
             )
         else:
             schema = self.load_schema(schema_text, modname=default_module)
@@ -12206,7 +12205,6 @@ class TestSDLTextFromSchema(BaseDescribeTest):
             schema, _ = s_ddl.apply_sdl(
                 sdl_schema,
                 base_schema=schema,
-                current_schema=schema,
             )
         else:
             schema = self.load_schema(schema_text, modname=default_module)

@@ -131,15 +131,15 @@ class TestResult:
     tests_time_taken: float
 
     # negative
-    failures: typing.List[TestCase]
-    errors: typing.List[TestCase]
-    unexpected_successes: typing.List[TestCase]
+    failures: list[TestCase]
+    errors: list[TestCase]
+    unexpected_successes: list[TestCase]
 
     # positive
-    warnings: typing.List[TestCase]
-    skipped: typing.List[TestCase]
-    not_implemented: typing.List[TestCase]
-    expected_failures: typing.List[TestCase]
+    warnings: list[TestCase]
+    skipped: list[TestCase]
+    not_implemented: list[TestCase]
+    expected_failures: list[TestCase]
 
 
 def _combine_test_results(a: TestResult, b: TestResult) -> TestResult:
@@ -318,7 +318,7 @@ def write_result(path_template: str, res: TestResult):
     json.dump(dataclasses.asdict(res), log_file, indent=4)
 
 
-def read_unsuccessful(path_template: str) -> typing.List[str]:
+def read_unsuccessful(path_template: str) -> list[str]:
     log_path = _result_log_path(path_template)
     if not log_path:
         return []
@@ -342,7 +342,7 @@ def read_unsuccessful(path_template: str) -> typing.List[str]:
     ]
 
 
-def _dataclass_from_dict(cls: typing.Type | None, data: typing.Any):
+def _dataclass_from_dict(cls: typing.Any, data: typing.Any):
     if not cls:
         return data
 
@@ -355,8 +355,8 @@ def _dataclass_from_dict(cls: typing.Type | None, data: typing.Any):
     if not isinstance(data, dict):
         raise ValueError(f'expected a dict of a dataclass, found {type(data)}')
 
-    field_types: typing.Mapping[str, typing.Type] = typing.get_type_hints(cls)
-    return cls(
+    field_types: typing.Mapping[str, type] = typing.get_type_hints(cls)
+    return cls(  # type: ignore
         **{
             k: _dataclass_from_dict(field_types.get(k), v)
             for k, v in data.items()
@@ -369,7 +369,7 @@ if __name__ == '__main__':
     # read result JSON files, concat them into a single result and render
     result_path_glob = sys.argv[1]
 
-    results: typing.List[TestResult] = []
+    results: list[TestResult] = []
     for new_file in glob.glob(result_path_glob):
         with open(new_file) as f:
             result_dict = json.load(f)

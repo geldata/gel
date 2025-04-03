@@ -68,8 +68,8 @@ class SnapshotLog:
 class Snapshot:
     timestamp: float
     capacity: int
-    blocks: typing.List[BlockSnapshot]
-    log: typing.List[SnapshotLog]
+    blocks: list[BlockSnapshot]
+    log: list[SnapshotLog]
 
     failed_connects: int
     failed_disconnects: int

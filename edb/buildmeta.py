@@ -21,11 +21,8 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Union,
     Mapping,
     Sequence,
-    List,
     NamedTuple,
     TypedDict,
     cast,
@@ -60,7 +57,7 @@ from edb.common import verutils
 # The merge conflict there is a nice reminder that you probably need
 # to write a patch in edb/pgsql/patches.py, and then you should preserve
 # the old value.
-EDGEDB_CATALOG_VERSION = 2025_03_27_00_00
+EDGEDB_CATALOG_VERSION = 2025_04_03_00_00
 EDGEDB_MAJOR_VERSION = 7
 
 
@@ -220,9 +217,9 @@ def get_extension_dir_path() -> pathlib.Path:
 
 
 def hash_dirs(
-    dirs: Sequence[Tuple[str, str]],
+    dirs: Sequence[tuple[str, str]],
     *,
-    extra_files: Optional[Sequence[Union[str, pathlib.Path]]]=None,
+    extra_files: Optional[Sequence[str | pathlib.Path]]=None,
     extra_data: Optional[bytes] = None,
 ) -> bytes:
     def hash_dir(dirname, ext, paths):
@@ -233,7 +230,7 @@ def hash_dirs(
                 elif entry.is_dir():
                     hash_dir(entry.path, ext, paths)
 
-    paths: List[str] = []
+    paths: list[str] = []
     for dirname, ext in dirs:
         hash_dir(dirname, ext, paths)
 
@@ -314,7 +311,7 @@ def get_version() -> verutils.Version:
         root = pathlib.Path(__file__).parent.parent.resolve()
         version = verutils.parse_version(get_version_from_scm(root))
     else:
-        vertuple: List[Any] = list(get_build_metadata_value('VERSION'))
+        vertuple: list[Any] = list(get_build_metadata_value('VERSION'))
         vertuple[2] = verutils.VersionStage(vertuple[2])
         version = verutils.Version(*vertuple)
 

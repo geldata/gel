@@ -18,7 +18,6 @@
 
 
 from __future__ import annotations
-import typing
 
 from edb.common import parsing
 from edb.edgeql import ast as qlast
@@ -66,7 +65,7 @@ class EdgeQLGrammar(Nonterm):
 
 
 class EdgeQLBlock(Nonterm):
-    val: typing.List[qlast.Command]
+    val: list[qlast.Command]
 
     @parsing.inline(0)
     def reduce_StatementBlock_OptSemicolons(self, _, _semicolon):

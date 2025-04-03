@@ -22,7 +22,7 @@ import decimal
 import io
 import os.path
 import subprocess
-from typing import Coroutine, Optional, Tuple
+from typing import Coroutine, Optional
 import unittest
 import uuid
 
@@ -1440,6 +1440,28 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 ['Movie.director', b'f', 'source', 'Movie', 'id'],
                 ['Movie.director', b'f', 'target', 'Person', 'id'],
             ],
+        )
+
+    async def test_sql_query_introspection_06(self):
+        res = await self.squery_values(
+            '''
+            SELECT column_name, col_description(
+                'public.novel'::regclass::oid, ordinal_position)
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'novel'
+            ORDER BY ordinal_position
+            '''
+        )
+        self.assertEqual(
+            res,
+            [
+                ['id', '__::pages'],
+                ['__type__', '__::id'],
+                ['foo', '__::title'],
+                ['genre_id', '__::genre'],
+                ['pages', '__::foo'],
+                ['title', None],
+            ]
         )
 
     async def test_sql_query_schemas_01(self):
@@ -3356,7 +3378,7 @@ class TestSQLQueryNonTransactional(tb.SQLQueryTestCase):
         async def assert_not_blocked(coroutine: Coroutine) -> None:
             await asyncio.wait_for(coroutine, 0.25)
 
-        async def assert_blocked(coroutine: Coroutine) -> Tuple[asyncio.Task]:
+        async def assert_blocked(coroutine: Coroutine) -> tuple[asyncio.Task]:
             task: asyncio.Task = asyncio.create_task(coroutine)
             done, pending = await asyncio.wait((task,), timeout=0.25)
             if len(done) != 0:

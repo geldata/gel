@@ -24,10 +24,7 @@ from typing import (
     Callable,
     Optional,
     Protocol,
-    Tuple,
     Iterable,
-    List,
-    Set,
     Sequence,
     cast,
 )
@@ -5451,7 +5448,7 @@ def format_fields(
     return ',\n'.join(cols)
 
 
-def _generate_branch_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_branch_views(schema: s_schema.Schema) -> list[dbops.View]:
     Branch = schema.get('sys::Branch', type=s_objtypes.ObjectType)
     annos = Branch.getptr(
         schema, s_name.UnqualName('annotations'), type=s_links.Link)
@@ -5561,7 +5558,7 @@ def _generate_branch_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_extension_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_extension_views(schema: s_schema.Schema) -> list[dbops.View]:
     ExtPkg = schema.get('sys::ExtensionPackage', type=s_objtypes.ObjectType)
     annos = ExtPkg.getptr(
         schema, s_name.UnqualName('annotations'), type=s_links.Link)
@@ -5694,7 +5691,7 @@ def _generate_extension_views(schema: s_schema.Schema) -> List[dbops.View]:
 
 def _generate_extension_migration_views(
     schema: s_schema.Schema
-) -> List[dbops.View]:
+) -> list[dbops.View]:
     ExtPkgMigration = schema.get(
         'sys::ExtensionPackageMigration', type=s_objtypes.ObjectType)
     annos = ExtPkgMigration.getptr(
@@ -5821,7 +5818,7 @@ def _generate_extension_migration_views(
     return views
 
 
-def _generate_role_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     Role = schema.get('sys::Role', type=s_objtypes.ObjectType)
     member_of = Role.getptr(
         schema, s_name.UnqualName('member_of'), type=s_links.Link)
@@ -6011,7 +6008,7 @@ def _generate_role_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_single_role_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     Role = schema.get('sys::Role', type=s_objtypes.ObjectType)
     member_of = Role.getptr(
         schema, s_name.UnqualName('member_of'), type=s_links.Link)
@@ -6135,7 +6132,7 @@ def _generate_single_role_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_schema_ver_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_schema_ver_views(schema: s_schema.Schema) -> list[dbops.View]:
     Ver = schema.get(
         'sys::GlobalSchemaVersion',
         type=s_objtypes.ObjectType,
@@ -6175,7 +6172,7 @@ def _generate_schema_ver_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_stats_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_stats_views(schema: s_schema.Schema) -> list[dbops.View]:
     QueryStats = schema.get(
         'sys::QueryStats',
         type=s_objtypes.ObjectType,
@@ -6311,7 +6308,7 @@ def _make_json_caster(
 def _generate_schema_alias_views(
     schema: s_schema.Schema,
     module: s_name.UnqualName,
-) -> List[dbops.View]:
+) -> list[dbops.View]:
     views = []
 
     schema_objs = schema.get_objects(
@@ -6361,7 +6358,7 @@ def _schema_alias_view_name(
 
 def _generate_sql_information_schema(
     backend_version: params.BackendVersion
-) -> List[dbops.Command]:
+) -> list[dbops.Command]:
 
     # Helper to create wrappers around materialized views.  For
     # performance, we use MATERIALIZED VIEW for some of our SQL
@@ -6648,10 +6645,10 @@ def _generate_sql_information_schema(
             vt_table_schema::{sql_ident} AS table_schema,
             vt_table_name::{sql_ident} AS table_name,
             v_column_name::{sql_ident} as column_name,
-            ROW_NUMBER() OVER (
+            cast(ROW_NUMBER() OVER (
                 PARTITION BY vt_table_schema, vt_table_name
                 ORDER BY position, v_column_name
-            ) AS ordinal_position,
+            ) AS INT) AS ordinal_position,
             column_default,
             is_nullable,
             data_type,
@@ -8803,7 +8800,7 @@ def _build_key_source(
 
 
 def _build_key_expr(
-    key_components: List[str],
+    key_components: list[str],
     versioned: bool,
 ) -> str:
     prefix = 'edgedb_VER' if versioned else 'edgedb'
@@ -8869,14 +8866,14 @@ def _generate_config_type_view(
     stype: s_objtypes.ObjectType,
     *,
     scope: Optional[qltypes.ConfigScope],
-    path: List[Tuple[s_pointers.Pointer, List[s_pointers.Pointer]]],
+    path: list[tuple[s_pointers.Pointer, list[s_pointers.Pointer]]],
     rptr: Optional[s_pointers.Pointer],
     existing_view_columns: Optional[dict[str, list[str]]],
     override_exclusive_props: Optional[list[s_pointers.Pointer]] = None,
-    _memo: Optional[Set[s_obj.Object]] = None,
-) -> Tuple[
-    List[Tuple[Tuple[str, str], str]],
-    List[s_pointers.Pointer],
+    _memo: Optional[set[s_obj.Object]] = None,
+) -> tuple[
+    list[tuple[tuple[str, str], str]],
+    list[s_pointers.Pointer],
 ]:
     X = xdedent.escape
 
@@ -9388,10 +9385,11 @@ async def execute_sql_script(
         elif pl_func_line:
             point = ql_parser.offset_of_line(sql_text, pl_func_line)
             text = sql_text
+        assert text
 
         if point is not None:
             span = qlast.Span(
-                'query', text, start=point, end=point, context_lines=30
+                None, text, start=point, end=point, context_lines=30
             )
             exceptions.replace_context(e, span)
 

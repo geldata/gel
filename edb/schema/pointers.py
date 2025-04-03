@@ -20,13 +20,9 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
     TypeVar,
-    Union,
     Iterable,
     Sequence,
-    Dict,
-    List,
     cast,
     TYPE_CHECKING,
 )
@@ -35,6 +31,7 @@ import collections.abc
 import enum
 import json
 import operator
+import dataclasses
 
 from edb import errors
 
@@ -84,7 +81,7 @@ class LineageStatus(enum.Enum):
 
 def merge_cardinality(
     ptr: Pointer,
-    bases: List[Pointer],
+    bases: list[Pointer],
     field_name: str,
     *,
     ignore_local: bool,
@@ -141,7 +138,7 @@ def merge_cardinality(
 
 def merge_readonly(
     target: Pointer,
-    sources: List[Pointer],
+    sources: list[Pointer],
     field_name: str,
     *,
     ignore_local: bool,
@@ -192,7 +189,7 @@ def merge_readonly(
 
 def merge_required(
     ptr: Pointer,
-    bases: List[Pointer],
+    bases: list[Pointer],
     field_name: str,
     *,
     ignore_local: bool = False,
@@ -237,7 +234,7 @@ def merge_required(
 
 def merge_target(
     ptr: Pointer,
-    bases: List[Pointer],
+    bases: list[Pointer],
     field_name: str,
     *,
     ignore_local: bool = False,
@@ -296,7 +293,7 @@ def _merge_types(
     t1_source: so.Object,
     t2_source: Optional[so.Object],
     allow_contravariant: bool = False,
-) -> Tuple[s_schema.Schema, Optional[s_types.Type]]:
+) -> tuple[s_schema.Schema, Optional[s_types.Type]]:
     if t1 == t2:
         return schema, t1
 
@@ -622,7 +619,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
     def material_type(
         self,
         schema: s_schema.Schema,
-    ) -> Tuple[s_schema.Schema, Pointer]:
+    ) -> tuple[s_schema.Schema, Pointer]:
         non_derived_parent = self.get_nearest_non_derived_parent(schema)
         source = non_derived_parent.get_source(schema)
         if source is None:
@@ -688,7 +685,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         *,
         derived_name_base: Optional[sn.Name] = None,
         **kwargs: Any
-    ) -> Tuple[s_schema.Schema, Pointer_T]:
+    ) -> tuple[s_schema.Schema, Pointer_T]:
         fqname = self.derive_name(
             schema, source, derived_name_base=derived_name_base)
         ptr = schema.get(fqname, default=None)
@@ -721,10 +718,10 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         *qualifiers: str,
         target: Optional[s_types.Type] = None,
         mark_derived: bool = False,
-        attrs: Optional[Dict[str, Any]] = None,
+        attrs: Optional[dict[str, Any]] = None,
         dctx: Optional[sd.CommandContext] = None,
         **kwargs: Any,
-    ) -> Tuple[s_schema.Schema, Pointer]:
+    ) -> tuple[s_schema.Schema, Pointer]:
         if target is None:
             if attrs and 'target' in attrs:
                 target = attrs['target']
@@ -831,7 +828,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         else:
             return self.is_exclusive(schema)
 
-    def get_implicit_bases(self, schema: s_schema.Schema) -> List[Pointer]:
+    def get_implicit_bases(self, schema: s_schema.Schema) -> list[Pointer]:
         bases = super().get_implicit_bases(schema)
 
         # True implicit bases for pointers will have the same name
@@ -841,7 +838,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
             if b.get_shortname(schema) == my_name
         ]
 
-    def get_implicit_ancestors(self, schema: s_schema.Schema) -> List[Pointer]:
+    def get_implicit_ancestors(self, schema: s_schema.Schema) -> list[Pointer]:
         ancestors = super().get_implicit_ancestors(schema)
 
         # True implicit ancestors for pointers will have the same name
@@ -1113,7 +1110,7 @@ class PseudoPointer(s_abc.Pointer):
     def material_type(
         self,
         schema: s_schema.Schema,
-    ) -> Tuple[s_schema.Schema, PseudoPointer]:
+    ) -> tuple[s_schema.Schema, PseudoPointer]:
         return schema, self
 
     def is_pure_computable(self, schema: s_schema.Schema) -> bool:
@@ -1129,21 +1126,17 @@ class PseudoPointer(s_abc.Pointer):
         return None
 
 
-PointerLike = Union[Pointer, PseudoPointer]
+PointerLike = Pointer | PseudoPointer
 
 
+@dataclasses.dataclass(repr=False, eq=False)
 class ComputableRef:
     """A shell for a computed target type."""
 
     expr: qlast.Expr
-
-    def __init__(
-        self,
-        expr: qlast.Expr,
-        specified_type: Optional[s_types.TypeShell[s_types.Type]] = None,
-    ) -> None:
-        self.expr = expr
-        self.specified_type = specified_type
+    specified_type: Optional[s_types.TypeShell[s_types.Type]] = (
+        dataclasses.field(default=None)
+    )
 
 
 class PointerCommandContext(
@@ -1226,7 +1219,7 @@ class PointerCommandOrFragment(
         expr: qlast.Expr,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-    ) -> Tuple[
+    ) -> tuple[
         s_schema.Schema,
         s_types.TypeShell[s_types.Type],
     ]:
@@ -1353,11 +1346,7 @@ class PointerCommandOrFragment(
             )
 
         spec_target: Optional[
-            Union[
-                s_types.TypeShell[s_types.Type],
-                s_types.Type,
-                ComputableRef,
-            ]
+            s_types.TypeShell[s_types.Type] | s_types.Type | ComputableRef
         ] = (
             self.get_specified_attribute_value('target', schema, context))
         spec_required: Optional[bool] = (
@@ -1452,7 +1441,7 @@ class PointerCommandOrFragment(
         detached: bool = False,
         should_set_path_prefix_anchor: bool = True
     ) -> s_expr.CompiledExpression:
-        singletons: List[Union[s_types.Type, Pointer]] = []
+        singletons: list[s_types.Type | Pointer] = []
 
         parent_ctx = self.get_referrer_context_or_die(context)
         source = parent_ctx.op.get_object(schema, context)
@@ -1635,7 +1624,7 @@ class PointerCommand(
         # delete a property some ancestors may not be present in the
         # schema anymore, so we will only consider the ones that still
         # are (which should still be valid).
-        lineage: List[Pointer_T] = []
+        lineage: list[Pointer_T] = []
         for iid in scls.get_ancestors(schema)._ids:
             try:
                 p = cast(Pointer_T, schema.get_by_id(iid))
@@ -1684,7 +1673,7 @@ class PointerCommand(
     def _validate_lineage(
         self,
         schema: s_schema.Schema,
-        lineage: List[Pointer_T],
+        lineage: list[Pointer_T],
     ) -> LineageStatus:
         if len(lineage) <= 1:
             # Having at most 1 item in the lineage is always valid.
@@ -1966,7 +1955,7 @@ class PointerCommand(
             so.ObjectShell(name=source_name, schemaclass=s_sources.Source),
         )
 
-        target_ref: Union[None, s_types.TypeShell[s_types.Type], ComputableRef]
+        target_ref: None | s_types.TypeShell[s_types.Type] | ComputableRef
 
         if astnode.target:
             if isinstance(astnode.target, qlast.TypeExpr):
@@ -2053,7 +2042,7 @@ class CreatePointer(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         astnode: qlast.ObjectDDL,
-        bases: List[Pointer_T],
+        bases: list[Pointer_T],
         referrer: so.Object,
     ) -> sd.ObjectCommand[Pointer_T]:
         cmd = super().as_inherited_ref_cmd(
@@ -2288,7 +2277,7 @@ class DeletePointer(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         scls: Pointer_T,
-    ) -> List[sd.Command]:
+    ) -> list[sd.Command]:
         commands = super()._canonicalize(schema, context, scls)
 
         # Any union type that references this field needs to have it
@@ -3106,7 +3095,7 @@ def get_or_create_union_pointer(
     transient: bool = False,
     opaque: bool = False,
     modname: Optional[str] = None,
-) -> Tuple[s_schema.Schema, Pointer]:
+) -> tuple[s_schema.Schema, Pointer]:
     from . import sources as s_sources
 
     components = list(components)
@@ -3192,7 +3181,7 @@ def get_or_create_union_pointer(
         # is also a list of Source (links.Link)
         schema = s_sources.populate_pointer_set_for_source_union(
             schema,
-            cast(List[s_sources.Source], components),
+            cast(list[s_sources.Source], components),
             result,
             modname=modname,
         )
@@ -3221,7 +3210,7 @@ def get_or_create_intersection_pointer(
     components: Iterable[Pointer], *,
     modname: Optional[str] = None,
     transient: bool = False,
-) -> Tuple[s_schema.Schema, Pointer]:
+) -> tuple[s_schema.Schema, Pointer]:
 
     components = list(components)
 

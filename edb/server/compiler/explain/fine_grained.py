@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Iterable
+from typing import Any, Optional, Iterable
 
 import uuid
 import dataclasses
@@ -185,7 +185,7 @@ class TreeBuilder:
         subplans = [self.build(subplan, args)
                     for subplan in plans]
 
-        alias_info = self.alias_info.get(alias)
+        alias_info = self.alias_info.get(alias) if alias else None
         contexts = alias_info.contexts if alias_info else None
         if not contexts and subplans and (contexts := subplans[0].contexts):
             # hoist contexts that are common in child branches
@@ -287,7 +287,7 @@ def build(
     plan: pg_tree.Plan,
     info: ir_analyze.AnalysisInfo,
     args: explain.Arguments,
-) -> Tuple[Plan, Index]:
+) -> tuple[Plan, Index]:
     tree = TreeBuilder(info)
     result = tree.build(plan, args)
     result.contexts = context_optimize(result.contexts)

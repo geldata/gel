@@ -26,7 +26,6 @@ from typing import (
     overload,
     Self,
     TypeVar,
-    Type,
 )
 
 import asyncio
@@ -225,7 +224,7 @@ class ExclusiveTaskProperty:
         self._method = method
         self._name = slot
 
-    def __set_name__(self, owner: Type[_Owner], name: str) -> None:
+    def __set_name__(self, owner: type[_Owner], name: str) -> None:
         if (slots := getattr(owner, "__slots__", None)) is not None:
             if self._name is None:
                 raise TypeError("missing slot in @exclusive_task()")
@@ -238,15 +237,15 @@ class ExclusiveTaskProperty:
             self._name = name
 
     @overload
-    def __get__(self, instance: None, owner: Type[_Owner]) -> Self: ...
+    def __get__(self, instance: None, owner: type[_Owner]) -> Self: ...
 
     @overload
     def __get__(
-        self, instance: _Owner, owner: Type[_Owner]
+        self, instance: _Owner, owner: type[_Owner]
     ) -> ExclusiveTask: ...
 
     def __get__(
-        self, instance: _Owner | None, owner: Type[_Owner]
+        self, instance: _Owner | None, owner: type[_Owner]
     ) -> ExclusiveTask | Self:
         # getattr on the class
         if instance is None:

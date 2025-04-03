@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Mapping, Dict, List, TYPE_CHECKING
+from typing import Optional, Mapping, TYPE_CHECKING
 from dataclasses import dataclass
 
 from edb import errors
@@ -53,9 +53,9 @@ class CompileResult:
 
     env: context.Environment
 
-    argmap: Dict[str, pgast.Param]
+    argmap: dict[str, pgast.Param]
 
-    detached_params: Optional[List[Tuple[str, ...]]] = None
+    detached_params: Optional[list[tuple[str, ...]]] = None
 
 
 def compile_ir_to_sql_tree(
@@ -69,14 +69,14 @@ def compile_ir_to_sql_tree(
     expected_cardinality_one: bool = False,
     is_explain: bool = False,
     external_rvars: Optional[
-        Mapping[Tuple[irast.PathId, pgce.PathAspect], pgast.PathRangeVar]
+        Mapping[tuple[irast.PathId, pgce.PathAspect], pgast.PathRangeVar]
     ] = None,
     external_rels: Optional[
         Mapping[
             irast.PathId,
-            Tuple[
+            tuple[
                 pgast.BaseRelation | pgast.CommonTableExpr,
-                Tuple[pgce.PathAspect, ...]
+                tuple[pgce.PathAspect, ...]
             ],
         ]
     ] = None,
@@ -208,9 +208,9 @@ def compile_ir_to_sql_tree(
 
 def new_external_rvar(
     *,
-    rel_name: Tuple[str, ...],
+    rel_name: tuple[str, ...],
     path_id: irast.PathId,
-    outputs: Mapping[Tuple[irast.PathId, Tuple[pgce.PathAspect, ...]], str],
+    outputs: Mapping[tuple[irast.PathId, tuple[pgce.PathAspect, ...]], str],
 ) -> pgast.RelRangeVar:
     """Construct a ``RangeVar`` instance given a relation name and a path id.
 
@@ -267,7 +267,7 @@ def new_external_rvar_as_subquery(
 
 def new_external_rel(
     *,
-    rel_name: Tuple[str, ...],
+    rel_name: tuple[str, ...],
     path_id: irast.PathId,
 ) -> pgast.Relation:
     if len(rel_name) == 1:

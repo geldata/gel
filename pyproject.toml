@@ -39,7 +39,7 @@ gel-ls = "edb.language_server.main:main"
 test = [
     'black~=24.2.0',
     'coverage~=7.4',
-    'ruff==0.3.7',
+    'ruff==0.11.2',
     'asyncpg~=0.30.0',
 
     # Needed for testing asyncutil
@@ -239,11 +239,11 @@ ignore_errors = true
 [tool.ruff]
 line-length = 80
 indent-width = 4
-exclude = ["postgres", ".github"]
+exclude = ["postgres", ".github", "edb/server/pgproto"]
 
 [tool.ruff.lint]
 preview = true
-select = ["E", "F", "W", "B"]
+select = ["E", "F", "W", "B", "UP006", "UP007"]
 ignore = [
     "F541", # f-string without any placeholders
     "B904", # Within an except clause, raise exceptions with raise ... from err

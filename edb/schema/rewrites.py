@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Type, cast, TYPE_CHECKING
+from typing import Any, Optional, cast, TYPE_CHECKING
 
 from edb import errors
 
@@ -374,7 +374,7 @@ class CreateRewrite(
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if field in ('kind', 'expr') and issubclass(
             astnode, qlast.CreateRewrite

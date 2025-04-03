@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Optional, Sequence, List, Dict, Mapping, Tuple
+from typing import Optional, Sequence, Mapping
 from dataclasses import dataclass, field
 import enum
 import uuid
@@ -62,7 +62,7 @@ class Options:
     # normalization.
     # When this is non-empty, the resolver is allowed to raise
     # DisableNormalization to recompile the query without normalization.
-    normalized_params: List[int]
+    normalized_params: list[int]
 
     # Apply a limit to the number of rows in the top-level query
     implicit_limit: Optional[int]
@@ -82,15 +82,15 @@ class Scope:
     """
 
     # RangeVars (table instances) in this query
-    tables: List[Table] = field(default_factory=lambda: [])
+    tables: list[Table] = field(default_factory=lambda: [])
 
     # Common Table Expressions
-    ctes: List[CTE] = field(default_factory=lambda: [])
+    ctes: list[CTE] = field(default_factory=lambda: [])
 
     # Pairs of columns of the same name that have been compared in a USING
     # clause. This makes unqualified references to their name them un-ambiguous.
     # The fourth tuple element is the join type.
-    factored_columns: List[Tuple[str, Table, Table, str]] = field(
+    factored_columns: list[tuple[str, Table, Table, str]] = field(
         default_factory=lambda: []
     )
 
@@ -104,7 +104,7 @@ class Table:
     name: Optional[str] = None
     alias: Optional[str] = None
 
-    columns: List[Column] = field(default_factory=lambda: [])
+    columns: list[Column] = field(default_factory=lambda: [])
 
     # Internal SQL
     reference_as: Optional[str] = None
@@ -131,7 +131,7 @@ class Table:
 @dataclass(kw_only=True)
 class CTE:
     name: Optional[str] = None
-    columns: List[Column] = field(default_factory=lambda: [])
+    columns: list[Column] = field(default_factory=lambda: [])
 
 
 @dataclass(kw_only=True)
@@ -193,13 +193,13 @@ class CompiledDML:
     value_relation_input: pgast.BaseRelation
 
     # columns that are expected to be produced by the value relation
-    value_columns: List[Tuple[str, bool]]
+    value_columns: list[tuple[str, bool]]
 
     # name of the column in the value relation, that should provide the identity
     value_iterator_name: Optional[str]
 
     # CTEs that perform the operation
-    output_ctes: List[pgast.CommonTableExpr]
+    output_ctes: list[pgast.CommonTableExpr]
 
     # name of the CTE that contains the output of the insert
     output_relation_name: str
@@ -228,17 +228,17 @@ class ResolverContextLevel(compiler.ContextLevel):
     # List of CTEs to add the top-level statement.
     # This is used, for example, by DML compilation to ensure that all DML is
     # in the top-level WITH binding.
-    ctes_buffer: List[pgast.CommonTableExpr]
+    ctes_buffer: list[pgast.CommonTableExpr]
 
     # A mapping of from objects to CTEs that provide an "inheritance view",
     # which is basically a union of all of their descendant's tables.
-    inheritance_ctes: Dict[s_objects.InheritingObject, str]
+    inheritance_ctes: dict[s_objects.InheritingObject, str]
 
     compiled_dml: Mapping[pgast.Query, CompiledDML]
 
     options: Options
 
-    query_params: List[dbstate.SQLParam]
+    query_params: list[dbstate.SQLParam]
     """List of params needed by the compiled query. Gets populated during
     compilation and also includes params needed for globals, from calls to ql
     compiler."""

@@ -396,7 +396,7 @@ class NestedQLBlockStmt(Nonterm):
 class NestedQLBlock(ProductionTpl):
 
     @property
-    def allowed_fields(self) -> typing.FrozenSet[str]:
+    def allowed_fields(self) -> frozenset[str]:
         raise NotImplementedError
 
     @property
@@ -930,13 +930,13 @@ class ExtensionPackageStmt(Nonterm):
 class ExtensionPackageBody(typing.NamedTuple):
 
     body: qlast.NestedQLBlock
-    fields: typing.List[qlast.SetField]
+    fields: list[qlast.SetField]
 
 
 class CreateExtensionPackageBodyBlock(NestedQLBlock):
 
     @property
-    def allowed_fields(self) -> typing.FrozenSet[str]:
+    def allowed_fields(self) -> frozenset[str]:
         return frozenset(
             {'internal', 'ext_module', 'sql_extensions', 'dependencies',
              'sql_setup_script', 'sql_teardown_script'}
@@ -988,7 +988,7 @@ class DropExtensionPackageStmt(Nonterm):
 class CreateExtensionPackageMigrationBodyBlock(NestedQLBlock):
 
     @property
-    def allowed_fields(self) -> typing.FrozenSet[str]:
+    def allowed_fields(self) -> frozenset[str]:
         return frozenset(
             {'early_sql_script', 'late_sql_script'}
         )
@@ -3087,7 +3087,7 @@ class CreateOperatorStmt(Nonterm):
         )
 
     def _process_operator_body(self, block, abstract: bool = False):
-        props: typing.Dict[str, typing.Any] = {}
+        props: dict[str, typing.Any] = {}
 
         commands = []
         from_operator = None
@@ -3613,13 +3613,13 @@ class MigrationStmt(Nonterm):
 class MigrationBody(typing.NamedTuple):
 
     body: qlast.NestedQLBlock
-    fields: typing.List[qlast.SetField]
+    fields: list[qlast.SetField]
 
 
 class CreateMigrationBodyBlock(NestedQLBlock):
 
     @property
-    def allowed_fields(self) -> typing.FrozenSet[str]:
+    def allowed_fields(self) -> frozenset[str]:
         return frozenset({'message', 'generated_by'})
 
     @property

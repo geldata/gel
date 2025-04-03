@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Iterable, Mapping, Sequence, Type
+from typing import Iterable, Mapping, Sequence
 
 import dataclasses
 import datetime
@@ -82,7 +82,7 @@ class Context:
         return ptr.get_cardinality(self.schema).is_multi()
 
     def get_type(
-        self, ptr: s_pointers.Pointer, *, type: Type[s_types.TypeT]
+        self, ptr: s_pointers.Pointer, *, type: type[s_types.TypeT]
     ) -> s_types.TypeT:
         rv = ptr.get_target(self.schema)
         if not isinstance(rv, type):

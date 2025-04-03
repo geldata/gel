@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional
 
 import urllib.parse
 
@@ -38,10 +38,10 @@ class HABackend(asyncwatcher.AsyncWatcher):
         super().__init__()
         self._failover_cb: Optional[Callable[[], None]] = None
 
-    async def get_cluster_consensus(self) -> Tuple[str, int]:
+    async def get_cluster_consensus(self) -> tuple[str, int]:
         raise NotImplementedError
 
-    def get_master_addr(self) -> Optional[Tuple[str, int]]:
+    def get_master_addr(self) -> Optional[tuple[str, int]]:
         raise NotImplementedError
 
     def set_failover_callback(self, cb: Optional[Callable[[], None]]) -> None:
