@@ -446,7 +446,6 @@ cdef class EdgeConnection(frontend.FrontendConnection):
 
     async def _execute_script(self, compiled: object, bind_args: bytes):
         cdef:
-            pgcon.PGConnection conn
             dbview.DatabaseConnectionView dbv
 
         if self._cancelled:
@@ -733,7 +732,6 @@ cdef class EdgeConnection(frontend.FrontendConnection):
     async def _execute_rollback(self, compiled: dbview.CompiledQuery):
         cdef:
             dbview.DatabaseConnectionView _dbview
-            pgcon.PGConnection conn
 
         query_unit = compiled.query_unit_group[0]
         _dbview = self.get_dbview()
@@ -764,7 +762,6 @@ cdef class EdgeConnection(frontend.FrontendConnection):
     ):
         cdef:
             dbview.DatabaseConnectionView dbv
-            pgcon.PGConnection conn
 
         dbv = self.get_dbview()
         async with self.with_pgcon() as conn:

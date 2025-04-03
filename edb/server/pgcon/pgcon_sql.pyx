@@ -156,9 +156,10 @@ cdef class PGSQLConnection:
                     msg_buf.write_bytestring(sql_text)
                     msg_buf.write_bytes(data)
                     buf.write_buffer(msg_buf.end_message())
-                    metrics.query_size.observe(
-                        len(sql_text), self.con.get_tenant_label(), 'compiled'
-                    )
+                    if self.con.listener:
+                        self.con.listener.on_pg_conn_metrics(
+                            self.con, 'query_size', len(sql_text))
+
                     if self.con.debug:
                         self.con.debug_print(
                             'Parse', action.stmt_name, sql_text, data
@@ -323,7 +324,7 @@ cdef class PGSQLConnection:
     async def _parse_sql_extended_query(
         self,
         actions,
-        fe_conn: frontend.AbstractFrontendConnection,
+        fe_conn: AbstractFrontendConnection,
         dbver: int,
         dbv: pg_ext.ConnectionView,
     ) -> tuple[bool, bool]:

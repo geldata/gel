@@ -166,7 +166,7 @@ class BaseCluster:
                       source_description: str,
                       apply_init_script: bool = False,
                       **kwargs: Unpack[pgconnparams.CreateParamsKwargs]
-    ) -> pgcon.PGConnection:
+    ) -> pgcon.PGConnectionRaw:
         """Connect to this cluster, with optional overriding parameters. If
         overriding parameters are specified, they are applied to a copy of the
         connection parameters before the connection takes place."""

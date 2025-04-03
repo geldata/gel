@@ -38,6 +38,7 @@ from edb.server.compiler import enums
 from edb.server.protocol import execute as p_execute
 from edb.server.dbview cimport dbview
 from edb.server.protocol cimport frontend
+from edb.server.pgcon cimport pgcon
 
 from edb.server.pgproto.pgproto cimport (
     WriteBuffer,
@@ -138,7 +139,7 @@ async def heartbeat_check(db, tenant):
         await pgcon.sql_execute(b"SELECT 'OK';")
 
 
-cdef class NotebookConnection(frontend.AbstractFrontendConnection):
+cdef class NotebookConnection(pgcon.AbstractFrontendConnection):
     def __cinit__(self):
         self.buf = WriteBuffer.new()
 

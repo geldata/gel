@@ -40,7 +40,6 @@ from edb.graphql import extension as graphql_ext
 
 from edb.server import args as srvargs
 from edb.server import config, metrics as srv_metrics
-from edb.server import tenant as edbtenant
 from edb.server.protocol cimport binary
 from edb.server.protocol import binary
 from edb.server.protocol import pg_ext
@@ -423,7 +422,7 @@ cdef class HttpProtocol:
         )
         sslobj = self.transport.get_extra_info('ssl_object')
         tenant = self.server.retrieve_tenant(sslobj)
-        if tenant is edbtenant.host_tenant:
+        if tenant.is_host_tenant():
             tenant = None
             self.is_tenant_host = True
         self.tenant = tenant
