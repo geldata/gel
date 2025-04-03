@@ -119,8 +119,12 @@ def document_updated(ls: ls_server.GelLanguageServer, doc_uri: str):
 
             # recompile schema
             ls.state.schema = None
-            _schema, diagnostic_set = ls_server.get_schema(ls)
+            _schema, diagnostic_set, err_msg = ls_server.get_schema(ls)
             diagnostic_set.extend(document, diagnostics)
+
+            if err_msg:
+                ls.show_message(f'Error: {err_msg}')
+
         elif is_edgeql_file(doc_uri):
             # query file
             ql_ast_res = ls_parsing.parse(document, ls)
