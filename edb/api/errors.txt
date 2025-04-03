@@ -166,7 +166,8 @@
 
 0x_F0_01_00_00   WarningMessage
 
-0x_F0_02_00_00   MigrationStatusMessage
+0x_F0_02_00_00   StatusMessage
+0x_F0_02_00_01   MigrationStatusMessage
 
 
 #### Suggested errors for Gel clients
