@@ -181,4 +181,6 @@ update ext::ai::ChatPrompt filter .name = 'builtin::rag-default' set {
                 })
 }
 '''),  # For #8553
+    # 6.6
+    ('edgeql+schema', ''),  # For #8554
 ]
