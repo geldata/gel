@@ -100,6 +100,21 @@ class NullQuery(BaseQuery):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
+class ServerParamConversion:
+    param_name: str
+    conversion_name: str
+    additional_info: tuple[str, ...]
+
+    # Explicitly store the value if it is a literal which was turned into a
+    # parameter during normalization.
+    #
+    # Normalized constants are passed to the backend as a blob of bytes.
+    # Since no encode/decode information is associated with this blob, the
+    # value to be converted needs to be passed in separately.
+    source_value: Optional[Any] = None
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class Query(BaseQuery):
     sql_hash: bytes
 
@@ -112,6 +127,8 @@ class Query(BaseQuery):
     in_type_args: Optional[list[Param]] = None
 
     globals: Optional[list[tuple[str, bool]]] = None
+
+    server_param_conversions: Optional[list[ServerParamConversion]] = None
 
     cacheable: bool = True
     is_explain: bool = False
@@ -304,6 +321,8 @@ class QueryUnit:
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
 
+    server_param_conversions: Optional[list[ServerParamConversion]] = None
+
     warnings: tuple[errors.EdgeDBError, ...] = ()
     unsafe_isolation_dangers: tuple[errors.UnsafeIsolationLevelError, ...] = ()
 
@@ -416,6 +435,9 @@ class QueryUnitGroup:
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
 
+    server_param_conversions: Optional[list[ServerParamConversion]] = None
+    unit_converted_param_indexes: Optional[dict[int, list[int]]] = None
+
     warnings: Optional[list[errors.EdgeDBError]] = None
     unsafe_isolation_dangers: (
         Optional[list[errors.UnsafeIsolationLevelError]]
@@ -482,6 +504,32 @@ class QueryUnitGroup:
             if self.globals is None:
                 self.globals = []
             self.globals.extend(query_unit.globals)
+        if query_unit.server_param_conversions is not None:
+            if self.server_param_conversions is None:
+                self.server_param_conversions = []
+            if self.unit_converted_param_indexes is None:
+                self.unit_converted_param_indexes = {}
+
+            # De-duplicate param conversions and store information about which
+            # units access which converted params.
+            # If two units request the same conversion on the same parameter,
+            # we should assume the conversion is stable and only do it once.
+            unit_index = len(self._units)
+            converted_param_indexes: list[int] = []
+            for spc in query_unit.server_param_conversions:
+                if spc in self.server_param_conversions:
+                    converted_param_indexes.append(
+                        self.server_param_conversions.index(spc)
+                    )
+                else:
+                    converted_param_indexes.append(
+                        len(self.server_param_conversions)
+                    )
+                    self.server_param_conversions.append(spc)
+            self.unit_converted_param_indexes[unit_index] = (
+                converted_param_indexes
+            )
+
         if query_unit.warnings is not None:
             if self.warnings is None:
                 self.warnings = []

@@ -1327,6 +1327,20 @@ class Function(
 
     is_inlined = so.SchemaField(bool, default=False)
 
+    # A json string which describes any server param conversions to apply.
+    #
+    # The data should take the form: dict[str, str | list[str]]
+    #
+    # The key should be the names of the converted params.
+    # The value should be either: the conversion name, or a list of strings
+    # where the first item is the name of the conversion.
+    #
+    # If the value is a list, the additional items act as parameters to the
+    # conversion.
+    server_param_conversions = so.SchemaField(
+        str, default=None, compcoef=0.0
+    )
+
     def has_inlined_defaults(self, schema: s_schema.Schema) -> bool:
         # This can be relaxed to just `language is EdgeQL` when we
         # support non-constant defaults.

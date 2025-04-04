@@ -17,6 +17,8 @@
 #
 
 
+cimport cython
+
 from edb.server.dbview cimport dbview
 from edb.server.pgproto.pgproto cimport WriteBuffer
 
@@ -25,6 +27,7 @@ cdef WriteBuffer recode_bind_args(
     dbview.DatabaseConnectionView dbv,
     dbview.CompiledQuery compiled,
     bytes bind_args,
+    list converted_args,
     list positions = ?,
     list data_types = ?,
 )
@@ -34,6 +37,7 @@ cdef recode_bind_args_for_script(
     dbview.DatabaseConnectionView dbv,
     dbview.CompiledQuery compiled,
     bytes bind_args,
+    list converted_args,
     ssize_t start,
     ssize_t end,
 )
@@ -45,3 +49,47 @@ cdef bytes recode_global(
 )
 
 cdef WriteBuffer combine_raw_args(object args = ?)
+
+@cython.final
+cdef class ParamConversion:
+    cdef:
+        str param_name
+        str conversion_name
+        tuple additional_info
+        bytes data
+        object source_value
+
+cdef list[ParamConversion] get_param_conversions(
+    dbview.DatabaseConnectionView dbv,
+    list server_param_conversions,
+    list in_type_args,
+    bytes bind_args,
+)
+
+cdef class ConvertedArg:
+    cdef:
+        int bind_format_code
+
+@cython.final
+cdef class ConvertedArgStr(ConvertedArg):
+    cdef:
+        str data
+
+    @staticmethod
+    cdef ConvertedArgStr new(str data)
+
+@cython.final
+cdef class ConvertedArgFloat64(ConvertedArg):
+    cdef:
+        float data
+
+    @staticmethod
+    cdef ConvertedArgFloat64 new(float data)
+
+@cython.final
+cdef class ConvertedArgListFloat32(ConvertedArg):
+    cdef:
+        list data
+
+    @staticmethod
+    cdef ConvertedArgListFloat32 new(list data)
