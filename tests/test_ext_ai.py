@@ -479,6 +479,74 @@ class TestExtAI(tb.BaseHttpExtensionTest):
                 delete Astronomy;
             ''')
 
+    async def test_ext_ai_indexing_06(self):
+        try:
+            await self.con.execute(
+                """
+                insert Astronomy {
+                    content := 'Skies on Venus are orange'
+                };
+                insert Astronomy {
+                    content := 'Skies on Mars are red'
+                };
+                insert Astronomy {
+                    content := 'Skies on Pluto are black and starry'
+                };
+                insert Astronomy {
+                    content := 'Skies on Earth are blue'
+                };
+                """,
+            )
+
+            async for tr in self.try_until_succeeds(
+                ignore=(AssertionError,),
+                timeout=30.0,
+            ):
+                async with tr:
+                    await self.assert_query_result(
+                        r'''
+                        with
+                            result := ext::ai::search(
+                                Astronomy, <str>$qv)
+                        select
+                            result.object {
+                                content,
+                                distance := result.distance,
+                            }
+                        order by
+                            result.distance asc empty last
+                            then result.object.content
+                        ''',
+                        [
+                            {
+                                'content': 'Skies on Earth are blue',
+                                'distance': 0.09861218113400261,
+                            },
+                            {
+                                'content': 'Skies on Venus are orange',
+                                'distance': 0.11303140601637596,
+                            },
+                            {
+                                'content': 'Skies on Mars are red',
+                                'distance': 0.14066215115268055,
+                            },
+                            {
+                                'content': (
+                                    'Skies on Pluto are black and starry'
+                                ),
+                                'distance': 0.32063377951324246,
+                            },
+                        ],
+                        variables={
+                            "qv": "Nice weather",
+                        }
+                    )
+
+        finally:
+            await self.con.execute('''
+                delete Astronomy;
+            ''')
+
     async def test_ext_ai_index_custom_dimensions(self):
         await self.assert_query_result(
             """
