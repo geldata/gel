@@ -67,19 +67,29 @@ cdef list[ParamConversion] get_param_conversions(
 )
 
 cdef class ConvertedArg:
-    pass
+    cdef:
+        int bind_format_code
 
 @cython.final
 cdef class ConvertedArgStr(ConvertedArg):
     cdef:
         str data
 
+    @staticmethod
+    cdef ConvertedArgStr new(str data)
+
 @cython.final
 cdef class ConvertedArgFloat64(ConvertedArg):
     cdef:
         float data
 
+    @staticmethod
+    cdef ConvertedArgFloat64 new(float data)
+
 @cython.final
 cdef class ConvertedArgListFloat32(ConvertedArg):
     cdef:
         list data
+
+    @staticmethod
+    cdef ConvertedArgListFloat32 new(list data)

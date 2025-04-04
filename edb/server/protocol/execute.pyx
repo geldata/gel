@@ -50,7 +50,6 @@ from edb.server.compiler import errormech
 from edb.server.compiler cimport rpc
 from edb.server.compiler import sertypes
 from edb.server.dbview cimport dbview
-from edb.server.protocol import ai_ext
 from edb.server.protocol cimport args_ser
 from edb.server.protocol cimport frontend
 from edb.server.pgcon cimport pgcon
@@ -455,9 +454,10 @@ async def _convert_parameters(
     in_type_args: Optional[list[dbstate.Param]],
     bind_args: bytes,
 ) -> Optional[list[args_ser.ConvertedArg]]:
-    # If there are server param conversions, compute them now so that they are
-    # injected into the recoded bind args later.
-    tenant = dbv.tenant
+    """
+    If there are server param conversions, compute them now so that they are
+    injected into the recoded bind args later.
+    """
 
     # We receive the encoded param data from the bind_args
     # and decode it manually.
@@ -468,6 +468,7 @@ async def _convert_parameters(
         return data.decode("utf-8")
 
     def decode_array_of_str(data: bytes) -> list[str]:
+        # See gel-python for more details on array encoding
         texts = []
         text_count = int.from_bytes(data[12:16])
         data = data[20:]
@@ -501,7 +502,7 @@ async def _convert_parameters(
                 else conversion.get_source_value()
             )
             converted_args.append(
-                args_ser.ConvertedArgStr(
+                args_ser.ConvertedArgStr.new(
                     str(decoded_param_data)
                 )
             )
@@ -513,7 +514,7 @@ async def _convert_parameters(
                 else conversion.get_source_value()
             )
             converted_args.append(
-                args_ser.ConvertedArgFloat64(
+                args_ser.ConvertedArgFloat64.new(
                     float(decoded_param_data)
                 )
             )
@@ -529,7 +530,7 @@ async def _convert_parameters(
 
             separator = additional_info[0]
             converted_args.append(
-                args_ser.ConvertedArgStr(
+                args_ser.ConvertedArgStr.new(
                     separator.join(decoded_param_data)
                 )
             )

@@ -198,10 +198,7 @@ cdef WriteBuffer recode_bind_args(
             # and converted args depend on the conversion
             if converted_args:
                 for arg in converted_args:
-                    if isinstance(arg, ConvertedArgStr):
-                        out_buf.write_int16(0x0000)
-                    else:
-                        out_buf.write_int16(0x0001)
+                    out_buf.write_int16(arg.bind_format_code)
 
         out_buf.write_int16(<int16_t>num_args)
 
@@ -749,14 +746,20 @@ cdef list[ParamConversion] get_param_conversions(
 # After param conversions, we need to re-encode the converted
 # arg before putting it into the recoded bind args
 cdef class ConvertedArg:
+
     def encode(self, buffer: WriteBuffer):
         raise NotImplementedError
 
 
-@cython.final
 cdef class ConvertedArgStr(ConvertedArg):
-    def __init__(self, data: str):
-        self.data = data
+
+    @staticmethod
+    cdef ConvertedArgStr new(str data):
+        cdef ConvertedArgStr result
+        result = ConvertedArgStr.__new__(ConvertedArgStr)
+        result.bind_format_code = 0x0000
+        result.data = data
+        return result
 
     def encode(self, buffer: WriteBuffer):
         encoded = self.data.encode()
@@ -764,20 +767,30 @@ cdef class ConvertedArgStr(ConvertedArg):
         buffer.write_bytes(encoded)
 
 
-@cython.final
 cdef class ConvertedArgFloat64(ConvertedArg):
-    def __init__(self, data: float):
-        self.data = data
+
+    @staticmethod
+    cdef ConvertedArgFloat64 new(float data):
+        cdef ConvertedArgFloat64 result
+        result = ConvertedArgFloat64.__new__(ConvertedArgFloat64)
+        result.bind_format_code = 0x0001
+        result.data = data
+        return result
 
     def encode(self, buffer: WriteBuffer):
         buffer.write_int32(8) # elem size
         buffer.write_double(self.data)
 
 
-@cython.final
 cdef class ConvertedArgListFloat32(ConvertedArg):
-    def __init__(self, data: list[str]):
-        self.data = data
+
+    @staticmethod
+    cdef ConvertedArgListFloat32 new(list data):
+        cdef ConvertedArgListFloat32 result
+        result = ConvertedArgListFloat32.__new__(ConvertedArgListFloat32)
+        result.bind_format_code = 0x0001
+        result.data = data
+        return result
 
     def encode(self, buffer: WriteBuffer):
         elem_count = len(self.data)
