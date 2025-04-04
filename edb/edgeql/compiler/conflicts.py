@@ -900,6 +900,9 @@ def check_for_isolation_conflicts(
     entries = _get_type_conflict_constraint_entries(stmt, typ, ctx=ctx)
     constrs = [cnstr for cnstr, _ in entries]
 
+    op = 'INSERT' if isinstance(stmt, irast.InsertStmt) else 'UPDATE'
+    base_msg = f'{op} to {typ.get_verbosename(schema)} '
+
     for constr in constrs:
         subject = constr.get_subject(schema)
         assert subject
@@ -916,36 +919,38 @@ def check_for_isolation_conflicts(
                     root_subject_obj = root_subject.get_source(schema)
                 else:
                     root_subject_obj = root_subject
-                assert isinstance(root_subject_obj, s_objtypes.ObjectType)
-                all_objs = list(
-                    schemactx.get_all_concrete(root_subject_obj, ctx=ctx)
-                )
-                if root_subject_obj == typ and len(all_objs) == 1:
-                    continue
-                if root_subject_obj == typ and constr.get_delegated(schema):
-                    continue
-                # If this is an UPDATE and we are processing some
-                # subtype, and the actual type being updated is
-                # covered by this same constraint, don't report it for
-                # the child: it will be reported for an ancestor,
-                # which is less noisy.
-                if (
-                    update_typ
-                    and update_typ != typ
-                    and update_typ in all_objs
-                ):
-                    continue
 
-        op = 'INSERT' if isinstance(stmt, irast.InsertStmt) else 'UPDATE'
-        vn = f'{op} to {typ.get_verbosename(schema)} '
+                if isinstance(root_subject_obj, s_objtypes.ObjectType):
+                    all_objs = list(
+                        schemactx.get_all_concrete(root_subject_obj, ctx=ctx)
+                    )
+                    if root_subject_obj == typ and len(all_objs) == 1:
+                        continue
+                    if root_subject_obj == typ and constr.get_delegated(schema):
+                        continue
+                    # If this is an UPDATE and we are processing some
+                    # subtype, and the actual type being updated is
+                    # covered by this same constraint, don't report it for
+                    # the child: it will be reported for an ancestor,
+                    # which is less noisy.
+                    if (
+                        update_typ
+                        and update_typ != typ
+                        and update_typ in all_objs
+                    ):
+                        continue
 
         subj_vn = subject.get_verbosename(schema, with_parent=True)
-        vn += f'affects an exclusive constraint on {subj_vn}'
+        vn = f'{base_msg}affects an exclusive constraint on {subj_vn}'
         if expr := constr.get_subjectexpr(schema):
             vn += f" with expression '{expr.text}'"
 
-        assert root_subject_obj
-        if root_subject_obj != typ:
+        if not root_subject_obj:
+            msg = (
+                f"{vn} that is defined on "
+                f"{root_subject.get_verbosename(schema)}"
+            )
+        elif root_subject_obj != typ:
             msg = (
                 f"{vn} that is defined in ancestor "
                 f"{root_subject_obj.get_verbosename(schema)}"
