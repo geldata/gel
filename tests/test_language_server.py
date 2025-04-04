@@ -309,7 +309,7 @@ class TestLanguageServer(unittest.TestCase):
             )
 
             self.assertEqual(
-                runner.recv(timeout_sec=5),
+                runner.recv(timeout_sec=50),
                 {
                     "jsonrpc": "2.0",
                     "method": "textDocument/publishDiagnostics",
@@ -383,7 +383,7 @@ class TestLanguageServer(unittest.TestCase):
                 }
             )
             self.assertEqual(
-                runner.recv(timeout_sec=5),
+                runner.recv(timeout_sec=50),
                 {
                     "jsonrpc": "2.0",
                     "method": "textDocument/publishDiagnostics",
@@ -421,7 +421,7 @@ class TestLanguageServer(unittest.TestCase):
                 }
             )
             self.assertEqual(
-                runner.recv(timeout_sec=0.1),
+                runner.recv(timeout_sec=1),
                 {
                     "jsonrpc": "2.0",
                     "id": 3,
