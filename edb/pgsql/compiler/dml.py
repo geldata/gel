@@ -421,11 +421,10 @@ def merge_iterator(
 
 def fini_dml_stmt(
     ir_stmt: irast.MutatingStmt,
-    wrapper: pgast.Query,
     parts: DMLParts,
     *,
     ctx: context.CompilerContextLevel,
-) -> pgast.Query:
+) -> None:
 
     union_cte, union_rvar = gen_dml_union(ir_stmt, parts, ctx=ctx)
 
@@ -497,8 +496,6 @@ def fini_dml_stmt(
     clauses.compile_output(ir_stmt.result, ctx=ctx)
 
     ctx.dml_stmt_stack.pop()
-
-    return wrapper
 
 
 def get_dml_range(
