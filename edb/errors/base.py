@@ -28,9 +28,7 @@ import contextlib
 
 
 __all__ = (
-    "EdgeDBError",
-    "EdgeDBMessage",
-    "ensure_span",
+    'EdgeDBError', 'EdgeDBMessage', 'ensure_span',
 )
 
 
@@ -44,7 +42,7 @@ class EdgeDBErrorMeta(type):
         assert name not in mcls._name_map
         mcls._name_map[name] = cls
 
-        code = dct.get("_code")
+        code = dct.get('_code')
         if code is not None:
             mcls._error_map[code] = cls
 
@@ -55,9 +53,8 @@ class EdgeDBErrorMeta(type):
             # We don't want any EdgeDBError subclasses to not
             # have a code.
             raise RuntimeError(
-                "direct subclassing of EdgeDBError is prohibited; "
-                "subclass one of its subclasses in edb.errors"
-            )
+                'direct subclassing of EdgeDBError is prohibited; '
+                'subclass one of its subclasses in edb.errors')
 
     @classmethod
     def get_error_class_from_code(mcls, code: int) -> type[EdgeDBError]:
@@ -69,18 +66,19 @@ class EdgeDBErrorMeta(type):
 
 
 class EdgeDBMessage(Warning):
+
     _code: Optional[int] = None
 
     @classmethod
     def get_code(cls):
         if cls._code is None:
             raise RuntimeError(
-                f"EdgeDB message code is not set (type: {cls.__name__})"
-            )
+                f'EdgeDB message code is not set (type: {cls.__name__})')
         return cls._code
 
 
 class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
+
     _code: Optional[int] = None
     _attrs: dict[int, str]
     _pgext_code: Optional[str] = None
@@ -98,8 +96,7 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
     ):
         if type(self) is EdgeDBError:
             raise RuntimeError(
-                "EdgeDBError is not supposed to be instantiated directly"
-            )
+                'EdgeDBError is not supposed to be instantiated directly')
 
         self._attrs = {}
         self._pgext_code = pgext_code
@@ -121,15 +118,14 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
     def get_code(cls):
         if cls._code is None:
             raise RuntimeError(
-                f"Gel message code is not set (type: {cls.__name__})"
-            )
+                f'Gel message code is not set (type: {cls.__name__})')
         return cls._code
 
     def to_json(self):
         err_dct = {
-            "message": str(self),
-            "type": str(type(self).__name__),
-            "code": self.get_code(),
+            'message': str(self),
+            'type': str(type(self).__name__),
+            'code': self.get_code(),
         }
         for name, field in _JSON_FIELDS.items():
             if field in self._attrs:
@@ -171,8 +167,7 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
     def set_hint_and_details(self, hint, details=None):
         ex.replace_context(
-            self, ex.DefaultExceptionContext(hint=hint, details=details)
-        )
+            self, ex.DefaultExceptionContext(hint=hint, details=details))
 
         if hint is not None:
             self._attrs[FIELD_HINT] = hint
@@ -212,7 +207,7 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
         self._attrs[FIELD_LINE_END] = str(end.line)
         self._attrs[FIELD_COLUMN_END] = str(end.column)
         self._attrs[FIELD_UTF16_COLUMN_END] = str(end.utf16column)
-        if span.filename and span.filename != "<string>":
+        if span.filename and span.filename != '<string>':
             self._attrs[FIELD_FILENAME] = span.filename
 
     def set_position(
@@ -306,11 +301,11 @@ _INT_FIELDS = {
 
 # Fields to include in the json dump of the type
 _JSON_FIELDS = {
-    "filename": FIELD_FILENAME,
-    "hint": FIELD_HINT,
-    "details": FIELD_DETAILS,
-    "start": FIELD_CHARACTER_START,
-    "end": FIELD_CHARACTER_END,
-    "line": FIELD_LINE_START,
-    "col": FIELD_COLUMN_START,
+    'filename': FIELD_FILENAME,
+    'hint': FIELD_HINT,
+    'details': FIELD_DETAILS,
+    'start': FIELD_CHARACTER_START,
+    'end': FIELD_CHARACTER_END,
+    'line': FIELD_LINE_START,
+    'col': FIELD_COLUMN_START,
 }
