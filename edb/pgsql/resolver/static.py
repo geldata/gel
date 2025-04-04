@@ -27,7 +27,6 @@ from edb import errors
 from edb.pgsql import ast as pgast
 from edb.pgsql.ast import SQLValueFunctionOP as val_func_op
 from edb.pgsql import common
-from edb.pgsql import parser as pgparser
 
 from edb.server import defines
 from edb.server.pgcon import errors as pgerror
@@ -230,6 +229,13 @@ ALLOWED_ADMIN_FUNCTIONS = frozenset(
     }
 )
 
+WRAPPED_FUNCTIONS = frozenset(
+    {
+        "to_regclass",
+        'pg_show_all_settings',
+    }
+)
+
 
 @eval.register
 def eval_FuncCall(
@@ -348,11 +354,11 @@ def eval_FuncCall(
         # we do not expose sequences, so any calls to this function returns NULL
         return pgast.NullConstant()
 
-    if fn_name == "to_regclass":
-        arg = require_string_param(expr, ctx)
-        return pgast.TypeCast(
-            arg=to_regclass(arg, ctx=ctx),
-            type_name=pgast.TypeName(name=('pg_catalog', 'regclass')),
+    if fn_name in WRAPPED_FUNCTIONS:
+        args = eval_list(expr.args, ctx=ctx)
+        return pgast.FuncCall(
+            name=(V('edgedbsql'), fn_name),
+            args=expr.args if args is None else args,
         )
 
     cast_arg_to_regclass = {
@@ -455,102 +461,27 @@ def cast_to_regclass(param: pgast.BaseExpr, ctx: Context) -> pgast.BaseExpr:
     """
 
     expr = eval(param, ctx=ctx)
-    res: pgast.BaseExpr
-    if isinstance(expr, pgast.NullConstant):
-        res = pgast.NullConstant()
-    elif isinstance(expr, pgast.StringConstant) and expr.val.isnumeric():
-        # We need to treat numeric string constants as numbers, apparently.
-        res = pgast.NumericConstant(val=expr.val)
-
-    elif isinstance(expr, pgast.StringConstant):
-        res = to_regclass(expr.val, ctx=ctx)
-    elif isinstance(expr, pgast.NumericConstant):
-        res = expr
-    else:
-        # This is a complex expression of unknown type.
-        # If we knew the type is numeric, we could lookup the internal oid by
-        # the public oid.
-        # But if the type if string, we'd have to implement to_regclass in SQL.
-
-        # The problem is that we don't know the type statically.
-        # So let's insert a runtime type check with an 'unsupported' message for
-        # strings.
+    if expr is None:
         param = dispatch.resolve(param, ctx=ctx)
-        res = pgast.CaseExpr(
-            args=[
-                pgast.CaseWhen(
-                    expr=pgast.Expr(
-                        lexpr=pgast.FuncCall(
-                            name=('pg_typeof',),
-                            args=[param]
-                        ),
-                        name='IN',
-                        rexpr=pgast.ImplicitRowExpr(
-                            args=[
-                                pgast.StringConstant(val='integer'),
-                                pgast.StringConstant(val='smallint'),
-                                pgast.StringConstant(val='bigint'),
-                                pgast.StringConstant(val='oid'),
-                            ]
-                        )
-                    ),
-                    result=param
-                )
-            ],
-            defresult=pgast.FuncCall(
-                name=(V('edgedb'), 'raise'),
-                args=[
-                    pgast.NumericConstant(val='1'),
-                    pgast.StringConstant(
-                        val=pgerror.ERROR_FEATURE_NOT_SUPPORTED
-                    ),
-                    pgast.StringConstant(val='cannot cast text to regclass'),
-                ]
-            )
+        return pgast.FuncCall(
+            name=(V('edgedbsql'), "to_regclass"), args=[param]
         )
-    return pgast.TypeCast(
-        arg=res,
-        type_name=pgast.TypeName(name=('pg_catalog', 'regclass')),
-    )
-
-
-def to_regclass(reg_class_name: str, ctx: Context) -> pgast.BaseExpr:
-    """
-    Equivalent to `to_regclass(text reg_class_name)` in SQL.
-
-    Parses a string as an SQL identifier (with optional schema name and
-    database name) and returns an SQL expression that evaluates to the
-    "registered class" of that ident.
-    """
-    from edb.pgsql.common import quote_literal as ql
-
-    try:
-        [stmt] = pgparser.parse(f'SELECT {reg_class_name}')
-        assert isinstance(stmt, pgast.SelectStmt)
-        [target] = stmt.target_list
-        assert isinstance(target.val, pgast.ColumnRef)
-        name = target.val.name
-    except Exception:
+    elif isinstance(expr, pgast.NullConstant):
         return pgast.NullConstant()
-
-    if len(name) < 2:
-        name = (ctx.options.search_path[0], name[0])
-
-    namespace, rel_name = name
-    assert isinstance(namespace, str)
-    assert isinstance(rel_name, str)
-
-    # A bit hacky to parse SQL here, but I don't want to construct pgast
-    [stmt] = pgparser.parse(
-        f'''
-        SELECT pc.oid
-        FROM {V('edgedbsql')}.pg_class pc
-        JOIN {V('edgedbsql')}.pg_namespace pn ON pn.oid = pc.relnamespace
-        WHERE {ql(namespace)} = pn.nspname AND pc.relname = {ql(rel_name)}
-        '''
-    )
-    assert isinstance(stmt, pgast.SelectStmt)
-    return pgast.SubLink(operator=None, expr=stmt)
+    elif isinstance(expr, pgast.StringConstant):
+        return pgast.FuncCall(
+            name=(V('edgedbsql'), "to_regclass"),
+            args=[expr],
+        )
+    elif isinstance(expr, pgast.NumericConstant):
+        return pgast.TypeCast(
+            arg=expr,
+            type_name=pgast.TypeName(name=('pg_catalog', 'regclass')),
+        )
+    else:
+        return pgast.FuncCall(
+            name=(V('edgedbsql'), "to_regclass"), args=[expr]
+        )
 
 
 def eval_current_schemas(
