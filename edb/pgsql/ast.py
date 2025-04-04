@@ -293,6 +293,10 @@ class CommonTableExpr(Base):
     # the dml stmt that this CTE was generated for
     for_dml_stmt: typing.Optional[irast.MutatingLikeStmt] = None
 
+    # marks the CTE that contains the output of a DML operation
+    # (so it can be used in RETURNING and CommandComplete tag)
+    output_of_dml: typing.Optional[irast.MutatingLikeStmt] = None
+
     def __repr__(self):
         return (
             f'<pg.{self.__class__.__name__} '
