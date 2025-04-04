@@ -88,7 +88,6 @@ Performance analysis statement:
     cardinality
     volatility
 
-    insert
     update
     for
     group
