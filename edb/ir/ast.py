@@ -772,12 +772,24 @@ class ComputableInfo(typing.NamedTuple):
     should_materialize: typing.Sequence[MaterializeReason]
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ServerParamConversion:
+    param_name: str
+    conversion_name: str
+    additional_info: tuple[str, ...]
+
+    # If the parameter is a constant value, pass to directly to the server.
+    constant_value: typing.Optional[typing.Any] = None
+
+
 class Statement(Command):
 
     expr: Set
     views: dict[sn.Name, s_types.Type]
     params: list[Param]
     globals: list[Global]
+    server_param_conversions: list[ServerParamConversion]
+    server_param_conversion_params: list[Param]
     cardinality: qltypes.Cardinality
     volatility: qltypes.Volatility
     multiplicity: qltypes.Multiplicity

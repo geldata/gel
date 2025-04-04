@@ -22,7 +22,7 @@ from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
 from lsprotocol import types as lsp_types
 
-
+from edb import errors
 from edb.edgeql import ast as qlast
 from edb.edgeql import tokenizer
 from edb.edgeql import parser as qlparser
@@ -30,6 +30,7 @@ from edb.edgeql.parser.grammar import tokens as qltokens
 import edb._edgeql_parser as rust_parser
 
 from . import Result, is_schema_file
+from . import utils as ls_utils
 
 
 def parse(
@@ -48,21 +49,10 @@ def parse(
                 message += f"\n{details}"
             if hint:
                 message += f"\nHint: {hint}"
-            (start, end) = tokenizer.inflate_span(source.text(), span)
-            assert end
 
             diagnostics.append(
                 lsp_types.Diagnostic(
-                    range=lsp_types.Range(
-                        start=lsp_types.Position(
-                            line=start.line - 1,
-                            character=start.column - 1,
-                        ),
-                        end=lsp_types.Position(
-                            line=end.line - 1,
-                            character=end.column - 1,
-                        ),
-                    ),
+                    range=ls_utils.span_to_lsp(source.text(), span),
                     severity=lsp_types.DiagnosticSeverity.Error,
                     message=message,
                 )
@@ -73,9 +63,18 @@ def parse(
     # parsing successful
     assert isinstance(result.out, rust_parser.CSTNode)
 
-    ast = qlparser._cst_to_ast(
-        result.out, productions, source, doc.filename
-    ).val
+    try:
+        ast = qlparser._cst_to_ast(
+            result.out, productions, source, doc.filename
+        ).val
+    except errors.EdgeDBError as e:
+        return Result(err=[
+            lsp_types.Diagnostic(
+                range=ls_utils.span_to_lsp(source.text(), e.get_span()),
+                severity=lsp_types.DiagnosticSeverity.Error,
+                message=e.args[0],
+            )
+        ])
     if sdl:
         assert isinstance(ast, qlast.Schema), ast
     else:

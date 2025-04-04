@@ -1025,6 +1025,17 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         inheritable=False,
     )
 
+    # Span of source text that contained definition of this object.
+    # This field is ephemeral, which means it not seriliazed and saved
+    # persistently. This is ok, because we only need it for language server.
+    span = SchemaField(
+        parsing.Span,
+        default=None,
+        compcoef=None,
+        hashable=False,
+        ephemeral=True,
+    )
+
     name = SchemaField(
         sn.Name,
         inheritable=False,

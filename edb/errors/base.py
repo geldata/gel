@@ -177,6 +177,18 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
     def has_span(self):
         return FIELD_POSITION_START in self._attrs
 
+    def get_span(self) -> tuple[int, int | None] | None:
+        if FIELD_POSITION_START not in self._attrs:
+            return None
+        return (
+            int(self._attrs[FIELD_POSITION_START]),
+            (
+                int(self._attrs[FIELD_POSITION_END])
+                if FIELD_POSITION_END in self._attrs
+                else None
+            ),
+        )
+
     def set_span(self, span: Optional[edb_span.Span]):
         if not span:
             return

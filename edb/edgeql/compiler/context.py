@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 from typing import (
+    Any,
     Callable,
     Literal,
     Optional,
@@ -135,6 +136,18 @@ InferredVolatility = (
 )
 
 
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class ServerParamConversion:
+    path_id: irast.PathId
+    ir_param: irast.Param
+    additional_info: tuple[str, ...]
+
+    volatility: qltypes.Volatility
+
+    # If the parameter is a constant value, pass to directly to the server.
+    constant_value: Optional[Any] = None
+
+
 class Environment:
     """Compilation environment."""
 
@@ -163,6 +176,22 @@ class Environment:
     query_globals: dict[s_name.QualName, irast.Global]
     """A mapping of query globals.  Gets populated during
     the compilation."""
+
+    server_param_conversions: dict[
+        str,
+        dict[str, ServerParamConversion],
+    ]
+    """A mapping of query parameters and the server param conversions which are
+    needed by the query.
+
+    This indicates that the server will compute and provide an additional
+    parameter based on a user provided parameter.
+
+    Used by ext::ai:search to get embeddings from text before running a query.
+    """
+
+    server_param_conversion_calls: list[tuple[str, Optional[parsing.Span]]]
+    """Used to generate errors related to server param conversions."""
 
     set_types: dict[irast.Set, s_types.Type]
     """A dictionary of all Set instances and their schema types."""
@@ -300,6 +329,8 @@ class Environment:
         self.schema_view_cache = {}
         self.query_parameters = {}
         self.query_globals = {}
+        self.server_param_conversions = {}
+        self.server_param_conversion_calls = []
         self.set_types = {}
         self.type_origins = {}
         self.inferred_volatility = {}
