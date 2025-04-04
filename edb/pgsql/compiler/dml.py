@@ -2614,7 +2614,7 @@ def process_link_update(
             )
 
         delcte = pgast.CommonTableExpr(
-            name=ctx.env.aliases.get(hint='d'),
+            name=ctx.env.aliases.get(hint='link_upd_del'),
             query=delqry,
             for_dml_stmt=ctx.get_current_dml_stmt(),
         )
@@ -2815,7 +2815,7 @@ def process_link_update(
             )
 
     update = pgast.CommonTableExpr(
-        name=ctx.env.aliases.get(hint='i'),
+        name=ctx.env.aliases.get(hint='link_upd_ins'),
         query=pgast.InsertStmt(
             relation=target_rvar,
             select_stmt=data_select,

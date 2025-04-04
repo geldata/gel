@@ -1359,7 +1359,7 @@ def _uncompile_delete_pointer_stmt(
 ) -> UncompiledDML:
     """
     Translates a SQL 'DELETE FROM a link / multi-property table' into
-    an `EdgeQL update SourceObject { subject: ... }`.
+    an EdgeQL `update SourceObject { pointer := ... }.pointer`.
     """
 
     sub_source = sub.get_source(ctx.schema)
@@ -2291,26 +2291,28 @@ def _resolve_returning_rows(
     subject_alias: Optional[str],
     ctx: context.ResolverContextLevel,
 ) -> tuple[pgast.Query, context.Table]:
-    # relation that provides the values of inserted pointers
-    inserted_rvar_name = ctx.alias_generator.get('ins')
-    inserted_query = pgast.SelectStmt(
+    # "output" is the relation that provides the values of the subject table
+    # after the DML operation.
+    # It contains data you'd get by having `RETURNING *` on the DML.
+    output_rvar_name = ctx.alias_generator.get('output')
+    output_query = pgast.SelectStmt(
         from_clause=[
             pgast.RelRangeVar(
                 relation=pgast.Relation(name=output_relation_name),
             )
         ]
     )
-    inserted_table = context.Table(
+    output_table = context.Table(
         name=subject_name,
         alias=subject_alias,
-        reference_as=inserted_rvar_name,
+        reference_as=output_rvar_name,
     )
 
     for col_name, val in output_namespace.items():
-        inserted_query.target_list.append(
+        output_query.target_list.append(
             pgast.ResTarget(name=col_name, val=val)
         )
-        inserted_table.columns.append(
+        output_table.columns.append(
             context.Column(
                 name=col_name,
                 kind=context.ColumnByName(reference_as=col_name),
@@ -2318,13 +2320,13 @@ def _resolve_returning_rows(
         )
 
     with ctx.empty() as sctx:
-        sctx.scope.tables.append(inserted_table)
+        sctx.scope.tables.append(output_table)
 
         returning_query = pgast.SelectStmt(
             from_clause=[
                 pgast.RangeSubselect(
-                    alias=pgast.Alias(aliasname=inserted_rvar_name),
-                    subquery=inserted_query,
+                    alias=pgast.Alias(aliasname=output_rvar_name),
+                    subquery=output_query,
                 )
             ],
             target_list=[],
