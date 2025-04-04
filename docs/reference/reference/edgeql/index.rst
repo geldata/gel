@@ -93,7 +93,4 @@ Performance analysis statement:
     group
     with
 
-    sess_set_alias
-    sess_reset_alias
-
     describe
