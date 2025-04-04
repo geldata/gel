@@ -93,13 +93,6 @@ Performance analysis statement:
     group
     with
 
-    tx_start
-    tx_commit
-    tx_rollback
-    tx_sp_declare
-    tx_sp_release
-    tx_sp_rollback
-
     sess_set_alias
     sess_reset_alias
 
