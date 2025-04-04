@@ -254,7 +254,20 @@ async def pg_connect(
                 ),
             )
         try:
-            await pgconn.sql_execute(INIT_CON_SCRIPT)
+            try:
+                await pgconn.sql_execute(INIT_CON_SCRIPT)
+            except pgcon.BackendError:
+                from edb.pgsql import dbops, metaschema
+
+                # ClearFELocalSQLSettingsFunction is needed by the
+                # INIT_CON_SCRIPT, so we cannot simply patch it up
+                # in the regular edb/pgsql/patches.py
+                block = dbops.PLTopBlock()
+                func = metaschema.ClearFELocalSQLSettingsFunction()
+                dbops.CreateFunction(func, or_replace=True).generate(block)
+
+                await pgconn.sql_execute(block.to_string().encode('utf-8'))
+                await pgconn.sql_execute(INIT_CON_SCRIPT)
         except Exception:
             logger.exception(
                 f"Failed to run init script for {pgconn.connection.to_dsn()}"
