@@ -388,6 +388,11 @@ def collect_server_param_conversions(
     list[irast.ServerParamConversion],
     list[irast.Param],
 ]:
+    """Gather converted parameters for use in the ir Statement.
+
+    Returns ServerParamConversion which will eventually be sent to the server
+    as well as the irast.Params which should be used to generate the pgast.
+    """
     lparams = [
         (
             param_name,

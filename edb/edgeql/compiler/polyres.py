@@ -114,7 +114,7 @@ def find_callable_typemods(
     so that we can compile the arguments with the proper fences.
     """
 
-    typ = s_pseudo.PseudoType.get(ctx.env.schema, 'anytype')
+    typ: s_types.Type = s_pseudo.PseudoType.get(ctx.env.schema, 'anytype')
     dummy = irast.DUMMY_SET
     args = [(typ, dummy)] * num_args
     kwargs = {k: (typ, dummy) for k in kwargs_names}
@@ -155,8 +155,8 @@ def find_callable_typemods(
 def find_callable(
     candidates: Iterable[s_func.CallableLike],
     *,
-    args: Sequence[tuple[s_types.Type, irast.Set]],
-    kwargs: Mapping[str, tuple[s_types.Type, irast.Set]],
+    args: list[tuple[s_types.Type, irast.Set]],
+    kwargs: dict[str, tuple[s_types.Type, irast.Set]],
     basic_matching_only: bool = False,
     ctx: context.ContextLevel,
 ) -> list[BoundCall]:
@@ -178,9 +178,7 @@ def find_callable(
             #
             # This means we need to check the other candidates to see if they
             # match the converted args.
-            converted_args = conversion[0]
-            converted_kwargs = conversion[1]
-            converted_params = conversion[2]
+            converted_args, converted_kwargs, converted_params = conversion
 
             for alt_candidate in candidates:
                 if alt_candidate is candidate:
@@ -667,8 +665,8 @@ def try_bind_call_args(
 
 def _check_server_arg_conversion(
     func: s_func.CallableLike,
-    args: Sequence[tuple[s_types.Type, irast.Set]],
-    kwargs: Mapping[str, tuple[s_types.Type, irast.Set]],
+    args: list[tuple[s_types.Type, irast.Set]],
+    kwargs: dict[str, tuple[s_types.Type, irast.Set]],
     *,
     ctx: context.ContextLevel,
 ) -> Optional[tuple[
@@ -867,7 +865,12 @@ def _check_server_arg_conversion(
 
             if existing_converted_path_id is None:
                 # If this is the first time this conversion was applied to this
-                # query param, save the path id for possible future use
+                # query param, save the conversion to be possibly reused by
+                # another call.
+
+                # Create the sub-params in case the resulting converted param
+                # is a tuple. Currently, no such conversion exists, but this
+                # is here to prepare for that distant future.
                 sub_params = tuple_args.create_sub_params(
                     converted_param_name,
                     converted_required,
@@ -875,6 +878,7 @@ def _check_server_arg_conversion(
                     pt=converted_type,
                     ctx=ctx
                 )
+
                 curr_conversions[conversion_name] = (
                     context.ServerParamConversion(
                         path_id=conversion_set.path_id,
@@ -893,21 +897,11 @@ def _check_server_arg_conversion(
 
             # Substitute the old arg
             if isinstance(arg_key, int):
-                args = [
-                    (converted_type, conversion_set)
-                    if index == arg_key else
-                    arg
-                    for index, arg in enumerate(args)
-                ]
+                args = args.copy()
+                args[arg_key] = (converted_type, conversion_set)
             else:
-                kwargs = {
-                    key: (
-                        (converted_type, conversion_set)
-                        if key == arg_key else
-                        arg
-                    )
-                    for key, arg in kwargs.items()
-                }
+                kwargs = kwargs.copy()
+                kwargs[arg_key] = (converted_type, conversion_set)
 
         if len(curr_server_param_conversions) != len(arg_conversions):
             # Not all conversions were applied, function candidate doesn't

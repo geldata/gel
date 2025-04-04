@@ -184,7 +184,7 @@ class Environment:
     """A mapping of query parameters and the server param conversions which are
     needed by the query.
 
-    This is indicates that the server will compute and provide an additional
+    This indicates that the server will compute and provide an additional
     parameter based on a user provided parameter.
 
     Used by ext::ai:search to get embeddings from text before running a query.
