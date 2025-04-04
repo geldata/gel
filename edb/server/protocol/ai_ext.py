@@ -1421,13 +1421,28 @@ async def _start_openai_like_chat(
                             + b'data: ' + event_data + b'\n\n'
                         )
                         protocol.write_raw(event)
+
+                        event_data = json.dumps({
+                            "type": "content_block_start",
+                            "index": 0,
+                            "content_block": {
+                                "type": "text",
+                                "text": ""
+                            }
+                        }).encode("utf-8")
+                        event = (
+                            b'event: content_block_start\n'
+                            + b'data: ' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+
                         # if there's only one openai tool call it shows up here
                         if tool_calls:
                             for tool_call in tool_calls:
                                 tool_index = tool_call["index"]
                                 event_data = json.dumps({
                                     "type": "content_block_start",
-                                    "index": tool_call["index"],
+                                    "index": tool_call["index"] + 1,
                                     "content_block": {
                                         "id": tool_call["id"],
                                         "type": "tool_use",
@@ -1458,14 +1473,14 @@ async def _start_openai_like_chat(
                                         + b'data: { \
                                         "type": "content_block_stop",'
                                         + b'"index": '
-                                        + str(currentIndex - 1).encode()
+                                        + str(currentIndex).encode()
                                         + b'}\n\n'
                                     )
                                     protocol.write_raw(event)
 
                                 event_data = json.dumps({
                                     "type": "content_block_start",
-                                    "index": currentIndex,
+                                    "index": currentIndex + 1,
                                     "content_block": {
                                         "id": tool_call.get("id"),
                                         "type": "tool_use",
@@ -1483,7 +1498,7 @@ async def _start_openai_like_chat(
                             else:
                                 event_data = json.dumps({
                                         "type": "content_block_delta",
-                                        "index": currentIndex,
+                                        "index": currentIndex + 1,
                                         "delta": {
                                             "type": "tool_call_delta",
                                             "args":
@@ -1497,7 +1512,9 @@ async def _start_openai_like_chat(
                                 protocol.write_raw(event)
                     elif finish_reason := data.get("finish_reason"):
                         index = (
-                            tool_index if finish_reason == "tool_calls" else 0
+                            tool_index + 1
+                            if finish_reason == "tool_calls"
+                            else 0
                         )
                         event = (
                             b'event: content_block_stop\n'
