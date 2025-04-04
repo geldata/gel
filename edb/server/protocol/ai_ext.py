@@ -1442,7 +1442,7 @@ async def _start_openai_like_chat(
                                 tool_index = tool_call["index"]
                                 event_data = json.dumps({
                                     "type": "content_block_start",
-                                    "index": tool_call["index"]+1,
+                                    "index": tool_call["index"] + 1,
                                     "content_block": {
                                         "id": tool_call["id"],
                                         "type": "tool_use",
@@ -1480,7 +1480,7 @@ async def _start_openai_like_chat(
 
                                 event_data = json.dumps({
                                     "type": "content_block_start",
-                                    "index": currentIndex+1,
+                                    "index": currentIndex + 1,
                                     "content_block": {
                                         "id": tool_call.get("id"),
                                         "type": "tool_use",
@@ -1498,7 +1498,7 @@ async def _start_openai_like_chat(
                             else:
                                 event_data = json.dumps({
                                         "type": "content_block_delta",
-                                        "index": currentIndex+1,
+                                        "index": currentIndex + 1,
                                         "delta": {
                                             "type": "tool_call_delta",
                                             "args":
@@ -1512,7 +1512,9 @@ async def _start_openai_like_chat(
                                 protocol.write_raw(event)
                     elif finish_reason := data.get("finish_reason"):
                         index = (
-                            tool_index+1 if finish_reason == "tool_calls" else 0
+                            tool_index + 1
+                            if finish_reason == "tool_calls"
+                            else 0
                         )
                         event = (
                             b'event: content_block_stop\n'
