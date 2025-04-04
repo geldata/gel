@@ -760,41 +760,17 @@ def _check_server_arg_conversion(
                 )
 
             # Get info about the conversion
-            converted_type: s_types.Type
-            additional_info: tuple[str, ...] = tuple()
-            conversion_volatility: ft.Volatility
-            if conversion_name == 'cast_int64_to_str':
-                converted_type = schema.get(
-                    'std::str', type=s_scalars.ScalarType
+            converted_type, additional_info, conversion_volatility = (
+                _resolve_server_param_conversion(
+                    conversion_name,
+                    schema=schema,
+                    conversion_info=(
+                        conversion_info
+                        if isinstance(conversion_info, list)
+                        else None
+                    )
                 )
-                conversion_volatility = ft.Volatility.Immutable
-
-            elif conversion_name == 'cast_int64_to_str_volatile':
-                converted_type = schema.get(
-                    'std::str', type=s_scalars.ScalarType
-                )
-                conversion_volatility = ft.Volatility.Volatile
-
-            elif conversion_name == 'cast_int64_to_float64':
-                converted_type = schema.get(
-                    'std::float64', type=s_scalars.ScalarType
-                )
-                conversion_volatility = ft.Volatility.Immutable
-
-            elif conversion_name == 'join_str_array':
-                assert isinstance(conversion_info, list)
-                separator = conversion_info[1]
-
-                converted_type = schema.get(
-                    'std::str', type=s_scalars.ScalarType
-                )
-                additional_info = (separator,)
-                conversion_volatility = ft.Volatility.Immutable
-
-            else:
-                raise RuntimeError(
-                    f'Unknown server param conversion: {conversion_name}'
-                )
+            )
 
             query_param_name: str
             constant_value: Optional[Any] = None
@@ -912,6 +888,60 @@ def _check_server_arg_conversion(
 
     else:
         return None
+
+
+def _resolve_server_param_conversion(
+    conversion_name: str,
+    *,
+    schema: s_schema.Schema,
+    conversion_info: Optional[list[str]] = None,
+) -> tuple[
+    s_types.Type,
+    tuple[str, ...],
+    ft.Volatility,
+]:
+    converted_type: s_types.Type
+    additional_info: tuple[str, ...] = tuple()
+    conversion_volatility: ft.Volatility
+
+    if conversion_name == 'cast_int64_to_str':
+        converted_type = schema.get(
+            'std::str', type=s_scalars.ScalarType
+        )
+        conversion_volatility = ft.Volatility.Immutable
+
+    elif conversion_name == 'cast_int64_to_str_volatile':
+        converted_type = schema.get(
+            'std::str', type=s_scalars.ScalarType
+        )
+        conversion_volatility = ft.Volatility.Volatile
+
+    elif conversion_name == 'cast_int64_to_float64':
+        converted_type = schema.get(
+            'std::float64', type=s_scalars.ScalarType
+        )
+        conversion_volatility = ft.Volatility.Immutable
+
+    elif conversion_name == 'join_str_array':
+        assert conversion_info is not None
+        separator = conversion_info[1]
+
+        converted_type = schema.get(
+            'std::str', type=s_scalars.ScalarType
+        )
+        additional_info = (separator,)
+        conversion_volatility = ft.Volatility.Immutable
+
+    else:
+        raise RuntimeError(
+            f'Unknown server param conversion: {conversion_name}'
+        )
+
+    return (
+        converted_type,
+        additional_info,
+        conversion_volatility,
+    )
 
 
 def _get_arg(
