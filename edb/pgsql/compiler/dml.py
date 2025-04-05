@@ -221,7 +221,7 @@ def gen_dml_union(
 
         union_cte = pgast.CommonTableExpr(
             query=qry.larg,
-            name=ctx.env.aliases.get(hint='ma'),
+            name=ctx.env.aliases.get(hint='dml_union'),
             for_dml_stmt=ctx.get_current_dml_stmt(),
         )
 
@@ -232,6 +232,7 @@ def gen_dml_union(
         )
 
     ctx.dml_stmts[ir_stmt] = union_cte
+    union_cte.output_of_dml = ir_stmt
 
     return union_cte, union_rvar
 
@@ -281,7 +282,7 @@ def gen_dml_cte(
 
     dml_cte = pgast.CommonTableExpr(
         query=dml_stmt,
-        name=ctx.env.aliases.get(hint='m'),
+        name=ctx.env.aliases.get(hint='dml'),
         for_dml_stmt=ir_stmt,
     )
 

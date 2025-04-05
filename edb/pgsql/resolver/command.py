@@ -1957,15 +1957,21 @@ def _compile_uncompiled_dml(
 
         # Find the output CTE by filtering by the name of relation that is being
         # manipulated. This will filter out stmts for link tables and triggers.
-        # XXX: this is the least reliable part of SQL DML
-        subject_id = str(stmt.subject.id)
-        output_cte = next(
-            c
-            for c in reversed(stmt_ctes)
-            if isinstance(c.query, pgast.DMLQuery)
-            and isinstance(c.query.relation, pgast.RelRangeVar)
-            and c.query.relation.relation.name == subject_id
-        )
+        output_cte: pgast.CommonTableExpr | None
+        if isinstance(stmt.subject, (s_pointers.Pointer)):
+            subject_id = str(stmt.subject.id)
+            output_cte = next(
+                c
+                for c in reversed(stmt_ctes)
+                if isinstance(c.query, pgast.DMLQuery)
+                and isinstance(c.query.relation, pgast.RelRangeVar)
+                and c.query.relation.relation.name == subject_id
+            )
+        else:
+            output_cte = next(
+                (c for c in stmt_ctes if c.output_of_dml == ir_mutating_stmt),
+                None,
+            )
         assert output_cte, 'cannot find the output CTE of a DML stmt'
         output_rel = output_cte.query
 
