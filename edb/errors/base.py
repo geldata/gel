@@ -210,6 +210,18 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
         if span.filename and span.filename != '<string>':
             self._attrs[FIELD_FILENAME] = span.filename
 
+    def get_position(self) -> tuple[int, int, int, int | None] | None:
+        if FIELD_COLUMN_START not in self._attrs:
+            return None
+        return (
+            int(self._attrs[FIELD_COLUMN_START]),
+            int(self._attrs[FIELD_LINE_START]),
+            int(self._attrs[FIELD_POSITION_START]),
+            int(self._attrs[FIELD_POSITION_END])
+            if FIELD_POSITION_END in self._attrs
+            else None,
+        )
+
     def set_position(
         self,
         start: int,  # zero-based

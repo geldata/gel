@@ -163,7 +163,7 @@ def init_dml_stmt(
         dml_cte = pgast.CommonTableExpr(
             query=pgast.SelectStmt(),
             name=ctx.env.aliases.get(hint='melse'),
-            for_dml_stmt=ctx.get_current_dml_stmt(),
+            for_dml_stmt=ir_stmt,
         )
         dml_rvar = relctx.rvar_for_rel(dml_cte, ctx=ctx)
         else_cte = (dml_cte, dml_rvar)
@@ -421,11 +421,10 @@ def merge_iterator(
 
 def fini_dml_stmt(
     ir_stmt: irast.MutatingStmt,
-    wrapper: pgast.Query,
     parts: DMLParts,
     *,
     ctx: context.CompilerContextLevel,
-) -> pgast.Query:
+) -> None:
 
     union_cte, union_rvar = gen_dml_union(ir_stmt, parts, ctx=ctx)
 
@@ -497,8 +496,6 @@ def fini_dml_stmt(
     clauses.compile_output(ir_stmt.result, ctx=ctx)
 
     ctx.dml_stmt_stack.pop()
-
-    return wrapper
 
 
 def get_dml_range(
@@ -2614,7 +2611,7 @@ def process_link_update(
             )
 
         delcte = pgast.CommonTableExpr(
-            name=ctx.env.aliases.get(hint='d'),
+            name=ctx.env.aliases.get(hint='link_upd_del'),
             query=delqry,
             for_dml_stmt=ctx.get_current_dml_stmt(),
         )
@@ -2815,7 +2812,7 @@ def process_link_update(
             )
 
     update = pgast.CommonTableExpr(
-        name=ctx.env.aliases.get(hint='i'),
+        name=ctx.env.aliases.get(hint='link_upd_ins'),
         query=pgast.InsertStmt(
             relation=target_rvar,
             select_stmt=data_select,

@@ -198,6 +198,14 @@ class CompiledDML:
     # name of the column in the value relation, that should provide the identity
     value_iterator_name: Optional[str]
 
+    # for INSERTs, relation that provides values for UPDATE that happens ON
+    # CONFLICT. not yet resolved
+    conflict_update_input: Optional[pgast.BaseRelation]
+
+    # for INSERTs, name of CTE that provides values for UPDATE that happens ON
+    # CONFLICT
+    conflict_update_name: Optional[str]
+
     # CTEs that perform the operation
     output_ctes: list[pgast.CommonTableExpr]
 
