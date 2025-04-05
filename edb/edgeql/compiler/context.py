@@ -308,6 +308,9 @@ class Environment:
     warnings: list[errors.EdgeDBError]
     """List of warnings to emit"""
 
+    unsafe_isolation_dangers: list[errors.UnsafeIsolationLevelError]
+    """List of repeatable read DML dangers"""
+
     def __init__(
         self,
         *,
@@ -358,6 +361,7 @@ class Environment:
         self.path_scope_map = {}
         self.dml_rewrites = {}
         self.warnings = []
+        self.unsafe_isolation_dangers = []
 
     def add_schema_ref(
         self, sobj: s_obj.Object, expr: Optional[qlast.Base]
@@ -835,6 +839,11 @@ class ContextLevel(compiler.ContextLevel):
 
     def log_warning(self, warning: errors.EdgeDBError) -> None:
         self.env.warnings.append(warning)
+
+    def log_repeatable_read_danger(
+        self, d: errors.UnsafeIsolationLevelError
+    ) -> None:
+        self.env.unsafe_isolation_dangers.append(d)
 
     def allow_factoring(self) -> None:
         self.no_factoring = self.warn_factoring = False

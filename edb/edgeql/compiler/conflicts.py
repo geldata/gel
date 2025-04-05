@@ -57,6 +57,10 @@ def _get_needed_ptrs(
     initial_ptrs: Iterable[str],
     ctx: context.ContextLevel,
 ) -> tuple[set[str], dict[str, qlast.Expr]]:
+    """Find all the pointers needed by a list of constraints and pointers.
+
+    This chases down computed pointer definitions and constraint expressions.
+    """
     needed_ptrs = set(initial_ptrs)
     for constr in obj_constrs:
         subjexpr: Optional[s_expr.Expression] = (
@@ -119,6 +123,8 @@ def _compile_conflict_select_for_obj_type(
         )
         if rewrite_kind:
             rewrite = ptr.get_rewrite(ctx.env.schema, rewrite_kind)
+            # XXX: I think this can fire in non UNLESS CONFLICT cases!
+            # TODO: XXX: would always using fake_dml_set fix this
             if rewrite:
                 raise errors.UnsupportedFeatureError(
                     "INSERT UNLESS CONFLICT cannot be used on properties or "
@@ -130,6 +136,8 @@ def _compile_conflict_select_for_obj_type(
 
     # If we are given a fake_dml_set to directly represent the result
     # of our DML, use that instead of populating the result.
+    # TODO: XXX: always use fake_dml_set??
+    # (would we need to still disallow MUTATING properties?)
     if fake_dml_set:
         for p in needed_ptrs | {'id'}:
             ptr = subject_typ.getptr(ctx.env.schema, s_name.UnqualName(p))
@@ -645,24 +653,13 @@ def _disallow_exclusive_linkprops(
                 )
 
 
-def _compile_inheritance_conflict_selects(
+def _get_type_conflict_constraint_entries(
     stmt: irast.MutatingStmt,
-    conflict: irast.MutatingStmt,
     typ: s_objtypes.ObjectType,
-    subject_type: s_objtypes.ObjectType,
     *, ctx: context.ContextLevel,
-) -> list[irast.OnConflictClause]:
-    """Compile the selects needed to resolve multiple DML to related types
+) -> list[tuple[s_constr.Constraint, ConstraintPair]]:
+    # TODO: why do we return this in such a hinkiy way?
 
-    Generate a SELECT that finds all objects of type `typ` that conflict with
-    the insert `stmt`. The backend will use this to explicitly check that
-    no conflicts exist, and raise an error if they do.
-
-    This is needed because we mostly use triggers to enforce these
-    cross-type exclusive constraints, and they use a snapshot
-    beginning at the start of the statement.
-    """
-    _disallow_exclusive_linkprops(stmt, typ, ctx=ctx)
     has_id_write = _has_explicit_id_write(stmt)
     pointers = _get_exclusive_ptr_constraints(
         typ, include_id=has_id_write, ctx=ctx)
@@ -688,6 +685,7 @@ def _compile_inheritance_conflict_selects(
             # modify a pointer used by the constraint. For inserts, though
             # everything must be in play, since constraints can depend on
             # nonexistence also.
+            # TODO: XXX: WHAT ABOUT REWRITES??
             if (
                 _constr_matters(ptr_constr, ctx=ctx)
                 and (
@@ -707,6 +705,29 @@ def _compile_inheritance_conflict_selects(
             )
         ):
             entries.append((obj_constr, ({}, [obj_constr])))
+
+    return entries
+
+
+def _compile_inheritance_conflict_selects(
+    stmt: irast.MutatingStmt,
+    conflict: irast.MutatingStmt,
+    typ: s_objtypes.ObjectType,
+    subject_type: s_objtypes.ObjectType,
+    *, ctx: context.ContextLevel,
+) -> list[irast.OnConflictClause]:
+    """Compile the selects needed to resolve multiple DML to related types
+
+    Generate a SELECT that finds all objects of type `typ` that conflict with
+    the insert `stmt`. The backend will use this to explicitly check that
+    no conflicts exist, and raise an error if they do.
+
+    This is needed because we mostly use triggers to enforce these
+    cross-type exclusive constraints, and they use a snapshot
+    beginning at the start of the statement.
+    """
+    _disallow_exclusive_linkprops(stmt, typ, ctx=ctx)
+    entries = _get_type_conflict_constraint_entries(stmt, typ, ctx=ctx)
 
     # For updates, we need to pull from the actual result overlay,
     # since the final row can depend on things not in the query.
@@ -831,3 +852,83 @@ def compile_inheritance_conflict_checks(
         )
 
     return conflicters or None
+
+
+def check_for_isolation_conflicts(
+    stmt: irast.MutatingStmt,
+    typ: s_objtypes.ObjectType,
+    update_typ: Optional[s_objtypes.ObjectType] = None,
+    *, ctx: context.ContextLevel,
+) -> None:
+    schema = ctx.env.schema
+
+    entries = _get_type_conflict_constraint_entries(stmt, typ, ctx=ctx)
+    constrs = [cnstr for cnstr, _ in entries]
+
+    op = 'INSERT' if isinstance(stmt, irast.InsertStmt) else 'UPDATE'
+    base_msg = f'{op} to {typ.get_verbosename(schema)} '
+
+    for constr in constrs:
+        subject = constr.get_subject(schema)
+        assert subject
+
+        # Find the origin type; if we are the only origin type and we
+        # don't have children, then we are good.
+        all_objs = []
+        match constr.get_constraint_origins(schema):
+            case []:
+                continue
+            case [root_constr, *_]:
+                root_subject = root_constr.get_subject(schema)
+                if isinstance(root_subject, s_pointers.Pointer):
+                    root_subject_obj = root_subject.get_source(schema)
+                else:
+                    root_subject_obj = root_subject
+
+                if isinstance(root_subject_obj, s_objtypes.ObjectType):
+                    all_objs = list(
+                        schemactx.get_all_concrete(root_subject_obj, ctx=ctx)
+                    )
+                    if root_subject_obj == typ and len(all_objs) == 1:
+                        continue
+                    if root_subject_obj == typ and constr.get_delegated(schema):
+                        continue
+                    # If this is an UPDATE and we are processing some
+                    # subtype, and the actual type being updated is
+                    # covered by this same constraint, don't report it for
+                    # the child: it will be reported for an ancestor,
+                    # which is less noisy.
+                    if (
+                        update_typ
+                        and update_typ != typ
+                        and update_typ in all_objs
+                    ):
+                        continue
+
+        subj_vn = subject.get_verbosename(schema, with_parent=True)
+        vn = f'{base_msg}affects an exclusive constraint on {subj_vn}'
+        if expr := constr.get_subjectexpr(schema):
+            vn += f" with expression '{expr.text}'"
+
+        if not root_subject_obj:
+            msg = (
+                f"{vn} that is defined on "
+                f"{root_subject.get_verbosename(schema)}"
+            )
+        elif root_subject_obj != typ:
+            msg = (
+                f"{vn} that is defined in ancestor "
+                f"{root_subject_obj.get_verbosename(schema)}"
+            )
+        else:
+            all_objs_s = ', '.join(sorted(
+                f"'{o.get_displayname(schema)}'" for o in all_objs if o != typ
+            ))
+            msg = (
+                f"{vn} that is shared with "
+                f"descendant types: {all_objs_s}"
+            )
+
+        ctx.log_repeatable_read_danger(
+            errors.UnsafeIsolationLevelError(msg, span=stmt.span)
+        )

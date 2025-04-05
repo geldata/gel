@@ -675,18 +675,30 @@ cdef class EdgeConnection(frontend.FrontendConnection):
     ):
         cdef:
             WriteBuffer msg
+            int16_t ann_count
 
         msg = WriteBuffer.new_message(b'T')
+        ann_count = 0
+        if query.query_unit_group.warnings:
+            ann_count += 1
+        if query.query_unit_group.unsafe_isolation_dangers:
+            ann_count += 1
+
+        msg.write_int16(ann_count)
 
         if query.query_unit_group.warnings:
             warnings = json.dumps(
                 [w.to_json() for w in query.query_unit_group.warnings]
             ).encode('utf-8')
-            msg.write_int16(1)
             msg.write_len_prefixed_bytes(b'warnings')
             msg.write_len_prefixed_bytes(warnings)
-        else:
-            msg.write_int16(0)  # no annotations
+        if query.query_unit_group.unsafe_isolation_dangers:
+            dangers = json.dumps([
+                w.to_json() for
+                w in query.query_unit_group.unsafe_isolation_dangers
+            ]).encode('utf-8')
+            msg.write_len_prefixed_bytes(b'unsafe_isolation_dangers')
+            msg.write_len_prefixed_bytes(dangers)
 
         msg.write_int64(<int64_t><uint64_t>query.query_unit_group.capabilities)
         msg.write_byte(self.render_cardinality(query.query_unit_group))
@@ -989,6 +1001,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             allow_capabilities,
             errors.DisabledCapabilityError,
             "disabled by the client",
+            unsafe_isolation_dangers=query_unit_group.unsafe_isolation_dangers,
         )
 
         if query_unit_group.in_type_id != in_tid:

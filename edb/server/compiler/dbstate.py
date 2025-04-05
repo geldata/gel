@@ -89,6 +89,9 @@ class BaseQuery:
     warnings: tuple[errors.EdgeDBError, ...] = dataclasses.field(
         kw_only=True, default=()
     )
+    unsafe_isolation_dangers: tuple[errors.UnsafeIsolationLevelError, ...] = (
+        dataclasses.field(kw_only=True, default=())
+    )
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -179,6 +182,8 @@ class TxControlQuery(BaseQuery):
 
     modaliases: Optional[immutables.Map[Optional[str], str]]
 
+    isolation_level: Optional[qltypes.TransactionIsolationLevel] = None
+
     user_schema: Optional[s_schema.Schema] = None
     global_schema: Optional[s_schema.Schema] = None
     cached_reflection: Any = None
@@ -255,6 +260,9 @@ class QueryUnit:
     # starts a new transaction.
     tx_id: Optional[int] = None
 
+    # If this is the start of the transaction, the isolation level of it.
+    tx_isolation_level: Optional[qltypes.TransactionIsolationLevel] = None
+
     # True if this unit is single 'COMMIT' command.
     # 'COMMIT' is always compiled to a separate QueryUnit.
     tx_commit: bool = False
@@ -316,6 +324,7 @@ class QueryUnit:
     server_param_conversions: Optional[list[ServerParamConversion]] = None
 
     warnings: tuple[errors.EdgeDBError, ...] = ()
+    unsafe_isolation_dangers: tuple[errors.UnsafeIsolationLevelError, ...] = ()
 
     # Set only when this unit contains a CONFIGURE INSTANCE command.
     system_config: bool = False
@@ -430,6 +439,9 @@ class QueryUnitGroup:
     unit_converted_param_indexes: Optional[dict[int, list[int]]] = None
 
     warnings: Optional[list[errors.EdgeDBError]] = None
+    unsafe_isolation_dangers: (
+        Optional[list[errors.UnsafeIsolationLevelError]]
+    ) = None
 
     # Cacheable QueryUnit is serialized in the compiler, so that the I/O server
     # doesn't need to serialize it again for persistence.
@@ -522,6 +534,11 @@ class QueryUnitGroup:
             if self.warnings is None:
                 self.warnings = []
             self.warnings.extend(query_unit.warnings)
+        if query_unit.unsafe_isolation_dangers is not None:
+            if self.unsafe_isolation_dangers is None:
+                self.unsafe_isolation_dangers = []
+            self.unsafe_isolation_dangers.extend(
+                query_unit.unsafe_isolation_dangers)
 
         if not serialize or query_unit.cache_sql is None:
             self._units.append(query_unit)
