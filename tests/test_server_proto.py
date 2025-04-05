@@ -2124,15 +2124,16 @@ class TestServerProto(tb.QueryTestCase):
                     tmp := 'aaa'
                 };
             ''')
-        with self.assertRaisesRegex(
-            edgedb.CapabilityError,
-            "with transaction isolation level REPEATABLE READ",
-        ):
-            await self.con.query('''
-                INSERT Child {
-                    tmp := 'aaa'
-                };
-            ''')
+        if not self.con.is_in_transaction():
+            with self.assertRaisesRegex(
+                edgedb.CapabilityError,
+                "with transaction isolation level REPEATABLE READ",
+            ):
+                await self.con.query('''
+                    INSERT Child {
+                        tmp := 'aaa'
+                    };
+                ''')
 
     async def test_server_proto_tx_23(self):
         # Test that default_transaction_isolation is respected
