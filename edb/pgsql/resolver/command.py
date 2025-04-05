@@ -435,11 +435,11 @@ def _uncompile_insert_object_stmt(
 
     if conflict and conflict.update_name is not None:
         assert conflict.update_id
-        assert conflict.update_rel
+        assert conflict.update_input_placeholder
         ql_singletons.add(conflict.update_id)
         ql_anchors[conflict.update_name] = conflict.update_id
         external_rels[conflict.update_id] = (
-            conflict.update_rel, (pgce.PathAspect.SOURCE,),
+            conflict.update_input_placeholder, (pgce.PathAspect.SOURCE,),
         )
 
     return UncompiledDML(
@@ -473,12 +473,26 @@ def _uncompile_insert_object_stmt(
 class UncompileOnConflict:
     ql_unless_conflict: tuple[qlast.Expr | None, qlast.Expr | None]
 
-    update_name: Optional[str] = None
-    update_id: Optional[irast.PathId] = None
+    # relation (that still has to be resolved) which will provide the values of
+    # columns that must be updated by the ON CONFLICT clause
     update_input: Optional[pgast.Query] = None
-    update_rel: Optional[pgast.Relation] = None
+
+    # name of the CTE that will contain resolved update_input
+    update_name: Optional[str] = None
+
+    # IR id which can be used as an anchor that will refer to the update_input
+    update_id: Optional[irast.PathId] = None
+
+    # a dummy relation that has all necessary path_outputs set, so it can be
+    # passed into external_rels
+    update_input_placeholder: Optional[pgast.Relation] = None
 
 
+# Uncompiles pg INSERT ON CONFLICT into edgeql UNLESS CONFLICT.
+# Will produce:
+# - qlast unless conflict that contain an empty node or an update stmt,
+# - update_input relation (that provides values to the UPDATE stmt) and a bunch
+#   of related variables needed for compiling it.
 def _uncompile_on_conflict(
     stmt: pgast.InsertStmt,
     sub: s_objtypes.ObjectType,
@@ -584,7 +598,7 @@ def _uncompile_on_conflict(
     # values for each of the updated columns. This relation will be replaced
     # by the resolved sql relation.
     conflict_source_ql = qlast.IRAnchor(name=update_name)
-    conflict_source_rel = pgast.Relation(
+    update_input_placeholder = pgast.Relation(
         name=update_name,
         strip_output_namespaces=True,
     )
@@ -595,16 +609,16 @@ def _uncompile_on_conflict(
         ptr_id = _get_ptr_id(update_id, ptr, ctx)
         output = pgast.ColumnRef(name=(ptr_name,), nullable=True)
         if is_link:
-            conflict_source_rel.path_outputs[
+            update_input_placeholder.path_outputs[
                 (ptr_id, pgce.PathAspect.IDENTITY)] = output
-            conflict_source_rel.path_outputs[
+            update_input_placeholder.path_outputs[
                 (ptr_id, pgce.PathAspect.VALUE)] = output
         else:
-            conflict_source_rel.path_outputs[
+            update_input_placeholder.path_outputs[
                 (ptr_id, pgce.PathAspect.VALUE)] = output
 
         if ptr_name == 'id':
-            conflict_source_rel.path_outputs[
+            update_input_placeholder.path_outputs[
                 (update_id, pgce.PathAspect.VALUE)
             ] = output
 
@@ -651,7 +665,7 @@ def _uncompile_on_conflict(
         update_name=update_name,
         update_id=update_id,
         update_input=update_input,
-        update_rel=conflict_source_rel,
+        update_input_placeholder=update_input_placeholder,
     )
 
 
@@ -2000,7 +2014,7 @@ def _collect_stmt_ctes(
 ) -> list[pgast.CommonTableExpr]:
     # We compile all SQL DML queries in a single EdgeQL query.
     # Result is an enormous SQL query with many CTEs.
-    # This function looks trough these CTEs and matches them to the original
+    # This function looks through these CTEs and matches them to the original
     # IR stmt that they originate from.
 
     # It will pop elements from ctes list until it reaches the main CTE for
