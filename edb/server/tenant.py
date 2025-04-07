@@ -431,9 +431,55 @@ class Tenant(ha_base.ClusterProtocol):
         self._sys_pgcon_ready_evt = asyncio.Event()
         self._sys_pgcon_reconnect_evt = asyncio.Event()
 
-    async def init(self) -> None:
+    async def get_patch_count(self, conn: pgcon.PGConnection) -> int:
+        """Get the number of applied patches."""
+        num_patches = await instdata.get_instdata(
+            conn, 'num_patches', 'json')
+        res: int = json.loads(num_patches) if num_patches else 0
+        return res
+
+    async def _check_metaschema_compatibility(
+        self, con: pgcon.PGConnection
+    ) -> None:
+        from edb.pgsql import patches as pg_patches
+
+        # Check catalog version
+        result = await instdata.get_instdata(
+            con, 'instancedata', 'json', versioned=False
+        )
+        catver = json.loads(result).get('catver')
+        if catver != defines.EDGEDB_CATALOG_VERSION:
+            raise errors.ConfigurationError(
+                'database instance incompatible with this version of Gel',
+                details=(
+                    f'The database instance was initialized with '
+                    f'Gel format version {catver}, but this version '
+                    f'of the server expects format version '
+                    f'{defines.EDGEDB_CATALOG_VERSION}.'
+                ),
+                hint=(
+                    'You need to either recreate the instance and upgrade '
+                    'using dump/restore, or do an inplace upgrade.'
+                )
+            )
+
+        # Check patch count
+        num_patches = await self.get_patch_count(con)
+        if num_patches < len(pg_patches.PATCHES):
+            raise errors.ConfigurationError(
+                'database instance incompatible with this version of Gel',
+                details=f"expected {len(pg_patches.PATCHES)} patches, "
+                        f"but only {num_patches} applied",
+                hint="if you are adding an old backend to a multi-tenant "
+                     "server, firstly run a new single-tenant server on "
+                     "that backend to apply the patches.",
+            )
+
+    async def init(self, compat_check: bool = False) -> None:
         logger.debug("starting database introspection")
         async with self.use_sys_pgcon() as syscon:
+            if compat_check:
+                await self._check_metaschema_compatibility(syscon)
             result = await instdata.get_instdata(
                 syscon, 'instancedata', 'json')
             self._instance_data = immutables.Map(json.loads(result))

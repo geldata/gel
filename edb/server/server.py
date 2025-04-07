@@ -693,13 +693,6 @@ class BaseServer:
         json_data = await syscon.sql_fetch_val(dbs_query)
         return json.loads(json_data)
 
-    async def get_patch_count(self, conn: pgcon.PGConnection) -> int:
-        """Get the number of applied patches."""
-        num_patches = await instdata.get_instdata(
-            conn, 'num_patches', 'json')
-        res: int = json.loads(num_patches) if num_patches else 0
-        return res
-
     async def _on_system_config_add(self, setting_name, value):
         # CONFIGURE INSTANCE INSERT ConfigObject;
         pass
@@ -1346,7 +1339,7 @@ class Server(BaseServer):
         self, conn: pgcon.PGConnection
     ) -> dict[int, bootstrap.PatchEntry]:
         """Prepare all the patches"""
-        num_patches = await self.get_patch_count(conn)
+        num_patches = await self._tenant.get_patch_count(conn)
 
         if num_patches < len(pg_patches.PATCHES):
             logger.info("preparing patches for database upgrade")
@@ -1407,7 +1400,7 @@ class Server(BaseServer):
         sys: bool=False,
     ) -> None:
         """Apply any un-applied patches to the database."""
-        num_patches = await self.get_patch_count(conn)
+        num_patches = await self._tenant.get_patch_count(conn)
         for num, (sql_b, syssql, keys) in patches.items():
             if num_patches <= num:
                 if sys:
@@ -1532,7 +1525,7 @@ class Server(BaseServer):
     async def _load_instance_data(self):
         logger.info("loading instance data")
         async with self._tenant.use_sys_pgcon() as syscon:
-            patch_count = await self.get_patch_count(syscon)
+            patch_count = await self._tenant.get_patch_count(syscon)
             version_key = pg_patches.get_version_key(patch_count)
 
             result = await instdata.get_instdata(
