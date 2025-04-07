@@ -4,8 +4,7 @@
 Access Policies
 ===============
 
-.. index:: access policy, object-level security, row-level security, RLS,
-           allow, deny, using
+.. index:: object-level security, row-level security, RLS
 
 Object types in |Gel| can contain security policies that restrict the set of
 objects that can be selected, inserted, updated, or deleted by a particular
@@ -295,8 +294,7 @@ able to write a new blog post.
 Policy types
 ============
 
-.. index:: access policy, select, insert, delete, update, update read,
-           update write, all
+.. api-index:: select, insert, delete, update read, update write, all
 
 The types of policy rules map to the statement type in EdgeQL:
 
@@ -370,8 +368,6 @@ Policy expressions themselves do not take other policies into account
 Custom error messages
 =====================
 
-.. index:: access policy, errmessage, using
-
 When an ``insert`` or ``update write`` violates an access policy, Gel will
 raise a generic ``AccessPolicyError``:
 
@@ -432,7 +428,7 @@ will receive this error:
 Disabling policies
 ==================
 
-.. index:: apply_access_policies
+.. api-index:: apply_access_policies
 
 You may disable all access policies by setting the ``apply_access_policies``
 :ref:`configuration parameter <ref_std_cfg>` to ``false``.
@@ -573,6 +569,9 @@ E.g. here's a policy that limits the number of blog posts a
 
 Declaring access policies
 =========================
+
+.. api-index:: access policy, when, allow, deny, all, select, insert, delete,
+               update, update read, update write, using, errmessage
 
 This section describes the syntax to declare access policies in your schema.
 

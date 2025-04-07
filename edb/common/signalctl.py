@@ -22,7 +22,6 @@ from __future__ import annotations
 import asyncio
 import functools
 import signal as mod_signal
-import typing
 import warnings
 
 
@@ -67,11 +66,11 @@ class SignalHandler:
 
 
 class SignalController:
-    _registry: typing.Dict[
+    _registry: dict[
         asyncio.AbstractEventLoop,
-        typing.Dict[int, typing.Set[SignalController]],
+        dict[int, set[SignalController]],
     ] = {}
-    _waiters: typing.Dict[int, typing.Set[asyncio.Future]]
+    _waiters: dict[int, set[asyncio.Future]]
 
     def __init__(self, *signals):
         self._signals = signals

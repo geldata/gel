@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Callable, List
+from typing import Callable
 
 import pathlib
 import tempfile
@@ -29,7 +29,7 @@ from edb.tools import profiling
 
 class FakeAtexit:
     def __init__(self) -> None:
-        self.registered: List[Callable[[], None]] = []
+        self.registered: list[Callable[[], None]] = []
 
     def register(self, callback: Callable[[], None]) -> None:
         self.registered.append(callback)

@@ -21,13 +21,9 @@ from __future__ import annotations
 from typing import (
     Callable,
     Optional,
-    Tuple,
-    Type,
     Iterable,
     Mapping,
     Sequence,
-    Dict,
-    List,
     cast,
     TYPE_CHECKING,
 )
@@ -216,7 +212,7 @@ class MetaCommand(sd.Command, metaclass=CommandMeta):
     def _get_topmost_command_op(
         self,
         context: sd.CommandContext,
-        ctxcls: Type[sd.CommandContextToken[sd.Command]],
+        ctxcls: type[sd.CommandContextToken[sd.Command]],
     ) -> CompositeMetaCommand:
         ctx = context.get_topmost_ancestor(ctxcls)
         if ctx is None:
@@ -229,7 +225,7 @@ class MetaCommand(sd.Command, metaclass=CommandMeta):
         constraint: s_constr.Constraint,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        ctxcls: Type[sd.CommandContextToken[sd.Command]],
+        ctxcls: type[sd.CommandContextToken[sd.Command]],
     ) -> None:
 
         if (
@@ -249,7 +245,7 @@ class MetaCommand(sd.Command, metaclass=CommandMeta):
     @staticmethod
     def get_function_type(
         name: tuple[str, str]
-    ) -> Type[dbops.Function] | Type[trampoline.VersionedFunction]:
+    ) -> type[dbops.Function] | type[trampoline.VersionedFunction]:
         return (
             trampoline.VersionedFunction if name[0] == 'edgedbstd'
             else dbops.Function
@@ -1247,7 +1243,7 @@ class FunctionCommand(MetaCommand):
     def compile_edgeql_overloaded_function_body(
         self,
         func: s_funcs.Function,
-        overloads: List[s_funcs.Function],
+        overloads: list[s_funcs.Function],
         ov_param_idx: int,
         schema: s_schema.Schema,
         context: sd.CommandContext,
@@ -1669,7 +1665,7 @@ class OperatorCommand(FunctionCommand):
         self,
         schema,
         name: sn.QualName,
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         return common.get_operator_backend_name(
             name, catenate=False)
 
@@ -1728,7 +1724,7 @@ class OperatorCommand(FunctionCommand):
         self,
         oper: s_opers.Operator,
         pgop: str,
-        from_args: Sequence[Tuple[str, ...] | str],
+        from_args: Sequence[tuple[str, ...] | str],
         schema: s_schema.Schema,
     ) -> str:
         # Need a proxy function with casts
@@ -2559,9 +2555,9 @@ class RebaseScalarType(
 
 class AlterScalarType(ScalarTypeMetaCommand, adapts=s_scalars.AlterScalarType):
 
-    problematic_refs: Optional[Tuple[
-        Tuple[so.Object, ...],
-        Dict[s_props.Property, s_types.TypeShell],
+    problematic_refs: Optional[tuple[
+        tuple[so.Object, ...],
+        dict[s_props.Property, s_types.TypeShell],
     ]]
 
     def _get_problematic_refs(
@@ -2570,9 +2566,9 @@ class AlterScalarType(ScalarTypeMetaCommand, adapts=s_scalars.AlterScalarType):
         context: sd.CommandContext,
         *,
         composite_only: bool,
-    ) -> Optional[Tuple[
-        Tuple[so.Object, ...],
-        Dict[s_props.Property, s_types.TypeShell],
+    ) -> Optional[tuple[
+        tuple[so.Object, ...],
+        dict[s_props.Property, s_types.TypeShell],
     ]]:
         """Find problematic references to this scalar type that need handled.
 
@@ -2685,8 +2681,8 @@ class AlterScalarType(ScalarTypeMetaCommand, adapts=s_scalars.AlterScalarType):
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        objs: Tuple[so.Object, ...],
-        props: Dict[s_props.Property, s_types.TypeShell],
+        objs: tuple[so.Object, ...],
+        props: dict[s_props.Property, s_types.TypeShell],
     ) -> s_schema.Schema:
         """Rewrite the type of everything that uses this scalar dangerously.
 
@@ -2758,8 +2754,8 @@ class AlterScalarType(ScalarTypeMetaCommand, adapts=s_scalars.AlterScalarType):
         schema: s_schema.Schema,
         orig_schema: s_schema.Schema,
         context: sd.CommandContext,
-        objs: Tuple[so.Object, ...],
-        props: Dict[s_props.Property, s_types.TypeShell],
+        objs: tuple[so.Object, ...],
+        props: dict[s_props.Property, s_types.TypeShell],
     ) -> s_schema.Schema:
         """Restore the type of everything that uses this scalar dangerously.
 
@@ -2953,7 +2949,7 @@ class AlterScalarType(ScalarTypeMetaCommand, adapts=s_scalars.AlterScalarType):
         return schema
 
 
-def drop_dependant_func_cache(pg_type: Tuple[str, ...]) -> dbops.PLQuery:
+def drop_dependant_func_cache(pg_type: tuple[str, ...]) -> dbops.PLQuery:
     if len(pg_type) == 1:
         types_cte = f'''
                     SELECT
@@ -3342,7 +3338,7 @@ def get_index_compile_options(
     index: s_indexes.Index,
     schema: s_schema.Schema,
     modaliases: Mapping[Optional[str], str],
-    schema_object_context: Optional[Type[so.Object_T]],
+    schema_object_context: Optional[type[so.Object_T]],
 ) -> qlcompiler.CompilerOptions:
     subject = index.get_subject(schema)
     assert isinstance(subject, (s_types.Type, s_pointers.Pointer))
@@ -3957,7 +3953,7 @@ class PointerMetaCommand(
     @classmethod
     def get_columns(
         cls, pointer, schema, default=None, sets_required=False
-    ) -> List[dbops.Column]:
+    ) -> list[dbops.Column]:
         ptr_stor_info = types.get_pointer_storage_info(pointer, schema=schema)
         col_type = common.quote_type(tuple(ptr_stor_info.column_type))
 
@@ -4088,7 +4084,7 @@ class PointerMetaCommand(
             # create columns
             alter_table = source_op.get_alter_table(
                 schema, context, manual=True)
-            cols_required: List[dbops.Column] = []
+            cols_required: list[dbops.Column] = []
             for col in cols:
                 cond = dbops.ColumnExists(
                     ptr_stor_info.table_name,
@@ -4588,7 +4584,7 @@ class PointerMetaCommand(
         check_non_null: bool = False,
         produce_ctes: bool = True,
         allow_globals: bool=False,
-    ) -> Tuple[
+    ) -> tuple[
         str,  # CTE SQL
         Optional[str],  # Query SQL
         bool,  # is_nullable
@@ -6717,7 +6713,7 @@ class UpdateEndpointDeleteActions(MetaCommand):
         schema,
         context: sd.CommandContext,
         objtype: s_objtypes.ObjectType,
-        links: List[s_links.Link],
+        links: list[s_links.Link],
         *,
         disposition: str,
         deferred: bool = False,

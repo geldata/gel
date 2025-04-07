@@ -1,7 +1,7 @@
 import datetime
 import pathlib
 
-from typing import TYPE_CHECKING, Iterable, List, Optional, Any
+from typing import TYPE_CHECKING, Iterable, Optional, Any
 
 if TYPE_CHECKING:
     class SigningCtx:
@@ -16,12 +16,12 @@ if TYPE_CHECKING:
         def allow(
             self,
             claim: str,
-            values: List[str] | Iterable[str],
+            values: list[str] | Iterable[str],
         ) -> None: ...
         def deny(
             self,
             claim: str,
-            values: List[str] | Iterable[str],
+            values: list[str] | Iterable[str],
         ) -> None: ...
         def require(self, claim: str) -> None: ...
         def reject(self, claim: str) -> None: ...
@@ -64,9 +64,9 @@ if TYPE_CHECKING:
     def generate_gel_token(
         registry: JWKSet,
         *,
-        instances: Optional[List[str] | Iterable[str]] = None,
-        roles: Optional[List[str] | Iterable[str]] = None,
-        databases: Optional[List[str] | Iterable[str]] = None,
+        instances: Optional[list[str] | Iterable[str]] = None,
+        roles: Optional[list[str] | Iterable[str]] = None,
+        databases: Optional[list[str] | Iterable[str]] = None,
         **kwargs: Any,
     ) -> str: ...
 

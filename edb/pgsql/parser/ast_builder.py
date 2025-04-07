@@ -22,12 +22,8 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
-    Union,
     Sequence,
-    List,
     cast,
 )
 
@@ -54,7 +50,7 @@ Builder = Callable[[Node, Context], T]
 
 def build_stmts(
     node: Node, source_sql: str, propagate_spans: bool
-) -> List[pgast.Query | pgast.Statement]:
+) -> list[pgast.Query | pgast.Statement]:
     ctx = Context(source_sql=source_sql)
 
     try:
@@ -97,7 +93,7 @@ def _list(
     mapper: Callable[[T], U] = _ident,
     *,
     unwrap: Optional[str] = None,
-) -> List[U]:
+) -> list[U]:
     if unwrap is not None:
         return [
             mapper(builder(_unwrap(n, unwrap), ctx)) for n in node.get(name, [])
@@ -114,7 +110,7 @@ def _maybe_list(
     mapper: Callable[[T], U] = _ident,
     *,
     unwrap: Optional[str] = None,
-) -> Optional[List[U]]:
+) -> Optional[list[U]]:
     return (
         _list(node, ctx, name, builder, mapper, unwrap=unwrap)
         if name in node
@@ -123,7 +119,7 @@ def _maybe_list(
 
 
 def _enum(
-    _ty: Type[T],
+    _ty: type[T],
     node: Node,
     ctx: Context,
     builders: dict[str, Builder],
@@ -221,7 +217,7 @@ def _build_span(n: Node, c: Context) -> Optional[Span]:
         return None
 
     return Span(
-        name="<string>",
+        filename=None,
         buffer=c.source_sql,
         start=n["location"],
         end=n["location"],
@@ -481,7 +477,7 @@ def _build_transaction_stmt(n: Node, c: Context) -> pgast.TransactionStmt:
 
 
 def _build_transaction_options(
-    nodes: List[Node], c: Context
+    nodes: list[Node], c: Context
 ) -> pgast.TransactionOptions:
     options = {}
     for n in nodes:
@@ -612,7 +608,7 @@ def _build_base_expr(node: Node, c: Context) -> pgast.BaseExpr:
     )
 
 
-def _build_distinct(nodes: List[Node], c: Context) -> List[pgast.Base]:
+def _build_distinct(nodes: list[Node], c: Context) -> list[pgast.Base]:
     # For some reason, plain DISTINCT is parsed as [{}]
     # In our AST this is represented by [pgast.Star()]
     if len(nodes) == 1 and len(nodes[0]) == 0:
@@ -647,10 +643,10 @@ def _build_record_indirection_op(
     return pgast.RecordIndirectionOp(name=_build_str(n, c))
 
 
-def _build_ctes(n: Node, c: Context) -> List[pgast.CommonTableExpr]:
+def _build_ctes(n: Node, c: Context) -> list[pgast.CommonTableExpr]:
     is_recursive = _maybe(n, c, 'recursive', lambda x, _: bool(x)) or False
 
-    ctes: List[pgast.CommonTableExpr] = _list(n, c, "ctes", _build_cte)
+    ctes: list[pgast.CommonTableExpr] = _list(n, c, "ctes", _build_cte)
     for cte in ctes:
         cte.recursive = is_recursive
     return ctes
@@ -762,7 +758,7 @@ def _build_sub_link(n: Node, c: Context) -> pgast.SubLink:
 
 
 def _build_row_expr(n: Node, c: Context) -> pgast.BaseExpr:
-    args: List[pgast.BaseExpr] = (
+    args: list[pgast.BaseExpr] = (
         _maybe_list(n, c, "args", _build_base_expr) or []
     )
 
@@ -801,7 +797,7 @@ def _build_type_cast(n: Node, c: Context) -> pgast.TypeCast:
 def _build_type_name(n: Node, c: Context) -> pgast.TypeName:
     n = _unwrap(n, "TypeName")
 
-    name: Tuple[str, ...] = tuple(_list(n, c, "names", _build_str))
+    name: tuple[str, ...] = tuple(_list(n, c, "names", _build_str))
 
     # we don't escape char properly, so let's just resolve it during parsing
     if name == ("char",):
@@ -989,7 +985,7 @@ def _build_array_expr(n: Node, c: Context) -> pgast.ArrayExpr:
 
 
 def _build_a_expr(n: Node, c: Context) -> pgast.BaseExpr:
-    names: List[str] = _list(n, c, 'name', _build_str)
+    names: list[str] = _list(n, c, 'name', _build_str)
     if names[0] == 'pg_catalog':
         names.pop(0)
     name = names.pop(0)
@@ -1094,15 +1090,15 @@ def _build_insert_target(n: Node, c: Context) -> pgast.InsertTarget:
 
 
 def _build_update_targets(
-    target_list: List[Node], c: Context
-) -> List[pgast.UpdateTarget | pgast.MultiAssignRef]:
-    targets: List[pgast.UpdateTarget | pgast.MultiAssignRef] = []
+    target_list: list[Node], c: Context
+) -> list[pgast.UpdateTarget | pgast.MultiAssignRef]:
+    targets: list[pgast.UpdateTarget | pgast.MultiAssignRef] = []
     while len(target_list) > 0:
         val: dict = target_list[0]["ResTarget"]["val"]
         if first_mar := val.get("MultiAssignRef", None):
             ncolumns = first_mar['ncolumns']
 
-            columns: List[str] = []
+            columns: list[str] = []
             for _ in range(ncolumns):
                 target = target_list.pop(0)
                 mar = target['ResTarget']
@@ -1123,7 +1119,7 @@ def _build_update_targets(
 
 
 def _build_multi_assign_ref(
-    n: Node, columns: List[str], c: Context
+    n: Node, columns: list[str], c: Context
 ) -> pgast.MultiAssignRef:
     return pgast.MultiAssignRef(
         source=_build_base_expr(n['source'], c),
@@ -1198,16 +1194,22 @@ def _build_locking_clause(n: Node, c: Context) -> pgast.LockingClause:
     )
 
 
-def _build_nones_order(n: Node, _c: Context) -> qlast.NonesOrder:
+def _build_nones_order(n: Node, _c: Context) -> Optional[qlast.NonesOrder]:
     if n == "SORTBY_NULLS_FIRST":
         return qlast.NonesFirst
-    return qlast.NonesLast
+    if n == "SORTBY_NULLS_LAST":
+        return qlast.NonesLast
+    return None
 
 
-def _build_sort_order(n: Node, _c: Context) -> qlast.SortOrder:
+def _build_sort_order(n: Node, _c: Context) -> Optional[qlast.SortOrder]:
     if n == "SORTBY_DESC":
         return qlast.SortOrder.Desc
-    return qlast.SortOrder.Asc
+    if n == "SORTBY_ASC":
+        return qlast.SortOrder.Asc
+    if n == "SORTBY_DEFAULT":
+        return None
+    raise PSqlUnsupportedError(n)
 
 
 def _build_column_ref(n: Node, c: Context) -> pgast.ColumnRef:
@@ -1218,21 +1220,55 @@ def _build_column_ref(n: Node, c: Context) -> pgast.ColumnRef:
     )
 
 
-def _build_infer_clause(n: Node, c: Context) -> pgast.InferClause:
-    return pgast.InferClause(
-        index_elems=_maybe_list(n, c, "indexElems", _build_str),
-        where_clause=_maybe(n, c, "whereClause", _build_base_expr),
-        conname=_maybe(n, c, "conname", _build_str),
+def _build_on_conflict(n: Node, c: Context) -> pgast.OnConflictClause:
+    action_str = _build_str(n["action"], c)
+    if action_str == "ONCONFLICT_NOTHING":
+        action = pgast.OnConflictAction.DO_NOTHING
+    elif action_str == "ONCONFLICT_UPDATE":
+        action = pgast.OnConflictAction.DO_UPDATE
+    else:
+        raise PSqlUnsupportedError(n, f"ON CONFLICT {action_str}")
+
+    return pgast.OnConflictClause(
+        action=action,
+        target=_maybe(n, c, "infer", _build_on_conflict_target),
+        update_list=_maybe(n, c, "targetList", _build_update_targets) or [],
+        update_where=_maybe(n, c, "whereClause", _build_base_expr),
         span=_build_span(n, c),
     )
 
 
-def _build_on_conflict(n: Node, c: Context) -> pgast.OnConflictClause:
-    return pgast.OnConflictClause(
-        action=_build_str(n["action"], c).removeprefix('ONCONFLICT_'),
-        infer=_maybe(n, c, "infer", _build_infer_clause),
-        target_list=_maybe(n, c, "targetList", _build_update_targets) or [],
-        where=_maybe(n, c, "where", _build_base_expr),
+def _build_on_conflict_target(n: Node, c: Context) -> pgast.OnConflictTarget:
+    return pgast.OnConflictTarget(
+        index_elems=_maybe_list(n, c, "indexElems", _build_index_elem),
+        index_where=_maybe(n, c, "whereClause", _build_base_expr),
+        constraint_name=_maybe(n, c, "conname", _build_str),
+        span=_build_span(n, c),
+    )
+
+
+def _build_index_elem(n: Node, c: Context) -> pgast.IndexElem:
+    n = _unwrap(n, 'IndexElem')
+
+    expr: pgast.BaseExpr
+    if 'name' in n:
+        expr = pgast.ColumnRef(name=(n['name'],))
+    elif 'indexcolname' in n:
+        expr = pgast.ColumnRef(name=(n['name'],))
+    elif 'expr' in n:
+        expr = _build_base_expr(n['expr'], c)
+    else:
+        raise PSqlUnsupportedError(n)
+
+    # TODO:
+    # collation
+    # opclass
+    # opclassopts
+
+    return pgast.IndexElem(
+        expr=expr,
+        ordering=_build_sort_order(n['ordering'], c),
+        nulls_ordering=_build_nones_order(n['nulls_ordering'], c),
         span=_build_span(n, c),
     )
 
@@ -1243,7 +1279,7 @@ def _build_star(_n: Node, _c: Context) -> pgast.Star | str:
 
 def _build_string_or_star(node: Node, c: Context) -> pgast.Star | str:
     return _enum(
-        Union[pgast.Star, str],  # type: ignore
+        pgast.Star | str,  # type: ignore
         node,
         c,
         {"String": _build_str, "A_Star": _build_star},
@@ -1261,7 +1297,7 @@ def _build_copy_format(n: Node, c: Context) -> pgast.CopyFormat:
     raise PSqlUnsupportedError(val, f"{val} format")
 
 
-def _build_copy_options(nodes: List[Node], c: Context) -> pgast.CopyOptions:
+def _build_copy_options(nodes: list[Node], c: Context) -> pgast.CopyOptions:
     opt = pgast.CopyOptions()
     for n in nodes:
         if 'DefElem' not in n or 'defname' not in n['DefElem']:

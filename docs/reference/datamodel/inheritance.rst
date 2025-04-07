@@ -4,8 +4,7 @@
 Inheritance
 ===========
 
-.. index:: abstract, extending, extends, subtype, supertype, parent type,
-           child type
+.. index:: extending, extends, subtype, supertype, parent type, child type
 
 Inheritance is a crucial aspect of schema modeling in Gel. Schema items can
 *extend* one or more parent types. When extending, the child (subclass)
@@ -24,6 +23,8 @@ annotations.
 
 Object types
 ------------
+
+.. api-index:: abstract type, extending
 
 Object types can *extend* other object types. The extending type (AKA the
 *subtype*) inherits all links, properties, indexes, constraints, etc. from its
@@ -71,8 +72,6 @@ Polymorphic queries <ref_eql_select_polymorphic>`.
 Multiple Inheritance
 ^^^^^^^^^^^^^^^^^^^^
 
-.. index:: Multiple Inheritance
-
 Object types can :ref:`extend more
 than one type <ref_eql_sdl_object_types_inheritance>` — that's called
 *multiple inheritance*. This mechanism allows building complex object
@@ -99,7 +98,7 @@ types out of combinations of more basic types.
 Overloading
 ^^^^^^^^^^^
 
-.. index:: overloaded
+.. api-index:: overloaded
 
 An object type can overload an inherited property or link. All overloaded
 declarations must be prefixed with the ``overloaded`` prefix to avoid
@@ -129,6 +128,8 @@ additional constraints.
 Properties
 ----------
 
+.. api-index:: abstract property, readonly
+
 Properties can be *concrete* (the default) or *abstract*. Abstract properties
 are declared independent of a source or target, can contain :ref:`annotations
 <ref_datamodel_annotations>`, and can be marked as ``readonly``.
@@ -144,6 +145,8 @@ are declared independent of a source or target, can contain :ref:`annotations
 
 Links
 -----
+
+.. api-index:: abstract link
 
 It's possible to define ``abstract`` links that aren't tied to a particular
 *source* or *target*. Abstract links can be marked as readonly and contain
@@ -167,6 +170,7 @@ annotations, property declarations, constraints, and indexes.
 Constraints
 -----------
 
+.. api-index:: abstract constraint, using, errmessage
 
 Use ``abstract`` to declare reusable, user-defined constraint types.
 
@@ -188,6 +192,8 @@ Use ``abstract`` to declare reusable, user-defined constraint types.
 
 Annotations
 -----------
+
+.. api-index:: abstract annotation, inheritable
 
 EdgeQL supports three annotation types by default: ``title``, ``description``,
 and ``deprecated``. Use ``abstract annotation`` to declare custom user-defined

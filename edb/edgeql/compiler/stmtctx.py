@@ -25,12 +25,8 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Union,
     Mapping,
     Sequence,
-    Dict,
-    List,
-    FrozenSet,
 )
 
 import copy
@@ -95,6 +91,8 @@ def init_context(
         env.path_scope = inlining_context.path_scope
         env.alias_result_view_name = options.result_view_name
         env.query_parameters = {}
+        env.server_param_conversions = {}
+        env.server_param_conversion_calls = []
         env.script_params = {}
 
         ctx = context.ContextLevel(
@@ -215,7 +213,7 @@ def fini_expression(
     # to catch them all in our fixups and analyses.
     # IMPORTANT: Any new expressions that are sent to the backend
     # but don't appear in `ir` must be added here.
-    extra_exprs = []
+    extra_exprs: list[irast.Set] = []
     extra_exprs += [
         rw for rw in ctx.env.type_rewrites.values()
         if isinstance(rw, irast.Set)
@@ -223,6 +221,15 @@ def fini_expression(
     extra_exprs += [
         p.sub_params.decoder_ir for p in ctx.env.query_parameters.values()
         if p.sub_params and p.sub_params.decoder_ir
+    ]
+    extra_exprs += [
+        conversion.ir_param.sub_params.decoder_ir
+        for conversions in ctx.env.server_param_conversions.values()
+        for conversion in conversions.values()
+        if (
+            conversion.ir_param.sub_params
+            and conversion.ir_param.sub_params.decoder_ir
+        )
     ]
     extra_exprs += [trigger.expr for stage in ir_triggers for trigger in stage]
 
@@ -260,6 +267,9 @@ def fini_expression(
 
     # Collect query parameters
     params = collect_params(ctx)
+    server_param_conversions, server_param_conversion_params = (
+        collect_server_param_conversions(ctx)
+    )
 
     # ConfigSet and ConfigReset don't like being part of a Set, so bail early
     if isinstance(ir.expr, (irast.ConfigSet, irast.ConfigReset)):
@@ -267,6 +277,13 @@ def fini_expression(
         ir.expr.globals = list(ctx.env.query_globals.values())
         ir.expr.params = params
         ir.expr.schema = ctx.env.schema
+
+        if ctx.env.server_param_conversion_calls:
+            func_name, func_span = ctx.env.server_param_conversion_calls[0]
+            raise errors.QueryError(
+                f"Function '{func_name}' is not allowed in a config statement.",
+                span=func_span,
+            )
 
         return ir.expr
 
@@ -311,6 +328,8 @@ def fini_expression(
         expr=ir,
         params=params,
         globals=list(ctx.env.query_globals.values()),
+        server_param_conversions=server_param_conversions,
+        server_param_conversion_params=server_param_conversion_params,
         views=ctx.view_nodes,
         scope_tree=ctx.env.path_scope,
         cardinality=cardinality,
@@ -345,7 +364,7 @@ def fini_expression(
     return result
 
 
-def collect_params(ctx: context.ContextLevel) -> List[irast.Param]:
+def collect_params(ctx: context.ContextLevel) -> list[irast.Param]:
     lparams = [
         p for p in ctx.env.query_parameters.values() if not p.is_sub_param
     ]
@@ -363,9 +382,61 @@ def collect_params(ctx: context.ContextLevel) -> List[irast.Param]:
     return params
 
 
+def collect_server_param_conversions(
+    ctx: context.ContextLevel
+) -> tuple[
+    list[irast.ServerParamConversion],
+    list[irast.Param],
+]:
+    """Gather converted parameters for use in the ir Statement.
+
+    Returns ServerParamConversion which will eventually be sent to the server
+    as well as the irast.Params which should be used to generate the pgast.
+    """
+    lparams = [
+        (
+            param_name,
+            conversion_name,
+            conversion,
+        )
+        for param_name, conversions in ctx.env.server_param_conversions.items()
+        for conversion_name, conversion in conversions.items()
+        if not conversion.ir_param.is_sub_param
+    ]
+    script_ordering = {k: i for i, k in enumerate(ctx.env.script_params)}
+
+    # Add ordering for param conversions which don't match query params.
+    # This can happen for constants.
+    extra_ordering: dict[str, int] = {}
+    for param_name in sorted(ctx.env.server_param_conversions.keys()):
+        if param_name not in script_ordering:
+            extra_ordering[param_name] = (
+                len(script_ordering) + len(extra_ordering)
+            )
+    script_ordering.update(extra_ordering)
+
+    lparams.sort(key=lambda x: (script_ordering[x[0]], x[1]))
+
+    conversions = []
+    params = []
+    # Now flatten it out, including all sub_params, making sure subparams
+    # appear in the right order.
+    for param_name, conversion_name, conversion in lparams:
+        conversions.append(irast.ServerParamConversion(
+            param_name=param_name,
+            conversion_name=conversion_name,
+            additional_info=conversion.additional_info,
+            constant_value=conversion.constant_value,
+        ))
+        params.append(conversion.ir_param)
+        if conversion.ir_param.sub_params:
+            params.extend(conversion.ir_param.sub_params.params)
+    return conversions, params
+
+
 def _fixup_materialized_sets(
     irs: Sequence[irast.Base], *, ctx: context.ContextLevel
-) -> List[irast.Set]:
+) -> list[irast.Set]:
     # Make sure that all materialized sets have their views compiled
     skips = {'materialized_sets'}
     children = []
@@ -455,7 +526,7 @@ def _fixup_materialized_sets(
 
 def _find_visible_binding_refs(
     ir: irast.Base, *, ctx: context.ContextLevel
-) -> List[irast.Set]:
+) -> list[irast.Set]:
     children = ast_visitor.find_children(
         ir, irast.Set, lambda n: n.is_visible_binding_ref)
     return children
@@ -579,7 +650,7 @@ def _get_nearest_non_source_derived_parent(
 
 
 def _elide_derived_ancestors(
-    obj: Union[s_types.InheritingType, s_pointers.Pointer],
+    obj: s_types.InheritingType | s_pointers.Pointer,
     *,
     ctx: context.ContextLevel,
 ) -> None:
@@ -608,7 +679,7 @@ def _elide_derived_ancestors(
 
 def compile_anchor(
     name: str,
-    anchor: Union[qlast.Expr, irast.Base, s_obj.Object, irast.PathId],
+    anchor: qlast.Expr | irast.Base | s_obj.Object | irast.PathId,
     *,
     ctx: context.ContextLevel,
 ) -> irast.Set:
@@ -715,7 +786,7 @@ def declare_view(
     factoring_fence: bool=False,
     fully_detached: bool=False,
     binding_kind: irast.BindingKind,
-    path_id_namespace: Optional[FrozenSet[str]]=None,
+    path_id_namespace: Optional[frozenset[str]]=None,
     ctx: context.ContextLevel,
 ) -> irast.Set:
 
@@ -849,7 +920,7 @@ def declare_view_from_schema(
     return vc
 
 
-def check_params(params: Dict[str, irast.Param]) -> None:
+def check_params(params: dict[str, irast.Param]) -> None:
     first_argname = next(iter(params))
     for param in params.values():
         # FIXME: context?
@@ -897,7 +968,7 @@ def throw_on_loose_param(
 
 
 def preprocess_script(
-    stmts: List[qlast.Base], *, ctx: context.ContextLevel
+    stmts: list[qlast.Base], *, ctx: context.ContextLevel
 ) -> irast.ScriptInfo:
     """Extract parameters from all statements in a script.
 

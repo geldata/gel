@@ -24,10 +24,8 @@ import json
 from typing import (
     Any,
     Callable,
-    Dict,
     Optional,
     TypeVar,
-    Union,
     Iterable,
     Mapping,
     Collection,
@@ -166,7 +164,7 @@ class Operation(NamedTuple):
     opcode: OpCode
     scope: qltypes.ConfigScope
     setting_name: str
-    value: Union[str, int, bool, Collection[Union[str, int, bool, None]], None]
+    value: str | int | bool | Collection[str | int | bool | None] | None
 
     def get_setting(self, spec: spec.Spec) -> spec.Setting:
         try:
@@ -450,7 +448,7 @@ def to_json_obj(
     *,
     setting_filter: Optional[Callable[[SettingValue], bool]] = None,
     include_source: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     dct = {}
     for name, value in storage.items():
         if setting_filter is None or setting_filter(value):

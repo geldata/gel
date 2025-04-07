@@ -22,7 +22,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Type,
 )
 
 import http.server
@@ -31,8 +30,10 @@ import threading
 import urllib.parse
 import urllib.request
 import dataclasses
+import time
+import random
 
-import edgedb
+import gel
 
 from edb.errors import base as base_errors
 
@@ -166,7 +167,7 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
         ex_msg = err["message"].strip()
         ex_code = err["code"]
 
-        raise edgedb.EdgeDBError._from_code(ex_code, ex_msg)
+        raise gel.EdgeDBError._from_code(ex_code, ex_msg)
 
     def assert_edgeql_query_result(
         self,
@@ -204,6 +205,43 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         return "graphql"
 
     def graphql_query(
+        self,
+        query,
+        *,
+        operation_name=None,
+        use_http_post=True,
+        variables=None,
+        globals=None,
+        deprecated_globals=None,
+    ):
+        def inner():
+            return self._graphql_query(
+                query,
+                operation_name=operation_name,
+                use_http_post=use_http_post,
+                variables=variables,
+                globals=globals,
+                deprecated_globals=deprecated_globals,
+            )
+        return self._retry_operation(inner)
+
+    def _retry_operation(self, func):
+        i = 0
+        while True:
+            i += 1
+            try:
+                return func()
+
+            # Retry transaction conflict errors
+            except gel.errors.TransactionConflictError:
+                if i >= 10:
+                    raise
+                time.sleep(
+                    min((2 ** i) * 0.1, 10)
+                    + random.randrange(100) * 0.001
+                )
+
+    def _graphql_query(
         self,
         query,
         *,
@@ -265,7 +303,7 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         msg = msg.strip()
 
         try:
-            ex_type = getattr(edgedb, typename)
+            ex_type = getattr(gel, typename)
         except AttributeError:
             raise AssertionError(
                 f"server returned an invalid exception typename: {typename!r}"
@@ -358,7 +396,7 @@ class RequestDetails:
 class MockHttpServer:
     def __init__(
         self,
-        handler_type: Type[MockHttpServerHandler] = MockHttpServerHandler,
+        handler_type: type[MockHttpServerHandler] = MockHttpServerHandler,
     ) -> None:
         self.has_started = threading.Event()
         self.routes: dict[

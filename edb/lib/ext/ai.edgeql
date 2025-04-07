@@ -580,6 +580,24 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         using sql expression;
     };
 
+    create function ext::ai::search(
+        object: anyobject,
+        query: str,
+    ) -> optional tuple<object: anyobject, distance: float64>
+    {
+        create annotation std::description := '
+            Search an object using its ext::ai::index index.
+            Gets an embedding for the query from the ai provider then
+            returns objects that match the specified semantic query and the
+            similarity score.
+        ';
+        set volatility := 'Stable';
+        # Needed to pick up the indexes when used in ORDER BY.
+        set prefer_subquery_args := true;
+        set server_param_conversions := '{"query": ["ai_text_embedding", "object"]}';
+        using sql expression;
+    };
+
     create scalar type ext::ai::ChatParticipantRole
         extending enum<System, User, Assistant, Tool>;
 

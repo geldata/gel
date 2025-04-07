@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Mapping, Sequence, List, TYPE_CHECKING, Optional
+from typing import Mapping, Sequence, TYPE_CHECKING, Optional
 
 import dataclasses
 import functools
@@ -83,8 +83,8 @@ def compile_sql(
     implicit_limit: Optional[int] = None,
 ) -> tuple[list[dbstate.SQLQueryUnit], bool]:
     def _try(
-        q: str, normalized_params: List[int]
-    ) -> List[dbstate.SQLQueryUnit]:
+        q: str, normalized_params: list[int]
+    ) -> list[dbstate.SQLQueryUnit]:
         return _compile_sql(
             q,
             orig_query_str=source.original_text(),
@@ -165,7 +165,7 @@ def _build_constant_extraction_map(
         # HACK: I don't know why, but this - 1 helps a lot.
         output_start=out.span.start - 1 if out.span else 0,
     )
-    if type(src) != type(out):
+    if type(src) is not type(out):
         return tdata
     children = tdata.children
     for (k1, v1), (k2, v2) in zip(ast.iter_fields(src), ast.iter_fields(out)):
@@ -208,9 +208,9 @@ def _compile_sql(
     disambiguate_column_names: bool,
     backend_runtime_params: pg_params.BackendRuntimeParams,
     protocol_version: defines.ProtocolVersion,
-    normalized_params: List[int],
+    normalized_params: list[int],
     implicit_limit: Optional[int] = None,
-) -> List[dbstate.SQLQueryUnit]:
+) -> list[dbstate.SQLQueryUnit]:
     opts = ResolverOptionsPartial(
         query_str=query_str,
         current_database=current_database,
@@ -293,13 +293,9 @@ def _compile_sql(
                 from edb.pgsql import resolver as pg_resolver
                 pg_resolver.dispatch._raise_unsupported(stmt)
 
-            unit.get_var = stmt.name
-            unit.frontend_only = (
-                stmt.name in FE_SETTINGS_MUTABLE
-                or stmt.name.startswith('global ')
-            )
-            if unit.frontend_only:
-                unit.command_complete_tag = dbstate.TagPlain(tag=b"SHOW")
+            stmt = _compile_show_command(stmt)
+            unit.query = pg_codegen.generate_source(stmt)
+            unit.command_complete_tag = dbstate.TagPlain(tag=b"SHOW")
 
         elif isinstance(stmt, pgast.SetTransactionStmt):
             if protocol_version != defines.POSTGRES_PROTOCOL:
@@ -551,6 +547,98 @@ def _compile_sql(
     return sql_units
 
 
+def _compile_show_command(stmt: pgast.VariableShowStmt) -> pgast.Query:
+    pg_settings_for_show = pgast.RelRangeVar(
+        relation=pgast.Relation(
+            schemaname=pg_common.versioned_schema('edgedbsql'),
+            name='pg_settings_for_show',
+        )
+    )
+
+    if stmt.name.lower() == 'all':
+        return pgast.SelectStmt(
+            target_list=[
+                pgast.ResTarget(
+                    val=pgast.ColumnRef(name=[pgast.Star()])
+                )
+            ],
+            from_clause=[pg_settings_for_show],
+        )
+
+    elif stmt.name.startswith("global "):
+        # SELECT coalesce(
+        #     (SELECT value
+        #      FROM _edgecon_state
+        #      WHERE name = 'global ..' AND type = 'L'
+        #     ),
+        #     (SELECT value
+        #      FROM _edgecon_state
+        #      WHERE name = 'global ..' AND type = 'S'
+        #     )
+        # ) #>> '{}' AS "global .."
+        sublinks: list[pgast.Base] = [
+            pgast.SubLink(
+                operator=None,
+                expr=pgast.SelectStmt(
+                    target_list=[
+                        pgast.ResTarget(
+                            val=pgast.ColumnRef(name=['value']),
+                        ),
+                    ],
+                    from_clause=[
+                        pgast.RelRangeVar(
+                            relation=pgast.Relation(
+                                name='_edgecon_state'
+                            ),
+                        ),
+                    ],
+                    where_clause=pgast.Expr(
+                        name='AND',
+                        lexpr=pgast.Expr(
+                            name='=',
+                            lexpr=pgast.ColumnRef(name=['name']),
+                            rexpr=pgast.StringConstant(val=stmt.name),
+                        ),
+                        rexpr=pgast.Expr(
+                            name='=',
+                            lexpr=pgast.ColumnRef(name=['type']),
+                            rexpr=pgast.StringConstant(val=typ),
+                        ),
+                    ),
+                )
+            )
+            for typ in ["L", "S"]
+        ]
+        return pgast.SelectStmt(
+            target_list=[
+                pgast.ResTarget(
+                    name=stmt.name,
+                    val=pgast.Expr(
+                        name='#>>',
+                        lexpr=pgast.CoalesceExpr(args=sublinks),
+                        rexpr=pgast.StringConstant(val='{}'),
+                    ),
+                )
+            ]
+        )
+
+    else:
+        return pgast.SelectStmt(
+            target_list=[
+                pgast.ResTarget(
+                    name=stmt.name,
+                    val=pgast.ColumnRef(name=['setting']),
+                ),
+            ],
+            from_clause=[pg_settings_for_show],
+            where_clause=pgast.Expr(
+                name='=',
+                lexpr=pgast.ColumnRef(name=['name']),
+                rexpr=pgast.StringConstant(val=stmt.name),
+            )
+        )
+
+
 @dataclasses.dataclass(kw_only=True, eq=False, repr=False)
 class ResolverOptionsPartial:
     current_user: str
@@ -560,7 +648,7 @@ class ResolverOptionsPartial:
     apply_access_policies: Optional[bool]
     include_edgeql_io_format_alternative: Optional[bool]
     disambiguate_column_names: bool
-    normalized_params: List[int]
+    normalized_params: list[int]
     implicit_limit: Optional[int]
 
 

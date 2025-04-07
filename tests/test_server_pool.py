@@ -82,8 +82,8 @@ def with_base_test(m):
 
 
 def calc_percentiles(
-    lats: typing.List[float]
-) -> typing.Tuple[float, float, float, float, float, float, int]:
+    lats: list[float]
+) -> tuple[float, float, float, float, float, float, int]:
     lats_len = len(lats)
     lats.sort()
     return (
@@ -98,8 +98,8 @@ def calc_percentiles(
 
 
 def calc_total_percentiles(
-    lats: typing.Dict[str, typing.List[float]]
-) -> typing.Tuple[float, float, float, float, float, float, int]:
+    lats: dict[str, list[float]]
+) -> tuple[float, float, float, float, float, float, int]:
     acc = []
     for i in lats.values():
         acc.extend(i)
@@ -158,7 +158,7 @@ class LatencyDistribution(ScoreMethod):
 
     @staticmethod
     def calc_average_cv_of_quantiles(
-        group_of_lats: typing.Iterable[typing.List[float]], n: int = 10
+        group_of_lats: typing.Iterable[list[float]], n: int = 10
     ) -> float:
         # Calculates the average CV (coefficient of variation) of the given
         # distributions. The result is a float ranging from zero indicating
@@ -279,11 +279,11 @@ class Spec:
     capacity: int
     conn_cost_base: float
     conn_cost_var: float
-    dbs: typing.List[DBSpec]
+    dbs: list[DBSpec]
     desc: str = ''
     disconn_cost_base: float = 0.006
     disconn_cost_var: float = 0.0015
-    score: typing.List[ScoreMethod] = dataclasses.field(default_factory=list)
+    score: list[ScoreMethod] = dataclasses.field(default_factory=list)
 
     def __post_init__(self):
         self.timeout *= TIME_SCALE
@@ -300,19 +300,19 @@ class Spec:
 
 @dataclasses.dataclass
 class Simulation:
-    latencies: typing.Dict[str, typing.List[float]] = dataclasses.field(
+    latencies: dict[str, list[float]] = dataclasses.field(
         default_factory=lambda: collections.defaultdict(list)
     )
 
     failed_disconnects: int = 0
     failed_queries: int = 0
 
-    stats: typing.List[dict] = dataclasses.field(default_factory=list)
-    scores: typing.List[dict] = dataclasses.field(default_factory=list)
+    stats: list[dict] = dataclasses.field(default_factory=list)
+    scores: list[dict] = dataclasses.field(default_factory=list)
 
     def group_of_latencies(
         self, keys: typing.Iterable[str]
-    ) -> typing.Iterable[typing.List[float]]:
+    ) -> typing.Iterable[list[float]]:
         for key in keys:
             yield self.latencies[key]
 

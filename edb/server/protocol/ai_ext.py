@@ -63,6 +63,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger("edb.server.ai_ext")
+keepalive_token = "ai-index-builder"
 
 
 class AIExtError(Exception):
@@ -292,7 +293,7 @@ async def _ext_ai_index_builder_controller_loop(
     provider_schedulers: dict[str, ProviderScheduler] = {}
 
     try:
-        while True:
+        while tenant.accept_new_tasks:
             if not db.tenant.is_database_connectable(dbname):
                 # Don't do work if the database is not connectable,
                 # e.g. being dropped
@@ -327,9 +328,22 @@ async def _ext_ai_index_builder_controller_loop(
                                 if not sleep_timer.is_ready_and_urgent():
                                     await asyncutil.deferred_shield(
                                         _ext_ai_unlock(tenant))
+                                    tenant.server.remove_keepalive_token(
+                                        (
+                                            keepalive_token,
+                                            tenant.get_instance_name(),
+                                            dbname,
+                                        )
+                                    )
                                     holding_lock = False
             except Exception:
-                logger.exception(f"caught error in {task_name}")
+                logger.error(
+                    f"caught error in {task_name}",
+                    exc_info=tenant.accept_new_tasks,
+                )
+
+            if not tenant.accept_new_tasks:
+                break
 
             if not sleep_timer.is_ready_and_urgent():
                 delay = sleep_timer.remaining_time(naptime)
@@ -548,7 +562,7 @@ class ProviderScheduler(rs.Scheduler[EmbeddingsData]):
         self, context: rs.Context,
     ) -> Optional[Sequence[EmbeddingsParams]]:
         assert isinstance(context, ProviderContext)
-        return await _generate_embeddings_params(
+        rv = await _generate_embeddings_params(
             context.db,
             context.pgconn,
             context.http_client,
@@ -561,6 +575,15 @@ class ProviderScheduler(rs.Scheduler[EmbeddingsData]):
                 None
             ),
         )
+        if rv:
+            context.db.server.add_keepalive_token(
+                (
+                    keepalive_token,
+                    context.db.tenant.get_instance_name(),
+                    context.db.name,
+                )
+            )
+        return rv
 
     def finalize(self, execution_report: rs.ExecutionReport) -> None:
         task_name = _task_name.get()
@@ -2502,22 +2525,68 @@ async def _generate_embeddings_for_type(
     type_query: str,
     content: str,
 ) -> bytes:
-    try:
-        type_desc = await execute.describe(
-            db,
-            f"SELECT ({type_query})",
-            allow_capabilities=compiler.Capability.NONE,
-            query_tag='gel/ai',
+    type_desc = await execute.describe(
+        db,
+        f"SELECT ({type_query})",
+        allow_capabilities=compiler.Capability.NONE,
+        query_tag='gel/ai',
+    )
+    if (
+        not isinstance(type_desc, sertypes.ShapeDesc)
+        or not isinstance(type_desc.type, sertypes.ObjectDesc)
+    ):
+        raise errors.InvalidReferenceError(
+            'context query does not return an '
+            'object type indexed with an `ext::ai::index`'
         )
-        if (
-            not isinstance(type_desc, sertypes.ShapeDesc)
-            or not isinstance(type_desc.type, sertypes.ObjectDesc)
-        ):
-            raise errors.InvalidReferenceError(
-                'context query does not return an '
-                'object type indexed with an `ext::ai::index`'
-            )
 
+    return await generate_embeddings_for_text(
+        db, http_client, type_desc.type.tid, content
+    )
+
+
+async def generate_embeddings_for_text(
+    db: dbview.Database,
+    http_client: http.HttpClient,
+    type_id: str | uuid.UUID,
+    content: str,
+) -> bytes:
+
+    index = await get_ai_index_for_type(db, type_id)
+    provider = _get_provider_config(db=db, provider_name=index.provider)
+    if (
+        index.index_embedding_dimensions
+        < index.model_embedding_dimensions
+    ):
+        shortening = index.index_embedding_dimensions
+    else:
+        shortening = None
+    result = await _generate_embeddings(
+        provider,
+        index.model,
+        [content],
+        shortening,
+        None,
+        http_client,
+    )
+    if isinstance(result.data, rs.Error):
+        raise AIProviderError(result.data.message)
+    return result.data.embeddings
+
+
+@dataclass
+class AIIndex:
+    model: str
+    provider: str
+    model_embedding_dimensions: int
+    index_embedding_dimensions: int
+
+
+async def get_ai_index_for_type(
+    db: dbview.Database,
+    type_id: str | uuid.UUID,
+) -> AIIndex:
+    try:
         indexes = await _edgeql_query_json(
             db=db,
             query="""
@@ -2567,7 +2636,7 @@ async def _generate_embeddings_for_type(
             FILTER
                 .ancestors.name = 'ext::ai::index'
             """,
-            variables={"type_id": str(type_desc.type.tid)},
+            variables={"type_id": str(type_id)},
         )
         if len(indexes) == 0:
             raise errors.InvalidReferenceError(
@@ -2584,22 +2653,9 @@ async def _generate_embeddings_for_type(
         await _db_error(db, ex, context="context.query")
 
     index = indexes[0]
-    provider = _get_provider_config(db=db, provider_name=index["provider"])
-    if (
-        index["index_embedding_dimensions"]
-        < index["model_embedding_dimensions"]
-    ):
-        shortening = index["index_embedding_dimensions"]
-    else:
-        shortening = None
-    result = await _generate_embeddings(
-        provider,
-        index["model"],
-        [content],
-        shortening,
-        None,
-        http_client,
+    return AIIndex(
+        model=index["model"],
+        provider=index["provider"],
+        model_embedding_dimensions=index["model_embedding_dimensions"],
+        index_embedding_dimensions=index["index_embedding_dimensions"],
     )
-    if isinstance(result.data, rs.Error):
-        raise AIProviderError(result.data.message)
-    return result.data.embeddings

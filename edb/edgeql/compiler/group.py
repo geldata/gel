@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence, Dict, Set, FrozenSet
+from typing import Any, Optional, Sequence
 
 from edb.common import ast as ast_visitor
 
@@ -47,13 +47,13 @@ class FindAggregatingUses(ast_visitor.NodeVisitor):
         super().__init__()
         self.target = target
         self.aggregate: Optional[irast.Set] = None
-        self.sightings: Set[Optional[irast.Set]] = set()
+        self.sightings: set[Optional[irast.Set]] = set()
         self.ctx = ctx
         # Track pathids that we've seen. pathids that we are interested
         # in but haven't seen get marked as False.
-        self.seen: Dict[irast.PathId, bool] = {}
-        self.skippable: Dict[
-            Optional[irast.Set], FrozenSet[irast.PathId]] = {}
+        self.seen: dict[irast.PathId, bool] = {}
+        self.skippable: dict[
+            Optional[irast.Set], frozenset[irast.PathId]] = {}
         self.scope_tree = ctx.path_scope
         # We don't bother trying to reuse the existing inference
         # context because we make singleton assumptions that it

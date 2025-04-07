@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Sequence, Dict, List, Set, TypeGuard
+from typing import Optional, Sequence, TypeGuard
 
 from edb.ir import ast as irast
 from edb.ir import typeutils as irtyputils
@@ -70,7 +70,7 @@ def get_less_specific_aspect(
 
 def map_path_id(
         path_id: irast.PathId,
-        path_id_map: Dict[irast.PathId, irast.PathId]) -> irast.PathId:
+        path_id_map: dict[irast.PathId, irast.PathId]) -> irast.PathId:
 
     sorted_map = sorted(
         path_id_map.items(), key=lambda kv: len(kv[0]), reverse=True)
@@ -87,7 +87,7 @@ def map_path_id(
 
 def reverse_map_path_id(
         path_id: irast.PathId,
-        path_id_map: Dict[irast.PathId, irast.PathId]) -> irast.PathId:
+        path_id_map: dict[irast.PathId, irast.PathId]) -> irast.PathId:
     for outer_id, inner_id in path_id_map.items():
         new_path_id = irtyputils.replace_pathid_prefix(
             path_id, inner_id, outer_id)
@@ -294,7 +294,7 @@ def _find_rel_rvar(
     *,
     aspect: pgce.PathAspect,
     flavor: str,
-) -> Tuple[str, Optional[pgast.PathRangeVar], Optional[pgast.BaseExpr]]:
+) -> tuple[str, Optional[pgast.PathRangeVar], Optional[pgast.BaseExpr]]:
     """Rummage around rel looking for an appropriate rvar for path_id.
 
     Somewhat unfortunately, some checks to find the actual path var
@@ -840,9 +840,9 @@ def get_rvar_output_var_as_col_list(
     aspect: pgce.PathAspect,
     *,
     env: context.Environment,
-) -> List[pgast.OutputVar]:
+) -> list[pgast.OutputVar]:
 
-    cols: List[pgast.OutputVar]
+    cols: list[pgast.OutputVar]
 
     if isinstance(outvar, pgast.TupleVarBase):
         cols = []
@@ -965,7 +965,7 @@ def has_path_aspect(
 
 def list_path_aspects(
     stmt: pgast.Query, path_id: irast.PathId
-) -> Set[pgce.PathAspect]:
+) -> set[pgce.PathAspect]:
     path_aspects = (
         pgce.PathAspect.VALUE,
         pgce.PathAspect.IDENTITY,
@@ -1542,7 +1542,7 @@ def get_path_output_or_null(
     flavor: str='normal',
     aspect: pgce.PathAspect,
     env: context.Environment,
-) -> Tuple[pgast.OutputVar, bool]:
+) -> tuple[pgast.OutputVar, bool]:
 
     path_id = map_path_id(path_id, rel.view_path_id_map)
 

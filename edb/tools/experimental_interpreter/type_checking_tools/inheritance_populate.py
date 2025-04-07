@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, Sequence, List
+from typing import Sequence
 
 from ..data import data_ops as e
 from ..data import expr_ops as eops
@@ -16,7 +16,7 @@ def merge_result_tp(ctx: e.TcCtx, l: e.ResultTp, r: e.ResultTp) -> e.ResultTp:
         ), e.NamedNominalLinkTp(name=r_name, linkprop=r_linkprop):
             if l_name != r_name:
                 raise ValueError("Named nominal link tp name mismatch", l, r)
-            new_link_prop: Dict[str, e.ResultTp] = {}
+            new_link_prop: dict[str, e.ResultTp] = {}
             for lbl, (l_comp_tp, l_comp_card) in l_linkprop.val.items():
                 new_link_prop[lbl] = e.ResultTp(l_comp_tp, l_comp_card)
             for lbl, (r_comp_tp, r_comp_card) in r_linkprop.val.items():
@@ -58,17 +58,17 @@ def merge_result_tp(ctx: e.TcCtx, l: e.ResultTp, r: e.ResultTp) -> e.ResultTp:
 def copy_construct_inheritance(
     ctx: e.TcCtx,
     typedef: e.ObjectTp,
-    super_types: List[e.QualifiedName],
+    super_types: list[e.QualifiedName],
     constraints: Sequence[e.Constraint],
     indexes: Sequence[Sequence[str]],
-) -> Tuple[e.ObjectTp, Sequence[e.Constraint], Sequence[Sequence[str]]]:
+) -> tuple[e.ObjectTp, Sequence[e.Constraint], Sequence[Sequence[str]]]:
 
     definitions = [
         mops.resolve_type_def(ctx, super_type) for super_type in super_types
     ]
-    final_tp_dict: Dict[str, e.ResultTp] = {}
-    final_constraints: List[e.Constraint] = [*constraints]
-    final_indexes: List[Sequence[str]] = [*indexes]
+    final_tp_dict: dict[str, e.ResultTp] = {}
+    final_constraints: list[e.Constraint] = [*constraints]
+    final_indexes: list[Sequence[str]] = [*indexes]
     for i, mdef in enumerate(definitions):
         definition = mdef.typedef
         super_constraint = mdef.constraints
@@ -107,12 +107,12 @@ def copy_construct_inheritance(
 
 
 def module_inheritance_populate(
-    dbschema: e.DBSchema, module_name: Tuple[str, ...]
+    dbschema: e.DBSchema, module_name: tuple[str, ...]
 ) -> None:
     """
     Modifies the db schema after checking
     """
-    result_vals: Dict[str, e.ModuleEntity] = {}
+    result_vals: dict[str, e.ModuleEntity] = {}
     dbmodule = dbschema.unchecked_modules[module_name]
     for t_name, t_me in dbmodule.defs.items():
         root_ctx = eops.emtpy_tcctx_from_dbschema(dbschema, module_name)

@@ -1,4 +1,3 @@
-from typing import Dict
 from ..data import data_ops as e
 from ..data.data_ops import (
     Val,
@@ -69,7 +68,7 @@ def make_storage_atomic(val: Val, tp: Tp) -> Val:
 
 
 # we require fmt to be a storage tp -- No Computable Types should be present
-def coerce_to_storage(val: ObjectVal, fmt: ObjectTp) -> Dict[str, MultiSetVal]:
+def coerce_to_storage(val: ObjectVal, fmt: ObjectTp) -> dict[str, MultiSetVal]:
     # ensure no redundant keys
     extra_keys = [
         k

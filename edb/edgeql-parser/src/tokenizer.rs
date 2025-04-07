@@ -649,19 +649,15 @@ impl<'a> Tokenizer<'a> {
                     };
                     Ok((Substitution, len + 1))
                 }
-                _ => {
-                    return Err(Error::new(format_args!(
-                        "unexpected character {:?}",
-                        cur_char
-                    )))
-                }
-            },
-            _ => {
-                return Err(Error::new(format_args!(
+                _ => Err(Error::new(format_args!(
                     "unexpected character {:?}",
                     cur_char
-                )))
-            }
+                ))),
+            },
+            _ => Err(Error::new(format_args!(
+                "unexpected character {:?}",
+                cur_char
+            ))),
         }
     }
 
@@ -707,10 +703,10 @@ impl<'a> Tokenizer<'a> {
                 }
             }
         }
-        return Err(Error::new(format_args!(
+        Err(Error::new(format_args!(
             "unterminated string, quoted by `{}`",
             open_quote
-        )));
+        )))
     }
 
     fn parse_string_interp_cont(&self, end: &str) -> Result<(Kind, usize), Error> {
@@ -731,10 +727,10 @@ impl<'a> Tokenizer<'a> {
                 _ => check_prohibited(c, true)?,
             }
         }
-        return Err(Error::new(format_args!(
+        Err(Error::new(format_args!(
             "unterminated string with interpolations, quoted by `{}`",
             end,
-        )));
+        )))
     }
 
     fn parse_number(&mut self) -> Result<(Kind, usize), Error> {
@@ -894,12 +890,12 @@ impl<'a> Tokenizer<'a> {
                 "123"
             };
             if suffix.starts_with('O') {
-                return Err(Error::new(format_args!(
+                Err(Error::new(format_args!(
                     "suffix {:?} is invalid for \
                         numbers, perhaps mixed up letter `O` \
                         with zero `0`?",
                     suffix
-                )));
+                )))
             } else if decimal {
                 return Err(Error::new(format_args!(
                     "suffix {:?} is invalid for \
@@ -986,19 +982,19 @@ impl<'a> Tokenizer<'a> {
     }
 }
 
-impl<'a> fmt::Display for TokenStub<'a> {
+impl fmt::Display for TokenStub<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}[{:?}]", self.text, self.kind)
     }
 }
 
-impl<'a> fmt::Display for Token<'a> {
+impl fmt::Display for Token<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}[{:?}]", self.text, self.kind)
     }
 }
 
-impl<'a> Token<'a> {
+impl Token<'_> {
     pub fn cloned(self) -> Token<'static> {
         Token {
             kind: self.kind,
@@ -1031,7 +1027,7 @@ fn check_prohibited(c: char, escape: bool) -> Result<(), Error> {
     }
 }
 
-impl<'a> std::cmp::PartialEq for Token<'a> {
+impl std::cmp::PartialEq for Token<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.kind == other.kind && self.text == other.text && self.value == other.value
     }
@@ -1051,7 +1047,7 @@ where
     struct Visitor;
     use serde::de;
 
-    impl<'v> de::Visitor<'v> for Visitor {
+    impl de::Visitor<'_> for Visitor {
         type Value = Keyword;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

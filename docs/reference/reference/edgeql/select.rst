@@ -6,8 +6,6 @@ Select
 :eql-statement:
 :eql-haswith:
 
-:index: order filter select offset limit with then asc desc first last empty
-
 ``select``--retrieve or compute a set of values.
 
 .. eql:synopsis::

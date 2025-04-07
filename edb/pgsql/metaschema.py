@@ -24,10 +24,7 @@ from typing import (
     Callable,
     Optional,
     Protocol,
-    Tuple,
     Iterable,
-    List,
-    Set,
     Sequence,
     cast,
 )
@@ -1227,7 +1224,7 @@ class GetDatabaseFrontendNameFunction(trampoline.VersionedFunction):
         THEN
             substring(db_name, position('_' in db_name) + 1)
         ELSE
-            'edgedb'
+            'main'
         END
     '''
 
@@ -5070,6 +5067,27 @@ class ResetQueryStatsFunction(trampoline.VersionedFunction):
         )
 
 
+# This is not a VersionedFunction because the VersionedFunction wrapper - which
+# is a SQL function - cannot return type trigger.
+class ClearFELocalSQLSettingsFunction(dbops.Function):
+    text = r"""
+    BEGIN
+        DELETE FROM _edgecon_state WHERE type = 'L' AND name = NEW.name;
+        RETURN NEW;
+    END;
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            name=('edgedb', '_clear_fe_local_sql_settings'),
+            args=[],
+            returns='trigger',
+            language='plpgsql',
+            volatility='volatile',
+            text=self.text,
+        )
+
+
 def _maybe_trampoline(
     cmd: dbops.Command, out: list[trampoline.Trampoline]
 ) -> None:
@@ -5294,6 +5312,7 @@ def get_bootstrap_commands(
         dbops.CreateFunction(FTSToRegconfig()),
         dbops.CreateFunction(PadBase64StringFunction()),
         dbops.CreateFunction(ResetQueryStatsFunction(False)),
+        dbops.CreateFunction(ClearFELocalSQLSettingsFunction()),
     ]
 
     commands = dbops.CommandGroup()
@@ -5429,7 +5448,7 @@ def format_fields(
     return ',\n'.join(cols)
 
 
-def _generate_branch_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_branch_views(schema: s_schema.Schema) -> list[dbops.View]:
     Branch = schema.get('sys::Branch', type=s_objtypes.ObjectType)
     annos = Branch.getptr(
         schema, s_name.UnqualName('annotations'), type=s_links.Link)
@@ -5539,7 +5558,7 @@ def _generate_branch_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_extension_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_extension_views(schema: s_schema.Schema) -> list[dbops.View]:
     ExtPkg = schema.get('sys::ExtensionPackage', type=s_objtypes.ObjectType)
     annos = ExtPkg.getptr(
         schema, s_name.UnqualName('annotations'), type=s_links.Link)
@@ -5672,7 +5691,7 @@ def _generate_extension_views(schema: s_schema.Schema) -> List[dbops.View]:
 
 def _generate_extension_migration_views(
     schema: s_schema.Schema
-) -> List[dbops.View]:
+) -> list[dbops.View]:
     ExtPkgMigration = schema.get(
         'sys::ExtensionPackageMigration', type=s_objtypes.ObjectType)
     annos = ExtPkgMigration.getptr(
@@ -5799,7 +5818,7 @@ def _generate_extension_migration_views(
     return views
 
 
-def _generate_role_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     Role = schema.get('sys::Role', type=s_objtypes.ObjectType)
     member_of = Role.getptr(
         schema, s_name.UnqualName('member_of'), type=s_links.Link)
@@ -5989,7 +6008,7 @@ def _generate_role_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_single_role_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     Role = schema.get('sys::Role', type=s_objtypes.ObjectType)
     member_of = Role.getptr(
         schema, s_name.UnqualName('member_of'), type=s_links.Link)
@@ -6113,7 +6132,7 @@ def _generate_single_role_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_schema_ver_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_schema_ver_views(schema: s_schema.Schema) -> list[dbops.View]:
     Ver = schema.get(
         'sys::GlobalSchemaVersion',
         type=s_objtypes.ObjectType,
@@ -6153,7 +6172,7 @@ def _generate_schema_ver_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_stats_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_stats_views(schema: s_schema.Schema) -> list[dbops.View]:
     QueryStats = schema.get(
         'sys::QueryStats',
         type=s_objtypes.ObjectType,
@@ -6289,7 +6308,7 @@ def _make_json_caster(
 def _generate_schema_alias_views(
     schema: s_schema.Schema,
     module: s_name.UnqualName,
-) -> List[dbops.View]:
+) -> list[dbops.View]:
     views = []
 
     schema_objs = schema.get_objects(
@@ -6339,7 +6358,7 @@ def _schema_alias_view_name(
 
 def _generate_sql_information_schema(
     backend_version: params.BackendVersion
-) -> List[dbops.Command]:
+) -> list[dbops.Command]:
 
     # Helper to create wrappers around materialized views.  For
     # performance, we use MATERIALIZED VIEW for some of our SQL
@@ -6534,6 +6553,61 @@ def _generate_sql_information_schema(
                 nsdef
         '''
     )
+    # pg_settings is a function because "_edgecon_state" is a temporary table
+    # and therefore cannot be used in a view.
+    fe_pg_settings = trampoline.VersionedFunction(
+        name=('edgedbsql', 'pg_show_all_settings'),
+        args=[],
+        returns=('pg_catalog', 'pg_settings'),
+        set_returning=True,
+        volatility='volatile',
+        text='''
+            SELECT
+                p.name,
+                COALESCE(
+                    COALESCE(l.value, s.value, d.value) #>> '{}',
+                    p.setting
+                ) AS setting,
+                unit,
+                category,
+                short_desc,
+                extra_desc,
+                context,
+                vartype,
+                CASE
+                    WHEN l.value IS NOT NULL THEN 'session'
+                    WHEN s.value IS NOT NULL THEN 'session'
+                    WHEN d.value IS NOT NULL THEN 'default'
+                    ELSE p.source
+                END AS source,
+                min_val,
+                max_val,
+                enumvals,
+                boot_val,
+                CASE
+                    WHEN d.value IS NOT NULL THEN d.value #>> '{}'
+                    ELSE p.reset_val
+                END AS reset_val,
+                sourcefile,
+                sourceline,
+                pending_restart
+            FROM
+                pg_settings p
+                LEFT JOIN _edgecon_state l ON p.name = l.name AND l.type = 'L'
+                LEFT JOIN _edgecon_state s ON p.name = s.name AND s.type = 'S'
+                LEFT JOIN (
+                    SELECT
+                        (j->>'name') AS name,
+                        (j->'value') AS value
+                    FROM
+                        edgedbinstdata_VER.instdata
+                        CROSS JOIN LATERAL
+                            jsonb_array_elements(instdata.json) AS j
+                    WHERE
+                        key = 'sql_default_fe_settings'
+                ) d ON p.name = d.name
+        '''
+    )
 
     sql_ident = 'information_schema.sql_identifier'
     sql_str = 'information_schema.character_data'
@@ -6571,10 +6645,10 @@ def _generate_sql_information_schema(
             vt_table_schema::{sql_ident} AS table_schema,
             vt_table_name::{sql_ident} AS table_name,
             v_column_name::{sql_ident} as column_name,
-            ROW_NUMBER() OVER (
+            cast(ROW_NUMBER() OVER (
                 PARTITION BY vt_table_schema, vt_table_name
                 ORDER BY position, v_column_name
-            ) AS ordinal_position,
+            ) AS INT) AS ordinal_position,
             column_default,
             is_nullable,
             data_type,
@@ -7140,25 +7214,39 @@ def _generate_sql_information_schema(
 
         trampoline.VersionedView(
             name=("edgedbsql", "pg_database"),
-            query="""
+            query=f"""
         SELECT
             oid,
-            edgedb_VER.get_current_database()::name as datname,
+            frontend_name.n as datname,
             datdba,
             encoding,
+            {'datlocprovider,' if backend_version.major >= 15 else ''}
             datcollate,
             datctype,
             datistemplate,
             datallowconn,
+            {'dathasloginevt,' if backend_version.major >= 17 else ''}
             datconnlimit,
             0::oid AS datlastsysoid,
             datfrozenxid,
             datminmxid,
             dattablespace,
+            {'datlocale,' if backend_version.major >= 17 else ''}
+            {'daticurules,' if backend_version.major >= 16 else ''}
+            {'datcollversion,' if backend_version.major >= 15 else ''}
             datacl,
             tableoid, xmin, cmin, xmax, cmax, ctid
-        FROM pg_database
-        WHERE datname LIKE '%_edgedb'
+        FROM
+            pg_database,
+            LATERAL (
+                SELECT edgedb_VER.get_database_frontend_name(datname) AS n
+            ) frontend_name,
+            LATERAL (
+                SELECT edgedb_VER.get_database_metadata(frontend_name.n) AS j
+            ) metadata
+        WHERE
+            metadata.j->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
+            AND NOT (metadata.j->'builtin')::bool
         """,
         ),
 
@@ -7541,6 +7629,75 @@ def _generate_sql_information_schema(
         WHERE FALSE
         """,
         ),
+        trampoline.VersionedView(
+            name=("edgedbsql", "pg_settings"),
+            query="""
+            select * from edgedbsql_VER.pg_show_all_settings()
+        """,
+        ),
+        # A helper view for the `SHOW` SQL command.
+        # See also NormalizedPgSettingsView, InterpretConfigValueToJsonFunction
+        # as well as the Postgres C function ShowGUCOption.
+        trampoline.VersionedView(
+            name=("edgedbsql", "pg_settings_for_show"),
+            query=r"""
+        SELECT
+            s.name AS name,
+            CASE
+                WHEN vartype = 'bool'
+                THEN (
+                    CASE
+                    WHEN lower(setting) = any(ARRAY['on', 'true', 'yes', '1'])
+                    THEN 'on'
+                    ELSE 'off'
+                    END
+                )
+
+                WHEN vartype = 'enum' OR vartype = 'string'
+                THEN setting
+
+                WHEN vartype = 'integer' OR vartype = 'real'
+                THEN (
+                    CASE
+                    WHEN setting::numeric > 0 AND unit.unit IS NOT NULL
+                    THEN (setting::numeric * unit.multiplier)::text || unit.unit
+                    ELSE setting
+                    END
+                )
+
+                ELSE
+                    edgedb_VER.raise(
+                        NULL::text,
+                        msg => (
+                            'unknown configuration type "' ||
+                            COALESCE(vartype, '<NULL>') ||
+                            '"'
+                        )
+                    )
+            END AS setting,
+            short_desc AS description
+
+        FROM
+            edgedbsql_VER.pg_settings AS s,
+
+            LATERAL (
+                SELECT regexp_match(
+                    s.unit, '^(\d*)\s*([a-zA-Z]{1,3})$') AS v
+            ) AS _unit,
+
+            LATERAL (
+                SELECT
+                    COALESCE(
+                        CASE
+                            WHEN _unit.v[1] = '' THEN 1
+                            ELSE _unit.v[1]::int
+                        END,
+                        1
+                    ) AS multiplier,
+                    COALESCE(_unit.v[2], '') AS unit
+            ) AS unit
+        """
+        ),
     ]
 
     # We expose most of the views as empty tables, just to prevent errors when
@@ -7590,6 +7747,7 @@ def _generate_sql_information_schema(
         'pg_tables',
         'pg_views',
         'pg_description',
+        'pg_settings',
     }
 
     PG_TABLES_WITH_SYSTEM_COLS = {
@@ -7692,6 +7850,326 @@ def _generate_sql_information_schema(
             views.append(v)
 
     util_functions = [
+        # A 1:1 PL/pgSQL replication of the Postgres SplitIdentifierString
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'split_identifier_string'),
+            args=(
+                ('rawstring', 'text',),
+                ('separator', 'text',),
+            ),
+            returns=('text[]',),
+            language="plpgsql",
+            volatility="immutable",
+            text=r"""
+DECLARE
+    namelist text[] := '{}';
+    pos integer := 1;
+    len integer;
+    c char;
+    sep_char char;
+    curname text;
+    in_quote boolean;
+    db_encoding text := getdatabaseencoding();
+BEGIN
+    -- Initialization
+    IF length(separator) != 1 THEN
+        RAISE EXCEPTION 'Separator must be a single character';
+    END IF;
+    sep_char := substring(separator FROM 1 FOR 1);
+    len := length(rawstring);
+
+    -- Skip leading whitespace
+    WHILE pos <= len LOOP
+        c := substring(rawstring FROM pos FOR 1);
+        IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+            pos := pos + 1;
+        ELSE
+            EXIT;
+        END IF;
+    END LOOP;
+
+    -- Allow empty string
+    IF pos > len THEN
+        RETURN namelist;
+    END IF;
+
+    -- At the top of the loop, we are at start of a new identifier.
+    LOOP
+        IF substring(rawstring FROM pos FOR 1) = '"' THEN
+            -- Quoted name --- collapse quote-quote pairs, no downcasing
+            pos := pos + 1;
+            curname := '';
+            in_quote := TRUE;
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c = '"' THEN
+                    IF pos < len
+                        AND substring(rawstring FROM pos + 1 FOR 1) = '"'
+                    THEN
+                        -- Collapse adjacent quotes into one quote,
+                        -- and look again
+                        curname := curname || '"';
+                        pos := pos + 2;
+                    ELSE
+                        -- Found end of quoted name
+                        pos := pos + 1;
+                        in_quote := FALSE;
+                        EXIT;
+                    END IF;
+                ELSE
+                    curname := curname || c;
+                    pos := pos + 1;
+                END IF;
+            END LOOP;
+
+            -- Mismatched quotes
+            IF in_quote THEN
+                RAISE EXCEPTION 'Unterminated quoted identifier';
+            END IF;
+
+        ELSE
+            -- Unquoted name --- extends to separator or whitespace
+            curname := '';
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c = sep_char OR c IN (' ', '\t', '\n', '\r', '\f') THEN
+                    EXIT;
+                END IF;
+                curname := curname || c;
+                pos := pos + 1;
+            END LOOP;
+
+            IF curname = '' THEN
+                RAISE EXCEPTION 'Empty unquoted identifier';
+            END IF;
+
+            -- Downcase the identifier
+            curname := lower(curname);
+        END IF;
+
+        -- Truncate name if it's overlength
+        IF octet_length(curname) > 63 THEN
+            RAISE NOTICE 'identifier "%" will be truncated', curname;
+            curname := convert_from(
+                substring(convert_to(curname, db_encoding) FROM 1 FOR 63),
+                db_encoding
+            );
+        END IF;
+
+        -- Finished isolating current name --- add it to list
+        namelist := array_append(namelist, curname);
+
+        -- Skip trailing whitespace
+        WHILE pos <= len LOOP
+            c := substring(rawstring FROM pos FOR 1);
+            IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+                pos := pos + 1;
+            ELSE
+                EXIT;
+            END IF;
+        END LOOP;
+
+        IF pos > len THEN
+            EXIT; -- End of string
+        ELSIF substring(rawstring FROM pos FOR 1) = sep_char THEN
+            pos := pos + 1;
+            -- Skip leading whitespace for next
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+                    pos := pos + 1;
+                ELSE
+                    EXIT;
+                END IF;
+            END LOOP;
+        ELSE
+            RAISE EXCEPTION 'Invalid character at position %: "%"', pos, c;
+        END IF;
+    END LOOP;
+
+    RETURN namelist;
+END;
+            """,
+        ),
+        # current_schemas() is an emulation of Postgres current_schemas(),
+        # fetch_search_path() and recomputeNamespacePath() internal functions.
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'current_schemas'),
+            args=(
+                ('include_implicit', 'bool',),
+            ),
+            returns=('name[]',),
+            language="plpgsql",
+            volatility="stable",
+            text="""
+DECLARE
+    search_path_str text;
+    schema_list text[];
+    rv name[] := '{}'::name[];
+    is_valid_namespace boolean;
+    has_pg_catalog boolean;
+    resolved_schema text;
+BEGIN
+    -- Get the current search_path from the emulated pg_settings view
+    SELECT COALESCE(setting, 'public') INTO search_path_str
+    FROM edgedbsql_VER.pg_settings
+    WHERE name = 'search_path';
+
+    -- Split using our custom function with comma separator
+    schema_list := edgedbsql_VER.split_identifier_string(search_path_str, ',');
+
+    -- Handle implicit schemas if requested
+    IF include_implicit THEN
+        -- Temporary schema is not supported yet
+
+        -- Check if pg_catalog is already present
+        has_pg_catalog := 'pg_catalog' = ANY(schema_list);
+
+        -- Add pg_catalog if not present and GUC variables allow it
+        IF NOT has_pg_catalog THEN
+            rv := array_append(rv, 'pg_catalog'::name);
+        END IF;
+    END IF;
+
+    -- Process each schema element
+    FOR i IN 1..array_length(schema_list, 1) LOOP
+        -- Handle $user substitution
+        IF schema_list[i] = '$user' THEN
+            resolved_schema := current_user;
+        ELSE
+            resolved_schema := schema_list[i];
+        END IF;
+
+        -- Check existence in namespace catalog
+        IF EXISTS (
+            SELECT 1
+            FROM edgedbsql_VER.pg_namespace
+            WHERE nspname = resolved_schema
+        ) THEN
+            rv := array_append(rv, resolved_schema::name);
+        END IF;
+    END LOOP;
+
+    RETURN rv;
+END;
+            """,
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('name_or_oid', 'text',),
+            ),
+            returns=('regclass',),
+            language="plpgsql",
+            text="""
+DECLARE
+    parts text[];
+    result regclass;
+BEGIN
+    IF name_or_oid = '-' THEN
+        RETURN 0::regclass;
+    END IF;
+
+    IF name_or_oid ~ '^[0-9]+$' THEN
+        RETURN name_or_oid::oid::regclass;
+    END IF;
+
+    parts := parse_ident(name_or_oid);
+    IF array_length(parts, 1) = 1 THEN
+        SELECT pc.oid::regclass INTO result
+        FROM unnest(edgedbsql_VER.current_schemas(true))
+            WITH ORDINALITY AS ns(nspname, ord)
+        JOIN edgedbsql_VER.pg_namespace pn
+            USING (nspname)
+        JOIN edgedbsql_VER.pg_class pc
+            ON pn.oid = pc.relnamespace
+        WHERE pc.relname = parts[1]
+        ORDER BY ns.ord
+        LIMIT 1;
+    ELSEIF array_length(parts, 1) = 2 THEN
+        SELECT pc.oid::regclass INTO result
+        FROM edgedbsql_VER.pg_class pc
+        JOIN edgedbsql_VER.pg_namespace pn
+            ON pn.oid = pc.relnamespace
+        WHERE relname = parts[2] AND nspname = parts[1];
+    ELSE
+        RAISE EXCEPTION
+            'improper relation name (too many dotted names): %', name_or_oid;
+    END IF;
+    RETURN result;
+END;
+            """
+        ),
+        # Unlike pg_catalog.to_regclass(), edgedbsql.to_regclass() also takes
+        # numeric parameters to support compiled `::regclass` typecasting.
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'integer',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'smallint',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'bigint',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'oid',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_database_privilege'),
+            args=(
+                ('database_name', 'text'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_database_privilege(oid, privilege)
+                FROM edgedbsql_VER.pg_database
+                WHERE datname = database_name
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_database_privilege'),
+            args=(
+                ('database_oid', 'oid'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_database_privilege(database_oid, privilege)
+            """
+        ),
         trampoline.VersionedFunction(
             name=('edgedbsql', 'has_schema_privilege'),
             args=(
@@ -7728,20 +8206,19 @@ def _generate_sql_information_schema(
             ),
             returns=('bool',),
             text="""
-                SELECT has_table_privilege(oid, privilege)
-                FROM edgedbsql_VER.pg_class
-                WHERE relname = table_name;
+                SELECT has_table_privilege(
+                    edgedbsql_VER.to_regclass(table_name), privilege)
             """
         ),
         trampoline.VersionedFunction(
             name=('edgedbsql', 'has_table_privilege'),
             args=(
-                ('schema_oid', 'oid'),
+                ('table_oid', 'oid'),
                 ('privilege', 'text'),
             ),
             returns=('bool',),
             text="""
-                SELECT has_table_privilege(schema_oid, privilege)
+                SELECT has_table_privilege(table_oid, privilege)
             """
         ),
 
@@ -7766,9 +8243,8 @@ def _generate_sql_information_schema(
             ),
             returns=('bool',),
             text="""
-                SELECT has_column_privilege(oid, col, privilege)
-                FROM edgedbsql_VER.pg_class
-                WHERE relname = tbl;
+                SELECT has_column_privilege(
+                    edgedbsql_VER.to_regclass(tbl), col, privilege)
             """
         ),
         trampoline.VersionedFunction(
@@ -7795,9 +8271,32 @@ def _generate_sql_information_schema(
             returns=('bool',),
             text="""
                 SELECT has_column_privilege(pc.oid, attnum_internal, privilege)
-                FROM edgedbsql_VER.pg_class pc
-                JOIN edgedbsql_VER.pg_attribute_ext pa ON pa.attrelid = pc.oid
-                WHERE pc.relname = tbl AND pa.attname = col;
+                FROM edgedbsql_VER.pg_attribute_ext pa,
+                LATERAL (SELECT edgedbsql_VER.to_regclass(tbl) AS oid) pc
+                WHERE pa.attrelid = pc.oid AND pa.attname = col
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_any_column_privilege'),
+            args=(
+                ('tbl', 'oid'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_any_column_privilege(tbl, privilege)
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_any_column_privilege'),
+            args=(
+                ('tbl', 'text'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_any_column_privilege(
+                    edgedbsql_VER.to_regclass(tbl), privilege)
             """
         ),
         trampoline.VersionedFunction(
@@ -7958,6 +8457,7 @@ def _generate_sql_information_schema(
             cast(dbops.Command, dbops.CreateFunction(long_name)),
             cast(dbops.Command, dbops.CreateFunction(type_rename)),
             cast(dbops.Command, dbops.CreateFunction(namespace_rename)),
+            cast(dbops.Command, dbops.CreateFunction(fe_pg_settings)),
         ]
         + [dbops.CreateView(view) for view in views]
         + [dbops.CreateFunction(func) for func in util_functions]
@@ -8300,7 +8800,7 @@ def _build_key_source(
 
 
 def _build_key_expr(
-    key_components: List[str],
+    key_components: list[str],
     versioned: bool,
 ) -> str:
     prefix = 'edgedb_VER' if versioned else 'edgedb'
@@ -8366,14 +8866,14 @@ def _generate_config_type_view(
     stype: s_objtypes.ObjectType,
     *,
     scope: Optional[qltypes.ConfigScope],
-    path: List[Tuple[s_pointers.Pointer, List[s_pointers.Pointer]]],
+    path: list[tuple[s_pointers.Pointer, list[s_pointers.Pointer]]],
     rptr: Optional[s_pointers.Pointer],
     existing_view_columns: Optional[dict[str, list[str]]],
     override_exclusive_props: Optional[list[s_pointers.Pointer]] = None,
-    _memo: Optional[Set[s_obj.Object]] = None,
-) -> Tuple[
-    List[Tuple[Tuple[str, str], str]],
-    List[s_pointers.Pointer],
+    _memo: Optional[set[s_obj.Object]] = None,
+) -> tuple[
+    list[tuple[tuple[str, str], str]],
+    list[s_pointers.Pointer],
 ]:
     X = xdedent.escape
 
@@ -8885,10 +9385,11 @@ async def execute_sql_script(
         elif pl_func_line:
             point = ql_parser.offset_of_line(sql_text, pl_func_line)
             text = sql_text
+        assert text
 
         if point is not None:
             span = qlast.Span(
-                'query', text, start=point, end=point, context_lines=30
+                None, text, start=point, end=point, context_lines=30
             )
             exceptions.replace_context(e, span)
 

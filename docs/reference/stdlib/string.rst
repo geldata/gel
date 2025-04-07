@@ -98,7 +98,7 @@ Strings
 
 .. eql:type:: std::str
 
-    :index: continuation cont
+    .. index:: continuation
 
     A unicode string of text.
 
@@ -191,7 +191,7 @@ Strings
 
 .. eql:operator:: stridx: str [ int64 ] -> str
 
-    :index: [int], index access
+    .. api-index:: §str§[§int§]
 
     String indexing.
 
@@ -231,7 +231,7 @@ Strings
 
 .. eql:operator:: strslice: str [ int64 : int64 ] -> str
 
-    :index: [int:int]
+    .. api-index:: §str§[§int§:§int§]
 
     String slicing.
 
@@ -265,7 +265,8 @@ Strings
 
 .. eql:operator:: strplus: str ++ str -> str
 
-    :index: ++, string, concatenate, join, add
+    .. index:: join, add
+    .. api-index:: §str §++§ str§
 
     String concatenation.
 
@@ -281,7 +282,8 @@ Strings
 .. eql:operator:: like: str like str -> bool
                         str not like str -> bool
 
-    :index: like, not like, case sensitive, string matching, comparison, compare
+    .. index:: comparison, compare
+    .. api-index:: §str §like§ str§, §str §not like§ str§
 
     Case-sensitive simple string matching.
 
@@ -333,7 +335,8 @@ Strings
 .. eql:operator:: ilike: str ilike str -> bool
                          str not ilike str -> bool
 
-    :index: ilike, not ilike, case insensitive, string matching, comparison, compare
+    .. index:: comparison, compare
+    .. api-index:: §str §ilike§ str§, §str §not ilike§ str§
 
     Case-insensitive simple string matching.
 
@@ -567,7 +570,7 @@ Strings
 
 .. eql:function:: std::str_split(s: str, delimiter: str) -> array<str>
 
-    :index: split str_split explode
+    .. index:: explode
 
     Splits a string into array elements using the supplied delimiter.
 
@@ -588,7 +591,7 @@ Strings
 .. eql:function:: std::re_match(pattern: str, \
                                 string: str) -> array<str>
 
-    :index: regex regexp regular
+    .. index:: regexp
 
     Finds the first regular expression match in a string.
 
@@ -609,7 +612,7 @@ Strings
 .. eql:function:: std::re_match_all(pattern: str, \
                                     string: str) -> set of array<str>
 
-    :index: regex regexp regular
+    .. index:: regexp
 
     Finds all regular expression matches in a string.
 
@@ -632,7 +635,7 @@ Strings
                                   named only flags: str='') \
                   -> str
 
-    :index: regex regexp regular replace
+    .. index:: regexp
 
     Replaces matching substrings in a given string.
 
@@ -656,7 +659,7 @@ Strings
 
 .. eql:function:: std::re_test(pattern: str, string: str) -> bool
 
-    :index: regex regexp regular match
+    .. index:: regexp
 
     Tests if a regular expression has a match in a string.
 
@@ -689,7 +692,7 @@ Strings
                   std::to_str(val: cal::local_time, \
                               fmt: optional str={}) -> str
 
-    :index: stringify dumps join array_to_string decode TextDecoder
+    .. index:: stringify, dumps, join, array_to_string, decode, TextDecoder
 
     Returns the string representation of the input value.
 

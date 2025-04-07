@@ -25,7 +25,6 @@ from typing import (
     Any,
     ClassVar,
     Optional,
-    Type,
     TypeVar,
     Union,
     Sequence,
@@ -67,7 +66,7 @@ FromJsonT = TypeVar('FromJsonT', bound='FromJson')
 class FromJson(ast.AST, to_json.ToJson):
     @classmethod
     def from_json(
-        cls: Type[FromJsonT],
+        cls: type[FromJsonT],
         json: dict[str, Any],
         ctx: explain.AnalyzeContext,
     ) -> FromJsonT:
@@ -278,7 +277,7 @@ important = Important()
 
 @dataclasses.dataclass
 class PropInfo:
-    type: Type[object]
+    type: type[object]
     enum_type: PropType
     important: bool
 
@@ -357,7 +356,7 @@ class Plan(FromJson, CostMixin):
 
     plans: list[Plan]
 
-    __subclasses: ClassVar[dict[str, Type[Plan]]] = dict()
+    __subclasses: ClassVar[dict[str, type[Plan]]] = dict()
 
     def __init_subclass__(cls, **kwargs: Any):
         super().__init_subclass__(**kwargs)

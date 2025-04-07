@@ -26,12 +26,8 @@ from typing import (
     Final,
     Optional,
     Protocol,
-    Tuple,
-    Union,
     Iterable,
     Sequence,
-    Dict,
-    List,
     cast,
     TYPE_CHECKING,
 )
@@ -148,7 +144,7 @@ def compile_FunctionCall(
             funcs, args=args, kwargs=kwargs, ctx=ctx)
     if not matched:
         alts = [f.get_signature_as_str(env.schema) for f in funcs]
-        sig: List[str] = []
+        sig: list[str] = []
         # This is used to generate unique arg names.
         argnum = 0
         for argtype, _ in args:
@@ -198,6 +194,20 @@ def compile_FunctionCall(
 
     func = matched_call.func
     assert isinstance(func, s_func.Function)
+
+    if matched_call.server_param_conversions:
+        for param_name, conversions in (
+            matched_call.server_param_conversions.items()
+        ):
+            if param_name not in ctx.env.server_param_conversions:
+                ctx.env.server_param_conversions[param_name] = {}
+            ctx.env.server_param_conversions[param_name].update(
+                conversions
+            )
+        ctx.env.server_param_conversion_calls.append((
+            func.get_signature_as_str(env.schema),
+            expr.span,
+        ))
 
     inline_func = None
     if (
@@ -343,6 +353,22 @@ def compile_FunctionCall(
             expr, matched_call, candidates=funcs, ctx=ctx
         )
 
+    volatility = (
+        # Incorporate the volatility of any server param conversions
+        max([
+            func.get_volatility(env.schema),
+            *(
+                conversion.volatility
+                for conversions in (
+                    matched_call.server_param_conversions.values()
+                )
+                for conversion in conversions.values()
+            )
+        ])
+        if matched_call.server_param_conversions else
+        func.get_volatility(env.schema)
+    )
+
     fcall = irast.FunctionCall(
         args=final_args,
         func_shortname=func_name,
@@ -351,7 +377,7 @@ def compile_FunctionCall(
         func_sql_function=func.get_from_function(env.schema),
         func_sql_expr=func.get_from_expr(env.schema),
         force_return_cast=func.get_force_return_cast(env.schema),
-        volatility=func.get_volatility(env.schema),
+        volatility=volatility,
         sql_func_has_out_params=func.get_sql_func_has_out_params(env.schema),
         error_on_null_result=func.get_error_on_null_result(env.schema),
         preserves_optionality=func.get_preserves_optionality(env.schema),
@@ -590,7 +616,7 @@ def _special_case(name: str) -> Callable[[_SpecialCaseFunc], _SpecialCaseFunc]:
 def compile_operator(
     qlexpr: qlast.Expr,
     op_name: str,
-    qlargs: List[qlast.Expr],
+    qlargs: list[qlast.Expr],
     *,
     ctx: context.ContextLevel,
 ) -> irast.Set:
@@ -931,13 +957,13 @@ def _check_free_shape_op(ir: irast.Call, *, ctx: context.ContextLevel) -> None:
 
 def validate_recursive_operator(
     opers: Iterable[s_func.CallableObject],
-    larg: Tuple[s_types.Type, irast.Set],
-    rarg: Tuple[s_types.Type, irast.Set],
+    larg: tuple[s_types.Type, irast.Set],
+    rarg: tuple[s_types.Type, irast.Set],
     *,
     ctx: context.ContextLevel,
-) -> List[polyres.BoundCall]:
+) -> list[polyres.BoundCall]:
 
-    matched: List[polyres.BoundCall] = []
+    matched: list[polyres.BoundCall] = []
 
     # if larg and rarg are tuples or arrays, recurse into their subtypes
     if (
@@ -970,13 +996,13 @@ def validate_recursive_operator(
 def compile_func_call_args(
     expr: qlast.FunctionCall,
     funcname: sn.Name,
-    typemods: Dict[Union[int, str], ft.TypeModifier],
+    typemods: dict[int | str, ft.TypeModifier],
     *,
     prefer_subquery_args: bool=False,
     ctx: context.ContextLevel
-) -> Tuple[
-    List[Tuple[s_types.Type, irast.Set]],
-    Dict[str, Tuple[s_types.Type, irast.Set]],
+) -> tuple[
+    list[tuple[s_types.Type, irast.Set]],
+    dict[str, tuple[s_types.Type, irast.Set]],
 ]:
     args = []
     kwargs = {}
@@ -1016,7 +1042,7 @@ def get_globals(
     bound_call: polyres.BoundCall,
     candidates: Sequence[s_func.Function],
     *, ctx: context.ContextLevel,
-) -> List[irast.Set]:
+) -> list[irast.Set]:
     assert isinstance(bound_call.func, s_func.Function)
 
     func_language = bound_call.func.get_language(ctx.env.schema)
@@ -1058,7 +1084,7 @@ def finalize_args(
     bound_call: polyres.BoundCall,
     *,
     actual_typemods: Sequence[ft.TypeModifier] = (),
-    guessed_typemods: Dict[Union[int, str], ft.TypeModifier],
+    guessed_typemods: dict[int | str, ft.TypeModifier],
     is_polymorphic: bool = False,
     ctx: context.ContextLevel,
 ) -> tuple[dict[int | str, irast.CallArg], dict[str, int | str]]:

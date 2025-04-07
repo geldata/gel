@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union, Iterator, Sequence, List, TYPE_CHECKING
+from typing import Optional, Iterator, Sequence, TYPE_CHECKING
 
 from edb.ir import typeutils as irtyputils
 
@@ -273,7 +273,7 @@ def join_condition(
 
 
 def safe_array_expr(
-    elements: List[pgast.BaseExpr],
+    elements: list[pgast.BaseExpr],
     *,
     ser_safe: bool = False,
     ctx: context.CompilerContextLevel,
@@ -308,7 +308,7 @@ def find_column_in_subselect_rvar(
 
 def get_column(
     rvar: pgast.BaseRangeVar,
-    colspec: Union[str, pgast.ColumnRef],
+    colspec: str | pgast.ColumnRef,
     *,
     is_packed_multi: bool = True,
     nullable: Optional[bool] = None,

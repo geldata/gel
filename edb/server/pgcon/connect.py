@@ -44,6 +44,11 @@ INIT_CON_SCRIPT: bytes | None = None
 # * 'E': an instance-level config setting from environment variable
 # * 'F': an instance/tenant-level config setting from the TOML config file
 #
+# * 'S': a session-level pg-ext config setting (frontend-only)
+# * 'L': a transaction-level pg-ext config setting (frontend-only)
+# * 'P': a session-level pg-ext config setting that's implemented by setting
+#   a corresponding backend config setting (not stored in _edgecon_state)
+#
 # Please also update ConStateType in edb/server/config/__init__.py if changed.
 SETUP_TEMP_TABLE_SCRIPT = '''
         CREATE TEMPORARY TABLE _edgecon_state (
@@ -51,7 +56,7 @@ SETUP_TEMP_TABLE_SCRIPT = '''
             value jsonb NOT NULL,
             type text NOT NULL CHECK(
                 type = 'C' OR type = 'B' OR type = 'A' OR type = 'E'
-                OR type = 'F'),
+                OR type = 'F' OR type = 'S' OR type = 'L'),
             UNIQUE(name, type)
         );
 '''.strip()
@@ -104,11 +109,17 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
         {SETUP_CONFIG_CACHE_SCRIPT}
         {SETUP_DML_DUMMY_TABLE_SCRIPT}
 
+        CREATE CONSTRAINT TRIGGER _edgecon_state_local_reset
+        AFTER INSERT ON _edgecon_state
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW EXECUTE FUNCTION edgedb._clear_fe_local_sql_settings();
+
         PREPARE _clear_state AS
             WITH x1 AS (
                 DELETE FROM _config_cache
             )
-            DELETE FROM _edgecon_state WHERE type = 'C' OR type = 'B';
+            DELETE FROM _edgecon_state
+                WHERE type = 'C' OR type = 'B' or type = 'S';
 
         PREPARE _apply_state(jsonb) AS
             INSERT INTO
@@ -128,11 +139,50 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
             SELECT edgedb._reset_session_config();
 
         PREPARE _apply_sql_state(jsonb) AS
-            SELECT
-                e.key AS name,
-                pg_catalog.set_config(e.key, e.value, false) AS value
-            FROM
-                jsonb_each_text($1::jsonb) AS e;
+            WITH be AS (
+                SELECT
+                    pg_catalog.set_config(
+                        e->>'name', e->>'value', false
+                    ) AS value
+                FROM
+                    jsonb_array_elements($1::jsonb) AS e
+                WHERE
+                    e->'type' = '"P"'::jsonb
+            ),
+            fe AS (
+                INSERT INTO
+                    _edgecon_state(name, value, type)
+                SELECT
+                    e->>'name' AS name,
+                    e->'value' AS value,
+                    e->>'type' AS type
+                FROM
+                    jsonb_array_elements($1::jsonb) AS e
+                WHERE
+                    e->'type' = '"S"'::jsonb
+                RETURNING 1
+            )
+            SELECT 1 FROM be, fe;
+
+        PREPARE _set_sql_state(text, text, text) AS
+            INSERT INTO
+                _edgecon_state(name, type, value)
+            VALUES
+                ($1, $2, pg_catalog.to_jsonb($3))
+            ON CONFLICT (name, type) DO UPDATE
+                SET value = pg_catalog.to_jsonb($3);
+
+        PREPARE _reset_sql_state(text, text) AS
+            DELETE FROM
+                _edgecon_state
+            WHERE
+                name = $1 AND type = $2;
+
+        PREPARE _reset_sql_state_all AS
+            DELETE FROM
+                _edgecon_state
+            WHERE
+                type = 'S' OR type = 'L';
     ''').strip().encode('utf-8')
 
 
@@ -204,7 +254,20 @@ async def pg_connect(
                 ),
             )
         try:
-            await pgconn.sql_execute(INIT_CON_SCRIPT)
+            try:
+                await pgconn.sql_execute(INIT_CON_SCRIPT)
+            except pgcon.BackendError:
+                from edb.pgsql import dbops, metaschema
+
+                # ClearFELocalSQLSettingsFunction is needed by the
+                # INIT_CON_SCRIPT, so we cannot simply patch it up
+                # in the regular edb/pgsql/patches.py
+                block = dbops.PLTopBlock()
+                func = metaschema.ClearFELocalSQLSettingsFunction()
+                dbops.CreateFunction(func, or_replace=True).generate(block)
+
+                await pgconn.sql_execute(block.to_string().encode('utf-8'))
+                await pgconn.sql_execute(INIT_CON_SCRIPT)
         except Exception:
             logger.exception(
                 f"Failed to run init script for {pgconn.connection.to_dsn()}"

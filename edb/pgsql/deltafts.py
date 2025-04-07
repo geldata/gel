@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Optional, Tuple, Iterable, Sequence, Collection, Dict, List
+from typing import Optional, Iterable, Sequence, Collection
 
 from edb import errors
 
@@ -49,7 +49,7 @@ def create_fts_index(
     index: s_indexes.Index,
     index_expr: irast.Set,
     predicate_src: Optional[str],
-    sql_kwarg_exprs: Dict[str, str],
+    sql_kwarg_exprs: dict[str, str],
     options: qlcompiler.CompilerOptions,
     schema: s_schema.Schema,
     context: sd.CommandContext,
@@ -135,7 +135,7 @@ def _create_fts_document(
     index: s_indexes.Index,
     index_expr: irast.Set,
     predicate_src: Optional[str],
-    sql_kwarg_exprs: Dict[str, str],
+    sql_kwarg_exprs: dict[str, str],
     schema: s_schema.Schema,
     context: sd.CommandContext,
 ) -> dbops.Command:
@@ -276,7 +276,7 @@ def _pg_create_fts_document(
     index: s_indexes.Index,
     exprs: Sequence[pgast.BaseExpr],
     predicate_src: Optional[str],
-    sql_kwarg_exprs: Dict[str, str],
+    sql_kwarg_exprs: dict[str, str],
     schema: s_schema.Schema,
 ) -> dbops.Command:
     ops = dbops.CommandGroup()
@@ -317,7 +317,7 @@ def _pg_create_fts_document(
 
 
 def _pg_create_trigger(
-    table_name: Tuple[str, str],
+    table_name: tuple[str, str],
     exprs: Sequence[pgast.BaseExpr],
 ) -> dbops.CommandGroup:
     ops = dbops.CommandGroup()
@@ -387,7 +387,7 @@ def _pg_create_trigger(
 
 
 def _pg_drop_trigger(
-    table_name: Tuple[str, str],
+    table_name: tuple[str, str],
 ) -> dbops.Command:
     ops = dbops.CommandGroup()
 
@@ -412,8 +412,8 @@ def _pg_drop_trigger(
 
 
 def _pg_update_func_name(
-    tbl_name: Tuple[str, str],
-) -> Tuple[str, ...]:
+    tbl_name: tuple[str, str],
+) -> tuple[str, ...]:
     return (
         tbl_name[0],
         common.edgedb_name_to_pg_name(tbl_name[1] + '_ftsupdate'),
@@ -433,7 +433,7 @@ def _zombo_create_fts_document(
     index: s_indexes.Index,
     exprs: Sequence[pgast.BaseExpr],
     predicate_src: Optional[str],
-    sql_kwarg_exprs: Dict[str, str],
+    sql_kwarg_exprs: dict[str, str],
     schema: s_schema.Schema,
 ) -> dbops.Command:
     ops = dbops.CommandGroup()
@@ -461,7 +461,7 @@ def _zombo_create_fts_document(
         )
     )
 
-    type_mappings: List[Tuple[str, str]] = []
+    type_mappings: list[tuple[str, str]] = []
     document_exprs = []
     for idx, expr in enumerate(exprs):
         assert isinstance(expr, pgast.FTSDocument)
@@ -526,8 +526,8 @@ def _zombo_create_fts_document(
 
 
 def _zombo_type_name(
-    tbl_name: Tuple[str, str],
-) -> Tuple[str, str]:
+    tbl_name: tuple[str, str],
+) -> tuple[str, str]:
     return (
         tbl_name[0],
         common.edgedb_name_to_pg_name(tbl_name[1] + '_zombo_type'),
@@ -535,8 +535,8 @@ def _zombo_type_name(
 
 
 def _zombo_func_name(
-    tbl_name: Tuple[str, str],
-) -> Tuple[str, ...]:
+    tbl_name: tuple[str, str],
+) -> tuple[str, ...]:
     return (
         tbl_name[0],
         common.edgedb_name_to_pg_name(tbl_name[1] + '_zombo_func'),

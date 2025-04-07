@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, Tuple
+from typing import Any
 
 from . import data_ops as e
 from . import expr_ops as eops
@@ -341,7 +341,7 @@ def show_arg_ret_type(tp: e.FunArgRetType) -> str:
     )
 
 
-def show_func_defs(funcdefs: List[e.FuncDef]) -> str:
+def show_func_defs(funcdefs: list[e.FuncDef]) -> str:
     if len(funcdefs) == 1:
         return show_arg_ret_type(funcdefs[0].tp)
     elif len(funcdefs) > 1:
@@ -392,7 +392,7 @@ def show_module(dbschema: e.DBModule) -> str:
     )
 
 
-def show_module_name(name: Tuple[str, ...]) -> str:
+def show_module_name(name: tuple[str, ...]) -> str:
     return "::".join(name)
 
 

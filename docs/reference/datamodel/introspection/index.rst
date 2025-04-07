@@ -3,7 +3,8 @@
 Introspection
 =============
 
-.. index:: describe, introspect, typeof, schema module
+.. index:: schema module
+.. api-index:: describe, introspect, typeof
 
 All of the schema information in Gel is stored in the ``schema``
 :ref:`module <ref_datamodel_modules>` and is accessible via

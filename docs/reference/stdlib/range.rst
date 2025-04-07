@@ -272,7 +272,8 @@ Reference
 .. eql:operator:: rangelt: range<anypoint> < range<anypoint> -> bool
                   multirange<anypoint> < multirange<anypoint> -> bool
 
-    :index: <, multirange, less than, before, comparison, compare
+    .. index:: less than, comparison
+    .. api-index:: §range §<§ range§
 
     One range or multirange is before the other.
 
@@ -320,7 +321,8 @@ Reference
 .. eql:operator:: rangegt: range<anypoint> > range<anypoint> -> bool
                   multirange<anypoint> > multirange<anypoint> -> bool
 
-    :index: >, multirange, greater than, after, comparison, compare
+    .. index:: greater than, comparison
+    .. api-index:: §range §>§ range§
 
     One range or multirange is after the other.
 
@@ -368,7 +370,8 @@ Reference
 .. eql:operator:: rangelteq: range<anypoint> <= range<anypoint> -> bool
                   multirange<anypoint> <= multirange<anypoint> -> bool
 
-    :index: <=, multirange, less than or equal, before, comparison, compare
+    .. index:: less than or equal, comparison
+    .. api-index:: §range §<=§ range§
 
     One range or multirange is before or same as the other.
 
@@ -423,7 +426,8 @@ Reference
 .. eql:operator:: rangegteq: range<anypoint> >= range<anypoint> -> bool
                   multirange<anypoint> >= multirange<anypoint> -> bool
 
-    :index: >=, multirange, greater than or equal, after, comparison, compare
+    .. index:: greater than or equal, comparison
+    .. api-index:: §range §>=§ range§
 
     One range or multirange is after or same as the other.
 
@@ -477,7 +481,8 @@ Reference
                   multirange<anypoint> + multirange<anypoint> \
                     -> multirange<anypoint>
 
-    :index: +, multirange, plus, addition, union
+    .. index:: plus, addition
+    .. api-index:: §range §+§ range§
 
     Range or multirange union.
 
@@ -513,7 +518,8 @@ Reference
                   multirange<anypoint> - multirange<anypoint> \
                     -> multirange<anypoint>
 
-    :index: -, multirange, minus, subtraction
+    .. index:: minus
+    .. api-index:: §range §-§ range§
 
     Range or multirange subtraction.
 
@@ -553,9 +559,9 @@ Reference
                   multirange<anypoint> * multirange<anypoint> \
                     -> multirange<anypoint>
 
-    :index: \*, multirange, intersection
+    .. api-index:: §range §*§ range§
 
-    Range or multirnage intersection.
+    Range or multirange intersection.
 
     Find the intersection of two ranges or multiranges.
 

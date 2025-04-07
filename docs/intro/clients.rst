@@ -31,19 +31,8 @@ with Gel. These libraries provide a common set of functionality.
 Available libraries
 ===================
 
-To execute queries from your application code, use one of Gel's *client
-libraries* for the following languages.
-
-- :ref:`JavaScript/TypeScript <gel-js-intro>`
-- :ref:`Go <gel-go-intro>`
-- :ref:`Python <gel-python-intro>`
-
-.. XXX: link to third-party doc websites
-.. - :ref:`Rust <ref_rust_index>`
-.. - :ref:`C# and F# <edgedb-dotnet-intro>`
-.. - :ref:`Java <edgedb-java-intro>`
-.. - :ref:`Dart <edgedb-dart-intro>`
-.. - :ref:`Elixir <edgedb-elixir-intro>`
+To execute queries from your application code, use one of :ref:`Gel's client
+libraries <ref_clients_index>`.
 
 Usage
 =====

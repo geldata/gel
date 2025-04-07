@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Tuple, Mapping, NamedTuple, Callable
+from typing import Any, Mapping, NamedTuple, Callable
 
 import asyncio
 import http
@@ -112,7 +112,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                 # and the cluster to be shutdown soon.
                 await sd.connect(wait_until_available=0)
 
-    async def test_server_ops_auto_shutdown_after_one(self):
+    async def test_server_ops_auto_shutdown_after_one_1(self):
         async with tb.start_edgedb_server(
             auto_shutdown_after=1,
         ) as sd:
@@ -120,6 +120,27 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
 
             with self.assertRaises(
                     (ConnectionError, edgedb.ClientConnectionError)):
+                await sd.connect(wait_until_available=0)
+
+    async def test_server_ops_auto_shutdown_after_one_2(self):
+        async with tb.start_edgedb_server(
+            auto_shutdown_after=1,
+            http_endpoint_security=(
+                args.ServerEndpointSecurityMode.Optional
+            ),
+        ) as sd:
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(2)
+
+            with self.assertRaises(
+                (ConnectionError, edgedb.ClientConnectionError)):
                 await sd.connect(wait_until_available=0)
 
     @unittest.skipIf(
@@ -227,7 +248,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     else:
                         return result
 
-        async def _waiter() -> Tuple[str, Mapping[str, Any]]:
+        async def _waiter() -> tuple[str, Mapping[str, Any]]:
             loop = asyncio.get_running_loop()
             line = await loop.run_in_executor(None, _read, status_file)
             status, _, dataline = line.partition('=')
@@ -295,7 +316,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     else:
                         return result
 
-        async def _waiter() -> Tuple[str, Mapping[str, Any]]:
+        async def _waiter() -> tuple[str, Mapping[str, Any]]:
             loop = asyncio.get_running_loop()
             lines = await asyncio.gather(
                 loop.run_in_executor(None, _read, status_file),

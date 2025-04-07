@@ -3,7 +3,7 @@
 Select
 ======
 
-.. index:: select
+.. api-index:: select
 
 The ``select`` command retrieves or computes a set of values. We've already
 seen simple queries that select primitive values.
@@ -164,7 +164,7 @@ this result would look like this:
 Shapes
 ------
 
-.. index:: select, shapes, { }
+.. api-index:: select, { }
 
 To specify which properties to select, we attach a **shape** to ``Villain``. A
 shape can be attached to any object type expression in EdgeQL.
@@ -182,8 +182,6 @@ shape can be attached to any object type expression in EdgeQL.
 
 Nested shapes
 ^^^^^^^^^^^^^
-
-.. index:: select, nested shapes
 
 Nested shapes can be used to fetch linked objects and their properties. Here we
 fetch all ``Villain`` objects and their nemeses.
@@ -230,7 +228,8 @@ identically to concrete/non-computed links like ``Villain.nemesis``.
 Splats
 ^^^^^^
 
-.. index:: select, splats, *, **, select *, select all, [is ].*, [is ].**
+.. index:: select *, select all
+.. api-index:: *, **, §type§.*, §type§.**, [is §type§].*, [is §type§].**
 
 Splats allow you to select all properties of a type using the asterisk (``*``)
 or all properties of the type and a single level of linked types with a double
@@ -481,7 +480,8 @@ we wouldn't get those with this query either.
 Filtering
 ---------
 
-.. index:: select, filter, where
+.. index:: where
+.. api-index:: filter
 
 To filter the set of selected objects, use a ``filter <expr>`` clause. The
 ``<expr>`` that follows the ``filter`` keyword can be *any boolean expression*.
@@ -651,7 +651,8 @@ If properties are selected, place the clauses after the link's shape:
 Ordering
 --------
 
-.. index:: order by, sorting, asc, desc, then, empty first, empty last
+.. index:: sorting
+.. api-index:: order by, asc, desc, then, empty first, empty last
 
 Order the result of a query with an ``order by`` clause.
 
@@ -712,7 +713,7 @@ are handled, see :ref:`Reference > Commands > Select
 Pagination
 ----------
 
-.. index:: limit, offset
+.. api-index:: limit, offset
 
 |Gel| supports ``limit`` and ``offset`` clauses. These are
 typically used in conjunction with ``order by`` to maintain a consistent
@@ -777,7 +778,7 @@ providing one or the other.
 Computed fields
 ---------------
 
-.. index:: computeds, :=
+.. api-index:: :=
 
 Shapes can contain *computed fields*. These are EdgeQL expressions that are
 computed on the fly during the execution of the query. As with other clauses,
@@ -832,7 +833,7 @@ As with nested filters, the *current scope* changes inside nested shapes.
 Backlinks
 ---------
 
-.. index:: .<
+.. api-index:: .<
 
 Fetching backlinks is a common use case for computed fields. To demonstrate
 this, let's fetch a list of all movies starring a particular Hero.
@@ -978,7 +979,7 @@ abstract type (such as ``Movie.characters``) or a :eql:op:`union type
 Polymorphic fields
 ^^^^^^^^^^^^^^^^^^
 
-.. index:: [is ].
+.. api-index:: [is §type§].
 
 We can fetch different properties *conditional* on the subtype of each object
 by prefixing property/link references with ``[is <type>]``. This is known as a

@@ -9,8 +9,6 @@ Enums
 
 .. eql:type:: std::enum
 
-    :index: enum
-
     An enumerated type is a data type consisting of an ordered list of values.
 
     An enum type can be declared in a schema by using the following

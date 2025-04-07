@@ -695,3 +695,18 @@ Bug fixes
 
 * Fix function cache storage of queries that take enum parameters
   (:eql:gh:`#8471`)
+
+6.4
+===
+
+* Use ``read committed`` when restoring dumps to improve restore performance
+  (:eql:gh:`#8496`)
+
+* Use ``COPY ... FREEZE`` when restoring dumps to improve restore performance
+  (:eql:gh:`#8494`)
+
+* pg-ext: add table name parsing in ``has_*privilege`` functions and fix ``pg_database`` view
+  (:eql:gh:`#8488`, fixes :eql:gh:`#8457`)
+
+* Fixed computed ptr with group by incorrectly inferring multiplicity
+  (:eql:gh:`#8485`, regression from :eql:gh:`#8464` in 6.3)

@@ -6,7 +6,7 @@ Computeds
 
 :edb-alt-title: Computed properties and links
 
-.. index:: computeds, :=, __source__, backlinks
+.. api-index:: :=
 
 .. important::
 
@@ -51,6 +51,8 @@ field is referenced in a query.
 
 Leading dot notation
 --------------------
+
+.. api-index:: __source__
 
 The example above used the special keyword ``__source__`` to refer to the
 current object; it's analogous to ``this`` or ``self``  in many object-oriented

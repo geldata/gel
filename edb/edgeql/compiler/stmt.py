@@ -24,20 +24,17 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
-    Union,
     Sequence,
-    DefaultDict,
-    List,
     cast
 )
 
 from collections import defaultdict
 import textwrap
+import itertools
 
 from edb import errors
 from edb.common import ast
+from edb.common import span as edb_span
 from edb.common.typeutils import not_none
 
 from edb.ir import ast as irast
@@ -936,8 +933,8 @@ def compile_DescribeStmt(
         else:
             assert isinstance(ql.object, qlast.ObjectRef), ql.object
             modules = []
-            items: DefaultDict[str, List[s_name.Name]] = defaultdict(list)
-            referenced_classes: List[s_obj.ObjectMeta] = []
+            items: defaultdict[str, list[s_name.Name]] = defaultdict(list)
+            referenced_classes: list[s_obj.ObjectMeta] = []
 
             objref = ql.object
             itemclass = objref.itemclass
@@ -953,7 +950,7 @@ def compile_DescribeStmt(
 
                 modules.append(mod)
             else:
-                itemtype: Optional[Type[s_obj.Object]] = None
+                itemtype: Optional[type[s_obj.Object]] = None
 
                 name = s_utils.ast_ref_to_name(objref)
                 if itemclass is not None:
@@ -994,7 +991,7 @@ def compile_DescribeStmt(
                         # matches for the same name.
                         if (itemclass is None or is_function):
                             try:
-                                funcs: Tuple[s_func.Function, ...] = (
+                                funcs: tuple[s_func.Function, ...] = (
                                     newctx.env.schema.get_functions(
                                         name,
                                         module_aliases=aliases)
@@ -1183,6 +1180,8 @@ def init_stmt(
 
     ctx.env.compiled_stmts[qlstmt] = irstmt
 
+    irstmt.span = qlstmt.span
+
     if isinstance(irstmt, irast.MutatingStmt):
         # This is some kind of mutation, so we need to check if it is
         # allowed.
@@ -1249,7 +1248,7 @@ def init_stmt(
 
 
 def fini_stmt(
-    irstmt: Union[irast.Stmt, irast.Set],
+    irstmt: irast.Stmt | irast.Set,
     *,
     ctx: context.ContextLevel,
     parent_ctx: context.ContextLevel,
@@ -1448,7 +1447,7 @@ def compile_result_clause(
 def compile_query_subject(
         set: irast.Set,
         *,
-        shape: Optional[List[qlast.ShapeElement]]=None,
+        shape: Optional[list[qlast.ShapeElement]]=None,
         view_rptr: Optional[context.ViewRPtr]=None,
         view_name: Optional[s_name.QualName]=None,
         result_alias: Optional[str]=None,
@@ -1587,6 +1586,15 @@ def compile_query_subject(
 
     if (shape is not None or view_scls is not None) and len(set.path_id) == 1:
         ctx.class_view_overrides[set.path_id.target.id] = set_stype
+
+    if shape:
+        # make sure that an applied shape expands the span of the set
+        set.span = edb_span.merge_spans(
+            itertools.chain(
+                (s.span for s in [set] if s.span),
+                (el.span for el in shape if el.span)
+            )
+        )
 
     return set
 

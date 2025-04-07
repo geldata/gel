@@ -25,7 +25,7 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
+    Hashable,
     Iterator,
     Mapping,
     Sequence,
@@ -210,6 +210,7 @@ class BaseServer:
         # and there have been no new connections for n seconds
         self._auto_shutdown_after = auto_shutdown_after
         self._auto_shutdown_handler: Any = None
+        self._keepalive_tokens: set = set()
 
         self._echo_runtime_info = echo_runtime_info
         self._status_sinks = status_sinks
@@ -324,11 +325,6 @@ class BaseServer:
 
     def on_binary_client_created(self) -> str:
         self._binary_proto_id_counter += 1
-
-        if self._auto_shutdown_handler:
-            self._auto_shutdown_handler.cancel()
-            self._auto_shutdown_handler = None
-
         return str(self._binary_proto_id_counter)
 
     def on_binary_client_connected(self, conn):
@@ -362,9 +358,15 @@ class BaseServer:
         )
         self.maybe_auto_shutdown()
 
+    def maybe_delay_auto_shutdown(self):
+        if self._auto_shutdown_handler:
+            self._auto_shutdown_handler.cancel()
+            self._auto_shutdown_handler = None
+
     def maybe_auto_shutdown(self):
         if (
             not self._binary_conns
+            and not self._keepalive_tokens
             and self._auto_shutdown_after >= 0
             and self._auto_shutdown_handler is None
         ):
@@ -377,6 +379,14 @@ class BaseServer:
             event,
             len(self._binary_conns),
         )
+
+    def add_keepalive_token(self, token: Hashable) -> None:
+        self.maybe_delay_auto_shutdown()
+        self._keepalive_tokens.add(token)
+
+    def remove_keepalive_token(self, token: Hashable) -> None:
+        self._keepalive_tokens.discard(token)
+        self.maybe_auto_shutdown()
 
     def on_pgext_client_connected(self, conn):
         self._pgext_conns[conn.get_id()] = conn
@@ -728,13 +738,9 @@ class BaseServer:
         # CONFIGURE INSTANCE RESET setting_name;
         pass
 
-    async def _start_server(
-        self,
-        host: str,
-        port: int,
-        sock: Optional[socket.socket] = None,
-    ) -> Optional[asyncio.base_events.Server]:
-        proto_factory = lambda: protocol.HttpProtocol(
+    def _make_protocol(self):
+        self.maybe_delay_auto_shutdown()
+        return protocol.HttpProtocol(
             self,
             self._sslctx,
             self._sslctx_pgext,
@@ -742,13 +748,21 @@ class BaseServer:
             http_endpoint_security=self._http_endpoint_security,
         )
 
+    async def _start_server(
+        self,
+        host: str,
+        port: int,
+        sock: Optional[socket.socket] = None,
+    ) -> Optional[asyncio.base_events.Server]:
         try:
             kwargs: dict[str, Any]
             if sock is not None:
                 kwargs = {"sock": sock}
             else:
                 kwargs = {"host": host, "port": port}
-            return await self.__loop.create_server(proto_factory, **kwargs)
+            return await self.__loop.create_server(
+                self._make_protocol, **kwargs
+            )
         except Exception as e:
             logger.warning(
                 f"could not create listen socket for '{host}:{port}': {e}"
@@ -1905,7 +1919,7 @@ async def _resolve_host(host: str) -> list[str] | Exception:
 
 async def _resolve_interfaces(
     hosts: Sequence[str],
-) -> Tuple[Sequence[str], bool, bool]:
+) -> tuple[Sequence[str], bool, bool]:
 
     async with asyncio.TaskGroup() as g:
         resolve_tasks = {

@@ -3,9 +3,9 @@ use std::convert::TryFrom;
 use bigdecimal::Num;
 
 use bytes::{BufMut, Bytes, BytesMut};
-use edgedb_protocol::codec;
-use edgedb_protocol::model::{BigInt, Decimal};
 use edgeql_parser::tokenizer::Value;
+use gel_protocol::codec;
+use gel_protocol::model::{BigInt, Decimal};
 use pyo3::exceptions::{PyAssertionError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyFloat, PyInt, PyList, PyString};
@@ -99,8 +99,8 @@ impl Entry {
 }
 
 pub fn serialize_extra(variables: &[Variable]) -> Result<Bytes, String> {
-    use edgedb_protocol::codec::Codec;
-    use edgedb_protocol::value::Value as P;
+    use gel_protocol::codec::Codec;
+    use gel_protocol::value::Value as P;
 
     let mut buf = BytesMut::new();
     buf.reserve(4 * variables.len());
