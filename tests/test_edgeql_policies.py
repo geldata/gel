@@ -1372,3 +1372,7 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             ''',
             [{}]
         )
+
+        await self.con.execute('''
+            drop type T
+        ''')
