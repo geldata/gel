@@ -168,4 +168,6 @@ alter type ext::ai::EmbeddingModel {
 '''),
     # 6.3
     ('repair', ''),  # For #8466
+    # 6.5
+    ('sql-introspection', ''),  # For #8511
 ]
