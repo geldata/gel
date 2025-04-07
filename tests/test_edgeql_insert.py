@@ -7947,3 +7947,125 @@ class TestInsert(tb.DDLTestCase):
             """,
             [{'l2': 0, 'subordinates': [{'name': 'hi', '@comment': 'a'}]}],
         )
+
+
+class TestRepeatableReadInsert(tb.QueryTestCase):
+    '''The scope of the tests is testing various modes of Object creation.'''
+    NO_FACTOR = True
+    INTERNAL_TESTMODE = False
+
+    SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
+                          'insert.esdl')
+
+    # Override setUp and tearDown to we run in RepeatableRead mode
+    def setUp(self):
+        self.loop.run_until_complete(
+            self.con.execute(
+                "configure session set default_transaction_isolation := "
+                "'RepeatableRead'"
+            )
+        )
+
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+
+        self.loop.run_until_complete(
+            self.con.execute(
+                "configure session reset default_transaction_isolation"
+            )
+        )
+
+    async def test_edgeql_rr_insert_01(self):
+        # insert on A is ok, since A itself has no conflicts
+        await self.con.execute("""
+            insert ConflictA {
+                name := "test"
+            };
+        """)
+
+    async def test_edgeql_rr_insert_02(self):
+        with self.assertRaisesRegex(
+            edgedb.CapabilityError,
+            "INSERT to object type 'default::ConflictB' affects an "
+            "exclusive constraint on property 'name' of object type "
+            "'default::ConflictB' that is shared with descendant types: "
+            "'default::ConflictAB'"
+        ):
+            await self.con.execute("""
+                insert ConflictB {
+                    name := "test"
+                };
+            """)
+
+    async def test_edgeql_rr_insert_03(self):
+        with self.assertRaisesRegex(
+            edgedb.CapabilityError,
+            "INSERT to object type 'default::ConflictAB' affects an "
+            "exclusive constraint on property 'name' of object type "
+            "'default::ConflictAB' that is defined in ancestor object "
+            "type 'default::ConflictB'"
+        ):
+            await self.con.execute("""
+                insert ConflictAB {
+                    name := "test"
+                };
+            """)
+
+    async def test_edgeql_rr_insert_04(self):
+        with self.assertRaisesRegex(
+            edgedb.CapabilityError,
+            r"an exclusive constraint on object type 'default::Person2a' "
+            r"with expression '\(\.first, \.bff\)'"
+        ):
+            await self.con.execute("""
+                INSERT Person2a {
+                    first := "Emmanuel",
+                    last := "Villip",
+                }
+            """)
+
+    async def test_edgeql_rr_update_01(self):
+        # *update* on A is not ok, since it hits AB which has a constraint
+        with self.assertRaisesRegex(
+            edgedb.CapabilityError,
+            # XXX: Should this be ConflictA
+            "UPDATE to object type 'default::ConflictAB' affects an "
+            "exclusive constraint on property 'name' of object type "
+            "'default::ConflictAB' that is defined in ancestor object "
+            "type 'default::ConflictB'"
+        ):
+            await self.con.execute("""
+                update ConflictA set {
+                    name := "test"
+                };
+            """)
+
+    async def test_edgeql_rr_update_02(self):
+        with self.assertRaisesRegex(
+            edgedb.CapabilityError,
+            "UPDATE to object type 'default::ConflictB' affects an "
+            "exclusive constraint on property 'name' of object type "
+            "'default::ConflictB' that is shared with descendant types: "
+            "'default::ConflictAB'"
+        ):
+            await self.con.execute("""
+                update ConflictB set {
+                    name := "test"
+                };
+            """)
+
+    async def test_edgeql_rr_update_03(self):
+        with self.assertRaisesRegex(
+            edgedb.CapabilityError,
+            "UPDATE to object type 'default::ConflictAB' affects an "
+            "exclusive constraint on property 'name' of object type "
+            "'default::ConflictAB' that is defined in ancestor object "
+            "type 'default::ConflictB'"
+        ):
+            await self.con.execute("""
+                update ConflictAB set {
+                    name := "test"
+                };
+            """)
