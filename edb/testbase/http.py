@@ -33,10 +33,9 @@ import dataclasses
 import time
 import random
 
-import edgedb
+import gel
 
 from edb.errors import base as base_errors
-from edb import errors
 
 from edb.common import assert_data_shape
 
@@ -168,7 +167,7 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
         ex_msg = err["message"].strip()
         ex_code = err["code"]
 
-        raise edgedb.EdgeDBError._from_code(ex_code, ex_msg)
+        raise gel.EdgeDBError._from_code(ex_code, ex_msg)
 
     def assert_edgeql_query_result(
         self,
@@ -234,8 +233,8 @@ class GraphQLTestCase(BaseHttpExtensionTest):
                 return func()
 
             # Retry transaction conflict errors
-            except errors.TransactionConflictError:
-                if i >= 10 or self.is_in_transaction():
+            except gel.errors.TransactionConflictError:
+                if i >= 10:
                     raise
                 time.sleep(
                     min((2 ** i) * 0.1, 10)
@@ -304,7 +303,7 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         msg = msg.strip()
 
         try:
-            ex_type = getattr(edgedb, typename)
+            ex_type = getattr(gel, typename)
         except AttributeError:
             raise AssertionError(
                 f"server returned an invalid exception typename: {typename!r}"
