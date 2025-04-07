@@ -1955,8 +1955,15 @@ def _compile_uncompiled_dml(
     for stmt, ir_mutating_stmt in zip(stmts, ir_stmts):
         stmt_ctes = _collect_stmt_ctes(ctes, ir_mutating_stmt)
 
-        # Find the output CTE by filtering by the name of relation that is being
-        # manipulated. This will filter out stmts for link tables and triggers.
+        # Find the output CTE of the DML operation. We do this in two different
+        # ways:
+        # - look for SQL DML on the subject relation. This is used for
+        #   operations on link tables. Kinda hacky.
+        # - use the `output_for_dml`, which will be set on the CTE that contains
+        #   the union of all SQL DML stmts that are generated for an IR DML.
+        #   There might be multiple because: 1) inheritance, which stores child
+        #   objects in seprate tables, 2) unless conflict that contains another
+        #   DML stmt.
         output_cte: pgast.CommonTableExpr | None
         if isinstance(stmt.subject, (s_pointers.Pointer)):
             subject_id = str(stmt.subject.id)
@@ -1974,6 +1981,12 @@ def _compile_uncompiled_dml(
             )
         assert output_cte, 'cannot find the output CTE of a DML stmt'
         output_rel = output_cte.query
+
+        # This "output_rel" must contain entry in path_namespace for each column
+        # of the subject table. This is ensured by applying a shape on the ql
+        # dml stmt, which selects all pointers. Although the shape is not
+        # constructed in CTEs (so we discard it), it causes values for pointers
+        # to be read from DML CTEs, which makes the appear in the path_namespace
 
         # prepare a map from pointer name into pgast
         ptr_map: dict[tuple[str, str], pgast.BaseExpr] = {}
