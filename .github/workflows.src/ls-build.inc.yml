@@ -87,7 +87,7 @@
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/<< plat_id >>@master
+      uses: edgedb/edgedb-pkg/integration/linux/build/<< plat_id >>@update-setuptools
       env:
         SRC_REF: "${{ needs.prep.outputs.branch }}"
         PKG_REVISION: "<current-date>"
@@ -135,7 +135,7 @@
     - uses: actions/checkout@v4
       with:
         repository: edgedb/edgedb-pkg
-        ref: master
+        ref: update-setuptools
         path: edgedb-pkg
 
     - name: Install Rust toolchain
@@ -213,7 +213,7 @@
         path: artifacts/<< plat_id >>
 
     - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
+      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@update-setuptools
       env:
         PACKAGE: edgedbpkg.edgedb_ls:EdgeDBLanguageServer
         <%- if subdist != "" %>
@@ -239,12 +239,12 @@
 
     - name: Describe
       id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
+      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@update-setuptools
       with:
         target: << plat_id >>
 
     - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/<< plat_id >>@master
+      uses: edgedb/edgedb-pkg/integration/linux/testpublished/<< plat_id >>@update-setuptools
       env:
         PACKAGE: edgedbpkg.edgedb_ls:EdgeDBLanguageServer
         PKG_NAME: "${{ steps.describe.outputs.name }}"
@@ -283,17 +283,17 @@
     - uses: actions/checkout@v4
       with:
         repository: edgedb/edgedb-pkg
-        ref: master
+        ref: update-setuptools
         path: edgedb-pkg
 
     - name: Describe
       id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
+      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@update-setuptools
       with:
         target: << plat_id >>
 
     - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
+      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@update-setuptools
       env:
         PACKAGE: edgedbpkg.edgedb_ls:EdgeDBLanguageServer
         <%- if subdist != "" %>
