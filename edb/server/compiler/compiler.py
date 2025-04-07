@@ -1918,6 +1918,29 @@ def _compile_ql_query(
         ctx, ir, sql_res.argmap, script_info
     )
 
+    server_param_conversions: Optional[
+        list[dbstate.ServerParamConversion]
+    ] = None
+    if isinstance(ir, irast.Statement) and ir.server_param_conversions:
+        source_variables = (
+            ctx.source.variables() if ctx.source else {}
+        )
+        server_param_conversions = [
+            dbstate.ServerParamConversion(
+                param_name=p.param_name,
+                conversion_name=p.conversion_name,
+                additional_info=p.additional_info,
+                source_value=(
+                    p.constant_value
+                    if p.constant_value is not None else
+                    source_variables[p.param_name]
+                    if p.param_name in source_variables else
+                    None
+                )
+            )
+            for p in ir.server_param_conversions
+        ]
+
     sql_hash = _hash_sql(
         sql_text.encode(defines.EDGEDB_ENCODING),
         mode=str(ctx.output_format).encode(),
@@ -1961,6 +1984,7 @@ def _compile_ql_query(
         in_type_args=in_type_args,
         out_type_id=out_type_id.bytes,
         out_type_data=out_type_data,
+        server_param_conversions=server_param_conversions,
         cacheable=cacheable,
         has_dml=bool(ir.dml_exprs),
         query_asts=query_asts,
@@ -2997,6 +3021,8 @@ def _make_query_unit(
         unit.out_type_id = comp.out_type_id
         unit.in_type_data = comp.in_type_data
         unit.in_type_id = comp.in_type_id
+
+        unit.server_param_conversions = comp.server_param_conversions
 
         unit.cacheable = comp.cacheable
 

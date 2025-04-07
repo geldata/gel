@@ -351,6 +351,8 @@ def compile_ast_fragment_to_ir(
         views={},
         params=[],
         globals=[],
+        server_param_conversions=[],
+        server_param_conversion_params=[],
         # These values are nonsensical, but ideally the caller does not care
         cardinality=qltypes.Cardinality.UNKNOWN,
         multiplicity=qltypes.Multiplicity.EMPTY,

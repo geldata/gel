@@ -26,11 +26,14 @@ cdef class PGMessage:
         query_unit=None,
         fe_settings=None,
         injected=False,
+        bytes force_portal_name=None,
     ):
         self.action = action
         self.stmt_name = stmt_name
         self.orig_portal_name = portal_name
-        if portal_name:
+        if force_portal_name is not None:
+            self.portal_name = force_portal_name
+        elif portal_name:
             self.portal_name = b'u' + portal_name.encode("utf-8")
         else:
             self.portal_name = b''
@@ -183,7 +186,7 @@ cdef class PGSQLConnection:
 
                 if action.is_frontend_only():
                     pass
-                elif isinstance(
+                elif action.query_unit is not None and isinstance(
                     action.query_unit.command_complete_tag, dbstate.TagUnpackRow
                 ):
                     # in this case we are intercepting the only result row so
@@ -263,7 +266,7 @@ cdef class PGSQLConnection:
 
                 if action.is_frontend_only():
                     pass
-                elif isinstance(
+                elif action.query_unit is not None and isinstance(
                     action.query_unit.command_complete_tag,
                     (dbstate.TagCountMessages, dbstate.TagUnpackRow),
                 ):
@@ -383,41 +386,6 @@ cdef class PGSQLConnection:
                         else:
                             msg_buf.write_bytestring(b'SET')
                         buf.write_buffer(msg_buf.end_message())
-                    elif action.query_unit.get_var is not None:
-                        setting_name = action.query_unit.get_var
-
-                        # RowDescription
-                        msg_buf = WriteBuffer.new_message(b'T')
-                        msg_buf.write_int16(1)  # number of fields
-                        # field name
-                        msg_buf.write_str(setting_name, "utf-8")
-                        # object ID of the table to identify the field
-                        msg_buf.write_int32(0)
-                        # attribute number of the column in prev table
-                        msg_buf.write_int16(0)
-                        # object ID of the field's data type
-                        msg_buf.write_int32(TEXT_OID)
-                        # data type size
-                        msg_buf.write_int16(-1)
-                        # type modifier
-                        msg_buf.write_int32(-1)
-                        # format code being used for the field
-                        msg_buf.write_int16(0)
-                        buf.write_buffer(msg_buf.end_message())
-
-                        # DataRow
-                        msg_buf = WriteBuffer.new_message(b'D')
-                        msg_buf.write_int16(1)  # number of column values
-                        setting = dbv.current_fe_settings()[setting_name]
-                        msg_buf.write_len_prefixed_utf8(
-                            setting_to_sql(setting_name, setting)
-                        )
-                        buf.write_buffer(msg_buf.end_message())
-
-                        # CommandComplete
-                        msg_buf = WriteBuffer.new_message(b'C')
-                        msg_buf.write_bytestring(b'SHOW')
-                        buf.write_buffer(msg_buf.end_message())
                     elif not action.is_injected():
                         # NoData
                         msg_buf = WriteBuffer.new_message(b'n')
@@ -449,25 +417,6 @@ cdef class PGSQLConnection:
                 ):
                     if action.query_unit.set_vars is not None:
                         msg_buf = WriteBuffer.new_message(b'n')  # NoData
-                        buf.write_buffer(msg_buf.end_message())
-                    elif action.query_unit.get_var is not None:
-                        # RowDescription
-                        msg_buf = WriteBuffer.new_message(b'T')
-                        msg_buf.write_int16(1)  # number of fields
-                        # field name
-                        msg_buf.write_str(action.query_unit.get_var, "utf-8")
-                        # object ID of the table to identify the field
-                        msg_buf.write_int32(0)
-                        # attribute number of the column in prev table
-                        msg_buf.write_int16(0)
-                        # object ID of the field's data type
-                        msg_buf.write_int32(TEXT_OID)
-                        # data type size
-                        msg_buf.write_int16(-1)
-                        # type modifier
-                        msg_buf.write_int32(-1)
-                        # format code being used for the field
-                        msg_buf.write_int16(0)
                         buf.write_buffer(msg_buf.end_message())
                 continue
 
@@ -518,9 +467,10 @@ cdef class PGSQLConnection:
                     self.con.buffer.finish_message()
                     if self.con.debug:
                         self.con.debug_print('BIND COMPLETE MSG')
-                    dbv.create_portal(
-                        action.orig_portal_name, action.query_unit
-                    )
+                    if action.query_unit is not None:
+                        dbv.create_portal(
+                            action.orig_portal_name, action.query_unit
+                        )
                     if not action.is_injected():
                         msg_buf = WriteBuffer.new_message(mtype)
                         buf.write_buffer(msg_buf.end_message())
@@ -538,8 +488,9 @@ cdef class PGSQLConnection:
                     if self.con.debug:
                         self.con.debug_print('END OF DESCRIBE', mtype)
                     if (
-                        mtype == b'T' and
-                        isinstance(
+                        mtype == b'T'
+                        and action.query_unit is not None
+                        and isinstance(
                             action.query_unit.command_complete_tag,
                             dbstate.TagUnpackRow,
                         )
@@ -578,7 +529,10 @@ cdef class PGSQLConnection:
 
                     msg_buf = WriteBuffer.new_message(b't')
                     external_params: int64_t = 0
-                    if action.query_unit.params:
+                    if (
+                        action.query_unit is not None
+                        and action.query_unit.params
+                    ):
                         for index, param in enumerate(action.query_unit.params):
                             if not isinstance(param, dbstate.SQLParamExternal):
                                 break
@@ -592,6 +546,7 @@ cdef class PGSQLConnection:
                 elif (
                     mtype == b'T'  # RowDescription
                     and action.action == PGAction.EXECUTE
+                    and action.query_unit is not None
                     and isinstance(
                         action.query_unit.command_complete_tag,
                         dbstate.TagUnpackRow,
@@ -606,6 +561,7 @@ cdef class PGSQLConnection:
                 elif (
                     mtype == b'D'  # DataRow
                     and action.action == PGAction.EXECUTE
+                    and action.query_unit is not None
                     and isinstance(
                         action.query_unit.command_complete_tag,
                         dbstate.TagUnpackRow,
@@ -625,24 +581,23 @@ cdef class PGSQLConnection:
                     data = self.con.buffer.consume_message()
                     if self.con.debug:
                         self.con.debug_print('END OF EXECUTE', mtype)
-                    fe_conn.on_success(action.query_unit)
-                    dbv.on_success(action.query_unit)
+                    if action.query_unit is not None:
+                        fe_conn.on_success(action.query_unit)
+                        dbv.on_success(action.query_unit)
 
-                    if (
-                        action.query_unit is not None
-                        and action.query_unit.prepare is not None
-                    ):
-                        be_stmt_name = action.query_unit.prepare.be_stmt_name
-                        if be_stmt_name:
-                            if self.con.debug:
-                                self.con.debug_print(
-                                    f"remembering ps {be_stmt_name}, "
-                                    f"dbver {dbver}"
-                                )
-                            self.con.prep_stmts[be_stmt_name] = dbver
+                        if action.query_unit.prepare is not None:
+                            be_stmt_name = action.query_unit.prepare.be_stmt_name
+                            if be_stmt_name:
+                                if self.con.debug:
+                                    self.con.debug_print(
+                                        f"remembering ps {be_stmt_name}, "
+                                        f"dbver {dbver}"
+                                    )
+                                self.con.prep_stmts[be_stmt_name] = dbver
 
                     if (
                         not action.is_injected()
+                        and action.query_unit is not None
                         and action.query_unit.command_complete_tag
                     ):
                         tag = action.query_unit.command_complete_tag
@@ -694,7 +649,8 @@ cdef class PGSQLConnection:
                     rv = False
                     if self.con.debug:
                         self.con.debug_print('ERROR RESPONSE MSG')
-                    fe_conn.on_error(action.query_unit)
+                    if action.query_unit is not None:
+                        fe_conn.on_error(action.query_unit)
                     dbv.on_error()
                     self._rewrite_sql_error_response(action, buf)
                     fe_conn.write(buf)

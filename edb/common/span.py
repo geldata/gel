@@ -33,7 +33,7 @@ contexts through the AST structure.
 
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Iterable, Any, Optional
 import re
 import bisect
 
@@ -300,3 +300,39 @@ class SpanValidator(ast.NodeVisitor):
         if getattr(node, 'span', None) is None:
             raise RuntimeError('node {} has no span'.format(node))
         super().generic_visit(node)
+
+
+# Finds the node in AST by position within the source.
+# It returns the first node whose span contains the target offset in a
+# post-order traversal of the AST.
+def find_by_source_position(
+    node: ast.AST, target_offset: int
+) -> ast.AST | None:
+    finder = SpanFinder(target_offset)
+    finder.visit(node)
+    return finder.found_node
+
+
+class SpanFinder(ast.NodeVisitor):
+    target_offset: int
+    found_node: Any | None
+
+    def __init__(self, target_offset: int):
+        super().__init__()
+        self.target_offset = target_offset
+        self.found_node = None
+
+    def generic_visit(self, node, *, combine_results=None) -> Any:
+        has_span = False
+        if node_span := getattr(node, 'span', None):
+            has_span = True
+            if not span_contains(node_span, self.target_offset):
+                return
+
+        super().generic_visit(node)
+        if self.found_node is None and has_span:
+            self.found_node = node
+
+
+def span_contains(span: Span, target_offset: int) -> bool:
+    return span.start <= target_offset and target_offset <= span.end

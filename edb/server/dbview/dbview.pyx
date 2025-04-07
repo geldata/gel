@@ -1219,7 +1219,7 @@ cdef class DatabaseConnectionView:
         self,
         user_schema,
         schema_version,
-        send_log_message: object | None = None,
+        send_log_message: typing.Callable[[int, str], None] | None = None,
     ):
         compiler_pool = self.server.get_compiler_pool()
         compile_concurrency = max(1, compiler_pool.get_size_hint() // 2)
@@ -1326,7 +1326,7 @@ cdef class DatabaseConnectionView:
         allow_capabilities: uint64_t = <uint64_t>compiler.Capability.ALL,
         pgcon: pgcon.PGConnection | None = None,
         tag: str | None = None,
-        send_log_message: object | None = None,
+        send_log_message: typing.Callable[[int, str], None] | None = None,
     ) -> CompiledQuery:
         query_unit_group = None
         if self._query_cache_enabled:

@@ -505,6 +505,12 @@ class Cluster(BaseCluster):
                 user='postgres',
                 auth_method='trust'
             )
+            self.add_hba_entry(
+                type='local',
+                database='replication',
+                user='postgres',
+                auth_method='trust'
+            )
             return True
         else:
             return False
@@ -571,6 +577,8 @@ class Cluster(BaseCluster):
                 ]
             ),
             "edb_stat_statements.track_planning": "true",
+            # Required for pg_basebackup --incremental to work
+            "summarize_wal": "on",
         }
 
         if os.getenv('EDGEDB_DEBUG_PGSERVER'):

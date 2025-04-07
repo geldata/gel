@@ -38,6 +38,7 @@ from libc.stdint cimport int32_t, int16_t, uint32_t
 from edb import errors
 from edb.common import debug
 from edb.common.log import current_tenant
+from edb.pgsql.common import setting_to_sql
 from edb.pgsql.parser import exceptions as parser_errors
 import edb.pgsql.parser.parser as pg_parser
 cimport edb.pgsql.parser.parser as pg_parser
@@ -46,14 +47,14 @@ from edb.server import defines, metrics
 from edb.server import tenant as edbtenant
 from edb.server.compiler import dbstate
 from edb.server.pgcon import errors as pgerror
-from edb.server.pgcon.pgcon cimport PGAction, PGMessage, setting_to_sql
+from edb.server.pgcon.pgcon cimport PGAction, PGMessage
 from edb.server.protocol cimport frontend
 
 DEFAULT_SETTINGS = dbstate.DEFAULT_SQL_SETTINGS
 DEFAULT_FE_SETTINGS = dbstate.DEFAULT_SQL_FE_SETTINGS
 
 cdef object logger = logging.getLogger('edb.server')
-cdef object DEFAULT_STATE = json.dumps(dict(DEFAULT_SETTINGS)).encode('utf-8')
+cdef object DEFAULT_STATE = None
 
 encodings.aliases.aliases["sql_ascii"] = "ascii"
 
@@ -102,7 +103,29 @@ cdef class ConnectionView:
         self._in_tx_new_portals = set()
         self._in_tx_savepoints = collections.deque()
         self._tx_error = False
-        self._session_state_db_cache = (DEFAULT_SETTINGS, DEFAULT_STATE)
+        global DEFAULT_STATE
+        if DEFAULT_STATE is None:
+            DEFAULT_STATE = json.dumps(
+                [
+                    {
+                        "type": "P",
+                        "name": key,
+                        "value": setting_to_sql(key, val),
+                    }
+                    for key, val in DEFAULT_SETTINGS.items()
+                ] + [
+                    {
+                        "type": "S",
+                        "name": key,
+                        "value": setting_to_sql(key, val),
+                    }
+                    for key, val in DEFAULT_FE_SETTINGS.items()
+                ]
+            ).encode("utf-8")
+
+        self._session_state_db_cache = (
+            DEFAULT_SETTINGS, DEFAULT_FE_SETTINGS, DEFAULT_STATE
+        )
 
     cpdef inline current_fe_settings(self):
         if self.in_tx():
@@ -347,17 +370,28 @@ cdef class ConnectionView:
         if self.in_tx():
             raise errors.InternalServerError(
                 'no need to serialize state while in transaction')
-        if self._settings == DEFAULT_SETTINGS:
+        if (
+            self._settings == DEFAULT_SETTINGS
+            and self._fe_settings == DEFAULT_FE_SETTINGS
+        ):
             return DEFAULT_STATE
 
         if self._session_state_db_cache is not None:
-            if self._session_state_db_cache[0] == self._settings:
-                return self._session_state_db_cache[1]
+            if self._session_state_db_cache[:2] == (
+                self._settings, self._fe_settings
+            ):
+                return self._session_state_db_cache[-1]
 
-        rv = json.dumps({
-            key: setting_to_sql(key, val) for key, val in self._settings.items()
-        }).encode("utf-8")
-        self._session_state_db_cache = (self._settings, rv)
+        rv = json.dumps(
+            [
+                {"type": "P", "name": key, "value": setting_to_sql(key, val)}
+                for key, val in self._settings.items()
+            ] + [
+                {"type": "S", "name": key, "value": setting_to_sql(key, val)}
+                for key, val in self._fe_settings.items()
+            ]
+        ).encode("utf-8")
+        self._session_state_db_cache = (self._settings, self._fe_settings, rv)
         return rv
 
     cdef bint needs_commit_after_state_sync(self):
@@ -1003,6 +1037,8 @@ cdef class PgConnection(frontend.FrontendConnection):
                     injected_action=True,
                 )
             parse_unit = stmt.parse_action.query_unit
+            if parse_unit.set_vars:
+                actions.extend(self._build_sql_settings_actions(parse_unit))
             actions.append(stmt.parse_action)
 
             # 2 bytes: number of format codes (1)
@@ -1214,6 +1250,8 @@ cdef class PgConnection(frontend.FrontendConnection):
                 self._query_count += 1
                 with managed_error():
                     unit = dbv.find_portal(portal_name)
+                    if unit.set_vars:
+                        actions.extend(self._build_sql_settings_actions(unit))
                     actions.append(
                         PGMessage(
                             PGAction.EXECUTE,
@@ -1457,6 +1495,94 @@ cdef class PgConnection(frontend.FrontendConnection):
                 injected=True,
             )
         )
+        return actions
+
+    def _build_sql_settings_actions(self, qu):
+        actions = []
+        if qu.set_vars == {None: None}:  # RESET ALL
+            actions.append(
+                PGMessage(
+                    PGAction.BIND,
+                    force_portal_name=b"injected",
+                    stmt_name=b"_reset_sql_state_all",
+                    # 2 bytes: number of format codes (0)
+                    # 2 bytes: number of parameters (0)
+                    # 2 bytes: number of result format codes (0)
+                    args=b"\x00\x00\x00\x00\x00\x00",
+                    injected=True,
+                )
+            )
+            actions.append(
+                PGMessage(
+                    PGAction.EXECUTE,
+                    args=0,
+                    force_portal_name=b"injected",
+                    injected=True,
+                )
+            )
+            actions.append(
+                PGMessage(
+                    PGAction.CLOSE_PORTAL,
+                    force_portal_name=b"injected",
+                    injected=True,
+                )
+            )
+        elif qu.frontend_only:
+            for k, v in qu.set_vars.items():
+                buf = WriteBuffer.new()
+
+                buf.write_int16(0)  # number of format codes
+
+                # number of parameters:
+                if v is None:
+                    buf.write_int16(2)
+                else:
+                    buf.write_int16(3)
+
+                buf.write_len_prefixed_utf8(k)  # 1st param: name
+                buf.write_len_prefixed_utf8(  # 2nd param: type
+                    "L" if qu.is_local else "S")
+                if v is not None:
+                    buf.write_len_prefixed_utf8(  # 3rd param: value
+                        setting_to_sql(k, v))
+
+                buf.write_int16(0)  # number of result format codes
+
+                if v is None:
+                    actions.append(
+                        PGMessage(
+                            PGAction.BIND,
+                            force_portal_name=b"injected",
+                            stmt_name=b"_reset_sql_state",
+                            args=bytes(buf),
+                            injected=True,
+                        )
+                    )
+                else:
+                    actions.append(
+                        PGMessage(
+                            PGAction.BIND,
+                            force_portal_name=b"injected",
+                            stmt_name=b"_set_sql_state",
+                            args=bytes(buf),
+                            injected=True,
+                        )
+                    )
+                actions.append(
+                    PGMessage(
+                        PGAction.EXECUTE,
+                        args=0,
+                        force_portal_name=b"injected",
+                        injected=True,
+                    )
+                )
+                actions.append(
+                    PGMessage(
+                        PGAction.CLOSE_PORTAL,
+                        force_portal_name=b"injected",
+                        injected=True,
+                    )
+                )
         return actions
 
     async def _parse_statement(

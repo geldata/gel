@@ -195,6 +195,20 @@ def compile_FunctionCall(
     func = matched_call.func
     assert isinstance(func, s_func.Function)
 
+    if matched_call.server_param_conversions:
+        for param_name, conversions in (
+            matched_call.server_param_conversions.items()
+        ):
+            if param_name not in ctx.env.server_param_conversions:
+                ctx.env.server_param_conversions[param_name] = {}
+            ctx.env.server_param_conversions[param_name].update(
+                conversions
+            )
+        ctx.env.server_param_conversion_calls.append((
+            func.get_signature_as_str(env.schema),
+            expr.span,
+        ))
+
     inline_func = None
     if (
         func.get_language(ctx.env.schema) == qlast.Language.EdgeQL
@@ -339,6 +353,22 @@ def compile_FunctionCall(
             expr, matched_call, candidates=funcs, ctx=ctx
         )
 
+    volatility = (
+        # Incorporate the volatility of any server param conversions
+        max([
+            func.get_volatility(env.schema),
+            *(
+                conversion.volatility
+                for conversions in (
+                    matched_call.server_param_conversions.values()
+                )
+                for conversion in conversions.values()
+            )
+        ])
+        if matched_call.server_param_conversions else
+        func.get_volatility(env.schema)
+    )
+
     fcall = irast.FunctionCall(
         args=final_args,
         func_shortname=func_name,
@@ -347,7 +377,7 @@ def compile_FunctionCall(
         func_sql_function=func.get_from_function(env.schema),
         func_sql_expr=func.get_from_expr(env.schema),
         force_return_cast=func.get_force_return_cast(env.schema),
-        volatility=func.get_volatility(env.schema),
+        volatility=volatility,
         sql_func_has_out_params=func.get_sql_func_has_out_params(env.schema),
         error_on_null_result=func.get_error_on_null_result(env.schema),
         preserves_optionality=func.get_preserves_optionality(env.schema),

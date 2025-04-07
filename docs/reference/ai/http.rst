@@ -29,13 +29,11 @@ Request headers
 Request body
 ------------
 
-* ``input`` (array of strings or a single string, required): The text to use as
-  the basis for embeddings generation.
-
+* ``inputs`` (array of strings, or single string, required): The text items to use as the basis
+  for embeddings generation.
 * ``model`` (string, required): The name of the embedding model to use. You may
   use any of the supported :ref:`embedding models
   <ref_ai_extai_reference_embedding_models>`.
-
 * ``dimensions`` (number, optional): The number of dimensions to truncate to.
 
 * ``user`` (string, optional): A user identifier for the request.
@@ -47,7 +45,7 @@ Example request
 .. code-block:: bash
 
   $ curl --user <username>:<password> --json '{\
-      "input": "What color is the sky on Mars?",\
+      "inputs": ["What color is the sky on Mars?"],\
       "model": "text-embedding-3-small"\
     }' http://localhost:10931/branch/main/ai/embeddings
 
@@ -134,9 +132,13 @@ Request body
    * ``id`` (string, optional): ID of predefined prompt.
    * ``custom`` (array of objects, optional): Custom prompt messages, each containing a ``role`` and ``content``. If no ``name`` or ``id`` was provided, the custom messages provided here become the prompt. If one of those was provided, these messages will be added to that existing prompt.
       * ``role`` (string): "system", "user", "assistant", or "tool".
-      * ``content`` (string|object): Content of the message.
-      * ``tool_call_id`` (string): Identifier for tool call.
-      * ``tool_calls`` (array): Array of tool calls.
+      * ``content`` (string | array): Content of the message.
+         * For ``role: "system"``: Must be a string.
+         * For ``role: "user"``: Must be an array of content blocks, e.g., ``[{"type": "text", "text": "..."}]``.
+         * For ``role: "assistant"``: Must be a string (the assistant's text response). May optionally include ``tool_calls``.
+         * For ``role: "tool"``: Must be a string (the result of the tool call). Requires ``tool_call_id``.
+      * ``tool_call_id`` (string, optional): Identifier for the tool call whose result this message represents (required if ``role: "tool"``).
+      * ``tool_calls`` (array, optional): Array of tool calls requested by the assistant (used if ``role: "assistant"``). Each object should follow the format: ``{"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}``. Arguments should be a JSON string.
 
 * ``temperature`` (number, optional): Sampling temperature.
 
@@ -156,6 +158,11 @@ Request body
 
 * ``user`` (string, optional): User identifier.
 
+* ``tools`` (array, optional): A list of tools the model may call. Each tool
+  has a ``type`` ("function") and a ``function`` object with ``name``,
+  ``description`` (optional), and ``parameters`` (JSON schema). Example:
+  ``[{"type": "function", "function": {"name": "get_weather", "description": "Get the current weather", "parameters": {"type": "object", "properties": {"location": {"type": "string"}}, "required": ["location"]}}}]``
+
 
 Example request
 ---------------
@@ -174,11 +181,32 @@ Response
 
 * **HTTP status**: 200 OK
 * **Content-Type**: application/json
-* **Body**:
+* **Body**: A JSON object containing the RAG response details.
 
   .. code-block:: json
 
-      {"response": "The sky on Mars is red."}
+      {
+        "id": "chatcmpl-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "model": "gpt-4-turbo-preview",
+        "text": "The sky on Mars typically appears butterscotch or reddish due to the fine dust particles suspended in the atmosphere.",
+        "finish_reason": "stop",
+        "usage": {
+          "prompt_tokens": 50,
+          "completion_tokens": 30,
+          "total_tokens": 80
+        },
+        "logprobs": null,
+        "tool_calls": null
+      }
+
+  * ``id`` (string): Unique identifier for the chat completion.
+  * ``model`` (string): The model used for the chat completion.
+  * ``text`` (string | null): The main text content of the response message.
+  * ``finish_reason`` (string | null): The reason the model stopped generating tokens (e.g., "stop", "length", "tool_calls").
+  * ``usage`` (object | null): Token usage statistics for the request.
+  * ``logprobs`` (object | null): Log probability information for the generated tokens (if requested).
+  * ``tool_calls`` (array | null): Any tool calls requested by the model. Each element contains ``id``, ``type`` ("function"), ``name``, and ``args`` (parsed JSON object).
+
 
 Error response
 --------------
@@ -215,7 +243,7 @@ the response in a structured format:
 
    * Event type: ``message_start``
 
-   * Data: Starts a message, specifying identifiers and roles.
+   * Data: Starts a message, specifying identifiers, roles, and initial usage.
 
    .. code-block:: json
 
@@ -224,7 +252,8 @@ the response in a structured format:
         "message": {
           "id": "<message_id>",
           "role": "assistant",
-          "model": "<model_name>"
+          "model": "<model_name>",
+          "usage": { "prompt_tokens": 10 }
         }
       }
 
@@ -232,7 +261,7 @@ the response in a structured format:
 
    * Event type: ``content_block_start``
 
-   * Data: Marks the beginning of a new content block.
+   * Data: Marks the beginning of a new content block (either text or a tool call).
 
    .. code-block:: json
 
@@ -245,12 +274,27 @@ the response in a structured format:
         }
       }
 
+   Or for a tool call:
+
+   .. code-block:: json
+
+      {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+          "id": "<tool_call_id>",
+          "type": "tool_use",
+          "name": "<function_name>",
+          "args": "{..."
+        }
+      }
+
+
 3. **Content block delta**
 
    * Event type: ``content_block_delta``
 
-   * Data: Incrementally updates the content, appending more text to the
-     message.
+   * Data: Incrementally updates the content, appending more text or tool arguments. Includes logprobs if requested.
 
    .. code-block:: json
 
@@ -260,10 +304,24 @@ the response in a structured format:
         "delta": {
           "type": "text_delta",
           "text": "The"
-        }
+        },
+        "logprobs": null
       }
 
-   Subsequent ``content_block_delta`` events add more text to the message.
+   Or for tool arguments:
+
+   .. code-block:: json
+
+     {
+       "type": "content_block_delta",
+       "index": 0,
+       "delta": {
+         "type": "tool_call_delta",
+         "args": "{\"location"
+       }
+     }
+
+   Subsequent ``content_block_delta`` events add more text/arguments to the message.
 
 4. **Content block stop**
 
@@ -278,7 +336,24 @@ the response in a structured format:
         "index": 0
       }
 
-5. **Message stop**
+5. **Message delta**
+
+   * Event type: ``message_delta``
+
+   * Data: Provides final message-level updates like the stop reason and final usage statistics.
+
+   .. code-block:: json
+
+      {
+        "type": "message_delta",
+        "delta": {
+          "stop_reason": "stop"
+        },
+        "usage": { "prompt_tokens": 10 }
+      }
+
+
+6. **Message stop**
 
    * Event type: ``message_stop``
 
@@ -298,37 +373,37 @@ stream.
     :class: collapsible
 
     event: message_start
-    data: {"type": "message_start", "message": {"id": "chatcmpl-9MzuQiF0SxUjFLRjIdT3mTVaMWwiv", "role": "assistant", "model": "gpt-4-0125-preview"}}
+    data: {"type": "message_start", "message": {"id": "chatcmpl-9MzuQiF0SxUjFLRjIdT3mTVaMWwiv", "role": "assistant", "model": "gpt-4-0125-preview", "usage": {"prompt_tokens": 10}}}
 
     event: content_block_start
     data: {"type": "content_block_start","index":0,"content_block":{"type":"text","text":""}}
 
     event: content_block_delta
-    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": "The"}}
+    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": "The"}, "logprobs": null}
 
     event: content_block_delta
-    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": " skies"}}
+    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": " skies"}, "logprobs": null}
 
     event: content_block_delta
-    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": " on"}}
+    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": " on"}, "logprobs": null}
 
     event: content_block_delta
-    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": " Mars"}}
+    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": " Mars"}, "logprobs": null}
 
     event: content_block_delta
-    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": " are"}}
+    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": " are"}, "logprobs": null}
 
     event: content_block_delta
-    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": " red"}}
+    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": " red"}, "logprobs": null}
 
     event: content_block_delta
-    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": "."}}
+    data: {"type": "content_block_delta","index":0,"delta":{"type": "text_delta", "text": "."}, "logprobs": null}
 
     event: content_block_stop
     data: {"type": "content_block_stop","index":0}
 
     event: message_delta
-    data: {"type": "message_delta", "delta": {"stop_reason": "stop"}}
+    data: {"type": "message_delta", "delta": {"stop_reason": "stop"}, "usage": {"completion_tokens": 7, "total_tokens": 17}}
 
     event: message_stop
     data: {"type": "message_stop"}

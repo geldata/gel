@@ -267,22 +267,38 @@ If you are having trouble receiving webhooks, you might need to look for any res
 Configuring SMTP
 ================
 
-For email-based factors, you can configure SMTP to allow the extension to send
-emails on your behalf. You should either configure SMTP, or webhooks for the
-relevant events.
 
-Here is an example of configuring SMTP for local development, using something
-like `Mailpit <https://mailpit.axllent.org/docs/>`__.
+For email-based factors, you can configure SMTP to allow the extension to send emails on your behalf. You should either configure SMTP, or webhooks for the relevant events.
+
+The easiest way to configure SMTP is to use the built-in UI. Here is an example of configuring SMTP for local development using EdgeQL directly, using something like `Mailpit <https://mailpit.axllent.org/docs/>`__.
+
+.. note:: Gel Cloud users, rejoice!
+
+  If you are using Gel Cloud, you can use the built-in development SMTP provider without any configuration. This special provider is already configured for development usage and is ready to send emails while you are developing your application. This provider is tuned specifically for development: it is  rate limited and the sender is hardcoded. Do not use it in production, it will not work for that purpose.
 
 .. code-block:: edgeql
 
-    CONFIGURE CURRENT BRANCH INSERT cfg::SMTPProviderConfig {
+    # Create a new SMTP provider:
+    #
+    configure current branch
+      insert cfg::SMTPProviderConfig {
+        # This name must be unique and is used to reference the provider
+        name := 'local_mailpit',
         sender := 'hello@example.com',
         host := 'localhost',
         port := <int32>1025,
+        username := 'smtpuser',
+        password := 'smtppassword',
         security := 'STARTTLSOrPlainText',
         validate_certs := false,
-    };
+        timeout_per_email := <duration>'60 seconds',
+        timeout_per_attempt := <duration>'15 seconds',
+      };
+
+    # Set this provider as the current email provider by name:
+    #
+    configure current branch
+      set current_email_provider_name := 'local_mailpit';
 
 
 Enabling authentication providers

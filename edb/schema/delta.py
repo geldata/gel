@@ -3105,6 +3105,15 @@ class CreateObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
                 if specified_id is not None:
                     props['id'] = specified_id
 
+        # This takes the span of the delta command and attaches it to the schema
+        # object. In practice, this means that span of DDL CREATE and SDL cmds
+        # is saved to the schema.
+        # But only to the in-memory repr of schema, since span is marked as
+        # ephemeral. This is because spans are large and not really needed in
+        # normal schema work, but are needed for language server.
+        if self.span and 'span' not in props:
+            props['span'] = self.span
+
         schema, self.scls = metaclass.create_in_schema(
             schema, stable_ids=context.stable_ids, **props)
 

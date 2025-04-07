@@ -99,6 +99,9 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             create property b := global glob_mod::b;
         };
         insert glob_mod::Computed;
+
+        create module Dup;
+        create type Dup::Movie;
         ''',
         os.path.join(
             os.path.dirname(__file__), 'schemas', 'movies_setup.edgeql'
@@ -1401,6 +1404,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             SELECT pc.relname, pcon.contype, pa.key, pcf.relname, paf.key
             FROM pg_constraint pcon
             JOIN pg_class pc ON pc.oid = pcon.conrelid
+            LEFT JOIN pg_namespace pn ON pn.oid = pc.relnamespace
             LEFT JOIN pg_class pcf ON pcf.oid = pcon.confrelid
             LEFT JOIN LATERAL (
                 SELECT string_agg(attname, ',') as key
@@ -1417,7 +1421,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             WHERE pc.relname IN (
                 'Book.chapters', 'Movie', 'Movie.director', 'Movie.actors'
             )
-            ORDER BY pc.relname ASC, pcon.contype DESC, pa.key
+            ORDER BY pc.relname ASC, pn.nspname ASC, pcon.contype DESC, pa.key
             '''
         )
 
@@ -1425,6 +1429,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             res,
             [
                 ['Book.chapters', b'f', 'source', 'Book', 'id'],
+                ['Movie', b'p', 'id', None, None],
                 ['Movie', b'p', 'id', None, None],
                 ['Movie', b'f', 'director_id', 'Person', 'id'],
                 ['Movie', b'f', 'genre_id', 'Genre', 'id'],
@@ -1565,6 +1570,15 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         )
         self.assertEqual(res, [[11]])
 
+    async def test_sql_query_static_eval_04a(self):
+        [[res1, res2]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie.actors"'),
+                format('%I.%I', 'public', 'Movie.actors')::regclass
+            '''
+        )
+        self.assertEqual(res1, res2)
+
     async def test_sql_query_static_eval_05(self):
         # pg_get_serial_sequence always returns NULL, we don't expose sequences
 
@@ -1624,6 +1638,48 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 ["novel.chapters", 0],
             ],
         )
+
+    async def test_sql_query_static_eval_07(self):
+        # to_regclass() is aware of search_path
+        await self.scon.execute('SET search_path TO public, "Dup";')
+        [[res1, res2]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie"'), 'public."Movie"'::regclass;
+            '''
+        )
+        self.assertEqual(res1, res2)
+
+        # Now flip the search_path
+        await self.scon.execute('SET search_path TO "Dup", public;')
+        [[res3, res4]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie"'), '"Dup"."Movie"'::regclass;
+            '''
+        )
+        self.assertEqual(res3, res4)
+
+        self.assertNotEqual(res1, res3)
+
+        # Emulate a typo in search_path, Dup without quotes will be lowercased,
+        # and thus not found; `public` will be used instead.
+        await self.scon.execute('SET search_path TO Dup, public;')
+        [[res5]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie"')
+            '''
+        )
+        self.assertEqual(res5, res1)
+
+    async def test_sql_query_static_eval_08(self):
+        # to_regclass() is aware of implicit search_path like pg_catalog
+        await self.scon.execute('SET search_path TO nonexist;')
+        [[res1, res2]] = await self.squery_values(
+            '''
+            SELECT to_regclass('pg_database'),
+                'pg_catalog.pg_database'::regclass;
+            '''
+        )
+        self.assertEqual(res1, res2)
 
     async def test_sql_native_query_static_eval_01(self):
         await self.assert_sql_query_result(
