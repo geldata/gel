@@ -2189,13 +2189,10 @@ def _compile_ql_transaction(
         # Compute the effective access mode
         access = ql.access
         if access is None:
-            if default_iso is qltypes.TransactionIsolationLevel.SERIALIZABLE:
-                access_mode: statypes.TransactionAccessMode = _get_config_val(
-                    ctx, "default_transaction_access_mode"
-                )
-                access = access_mode.to_qltypes()
-            else:
-                access = qltypes.TransactionAccessMode.READ_ONLY
+            access_mode: statypes.TransactionAccessMode = _get_config_val(
+                ctx, "default_transaction_access_mode"
+            )
+            access = access_mode.to_qltypes()
 
         sqls = f'START TRANSACTION ISOLATION LEVEL {iso.value} {access.value}'
         if ql.deferrable is not None:

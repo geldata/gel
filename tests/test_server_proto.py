@@ -2248,7 +2248,8 @@ class TestServerProto(tb.QueryTestCase):
             [42])
 
     async def test_server_proto_tx_28(self):
-        # Test that non-serializable START TRANSACTION enforces read-only
+        # Test that non-serializable START TRANSACTION does *not*
+        # enforce read-only, because we changed that behavior.
 
         try:
             await self.con.query('''
@@ -2259,9 +2260,7 @@ class TestServerProto(tb.QueryTestCase):
                 START TRANSACTION;
             ''')
 
-            await self.assert_read_only_and_default(
-                'read-only transaction', default='ReadWrite'
-            )
+            await self.assert_no_isolation_dangers()
         finally:
             await self.con.query(f'''
                 ROLLBACK;
