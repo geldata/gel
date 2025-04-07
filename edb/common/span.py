@@ -138,8 +138,8 @@ class Span(markup.MarkupExceptionContext):
 
         endcol = end.column if start.line == end.line else None
         tbp = me.lang.TracebackPoint(
-            name=self.name,
-            filename=self.name,
+            name=self.filename,
+            filename=self.filename,
             lineno=start.line,
             colno=start.column,
             end_colno=endcol,
