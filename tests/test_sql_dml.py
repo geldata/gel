@@ -56,7 +56,7 @@ class TestSQLDataModificationLanguage(tb.SQLQueryTestCase):
         create type Base {
           create property prop: str {
             create constraint exclusive;
-          }
+          };
         };
 
         create type Child extending Base {
@@ -1058,7 +1058,6 @@ class TestSQLDataModificationLanguage(tb.SQLQueryTestCase):
         res = await self.squery_values('SELECT key, value FROM "Map"')
         self.assertEqual(res, [['x', 10]])
 
-    @test.xfail("unimplemented")
     async def test_sql_dml_insert_47(self):
         # ON CONFLICT DO UPDATE, basic
 
@@ -1081,29 +1080,6 @@ class TestSQLDataModificationLanguage(tb.SQLQueryTestCase):
         res = await self.squery_values('SELECT key, value FROM "Map"')
         self.assertEqual(res, [['x', 0]])
 
-    async def test_sql_dml_insert_47_without_tag(self):
-        # equivalent to test_sql_dml_insert_47 but without
-        # checking CommandComplete tag, which does not work correctly yet
-
-        res = await self.scon.execute(
-            '''
-            INSERT INTO "Map" (key, value) VALUES ('x', 10)
-            '''
-        )
-        self.assertEqual(res, 'INSERT 0 1')
-
-        res = await self.scon.execute(
-            '''
-            INSERT INTO "Map" (key, value) VALUES ('x', 5)
-            ON CONFLICT (key)
-            DO UPDATE SET value = 0
-            '''
-        )
-
-        res = await self.squery_values('SELECT key, value FROM "Map"')
-        self.assertEqual(res, [['x', 0]])
-
-    @test.xfail("unimplemented")
     async def test_sql_dml_insert_48(self):
         # ON CONFLICT DO UPDATE RETURNING
 
@@ -2115,6 +2091,35 @@ class TestSQLDataModificationLanguage(tb.SQLQueryTestCase):
             ''',
         )
         self.assertEqual(res, [['Test returning (updated)']])
+
+    async def test_sql_dml_update_19(self):
+        # update of two objects, parent and child
+
+        await self.scon.execute(
+            '''
+            INSERT INTO "Base" (prop) VALUES ('base')
+            '''
+        )
+        await self.scon.execute(
+            '''
+            INSERT INTO "Child" (prop) VALUES ('child')
+            '''
+        )
+
+        res = await self.scon.execute(
+            '''
+            UPDATE "Base" SET prop = prop || ' 1'
+            '''
+        )
+        self.assertEqual(res, 'UPDATE 2')
+
+        res = await self.squery_values(
+            '''
+            UPDATE "Base" SET prop = prop || ' 2'
+            RETURNING prop
+            '''
+        )
+        self.assertEqual(res, [['base 1 2'], ['child 1 2']])
 
     async def test_sql_dml_01(self):
         # update/delete only
