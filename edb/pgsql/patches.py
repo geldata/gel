@@ -183,4 +183,25 @@ update ext::ai::ChatPrompt filter .name = 'builtin::rag-default' set {
 '''),  # For #8553
     # 6.6
     ('edgeql+schema', ''),  # For #8554
+    ('ext-pkg', 'ai'),  # For #8521
+    ('edgeql+user_ext|ai', '''
+    create function ext::ai::search(
+        object: anyobject,
+        query: str,
+    ) -> optional tuple<object: anyobject, distance: float64>
+    {
+        create annotation std::description := '
+            Search an object using its ext::ai::index index.
+            Gets an embedding for the query from the ai provider then
+            returns objects that match the specified semantic query and the
+            similarity score.
+        ';
+        set volatility := 'Stable';
+        # Needed to pick up the indexes when used in ORDER BY.
+        set prefer_subquery_args := true;
+        set server_param_conversions :=
+            '{"query": ["ai_text_embedding", "object"]}';
+        using sql expression;
+    };
+'''),
 ]
