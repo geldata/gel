@@ -74,6 +74,7 @@ from edb.schema import utils as s_utils
 from edb.server import args as edbargs
 from edb.server import config
 from edb.server import compiler as edbcompiler
+from edb.server.compiler import dbstate
 from edb.server import defines as edbdef
 from edb.server import pgcluster
 from edb.server import pgcon
@@ -2253,6 +2254,18 @@ async def _populate_misc_instance_data(
             f'{edbdef.EDGEDB_SYSTEM_DB}metadata',
             json.dumps({}),
         )
+
+    await _store_static_json_cache(
+        ctx,
+        'sql_default_fe_settings',
+        json.dumps(
+            [
+                {"name": key, "value": pg_common.setting_to_sql(key, val)}
+                for key, val in dbstate.DEFAULT_SQL_FE_SETTINGS.items()
+            ]
+        )
+    )
+
     return json_instance_data
 
 
