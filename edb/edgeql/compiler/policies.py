@@ -302,13 +302,13 @@ def try_type_rewrite(
     # TODO: caching?
     children_overlap = False
     if children_have_policies:
-        all_descs = [
+        all_child_descs = [
             x
             for child in stype.children(schema)
             for x in child.descendants(schema)
         ]
-        descs = set(all_descs)
-        if len(descs) != len(all_descs):
+        child_descs = set(all_child_descs)
+        if len(child_descs) != len(all_child_descs):
             children_overlap = True
 
     # Put a placeholder to prevent recursion.
@@ -355,7 +355,11 @@ def try_type_rewrite(
     if children_have_policies and not skip_subtypes:
         # N.B: we don't filter here, we just generate references
         # they will go in their own CTEs
-        children = stype.children(schema) if not children_overlap else descs
+        children = (
+            stype.children(schema)
+            if not children_overlap
+            else stype.descendants(schema)
+        )
         sets += [
             # We need to wrap it in a type override so that unioning
             # them all together works...

@@ -1350,3 +1350,25 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             ''',
             [{"s": [], "foo": None}]
         )
+
+    async def test_edgeql_policies_diamond_01(self):
+        # Verify that selecting a type with overlapping children and
+        # access policies in at least one child works
+
+        await self.con.execute('''
+            create type Base;
+            create type A extending Base;
+            create type B extending Base;
+            create type AB extending A, B;
+            create type T extending Base {
+                create access policy ok allow all;
+            };
+            insert T;
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select Base
+            ''',
+            [{}]
+        )
