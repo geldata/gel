@@ -632,15 +632,17 @@ class AbstractPool:
     async def health_check(self) -> bool:
         elapsed = time.monotonic() - self._last_active_time
         if elapsed > HEALTH_CHECK_MIN_INTERVAL:
-            task = self._loop.create_task(
-                self.make_compilation_config_serializer()
-            )
-            task.add_done_callback(
-                lambda _: self._maybe_update_last_active_time()
-            )
-            await asyncio.wait([task], timeout=HEALTH_CHECK_TIMEOUT)
-            if not task.done():
+            try:
+                with asyncio.timeout(HEALTH_CHECK_TIMEOUT):
+                    await self.make_compilation_config_serializer()
+            except TimeoutError:
+                logger.error("health check timed out")
                 return False
+            except Exception:
+                logger.exception("health check failed")
+                return False
+            else:
+                self._maybe_update_last_active_time()
         return True
 
 
@@ -822,14 +824,26 @@ class BaseLocalPool(
     async def _acquire_worker(
         self, *, condition=None, weighter=None, **compiler_args
     ):
-        while (
-            worker := await self._workers_queue.acquire(
-                condition=condition, weighter=weighter
+        start_time = time.monotonic()
+        try:
+            while (
+                worker := await self._workers_queue.acquire(
+                    condition=condition, weighter=weighter
+                )
+            ).get_pid() not in self._workers:
+                # The worker was disconnected; skip to the next one.
+                pass
+        except TimeoutError:
+            metrics.compiler_pool_queue_errors.inc(1.0, "timeout")
+            raise
+        except Exception:
+            metrics.compiler_pool_queue_errors.inc(1.0, "ise")
+            raise
+        else:
+            metrics.compiler_pool_queue_wait_duration.observe(
+                time.monotonic() - start_time
             )
-        ).get_pid() not in self._workers:
-            # The worker was disconnected; skip to the next one.
-            pass
-        return worker
+            return worker
 
     def _release_worker(self, worker, *, put_in_front: bool = True):
         # Skip disconnected workers
@@ -1201,8 +1215,21 @@ class RemotePool(AbstractPool):
     async def _acquire_worker(
         self, *, condition=None, cmp=None, **compiler_args
     ):
-        await self._semaphore.acquire()
-        return await self._worker
+        start_time = time.monotonic()
+        try:
+            await self._semaphore.acquire()
+            worker = await self._worker
+        except TimeoutError:
+            metrics.compiler_pool_queue_errors.inc(1.0, "timeout")
+            raise
+        except Exception:
+            metrics.compiler_pool_queue_errors.inc(1.0, "ise")
+            raise
+        else:
+            metrics.compiler_pool_queue_wait_duration.observe(
+                time.monotonic() - start_time
+            )
+            return worker
 
     def _release_worker(self, worker, *, put_in_front: bool = True):
         if self._sync_lock.locked():

@@ -41,6 +41,18 @@ current_compiler_processes = registry.new_gauge(
     'Current number of active compiler processes.'
 )
 
+compiler_pool_queue_wait_duration = registry.new_histogram(
+    'compiler_pool_queue_wait_duration',
+    'Time a compiler request waits in the queue.',
+    unit=prom.Unit.SECONDS,
+)
+
+compiler_pool_queue_errors = registry.new_labeled_counter(
+    'compiler_pool_queue_errors_total',
+    'Number of compiler pool errors in queue.',
+    labels=('type',),
+)
+
 current_branches = registry.new_labeled_gauge(
     'branches_current',
     'Current number of branches.',
