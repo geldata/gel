@@ -170,4 +170,15 @@ alter type ext::ai::EmbeddingModel {
     ('repair', ''),  # For #8466
     # 6.5
     ('sql-introspection', ''),  # For #8511
+    ('edgeql+user_ext|ai', r'''
+update ext::ai::ChatPrompt filter .name = 'builtin::rag-default' set {
+    messages += (insert ext::ai::ChatPromptMessage {
+                    participant_role := ext::ai::ChatParticipantRole.User,
+                    content := (
+                        "Query: {query}\n\
+                         Answer: "
+                    ),
+                })
+}
+'''),  # For #8553
 ]
