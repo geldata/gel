@@ -1166,6 +1166,12 @@ class FunctionCommand(MetaCommand):
         # be deleted from the schema.
         for ctx in context.stack:
             if isinstance(ctx.op, s_objtypes.DeleteObjectType):
+                # Also get the pointers, since we look at pointer descendents.
+                # This is really all a pretty bad hack.
+                for ptr in ctx.op.scls.get_pointers(schema).objects(schema):
+                    schema = schema.delete(ptr)
+                schema = schema.delete(ctx.op.scls)
+            elif isinstance(ctx.op, s_pointers.DeletePointer):
                 schema = schema.delete(ctx.op.scls)
 
         return s_funcs.compile_function(
