@@ -26,10 +26,6 @@ from . import config
 from .config import logger
 from edb.server import rust_async_channel
 
-# Connections must be hashable because we use them to reverse-lookup
-# an internal ID.
-C = typing.TypeVar("C", bound=typing.Hashable)
-
 CP1 = typing.TypeVar('CP1', covariant=True)
 CP2 = typing.TypeVar('CP2', contravariant=True)
 
@@ -83,7 +79,9 @@ class StatsCollector(typing.Protocol):
         pass
 
 
-class Pool(typing.Generic[C]):
+# Connections must be hashable because we use them to reverse-lookup
+# an internal ID.
+class Pool[C: typing.Hashable]:
     _pool: _rust.ConnPool
     _next_conn_id: int
     _failed_connects: int
