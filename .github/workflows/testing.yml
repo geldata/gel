@@ -547,7 +547,8 @@ jobs:
     - name: Install dependencies
       if: true
       run: |
-        env HOMEBREW_NO_AUTO_UPDATE=1 brew install libmagic
+        env HOMEBREW_NO_AUTO_UPDATE=1 brew install \
+        libmagic sentencepiece protobuf
 
     - name: Build
       env:
@@ -618,7 +619,8 @@ jobs:
     - name: Install dependencies
       if: true
       run: |
-        env HOMEBREW_NO_AUTO_UPDATE=1 brew install libmagic
+        env HOMEBREW_NO_AUTO_UPDATE=1 brew install \
+        libmagic sentencepiece protobuf
 
     - name: Build
       env:

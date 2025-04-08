@@ -24,6 +24,7 @@ type Person {
 
     full_name := __source__.first_name ++ ((' ' ++ .last_name) ?? '');
     favorite_genre := (select Genre filter .name = 'Drama' limit 1);
+    directed_movie := (select .<director[is Movie] limit 1);
     username := (global username_prefix ?? 'u_') ++ str_lower(.first_name);
 }
 

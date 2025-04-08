@@ -762,6 +762,9 @@ def _check_server_arg_conversion(
             # Get info about the conversion
             converted_type, additional_info, conversion_volatility = (
                 _resolve_server_param_conversion(
+                    func_params,
+                    args,
+                    kwargs,
                     conversion_name,
                     schema=schema,
                     conversion_info=(
@@ -891,6 +894,9 @@ def _check_server_arg_conversion(
 
 
 def _resolve_server_param_conversion(
+    func_params: s_func.FuncParameterList,
+    args: list[tuple[s_types.Type, irast.Set]],
+    kwargs: dict[str, tuple[s_types.Type, irast.Set]],
     conversion_name: str,
     *,
     schema: s_schema.Schema,
@@ -931,6 +937,31 @@ def _resolve_server_param_conversion(
         )
         additional_info = (separator,)
         conversion_volatility = ft.Volatility.Immutable
+
+    elif conversion_name == 'ai_text_embedding':
+        assert isinstance(conversion_info, list)
+        object_param_name = conversion_info[1]
+
+        converted_type = schema.get_global(
+            s_types.Array,
+            s_types.Array.generate_name(
+                sn.QualName('std', 'float32')
+            )
+        )
+
+        _, _, object_arg = _get_arg(
+            func_params,
+            object_param_name,
+            args,
+            kwargs,
+            error_msg=f'Server param conversion {conversion_name} '
+            f'error finding object argument',
+            schema=schema,
+        )
+
+        object_type = object_arg[0].material_type(schema)[1]
+        additional_info = (str(object_type.get_id(schema)),)
+        conversion_volatility = ft.Volatility.Volatile
 
     else:
         raise RuntimeError(

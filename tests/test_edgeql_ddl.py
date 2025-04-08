@@ -5241,6 +5241,24 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 };
             ''')
 
+    async def test_edgeql_ddl_function_42(self):
+        await self.con.execute("""
+            create abstract type Named {
+                create required property name: str;
+            };
+            create function all_names() -> SET OF str {
+                USING (Named.name)
+            };
+            create type Z extending Named {
+                create access policy ok allow all;
+            };
+            create type T;
+        """)
+
+        await self.con.execute("""
+            drop type Z;
+        """)
+
     async def test_edgeql_ddl_function_inh_01(self):
         await self.con.execute("""
             create abstract type T;

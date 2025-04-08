@@ -1288,11 +1288,12 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 ['Movie.director', 'bar', 'YES', 3],
                 ['Person', 'id', 'NO', 1],
                 ['Person', '__type__', 'NO', 2],
-                ['Person', 'favorite_genre_id', 'YES', 3],
-                ['Person', 'first_name', 'NO', 4],
-                ['Person', 'full_name', 'NO', 5],
-                ['Person', 'last_name', 'YES', 6],
-                ['Person', 'username', 'NO', 7],
+                ['Person', 'directed_movie_id', 'YES', 3],
+                ['Person', 'favorite_genre_id', 'YES', 4],
+                ['Person', 'first_name', 'NO', 5],
+                ['Person', 'full_name', 'NO', 6],
+                ['Person', 'last_name', 'YES', 7],
+                ['Person', 'username', 'NO', 8],
                 ['novel', 'id', 'NO', 1],
                 ['novel', '__type__', 'NO', 2],
                 ['novel', 'foo', 'YES', 3],
@@ -2341,6 +2342,19 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         self.assertEqual(await query_glob_bool("'ON'"), True)
         self.assertEqual(await query_glob_bool("'OFF'"), False)
         self.assertEqual(await query_glob_bool("'HELLO'"), None)
+
+    async def test_sql_query_computed_14(self):
+        # single link, using a backlink
+
+        res = await self.squery_values(
+            """
+            SELECT first_name, directed_movie_id IS NOT NULL FROM "Person"
+            ORDER BY first_name
+            """
+        )
+        self.assertEqual(
+            res, [["Robin", False], ["Steven", True], ["Tom", False]]
+        )
 
     async def test_sql_query_access_policy_01(self):
         # no access policies

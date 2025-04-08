@@ -149,7 +149,8 @@
     - name: Install dependencies
       if: << 'false' if tgt.runs_on and 'self-hosted' in tgt.runs_on else 'true' >>
       run: |
-        env HOMEBREW_NO_AUTO_UPDATE=1 brew install libmagic
+        env HOMEBREW_NO_AUTO_UPDATE=1 brew install \
+        libmagic sentencepiece protobuf
 
     - name: Build
       env:

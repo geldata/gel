@@ -262,7 +262,7 @@ class MultiTenantServer(server.BaseServer):
             await tenant.load_config_file(self.get_compiler_pool())
         try:
             await tenant.init_sys_pgcon()
-            await tenant.init()
+            await tenant.init(compat_check=True)
             tenant.start_watching_files()
             await tenant.start_accepting_new_tasks()
             tenant.start_running()

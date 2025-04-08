@@ -22,6 +22,10 @@ dependencies = [
     'aiosmtplib~=3.0',
     'tiktoken~=0.7.0',
     'mistral_common~=1.2.1',
+
+    # pin because newer versions are either broken or require
+    # us to update setuptools (in gel-pkg)
+    'calver==2025.03.31',
 ]
 
 [project.scripts]
