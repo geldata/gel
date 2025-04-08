@@ -1023,7 +1023,8 @@ async def _update_embeddings_in_db(
     embeddings: bytes,
     offset: int,
 ) -> int:
-    id_array = '", "'.join(id.hex for id in ids)
+
+    id_array = '{' + ', '.join(f'"{id.hex}"' for id in ids) + '}'
     entries = await pgconn.sql_fetch_val(
         f"""
         WITH upd AS (
@@ -1056,7 +1057,7 @@ async def _update_embeddings_in_db(
         """.encode(),
         args=(
             embeddings,
-            f'{{"{id_array}"}}'.encode(),
+            id_array.encode(),
             str(offset).encode(),
         ),
         tx_isolation=edbdef.TxIsolationLevel.RepeatableRead,
