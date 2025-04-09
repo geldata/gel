@@ -155,7 +155,7 @@
     - name: Install an alias
       if: << 'false' if tgt.runs_on and 'self-hosted' in tgt.runs_on else 'true' >>
       run: |
-        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc 
+        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc
         chmod +x /usr/local/bin/nproc
 
     - name: Build

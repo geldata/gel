@@ -1158,7 +1158,7 @@ jobs:
     - name: Install an alias
       if: true
       run: |
-        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc 
+        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc
         chmod +x /usr/local/bin/nproc
 
     - name: Build
@@ -1237,7 +1237,7 @@ jobs:
     - name: Install an alias
       if: true
       run: |
-        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc 
+        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc
         chmod +x /usr/local/bin/nproc
 
     - name: Build
