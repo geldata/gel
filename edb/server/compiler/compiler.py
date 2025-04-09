@@ -1941,6 +1941,19 @@ def _compile_ql_query(
             for p in ir.server_param_conversions
         ]
 
+        if any(
+            spc.source_value is not None
+            for spc in server_param_conversions
+        ):
+            # Source values are a way for normalized constants to be passed
+            # to the server for conversion.
+            #
+            # They should not be cached since they are not differentiated
+            # in the cache key value.
+            #
+            # This will not impact query parameters (eg. `<str>$0`).
+            cacheable = False
+
     sql_hash = _hash_sql(
         sql_text.encode(defines.EDGEDB_ENCODING),
         mode=str(ctx.output_format).encode(),
