@@ -1160,6 +1160,12 @@ jobs:
         env HOMEBREW_NO_AUTO_UPDATE=1 brew install \
         libmagic sentencepiece protobuf
 
+    - name: Install an alias
+      if: true
+      run: |
+        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc 
+        chmod +x /usr/local/bin/nproc
+
     - name: Build
       env:
         PACKAGE: edgedbpkg.edgedb:Gel
@@ -1173,7 +1179,6 @@ jobs:
         METAPKG_GIT_CACHE: disabled
         BUILD_GENERIC: true
       run: |
-        alias nproc="sysctl -n hw.logicalcpu"
         edgedb-pkg/integration/macos/build.sh
 
     - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874  # v4.4.0
@@ -1234,6 +1239,12 @@ jobs:
         env HOMEBREW_NO_AUTO_UPDATE=1 brew install \
         libmagic sentencepiece protobuf
 
+    - name: Install an alias
+      if: true
+      run: |
+        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc 
+        chmod +x /usr/local/bin/nproc
+
     - name: Build
       env:
         PACKAGE: edgedbpkg.edgedb:Gel
@@ -1247,7 +1258,6 @@ jobs:
         METAPKG_GIT_CACHE: disabled
         BUILD_GENERIC: true
       run: |
-        alias nproc="sysctl -n hw.logicalcpu"
         edgedb-pkg/integration/macos/build.sh
 
     - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874  # v4.4.0
