@@ -321,10 +321,6 @@ def gen_dml_cte(
     # need them.
     ctx.path_scope.maps.clear()
 
-    skip_rel = (
-        isinstance(ir_stmt, irast.UpdateStmt) and ir_stmt.sql_mode_link_only
-    )
-
     if range_rvar is not None:
         relctx.pull_path_namespace(
             target=dml_stmt, source=range_rvar, ctx=ctx)
@@ -332,16 +328,16 @@ def gen_dml_cte(
         # Auxiliary relations are always joined via the WHERE
         # clause due to the structure of the UPDATE/DELETE SQL statements.
         assert isinstance(dml_stmt, (pgast.SelectStmt, pgast.DeleteStmt))
-        if not skip_rel:
-            dml_stmt.where_clause = astutils.new_binop(
-                lexpr=pathctx.get_rvar_path_identity_var(
-                    subject_rvar, subject_path_id, env=ctx.env
-                ),
-                op='=',
-                rexpr=pathctx.get_rvar_path_identity_var(
-                    range_rvar, subject_path_id, env=ctx.env
-                )
+        dml_stmt.where_clause = astutils.new_binop(
+            lexpr=pathctx.get_rvar_path_identity_var(
+                subject_rvar, subject_path_id, env=ctx.env
+            ),
+            op='=',
+            rexpr=pathctx.get_rvar_path_identity_var(
+                range_rvar, subject_path_id, env=ctx.env
             )
+        )
+
         # Do any read-side filtering
         if pol_expr := ir_stmt.read_policies.get(typeref.id):
             with ctx.newrel() as sctx:

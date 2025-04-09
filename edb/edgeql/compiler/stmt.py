@@ -621,10 +621,7 @@ def compile_UpdateQuery(
     ctx.env.dml_exprs.append(expr)
 
     with ctx.subquery() as ictx:
-        stmt = irast.UpdateStmt(
-            span=expr.span,
-            sql_mode_link_only=expr.sql_mode_link_only,
-        )
+        stmt = irast.UpdateStmt(span=expr.span)
         init_stmt(stmt, expr, ctx=ictx, parent_ctx=ctx)
 
         with ictx.new() as ectx:
@@ -680,12 +677,6 @@ def compile_UpdateQuery(
                 ctx=bodyctx,
                 span=expr.span,
             )
-            # If we are doing a SQL-mode link only update (that is,
-            # we are doing a SQL INSERT or DELETE to a link table),
-            # disable rewrites.
-            # HACK: This is a really ass-backwards way to accomplish that.
-            if stmt.sql_mode_link_only:
-                ctx.env.dml_rewrites.pop(stmt.subject, None)
 
         result = setgen.class_set(
             mat_stype, path_id=stmt.subject.path_id, ctx=ctx,
