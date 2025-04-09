@@ -1908,9 +1908,10 @@ def process_update_rewrites(
         )
 
         # pull in table_relation for __old__
-        table_rel.path_outputs[
-            (old_path_id, pgce.PathAspect.VALUE)
-        ] = table_rel.path_outputs[(subject_path_id, pgce.PathAspect.VALUE)]
+        subject_value = pathctx.get_path_value_output(
+            table_rel, subject_path_id, env=ctx.env
+        )
+        pathctx.put_path_value_var(table_rel, old_path_id, subject_value)
         relctx.include_rvar(
             rewrites_stmt, table_relation, old_path_id, ctx=ctx
         )
