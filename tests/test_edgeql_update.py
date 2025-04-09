@@ -2928,10 +2928,6 @@ class TestUpdate(tb.QueryTestCase):
             [3],
         )
 
-    @test.xfail('''
-        PostgreSQL doesn't allow updating just-inserted record
-        in the same query.
-    ''')
     async def test_edgeql_update_with_self_insert_01(self):
         await self.con.execute('''
             WITH new_test := (INSERT UpdateTest { name := "new-test" })
