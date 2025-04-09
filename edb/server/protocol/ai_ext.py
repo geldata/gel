@@ -129,12 +129,14 @@ class Tokenizer(abc.ABC):
         """Decode tokens into text."""
         raise NotImplementedError
 
-    def shorten_to_token_length(self, text: str, token_length: int) -> str:
+    def shorten_to_token_length(
+        self, text: str, token_length: int
+    ) -> tuple[str, int]:
         """Truncate text to a maximum token length."""
         encoded = self.encode(text)
         if len(encoded) > token_length:
             encoded = encoded[:token_length]
-        return self.decode(encoded)
+        return self.decode(encoded), len(encoded)
 
 
 class OpenAITokenizer(Tokenizer):
@@ -230,6 +232,21 @@ class TestTokenizer(Tokenizer):
 
     def decode(self, tokens: list[int]) -> str:
         return ''.join(chr(c) for c in tokens)
+
+
+def get_model_tokenizer(
+    provider_name: str,
+    model_name: str,
+) -> Optional[Tokenizer]:
+    """Get the tokenizer for a given provider and model"""
+    if provider_name == 'builtin::openai':
+        return OpenAITokenizer.for_model(model_name)
+    elif provider_name == 'builtin::mistral':
+        return MistralTokenizer.for_model(model_name)
+    elif provider_name == 'custom::test':
+        return TestTokenizer.for_model(model_name)
+    else:
+        return None
 
 
 @dataclass
@@ -701,23 +718,6 @@ async def _generate_embeddings_params(
         logger.error(f"{task_name}: {e}")
         return None
 
-    model_tokenizers: dict[str, Tokenizer] = {}
-    if provider_name == 'builtin::openai':
-        model_tokenizers = {
-            model_name: OpenAITokenizer.for_model(model_name)
-            for model_name in provider_models
-        }
-    elif provider_name == 'builtin::mistral':
-        model_tokenizers = {
-            model_name: MistralTokenizer.for_model(model_name)
-            for model_name in provider_models
-        }
-    elif provider_name == 'custom::test':
-        model_tokenizers = {
-            model_name: TestTokenizer.for_model(model_name)
-            for model_name in provider_models
-        }
-
     model_max_input_tokens: dict[str, int] = {
         model_name: await _get_model_annotation_as_int(
             db,
@@ -772,81 +772,30 @@ async def _generate_embeddings_params(
         )
         for shortening, part_iter in groups:
             part = list(part_iter)
+            part_texts = [(p.text, p.truncate_to_max) for p in part]
 
-            input_texts: list[str] = []
-            input_entries: list[PendingEmbedding] = []
-            total_token_count: int = 0
-            for pending_entry in part:
-                text = pending_entry.text
+            batches, excluded_indexes = batch_texts(
+                part_texts,
+                get_model_tokenizer(provider_name, model_name),
+                model_max_input_tokens[model_name],
+                model_max_batch_tokens[model_name]
+            )
 
-                if model_name in model_tokenizers:
-                    tokenizer = model_tokenizers[model_name]
-                    truncate_length = (
-                        model_max_input_tokens[model_name]
-                        - tokenizer.encode_padding()
-                    )
-
-                    if pending_entry.truncate_to_max:
-                        text = tokenizer.shorten_to_token_length(
-                            text, truncate_length
-                        )
-                        total_token_count += truncate_length
-                    else:
-                        current_token_count = len(tokenizer.encode(text))
-
-                        if current_token_count > truncate_length:
-                            # If the text is too long, mark it as excluded and
-                            # skip.
-                            if model_name not in model_excluded_ids:
-                                model_excluded_ids[model_name] = []
-                            model_excluded_ids[model_name].append(
-                                pending_entry.id.hex
-                            )
-                            continue
-
-                        total_token_count += current_token_count
-
-                input_texts.append(text)
-                input_entries.append(pending_entry)
-
-            if model_name in model_tokenizers:
-                tokenizer = model_tokenizers[model_name]
-                max_batch_tokens = model_max_batch_tokens[model_name]
-                if isinstance(tokens_rate_limit, int):
-                    # If the rate limit is lower than the batch limit, use that
-                    # instead.
-                    max_batch_tokens = min(max_batch_tokens, tokens_rate_limit)
-
-                # Group the input into batches based on token count
-                batches = _batch_embeddings_inputs(
-                    tokenizer, input_texts, max_batch_tokens
+            if excluded_indexes:
+                if model_name not in model_excluded_ids:
+                    model_excluded_ids[model_name] = []
+                model_excluded_ids[model_name].extend(
+                    part[excluded_index].id.hex
+                    for excluded_index in excluded_indexes
                 )
 
-                for batch_input_indexes, batch_token_count in batches:
-                    inputs = [
-                        (input_entries[index], input_texts[index])
-                        for index in batch_input_indexes
-                    ]
+            for batch in batches:
+                inputs = [
+                    (part[entry.input_index], entry.input_text)
+                    for entry in batch.entries
+                ]
 
-                    # Sort the batches by target_rel. This groups embeddings
-                    # for each table together.
-                    # This is necessary for `EmbeddingsResult.finalize()`
-                    inputs.sort(key=lambda e: e[0].target_rel)
-
-                    embeddings_params.append(EmbeddingsParams(
-                        pgconn=pgconn,
-                        provider=provider_cfg,
-                        model_name=model_name,
-                        inputs=inputs,
-                        token_count=batch_token_count,
-                        shortening=shortening,
-                        user=None,
-                        http_client=http_client,
-                    ))
-
-            else:
-                inputs = list(zip(input_entries, input_texts))
-                # Sort the inputs by target_rel. This groups embeddings
+                # Sort the batches by target_rel. This groups embeddings
                 # for each table together.
                 # This is necessary for `EmbeddingsResult.finalize()`
                 inputs.sort(key=lambda e: e[0].target_rel)
@@ -856,13 +805,129 @@ async def _generate_embeddings_params(
                     provider=provider_cfg,
                     model_name=model_name,
                     inputs=inputs,
-                    token_count=total_token_count,
+                    token_count=batch.token_count,
                     shortening=shortening,
                     user=None,
                     http_client=http_client,
                 ))
 
     return embeddings_params
+
+
+@dataclass(frozen=True, kw_only=True)
+class TextBatchEntry:
+    input_index: int
+    input_text: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class TextBatch:
+    entries: list[TextBatchEntry]
+    token_count: int
+
+
+def batch_texts(
+    texts: list[tuple[str, bool]],
+    tokenizer: Optional[Tokenizer],
+    max_input_tokens: int,
+    max_batch_tokens: int,
+) -> tuple[list[TextBatch], list[int]]:
+    """Given a list of texts and whether each can be truncated, produce a list
+    of valid texts to batch.
+
+    Additionally, returns a list of indexes of texts which are too long and
+    should be excluded from future embeddings requests.
+    """
+    excluded_indexes: list[int] = []
+
+    if tokenizer:
+        input_indexes: list[int] = []
+        input_texts: list[str] = []
+
+        for index, (text, allowed_to_truncate) in enumerate(texts):
+            ensured = _ensure_text_token_length(
+                text,
+                allowed_to_truncate,
+                tokenizer,
+                max_input_tokens
+            )
+
+            if ensured is None:
+                # If the text is too long, mark it as excluded and
+                # skip.
+                excluded_indexes.append(index)
+                continue
+
+            input_indexes.append(index)
+            input_texts.append(ensured)
+
+        # Group the valid texts into batches based on token count
+        batched_inputs = _batch_embeddings_inputs(
+            tokenizer, input_texts, max_batch_tokens
+        )
+
+        # Gather results
+        batches = [
+            TextBatch(
+                entries=[
+                    TextBatchEntry(
+                        input_index=input_indexes[index],
+                        input_text=input_texts[index],
+                    )
+                    for index in batch_input_indexes
+                ],
+                token_count=token_count
+            )
+            for batch_input_indexes, token_count in batched_inputs
+        ]
+
+    else:
+        batches = [
+            TextBatch(
+                entries=[
+                    TextBatchEntry(
+                        input_index=index,
+                        input_text=texts[index][0],
+                    )
+                    for index in range(len(texts))
+                ],
+                token_count=0,
+            )
+        ]
+
+    return (batches, excluded_indexes)
+
+
+def _ensure_text_token_length(
+    text: str,
+    allowed_to_truncate: bool,
+    tokenizer: Tokenizer,
+    max_token_count: int,
+) -> Optional[str]:
+    """Ensure text does not exceed the allowed token length.
+
+    If the text is ok, return the text unchanged.
+
+    If the text is too long and `allowed_to_truncate` is true, return the
+    text truncated.
+
+    Otherwise return None.
+    """
+
+    truncate_length = max_token_count - tokenizer.encode_padding()
+
+    if allowed_to_truncate:
+        text, current_token_count = (
+            tokenizer.shorten_to_token_length(text, truncate_length)
+        )
+
+    else:
+        current_token_count = len(tokenizer.encode(text))
+
+        if current_token_count > truncate_length:
+            return None
+
+    return text
 
 
 @dataclass(frozen=True, kw_only=True)
