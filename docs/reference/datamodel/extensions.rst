@@ -53,9 +53,28 @@ Standalone extensions
 
 .. api-index:: postgis
 
-Additionally, standalone extension packages can be installed on local project-managed instances via the CLI, with ``postgis`` being a notable example.
+Unlike the built-in extensions, standalone extensions must be installed on the instance before they can be used in your instance's branches schemas. The manner in which you install these extensions will depend on whether you are using a local, remote instance, or are using |Gel| Cloud.
 
-List installed extensions:
+Once you've installed them, standalone extensions can be declared in the schema, same as built-in extensions:
+
+.. code-block:: sdl
+
+  using extension postgis;
+
+.. note::
+
+  To restore a dump that uses a standalone extension, that extension must be installed before the restore process.
+
+
+Gel Cloud
+---------
+
+If you are using |Gel| Cloud, standalone extentions...
+
+Local instances
+---------------
+
+Additionally, standalone extension packages can be installed on local project-managed instances via the CLI :gelcmd:`extension` command group, with ``postgis`` being a notable example.
 
 .. code-block:: bash
 
@@ -63,30 +82,15 @@ List installed extensions:
   ┌─────────┬─────────┐
   │ Name    │ Version │
   └─────────┴─────────┘
-
-List available extensions:
-
-.. code-block:: bash
-
   $ gel extension list-available
   ┌─────────┬───────────────┐
   │ Name    │ Version       │
   │ postgis │ 3.4.3+6b82d77 │
   └─────────┴───────────────┘
-
-Install the ``postgis`` extension:
-
-.. code-block:: bash
-
   $ gel extension install postgis
   Found extension package: postgis version 3.4.3+6b82d77
   00:00:03 [====================] 22.49 MiB/22.49 MiB
   Extension 'postgis' installed successfully.
-
-Check that extension is installed:
-
-.. code-block:: bash
-
   $ gel extension list
   ┌─────────┬───────────────┐
   │ Name    │ Version       │
@@ -99,16 +103,10 @@ After installing extensions, make sure to restart your instance:
 
   $ gel instance restart
 
-Standalone extensions can now be declared in the schema, same as
-built-in extensions:
+Remote instances
+----------------
 
-.. code-block:: sdl
-
-  using extension postgis;
-
-.. note::
-   To restore a dump that uses a standalone extension, that extension must
-   be installed before the restore process.
+If you are using a remote instance, see the :ref:`relevant deployment guide <ref_guide_deployment>` for instructions on how to install extensions.
 
 .. _ref_eql_sdl_extensions:
 
