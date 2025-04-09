@@ -151,6 +151,7 @@ The ``cli.toml`` has the following structure. All fields are optional:
     gel_list
     gel_info
     gel_cli_upgrade
+    gel_extension/index
     gel_server/index
     gel_describe/index
     gel_instance/index
