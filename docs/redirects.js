@@ -1,6 +1,11 @@
 // See https://nextjs.org/docs/app/api-reference/config/next-config-js/redirects
 module.exports = [
   {
+    source: "/changelog/:path*",
+    destination: "/resources/changelog/:path*",
+    permanent: false,
+  },
+  {
     source: "/guides/cheatsheet/:path*",
     destination: "/resources/cheatsheets/:path*",
     permanent: true,
