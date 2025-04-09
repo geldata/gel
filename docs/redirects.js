@@ -51,6 +51,37 @@ module.exports = [
     permanent: false,
   },
   {
+    source: "/reference/libraries/dotnet/:path*",
+    destination: "https://github.com/geldata/gel-net",
+    permanent: false,
+  },
+  {
+    source: "/reference/libraries/elixir/:path*",
+    destination: "https://hexdocs.pm/gel",
+    permanent: false,
+  },
+  {
+    source: "/reference/libraries/java/:path*",
+    destination: "https://github.com/geldata/gel-java",
+    permanent: false,
+  },
+  // Use the further redirects to get to the correct point in the consolidated docs
+  {
+    source: "/reference/libraries/js/:path*",
+    destination: "/reference/clients/js/:path*",
+    permanent: false,
+  },
+  {
+    source: "/reference/libraries/python/:path*",
+    destination: "/reference/clients/python/:path*",
+    permanent: false,
+  },
+  {
+    source: "/reference/libraries/:path*",
+    destination: "/reference/using",
+    permanent: false,
+  },
+  {
     source: "/reference/clients/js/delete#delete",
     destination: "/reference/using/js/querybuilder",
     permanent: false,
