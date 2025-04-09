@@ -245,12 +245,12 @@ def gen_dml_cte(
     ctx: context.CompilerContextLevel,
 ) -> tuple[pgast.CommonTableExpr, pgast.PathRangeVar]:
 
-    target_ir_set = ir_stmt.subject
-    target_path_id = target_ir_set.path_id
+    subject_ir_set = ir_stmt.subject
+    subject_path_id = subject_ir_set.path_id
 
     relation = relctx.range_for_typeref(
         typeref,
-        target_path_id,
+        subject_path_id,
         for_mutation=True,
         ctx=ctx,
     )
@@ -273,12 +273,12 @@ def gen_dml_cte(
     else:
         raise AssertionError(f'unexpected DML IR: {ir_stmt!r}')
 
-    pathctx.put_path_value_rvar(dml_stmt, target_path_id, relation)
-    pathctx.put_path_source_rvar(dml_stmt, target_path_id, relation)
+    pathctx.put_path_value_rvar(dml_stmt, subject_path_id, relation)
+    pathctx.put_path_source_rvar(dml_stmt, subject_path_id, relation)
     # Skip the path bond for inserts, since it doesn't help and
     # interferes when inserting in an UNLESS CONFLICT ELSE
     if not isinstance(ir_stmt, irast.InsertStmt):
-        pathctx.put_path_bond(dml_stmt, target_path_id)
+        pathctx.put_path_bond(dml_stmt, subject_path_id)
 
     dml_cte = pgast.CommonTableExpr(
         query=dml_stmt,
@@ -311,14 +311,16 @@ def gen_dml_cte(
                 ]),
                 op='=',
                 rexpr=pathctx.get_rvar_path_identity_var(
-                    range_rvar, target_ir_set.path_id, env=ctx.env)
+                    range_rvar, subject_ir_set.path_id, env=ctx.env)
             )
         # Do any read-side filtering
         if pol_expr := ir_stmt.read_policies.get(typeref.id):
             with ctx.newrel() as sctx:
-                pathctx.put_path_value_rvar(sctx.rel, target_path_id, relation)
+                pathctx.put_path_value_rvar(
+                    sctx.rel, subject_path_id, relation
+                )
                 pathctx.put_path_source_rvar(
-                    sctx.rel, target_path_id, relation
+                    sctx.rel, subject_path_id, relation
                 )
 
                 val = clauses.compile_filter_clause(
