@@ -203,7 +203,7 @@ module.exports = [
   },
   {
     source: "/reference/reference/environment",
-    destination: "/reference/running/environment",
+    destination: "/reference/running/configuration#environment-variables",
     permanent: false,
   },
   {
