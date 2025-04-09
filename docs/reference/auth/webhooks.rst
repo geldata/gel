@@ -15,7 +15,7 @@ If you are using Webhooks to send emails, be sure to not also configure an SMTP 
 Configuration
 =============
 
-You can configure webhooks with the UI or via query.
+You can configure webhooks with the UI or via query. The URLs you register as webhooks must be unique across all webhooks configured for each branch. If you want to send multiple events to the same URL, you can do so by adding multiple ``ext::auth::WebhookEvent`` values to the ``events`` set, like in this example.
 
 .. code-block:: edgeql
 
@@ -30,9 +30,7 @@ You can configure webhooks with the UI or via query.
         signing_secret_key := '1234567890',
       };
 
-.. note::
-
-  URLs must be unique across all webhooks configured for each branch. If you want to send multiple events to the same URL, you can do so by adding multiple ``ext::auth::WebhookEvent`` values to the ``events`` set.
+When you receive a webhook, you'll look at the ``event_type`` field to determine which event corresponds to this webhook request and handle it accordingly.
 
 Checking webhook signatures
 ===========================
