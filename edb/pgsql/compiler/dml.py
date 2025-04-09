@@ -245,12 +245,12 @@ def gen_dml_cte(
     ctx: context.CompilerContextLevel,
 ) -> tuple[pgast.CommonTableExpr, pgast.PathRangeVar]:
 
-    subject_ir_set = ir_stmt.subject
-    subject_path_id = subject_ir_set.path_id
+    target_ir_set = ir_stmt.subject
+    target_path_id = target_ir_set.path_id
 
     relation = relctx.range_for_typeref(
         typeref,
-        subject_path_id,
+        target_path_id,
         for_mutation=True,
         ctx=ctx,
     )
@@ -273,20 +273,12 @@ def gen_dml_cte(
     else:
         raise AssertionError(f'unexpected DML IR: {ir_stmt!r}')
 
-    subject_rvar: pgast.PathRangeVar
-    if isinstance(ir_stmt, irast.UpdateStmt):
-        assert range_rvar is not None
-        subject_rvar = range_rvar
-    else:
-        subject_rvar = relation
-
-    pathctx.put_path_value_rvar(dml_stmt, subject_path_id, subject_rvar)
-    pathctx.put_path_source_rvar(dml_stmt, subject_path_id, subject_rvar)
-
+    pathctx.put_path_value_rvar(dml_stmt, target_path_id, relation)
+    pathctx.put_path_source_rvar(dml_stmt, target_path_id, relation)
     # Skip the path bond for inserts, since it doesn't help and
     # interferes when inserting in an UNLESS CONFLICT ELSE
     if not isinstance(ir_stmt, irast.InsertStmt):
-        pathctx.put_path_bond(dml_stmt, subject_path_id)
+        pathctx.put_path_bond(dml_stmt, target_path_id)
 
     dml_cte = pgast.CommonTableExpr(
         query=dml_stmt,
@@ -301,59 +293,32 @@ def gen_dml_cte(
     # need them.
     ctx.path_scope.maps.clear()
 
+    skip_rel = (
+        isinstance(ir_stmt, irast.UpdateStmt) and ir_stmt.sql_mode_link_only
+    )
+
     if range_rvar is not None:
-        assert isinstance(dml_stmt, (pgast.SelectStmt, pgast.DeleteStmt))
-
         relctx.pull_path_namespace(
-            target=dml_stmt, source=range_rvar, ctx=ctx
-        )
+            target=dml_stmt, source=range_rvar, ctx=ctx)
 
-        if isinstance(dml_stmt, pgast.DeleteStmt):
-            # Limit DELETE on rows produced by range CTE
+        # Auxiliary relations are always joined via the WHERE
+        # clause due to the structure of the UPDATE/DELETE SQL statements.
+        assert isinstance(dml_stmt, (pgast.SelectStmt, pgast.DeleteStmt))
+        if not skip_rel:
             dml_stmt.where_clause = astutils.new_binop(
-                lexpr=pgast.ColumnRef(name=[relation.alias.aliasname, 'id']),
+                lexpr=pgast.ColumnRef(name=[
+                    relation.alias.aliasname, 'id'
+                ]),
                 op='=',
                 rexpr=pathctx.get_rvar_path_identity_var(
-                    range_rvar, subject_ir_set.path_id, env=ctx.env
-                )
+                    range_rvar, target_ir_set.path_id, env=ctx.env)
             )
-        else:
-            # For SELECT (irast.UpdateStmt) we filter the range CTE to only
-            # the actual type of the object we are updating
-            # (this makes a difference when updating objects with subtypes)
-
-            # Make up a ptrref for the __type__ link on our actual target type
-            # and make up a new path_id to access it.
-            el_name = sn.QualName('__', '__type__')
-            # std_type = ctx.env.sc
-            actual_type_ptrref = irast.SpecialPointerRef(
-                name=el_name,
-                shortname=el_name,
-                out_source=ir_stmt.subject.typeref,
-                # HACK: This is obviously not the right target type, but we
-                # don't need it for anything and the pathid never escapes this
-                # function.
-                out_target=typeref,
-                out_cardinality=qltypes.Cardinality.AT_MOST_ONE,
-            )
-            type_pathid = subject_path_id.extend(ptrref=actual_type_ptrref)
-
-            dml_stmt.where_clause = astutils.new_binop(
-                lexpr=dispatch.compile(typeref, ctx=ctx),
-                op='=',
-                rexpr=pathctx.get_rvar_path_identity_var(
-                    range_rvar, type_pathid, env=ctx.env
-                )
-            )
-
         # Do any read-side filtering
         if pol_expr := ir_stmt.read_policies.get(typeref.id):
             with ctx.newrel() as sctx:
-                pathctx.put_path_value_rvar(
-                    sctx.rel, subject_path_id, subject_rvar
-                )
+                pathctx.put_path_value_rvar(sctx.rel, target_path_id, relation)
                 pathctx.put_path_source_rvar(
-                    sctx.rel, subject_path_id, subject_rvar
+                    sctx.rel, target_path_id, relation
                 )
 
                 val = clauses.compile_filter_clause(
@@ -366,6 +331,8 @@ def gen_dml_cte(
 
         # SELECT has "FROM", while DELETE has "USING".
         if isinstance(dml_stmt, pgast.SelectStmt):
+            if not skip_rel:
+                dml_stmt.from_clause.append(relation)
             dml_stmt.from_clause.append(range_rvar)
         elif isinstance(dml_stmt, pgast.DeleteStmt):
             dml_stmt.using_clause.append(range_rvar)
@@ -572,8 +539,6 @@ def get_dml_range(
 
         range_stmt.path_id_mask.discard(target_ir_set.path_id)
         pathctx.put_path_bond(range_stmt, target_ir_set.path_id)
-
-        relgen.ensure_source_rvar(target_ir_set, range_stmt, ctx=subctx)
 
         range_cte = pgast.CommonTableExpr(
             query=range_stmt,
@@ -1782,15 +1747,9 @@ def process_update_body(
             ctx.env.check_ctes.append(check_cte)
 
     if not no_update:
-        table_relation = relctx.range_for_typeref(
-            typeref,
-            ir_stmt.subject.path_id,
-            for_mutation=True,
-            ctx=ctx,
-        )
+        table_relation = contents_select.from_clause[0]
         assert isinstance(table_relation, pgast.RelRangeVar)
-
-        range_relation = contents_select.from_clause[0]
+        range_relation = contents_select.from_clause[1]
         assert isinstance(range_relation, pgast.PathRangeVar)
 
         contents_rvar = relctx.rvar_for_rel(contents_cte, ctx=ctx)
@@ -1949,9 +1908,7 @@ def process_update_rewrites(
         # pull in table_relation for __old__
         table_rel.path_outputs[
             (old_path_id, pgce.PathAspect.VALUE)
-        ] = pathctx.get_path_value_output(
-            table_rel, subject_path_id, env=ctx.env
-        )
+        ] = table_rel.path_outputs[(subject_path_id, pgce.PathAspect.VALUE)]
         relctx.include_rvar(
             rewrites_stmt, table_relation, old_path_id, ctx=ctx
         )
@@ -2133,9 +2090,7 @@ def process_update_shape(
                     val = pgast.FuncCall(
                         name=("nullif",),
                         args=[
-                            pathctx.get_path_value_var(
-                                rel, element.path_id, env=ctx.env
-                            ),
+                            pgast.ColumnRef(name=[ptr_info.column_name]),
                             val,
                         ],
                     )
@@ -2154,7 +2109,7 @@ def process_update_shape(
                 # it.
                 # XXX: Maybe this suggests a rework of the
                 # DynamicRangeVar mechanism would be a good idea.
-                pathctx.put_path_var_if_not_exists(
+                pathctx.put_path_var(
                     rel,
                     element.path_id,
                     aspect=pgce.PathAspect.VALUE,
