@@ -1178,6 +1178,7 @@ jobs:
         EXTRA_OPTIMIZATIONS: "true"
         METAPKG_GIT_CACHE: disabled
         BUILD_GENERIC: true
+        CMAKE_POLICY_VERSION_MINIMUM: '3.5'
       run: |
         edgedb-pkg/integration/macos/build.sh
 
@@ -1257,6 +1258,7 @@ jobs:
         EXTRA_OPTIMIZATIONS: "true"
         METAPKG_GIT_CACHE: disabled
         BUILD_GENERIC: true
+        CMAKE_POLICY_VERSION_MINIMUM: '3.5'
       run: |
         edgedb-pkg/integration/macos/build.sh
 
