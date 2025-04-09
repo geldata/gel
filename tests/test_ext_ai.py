@@ -22,6 +22,8 @@ import unittest
 
 import edgedb
 
+from edb.common import assert_data_shape
+
 from edb.server.protocol import ai_ext
 from edb.testbase import http as tb
 
@@ -96,6 +98,8 @@ class TestExtAI(tb.BaseHttpExtensionTest):
 
         return res
 
+    _embeddings_log: list[list[str]] = []
+
     @classmethod
     def mock_api_embeddings(
         cls,
@@ -104,6 +108,7 @@ class TestExtAI(tb.BaseHttpExtensionTest):
     ) -> tb.ResponseType:
         assert request_details.body is not None
         inputs: list[str] = json.loads(request_details.body)['input']
+        cls._embeddings_log.append(inputs)
         # Produce a dummy embedding as the number of occurences of the first ten
         # letters of the alphabet.
         response_data = [
@@ -547,6 +552,257 @@ class TestExtAI(tb.BaseHttpExtensionTest):
                 delete Astronomy;
             ''')
 
+    async def test_ext_ai_batch_embeddings_01(self):
+        # Content that can be batched without being truncated
+        #
+        # Note:
+        #   ai_ext.py: TestTokenizer counts each char as a separate token
+        #   ext_ai.esdl: TestEmbeddingModel has a max input token length 100
+        #   ext_ai.esdl: TestEmbeddingModel has a max batch token length 500
+
+        content_prefix = 'batch_01_'
+        entry_count = 20
+
+        contents = [
+            f"{content_prefix}{str(n).zfill(3)}{'a' * (50 + n)}"
+            for n in range(entry_count)
+        ]
+
+        expected_batches = [
+            [19, 0, 1, 2, 3, 4, 5],
+            [18, 6, 7, 8, 9, 10],
+            [17, 11, 12, 13, 14, 15],
+            [16],
+        ]
+
+        try:
+            await self.con.execute(
+                f"""
+                for c in {{{", ".join(f'"{c}"' for c in contents)}}}
+                    insert Astronomy {{ content := c }};
+                """,
+            )
+
+            async for tr in self.try_until_succeeds(
+                ignore=(AssertionError,),
+                timeout=30.0,
+            ):
+                async with tr:
+                    await self.assert_query_result(
+                        r'''
+                        select count(
+                            ext::ai::search(Astronomy, <array<float32>>$qv)
+                        )
+                        ''',
+                        [entry_count],
+                        variables={"qv": [1 for i in range(10)]}
+                    )
+
+        finally:
+            await self.con.execute('''
+                delete Astronomy;
+            ''')
+
+        # Check embeddings were batched correctly
+        current_requests = [
+            embeddings_request
+            for embeddings_request in TestExtAI._embeddings_log
+            if any(
+                entry.startswith(content_prefix)
+                for entry in embeddings_request
+            )
+        ]
+
+        prefix_length = len(content_prefix)
+        actual_batches = [
+            [
+                int(entry[prefix_length:prefix_length + 3])
+                for entry in embeddings_request
+            ]
+            for embeddings_request in current_requests
+        ]
+
+        assert_data_shape.assert_data_shape(
+            actual_batches,
+            expected_batches,
+            self.fail,
+            message='Embeddings not batched correctly.'
+        )
+
+    async def test_ext_ai_batch_embeddings_02(self):
+        # Content that can be batched, some entries are too long
+        #
+        # Note:
+        #   ai_ext.py: TestTokenizer counts each char as a separate token
+        #   ext_ai.esdl: TestEmbeddingModel has a max input token length 100
+        #   ext_ai.esdl: TestEmbeddingModel has a max batch token length 500
+
+        content_prefix = 'batch_02_'
+        short_entry_count = 10
+        long_entry_count = 10
+
+        # 10 entries to get embeddings and 10 entries which are too long
+        contents = (
+            [
+                f"{content_prefix}{str(n).zfill(3)}{'a' * (50 + n)}"
+                for n in range(short_entry_count)
+            ]
+            + [
+                f"{content_prefix}{str(n).zfill(3)}{'a' * (200 + n)}"
+                for n in range(
+                    short_entry_count,
+                    short_entry_count + long_entry_count
+                )
+            ]
+        )
+
+        expected_batches = [
+            [9, 0, 1, 2, 3, 4, 5],
+            [8, 6, 7],
+        ]
+
+        try:
+            await self.con.execute(
+                f"""
+                for c in {{{", ".join(f'"{c}"' for c in contents)}}}
+                    insert Astronomy {{ content := c }};
+                """,
+            )
+
+            async for tr in self.try_until_succeeds(
+                ignore=(AssertionError,),
+                timeout=30.0,
+            ):
+                async with tr:
+                    await self.assert_query_result(
+                        r'''
+                        select count(
+                            ext::ai::search(Astronomy, <array<float32>>$qv)
+                        )
+                        ''',
+                        [short_entry_count],
+                        variables={"qv": [1 for i in range(10)]}
+                    )
+
+        finally:
+            await self.con.execute('''
+                delete Astronomy;
+            ''')
+
+        # Check embeddings were batched correctly
+        current_requests = [
+            embeddings_request
+            for embeddings_request in TestExtAI._embeddings_log
+            if any(
+                entry.startswith(content_prefix)
+                for entry in embeddings_request
+            )
+        ]
+
+        prefix_length = len(content_prefix)
+        actual_batches = [
+            [
+                int(entry[prefix_length:prefix_length + 3])
+                for entry in embeddings_request
+            ]
+            for embeddings_request in current_requests
+        ]
+
+        assert_data_shape.assert_data_shape(
+            actual_batches,
+            expected_batches,
+            self.fail,
+            message='Embeddings not batched correctly.'
+        )
+
+    async def test_ext_ai_batch_embeddings_03(self):
+        # Content that can be batched, some entries to be truncated
+        #
+        # Note:
+        #   ai_ext.py: TestTokenizer counts each char as a separate token
+        #   ext_ai.esdl: TestEmbeddingModel has a max input token length 100
+        #   ext_ai.esdl: TestEmbeddingModel has a max batch token length 500
+
+        content_prefix = 'batch_03_'
+        short_entry_count = 10
+        long_entry_count = 10
+
+        # 10 entries to get embeddings and 10 entries which are too long
+        contents = (
+            [
+                f"{content_prefix}{str(n).zfill(3)}{'a' * (50 + n)}"
+                for n in range(short_entry_count)
+            ]
+            + [
+                f"{content_prefix}{str(n).zfill(3)}{'a' * (200 + n)}"
+                for n in range(
+                    short_entry_count,
+                    short_entry_count + long_entry_count
+                )
+            ]
+        )
+
+        expected_batches = [
+            [19, 0, 1, 2, 3, 4, 5],
+            [18, 6, 7, 8, 9, 10],
+            [17, 11, 12, 13, 14],
+            [16, 15],
+        ]
+
+        try:
+            await self.con.execute(
+                f"""
+                for c in {{{", ".join(f'"{c}"' for c in contents)}}}
+                    insert Truncated {{ content := c }};
+                """,
+            )
+
+            async for tr in self.try_until_succeeds(
+                ignore=(AssertionError,),
+                timeout=30.0,
+            ):
+                async with tr:
+                    await self.assert_query_result(
+                        r'''
+                        select count(
+                            ext::ai::search(Truncated, <array<float32>>$qv)
+                        )
+                        ''',
+                        [short_entry_count + long_entry_count],
+                        variables={"qv": [1 for i in range(10)]}
+                    )
+
+        finally:
+            await self.con.execute('''
+                delete Truncated;
+            ''')
+
+        # Check embeddings were batched correctly
+        current_requests = [
+            embeddings_request
+            for embeddings_request in TestExtAI._embeddings_log
+            if any(
+                entry.startswith(content_prefix)
+                for entry in embeddings_request
+            )
+        ]
+
+        prefix_length = len(content_prefix)
+        actual_batches = [
+            [
+                int(entry[prefix_length:prefix_length + 3])
+                for entry in embeddings_request
+            ]
+            for embeddings_request in current_requests
+        ]
+
+        assert_data_shape.assert_data_shape(
+            actual_batches,
+            expected_batches,
+            self.fail,
+            message='Embeddings not batched correctly.'
+        )
+
     async def test_ext_ai_index_custom_dimensions(self):
         await self.assert_query_result(
             """
@@ -649,5 +905,17 @@ class TestExtAIUtils(unittest.TestCase):
             [
                 ([4, 0, 1], 8),
                 ([3, 2], 7),
+            ],
+        )
+        # Text is alphabetically ordered to ensure consistent batching
+        self.assertEqual(
+            ai_ext._batch_embeddings_inputs(
+                CharacterTokenizer(),
+                ['AAA', 'CCC', 'EEE', 'BBB', 'DDD'],
+                10
+            ),
+            [
+                ([2, 0, 3], 9),
+                ([4, 1], 6),
             ],
         )

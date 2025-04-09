@@ -970,9 +970,10 @@ def _batch_embeddings_inputs(
     ]
 
     # Get indexes of inputs, sorted from shortest to longest by token count
+    # Use the text itself as a tie breaker for consistency
     unbatched_input_indexes = list(range(len(inputs)))
     unbatched_input_indexes.sort(
-        key=lambda index: input_token_counts[index],
+        key=lambda index: (input_token_counts[index], inputs[index]),
         reverse=False,
     )
 
