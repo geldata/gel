@@ -527,10 +527,11 @@ jobs:
     - name: Install dependencies
       if: true
       run: |
-        env HOMEBREW_NO_AUTO_UPDATE=1 brew install \
-        libmagic sentencepiece protobuf
+        env HOMEBREW_NO_AUTO_UPDATE=1 brew install libmagic
 
     - name: Install an alias
+      # This is probably not strictly needed, but sentencepiece build script reports
+      # errors without it.
       if: true
       run: |
         printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc
@@ -605,10 +606,11 @@ jobs:
     - name: Install dependencies
       if: true
       run: |
-        env HOMEBREW_NO_AUTO_UPDATE=1 brew install \
-        libmagic sentencepiece protobuf
+        env HOMEBREW_NO_AUTO_UPDATE=1 brew install libmagic
 
     - name: Install an alias
+      # This is probably not strictly needed, but sentencepiece build script reports
+      # errors without it.
       if: true
       run: |
         printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc
