@@ -114,6 +114,13 @@ class TestServerParamConversions(tb.QueryTestCase):
             ["123"],
         )
 
+        # Check that the source value `123` from the previous query is
+        # not cached
+        await self.assert_query_result(
+            'select simple_to_str(456)',
+            ["456"],
+        )
+
     async def test_server_param_conversions_simple_03(self):
         # Scalar expression
         async with self.assertRaisesRegexTx(
