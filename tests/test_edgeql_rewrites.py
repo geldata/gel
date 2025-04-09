@@ -66,6 +66,16 @@ class TestRewrites(tb.DDLTestCase):
           drop access policy filter_title;
           drop access policy dml;
         };
+
+        create type CT {
+            create property a -> str;
+            create property b -> str {
+                create rewrite update using (.a);
+                create constraint exclusive;
+            };
+        };
+        create type CS extending CT;
+
     """
     ]
 
@@ -1156,4 +1166,39 @@ class TestRewrites(tb.DDLTestCase):
                     (select Document filter .name = '1' limit 1)
                 ),
             };
+        ''')
+
+    async def test_edgeql_rewrites_conflicts_01(self):
+        await self.con.execute('''
+            insert CT; insert CS;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+            edgedb.ConstraintViolationError,
+            r""
+        ):
+            await self.con.execute('''
+                update CT set { a := 'x' }
+            ''')
+
+        await self.con.execute('''
+            update CT set { a := <str>random() }
+        ''')
+
+    async def test_edgeql_rewrites_conflicts_02(self):
+        await self.con.execute('''
+            alter type CT alter property b create rewrite insert using (.a);
+        ''')
+
+        async with self.assertRaisesRegexTx(
+            edgedb.ConstraintViolationError,
+            r""
+        ):
+            await self.con.execute('''
+                select {(insert CT { a := "y" }), (insert CS { a := "y" })}
+            ''')
+
+        await self.con.execute('''
+            select {(insert CT { a := <str>random() }),
+                    (insert CS { a := <str>random() })}
         ''')
