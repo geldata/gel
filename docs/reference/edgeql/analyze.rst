@@ -3,11 +3,17 @@
 Analyze
 =======
 
+:eql-statement:
+
+``analyze`` -- trigger performance analysis of the appended query
+
+Overview
+--------
+
 .. index:: explain, performance, postgres query planner
 .. api-index:: analyze
 
-Prefix an EdgeQL query with ``analyze`` to run a performance analysis of that
-query.
+Prefix an EdgeQL query with ``analyze`` to run a performance analysis of that query.
 
 .. code-block:: edgeql-repl
 
@@ -21,8 +27,9 @@ query.
   ...     }
   ...   }
   ... };
-  ──────────────────────────────────────── Query ────────────────────────────────────────
-  analyze select ➊  Hero {name, secret_identity, ➋  villains: {name, ➌  nemesis: {name}}};
+  ────────────────────────────────── Query ──────────────────────────────────
+  analyze select ➊  Hero {name, secret_identity, ➋  villains:
+  {name, ➌  nemesis: {name}}};
 
   ──────────────────────── Coarse-grained Query Plan ────────────────────────
                     │ Time     Cost Loops Rows Width │ Relations
@@ -33,20 +40,28 @@ query.
 
 .. note::
 
-    In addition to using the ``analyze`` statement in the CLI or UI's REPL, you
-    may also run performance analysis via our CLI's :ref:`analyze command
-    <ref_cli_gel_analyze>` and the UI's query builder (accessible by running
-    :ref:`ref_cli_gel_ui` to invoke your instance's UI) by prepending your
-    query with ``analyze``. This method offers helpful visualizations to to
-    make it easy to understand your query's performance.
+    In addition to using the ``analyze`` statement in the CLI or UI's REPL, you may also run performance analysis via our CLI's :gelcmd:`analyze` command and the UI's query builder (accessible by running :ref:`ref_cli_gel_ui` to invoke your instance's UI) by prepending your query with ``analyze``. This method offers helpful visualizations to to make it easy to understand your query's performance.
 
 After analyzing a query, you may run the ``\expand`` command in the REPL to see
 more fine-grained performance metrics on the previously analyzed query.
 
 
-.. list-table::
-  :class: seealso
+.. _ref_eql_statements_analyze:
 
-  * - **See also**
-  * - :ref:`CLI > gel analyze <ref_cli_gel_analyze>`
-  * - :ref:`Reference > EdgeQL > analyze <ref_eql_statements_analyze>`
+EdgeQL Syntax
+-------------
+
+.. eql:synopsis::
+
+    analyze <query>;
+
+    # where <query> is any EdgeQL query
+
+``analyze`` returns a table with performance metrics broken down by node.
+
+You may prepend the ``analyze`` keyword in either of our REPLs (CLI or :ref:`UI
+<ref_cli_gel_ui>`) or you may prepend in the UI's query builder for a
+helpful visualization of your query's performance.
+
+After any ``analyze`` in a REPL, run the ``\expand`` command to see
+fine-grained performance analysis of the previously analyzed query.
