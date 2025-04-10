@@ -2272,11 +2272,18 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
             else:
                 had_using = False
         else:
-            from_clause = f'USING {node.code.language} '
-            self._write_keywords(from_clause)
-            if node.code.code:
-                self.write(edgeql_quote.dollar_quote_literal(
-                    node.code.code))
+            if node.code.from_expr:
+                from_clause = f'USING {node.code.language} EXPRESSION'
+                self._write_keywords(from_clause)
+            elif node.code.code:
+                from_clause = f'USING {node.code.language} '
+                self._write_keywords(from_clause)
+                self.write(
+                    edgeql_quote.dollar_quote_literal(
+                        node.code.code))
+            else:
+                from_clause = f'USING {node.code.language} '
+                self._write_keywords(from_clause)
 
         if node.commands:
             self._block_ws(-1)
