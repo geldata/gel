@@ -272,6 +272,9 @@ def gen_dml_cte(
         # touches link tables).
         dml_stmt = pgast.SelectStmt()
 
+        # We join with the concrete table for this type, but also include
+        # overlays produced by previous DML stmts. This is needed for SQL DML
+        # support, which needs to update a link table of a newly inserted object
         subject_rel_overlayed = relctx.range_for_typeref(
             typeref,
             subject_path_id,
