@@ -895,6 +895,23 @@ def check_for_isolation_conflicts(
     update_typ: Optional[s_objtypes.ObjectType] = None,
     *, ctx: context.ContextLevel,
 ) -> None:
+    """Check for conflicts on a DML stmt that cause isolation dangers.
+
+    Cross-table exclusive constraints are implemented by triggers that
+    read the other tables looking for conflicting rows. This works
+    fine in SERIALIZABLE mode, but in REPEATABLE READ mode, this can
+    miss two concurrent transactions creating conflicting objects.
+
+    Analyze the type involved in `stmt` to see if there are isolation
+    dangers, and log them if so.  These will be reported to the client
+    and will generate an error if the query is executed in REPEATABLE
+    READ mode.
+
+    This function is called for every subtype in an UPDATE.  In that
+    case, `typ` is the subtype and `update_typ` is the base type being
+    UDPATEd.
+    """
+
     schema = ctx.env.schema
 
     entries = _get_type_conflict_constraint_entries(stmt, typ, ctx=ctx)
