@@ -245,22 +245,25 @@ def gen_dml_cte(
     ctx: context.CompilerContextLevel,
 ) -> tuple[pgast.CommonTableExpr, pgast.PathRangeVar]:
 
-    target_ir_set = ir_stmt.subject
-    target_path_id = target_ir_set.path_id
-
-    relation = relctx.range_for_typeref(
-        typeref,
-        target_path_id,
-        for_mutation=True,
-        ctx=ctx,
-    )
-    assert isinstance(relation, pgast.RelRangeVar), (
-        "spurious overlay on DML target"
-    )
+    subject_ir_set = ir_stmt.subject
+    subject_path_id = subject_ir_set.path_id
 
     dml_stmt: pgast.InsertStmt | pgast.SelectStmt | pgast.DeleteStmt
+    subject_rvar: pgast.BaseRangeVar
     if isinstance(ir_stmt, irast.InsertStmt):
+        relation = relctx.range_for_typeref(
+            typeref,
+            subject_path_id,
+            for_mutation=True,
+            ctx=ctx,
+        )
+        assert isinstance(relation, pgast.RelRangeVar), (
+            "spurious overlay on DML target"
+        )
+
         dml_stmt = pgast.InsertStmt(relation=relation)
+        subject_rvar = relation
+
     elif isinstance(ir_stmt, irast.UpdateStmt):
         # We generate a Select as the initial statement for an update,
         # since the contents select is the query that needs to join
@@ -268,17 +271,45 @@ def gen_dml_cte(
         # sometimes end up not needing an UPDATE anyway (if it only
         # touches link tables).
         dml_stmt = pgast.SelectStmt()
+
+        # We join with the concrete table for this type, but also include
+        # overlays produced by previous DML stmts. This is needed for SQL DML
+        # support, which needs to update a link table of a newly inserted object
+        subject_rel_overlayed = relctx.range_for_typeref(
+            typeref,
+            subject_path_id,
+            for_mutation=False,
+            include_descendants=False,
+            dml_source=[
+                k for k in ctx.dml_stmts.keys()
+                if isinstance(k, irast.MutatingLikeStmt)
+            ],
+            ctx=ctx,
+        )
+        dml_stmt.from_clause.append(subject_rel_overlayed)
+        subject_rvar = subject_rel_overlayed
+
     elif isinstance(ir_stmt, irast.DeleteStmt):
+        relation = relctx.range_for_typeref(
+            typeref,
+            subject_path_id,
+            for_mutation=True,
+            ctx=ctx,
+        )
+        assert isinstance(relation, pgast.RelRangeVar), (
+            "spurious overlay on DML target"
+        )
         dml_stmt = pgast.DeleteStmt(relation=relation)
+        subject_rvar = relation
     else:
         raise AssertionError(f'unexpected DML IR: {ir_stmt!r}')
 
-    pathctx.put_path_value_rvar(dml_stmt, target_path_id, relation)
-    pathctx.put_path_source_rvar(dml_stmt, target_path_id, relation)
+    pathctx.put_path_value_rvar(dml_stmt, subject_path_id, subject_rvar)
+    pathctx.put_path_source_rvar(dml_stmt, subject_path_id, subject_rvar)
     # Skip the path bond for inserts, since it doesn't help and
     # interferes when inserting in an UNLESS CONFLICT ELSE
     if not isinstance(ir_stmt, irast.InsertStmt):
-        pathctx.put_path_bond(dml_stmt, target_path_id)
+        pathctx.put_path_bond(dml_stmt, subject_path_id)
 
     dml_cte = pgast.CommonTableExpr(
         query=dml_stmt,
@@ -293,10 +324,6 @@ def gen_dml_cte(
     # need them.
     ctx.path_scope.maps.clear()
 
-    skip_rel = (
-        isinstance(ir_stmt, irast.UpdateStmt) and ir_stmt.sql_mode_link_only
-    )
-
     if range_rvar is not None:
         relctx.pull_path_namespace(
             target=dml_stmt, source=range_rvar, ctx=ctx)
@@ -304,25 +331,29 @@ def gen_dml_cte(
         # Auxiliary relations are always joined via the WHERE
         # clause due to the structure of the UPDATE/DELETE SQL statements.
         assert isinstance(dml_stmt, (pgast.SelectStmt, pgast.DeleteStmt))
-        if not skip_rel:
-            dml_stmt.where_clause = astutils.new_binop(
-                lexpr=pgast.ColumnRef(name=[
-                    relation.alias.aliasname, 'id'
-                ]),
-                op='=',
-                rexpr=pathctx.get_rvar_path_identity_var(
-                    range_rvar, target_ir_set.path_id, env=ctx.env)
+        dml_stmt.where_clause = astutils.new_binop(
+            lexpr=pathctx.get_rvar_path_identity_var(
+                subject_rvar, subject_path_id, env=ctx.env
+            ),
+            op='=',
+            rexpr=pathctx.get_rvar_path_identity_var(
+                range_rvar, subject_path_id, env=ctx.env
             )
+        )
+
         # Do any read-side filtering
         if pol_expr := ir_stmt.read_policies.get(typeref.id):
             with ctx.newrel() as sctx:
-                pathctx.put_path_value_rvar(sctx.rel, target_path_id, relation)
+                pathctx.put_path_value_rvar(
+                    sctx.rel, subject_path_id, subject_rvar
+                )
                 pathctx.put_path_source_rvar(
-                    sctx.rel, target_path_id, relation
+                    sctx.rel, subject_path_id, subject_rvar
                 )
 
                 val = clauses.compile_filter_clause(
-                    pol_expr.expr, pol_expr.cardinality, ctx=sctx)
+                    pol_expr.expr, pol_expr.cardinality, ctx=sctx
+                )
             sctx.rel.target_list.append(pgast.ResTarget(val=val))
 
             dml_stmt.where_clause = astutils.extend_binop(
@@ -331,8 +362,6 @@ def gen_dml_cte(
 
         # SELECT has "FROM", while DELETE has "USING".
         if isinstance(dml_stmt, pgast.SelectStmt):
-            if not skip_rel:
-                dml_stmt.from_clause.append(relation)
             dml_stmt.from_clause.append(range_rvar)
         elif isinstance(dml_stmt, pgast.DeleteStmt):
             dml_stmt.using_clause.append(range_rvar)
@@ -1747,7 +1776,12 @@ def process_update_body(
             ctx.env.check_ctes.append(check_cte)
 
     if not no_update:
-        table_relation = contents_select.from_clause[0]
+        table_relation = relctx.range_for_typeref(
+            typeref,
+            ir_stmt.subject.path_id,
+            for_mutation=True,
+            ctx=ctx,
+        )
         assert isinstance(table_relation, pgast.RelRangeVar)
         range_relation = contents_select.from_clause[1]
         assert isinstance(range_relation, pgast.PathRangeVar)
@@ -1908,7 +1942,9 @@ def process_update_rewrites(
         # pull in table_relation for __old__
         table_rel.path_outputs[
             (old_path_id, pgce.PathAspect.VALUE)
-        ] = table_rel.path_outputs[(subject_path_id, pgce.PathAspect.VALUE)]
+        ] = pathctx.get_path_value_output(
+            table_rel, subject_path_id, env=ctx.env
+        )
         relctx.include_rvar(
             rewrites_stmt, table_relation, old_path_id, ctx=ctx
         )
