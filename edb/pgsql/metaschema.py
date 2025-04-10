@@ -5067,9 +5067,9 @@ class ResetQueryStatsFunction(trampoline.VersionedFunction):
         )
 
 
-# This is not a VersionedFunction because the VersionedFunction wrapper - which
-# is a SQL function - cannot return type trigger.
-class ClearFELocalSQLSettingsFunction(dbops.Function):
+# N.B: This is a VersionedFunction but it can not be trampolined, since
+# the trampoline wrapper can't be a trigger.
+class ClearFELocalSQLSettingsFunction(trampoline.VersionedFunction):
     text = r"""
     BEGIN
         DELETE FROM _edgecon_state WHERE type = 'L' AND name = NEW.name;
@@ -5201,7 +5201,7 @@ async def generate_instdata_table(
 def get_bootstrap_commands(
     config_spec: edbconfig.Spec,
 ) -> tuple[dbops.CommandGroup, list[trampoline.Trampoline]]:
-    cmds = [
+    trampolined = [
         dbops.CreateSchema(name=V('edgedb')),
         dbops.CreateSchema(name=V('edgedbpub')),
         dbops.CreateSchema(name=V('edgedbstd')),
@@ -5312,13 +5312,17 @@ def get_bootstrap_commands(
         dbops.CreateFunction(FTSToRegconfig()),
         dbops.CreateFunction(PadBase64StringFunction()),
         dbops.CreateFunction(ResetQueryStatsFunction(False)),
+    ]
+
+    non_trampolined = [
         dbops.CreateFunction(ClearFELocalSQLSettingsFunction()),
     ]
 
     commands = dbops.CommandGroup()
-    commands.add_commands(cmds)
+    commands.add_commands(trampolined)
+    commands.add_commands(non_trampolined)
 
-    return commands, trampoline_functions(cmds)
+    return commands, trampoline_functions(trampolined)
 
 
 async def create_pg_extensions(
