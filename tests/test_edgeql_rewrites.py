@@ -1139,6 +1139,28 @@ class TestRewrites(tb.DDLTestCase):
             update H.x set { text := 'full' };
         ''')
 
+    async def test_edgeql_rewrites_31(self):
+        await self.con.execute('''
+            create type A;
+            create type B {
+                create multi link a: A;
+                create property has_updated: bool {
+                        create rewrite update using (true);
+                };
+            };
+
+            insert A;
+            insert B;
+            update B set { a += (select A) };
+        ''')
+
+        await self.assert_query_result(
+            '''
+            select B.has_updated;
+            ''',
+            [True]
+        )
+
     async def test_edgeql_rewrites_triggers_01(self):
         await self.con.execute('''
             create type Pidgeon {
