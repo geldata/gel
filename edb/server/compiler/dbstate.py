@@ -861,7 +861,16 @@ class TransactionState(NamedTuple):
 
 
 class Transaction:
+
+    # Fields that affects the state key are listed here. The key is used
+    # to determine if we can reuse a previously-pickled state, so remember
+    # to update get_state_key() below when adding new fields affecting the
+    # state key.  See also edb/server/compiler_pool/worker.py
+    _id: int
     _savepoints: dict[int, TransactionState]
+    _current: TransactionState
+
+    # backref to the owning state object
     _constate: CompilerConnectionState
 
     def __init__(
@@ -1099,7 +1108,14 @@ CStateStateType = tuple[dict[int, TransactionState], Transaction, int]
 class CompilerConnectionState:
     __slots__ = ("_savepoints_log", "_current_tx", "_tx_count", "_user_schema")
 
+    # Fields that affects the state key are listed here. The key is used
+    # to determine if we can reuse a previously-pickled state, so remember
+    # to update get_state_key() below when adding new fields affecting the
+    # state key.  See also edb/server/compiler_pool/worker.py
+    _tx_count: int
     _savepoints_log: dict[int, TransactionState]
+    _current_tx: Transaction
+
     _user_schema: Optional[s_schema.FlatSchema]
 
     def __init__(
