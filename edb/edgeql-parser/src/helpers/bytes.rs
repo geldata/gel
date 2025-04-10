@@ -6,13 +6,11 @@ pub fn unquote_bytes(value: &str) -> Result<Vec<u8>, String> {
     match prefix {
         "br" | "rb" => Ok(value[3..value.len() - 1].as_bytes().to_vec()),
         "b" => Ok(unquote_bytes_inner(&value[2..value.len() - 1])?),
-        _ => {
-            return Err(format_args!(
-                "prefix {:?} is not allowed for bytes, allowed: `b`, `rb`",
-                prefix
-            )
-            .to_string())
-        }
+        _ => Err(format_args!(
+            "prefix {:?} is not allowed for bytes, allowed: `b`, `rb`",
+            prefix
+        )
+        .to_string()),
     }
 }
 

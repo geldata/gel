@@ -507,6 +507,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         self,
         rpc.CompilationRequest query_req,
         uint64_t allow_capabilities,
+        tag=None,
     ) -> dbview.CompiledQuery:
         cdef dbview.DatabaseConnectionView dbv
         dbv = self.get_dbview()
@@ -546,15 +547,36 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                             query_req,
                             allow_capabilities=allow_capabilities,
                             pgcon=pg_conn,
+                            tag=tag,
                         )
                 else:
                     return await dbv.parse(
                         query_req,
                         allow_capabilities=allow_capabilities,
+                        send_log_message=(
+                            lambda code, s: self.write_log(
+                                EdgeSeverity.EDGE_SEVERITY_NOTICE,
+                                code,
+                                s,
+                            )
+                        )
                     )
             finally:
                 if suppress_timeout:
-                    await self._restore_tx_timeout(dbv)
+                    try:
+                        await self._restore_tx_timeout(dbv)
+                    except pgerror.BackendError as ex:
+                        # dbv.parse() for LANG_SQL can send a SQL
+                        # query, which can put the transaction in a
+                        # bad state if it fails. If we fail because of
+                        # that, swallow it.
+                        if (
+                            query_req.input_language is not LANG_SQL
+                            or not ex.code_is(
+                                pgerror.ERRCODE_IN_FAILED_SQL_TRANSACTION
+                            )
+                        ):
+                            raise
         else:
             return dbv.as_compiled(query_req, query_unit_group)
 
@@ -944,7 +966,9 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 if self.debug:
                     self.debug_print('EXECUTE /CACHE MISS', query_req.source.text())
 
-                compiled = await self._parse(query_req, allow_capabilities)
+                compiled = await self._parse(
+                    query_req, allow_capabilities, tag
+                )
                 query_unit_group = compiled.query_unit_group
                 if self._cancelled:
                     raise ConnectionAbortedError
@@ -1611,13 +1635,15 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         async with self._with_dump_restore_pgcon() as pgcon:
             _dbview.decode_state(sertypes.NULL_TYPE_ID.bytes, b'')
             await self._execute_utility_stmt(
-                'START TRANSACTION ISOLATION SERIALIZABLE',
+                'START TRANSACTION',
                 pgcon,
             )
 
             try:
                 await pgcon.sql_execute(
                     b'''
+                        -- Drop isolation level.
+                        SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
                         -- Disable transaction or query execution timeout
                         -- limits. Both clients and the server can be slow
                         -- during the dump/restore process.

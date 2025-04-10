@@ -209,7 +209,7 @@ fn starts_with_unexpected_error(a: &Parser) -> bool {
         .map_or(true, |x| x.message.starts_with(UNEXPECTED))
 }
 
-impl<'s> Context<'s> {
+impl Context<'_> {
     fn alloc_terminal(&self, t: Terminal) -> &'_ Terminal {
         let idx = self.terminal_arena.push(t);
         &self.terminal_arena[idx]
@@ -749,6 +749,10 @@ fn get_token_kind(token_name: &str) -> Kind {
         "PARAMETER" => Parameter,
         "PARAMETERANDTYPE" => ParameterAndType,
         "SUBSTITUTION" => Substitution,
+
+        "STRINTERPSTART" => StrInterpStart,
+        "STRINTERPCONT" => StrInterpCont,
+        "STRINTERPEND" => StrInterpEnd,
 
         _ => {
             let mut token_name = token_name.to_lowercase();

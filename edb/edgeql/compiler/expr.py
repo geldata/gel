@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Type, Union, Sequence, List, cast
+from typing import Callable, Optional, Sequence, cast
 
 from edb import errors
 
@@ -160,6 +160,30 @@ def compile_IsOp(expr: qlast.IsOp, *, ctx: context.ContextLevel) -> irast.Set:
     return setgen.ensure_set(op_node, ctx=ctx)
 
 
+@dispatch.compile.register
+def compile_StrInterp(
+    expr: qlast.StrInterp, *, ctx: context.ContextLevel
+) -> irast.Set:
+    strs: list[qlast.Expr] = []
+    strs.append(qlast.Constant.string(expr.prefix))
+
+    str_type = qlast.TypeName(
+        maintype=qlast.ObjectRef(module='__std__', name='str')
+    )
+    for fragment in expr.interpolations:
+        strs.append(qlast.TypeCast(
+            expr=fragment.expr, type=str_type
+        ))
+        strs.append(qlast.Constant.string(fragment.suffix))
+
+    call = qlast.FunctionCall(
+        func=('__std__', 'array_join'),
+        args=[qlast.Array(elements=strs), qlast.Constant.string('')],
+    )
+
+    return dispatch.compile(call, ctx=ctx)
+
+
 @dispatch.compile.register(qlast.DetachedExpr)
 def compile_DetachedExpr(
     expr: qlast.DetachedExpr,
@@ -205,7 +229,7 @@ def compile_Set(expr: qlast.Set, *, ctx: context.ContextLevel) -> irast.Set:
             )
             res = dispatch.compile(bigunion, ctx=ctx)
             if cres := try_constant_set(res):
-                res = setgen.ensure_set(cres, ctx=ctx)
+                res = setgen.ensure_set(cres, span=res.span, ctx=ctx)
             return res
     else:
         return setgen.new_empty_set(
@@ -221,7 +245,7 @@ def compile_Constant(
 ) -> irast.Set:
     value = expr.value
 
-    node_cls: Type[irast.BaseConstant]
+    node_cls: type[irast.BaseConstant]
 
     if expr.kind == qlast.ConstantKind.STRING:
         std_type = sn.QualName('std', 'str')
@@ -254,7 +278,8 @@ def compile_Constant(
         ctx.env.get_schema_type_and_track(std_type),
         env=ctx.env,
     )
-    return setgen.ensure_set(node_cls(value=value, typeref=ct), ctx=ctx)
+    ir_expr = node_cls(value=value, typeref=ct, span=expr.span)
+    return setgen.ensure_set(ir_expr, ctx=ctx)
 
 
 @dispatch.compile.register(qlast.BytesConstant)
@@ -687,7 +712,7 @@ def compile_TypeCast(
             )
         raise
 
-    ir_expr: Union[irast.Set, irast.Expr]
+    ir_expr: irast.Set | irast.Expr
 
     if isinstance(expr.expr, qlast.Parameter):
         if (
@@ -1029,7 +1054,7 @@ def _infer_slice_type(
 def compile_Indirection(
     expr: qlast.Indirection, *, ctx: context.ContextLevel
 ) -> irast.Set:
-    node: Union[irast.Set, irast.Expr] = dispatch.compile(expr.arg, ctx=ctx)
+    node: irast.Set | irast.Expr = dispatch.compile(expr.arg, ctx=ctx)
     for indirection_el in expr.indirection:
         if isinstance(indirection_el, qlast.Index):
             idx = dispatch.compile(indirection_el.index, ctx=ctx)
@@ -1079,6 +1104,12 @@ def compile_type_check_op(
     typeref = typegen.ql_typeexpr_to_ir_typeref(expr.right, ctx=ctx)
 
     if ltype.is_object_type() and not ltype.is_free_object_type(ctx.env.schema):
+        # Argh, what a mess path factoring and deduplication is!  We
+        # need to dereference __type__, and <Expr> needs to be visible
+        # in the scope when we do it, or else it will get
+        # deduplicated.
+        pathctx.register_set_in_scope(left, ctx=ctx)
+
         left = setgen.ptr_step_set(
             left, expr=None, source=ltype, ptr_name='__type__',
             span=expr.span, ctx=ctx
@@ -1107,7 +1138,7 @@ def compile_type_check_op(
         typeref=output_typeref)
 
 
-def flatten_set(expr: qlast.Set) -> List[qlast.Expr]:
+def flatten_set(expr: qlast.Set) -> list[qlast.Expr]:
     elements = []
     for el in expr.elements:
         if isinstance(el, qlast.Set):
@@ -1118,7 +1149,7 @@ def flatten_set(expr: qlast.Set) -> List[qlast.Expr]:
     return elements
 
 
-def collect_binop(expr: qlast.BinOp) -> List[qlast.Expr]:
+def collect_binop(expr: qlast.BinOp) -> list[qlast.Expr]:
     elements = []
 
     stack = [expr.right, expr.left]

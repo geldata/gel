@@ -179,8 +179,9 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
     {
         create annotation
             ext::ai::embedding_model_max_input_tokens := "<must override>";
+        # for now, use the openai batch limit as the default.
         create annotation
-            ext::ai::embedding_model_max_batch_tokens := "<must override>";
+            ext::ai::embedding_model_max_batch_tokens := "8191";
         create annotation
             ext::ai::embedding_model_max_output_dimensions := "<must override>";
         create annotation
@@ -316,6 +317,28 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::text_gen_model_context_window := "128000";
     };
 
+    create abstract type ext::ai::OpenAI_O1_PreviewModel
+        extending ext::ai::TextGenerationModel
+    {
+        alter annotation
+            ext::ai::model_name := "o1-preview";
+        alter annotation
+            ext::ai::model_provider := "builtin::openai";
+        alter annotation
+            ext::ai::text_gen_model_context_window := "128000";
+    };
+
+    create abstract type ext::ai::OpenAI_O1_MiniModel
+        extending ext::ai::TextGenerationModel
+    {
+        alter annotation
+            ext::ai::model_name := "o1-mini";
+        alter annotation
+            ext::ai::model_provider := "builtin::openai";
+        alter annotation
+            ext::ai::text_gen_model_context_window := "128000";
+    };
+
     # Mistral models
     create abstract type ext::ai::MistralEmbedModel
         extending ext::ai::EmbeddingModel
@@ -343,16 +366,18 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::text_gen_model_context_window := "32000";
     };
 
-    # going to be deprecated shortly
+    # Mistral legacy model
     create abstract type ext::ai::MistralMediumModel
         extending ext::ai::TextGenerationModel
     {
+        create annotation std::deprecated :=
+        "This model is noted as a legacy model in the Mistral docs.";
         alter annotation
             ext::ai::model_name := "mistral-medium-latest";
         alter annotation
             ext::ai::model_provider := "builtin::mistral";
         alter annotation
-            ext::ai::text_gen_model_context_window := "8192";
+            ext::ai::text_gen_model_context_window := "32000";
     };
 
     create abstract type ext::ai::MistralLargeModel
@@ -366,18 +391,18 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::text_gen_model_context_window := "128000";
     };
 
-    create abstract type ext::ai::Ministral_8B
+    create abstract type ext::ai::PixtralLargeModel
         extending ext::ai::TextGenerationModel
     {
         alter annotation
-            ext::ai::model_name := "ministral-8b-latest";
+            ext::ai::model_name := "pixtral-large-latest";
         alter annotation
             ext::ai::model_provider := "builtin::mistral";
         alter annotation
             ext::ai::text_gen_model_context_window := "128000";
     };
 
-    create abstract type ext::ai::Ministral_3B
+    create abstract type ext::ai::Ministral_3B_Model
         extending ext::ai::TextGenerationModel
     {
         alter annotation
@@ -388,7 +413,18 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::text_gen_model_context_window := "128000";
     };
 
-    create abstract type ext::ai::Codestral
+    create abstract type ext::ai::Ministral_8B_Model
+        extending ext::ai::TextGenerationModel
+    {
+        alter annotation
+            ext::ai::model_name := "ministral-8b-latest";
+        alter annotation
+            ext::ai::model_provider := "builtin::mistral";
+        alter annotation
+            ext::ai::text_gen_model_context_window := "128000";
+    };
+
+    create abstract type ext::ai::CodestralModel
         extending ext::ai::TextGenerationModel
     {
         alter annotation
@@ -396,12 +432,11 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         alter annotation
             ext::ai::model_provider := "builtin::mistral";
         alter annotation
-            ext::ai::text_gen_model_context_window := "128000";
+            ext::ai::text_gen_model_context_window := "32000";
     };
 
-
     # Mistral free models
-    create abstract type ext::ai::Pixtral
+    create abstract type ext::ai::PixtralModel
         extending ext::ai::TextGenerationModel
     {
         alter annotation
@@ -411,7 +446,6 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         alter annotation
             ext::ai::text_gen_model_context_window := "128000";
     };
-
 
     create abstract type ext::ai::MistralNemo
         extending ext::ai::TextGenerationModel
@@ -546,6 +580,24 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         using sql expression;
     };
 
+    create function ext::ai::search(
+        object: anyobject,
+        query: str,
+    ) -> optional tuple<object: anyobject, distance: float64>
+    {
+        create annotation std::description := '
+            Search an object using its ext::ai::index index.
+            Gets an embedding for the query from the ai provider then
+            returns objects that match the specified semantic query and the
+            similarity score.
+        ';
+        set volatility := 'Stable';
+        # Needed to pick up the indexes when used in ORDER BY.
+        set prefer_subquery_args := true;
+        set server_param_conversions := '{"query": ["ai_text_embedding", "object"]}';
+        using sql expression;
+    };
+
     create scalar type ext::ai::ChatParticipantRole
         extending enum<System, User, Assistant, Tool>;
 
@@ -604,6 +656,13 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
                      knowledge, answer the user query."
                 ),
             }),
+            (insert ext::ai::ChatPromptMessage {
+                participant_role := ext::ai::ChatParticipantRole.User,
+                content := (
+                    "Query: {query}\n\
+                     Answer: "
+                ),
+            })
         }
     };
 

@@ -26,6 +26,7 @@ from typing import (
 
 import asyncio
 
+from edb.server import defines as edbdef
 from edb.server import pgconnparams
 
 class BackendError(Exception):
@@ -36,8 +37,6 @@ class BackendConnectionError(BackendError): ...
 class BackendPrivilegeError(BackendError): ...
 class BackendCatalogNameError(BackendError): ...
 
-def set_init_con_script_data(cfg: list[dict[str, Any]]): ...
-
 class PGConnection(asyncio.Protocol):
 
     idle: bool
@@ -47,10 +46,16 @@ class PGConnection(asyncio.Protocol):
     parameter_status: dict[str, str]
     backend_secret: int
     is_ssl: bool
+    last_init_con_data: object
 
     def __init__(self, dbname): ...
     async def close(self): ...
-    async def sql_execute(self, sql: bytes | tuple[bytes, ...]) -> None: ...
+    async def sql_execute(
+        self,
+        sql: bytes | tuple[bytes, ...],
+        *,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
+    ) -> None: ...
     async def sql_fetch(
         self,
         sql: bytes,
@@ -58,6 +63,7 @@ class PGConnection(asyncio.Protocol):
         args: tuple[bytes, ...] | list[bytes] = (),
         use_prep_stmt: bool = False,
         state: Optional[bytes] = None,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
     ) -> list[tuple[bytes, ...]]: ...
     async def sql_fetch_val(
         self,
@@ -66,6 +72,7 @@ class PGConnection(asyncio.Protocol):
         args: tuple[bytes, ...] | list[bytes] = (),
         use_prep_stmt: bool = False,
         state: Optional[bytes] = None,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
     ) -> bytes: ...
     async def sql_fetch_col(
         self,
@@ -74,6 +81,7 @@ class PGConnection(asyncio.Protocol):
         args: tuple[bytes, ...] | list[bytes] = (),
         use_prep_stmt: bool = False,
         state: Optional[bytes] = None,
+        tx_isolation: edbdef.TxIsolationLevel | None = None,
     ) -> list[bytes]: ...
     async def sql_describe(
         self,
@@ -97,3 +105,4 @@ class PGConnection(asyncio.Protocol):
 
 SETUP_TEMP_TABLE_SCRIPT: str
 SETUP_CONFIG_CACHE_SCRIPT: str
+SETUP_DML_DUMMY_TABLE_SCRIPT: str

@@ -34,11 +34,15 @@ async def get_instdata(
     backend_conn: metaschema.PGConnection,
     key: str,
     field: str,
+    versioned: bool = True,
 ) -> bytes | Any:
     if field == 'json':
         field = 'json::json'
 
-    schema = pg_common.versioned_schema('edgedbinstdata')
+    if versioned:
+        schema = pg_common.versioned_schema('edgedbinstdata')
+    else:
+        schema = 'edgedbinstdata'
     return await backend_conn.sql_fetch_val(
         f"""
         SELECT {field} FROM {schema}.instdata

@@ -23,14 +23,9 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
-    Union,
     Iterable,
     Literal,
     Sequence,
-    Dict,
-    List,
     NamedTuple,
     TYPE_CHECKING,
 )
@@ -70,6 +65,7 @@ from edb.server import args as edgedb_args
 from edb.server import cluster as edgedb_cluster
 from edb.server import pgcluster
 from edb.server import defines as edgedb_defines
+from edb.server import auth
 from edb.server.pgconnparams import ConnectionParams
 
 from edb.common import assert_data_shape
@@ -78,6 +74,7 @@ from edb.common import debug
 from edb.common import retryloop
 from edb.common import secretkey
 
+from edb import buildmeta
 from edb import protocol
 from edb.protocol import protocol as test_protocol
 from edb.testbase import serutils
@@ -130,7 +127,7 @@ def get_test_cases(tests):
 
 bag = assert_data_shape.bag
 
-generate_jwk = secretkey.generate_jwk
+generate_jwk = auth.generate_jwk
 generate_tls_cert = secretkey.generate_tls_cert
 
 
@@ -317,7 +314,7 @@ class TestCase(unittest.TestCase, metaclass=TestCaseMeta):
     @staticmethod
     def try_until_succeeds(
         *,
-        ignore: Union[Type[Exception], Tuple[Type[Exception]]] | None = None,
+        ignore: type[Exception] | tuple[type[Exception]] | None = None,
         ignore_regexp: str | None = None,
         delay: float=0.5,
         timeout: float=5
@@ -344,7 +341,7 @@ class TestCase(unittest.TestCase, metaclass=TestCaseMeta):
     @staticmethod
     def try_until_fails(
         *,
-        wait_for: Union[Type[Exception], Tuple[Type[Exception]]] | None = None,
+        wait_for: type[Exception] | tuple[type[Exception]] | None = None,
         wait_for_regexp: str | None = None,
         delay: float=0.5,
         timeout: float=5
@@ -432,7 +429,7 @@ class RollbackChanges:
         await self._tx.rollback()
 
 
-class BaseHTTPTestCase(TestCase):
+class TestCaseWithHttpClient(TestCase):
     @classmethod
     def get_api_prefix(cls):
         return ''
@@ -783,7 +780,7 @@ async def drop_db(conn, dbname):
     await conn.execute(f'DROP BRANCH {dbname}')
 
 
-class ClusterTestCase(BaseHTTPTestCase):
+class ClusterTestCase(TestCaseWithHttpClient):
 
     BASE_TEST_CLASS = True
     backend_dsn: Optional[str] = None
@@ -962,13 +959,24 @@ class ClusterTestCase(BaseHTTPTestCase):
         return tls_context
 
 
+def ignore_warnings(warning_message=None):
+    def w(f):
+        async def wf(self, *args, **kwargs):
+            with self.ignore_warnings(warning_message):
+                return await f(self, *args, **kwargs)
+
+        return wf
+
+    return w
+
+
 class ConnectedTestCase(ClusterTestCase):
 
     BASE_TEST_CLASS = True
-    NO_FACTOR = False
+    NO_FACTOR = True
     WARN_FACTOR = False
 
-    con: Any  # XXX: the real type?
+    con: tconn.Connection
 
     @classmethod
     def setUpClass(cls):
@@ -981,6 +989,21 @@ class ConnectedTestCase(ClusterTestCase):
             cls.loop.run_until_complete(cls.teardown_and_disconnect())
         finally:
             super().tearDownClass()
+
+    @contextlib.contextmanager
+    def ignore_warnings(self, warning_message=None):
+        old = self.con._capture_warnings
+        warnings = []
+        self.con._capture_warnings = warnings
+        try:
+            yield
+        finally:
+            self.con._capture_warnings = old
+
+        if warning_message is not None:
+            for warning in warnings:
+                with self.assertRaisesRegex(Exception, warning_message):
+                    raise warning
 
     @classmethod
     async def setup_and_connect(cls):
@@ -1061,7 +1084,7 @@ class ConnectedTestCase(ClusterTestCase):
         user=edgedb_defines.EDGEDB_SUPERUSER,
         password=None,
         secret_key=None,
-    ):
+    ) -> tconn.Connection:
         conargs = cls.get_connect_args(
             cluster=cluster,
             database=database,
@@ -1221,6 +1244,7 @@ class ConnectedTestCase(ClusterTestCase):
         query,
         exp_result,
         *,
+        implicit_limit=0,
         msg=None,
         sort=None,
         variables=None,
@@ -1236,6 +1260,7 @@ class ConnectedTestCase(ClusterTestCase):
             await self.assert_query_result(
                 query,
                 exp_result,
+                implicit_limit=implicit_limit,
                 msg=msg,
                 sort=sort,
                 variables=variables,
@@ -1307,12 +1332,29 @@ class ConnectedTestCase(ClusterTestCase):
     @contextlib.asynccontextmanager
     async def without_access_policies(self):
         await self.con.execute(
-            'CONFIGURE SESSION SET apply_access_policies := false')
+            'CONFIGURE SESSION SET apply_access_policies := false'
+        )
+        raised_an_execption = False
         try:
             yield
+        except BaseException:
+            raised_an_execption = True
+            raise
         finally:
-            await self.con.execute(
-                'CONFIGURE SESSION RESET apply_access_policies')
+            if not (raised_an_execption and self.con.is_in_transaction()):
+                await self.con.execute(
+                    'CONFIGURE SESSION RESET apply_access_policies'
+                )
+
+    @classmethod
+    def get_sql_proto_dsn(cls, dbname=None):
+        dbname = dbname or cls.con.dbname
+        conargs = cls.get_connect_args()
+        return (
+            f"postgres://{conargs['user']}:{conargs['password']}@"
+            f"{conargs['host']}:{conargs['port']}/{cls.con.dbname}?"
+            f"sslrootcert={conargs['tls_ca_file']}"
+        )
 
 
 class DatabaseTestCase(ConnectedTestCase):
@@ -1321,7 +1363,7 @@ class DatabaseTestCase(ConnectedTestCase):
     TEARDOWN: Optional[str] = None
     SCHEMA: Optional[str | pathlib.Path] = None
     DEFAULT_MODULE: str = 'default'
-    EXTENSIONS: List[str] = []
+    EXTENSIONS: list[str] = []
 
     BASE_TEST_CLASS = True
 
@@ -1618,8 +1660,16 @@ class SQLQueryTestCase(BaseQueryTestCase):
         finally:
             super().tearDownClass()
 
+    def setUp(self):
+        if self.TRANSACTION_ISOLATION:
+            self.stran = self.scon.transaction()
+            self.loop.run_until_complete(self.stran.start())
+        super().setUp()
+
     def tearDown(self):
         try:
+            if self.TRANSACTION_ISOLATION:
+                self.loop.run_until_complete(self.stran.rollback())
             self.loop.run_until_complete(self.scon.execute('RESET ALL'))
         finally:
             super().tearDown()
@@ -1628,7 +1678,7 @@ class SQLQueryTestCase(BaseQueryTestCase):
         res = await self.scon.fetch(query, *args)
         return [list(r.values()) for r in res]
 
-    def assert_shape(self, res: Any, rows: int, columns: int | List[str]):
+    def assert_shape(self, res: Any, rows: int, columns: int | list[str]):
         """
         Fail if query result does not confront the specified shape, defined in
         terms of:
@@ -1654,7 +1704,7 @@ class CLITestCaseMixin:
 
     @classmethod
     def run_cli_on_connection(
-        cls, conn_args: Dict[str, Any], *args, input: Optional[str] = None
+        cls, conn_args: dict[str, Any], *args, input: Optional[str] = None
     ) -> None:
         cmd_args = [
             '--host', conn_args['host'],
@@ -1670,7 +1720,7 @@ class CLITestCaseMixin:
             else:
                 input = f"{conn_args['password']}\n"
         cmd_args += args
-        cmd = ['edgedb'] + cmd_args
+        cmd = ['gel'] + cmd_args
         try:
             subprocess.run(
                 cmd,
@@ -1888,13 +1938,8 @@ class StablePGDumpTestCase(BaseQueryTestCase):
 
     @classmethod
     def run_pg_dump_on_connection(
-        cls, conargs: Dict[str, Any], *args, input: Optional[str] = None
+        cls, dsn: str, *args, input: Optional[str] = None
     ) -> None:
-        dsn = (
-            f"postgres://{conargs['user']}:{conargs['password']}@"
-            f"{conargs['host']}:{conargs['port']}/{cls.con.dbname}?"
-            f"sslrootcert={conargs['tls_ca_file']}"
-        )
         cmd = [cls._pg_bin_dir / 'pg_dump', '--dbname', dsn]
         cmd += args
         try:
@@ -1923,7 +1968,7 @@ class StablePGDumpTestCase(BaseQueryTestCase):
             raise unittest.SkipTest('SQL dump tests skipped in single db mode')
 
         super().setUpClass()
-        conargs = cls.get_connect_args()
+        frontend_dsn = cls.get_sql_proto_dsn()
         src_dbname = cls.con.dbname
         tgt_dbname = f'restored_{src_dbname}'
         try:
@@ -1940,7 +1985,18 @@ class StablePGDumpTestCase(BaseQueryTestCase):
 
         # Run pg_dump to create the dump data for an existing Gel database.
         with tempfile.NamedTemporaryFile() as f:
-            cls.run_pg_dump_on_connection(conargs, '-f', f.name)
+            cls.run_pg_dump_on_connection(frontend_dsn, '-f', f.name)
+
+            # Skip the restore part of the test if the database
+            # backend is older than our pg_dump, since it won't work.
+            pg_ver_str = cls.loop.run_until_complete(
+                cls.backend.fetch('select version()')
+            )[0][0]
+            pg_ver = buildmeta.parse_pg_version(pg_ver_str)
+            bundled_ver = buildmeta.get_pg_version()
+            if pg_ver.major < bundled_ver.major:
+                raise unittest.SkipTest('pg_dump newer than backend')
+
             # Create a new Postgres database to be used for dump tests.
             db_exists = cls.loop.run_until_complete(
                 cls.backend.fetch(f'''
@@ -2089,8 +2145,8 @@ class StablePGDumpTestCase(BaseQueryTestCase):
 
 def get_test_cases_setup(
     cases: Iterable[unittest.TestCase]
-) -> List[Tuple[unittest.TestCase, DatabaseName, SetupScript]]:
-    result: List[Tuple[unittest.TestCase, DatabaseName, SetupScript]] = []
+) -> list[tuple[unittest.TestCase, DatabaseName, SetupScript]]:
+    result: list[tuple[unittest.TestCase, DatabaseName, SetupScript]] = []
 
     for case in cases:
         if not hasattr(case, 'get_setup_script'):
@@ -2295,7 +2351,7 @@ class _EdgeDBServer:
     def __init__(
         self,
         *,
-        bind_addrs: Tuple[str, ...] = ('localhost',),
+        bind_addrs: tuple[str, ...] = ('localhost',),
         bootstrap_command: Optional[str],
         auto_shutdown_after: Optional[int],
         adjacent_to: Optional[tconn.Connection],
@@ -2328,10 +2384,12 @@ class _EdgeDBServer:
         jwt_sub_allowlist_file: Optional[os.PathLike] = None,
         jwt_revocation_list_file: Optional[os.PathLike] = None,
         multitenant_config: Optional[str] = None,
+        config_file: Optional[os.PathLike] = None,
         default_branch: Optional[str] = None,
-        env: Optional[Dict[str, str]] = None,
-        extra_args: Optional[List[str]] = None,
+        env: Optional[dict[str, str]] = None,
+        extra_args: Optional[list[str]] = None,
         net_worker_mode: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> None:
         self.bind_addrs = bind_addrs
         self.auto_shutdown_after = auto_shutdown_after
@@ -2363,10 +2421,12 @@ class _EdgeDBServer:
         self.jwt_sub_allowlist_file = jwt_sub_allowlist_file
         self.jwt_revocation_list_file = jwt_revocation_list_file
         self.multitenant_config = multitenant_config
+        self.config_file = config_file
         self.default_branch = default_branch
         self.env = env
         self.extra_args = extra_args
         self.net_worker_mode = net_worker_mode
+        self.password = password
 
     async def wait_for_server_readiness(self, stream: asyncio.StreamReader):
         while True:
@@ -2459,7 +2519,7 @@ class _EdgeDBServer:
                 reset_auth = True
 
         if not reset_auth:
-            password = None
+            password = self.password
             bootstrap_command = ''
         else:
             password = secrets.token_urlsafe()
@@ -2528,6 +2588,9 @@ class _EdgeDBServer:
         if self.jwt_revocation_list_file:
             cmd += ['--jwt-revocation-list-file',
                     self.jwt_revocation_list_file]
+
+        if self.config_file:
+            cmd += ['--config-file', self.config_file]
 
         if not self.multitenant_config:
             cmd += ['--instance-name=localtest']
@@ -2659,7 +2722,7 @@ def start_edgedb_server(
     bind_addrs: tuple[str, ...] = ('localhost',),
     auto_shutdown_after: Optional[int]=None,
     bootstrap_command: Optional[str]=None,
-    max_allowed_connections: Optional[int]=10,
+    max_allowed_connections: Optional[int]=5,
     compiler_pool_size: int=2,
     compiler_pool_mode: Optional[edgedb_args.CompilerPoolMode] = None,
     adjacent_to: Optional[tconn.Connection]=None,
@@ -2690,27 +2753,38 @@ def start_edgedb_server(
     jwt_sub_allowlist_file: Optional[os.PathLike] = None,
     jwt_revocation_list_file: Optional[os.PathLike] = None,
     multitenant_config: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None,
-    extra_args: Optional[List[str]] = None,
+    config_file: Optional[os.PathLike] = None,
+    env: Optional[dict[str, str]] = None,
+    extra_args: Optional[list[str]] = None,
     default_branch: Optional[str] = None,
     net_worker_mode: Optional[str] = None,
+    force_new: bool = False,  # True for ignoring multitenant config env
 ):
     if (not devmode.is_in_dev_mode() or adjacent_to) and not runstate_dir:
         if backend_dsn or adjacent_to:
             import traceback
             # We don't want to implicitly "fix the issue" for the test author
-            print('WARNING: starting an Gel server with the default '
+            print('WARNING: starting a Gel server with the default '
                   'runstate_dir; the test is likely to fail or hang. '
                   'Consider specifying the runstate_dir parameter.')
             print('\n'.join(traceback.format_stack(limit=5)))
 
+    password = None
     if mt_conf := os.environ.get("EDGEDB_SERVER_MULTITENANT_CONFIG_FILE"):
         if multitenant_config is None and max_allowed_connections == 10:
             if not any(
-                (adjacent_to, data_dir, backend_dsn, compiler_pool_mode)
+                (
+                    adjacent_to,
+                    data_dir,
+                    backend_dsn,
+                    compiler_pool_mode,
+                    default_branch,
+                    force_new,
+                )
             ):
                 multitenant_config = mt_conf
                 max_allowed_connections = None
+                password = 'test'  # set in init_cluster() by test/runner.py
 
     params = locals()
     exclusives = [
@@ -2760,10 +2834,12 @@ def start_edgedb_server(
         jwt_sub_allowlist_file=jwt_sub_allowlist_file,
         jwt_revocation_list_file=jwt_revocation_list_file,
         multitenant_config=multitenant_config,
+        config_file=config_file,
         env=env,
         extra_args=extra_args,
         default_branch=default_branch,
         net_worker_mode=net_worker_mode,
+        password=password,
     )
 
 
@@ -2922,23 +2998,10 @@ def get_cases_by_shard(cases, selected_shard, total_shards, verbosity, stats):
     return _merge_results(cases)
 
 
-def find_available_port(max_value=None) -> int:
-    if max_value is None:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.bind(("localhost", 0))
-            return sock.getsockname()[1]
-    elif max_value > 1024:
-        port = max_value
-        while port > 1024:
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.bind(("localhost", port))
-                    return port
-            except IOError:
-                port -= 1
-        raise RuntimeError("cannot find an available port")
-    else:
-        raise ValueError("max_value must be greater than 1024")
+def find_available_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("localhost", 0))
+        return sock.getsockname()[1]
 
 
 def _needs_factoring(weakly):
@@ -2958,6 +3021,14 @@ def _needs_factoring(weakly):
 
         return g
     return decorator
+
+
+@contextlib.asynccontextmanager
+async def temp_file_with(data: bytes):
+    with tempfile.NamedTemporaryFile() as f:
+        f.write(data)
+        f.flush()
+        yield f
 
 
 needs_factoring = _needs_factoring(weakly=False)

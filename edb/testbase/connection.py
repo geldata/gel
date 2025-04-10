@@ -53,10 +53,6 @@ class TransactionState(enum.Enum):
     FAILED = 4
 
 
-def raise_first_warning(warnings, res):
-    raise warnings[0]
-
-
 InputLanguage = protocol.InputLanguage
 
 
@@ -148,7 +144,12 @@ class BaseTransaction(abc.ABC):
     async def _commit(self) -> None:
         query = self._make_commit_query()
         try:
-            await self._connection.execute(query)
+            # Use _fetchall to ensure there is no retry performed.
+            # The protocol level apparently thinks the transaction is
+            # over if COMMIT fails, and since we use that to decide
+            # whether to retry in query/execute, it would want to
+            # retry a COMMIT.
+            await self._connection._fetchall(query)
         except BaseException:
             self._state = TransactionState.FAILED
             raise
@@ -296,11 +297,17 @@ class Iteration(BaseTransaction, abstract.AsyncIOExecutor):
                 )
             await self.start()
 
+    def _get_retry_options(self) -> options.RetryOptions:
+        return options.RetryOptions.defaults()
+
     def _get_state(self) -> options.State:
         return self._connection._get_state()
 
     def _get_warning_handler(self) -> options.WarningHandler:
-        return raise_first_warning
+        return self._connection._get_warning_handler()
+
+    def _get_annotations(self) -> dict[str, str]:
+        return self._connection._get_annotations()
 
 
 class Retry:
@@ -355,6 +362,7 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
         self._params = None
         self._server_hostname = server_hostname
         self._log_listeners = set()
+        self._capture_warnings = None
 
     def add_log_listener(self, callback):
         self._log_listeners.add(callback)
@@ -362,11 +370,24 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
     def remove_log_listener(self, callback):
         self._log_listeners.discard(callback)
 
+    def _get_retry_options(self) -> options.RetryOptions:
+        return self._options.retry_options
+
     def _get_state(self):
         return self._options.state
 
+    def _get_annotations(self) -> dict[str, str]:
+        return self._options.annotations
+
+    def _warning_handler(self, warnings, res):
+        if self._capture_warnings is not None:
+            self._capture_warnings.extend(warnings)
+            return res
+        else:
+            raise warnings[0]
+
     def _get_warning_handler(self) -> options.WarningHandler:
-        return raise_first_warning
+        return self._warning_handler
 
     def _on_log_message(self, msg):
         if self._log_listeners:
@@ -387,29 +408,55 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
     def _get_query_cache(self) -> abstract.QueryCache:
         return self._query_cache
 
-    async def _query(self, query_context: abstract.QueryContext):
-        await self.ensure_connected()
-        return await self.raw_query(query_context)
-
-    async def _execute(self, script: abstract.ExecuteContext) -> None:
-        await self.ensure_connected()
-        ctx = script.lower(allow_capabilities=edgedb_enums.Capability.ALL)
-        res = await self._protocol.execute(ctx)
-        if ctx.warnings:
-            script.warning_handler(ctx.warnings, res)
-
     async def ensure_connected(self):
         if self.is_closed():
             await self.connect()
         return self
 
+    async def _query(self, query_context: abstract.QueryContext):
+        await self.ensure_connected()
+        return await self.raw_query(query_context)
+
+    async def _retry_operation(self, func):
+        i = 0
+        while True:
+            i += 1
+            try:
+                return await func()
+            # Retry transaction conflict errors, up to a maximum of 5
+            # times.  We don't do this if we are in a transaction,
+            # since that *ought* to be done at the transaction level.
+            # Though in reality in the test suite it is usually done at the
+            # test runner level.
+            except errors.TransactionConflictError:
+                if i >= 10 or self.is_in_transaction():
+                    raise
+                await asyncio.sleep(
+                    min((2 ** i) * 0.1, 10)
+                    + random.randrange(100) * 0.001
+                )
+
+    async def _execute(self, script: abstract.ExecuteContext) -> None:
+        await self.ensure_connected()
+
+        async def _inner():
+            ctx = script.lower(allow_capabilities=edgedb_enums.Capability.ALL)
+            res = await self._protocol.execute(ctx)
+            if ctx.warnings:
+                script.warning_handler(ctx.warnings, res)
+
+        await self._retry_operation(_inner)
+
     async def raw_query(self, query_context: abstract.QueryContext):
-        ctx = query_context.lower(
-            allow_capabilities=edgedb_enums.Capability.ALL)
-        res = await self._protocol.query(ctx)
-        if ctx.warnings:
-            res = query_context.warning_handler(ctx.warnings, res)
-        return res
+        async def _inner():
+            ctx = query_context.lower(
+                allow_capabilities=edgedb_enums.Capability.ALL)
+            res = await self._protocol.query(ctx)
+            if ctx.warnings:
+                res = query_context.warning_handler(ctx.warnings, res)
+            return res
+
+        return await self._retry_operation(_inner)
 
     async def _fetchall_generic(self, ctx):
         await self.ensure_connected()
@@ -621,7 +668,7 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
     def is_in_transaction(self):
         return self._protocol.is_in_transaction()
 
-    def get_settings(self) -> typing.Dict[str, typing.Any]:
+    def get_settings(self) -> dict[str, typing.Any]:
         return self._protocol.get_settings()
 
     @property

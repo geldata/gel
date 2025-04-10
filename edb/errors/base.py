@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Type, Iterator, Dict
+from typing import Optional, Iterator
 
 from edb.common import span as edb_span
 from edb.common import exceptions as ex
@@ -33,8 +33,8 @@ __all__ = (
 
 
 class EdgeDBErrorMeta(type):
-    _error_map: Dict[int, Type[EdgeDBError]] = {}
-    _name_map: Dict[str, Type[EdgeDBError]] = {}
+    _error_map: dict[int, type[EdgeDBError]] = {}
+    _name_map: dict[str, type[EdgeDBError]] = {}
 
     def __new__(mcls, name, bases, dct):
         cls = super().__new__(mcls, name, bases, dct)
@@ -57,11 +57,11 @@ class EdgeDBErrorMeta(type):
                 'subclass one of its subclasses in edb.errors')
 
     @classmethod
-    def get_error_class_from_code(mcls, code: int) -> Type[EdgeDBError]:
+    def get_error_class_from_code(mcls, code: int) -> type[EdgeDBError]:
         return mcls._error_map[code]
 
     @classmethod
-    def get_error_class_from_name(mcls, name: str) -> Type[EdgeDBError]:
+    def get_error_class_from_name(mcls, name: str) -> type[EdgeDBError]:
         return mcls._name_map[name]
 
 
@@ -80,7 +80,7 @@ class EdgeDBMessage(Warning):
 class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
     _code: Optional[int] = None
-    _attrs: Dict[int, str]
+    _attrs: dict[int, str]
     _pgext_code: Optional[str] = None
 
     def __init__(
@@ -104,7 +104,8 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
         if span:
             self.set_span(span)
         elif position:
-            self.set_position(*position)
+            self.set_linecol(position[1], position[0])
+            self.set_position(position[2], position[3])
 
         if filename is not None:
             self.set_filename(filename)
@@ -138,11 +139,31 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
     def set_filename(self, filename):
         self._attrs[FIELD_FILENAME] = filename
 
-    def set_linecol(self, line: Optional[int], col: Optional[int]):
+    def set_linecol(
+        self,
+        line: Optional[int],  # one-based
+        col: Optional[int],  # one-based
+    ):
         if line is not None:
             self._attrs[FIELD_LINE_START] = str(line)
         if col is not None:
             self._attrs[FIELD_COLUMN_START] = str(col)
+
+    def compute_line_col(self, source: str):
+        from edb.edgeql import tokenizer
+
+        start: int = self.position
+        end: int | None = self.position_end
+        if end and end < 0:
+            end = None
+
+        start_s, end_s = tokenizer.inflate_span(source, (start, end))
+
+        self._attrs[FIELD_LINE_START] = str(start_s.line)
+        self._attrs[FIELD_COLUMN_START] = str(start_s.column)
+        if end_s is not None:
+            self._attrs[FIELD_LINE_END] = str(end_s.line)
+            self._attrs[FIELD_COLUMN_END] = str(end_s.column)
 
     def set_hint_and_details(self, hint, details=None):
         ex.replace_context(
@@ -155,6 +176,18 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
 
     def has_span(self):
         return FIELD_POSITION_START in self._attrs
+
+    def get_span(self) -> tuple[int, int | None] | None:
+        if FIELD_POSITION_START not in self._attrs:
+            return None
+        return (
+            int(self._attrs[FIELD_POSITION_START]),
+            (
+                int(self._attrs[FIELD_POSITION_END])
+                if FIELD_POSITION_END in self._attrs
+                else None
+            ),
+        )
 
     def set_span(self, span: Optional[edb_span.Span]):
         if not span:
@@ -174,17 +207,26 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
         self._attrs[FIELD_LINE_END] = str(end.line)
         self._attrs[FIELD_COLUMN_END] = str(end.column)
         self._attrs[FIELD_UTF16_COLUMN_END] = str(end.utf16column)
-        if span.name and span.name != '<string>':
-            self._attrs[FIELD_FILENAME] = span.name
+        if span.filename and span.filename != '<string>':
+            self._attrs[FIELD_FILENAME] = span.filename
+
+    def get_position(self) -> tuple[int, int, int, int | None] | None:
+        if FIELD_COLUMN_START not in self._attrs:
+            return None
+        return (
+            int(self._attrs[FIELD_COLUMN_START]),
+            int(self._attrs[FIELD_LINE_START]),
+            int(self._attrs[FIELD_POSITION_START]),
+            int(self._attrs[FIELD_POSITION_END])
+            if FIELD_POSITION_END in self._attrs
+            else None,
+        )
 
     def set_position(
         self,
-        column: int,
-        line: int,
-        start: int,
-        end: Optional[int],
+        start: int,  # zero-based
+        end: Optional[int],  # zero-based
     ):
-        self.set_linecol(line, column)
         self._attrs[FIELD_POSITION_START] = str(start)
         self._attrs[FIELD_POSITION_END] = str(end or start)
 
@@ -209,6 +251,10 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
         return int(self._attrs.get(FIELD_POSITION_START, -1))
 
     @property
+    def position_end(self):
+        return int(self._attrs.get(FIELD_POSITION_END, -1))
+
+    @property
     def hint(self):
         return self._attrs.get(FIELD_HINT)
 
@@ -219,6 +265,10 @@ class EdgeDBError(Exception, metaclass=EdgeDBErrorMeta):
     @property
     def pgext_code(self):
         return self._pgext_code
+
+    @property
+    def filename(self):
+        return self._attrs.get(FIELD_FILENAME, None)
 
 
 @contextlib.contextmanager

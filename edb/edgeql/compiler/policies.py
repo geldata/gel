@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, List
+from typing import Optional
 
 from edb.ir import ast as irast
 
@@ -73,7 +73,7 @@ def get_access_policies(
     stype: s_objtypes.ObjectType,
     *,
     ctx: context.ContextLevel,
-) -> Tuple[s_policies.AccessPolicy, ...]:
+) -> tuple[s_policies.AccessPolicy, ...]:
     schema = ctx.env.schema
     if not ctx.env.options.apply_query_rewrites:
         return ()
@@ -302,13 +302,13 @@ def try_type_rewrite(
     # TODO: caching?
     children_overlap = False
     if children_have_policies:
-        all_descs = [
+        all_child_descs = [
             x
             for child in stype.children(schema)
             for x in child.descendants(schema)
         ]
-        descs = set(all_descs)
-        if len(descs) != len(all_descs):
+        child_descs = set(all_child_descs)
+        if len(child_descs) != len(all_child_descs):
             children_overlap = True
 
     # Put a placeholder to prevent recursion.
@@ -355,7 +355,11 @@ def try_type_rewrite(
     if children_have_policies and not skip_subtypes:
         # N.B: we don't filter here, we just generate references
         # they will go in their own CTEs
-        children = stype.children(schema) if not children_overlap else descs
+        children = (
+            stype.children(schema)
+            if not children_overlap
+            else stype.descendants(schema)
+        )
         sets += [
             # We need to wrap it in a type override so that unioning
             # them all together works...
@@ -377,7 +381,7 @@ def try_type_rewrite(
         with ctx.new() as subctx:
             subctx.expr_exposed = context.Exposure.UNEXPOSED
             subctx.anchors = subctx.anchors.copy()
-            parts: List[qlast.Expr] = [subctx.create_anchor(x) for x in sets]
+            parts: list[qlast.Expr] = [subctx.create_anchor(x) for x in sets]
             rewritten_set = dispatch.compile(
                 qlast.Set(elements=parts), ctx=subctx)
     elif len(sets) > 0:

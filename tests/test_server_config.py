@@ -19,10 +19,12 @@
 
 import asyncio
 import datetime
+import enum
 import json
 import os
 import platform
 import random
+import signal
 import tempfile
 import textwrap
 import unittest
@@ -38,6 +40,7 @@ from edb.edgeql import quote as qlquote
 from edb.protocol import messages
 
 from edb.testbase import server as tb
+
 from edb.schema import objects as s_obj
 
 from edb.ir import statypes
@@ -1066,6 +1069,45 @@ class TestServerConfig(tb.QueryTestCase):
                 CONFIGURE INSTANCE RESET _pg_prepared_statement_cache_size;
             ''')
 
+    async def test_server_proto_configure_09(self):
+        con2 = await self.connect(database=self.con.dbname)
+        default_value = await con2.query_single(
+            'SELECT assert_single(cfg::Config).boolprop'
+        )
+        try:
+            for value in [True, False, True, False]:
+                await self.con.execute(f'''
+                    CONFIGURE SESSION SET boolprop := <bool>'{value}';
+                ''')
+                # The first immediate query is likely NOT syncing in-memory
+                # state to the backend connection, so this will test that
+                # the state in the SQL temp table is correctly set.
+                await self.assert_query_result(
+                    '''
+                    SELECT cfg::Config.boolprop
+                    ''',
+                    [value],
+                )
+                # Now change the state on the backend connection, hopefully,
+                # by running a query with con2 with different state.
+                self.assertEqual(
+                    await con2.query_single(
+                        'SELECT assert_single(cfg::Config).boolprop'
+                    ),
+                    default_value,
+                )
+                # The second query shall sync in-memory state to the backend
+                # connection, so this tests if the statically evaluated bool
+                # value is correct.
+                await self.assert_query_result(
+                    '''
+                    SELECT cfg::Config.boolprop
+                    ''',
+                    [value],
+                )
+        finally:
+            await con2.aclose()
+
     async def test_server_proto_configure_describe_system_config(self):
         try:
             conf1 = "CONFIGURE INSTANCE SET singleprop := '1337';"
@@ -1508,7 +1550,7 @@ class TestServerConfig(tb.QueryTestCase):
             await con2.aclose()
 
 
-class TestSeparateCluster(tb.BaseHTTPTestCase):
+class TestSeparateCluster(tb.TestCaseWithHttpClient):
 
     @unittest.skipIf(
         platform.system() == "Darwin",
@@ -1664,6 +1706,11 @@ class TestSeparateCluster(tb.BaseHTTPTestCase):
             http_endpoint_security=args.ServerEndpointSecurityMode.Optional,
         ) as sd:
             con1 = await sd.connect()
+
+            # Shouldn't be anything in INSTANCE CONFIG, to start.
+            res = await con1.query_single('DESCRIBE INSTANCE CONFIG;')
+            self.assertEqual(res, '')
+
             con2 = await sd.connect()
 
             await con1.execute('''
@@ -2099,6 +2146,96 @@ class TestSeparateCluster(tb.BaseHTTPTestCase):
                     new_aborted += float(line.split(' ')[1])
             self.assertEqual(orig_aborted, new_aborted)
 
+    @unittest.skipIf(
+        "EDGEDB_SERVER_MULTITENANT_CONFIG_FILE" in os.environ,
+        "cannot use CONFIGURE INSTANCE in multi-tenant mode",
+    )
+    async def test_server_config_custom_enum(self):
+        async def assert_conf(con, name, expected_val):
+            val = await con.query_single(f'''
+                select assert_single(cfg::Config.{name})
+            ''')
+
+            self.assertEqual(
+                str(val),
+                expected_val
+            )
+
+        async with tb.start_edgedb_server(
+            security=args.ServerSecurityMode.InsecureDevMode,
+        ) as sd:
+            c1 = await sd.connect()
+            c2 = await sd.connect()
+
+            await c2.query('create database test')
+            t1 = await sd.connect(database='test')
+
+            # check that the default was set correctly
+            await assert_conf(
+                c1, '__check_function_bodies', 'Enabled')
+
+            ####
+
+            await c1.query('''
+                configure instance set
+                    __check_function_bodies
+                        := cfg::TestEnabledDisabledEnum.Disabled;
+            ''')
+
+            for c in {c1, c2, t1}:
+                await assert_conf(
+                    c, '__check_function_bodies', 'Disabled')
+
+            ####
+
+            await t1.query('''
+                configure current database set
+                    __check_function_bodies :=
+                        cfg::TestEnabledDisabledEnum.Enabled;
+            ''')
+
+            for c in {c1, c2}:
+                await assert_conf(
+                    c, '__check_function_bodies', 'Disabled')
+
+            await assert_conf(
+                t1, '__check_function_bodies', 'Enabled')
+
+            ####
+
+            await c2.query('''
+                configure session set
+                    __check_function_bodies :=
+                        cfg::TestEnabledDisabledEnum.Disabled;
+            ''')
+            await assert_conf(
+                c1, '__check_function_bodies', 'Disabled')
+            await assert_conf(
+                t1, '__check_function_bodies', 'Enabled')
+            await assert_conf(
+                c2, '__check_function_bodies', 'Disabled')
+
+            ####
+            await c1.query('''
+                configure instance reset
+                    __check_function_bodies;
+            ''')
+            await t1.query('''
+                configure session set
+                    __check_function_bodies :=
+                        cfg::TestEnabledDisabledEnum.Disabled;
+            ''')
+            await assert_conf(
+                c1, '__check_function_bodies', 'Enabled')
+            await assert_conf(
+                t1, '__check_function_bodies', 'Disabled')
+            await assert_conf(
+                c2, '__check_function_bodies', 'Disabled')
+
+            await c1.aclose()
+            await c2.aclose()
+            await t1.aclose()
+
 
 class TestStaticServerConfig(tb.TestCase):
     @test.xerror("static config args not supported")
@@ -2161,12 +2298,17 @@ class TestStaticServerConfig(tb.TestCase):
                 pass
 
     async def test_server_config_env_01(self):
+        # Backend settings cannot be set statically with remote backend
+        remote_pg = bool(os.getenv("EDGEDB_TEST_BACKEND_DSN"))
+
         env = {
             "EDGEDB_SERVER_CONFIG_cfg::session_idle_timeout": "1m22s",
-            "EDGEDB_SERVER_CONFIG_cfg::query_execution_timeout": "403",
             "EDGEDB_SERVER_CONFIG_cfg::apply_access_policies": "false",
             "EDGEDB_SERVER_CONFIG_cfg::multiprop": "single",
         }
+        if not remote_pg:
+            env["EDGEDB_SERVER_CONFIG_cfg::query_execution_timeout"] = "403"
+
         async with tb.start_edgedb_server(env=env) as sd:
             conn = await sd.connect()
             try:
@@ -2182,13 +2324,14 @@ class TestStaticServerConfig(tb.TestCase):
                     """),
                     datetime.timedelta(minutes=1, seconds=22),
                 )
-                self.assertEqual(
-                    await conn.query_single("""\
-                        select assert_single(
-                            cfg::Config.query_execution_timeout)
-                    """),
-                    datetime.timedelta(seconds=403),
-                )
+                if not remote_pg:
+                    self.assertEqual(
+                        await conn.query_single("""\
+                            select assert_single(
+                                cfg::Config.query_execution_timeout)
+                        """),
+                        datetime.timedelta(seconds=403),
+                    )
                 self.assertFalse(
                     await conn.query_single("""\
                         select assert_single(cfg::Config.apply_access_policies)
@@ -2209,7 +2352,7 @@ class TestStaticServerConfig(tb.TestCase):
         }
         with self.assertRaisesRegex(
             cluster.ClusterError,
-            "can only be one of: AlwaysAllow, NeverAllow"
+            "'cfg::AllowBareDDL' enum has no member called 'illegal_input'"
         ):
             async with tb.start_edgedb_server(env=env):
                 pass
@@ -2228,7 +2371,7 @@ class TestStaticServerConfig(tb.TestCase):
         "cannot use CONFIGURE INSTANCE in multi-tenant mode",
     )
     async def test_server_config_default(self):
-        p1 = tb.find_available_port(max_value=50000)
+        p1 = tb.find_available_port()
         async with tb.start_edgedb_server(
             extra_args=["--port", str(p1)]
         ) as sd:
@@ -2240,7 +2383,7 @@ class TestStaticServerConfig(tb.TestCase):
                     """),
                     p1,
                 )
-                p2 = tb.find_available_port(p1 - 1)
+                p2 = tb.find_available_port()
                 await conn.execute(f"""\
                     configure instance set listen_port := {p2}
                 """)
@@ -2269,6 +2412,198 @@ class TestStaticServerConfig(tb.TestCase):
                     """),
                     p1,
                 )
+            finally:
+                await conn.aclose()
+
+    @unittest.skipIf(
+        "EDGEDB_SERVER_MULTITENANT_CONFIG_FILE" in os.environ,
+        "cannot use --config-file in multi-tenant mode",
+    )
+    async def test_server_config_file_01(self):
+        conf = textwrap.dedent('''
+            ["cfg::Config"]
+            session_idle_timeout = "8m42s"
+            durprop = "996"
+            apply_access_policies = false
+            multiprop = "single"
+            current_email_provider_name = "localmock"
+
+            [[magic_smtp_config]]
+            _tname = "cfg::SMTPProviderConfig"
+            name = "localmock"
+            sender = "sender@example.com"
+            timeout_per_email = "1 minute 48 seconds"
+        ''')
+        async with tb.temp_file_with(
+            conf.encode()
+        ) as config_file, tb.start_edgedb_server(
+            config_file=config_file.name,
+            http_endpoint_security=args.ServerEndpointSecurityMode.Optional,
+        ) as sd:
+            conn = await sd.connect()
+            try:
+                sysconfig = conn.get_settings()["system_config"]
+                self.assertEqual(
+                    sysconfig.session_idle_timeout,
+                    datetime.timedelta(minutes=8, seconds=42),
+                )
+
+                self.assertEqual(
+                    await conn.query_single("""\
+                        select assert_single(cfg::Config.session_idle_timeout)
+                    """),
+                    datetime.timedelta(minutes=8, seconds=42),
+                )
+                self.assertEqual(
+                    await conn.query_single("""\
+                        select assert_single(
+                            cfg::Config.durprop)
+                    """),
+                    datetime.timedelta(seconds=996),
+                )
+                self.assertFalse(
+                    await conn.query_single("""\
+                        select assert_single(cfg::Config.apply_access_policies)
+                    """)
+                )
+                self.assertEqual(
+                    await conn.query("""\
+                        select assert_single(cfg::Config).multiprop
+                    """),
+                    ["single"],
+                )
+
+                dbname = await conn.query_single("""\
+                    select sys::get_current_branch()
+                """)
+                provider = sd.fetch_server_info()["databases"][dbname][
+                    "current_email_provider"
+                ]
+                self.assertEqual(provider['name'], 'localmock')
+                self.assertEqual(provider['sender'], 'sender@example.com')
+                self.assertEqual(provider['timeout_per_email'], 'PT1M48S')
+
+                await conn.query("""\
+                    configure current database
+                    set current_email_provider_name := 'non_exist';
+                """)
+                async for tr in self.try_until_succeeds(ignore=AssertionError):
+                    async with tr:
+                        provider = sd.fetch_server_info()["databases"][dbname][
+                            "current_email_provider"
+                        ]
+                        self.assertIsNone(provider)
+            finally:
+                await conn.aclose()
+
+    @unittest.skipIf(
+        "EDGEDB_SERVER_MULTITENANT_CONFIG_FILE" in os.environ,
+        "cannot use --config-file in multi-tenant mode",
+    )
+    async def test_server_config_file_02(self):
+        conf = textwrap.dedent('''
+            ["cfg::Config"]
+            allow_bare_ddl = "illegal_input"
+        ''')
+        with self.assertRaisesRegex(
+            cluster.ClusterError,
+            "'cfg::AllowBareDDL' enum has no member called 'illegal_input'"
+        ):
+            async with tb.temp_file_with(
+                conf.encode()
+            ) as config_file, tb.start_edgedb_server(
+                config_file=config_file.name,
+            ):
+                pass
+
+    @unittest.skipIf(
+        "EDGEDB_SERVER_MULTITENANT_CONFIG_FILE" in os.environ,
+        "cannot use --config-file in multi-tenant mode",
+    )
+    async def test_server_config_file_03(self):
+        conf = textwrap.dedent('''
+            ["cfg::Config"]
+            apply_access_policies = "on"
+        ''')
+        with self.assertRaisesRegex(
+            cluster.ClusterError,
+            "can only be one of: true, false",
+        ):
+            async with tb.temp_file_with(
+                conf.encode()
+            ) as config_file, tb.start_edgedb_server(
+                config_file=config_file.name,
+            ):
+                pass
+
+    @unittest.skipIf(
+        "EDGEDB_SERVER_MULTITENANT_CONFIG_FILE" in os.environ,
+        "cannot use --config-file in multi-tenant mode",
+    )
+    async def test_server_config_file_04(self):
+        conf = textwrap.dedent('''
+            ["cfg::Config"]
+            query_execution_timeout = "1 hour"
+        ''')
+        with self.assertRaisesRegex(
+            cluster.ClusterError,
+            "backend config 'query_execution_timeout' cannot be set "
+            "via config file"
+        ):
+            async with tb.temp_file_with(
+                conf.encode()
+            ) as config_file, tb.start_edgedb_server(
+                config_file=config_file.name,
+            ):
+                pass
+
+    @unittest.skipIf(
+        "EDGEDB_SERVER_MULTITENANT_CONFIG_FILE" in os.environ,
+        "cannot use --config-file in multi-tenant mode",
+    )
+    async def test_server_config_file_05(self):
+        class Prop(enum.Enum):
+            One = "One"
+            Two = "Two"
+            Three = "Three"
+
+        conf = textwrap.dedent('''
+            ["cfg::Config"]
+            enumprop = "One"
+        ''')
+        async with tb.temp_file_with(
+            conf.encode()
+        ) as config_file, tb.start_edgedb_server(
+            config_file=config_file.name,
+        ) as sd:
+            conn = await sd.connect()
+            try:
+                self.assertEqual(
+                    await conn.query_single("""\
+                        select assert_single(
+                            cfg::Config.enumprop)
+                    """),
+                    Prop.One,
+                )
+
+                config_file.seek(0)
+                config_file.truncate()
+                config_file.write(textwrap.dedent('''
+                    ["cfg::Config"]
+                    enumprop = "Three"
+                ''').encode())
+                config_file.flush()
+                os.kill(sd.pid, signal.SIGHUP)
+
+                async for tr in self.try_until_succeeds(ignore=AssertionError):
+                    async with tr:
+                        self.assertEqual(
+                            await conn.query_single("""\
+                                select assert_single(
+                                    cfg::Config.enumprop)
+                            """),
+                            Prop.Three,
+                        )
             finally:
                 await conn.aclose()
 

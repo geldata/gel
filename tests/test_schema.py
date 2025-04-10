@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Type, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import random
 import re
@@ -455,8 +455,11 @@ class TestSchema(tb.BaseSchemaLoadTest):
             };
         """
 
-    @tb.must_fail(errors.QueryError,
-                  "could not resolve partial path")
+    @tb.must_fail(
+        errors.QueryError,
+        "could not resolve partial path",
+        hint="Did you mean __source__.name?"
+    )
     def test_schema_partial_path_in_default_of_link_prop_01(self):
         """
             module default {
@@ -472,6 +475,21 @@ class TestSchema(tb.BaseSchemaLoadTest):
                     }
 
                 }
+            }
+        """
+
+    @tb.must_fail(
+        errors.QueryError,
+        "could not resolve partial path",
+        hint="Did you mean __new__.wow?"
+    )
+    def test_schema_partial_path_in_trigger_01(self):
+        """
+            type Foo {
+                property wow: bool;
+                trigger prohibit_queue after insert for each do (
+                    select assert(.wow, message := "wow!")
+                );
             }
         """
 
@@ -742,6 +760,44 @@ class TestSchema(tb.BaseSchemaLoadTest):
         };
         """
 
+    @tb.must_fail(
+        errors.InvalidReferenceError,
+        "type 'test::Bar' does not exist",
+    )
+    def test_schema_bad_type_19a(self):
+        """
+        function foo() -> Bar using (1);
+        """
+
+    @tb.must_fail(
+        errors.InvalidReferenceError,
+        "type 'test::Bar' does not exist",
+    )
+    def test_schema_bad_type_19b(self):
+        """
+        function foo(x: Bar) -> int64 using (1);
+        """
+
+    @tb.must_fail(
+        errors.InvalidReferenceError,
+        "type 'test::Baz' does not exist",
+    )
+    def test_schema_bad_type_19c(self):
+        """
+        type Bar;
+        function foo() -> Bar | Baz using (1);
+        """
+
+    @tb.must_fail(
+        errors.InvalidReferenceError,
+        "type 'test::Baz' does not exist",
+    )
+    def test_schema_bad_type_19d(self):
+        """
+        type Bar;
+        function foo(x: Bar | Baz) -> int64 using (1);
+        """
+
     def test_schema_computable_cardinality_inference_01(self):
         schema = self.load_schema("""
             type Object {
@@ -1006,6 +1062,40 @@ class TestSchema(tb.BaseSchemaLoadTest):
             foo := .bar ++ "!";
             foo := .bar ++ "!";
         }
+        """
+
+    @tb.must_fail(
+        errors.InvalidPropertyTargetError,
+        "got object type"
+    )
+    def test_schema_object_as_lprop_01(self):
+        """
+        type Tgt;
+        type Tgt2;
+        type Src {
+          multi tgts: Tgt {
+            lprop: Tgt2;
+          }
+        };
+        """
+
+    @tb.must_fail(
+        errors.InvalidPropertyTargetError,
+        "got object type"
+    )
+    def test_schema_object_as_lprop_02(self):
+        """
+        type Tgt;
+        type Tgt2;
+        type Src {
+          multi tgts: Tgt {
+          }
+        };
+        type Src2 extending Src {
+          overloaded multi tgts: Tgt {
+            lprop: Tgt2;
+          }
+        };
         """
 
     @tb.must_fail(
@@ -2131,7 +2221,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         asdf = obj.getptr(schema, s_name.UnqualName('asdf'))
         expr_ast = asdf.get_expr(schema).parse()
         self.assertEqual(
-            expr_ast.span.name,
+            expr_ast.span.filename,
             f'<{asdf.id} expr>'
         )
 
@@ -2143,7 +2233,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         x = obj.getptr(schema, s_name.UnqualName('x'))
         default_ast = x.get_default(schema).parse()
         self.assertEqual(
-            default_ast.span.name,
+            default_ast.span.filename,
             f'<{x.id} default>'
         )
 
@@ -3124,7 +3214,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         self,
         schema_text: str,
         invalid_queries: list[str],
-        error_type: Type,
+        error_type: type,
         error_message: str,
     ) -> None:
         for query in invalid_queries:
@@ -10009,7 +10099,6 @@ class BaseDescribeTest(tb.BaseSchemaLoadTest):
             schema, _ = s_ddl.apply_sdl(
                 sdl_schema,
                 base_schema=schema,
-                current_schema=schema,
             )
         else:
             schema = self.load_schema(schema_text, modname=default_module)
@@ -12116,7 +12205,6 @@ class TestSDLTextFromSchema(BaseDescribeTest):
             schema, _ = s_ddl.apply_sdl(
                 sdl_schema,
                 base_schema=schema,
-                current_schema=schema,
             )
         else:
             schema = self.load_schema(schema_text, modname=default_module)

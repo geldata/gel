@@ -24,11 +24,9 @@ from typing import (
     ClassVar,
     Literal,
     Optional,
-    Type,
     Iterable,
     Mapping,
     Sequence,
-    Dict,
     cast,
     overload,
 )
@@ -45,8 +43,9 @@ import immutables
 
 from edb import errors
 from edb.common import binwrapper
-from edb.common import value_dispatch
+from edb.common import lru
 from edb.common import uuidgen
+from edb.common import value_dispatch
 
 from edb.protocol import enums as p_enums
 from edb.server import config
@@ -103,6 +102,7 @@ class DescriptorTag(bytes, enum.Enum):
     OBJECT = b'\x0a'
     COMPOUND = b'\x0b'
     MULTIRANGE = b'\x0c'
+    SQL_ROW = b'\x0d'
 
     ANNO_TYPENAME = b'\xff'
 
@@ -1033,6 +1033,53 @@ def describe_params(
     return full_params, params_id
 
 
+def describe_sql_result(
+    *,
+    schema: s_schema.Schema,
+    row: dict[str, s_types.Type],
+    protocol_version: edbdef.ProtocolVersion,
+) -> tuple[bytes, uuid.UUID]:
+    ctx = Context(
+        schema=schema,
+        protocol_version=protocol_version,
+    )
+
+    params_buf = []
+
+    subtypes = []
+    element_names = []
+
+    for rel_name, rel_t in row.items():
+        rel_type_id = _describe_type(rel_t, ctx=ctx)
+        # SQLRecordElement.name
+        params_buf.append(_string_packer(rel_name))
+        element_names.append(rel_name)
+        # SQLRecordElement.type
+        params_buf.append(_type_ref_id_packer(rel_type_id, ctx=ctx))
+        subtypes.append(rel_type_id)
+
+    rec_id = _get_object_shape_id("SQLRow", subtypes, element_names)
+
+    record_body_bytes = [
+        DescriptorTag.SQL_ROW._value_,
+        rec_id.bytes,
+    ]
+
+    record_body_bytes.extend([
+        _uint16_packer(len(row)),
+        *params_buf,
+    ])
+
+    _finish_typedesc(rec_id, record_body_bytes, ctx=ctx)
+
+    record = b''.join([
+        *ctx.buffer,
+        *ctx.anno_buffer,
+    ])
+
+    return record, rec_id
+
+
 def describe(
     schema: s_schema.Schema,
     typ: s_types.Type,
@@ -1852,7 +1899,7 @@ class StateSerializer(InputShapeSerializer):
 
 
 class CompilationConfigSerializer(InputShapeSerializer):
-    @functools.lru_cache(64)
+    @lru.lru_method_cache(64)
     def encode_configs(
         self, *configs: immutables.Map[str, config.SettingValue] | None
     ) -> bytes:
@@ -1896,7 +1943,7 @@ class TypeDesc:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SequenceDesc(TypeDesc):
     subtype: TypeDesc
-    impl: ClassVar[Type[s_obj.CollectionFactory[Any]]]
+    impl: ClassVar[type[s_obj.CollectionFactory[Any]]]
 
     def encode(self, data: collections.abc.Collection[Any]) -> bytes:
         if not data:
@@ -1971,7 +2018,7 @@ class CompoundDesc(SchemaTypeDesc):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class BaseScalarDesc(SchemaTypeDesc):
-    codecs: ClassVar[Dict[
+    codecs: ClassVar[dict[
         uuid.UUID,
         tuple[Callable[[Any], bytes], Callable[[bytes], Any]]
     ]] = {
@@ -2050,11 +2097,29 @@ class EnumDesc(SchemaTypeDesc):
     names: list[str]
     ancestors: Optional[list[TypeDesc]]
 
-    def encode(self, data: str) -> bytes:
-        return _encode_str(data)
+    @functools.cached_property
+    def _decoder(self) -> Callable[[bytes], Any]:
+        assert self.name is not None
+        pytype = statypes.maybe_get_python_type_for_scalar_type_name(self.name)
+        if pytype is not None and issubclass(pytype, statypes.ScalarType):
+            return pytype.decode
+        else:
+            return _decode_str
 
-    def decode(self, data: bytes) -> str:
-        return _decode_str(data)
+    @functools.cached_property
+    def _encoder(self) -> Callable[[Any], bytes]:
+        assert self.name is not None
+        pytype = statypes.maybe_get_python_type_for_scalar_type_name(self.name)
+        if pytype is not None and issubclass(pytype, statypes.ScalarType):
+            return pytype.encode
+        else:
+            return _encode_str
+
+    def encode(self, data: Any) -> bytes:
+        return self._encoder(data)
+
+    def decode(self, data: bytes) -> Any:
+        return self._decoder(data)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

@@ -22,12 +22,15 @@ from __future__ import annotations
 from edb.testbase import server
 
 from edb.protocol import protocol  # type: ignore
+from edb.protocol.protocol import Connection
 
 
 class ProtocolTestCase(server.DatabaseTestCase):
 
     PARALLELISM_GRANULARITY = 'database'
     BASE_TEST_CLASS = True
+
+    con: Connection
 
     def setUp(self):
         self.con = self.loop.run_until_complete(

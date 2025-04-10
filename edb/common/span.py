@@ -33,7 +33,7 @@ contexts through the AST structure.
 
 from __future__ import annotations
 
-from typing import Iterable, List
+from typing import Iterable, Any, Optional
 import re
 import bisect
 
@@ -54,34 +54,37 @@ class Span(markup.MarkupExceptionContext):
 
     def __init__(
         self,
-        name,
-        buffer,
+        filename: Optional[str],
+        buffer: str,
         start: int,
         end: int,
-        document=None,
         *,
-        filename=None,
         context_lines=1,
     ):
-        self.name = name
+        assert start is not None
+        assert end is not None
+
+        self.filename = filename
         self.buffer = buffer
         self.start = start
         self.end = end
-        self.document = document
-        self.filename = filename
         self.context_lines = context_lines
+
         self._points = None
-        assert start is not None
-        assert end is not None
 
     @classmethod
     def empty(cls) -> Span:
         return Span(
-            name='<empty>',
+            filename=None,
             buffer='',
             start=0,
             end=0,
         )
+
+    def __str__(self):
+        if self.filename:
+            return f'{self.filename}:{self.start}..{self.end}'
+        return f'{self.start}..{self.end}'
 
     def __getstate__(self):
         dic = self.__dict__.copy()
@@ -89,9 +92,13 @@ class Span(markup.MarkupExceptionContext):
         return dic
 
     def _calc_points(self):
+        # HACK: If we don't have an actual buffer (probably because we
+        # are recompiling after a schema change), just fake something
+        # long enough. Line numbers will be wrong but positions will
+        # still be right...
+        buffer = self.buffer.encode('utf-8') if self.buffer else b' ' * self.end
         self._points = ql_parser.SourcePoint.from_offsets(
-            self.buffer.encode('utf-8'),
-            [self.start, self.end]
+            buffer, [self.start, self.end]
         )
 
     @property
@@ -120,7 +127,7 @@ class Span(markup.MarkupExceptionContext):
         buf_lines = []
         line_offsets = [0]
         for match in NEW_LINE.finditer(buf_bytes):
-            buf_lines.append(buf_bytes[offset:match.start()].decode('utf-8'))
+            buf_lines.append(buf_bytes[offset : match.start()].decode('utf-8'))
             offset = match.end()
             line_offsets.append(offset)
 
@@ -131,8 +138,11 @@ class Span(markup.MarkupExceptionContext):
 
         endcol = end.column if start.line == end.line else None
         tbp = me.lang.TracebackPoint(
-            name=self.name, filename=self.name, lineno=start.line,
-            colno=start.column, end_colno=endcol,
+            name=self.filename,
+            filename=self.filename,
+            lineno=start.line,
+            colno=start.column,
+            end_colno=endcol,
             lines=buf_lines[context_start:context_end],
             # Line numbers are 1 indexed here
             line_numbers=list(range(context_start + 1, context_end + 1)),
@@ -142,7 +152,7 @@ class Span(markup.MarkupExceptionContext):
         return me.lang.ExceptionContext(title=self.title, body=[tbp])
 
 
-def _get_span(items, *, reverse=False):
+def _get_span(items, *, reverse=False) -> Optional[Span]:
     ctx = None
 
     items = reversed(items) if reverse else items
@@ -161,15 +171,15 @@ def _get_span(items, *, reverse=False):
     return None
 
 
-def get_span(*kids: List[ast.AST]):
+def get_span(*kids: list[ast.AST]):
     start_ctx = _get_span(kids)
     end_ctx = _get_span(kids, reverse=True)
 
-    if not start_ctx:
+    if not start_ctx or not end_ctx:
         return None
 
     return Span(
-        name=start_ctx.name,
+        filename=start_ctx.filename,
         buffer=start_ctx.buffer,
         start=start_ctx.start,
         end=end_ctx.end,
@@ -186,7 +196,7 @@ def merge_spans(spans: Iterable[Span]) -> Span | None:
     # assume same name and buffer apply to all
     #
     return Span(
-        name=span_list[0].name,
+        filename=span_list[0].filename,
         buffer=span_list[0].buffer,
         start=span_list[0].start,
         end=span_list[-1].end,
@@ -201,6 +211,7 @@ def infer_span_from_children(node, span: Span):
 
 def wrap_function_to_infer_spans(func):
     """Provide automatic span for Nonterm production rules."""
+
     def wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         obj, *args = args
@@ -250,7 +261,7 @@ class SpanPropagator(ast.NodeVisitor):
     def repeated_node_visit(self, node):
         return self.memo[node]
 
-    def container_visit(self, node) -> List[Span | None]:
+    def container_visit(self, node) -> list[Span | None]:
         span_list: list[Span | None] = []
         for el in node:
             if isinstance(el, ast.AST) or typeutils.is_container(el):
@@ -289,3 +300,39 @@ class SpanValidator(ast.NodeVisitor):
         if getattr(node, 'span', None) is None:
             raise RuntimeError('node {} has no span'.format(node))
         super().generic_visit(node)
+
+
+# Finds the node in AST by position within the source.
+# It returns the first node whose span contains the target offset in a
+# post-order traversal of the AST.
+def find_by_source_position(
+    node: ast.AST, target_offset: int
+) -> ast.AST | None:
+    finder = SpanFinder(target_offset)
+    finder.visit(node)
+    return finder.found_node
+
+
+class SpanFinder(ast.NodeVisitor):
+    target_offset: int
+    found_node: Any | None
+
+    def __init__(self, target_offset: int):
+        super().__init__()
+        self.target_offset = target_offset
+        self.found_node = None
+
+    def generic_visit(self, node, *, combine_results=None) -> Any:
+        has_span = False
+        if node_span := getattr(node, 'span', None):
+            has_span = True
+            if not span_contains(node_span, self.target_offset):
+                return
+
+        super().generic_visit(node)
+        if self.found_node is None and has_span:
+            self.found_node = node
+
+
+def span_contains(span: Span, target_offset: int) -> bool:
+    return span.start <= target_offset and target_offset <= span.end

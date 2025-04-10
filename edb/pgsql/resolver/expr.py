@@ -20,23 +20,33 @@
 """SQL resolver that compiles public SQL to internal SQL which is executable
 in our internal Postgres instance."""
 
-from typing import Optional, Tuple, Iterator, Sequence, Dict, List, cast, Set
+from typing import (
+    Iterable,
+    Optional,
+    Iterator,
+    Sequence,
+    cast,
+)
 import uuid
 
 from edb import errors
 
 from edb.pgsql import ast as pgast
 from edb.pgsql import common
+from edb.pgsql.parser import parser as pg_parser
+from edb.pgsql.common import quote_ident as qi
 from edb.pgsql import compiler as pgcompiler
 from edb.pgsql.compiler import enums as pgce
 
 from edb.schema import types as s_types
+from edb.schema import pointers as s_pointers
 
 from edb.ir import ast as irast
 
 from edb.edgeql import compiler as qlcompiler
 
 from edb.server.pgcon import errors as pgerror
+from edb.server.compiler import dbstate
 
 from . import dispatch
 from . import context
@@ -75,9 +85,9 @@ def infer_alias(res_target: pgast.ResTarget) -> Optional[str]:
 def resolve_ResTarget(
     res_target: pgast.ResTarget,
     *,
-    existing_names: Set[str],
+    existing_names: set[str],
     ctx: Context,
-) -> Tuple[Sequence[pgast.ResTarget], Sequence[context.Column]]:
+) -> tuple[Sequence[pgast.ResTarget], Sequence[context.Column]]:
     targets, columns = _resolve_ResTarget(
         res_target, existing_names=existing_names, ctx=ctx
     )
@@ -88,9 +98,9 @@ def resolve_ResTarget(
 def _resolve_ResTarget(
     res_target: pgast.ResTarget,
     *,
-    existing_names: Set[str],
+    existing_names: set[str],
     ctx: Context,
-) -> Tuple[Sequence[pgast.ResTarget], Sequence[context.Column]]:
+) -> tuple[Sequence[pgast.ResTarget], Sequence[context.Column]]:
     alias = infer_alias(res_target)
 
     # special case for ColumnRef for handing wildcards
@@ -117,7 +127,7 @@ def _resolve_ResTarget(
                     raise errors.QueryError(
                         f'duplicate column name: `{nam}`',
                         span=res_target.span,
-                        pgext_code=pgerror.ERROR_INVALID_COLUMN_REFERENCE,
+                        pgext_code=pgerror.ERROR_UNDEFINED_COLUMN,
                     )
             existing_names.add(nam)
 
@@ -156,7 +166,7 @@ def _resolve_ResTarget(
                 raise errors.QueryError(
                     f'duplicate column name: `{alias}`',
                     span=res_target.span,
-                    pgext_code=pgerror.ERROR_INVALID_COLUMN_REFERENCE,
+                    pgext_code=pgerror.ERROR_UNDEFINED_COLUMN,
                 )
         else:
             # inferred duplicate name: use generated alias instead
@@ -205,8 +215,22 @@ def resolve_column_kind(
             assert expr
 
             source = pointer.get_source(ctx.schema)
-            assert isinstance(source, s_types.Type)
-            source_id = irast.PathId.from_type(ctx.schema, source, env=None)
+
+            subject_id: irast.PathId
+            source_id: irast.PathId
+            if isinstance(source, s_types.Type):
+                subject_id = irast.PathId.from_type(
+                    ctx.schema, source, env=None
+                )
+                source_id = subject_id
+            else:
+                assert isinstance(source, s_pointers.Pointer)
+                subject_id = irast.PathId.from_pointer(
+                    ctx.schema, source, env=None
+                )
+                s = source.get_source(ctx.schema)
+                assert isinstance(s, s_types.Type)
+                source_id = irast.PathId.from_type(ctx.schema, s, env=None)
 
             singletons = [source]
             options = qlcompiler.CompilerOptions(
@@ -219,15 +243,30 @@ def resolve_column_kind(
             )
             compiled = expr.compiled(ctx.schema, options=options, context=None)
 
+            subject_rel = pgast.Relation(name=table.reference_as)
+            if isinstance(source, s_types.Type):
+                subject_rel.path_outputs = {
+                    (source_id, pgce.PathAspect.IDENTITY): pgast.ColumnRef(
+                        name=('id',)
+                    )
+                }
+            else:
+                subject_rel.path_outputs = {
+                    (source_id, pgce.PathAspect.IDENTITY): pgast.ColumnRef(
+                        name=('source',)
+                    )
+                }
+            subject_rel_var = pgast.RelRangeVar(
+                alias=pgast.Alias(aliasname=table.reference_as),
+                relation=subject_rel,
+            )
+
             sql_tree = pgcompiler.compile_ir_to_sql_tree(
                 compiled.irast,
                 external_rvars={
-                    (source_id, pgce.PathAspect.SOURCE): pgast.RelRangeVar(
-                        alias=pgast.Alias(
-                            aliasname=table.reference_as,
-                        ),
-                        relation=pgast.Relation(name=table.reference_as),
-                    ),
+                    (subject_id, pgce.PathAspect.SOURCE): subject_rel_var,
+                    (subject_id, pgce.PathAspect.VALUE): subject_rel_var,
+                    (source_id, pgce.PathAspect.IDENTITY): subject_rel_var
                 },
                 output_format=pgcompiler.OutputFormat.NATIVE_INTERNAL,
                 alias_generator=ctx.alias_generator,
@@ -265,8 +304,8 @@ def _uuid_const(val: uuid.UUID):
 def _lookup_column(
     column_ref: pgast.ColumnRef,
     ctx: Context,
-) -> Sequence[Tuple[context.Table, context.Column]]:
-    matched_columns: List[Tuple[context.Table, context.Column]] = []
+) -> Sequence[tuple[context.Table, context.Column]]:
+    matched_columns: list[tuple[context.Table, context.Column]] = []
 
     name = column_ref.name
     col_name: str | pgast.Star
@@ -279,6 +318,11 @@ def _lookup_column(
             return [
                 (t, c)
                 for t in ctx.scope.tables
+                # Only look at the highest precedence level for
+                # *. That is, we take everything in our local FROM
+                # clauses but not stuff in enclosing queries, if we
+                # are a subquery.
+                if t.precedence == 0
                 for c in t.columns
                 if not c.hidden
             ]
@@ -316,9 +360,9 @@ def _lookup_column(
 
     if not matched_columns:
         raise errors.QueryError(
-            f'cannot find column `{col_name}`',
+            f'column {qi(col_name, force=True)} does not exist',
             span=column_ref.span,
-            pgext_code=pgerror.ERROR_INVALID_COLUMN_REFERENCE,
+            pgext_code=pgerror.ERROR_UNDEFINED_COLUMN,
         )
 
     # apply precedence
@@ -379,14 +423,14 @@ def _lookup_column(
 
 def _lookup_in_table(
     col_name: str, table: context.Table
-) -> Iterator[Tuple[context.Table, context.Column]]:
+) -> Iterator[tuple[context.Table, context.Column]]:
     for column in table.columns:
         if column.name == col_name:
             yield (table, column)
 
 
 def _maybe_lookup_table(tab_name: str, ctx: Context) -> context.Table | None:
-    matched_tables: List[context.Table] = []
+    matched_tables: list[context.Table] = []
     for t in ctx.scope.tables:
         t_name = t.alias or t.name
         if t_name == tab_name:
@@ -447,8 +491,11 @@ def resolve_TypeCast(
     *,
     ctx: Context,
 ) -> pgast.BaseExpr:
-    if res := static.eval_TypeCast(expr, ctx=ctx):
-        return res
+
+    pg_catalog_name = static.name_in_pg_catalog(expr.type_name.name)
+    if pg_catalog_name == 'regclass' and not expr.type_name.array_bounds:
+        return static.cast_to_regclass(expr.arg, ctx)
+
     return pgast.TypeCast(
         arg=dispatch.resolve(expr.arg, ctx=ctx),
         type_name=expr.type_name,
@@ -509,7 +556,7 @@ def resolve_LockingClause(
     ctx: Context,
 ) -> pgast.LockingClause:
 
-    tables: List[context.Table] = []
+    tables: list[context.Table] = []
     if expr.locked_rels is not None:
         for rvar in expr.locked_rels:
             assert rvar.relation.name
@@ -537,7 +584,7 @@ def resolve_LockingClause(
     )
 
 
-func_calls_remapping: Dict[Tuple[str, ...], Tuple[str, ...]] = {
+func_calls_remapping: dict[tuple[str, ...], tuple[str, ...]] = {
     ('information_schema', '_pg_truetypid'): (
         common.versioned_schema('edgedbsql'),
         '_pg_truetypid',
@@ -580,7 +627,7 @@ def resolve_FuncCall(
     # Effectively, this exposes all non-remapped functions.
     name = func_calls_remapping.get(call.name, call.name)
 
-    return pgast.FuncCall(
+    res = pgast.FuncCall(
         name=name,
         args=dispatch.resolve_list(call.args, ctx=ctx),
         agg_order=dispatch.resolve_opt_list(call.agg_order, ctx=ctx),
@@ -590,6 +637,8 @@ def resolve_FuncCall(
         over=dispatch.resolve_opt(call.over, ctx=ctx),
         with_ordinality=call.with_ordinality,
     )
+
+    return res
 
 
 @dispatch._resolve.register
@@ -658,9 +707,34 @@ def resolve_RowExpr(
     *,
     ctx: Context,
 ) -> pgast.RowExpr:
-    return pgast.RowExpr(
-        args=dispatch.resolve_list(expr.args, ctx=ctx),
+    return construct_row_expr(
+        dispatch.resolve_list(expr.args, ctx=ctx),
+        ctx=ctx,
     )
+
+
+def construct_row_expr(
+    args: Iterable[pgast.BaseExpr], *, ctx: Context
+) -> pgast.RowExpr:
+    # Constructs a ROW and maybe injects type casts for params.
+
+    return pgast.RowExpr(args=[maybe_annotate_param(a, ctx=ctx) for a in args])
+
+
+def maybe_annotate_param(expr: pgast.BaseExpr, *, ctx: Context):
+    # If the expression is a param whose type is `unknown` we inject a type cast
+    # saying it is actually text.
+
+    if isinstance(expr, pgast.ParamRef):
+        param = ctx.query_params[expr.number - 1]
+        if (
+            isinstance(param, dbstate.SQLParamExtractedConst)
+            and param.type_oid == pg_parser.PgLiteralTypeOID.UNKNOWN
+        ):
+            return pgast.TypeCast(
+                arg=expr, type_name=pgast.TypeName(name=('text',))
+            )
+    return expr
 
 
 @dispatch._resolve.register
@@ -670,6 +744,16 @@ def resolve_ParamRef(
     ctx: Context,
 ) -> pgast.ParamRef:
     # external params map one-to-one to internal params
+    if expr.number < 1:
+        raise errors.QueryError(
+            f'param out of bounds: ${expr.number}',
+            pgext_code=pgerror.ERROR_UNDEFINED_PARAMETER,
+            hint='query parameters start with 1',
+        )
+
+    param = ctx.query_params[expr.number - 1]
+    param.used = True
+
     return expr
 
 

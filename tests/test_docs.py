@@ -6,9 +6,8 @@
 ##
 
 
-from typing import List
-
 import collections
+import contextlib
 import json
 import os
 import re
@@ -45,6 +44,78 @@ from edb.edgeql import parser as ql_parser
 
 def find_edgedb_root():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+class LintControl:
+
+    _filename: str | None
+    _errors: list[str]
+
+    def __init__(self):
+        self._lint_on = True
+        self._line_no = 0
+        self._errors = []
+
+    @contextlib.contextmanager
+    def enter_file(self, filename: str):
+        self._filename = filename
+        self._line_no = 0
+        self._lint_on = True
+
+        try:
+            yield
+        finally:
+            try:
+                if not self._lint_on:
+                    raise AssertionError(
+                        f"Unexpected EOF. No closing '.. lint-on' found in "
+                        f"{self._filename}")
+            finally:
+                self._filename = None
+
+    @property
+    def filename(self) -> str:
+        assert self._filename is not None
+        return self._filename
+
+    def feed_line(self, line: str):
+        assert self._filename is not None
+        self._line_no += 1
+
+        if line.startswith('.. lint-off'):
+            if self._lint_on:
+                self._lint_on = False
+            else:
+                raise AssertionError(
+                    f'Mismatched lint-on/lint-off in '
+                    f'{self._filename}, line {self._line_no}'
+                )
+        elif line.startswith('.. lint-on'):
+            if not self._lint_on:
+                self._lint_on = True
+            else:
+                raise AssertionError(
+                    f'Mismatched lint-on/lint-off in '
+                    f'{self._filename}, line {self._line_no}'
+                )
+
+    def report_error(self, message: str):
+        self._errors.append(f'{self._filename}:{self._line_no}: {message}')
+
+    def raise_errors_if_any(self):
+        if self._errors:
+            raise AssertionError(
+                '\n'.join(self._errors)
+            )
+
+    def is_linting(self):
+        return self._lint_on
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _et, _ev, _tb):
+        pass
 
 
 class TestDocSnippets(unittest.TestCase):
@@ -92,7 +163,7 @@ class TestDocSnippets(unittest.TestCase):
 
                 return msg
 
-    def find_rest_files(self, path: str) -> List[str]:
+    def find_rest_files(self, path: str) -> list[str]:
         def scan(path):
             with os.scandir(path) as it:
                 for entry in it:
@@ -101,7 +172,7 @@ class TestDocSnippets(unittest.TestCase):
                     if entry.is_dir():
                         scan(entry.path)
 
-        files: List[str] = []
+        files: list[str] = []
         scan(path)
         return files
 
@@ -122,30 +193,6 @@ class TestDocSnippets(unittest.TestCase):
         document.note_source(filename, -1)
 
         parser.parse(source, document)
-
-        lines = source.split('\n')
-        lint_on = True
-        for lineno, line in enumerate(lines, 1):
-
-            if line.startswith('.. lint-off'):
-                if lint_on:
-                    lint_on = False
-                else:
-                    reporter.lint_errors.add(
-                        f'Mismatched lint-on/lint-off in '
-                        f'{filename}, line {lineno}')
-            elif line.startswith('.. lint-on'):
-                if not lint_on:
-                    lint_on = True
-                else:
-                    reporter.lint_errors.add(
-                        f'Mismatched lint-on/lint-off in '
-                        f'{filename}, line {lineno}')
-
-        if not lint_on:
-            reporter.lint_errors.add(
-                f'Unexpected EOF. No closing \'.. lint-on\' found in '
-                f'{filename}')
 
         if reporter.lint_errors:
             raise self.RestructuredTextStyleError(
@@ -359,6 +406,7 @@ class TestDocSnippets(unittest.TestCase):
                         'typescript',
                         'go',
                         'yaml',
+                        'text',
                         'jsx',
                         'rust',
                         'tsx',
@@ -400,6 +448,81 @@ class TestDocSnippets(unittest.TestCase):
 
             for block in blocks:
                 self.run_block_test(block)
+
+    def test_cqa_doc_trailing_whitespace(self):
+        edgepath = find_edgedb_root()
+        docspath = os.path.join(edgepath, 'docs')
+
+        ws_errors = collections.defaultdict(set)
+
+        for filename in self.find_rest_files(docspath):
+            with open(filename, 'rt') as f:
+                source = f.readlines()
+
+            for lineno, line in enumerate(source):
+                if re.match(r'\s+\n$', line):
+                    ws_errors[filename].add(lineno)
+
+        if ws_errors:
+            raise AssertionError(
+                'trailing whitespace:\n\n' +
+                '\n'.join(
+                    f'{filename}:{linenos!r}'
+                    for filename, linenos in ws_errors.items()
+                )
+            )
+
+    def test_cqa_doc_substitutions(self):
+        edgepath = find_edgedb_root()
+        docspath = os.path.join(edgepath, 'docs')
+
+        with LintControl() as lc:
+            for filename in self.find_rest_files(docspath):
+                if '/docs/resources/changelog/' in filename:
+                    # changelog files contain a bunch of historical
+                    # text that sometimes can't use the new stuff.
+                    continue
+
+                with lc.enter_file(filename):
+                    with open(filename, 'rt') as f:
+                        source = f.readlines()
+
+                    for line in source:
+                        lc.feed_line(line)
+
+                        if not lc.is_linting():
+                            continue
+
+                        if '``edgedb://' in line:
+                            lc.report_error(
+                                f'do not use ``edgedb://``, '
+                                f'use |geluri| for "gel://" and '
+                                f':geluri:`blah` for "gel://blah"')
+                        if '``gel://' in line:
+                            lc.report_error(
+                                f'do not use ``gel://``, '
+                                f'use |geluri| for "gel://" and '
+                                f':geluri:`blah` for "gel://blah"')
+
+                        if '.esdl``' in line or '.gel``' in line:
+                            lc.report_error(
+                                f"don't use ``filename.esdl`` "
+                                f"or ``filename.gel``, use :dotgel:`filename` "
+                                f"instead")
+                        if '``gel ' in line:
+                            lc.report_error(
+                                f'do not use ``gel`` markup '
+                                f'for "gel" cli commands, '
+                                f'use :gelcmd:`command` instead; '
+                                f'it will be rendered as ``gel command``')
+                        if '``edgedb ' in line:
+                            lc.report_error(
+                                f'do not use ``edgedb`` markup '
+                                f'for "gel" cli commands, '
+                                f'use :gelcmd:`command` instead; '
+                                f'it will be rendered as ``gel command``')
+
+        lc.raise_errors_if_any()
 
     @unittest.skipIf(docutils is None, 'docutils is missing')
     def test_doc_test_broken_code_block_01(self):
@@ -485,6 +608,7 @@ class TestDocSnippets(unittest.TestCase):
                     '-b', 'xml',
                     '-q',
                     '-D', 'master_doc=index',
+                    '-W',
                     docs_root,
                     td,
                 ],

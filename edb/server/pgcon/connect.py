@@ -18,12 +18,10 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import textwrap
 
 from edb.pgsql.common import quote_ident as pg_qi
-from edb.pgsql.common import quote_literal as pg_ql
 from edb.pgsql import params as pg_params
 from edb.server import pgcon
 
@@ -33,7 +31,6 @@ from . import rust_transport
 logger = logging.getLogger('edb.server')
 
 INIT_CON_SCRIPT: bytes | None = None
-INIT_CON_SCRIPT_DATA = ''
 
 # The '_edgecon_state table' is used to store information about
 # the current session. The `type` column is one character, with one
@@ -45,12 +42,21 @@ INIT_CON_SCRIPT_DATA = ''
 #   a corresponding Postgres config setting.
 # * 'A': an instance-level config setting from command-line arguments
 # * 'E': an instance-level config setting from environment variable
+# * 'F': an instance/tenant-level config setting from the TOML config file
+#
+# * 'S': a session-level pg-ext config setting (frontend-only)
+# * 'L': a transaction-level pg-ext config setting (frontend-only)
+# * 'P': a session-level pg-ext config setting that's implemented by setting
+#   a corresponding backend config setting (not stored in _edgecon_state)
+#
+# Please also update ConStateType in edb/server/config/__init__.py if changed.
 SETUP_TEMP_TABLE_SCRIPT = '''
         CREATE TEMPORARY TABLE _edgecon_state (
             name text NOT NULL,
             value jsonb NOT NULL,
             type text NOT NULL CHECK(
-                type = 'C' OR type = 'B' OR type = 'A' OR type = 'E'),
+                type = 'C' OR type = 'B' OR type = 'A' OR type = 'E'
+                OR type = 'F' OR type = 'S' OR type = 'L'),
             UNIQUE(name, type)
         );
 '''.strip()
@@ -60,6 +66,26 @@ SETUP_CONFIG_CACHE_SCRIPT = '''
             value edgedb._sys_config_val_t NOT NULL
         );
 '''.strip()
+
+# A empty dummy table used when we need to emit no-op DML.
+#
+# This is used by scan_check_ctes in the pgsql compiler to
+# force the evaluation of error checking.
+SETUP_DML_DUMMY_TABLE_SCRIPT = '''
+        CREATE TEMPORARY TABLE _dml_dummy (
+            id int8,
+            flag bool,
+            unique(id)
+        );
+        INSERT INTO _dml_dummy VALUES (0, false);
+'''.strip()
+
+RESET_STATIC_CFG_SCRIPT: bytes = b'''
+    WITH x1 AS (
+        DELETE FROM _config_cache
+    )
+    DELETE FROM _edgecon_state WHERE type = 'A' OR type = 'E' OR type = 'F';
+'''
 
 
 def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
@@ -81,14 +107,19 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
 
         {SETUP_TEMP_TABLE_SCRIPT}
         {SETUP_CONFIG_CACHE_SCRIPT}
+        {SETUP_DML_DUMMY_TABLE_SCRIPT}
 
-        {INIT_CON_SCRIPT_DATA}
+        CREATE CONSTRAINT TRIGGER _edgecon_state_local_reset
+        AFTER INSERT ON _edgecon_state
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW EXECUTE FUNCTION edgedb._clear_fe_local_sql_settings();
 
         PREPARE _clear_state AS
             WITH x1 AS (
                 DELETE FROM _config_cache
             )
-            DELETE FROM _edgecon_state WHERE type = 'C' OR type = 'B';
+            DELETE FROM _edgecon_state
+                WHERE type = 'C' OR type = 'B' or type = 'S';
 
         PREPARE _apply_state(jsonb) AS
             INSERT INTO
@@ -108,11 +139,50 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
             SELECT edgedb._reset_session_config();
 
         PREPARE _apply_sql_state(jsonb) AS
-            SELECT
-                e.key AS name,
-                pg_catalog.set_config(e.key, e.value, false) AS value
-            FROM
-                jsonb_each_text($1::jsonb) AS e;
+            WITH be AS (
+                SELECT
+                    pg_catalog.set_config(
+                        e->>'name', e->>'value', false
+                    ) AS value
+                FROM
+                    jsonb_array_elements($1::jsonb) AS e
+                WHERE
+                    e->'type' = '"P"'::jsonb
+            ),
+            fe AS (
+                INSERT INTO
+                    _edgecon_state(name, value, type)
+                SELECT
+                    e->>'name' AS name,
+                    e->'value' AS value,
+                    e->>'type' AS type
+                FROM
+                    jsonb_array_elements($1::jsonb) AS e
+                WHERE
+                    e->'type' = '"S"'::jsonb
+                RETURNING 1
+            )
+            SELECT 1 FROM be, fe;
+
+        PREPARE _set_sql_state(text, text, text) AS
+            INSERT INTO
+                _edgecon_state(name, type, value)
+            VALUES
+                ($1, $2, pg_catalog.to_jsonb($3))
+            ON CONFLICT (name, type) DO UPDATE
+                SET value = pg_catalog.to_jsonb($3);
+
+        PREPARE _reset_sql_state(text, text) AS
+            DELETE FROM
+                _edgecon_state
+            WHERE
+                name = $1 AND type = $2;
+
+        PREPARE _reset_sql_state_all AS
+            DELETE FROM
+                _edgecon_state
+            WHERE
+                type = 'S' OR type = 'L';
     ''').strip().encode('utf-8')
 
 
@@ -184,7 +254,20 @@ async def pg_connect(
                 ),
             )
         try:
-            await pgconn.sql_execute(INIT_CON_SCRIPT)
+            try:
+                await pgconn.sql_execute(INIT_CON_SCRIPT)
+            except pgcon.BackendError:
+                from edb.pgsql import dbops, metaschema
+
+                # ClearFELocalSQLSettingsFunction is needed by the
+                # INIT_CON_SCRIPT, so we cannot simply patch it up
+                # in the regular edb/pgsql/patches.py
+                block = dbops.PLTopBlock()
+                func = metaschema.ClearFELocalSQLSettingsFunction()
+                dbops.CreateFunction(func, or_replace=True).generate(block)
+
+                await pgconn.sql_execute(block.to_string().encode('utf-8'))
+                await pgconn.sql_execute(INIT_CON_SCRIPT)
         except Exception:
             logger.exception(
                 f"Failed to run init script for {pgconn.connection.to_dsn()}"
@@ -193,15 +276,3 @@ async def pg_connect(
             raise
 
     return pgconn
-
-
-def set_init_con_script_data(cfg):
-    global INIT_CON_SCRIPT, INIT_CON_SCRIPT_DATA
-    INIT_CON_SCRIPT = None
-    INIT_CON_SCRIPT_DATA = (
-        f'''
-        INSERT INTO _edgecon_state
-        SELECT * FROM jsonb_to_recordset({pg_ql(json.dumps(cfg))}::jsonb)
-        AS cfg(name text, value jsonb, type text);
-    '''
-    ).strip()

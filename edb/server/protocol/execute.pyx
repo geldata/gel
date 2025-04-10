@@ -39,16 +39,20 @@ from edb.common import debug
 from edb import edgeql
 from edb.edgeql import qltypes
 
+from edb.pgsql.parser import exceptions as parser_errors
+
 from edb.server import compiler
 from edb.server import config
 from edb.server import defines as edbdef
 from edb.server import metrics
+from edb.server.compiler import dbstate
 from edb.server.compiler import errormech
 from edb.server.compiler cimport rpc
 from edb.server.compiler import sertypes
 from edb.server.dbview cimport dbview
 from edb.server.protocol cimport args_ser
 from edb.server.protocol cimport frontend
+from edb.server.protocol import ai_ext
 from edb.server.pgcon cimport pgcon
 from edb.server.pgcon import errors as pgerror
 
@@ -74,6 +78,7 @@ cdef class ExecutionGroup:
         object dbv,  # can be DatabaseConnectionView or Database
         fe_conn: frontend.AbstractFrontendConnection = None,
         bytes state = None,
+        bint needs_commit_state = False,
     ):
         cdef int dbver
 
@@ -91,9 +96,14 @@ cdef class ExecutionGroup:
                 dbver,
                 parse_array,
                 None,  # query_prefix
+                needs_commit_state,
             )
             if state is not None:
-                await be_conn.wait_for_state_resp(state, state_sync=0)
+                await be_conn.wait_for_state_resp(
+                    state,
+                    state_sync=needs_commit_state,
+                    needs_commit_state=needs_commit_state,
+                )
             for i, unit in enumerate(self.group):
                 ignore_data = unit.output_format == FMT_NONE
                 rv = await be_conn.wait_for_command(
@@ -153,6 +163,7 @@ async def describe(
     *,
     query_cache_enabled: Optional[bool] = None,
     allow_capabilities: compiler.Capability = compiler.Capability.MODIFICATIONS,
+    query_tag: str | None = None,
 ) -> sertypes.TypeDesc:
     compiled, dbv = await _parse(
         db,
@@ -160,6 +171,8 @@ async def describe(
         query_cache_enabled=query_cache_enabled,
         allow_capabilities=allow_capabilities,
     )
+    if query_tag:
+        compiled.tag = query_tag
 
     try:
         desc = sertypes.parse(
@@ -232,11 +245,13 @@ async def execute(
     cdef:
         bytes state = None, orig_state = None
         WriteBuffer bound_args_buf
+        bint needs_commit_state = False
 
     query_unit = compiled.query_unit_group[0]
 
     if not dbv.in_tx():
         orig_state = state = dbv.serialize_state()
+        needs_commit_state = dbv.needs_commit_after_state_sync()
 
     new_types = None
     server = dbv.server
@@ -263,21 +278,37 @@ async def execute(
                 close_frontend_conns=query_unit.drop_db_reset_connections,
             )
         if query_unit.system_config:
+            # execute_system_config() always sync state in a separate tx,
+            # so we don't need to pass down the needs_commit_state here
             await execute_system_config(be_conn, dbv, query_unit, state)
         else:
             config_ops = query_unit.config_ops
 
             if query_unit.sql:
                 if query_unit.user_schema:
-                    await be_conn.parse_execute(query=query_unit, state=state)
+                    await be_conn.parse_execute(
+                        query=query_unit,
+                        state=state,
+                        needs_commit_state=needs_commit_state,
+                    )
                     if query_unit.ddl_stmt_id is not None:
                         ddl_ret = be_conn.load_last_ddl_return(query_unit)
                         if ddl_ret and ddl_ret['new_types']:
                             new_types = ddl_ret['new_types']
                 else:
+                    converted_args: Optional[list[args_ser.ConvertedArg]] = None
+                    if query_unit.server_param_conversions:
+                        converted_args = await _convert_parameters(
+                            dbv,
+                            query_unit.server_param_conversions,
+                            query_unit.in_type_args,
+                            bind_args,
+                        )
+
                     data_types = []
                     bound_args_buf = args_ser.recode_bind_args(
-                        dbv, compiled, bind_args, None, data_types)
+                        dbv, compiled, bind_args, converted_args, None, data_types,
+                    )
 
                     assert not (query_unit.database_config
                                 and query_unit.needs_readback), (
@@ -293,6 +324,7 @@ async def execute(
                         param_data_types=data_types,
                         use_prep_stmt=use_prep_stmt,
                         state=state,
+                        needs_commit_state=needs_commit_state,
                         dbver=dbv.dbver,
                         use_pending_func_cache=compiled.use_pending_func_cache,
                         tx_isolation=tx_isolation,
@@ -376,6 +408,8 @@ async def execute(
         if query_unit.user_schema:
             if isinstance(ex, pgerror.BackendError):
                 ex._user_schema = query_unit.user_schema
+        if query_unit.source_map:
+            ex._from_sql = True
 
         dbv.on_error()
 
@@ -403,6 +437,8 @@ async def execute(
                 #   1. An orphan ROLLBACK command without a paring start tx
                 #   2. There was no SQL, so the state can't have been synced.
                 be_conn.last_state = state
+                be_conn.state_reset_needs_commit = (
+                    dbv.needs_commit_after_state_sync())
         if compiled.recompiled_cache:
             for req, qu_group in compiled.recompiled_cache:
                 dbv.cache_compiled_query(req, qu_group)
@@ -411,6 +447,129 @@ async def execute(
             tenant.allow_database_connections(query_unit.drop_db)
 
     return data
+
+
+async def _convert_parameters(
+    dbv: dbview.DatabaseConnectionView,
+    server_param_conversions: list[dbstate.ServerParamConversion],
+    in_type_args: Optional[list[dbstate.Param]],
+    bind_args: bytes,
+) -> Optional[list[args_ser.ConvertedArg]]:
+    """
+    If there are server param conversions, compute them now so that they are
+    injected into the recoded bind args later.
+    """
+
+    # We receive the encoded param data from the bind_args
+    # and decode it manually.
+    def decode_int(data: bytes) -> int:
+        return int.from_bytes(data)
+
+    def decode_str(data: bytes) -> str:
+        return data.decode("utf-8")
+
+    def decode_array_of_str(data: bytes) -> list[str]:
+        # See gel-python for more details on array encoding
+        texts = []
+        text_count = int.from_bytes(data[12:16])
+        data = data[20:]
+        for _ in range(text_count):
+            text_length = int.from_bytes(data[:4])
+            data = data[4:]
+            texts.append(data[:(text_length)].decode("utf-8"))
+            data = data[text_length:]
+        return texts
+
+    param_conversions: list[args_ser.ParamConversion] = (
+        args_ser.get_param_conversions(
+            dbv, server_param_conversions, in_type_args, bind_args,
+        )
+    )
+
+    converted_args = []
+    for conversion in param_conversions:
+        conversion_name: str = conversion.get_conversion_name()
+        additional_info: tuple[str, ...] = (
+            conversion.get_additional_info()
+        )
+
+        if (
+            conversion_name == 'cast_int64_to_str'
+            or conversion_name == 'cast_int64_to_str_volatile'
+        ):
+            decoded_param_data = (
+                decode_int(conversion.get_data())
+                if conversion.get_source_value() is None
+                else conversion.get_source_value()
+            )
+            converted_args.append(
+                args_ser.ConvertedArgStr.new(
+                    str(decoded_param_data)
+                )
+            )
+
+        elif conversion_name == 'cast_int64_to_float64':
+            decoded_param_data = (
+                decode_int(conversion.get_data())
+                if conversion.get_source_value() is None
+                else conversion.get_source_value()
+            )
+            converted_args.append(
+                args_ser.ConvertedArgFloat64.new(
+                    float(decoded_param_data)
+                )
+            )
+
+        elif conversion_name == 'join_str_array':
+            decoded_param_data = (
+                decode_array_of_str(
+                    conversion.get_data()
+                )
+                if conversion.get_source_value() is None
+                else conversion.get_source_value()
+            )
+
+            separator = additional_info[0]
+            converted_args.append(
+                args_ser.ConvertedArgStr.new(
+                    separator.join(decoded_param_data)
+                )
+            )
+
+        elif conversion_name == 'ai_text_embedding':
+            decoded_param_data = (
+                decode_str(conversion.get_data())
+                if conversion.get_source_value() is None
+                else conversion.get_source_value()
+            )
+
+            object_type_id = additional_info[0]
+
+            tenant = dbv.tenant
+            db = tenant.maybe_get_db(dbname=dbv.dbname)
+            assert db is not None
+            embeddings_result = await ai_ext.generate_embeddings_for_text(
+                db,
+                tenant.get_http_client(originator="ai/index"),
+                object_type_id,
+                decoded_param_data,
+            )
+            embeddings = json.loads(
+                embeddings_result.decode("utf-8")
+            )["data"][0]["embedding"]
+
+            converted_args.append(
+                args_ser.ConvertedArgListFloat32.new(
+                    embeddings
+                )
+            )
+
+        else:
+            raise errors.QueryError(
+                f'unknown param conversion: {conversion_name}'
+            )
+
+    return converted_args
 
 
 async def execute_script(
@@ -429,19 +588,21 @@ async def execute_script(
         object global_schema, roles
         WriteBuffer bind_data
         int dbver = dbv.dbver
-        bint parse
+        bint parse, needs_commit_state = False
 
     user_schema = extensions = ext_config_settings = cached_reflection = None
     feature_used_metrics = None
     global_schema = roles = None
     unit_group = compiled.query_unit_group
     query_prefix = compiled.make_query_prefix()
+    query_unit = None
 
     sync = False
     no_sync = False
     in_tx = dbv.in_tx()
     if not in_tx:
         orig_state = state = dbv.serialize_state()
+        needs_commit_state = dbv.needs_commit_after_state_sync()
 
     data = None
 
@@ -451,6 +612,16 @@ async def execute_script(
             # state restoring
             state = None
         async with conn.parse_execute_script_context():
+            
+            converted_args: Optional[list[args_ser.ConvertedArg]] = None
+            if unit_group.server_param_conversions:
+                converted_args = await _convert_parameters(
+                    dbv,
+                    unit_group.server_param_conversions,
+                    unit_group.in_type_args,
+                    bind_args,
+                )
+
             parse_array = [False] * len(unit_group)
             for idx, query_unit in enumerate(unit_group):
                 if fe_conn is not None and fe_conn.cancelled:
@@ -481,8 +652,10 @@ async def execute_script(
                         sent = len(unit_group)
 
                     sync = sent == len(unit_group) and not no_sync
+
                     bind_array = args_ser.recode_bind_args_for_script(
-                        dbv, compiled, bind_args, idx, sent)
+                        dbv, compiled, bind_args, converted_args, idx, sent)
+
                     dbver = dbv.dbver
                     conn.send_query_unit_group(
                         unit_group,
@@ -494,10 +667,16 @@ async def execute_script(
                         dbver,
                         parse_array,
                         query_prefix,
+                        needs_commit_state,
                     )
 
                 if idx == 0 and state is not None:
-                    await conn.wait_for_state_resp(state, state_sync=0)
+                    await conn.wait_for_state_resp(
+                        state,
+                        state_sync=needs_commit_state,
+                        needs_commit_state=needs_commit_state,
+                    )
+                    conn.state_reset_needs_commit = needs_commit_state
                     # state is restored, clear orig_state so that we can
                     # set conn.last_state correctly later
                     orig_state = None
@@ -567,6 +746,9 @@ async def execute_script(
         if isinstance(e, pgerror.BackendError):
             e._user_schema = dbv.get_user_schema_pickle()
 
+        if query_unit and query_unit.source_map:
+            e._from_sql = True
+
         if not in_tx and dbv.in_tx():
             # Abort the implicit transaction
             dbv.abort_tx()
@@ -610,6 +792,8 @@ async def execute_script(
             state = dbv.serialize_state()
             if state is not orig_state:
                 conn.last_state = state
+                conn.state_reset_needs_commit = (
+                    dbv.needs_commit_after_state_sync())
         elif updated_user_schema:
             dbv._in_tx_user_schema_pickle = user_schema
 
@@ -728,6 +912,7 @@ async def parse_execute_json(
     cached_globally: bool = False,
     use_metrics: bool = True,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
+    query_tag: str | None = None
 ) -> bytes:
     # WARNING: only set cached_globally to True when the query is
     # strictly referring to only shared stable objects in user schema
@@ -744,6 +929,8 @@ async def parse_execute_json(
         cached_globally=cached_globally,
         query_cache_enabled=query_cache_enabled,
     )
+    if query_tag:
+        compiled.tag = query_tag
 
     tenant = db.tenant
     async with tenant.with_pgcon(db.name) as pgcon:
@@ -925,8 +1112,12 @@ async def interpret_error(
 
     elif isinstance(exc, pgerror.BackendError):
         try:
+            from_sql = getattr(exc, '_from_sql', False)
+            source_map = getattr(exc, '_source_map', None)
+            fields = exc.fields
+
             static_exc = errormech.static_interpret_backend_error(
-                exc.fields, from_graphql=from_graphql
+                fields, from_graphql=from_graphql
             )
 
             # only use the backend if schema is required
@@ -944,7 +1135,7 @@ async def interpret_error(
                 exc = await compiler_pool.interpret_backend_error(
                     user_schema_pickle,
                     global_schema_pickle,
-                    exc.fields,
+                    fields,
                     from_graphql,
                 )
 
@@ -957,6 +1148,31 @@ async def interpret_error(
             else:
                 exc = static_exc
 
+            if from_sql and isinstance(exc, errors.InternalServerError):
+                exc = errors.ExecutionError(*exc.args)
+
+            # Translate error position for SQL queries if we can
+            if source_map and isinstance(exc, errors.EdgeDBError):
+                if 'P' in fields:
+                    errors.EdgeDBError.set_position(
+                        exc,
+                        source_map.translate(int(fields['P'])),
+                        None,
+                    )
+
+            # Include hint/detail from SQL queries also, if we haven't
+            # produced our own.
+            if from_sql and isinstance(exc, errors.EdgeDBError):
+                if 'H' in fields or 'D' in fields:
+                    hint = exc.hint or fields.get('H')
+                    details = exc.details or fields.get('D')
+                    # ... there is some sort of cython bug/"feature"
+                    # involving the type annotation above which causes
+                    # exc.set_hint_and_details to fail, so we copy it
+                    # to a new variable.
+                    exc2: object = exc
+                    exc2.set_hint_and_details(hint, details)
+
         except Exception as e:
             from edb.common import debug
             if debug.flags.server:
@@ -965,6 +1181,9 @@ async def interpret_error(
             exc = RuntimeError(
                 'unhandled error while calling interpret_backend_error(); '
                 'run with EDGEDB_DEBUG_SERVER to debug.')
+
+    elif isinstance(exc, parser_errors.PSqlParseError):
+        exc = errormech.static_interpret_psql_parse_error(exc)
 
     return _check_for_ise(exc)
 

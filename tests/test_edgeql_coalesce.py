@@ -50,6 +50,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             sort=lambda x: x['time_estimate']
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_scalar_02(self):
         await self.assert_query_result(
             r'''
@@ -145,6 +146,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             sort=lambda x: x['number']
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_scalar_08(self):
         await self.assert_query_result(
             r'''
@@ -225,6 +227,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ]
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_scalar_12(self):
         await self.assert_query_result(
             r'''
@@ -305,6 +308,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             sort=lambda x: x['te']
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_set_03(self):
         await self.assert_query_result(
             r'''
@@ -391,6 +395,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             sort=lambda x: x['number']
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_set_08(self):
         await self.assert_query_result(
             r'''
@@ -480,6 +485,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_dependent_02(self):
         await self.assert_query_result(
             r'''
@@ -499,6 +505,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_dependent_03(self):
         await self.assert_query_result(
             r'''
@@ -649,6 +656,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_dependent_12(self):
         await self.assert_query_result(
             r'''
@@ -668,6 +676,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_dependent_13(self):
         await self.assert_query_result(
             r'''
@@ -702,6 +711,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             sort=True
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_dependent_15(self):
         await self.assert_query_result(
             r'''
@@ -765,6 +775,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             sort=True
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_dependent_18(self):
         await self.assert_query_result(
             r'''
@@ -779,6 +790,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             sort=True
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_dependent_19(self):
         await self.assert_query_result(
             r'''
@@ -888,6 +900,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_dependent_21(self):
         await self.assert_query_result(
             r'''
@@ -898,6 +911,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             {'High', 'Low', 'Open', 'Closed'},
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_dependent_22(self):
         await self.assert_query_result(
             r'''
@@ -1048,6 +1062,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_object_02(self):
         await self.assert_query_result(
             r'''
@@ -1160,6 +1175,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_object_07(self):
         await self.assert_query_result(
             r'''
@@ -1412,6 +1428,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             [],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_set_of_nonempty_01(self):
         await self.con.execute(
             '''INSERT Publication { title := "1" }''')
@@ -1451,6 +1468,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ["a"],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_correlation_01(self):
         await self.assert_query_result(
             r'''
@@ -1461,6 +1479,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ["Issue 160", "Issue 290", "Issue 390"],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_correlation_02(self):
         await self.assert_query_result(
             r'''
@@ -1497,6 +1516,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ]
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_tuple_02(self):
         await self.assert_query_result(
             r'''
@@ -1514,6 +1534,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
 
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_tuple_03(self):
         await self.assert_query_result(
             r'''
@@ -1530,6 +1551,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ]
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_tuple_04(self):
         await self.assert_query_result(
             r'''
@@ -1546,6 +1568,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_tuple_05(self):
         await self.assert_query_result(
             r'''
@@ -1597,6 +1620,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_tuple_08(self):
         await self.con.execute('''
             CREATE TYPE Foo {
@@ -1706,6 +1730,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             [2, 4],
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_overload_01(self):
         # first argument bool -> optional second arg
         await self.assert_query_result(
@@ -1766,6 +1791,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
             ]),
         )
 
+    @tb.needs_factoring
     async def test_edgeql_coalesce_overload_02(self):
         # first argument int -> singleton second arg
         await self.assert_query_result(
@@ -1969,3 +1995,7 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
                   ?? [is MultiRange].element_type.id,
             };
         ''')
+
+
+class TestEdgeQLCoalesceNoFactor(TestEdgeQLCoalesce):
+    NO_FACTOR = True

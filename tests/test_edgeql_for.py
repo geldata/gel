@@ -212,6 +212,7 @@ class TestEdgeQLFor(tb.QueryTestCase):
             implicit_limit=100,
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_for_filter_02(self):
         await self.assert_query_result(
             r'''
@@ -235,6 +236,7 @@ class TestEdgeQLFor(tb.QueryTestCase):
             }
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_for_filter_03(self):
         await self.assert_query_result(
             r'''
@@ -690,14 +692,16 @@ class TestEdgeQLFor(tb.QueryTestCase):
                         {
                             "name": "Bog monster",
                             "letter": {"B!!", "B!?"},
-                            "correlated": {("!", "!"), ("?", "?")},
+                            "correlated": {("!", "!"), ("!", "?"),
+                                           ("?", "!"), ("?", "?")},
                             "uncorrelated": {("!", "!"), ("!", "?"),
                                              ("?", "!"), ("?", "?")}
                         },
                         {
                             "name": "Imp",
                             "letter": {"I!!", "I!?"},
-                            "correlated": {("!", "!"), ("?", "?")},
+                            "correlated": {("!", "!"), ("!", "?"),
+                                           ("?", "!"), ("?", "?")},
                             "uncorrelated": {("!", "!"), ("!", "?"),
                                              ("?", "!"), ("?", "?")}
                         },
@@ -994,7 +998,7 @@ class TestEdgeQLFor(tb.QueryTestCase):
                     SELECT (X, (FOR x in {X} UNION (SELECT x)))
                 ));
             ''',
-            [2],
+            [4],
         )
 
         await self.assert_query_result(
@@ -1004,7 +1008,7 @@ class TestEdgeQLFor(tb.QueryTestCase):
                     SELECT ((FOR x in {X} UNION (SELECT x)), X)
                 ));
             ''',
-            [2],
+            [4],
         )
 
     async def test_edgeql_for_correlated_02(self):
@@ -1014,7 +1018,7 @@ class TestEdgeQLFor(tb.QueryTestCase):
                               (FOR x in {Card} UNION (SELECT x.name)),
                 ));
             ''',
-            [9],
+            [81],
         )
 
     async def test_edgeql_for_correlated_03(self):
@@ -1024,7 +1028,7 @@ class TestEdgeQLFor(tb.QueryTestCase):
                                Card.name,
                 ));
             ''',
-            [9],
+            [81],
         )
 
     async def test_edgeql_for_empty_01(self):
@@ -1076,6 +1080,8 @@ class TestEdgeQLFor(tb.QueryTestCase):
             [{"key": {"element": "Earth"}}, {"key": {"element": "Water"}}]
         )
 
+    # XXX: This is *wrong*, I think
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_for_fake_group_01c(self):
         await self.assert_query_result(
             r'''

@@ -25,7 +25,7 @@ multiplicity fields and performing multiplicity checks.
 
 
 from __future__ import annotations
-from typing import Tuple, Iterable, List
+from typing import Iterable
 
 import dataclasses
 import functools
@@ -64,7 +64,7 @@ class ContainerMultiplicityInfo(inf_ctx.MultiplicityInfo):
     """Multiplicity descriptor for an expression returning a container"""
 
     #: Individual multiplicity values for container elements.
-    elements: Tuple[inf_ctx.MultiplicityInfo, ...] = ()
+    elements: tuple[inf_ctx.MultiplicityInfo, ...] = ()
 
 
 def _max_multiplicity(
@@ -328,13 +328,8 @@ def _infer_set_inner(
     ):
         path_mult = dataclasses.replace(path_mult, disjoint_union=True)
 
-    # Mark free object roots
-    if irutils.is_trivial_free_object(ir):
-        path_mult = dataclasses.replace(path_mult, fresh_free_object=True)
-
-    # Remove free object freshness when we see them through a binding
-    if ir.is_binding == irast.BindingKind.With and path_mult.fresh_free_object:
-        path_mult = dataclasses.replace(path_mult, fresh_free_object=False)
+    if irtyputils.is_free_object(ir.typeref):
+        path_mult = UNIQUE
 
     return path_mult
 
@@ -388,8 +383,8 @@ def __infer_oper_call(
     ctx: inf_ctx.InfCtx,
 ) -> inf_ctx.MultiplicityInfo:
     card = cardinality.infer_cardinality(ir, scope_tree=scope_tree, ctx=ctx)
-    mult: List[inf_ctx.MultiplicityInfo] = []
-    cards: List[qltypes.Cardinality] = []
+    mult: list[inf_ctx.MultiplicityInfo] = []
+    cards: list[qltypes.Cardinality] = []
     for arg in ir.args.values():
         cards.append(
             cardinality.infer_cardinality(
@@ -413,7 +408,7 @@ def __infer_oper_call(
 
         arg_type = ctx.env.set_types[ir.args[0].expr]
         if isinstance(arg_type, s_objtypes.ObjectType):
-            types: List[s_objtypes.ObjectType] = [
+            types: list[s_objtypes.ObjectType] = [
                 downcast(s_objtypes.ObjectType, ctx.env.set_types[arg.expr])
                 for arg in ir.args.values()
             ]
@@ -643,7 +638,7 @@ def _infer_for_multiplicity(
     elif itmult.is_duplicate():
         return DUPLICATE
     else:
-        if result_mult.disjoint_union or result_mult.fresh_free_object:
+        if result_mult.disjoint_union:
             return result_mult
         else:
             return DUPLICATE
@@ -791,7 +786,7 @@ def _infer_on_conflict_clause(
     scope_tree: irast.ScopeTreeNode,
     ctx: inf_ctx.InfCtx,
 ) -> None:
-    for part in [ir.select_ir, ir.else_ir, ir.update_query_set]:
+    for part in [ir.select_ir, ir.else_ir]:
         if part:
             infer_multiplicity(part, scope_tree=scope_tree, ctx=ctx)
 
@@ -806,7 +801,7 @@ def __infer_group_stmt(
     infer_multiplicity(ir.subject, scope_tree=scope_tree, ctx=ctx)
     for binding, _ in ir.using.values():
         infer_multiplicity(binding, scope_tree=scope_tree, ctx=ctx)
-    result_mult = _infer_stmt_multiplicity(ir, scope_tree=scope_tree, ctx=ctx)
+    _infer_stmt_multiplicity(ir, scope_tree=scope_tree, ctx=ctx)
 
     for clause in (ir.orderby or ()):
         new_scope = inf_utils.get_set_scope(clause.expr, scope_tree, ctx=ctx)
@@ -820,10 +815,12 @@ def __infer_group_stmt(
         if set:
             infer_multiplicity(set, scope_tree=scope_tree, ctx=ctx)
 
-    if result_mult.fresh_free_object:
-        return result_mult
-    else:
-        return DUPLICATE
+    # N.B: The type is usually a free object (except in some
+    # internal tests), which are always unique
+    if irtyputils.is_free_object(ir.typeref):
+        return UNIQUE
+
+    return DUPLICATE
 
 
 @_infer_multiplicity.register

@@ -29,7 +29,6 @@ import edgedb
 from edb import errors
 from edb.common import assert_data_shape
 from edb.testbase import server as tb
-from edb.tools import test
 
 
 class value(typing.NamedTuple):
@@ -185,7 +184,6 @@ def get_test_items(**flags):
 
 
 class TestExpressions(tb.QueryTestCase):
-    NO_FACTOR = True
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
@@ -2610,7 +2608,10 @@ class TestExpressions(tb.QueryTestCase):
         # syntactically legal (see test_edgeql_syntax_constants_09),
         # but will fail to resolve to anything.
         with self.assertRaisesRegex(
-                edgedb.QueryError, r'could not resolve partial path'):
+            edgedb.QueryError,
+            r'could not resolve partial path',
+            _hint=None
+        ):
             await self.con.execute(r"""
                 SELECT .1;
             """)
@@ -8832,6 +8833,7 @@ aa \
             [5],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_expr_alias_01(self):
         await self.assert_query_result(
             r"""
@@ -8844,6 +8846,7 @@ aa \
             [2],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_expr_alias_02(self):
         await self.assert_query_result(
             r"""
@@ -8989,110 +8992,6 @@ aa \
                 UNION {x, x + 2};
             """,
             {2, 3, 4, 5},
-        )
-
-    @test.not_implemented('GROUP statement is not yet implemented')
-    async def test_edgeql_expr_group_01(self):
-        await self.assert_query_result(
-            r"""
-                WITH I := {1, 2, 3, 4}
-                GROUP I
-                USING _ := I % 2 = 0
-                BY _
-                INTO I
-                UNION _r := (
-                    values := array_agg(I ORDER BY I)
-                ) ORDER BY _r.values;
-            """,
-            [
-                {'values': [1, 3]},
-                {'values': [2, 4]}
-            ]
-        )
-
-    @test.not_implemented('GROUP statement is not yet implemented')
-    async def test_edgeql_expr_group_02(self):
-        await self.assert_query_result(
-            r'''
-                # handle a number of different aliases
-                WITH x := {(1, 2), (3, 4), (4, 2)}
-                GROUP y := x
-                USING _ := y.1
-                BY _
-                INTO y
-                UNION array_agg(y.0 ORDER BY y.0);
-            ''',
-            [[1, 4], [3]],
-            sort=True
-        )
-
-    @test.not_implemented('GROUP statement is not yet implemented')
-    async def test_edgeql_expr_group_03(self):
-        await self.assert_query_result(
-            r'''
-                WITH x := {(1, 2), (3, 4), (4, 2)}
-                GROUP x
-                USING _ := x.1
-                BY _
-                INTO x
-                UNION array_agg(x.0 ORDER BY x.0);
-            ''',
-            [[1, 4], [3]],
-            sort=True
-        )
-
-    @test.not_implemented('GROUP statement is not yet implemented')
-    async def test_edgeql_expr_group_04(self):
-        await self.assert_query_result(
-            r'''
-                WITH x := {(1, 2), (3, 4), (4, 2)}
-                GROUP x
-                USING B := x.1
-                BY B
-                INTO x
-                UNION (B, array_agg(x.0 ORDER BY x.0))
-                ORDER BY
-                    B;
-            ''',
-            [[2, [1, 4]], [4, [3]]],
-        )
-
-    @test.not_implemented('GROUP statement is not yet implemented')
-    async def test_edgeql_expr_group_05(self):
-        await self.assert_query_result(
-            r'''
-                # handle the case where the value to be computed depends
-                # on both, the grouped subset and the original set
-                WITH
-                    x1 := {(1, 0), (1, 0), (1, 0), (2, 0), (3, 0), (3, 0)},
-                    x2 := x1
-                GROUP y := x1
-                USING z := y.0
-                BY z
-                INTO y
-                UNION (
-                    # we expect that count(x1) and count(x2) will be
-                    # identical in this context, whereas count(y) will
-                    # represent the size of each subset
-                    z, count(y), count(x1), count(x2)
-                )
-                ORDER BY z;
-            ''',
-            [[1, 3, 6, 6], [2, 1, 6, 6], [3, 2, 6, 6]]
-        )
-
-    @test.not_implemented('GROUP statement is not yet implemented')
-    async def test_edgeql_expr_group_06(self):
-        await self.assert_query_result(
-            r'''
-                GROUP X := {1, 1, 1, 2, 3, 3}
-                USING y := X
-                BY y
-                INTO y
-                UNION (y, count(X))
-                ORDER BY y;
-            ''',
-            [[1, 3], [2, 1], [3, 2]]
         )
 
     async def test_edgeql_expr_slice_01(self):
@@ -9566,9 +9465,9 @@ aa \
         await self.assert_query_result(
             """
                 SELECT assert_distinct((
-                    (SELECT Issue FILTER .references[IS File].name = "File 1")
+                    (SELECT Issue FILTER "File 1" IN .references[IS File].name)
                     UNION
-                    (SELECT Issue FILTER .references[IS File].name = "File 2")
+                    (SELECT Issue FILTER "File 2" IN .references[IS File].name)
                 )) {
                     number
                 }
@@ -10610,3 +10509,27 @@ aa \
                     "Foo' does not exist",
                 ):
                     await self.con.execute(query)
+
+    async def test_edgeql_expr_str_interpolation_01(self):
+        await self.assert_query_result(
+            r'''
+                select "1 + 1 = \(1 + 1)"
+            ''',
+            ['1 + 1 = 2'],
+        )
+
+        await self.assert_query_result(
+            r'''
+                select ("1 + 1 = \(1 + 1)")
+            ''',
+            ['1 + 1 = 2'],
+        )
+
+        # Have some more fun. Nest it a bit.
+        await self.assert_query_result(
+            r'''select "asdf \(str_reverse("1234") ++
+"[\(sum({1,2,3}))]")! count(User)=\
+\(
+count(User))" ++ "!";''',
+            ['asdf 4321[6]! count(User)=0!'],
+        )

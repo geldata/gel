@@ -741,12 +741,8 @@ class TestEdgeQLVolatility(tb.QueryTestCase):
                 SELECT (O.m, O.m);
             """)
 
-            self.assertEqual(len(res), 3)
-            for row in res:
-                self.assertEqual(row[0], row[1])
-
-            # Make sure it is really volatile
-            self.assertNotEqual(res[0][0], res[1][0])
+            self.assertEqual(len(res), 9)
+            self._check_crossproduct(res)
 
     async def test_edgeql_volatility_select_hard_objects_01b(self):
         for query in self._test_loop():
@@ -756,9 +752,8 @@ class TestEdgeQLVolatility(tb.QueryTestCase):
                 SELECT ((SELECT O.m), O.m);
             """)
 
-            self.assertEqual(len(res), 3)
-            for row in res:
-                self.assertEqual(row[0], row[1])
+            self.assertEqual(len(res), 9)
+            self._check_crossproduct(res)
 
     async def test_edgeql_volatility_select_hard_objects_02a(self):
         for query in self._test_loop():
@@ -788,9 +783,9 @@ class TestEdgeQLVolatility(tb.QueryTestCase):
                 SELECT (O {m}, O {m});
             """)
 
-            self.assertEqual(len(res), 3)
-            for row in res:
-                self.assertEqual(row[0]['m'], row[1]['m'])
+            self.assertEqual(len(res), 9)
+            self._check_crossproduct(
+                [(row[0]['m'], row[1]['m']) for row in res])
 
     async def test_edgeql_volatility_select_hard_objects_04a(self):
         # TODO: this, but wrapped in DISTINCT
@@ -858,9 +853,9 @@ class TestEdgeQLVolatility(tb.QueryTestCase):
                 SELECT ((O {m}), (O {m}));
             """)
 
-            self.assertEqual(len(res), 3)
-            for row in res:
-                self.assertEqual(row[0]['m'], row[1]['m'])
+            self.assertEqual(len(res), 9)
+            self._check_crossproduct(
+                [(tuple(row[0]['m']), tuple(row[1]['m'])) for row in res])
 
     async def test_edgeql_volatility_select_hard_objects_08a(self):
         for query in self._test_loop(single=True):
@@ -1081,12 +1076,6 @@ class TestEdgeQLVolatility(tb.QueryTestCase):
                 };
             """)
 
-            cs = {x['n']: [] for x in res['a']}
-            for rc in res['c']:
-                self.assertEqual(rc[1]['n'], rc[2]['n'])
-                self.assertEqual(rc[1]['x'], rc[2]['x'])
-                cs[rc[0]].append([rc[1]['n'], rc[1]['x']])
-
             for ra, rb in zip(res['a'], res['b']):
                 self.assertLessEqual(len(ra['friends']), 4)
 
@@ -1097,11 +1086,6 @@ class TestEdgeQLVolatility(tb.QueryTestCase):
 
                 self.assertEqual(
                     sorted([x['n'], x['x']] for x in ra['friends']),
-                    sorted(rb['friends_tuples']),
-                )
-
-                self.assertEqual(
-                    sorted(cs[ra['n']]),
                     sorted(rb['friends_tuples']),
                 )
 
@@ -1259,7 +1243,7 @@ class TestEdgeQLVolatility(tb.QueryTestCase):
         await self.assert_query_result(r'''
             WITH X := ((SELECT Obj { m := next() }),),
                  Y := ((SELECT Obj { m := next() }),),
-            SELECT count((SELECT (X, Y) FILTER X = Y));
+            SELECT count((SELECT (X, Y) FILTER .0 = .1));
         ''', [
             3,
         ])
@@ -1267,7 +1251,7 @@ class TestEdgeQLVolatility(tb.QueryTestCase):
         await self.assert_query_result(r'''
             WITH X := ((SELECT Obj { m := next() }),),
                  Y := ((SELECT Obj { m := next() }),),
-            SELECT count((SELECT (X, Y) FILTER X < Y));
+            SELECT count((SELECT (X, Y) FILTER .0 < .1));
         ''', [
             3,
         ])
@@ -1275,7 +1259,7 @@ class TestEdgeQLVolatility(tb.QueryTestCase):
         await self.assert_query_result(r'''
             WITH X := ((SELECT Obj { m := next() }),),
                  Y := (Obj,),
-            SELECT count((SELECT (X, Y) FILTER X < Y));
+            SELECT count((SELECT (X, Y) FILTER .0 < .1));
         ''', [
             3,
         ])
@@ -1361,131 +1345,6 @@ class TestEdgeQLVolatility(tb.QueryTestCase):
             {"m": 2, "n": 2},
             {"m": 2, "n": 3},
         ])
-
-    async def test_edgeql_volatility_hack_03a(self):
-        await self.assert_query_result(r'''
-            WITH X := (WITH x := {1,2}, SELECT (x, Obj {m := x})).1
-            SELECT X { n, m } ORDER BY .m THEN .n;
-        ''', [
-            {"m": 1, "n": 1},
-            {"m": 1, "n": 2},
-            {"m": 1, "n": 3},
-            {"m": 2, "n": 1},
-            {"m": 2, "n": 2},
-            {"m": 2, "n": 3},
-        ])
-
-    async def test_edgeql_volatility_hack_03b(self):
-        await self.assert_query_result(r'''
-            WITH X := (WITH x := {1,2}, SELECT (x, Obj {m := x}).1)
-            SELECT X { n, m } ORDER BY .m THEN .n;
-        ''', [
-            {"m": 1, "n": 1},
-            {"m": 1, "n": 2},
-            {"m": 1, "n": 3},
-            {"m": 2, "n": 1},
-            {"m": 2, "n": 2},
-            {"m": 2, "n": 3},
-        ])
-
-    async def test_edgeql_volatility_hack_04a(self):
-        await self.assert_query_result(r'''
-            SELECT (WITH x := {1,2}, SELECT (x, Obj {m := x})).1
-            { n, m } ORDER BY .m THEN .n;
-        ''', [
-            {"m": 1, "n": 1},
-            {"m": 1, "n": 2},
-            {"m": 1, "n": 3},
-            {"m": 2, "n": 1},
-            {"m": 2, "n": 2},
-            {"m": 2, "n": 3},
-        ])
-
-    async def test_edgeql_volatility_hack_04b(self):
-        await self.assert_query_result(r'''
-            SELECT (WITH x := {1,2}, SELECT (x, Obj {m := x}).1)
-            { n, m } ORDER BY .m THEN .n;
-        ''', [
-            {"m": 1, "n": 1},
-            {"m": 1, "n": 2},
-            {"m": 1, "n": 3},
-            {"m": 2, "n": 1},
-            {"m": 2, "n": 2},
-            {"m": 2, "n": 3},
-        ])
-
-    async def test_edgeql_volatility_hack_05a(self):
-        await self.assert_query_result(r'''
-            SELECT (WITH x := {(SELECT Tgt FILTER .n < 3)},
-                    SELECT (x.n, Obj {m := x.n})).1
-            { n, m } ORDER BY .m THEN .n;
-        ''', [
-            {"m": 1, "n": 1},
-            {"m": 1, "n": 2},
-            {"m": 1, "n": 3},
-            {"m": 2, "n": 1},
-            {"m": 2, "n": 2},
-            {"m": 2, "n": 3},
-        ])
-
-    async def test_edgeql_volatility_hack_05b(self):
-        await self.assert_query_result(r'''
-            WITH X :=  (WITH x := {(SELECT Tgt FILTER .n < 3)},
-                        SELECT (x.n, Obj {m := x.n})).1,
-            SELECT X { n, m } ORDER BY .m THEN .n;
-        ''', [
-            {"m": 1, "n": 1},
-            {"m": 1, "n": 2},
-            {"m": 1, "n": 3},
-            {"m": 2, "n": 1},
-            {"m": 2, "n": 2},
-            {"m": 2, "n": 3},
-        ])
-
-    async def test_edgeql_volatility_for_like_hard_01(self):
-        for query in self._test_loop():
-            res = await query("""
-                WITH
-                    O := (SELECT Obj { x := next() }),
-                    Z := (O, (SELECT O { n, x, y := -.x })).1
-                SELECT Z { n, x, y };
-            """)
-
-            self.assertEqual(len(res), 3)
-            self.assertNotEqual(res[0]['x'], res[1]['x'])
-            for obj in res:
-                self.assertEqual(obj['x'], -obj['y'])
-
-    @test.xerror("column definition list is only allowed ...")
-    async def test_edgeql_volatility_for_like_hard_02(self):
-        # Weird stuff is happening here!
-        # 1. Putting basically anything other than O as the 1st tuple el works
-        # 2. If we reorder the arguments it works
-        # 3. If we add a real shape to the nested O, it works
-        for query in self._test_loop():
-            res = await query("""
-                WITH
-                    O := (SELECT Obj { x := next() }),
-                    Z := (O, ({ o := O })).1
-                SELECT Z { o: {n, x} };
-            """)
-
-            self.assertEqual(len(res), 3)
-            self.assertNotEqual(res[0]['o']['x'], res[1]['o']['x'])
-
-    @test.xerror("column definition list is only allowed ...")
-    async def test_edgeql_volatility_for_like_hard_03(self):
-        for query in self._test_loop():
-            res = await query("""
-                WITH
-                    O := (SELECT Obj { x := next() }),
-                    Za := (O, ({ o := O })),
-                    Z := Za.1
-                SELECT Z { o: {n, x} };
-            """)
-
-            self.assertEqual(len(res), 3)
-            self.assertNotEqual(res[0]['o']['x'], res[1]['o']['x'])
 
     async def test_edgeql_volatility_for_hard_01(self):
         for query in self._test_loop():

@@ -24,7 +24,6 @@ from typing import (
     Optional,
     ItemsView,
     Mapping,
-    List,
     NamedTuple,
     NoReturn,
     Sequence,
@@ -150,6 +149,7 @@ class ReloadTrigger(enum.StrEnum):
     3. Multi-tenant config file (server config)
     4. Readiness state (server or tenant config)
     5. JWT sub allowlist and revocation list (server or tenant config)
+    6. The TOML config file (server or tenant config)
     """
 
     Default = "default"
@@ -203,8 +203,8 @@ DEFAULT_AUTH_METHODS = ServerAuthMethods({
 
 
 class BackendCapabilitySets(NamedTuple):
-    must_be_present: List[pgsql_params.BackendCapabilities]
-    must_be_absent: List[pgsql_params.BackendCapabilities]
+    must_be_present: list[pgsql_params.BackendCapabilities]
+    must_be_absent: list[pgsql_params.BackendCapabilities]
 
 
 class CompilerPoolMode(enum.StrEnum):
@@ -265,9 +265,10 @@ class ServerConfig(NamedTuple):
     disable_dynamic_system_config: bool
     reload_config_files: ReloadTrigger
     net_worker_mode: NetWorkerMode
+    config_file: Optional[pathlib.Path]
 
     startup_script: Optional[StartupScript]
-    status_sinks: List[Callable[[str], None]]
+    status_sinks: list[Callable[[str], None]]
 
     tls_cert_file: pathlib.Path
     tls_key_file: pathlib.Path
@@ -289,6 +290,8 @@ class ServerConfig(NamedTuple):
     backend_capability_sets: BackendCapabilitySets
 
     admin_ui: bool
+
+    cors_always_allowed_origins: Optional[str]
 
 
 class PathPath(click.Path):
@@ -412,11 +415,11 @@ def compute_default_max_backend_connections() -> int:
 
 def adjust_testmode_max_connections(max_conns):
     # Some test cases will start a second EdgeDB server (default
-    # max_backend_connections=10), so we should reserve some backend
+    # max_backend_connections=5), so we should reserve some backend
     # connections for that. This is ideally calculated upon the edb test -j
     # option, but that also depends on the total available memory. We are
     # hard-coding 15 reserved connections here for simplicity.
-    return max(1, max_conns // 2, max_conns - 15)
+    return max(1, max_conns // 2, max_conns - 30)
 
 
 def _validate_compiler_pool_size(ctx, param, value):
@@ -685,6 +688,14 @@ server_options = typeutils.chain_decorators([
         envvar="GEL_SERVER_MULTITENANT_CONFIG_FILE",
         cls=EnvvarResolver,
         hidden=True,
+        help='Start the server in multi-tenant mode, with reloadable tenants '
+             'configured in the given file. Each tenant must have a unique '
+             'SNI name as the key to route the traffic correctly, as well as '
+             'a dedicated backend DSN to host the tenant data. See edb/server/'
+             'multitenant.py for config file format. All tenants share the '
+             'same compiler pool, thus the same stdlib. So if any of the '
+             'backends contains test-mode schema, the server should be '
+             'started with --testmode to handle them properly.',
     ),
     click.option(
         '-l', '--log-level',
@@ -972,8 +983,9 @@ server_options = typeutils.chain_decorators([
         cls=EnvvarResolver,
         hidden=True,
         help='Specifies a path to a file containing a public key in PEM '
-             'format used to verify JWT signatures. The file could also '
-             'contain a private key to sign JWT for local testing.'),
+             'or JSON JWK format used to verify JWT signatures. The file may '
+             'also contain a private key to sign JWT tokens for '
+             'SCRAM-over-HTTP.'),
     click.option(
         '--jwe-key-file',
         type=PathPath(),
@@ -1080,6 +1092,16 @@ server_options = typeutils.chain_decorators([
         default='default',
         help='Enable admin UI.'),
     click.option(
+        '--cors-always-allowed-origins',
+        envvar="GEL_SERVER_CORS_ALWAYS_ALLOWED_ORIGINS",
+        cls=EnvvarResolver,
+        hidden=True,
+        help='A comma separated list of origins to always allow CORS requests '
+             'from regardless of the `cors_allow_orgin` config. The `*` '
+             'character can be used as a wildcard. Intended for use by cloud '
+             'to always allow the cloud UI to make requests to the instance.'
+    ),
+    click.option(
         '--disable-dynamic-system-config', is_flag=True,
         envvar="GEL_SERVER_DISABLE_DYNAMIC_SYSTEM_CONFIG",
         cls=EnvvarResolver,
@@ -1105,6 +1127,13 @@ server_options = typeutils.chain_decorators([
         hidden=True,
         default='default',
         help='Controls how the std::net workers work.',
+    ),
+    click.option(
+        "--config-file", type=PathPath(), metavar="PATH",
+        envvar="GEL_SERVER_CONFIG_FILE",
+        cls=EnvvarResolver,
+        help='Path to a TOML file to configure the server.',
+        hidden=True,
     ),
 ])
 
@@ -1534,6 +1563,7 @@ def parse_args(**kwargs: Any):
             "readiness_state_file",
             "jwt_sub_allowlist_file",
             "jwt_revocation_list_file",
+            "config_file",
         ):
             if kwargs.get(name):
                 opt = "--" + name.replace("_", "-")

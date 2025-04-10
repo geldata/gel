@@ -95,7 +95,7 @@ cdef class Database:
         readonly bytes user_schema_pickle
         readonly object reflection_cache
         readonly object backend_ids
-        readonly object backend_id_to_name
+        readonly object backend_oid_to_id
         readonly object extensions
         readonly object _feature_used_metrics
 
@@ -104,6 +104,7 @@ cdef class Database:
     cdef _new_view(self, query_cache, protocol_version)
     cdef _remove_view(self, view)
     cdef _observe_auth_ext_config(self)
+    cdef _set_backend_ids(self, types)
     cdef _update_backend_ids(self, new_types)
     cdef _set_extensions(
         self,
@@ -237,6 +238,7 @@ cdef class DatabaseConnectionView:
 
     cdef get_system_config(self)
     cpdef get_compilation_system_config(self)
+    cdef config_lookup(self, name)
 
     cdef set_modaliases(self, new_aliases)
     cpdef get_modaliases(self)
@@ -246,6 +248,7 @@ cdef class DatabaseConnectionView:
     cdef describe_state(self)
     cdef encode_state(self)
     cdef decode_state(self, type_id, data)
+    cdef bint needs_commit_after_state_sync(self)
 
     cdef check_capabilities(
         self,

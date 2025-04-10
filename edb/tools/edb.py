@@ -57,6 +57,8 @@ def server(version=False, **kwargs):
     os.environ['EDGEDB_DEBUG_SERVER'] = '1'
     debug.init_debug_flags()
     kwargs['security'] = srv_args.ServerSecurityMode.InsecureDevMode
+    if kwargs['cors_always_allowed_origins'] is None:
+        kwargs['cors_always_allowed_origins'] = "http://localhost:*"
     srv_main.server_main(**kwargs)
 
 
@@ -88,5 +90,7 @@ from . import ast_inheritance_graph  # noqa
 from . import parser_demo  # noqa
 from . import ls_forbidden_functions  # noqa
 from . import redo_metaschema  # noqa
+from . import ls  # noqa
+from . import railroad_diagram  # noqa
 from .profiling import cli as prof_cli  # noqa
 from .experimental_interpreter import edb_entry # noqa

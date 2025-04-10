@@ -20,7 +20,6 @@
 """Implementation of DESCRIBE ... CONFIG"""
 
 from __future__ import annotations
-from typing import Dict, List
 
 import textwrap
 
@@ -51,7 +50,9 @@ def compile_describe_config(
         ctx.env.schema, scope, ctx.env.options.testmode)
     config_ast = qlparser.parse_fragment(config_edgeql)
 
-    return dispatch.compile(config_ast, ctx=ctx)
+    with ctx.new() as subctx:
+        subctx.allow_factoring()
+        return dispatch.compile(config_ast, ctx=subctx)
 
 
 def _describe_config(
@@ -188,6 +189,16 @@ def _describe_config_inner(
         condition = f'EXISTS json_get(conf, {ql(fpn)})'
         if is_internal:
             condition = f'({condition}) AND testmode'
+        # For INSTANCE, filter out configs that are set to the default.
+        # This is because we currently implement the defaults by
+        # setting them with CONFIGURE INSTANCE, so we can't detect
+        # defaults by seeing what is unset.
+        if (
+            scope == qltypes.ConfigScope.INSTANCE
+            and (default := p.get_default(schema))
+        ):
+            condition = f'({condition}) AND {psource} ?!= ({default.text})'
+
         items.append(f"(\n{item}\n    IF {condition} ELSE ''\n  )")
 
     return items
@@ -375,7 +386,7 @@ def _describe_config_object(
     valtype: s_objtypes.ObjectType,
     level: int,
     scope: qltypes.ConfigScope,
-) -> Dict[s_name.QualName, List[str]]:
+) -> dict[s_name.QualName, list[str]]:
     cfg_types = [valtype]
     cfg_types.extend(cfg_types[0].descendants(schema))
     layouts = {}

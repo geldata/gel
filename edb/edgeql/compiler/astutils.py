@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, Dict, List, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from edb.common import ast
 from edb.common import view_patterns
@@ -120,13 +120,13 @@ def extend_path(expr: qlast.Expr, field: str) -> qlast.Path:
 
 @dataclass
 class Params:
-    cast_params: List[
-        Tuple[qlast.TypeCast, Dict[Optional[str], str]]
+    cast_params: list[
+        tuple[qlast.TypeCast, dict[Optional[str], str]]
     ] = field(default_factory=list)
-    shaped_params: List[
-        Tuple[qlast.Parameter, qlast.Shape]
+    shaped_params: list[
+        tuple[qlast.Parameter, qlast.Shape]
     ] = field(default_factory=list)
-    loose_params: List[qlast.Parameter] = field(default_factory=list)
+    loose_params: list[qlast.Parameter] = field(default_factory=list)
 
 
 class FindParams(ast.NodeVisitor):
@@ -134,7 +134,7 @@ class FindParams(ast.NodeVisitor):
 
     The annoying bit is that we also need all the modaliases.
     """
-    def __init__(self, modaliases: Dict[Optional[str], str]) -> None:
+    def __init__(self, modaliases: dict[Optional[str], str]) -> None:
         super().__init__()
         self.params: Params = Params()
         self.modaliases = modaliases
@@ -180,7 +180,7 @@ class FindParams(ast.NodeVisitor):
 
 
 def find_parameters(
-    ql: qlast.Base, modaliases: Dict[Optional[str], str]
+    ql: qlast.Base, modaliases: dict[Optional[str], str]
 ) -> Params:
     """Get all query parameters"""
     v = FindParams(modaliases)

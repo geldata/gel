@@ -31,7 +31,7 @@ from __future__ import annotations
 import collections
 from types import GenericAlias, UnionType  # type: ignore
 from typing import _GenericAlias  # type: ignore
-from typing import Any, ClassVar, Generic, Optional, Tuple, TypeVar, Union
+from typing import Any, ClassVar, Generic, Optional, TypeVar, Union
 
 
 __all__ = [
@@ -75,7 +75,7 @@ def is_union_type(t) -> bool:
 
 def is_tuple_type(t) -> bool:
     return (
-        t is Tuple
+        t is tuple
         or _is_genericalias(t)
         and t.__origin__ is tuple
         or isinstance(t, type)
@@ -98,11 +98,11 @@ def get_args(t, evaluate: bool = True) -> Any:
     return ()
 
 
-def get_generic_bases(t) -> Tuple[type, ...]:
+def get_generic_bases(t) -> tuple[type, ...]:
     return getattr(t, "__orig_bases__", ())
 
 
-def get_parameters(t) -> Tuple[TypeVar, ...]:
+def get_parameters(t) -> tuple[TypeVar, ...]:
     if (
         _is_genericalias(t)
         or isinstance(t, type)

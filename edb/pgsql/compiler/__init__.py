@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Mapping, Dict, List, TYPE_CHECKING
+from typing import Optional, Mapping, TYPE_CHECKING
 from dataclasses import dataclass
 
 from edb import errors
@@ -53,9 +53,9 @@ class CompileResult:
 
     env: context.Environment
 
-    argmap: Dict[str, pgast.Param]
+    argmap: dict[str, pgast.Param]
 
-    detached_params: Optional[List[Tuple[str, ...]]] = None
+    detached_params: Optional[list[tuple[str, ...]]] = None
 
 
 def compile_ir_to_sql_tree(
@@ -69,14 +69,14 @@ def compile_ir_to_sql_tree(
     expected_cardinality_one: bool = False,
     is_explain: bool = False,
     external_rvars: Optional[
-        Mapping[Tuple[irast.PathId, pgce.PathAspect], pgast.PathRangeVar]
+        Mapping[tuple[irast.PathId, pgce.PathAspect], pgast.PathRangeVar]
     ] = None,
     external_rels: Optional[
         Mapping[
             irast.PathId,
-            Tuple[
+            tuple[
                 pgast.BaseRelation | pgast.CommonTableExpr,
-                Tuple[pgce.PathAspect, ...]
+                tuple[pgce.PathAspect, ...]
             ],
         ]
     ] = None,
@@ -94,6 +94,7 @@ def compile_ir_to_sql_tree(
         # Transform to sql tree
         query_params = []
         query_globals = []
+        server_param_conversion_params = []
         type_rewrites = {}
         triggers: tuple[tuple[irast.Trigger, ...], ...] = ()
 
@@ -102,6 +103,9 @@ def compile_ir_to_sql_tree(
             scope_tree = ir_expr.scope_tree
             query_params = list(ir_expr.params)
             query_globals = list(ir_expr.globals)
+            server_param_conversion_params = (
+                ir_expr.server_param_conversion_params
+            )
             type_rewrites = ir_expr.type_rewrites
             singletons = ir_expr.singletons
             triggers = ir_expr.triggers
@@ -156,7 +160,9 @@ def compile_ir_to_sql_tree(
             ctx.path_scope[sing] = ctx.rel
         if external_rels:
             ctx.external_rels = external_rels
-        clauses.populate_argmap(query_params, query_globals, ctx=ctx)
+        clauses.populate_argmap(
+            query_params, query_globals, server_param_conversion_params, ctx=ctx
+        )
 
         qtree = dispatch.compile(ir_expr, ctx=ctx)
         dml.compile_triggers(triggers, qtree, ctx=ctx)
@@ -175,7 +181,13 @@ def compile_ir_to_sql_tree(
             detached_params_idx = {
                 ctx.argmap[param.name].index: (
                     pgtypes.pg_type_from_ir_typeref(
-                        param.ir_type.base_type or param.ir_type))
+                        param.ir_type.base_type or param.ir_type,
+                        # Needs serialized=True so types without their own
+                        # binary encodings (like postgis::box2d) get mapped
+                        # to the real underlying type.
+                        serialized=True,
+                    )
+                )
                 for param in ctx.env.query_params
                 if not param.sub_params
             }
@@ -202,9 +214,9 @@ def compile_ir_to_sql_tree(
 
 def new_external_rvar(
     *,
-    rel_name: Tuple[str, ...],
+    rel_name: tuple[str, ...],
     path_id: irast.PathId,
-    outputs: Mapping[Tuple[irast.PathId, Tuple[pgce.PathAspect, ...]], str],
+    outputs: Mapping[tuple[irast.PathId, tuple[pgce.PathAspect, ...]], str],
 ) -> pgast.RelRangeVar:
     """Construct a ``RangeVar`` instance given a relation name and a path id.
 
@@ -261,7 +273,7 @@ def new_external_rvar_as_subquery(
 
 def new_external_rel(
     *,
-    rel_name: Tuple[str, ...],
+    rel_name: tuple[str, ...],
     path_id: irast.PathId,
 ) -> pgast.Relation:
     if len(rel_name) == 1:

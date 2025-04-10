@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Optional, List
+from typing import Optional
 
 import copy
 import dataclasses
@@ -51,11 +51,11 @@ class ResolvedSQL:
     command_complete_tag: Optional[dbstate.CommandCompleteTag]
 
     # query parameters
-    params: List[dbstate.SQLParam]
+    params: list[dbstate.SQLParam]
 
 
 def resolve(
-    query: pgast.Base,
+    query: pgast.Query | pgast.CopyStmt,
     schema: s_schema.Schema,
     options: context.Options,
 ) -> ResolvedSQL:
@@ -77,7 +77,19 @@ def resolve(
     command.init_external_params(query, ctx)
     top_level_ctes = command.compile_dml(query, ctx=ctx)
 
-    resolved = dispatch.resolve(query, ctx=ctx)
+    resolved: pgast.Base
+    if isinstance(query, pgast.Query):
+        resolved, resolved_table = dispatch.resolve_relation(query, ctx=ctx)
+    elif isinstance(query, pgast.CopyStmt):
+        resolved = dispatch.resolve(query, ctx=ctx)
+        resolved_table = None
+    else:
+        raise AssertionError()
+
+    if limit := ctx.options.implicit_limit:
+        resolved = apply_implicit_limit(resolved, limit, resolved_table, ctx)
+
+    command.fini_external_params(ctx)
 
     if top_level_ctes:
         assert isinstance(resolved, pgast.Query)
@@ -117,17 +129,33 @@ def resolve(
 
     if options.include_edgeql_io_format_alternative:
         edgeql_output_format_ast = copy.copy(resolved)
-        if isinstance(edgeql_output_format_ast, pgast.SelectStmt):
-            edgeql_output_format_ast.target_list = [
-                pgast.ResTarget(
-                    val=pgast.RowExpr(
-                        args=[
-                            rt.val
-                            for rt in edgeql_output_format_ast.target_list
-                        ]
+        if e := as_plain_select(edgeql_output_format_ast, resolved_table, ctx):
+            # Turn the query into one that returns a ROW.
+            #
+            # We need to do this by injecting a new query and putting
+            # the old one in its FROM clause, since things like
+            # DISTINCT/ORDER BY care about what exact columns are in
+            # the target list.
+            columns = []
+            for i, target in enumerate(e.target_list):
+                if not target.name:
+                    e.target_list[i] = target = target.replace(name=f'__i~{i}')
+                    assert target.name
+                columns.append(pgast.ColumnRef(name=(target.name,)))
+
+            edgeql_output_format_ast = pgast.SelectStmt(
+                target_list=[
+                    pgast.ResTarget(
+                        val=expr.construct_row_expr(columns, ctx=ctx)
                     )
-                )
-            ]
+                ],
+                from_clause=[pgast.RangeSubselect(
+                    subquery=e,
+                    alias=pgast.Alias(aliasname='r'),
+                )],
+                ctes=e.ctes,
+            )
+            e.ctes = []
     else:
         edgeql_output_format_ast = None
 
@@ -137,3 +165,52 @@ def resolve(
         command_complete_tag=command_complete_tag,
         params=ctx.query_params,
     )
+
+
+def as_plain_select(
+    query: pgast.Base,
+    table: Optional[context.Table],
+    ctx: context.ResolverContextLevel,
+) -> Optional[pgast.SelectStmt]:
+    if not isinstance(query, pgast.Query):
+        return None
+    assert table
+
+    if (
+        isinstance(query, pgast.SelectStmt)
+        and not query.op
+        and not query.values
+    ):
+        return query
+
+    table.alias = "t"
+    return pgast.SelectStmt(
+        from_clause=[
+            pgast.RangeSubselect(
+                subquery=query,
+                alias=pgast.Alias(aliasname="t"),
+            )
+        ],
+        target_list=[
+            pgast.ResTarget(
+                name=f'column{index + 1}',
+                val=expr.resolve_column_kind(table, c.kind, ctx=ctx),
+            )
+            for index, c in enumerate(table.columns)
+        ],
+    )
+
+
+def apply_implicit_limit(
+    expr: pgast.Base,
+    limit: int,
+    table: Optional[context.Table],
+    ctx: context.ResolverContextLevel,
+) -> pgast.Base:
+    e = as_plain_select(expr, table, ctx)
+    if not e:
+        return expr
+
+    if e.limit_count is None:
+        e.limit_count = pgast.NumericConstant(val=str(limit))
+    return e

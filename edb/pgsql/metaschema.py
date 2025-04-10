@@ -24,14 +24,12 @@ from typing import (
     Callable,
     Optional,
     Protocol,
-    Tuple,
     Iterable,
-    List,
-    Set,
     Sequence,
     cast,
 )
 
+import functools
 import json
 import re
 
@@ -183,32 +181,6 @@ class InstDataTable(dbops.Table):
                 ),
             ]),
         )
-
-
-class DMLDummyTable(dbops.Table):
-    """A empty dummy table used when we need to emit no-op DML.
-
-    This is used by scan_check_ctes in the pgsql compiler to
-    force the evaluation of error checking.
-    """
-    def __init__(self) -> None:
-        super().__init__(name=('edgedb', '_dml_dummy'))
-
-        self.add_columns([
-            dbops.Column(name='id', type='int8'),
-            dbops.Column(name='flag', type='bool'),
-        ])
-
-        self.add_constraint(
-            dbops.UniqueConstraint(
-                table_name=('edgedb', '_dml_dummy'),
-                columns=['id'],
-            ),
-        )
-
-    SETUP_QUERY = '''
-        INSERT INTO edgedb._dml_dummy VALUES (0, false)
-    '''
 
 
 class QueryCacheTable(dbops.Table):
@@ -1252,7 +1224,7 @@ class GetDatabaseFrontendNameFunction(trampoline.VersionedFunction):
         THEN
             substring(db_name, position('_' in db_name) + 1)
         ELSE
-            'edgedb'
+            'main'
         END
     '''
 
@@ -1746,11 +1718,11 @@ class AssertJSONTypeFunction(trampoline.VersionedFunction):
                     'wrong_object_type',
                     msg => coalesce(
                         msg,
-                        (
-                            'expected JSON '
-                            || array_to_string(typenames, ' or ')
-                            || '; got JSON '
-                            || coalesce(jsonb_typeof(val), 'UNKNOWN')
+                        format(
+                            'expected JSON %s; got JSON %s: %s',
+                            array_to_string(typenames, ' or '),
+                            coalesce(jsonb_typeof(val), 'UNKNOWN'),
+                            val::text
                         )
                     ),
                     detail => detail
@@ -3391,7 +3363,7 @@ class InterpretConfigValueToJsonFunction(trampoline.VersionedFunction):
       - for memory size: we always convert to kilobytes;
       - already unitless numbers are left as is.
 
-    See https://www.postgresql.org/docs/12/config-setting.html
+    See https://www.postgresql.org/docs/current/config-setting.html
     for information about the units Postgres config system has.
     """
 
@@ -3443,6 +3415,53 @@ class InterpretConfigValueToJsonFunction(trampoline.VersionedFunction):
         )
 
 
+class PostgresJsonConfigValueToFrontendConfigValueFunction(
+    trampoline.VersionedFunction,
+):
+    """Convert a Postgres config value to frontend config value.
+
+    Most values are retained as-is, but some need translation, which
+    is implemented as a to_frontend_expr() on the corresponding
+    setting ScalarType.
+    """
+
+    def __init__(self, config_spec: edbconfig.Spec) -> None:
+        variants_list = []
+        for setting in config_spec.values():
+            if (
+                setting.backend_setting
+                and isinstance(setting.type, type)
+                and issubclass(setting.type, statypes.ScalarType)
+            ):
+                conv_expr = setting.type.to_frontend_expr('"value"->>0')
+                if conv_expr is not None:
+                    variants_list.append(f"""
+                        WHEN {ql(setting.backend_setting)}
+                        THEN to_jsonb({conv_expr})
+                    """)
+
+        variants = "\n".join(variants_list)
+        text = f"""
+        SELECT (
+            CASE "setting_name"
+                {variants}
+                ELSE "value"
+            END
+        )
+        """
+
+        super().__init__(
+            name=('edgedb', '_postgres_json_config_value_to_fe_config_value'),
+            args=[
+                ('setting_name', ('text',)),
+                ('value', ('jsonb',))
+            ],
+            returns=('jsonb',),
+            volatility='immutable',
+            text=text,
+        )
+
+
 class PostgresConfigValueToJsonFunction(trampoline.VersionedFunction):
     """Convert a Postgres setting to JSON value.
 
@@ -3470,26 +3489,10 @@ class PostgresConfigValueToJsonFunction(trampoline.VersionedFunction):
 
     text = r"""
         SELECT
-            (CASE
-
-                WHEN parsed_value.unit != ''
-                THEN
-                    edgedb_VER._interpret_config_value_to_json(
-                        parsed_value.val,
-                        settings.vartype,
-                        1,
-                        parsed_value.unit
-                    )
-
-                ELSE
-                    edgedb_VER._interpret_config_value_to_json(
-                        "setting_value",
-                        settings.vartype,
-                        settings.multiplier,
-                        settings.unit
-                    )
-
-            END)
+            edgedb_VER._postgres_json_config_value_to_fe_config_value(
+                "setting_name",
+                backend_json_value.value
+            )
         FROM
             LATERAL (
                 SELECT regexp_match(
@@ -3520,8 +3523,29 @@ class PostgresConfigValueToJsonFunction(trampoline.VersionedFunction):
                     as vartype,
                     COALESCE(settings_in.multiplier, '1') as multiplier,
                     COALESCE(settings_in.unit, '') as unit
-            ) as settings
+            ) AS settings
+        CROSS JOIN LATERAL
+            (SELECT
+                (CASE
+                    WHEN parsed_value.unit != ''
+                    THEN
+                        edgedb_VER._interpret_config_value_to_json(
+                            parsed_value.val,
+                            settings.vartype,
+                            1,
+                            parsed_value.unit
+                        )
 
+                    ELSE
+                        edgedb_VER._interpret_config_value_to_json(
+                            "setting_value",
+                            settings.vartype,
+                            settings.multiplier,
+                            settings.unit
+                        )
+
+                END) AS value
+            ) AS backend_json_value
     """
 
     def __init__(self) -> None:
@@ -3579,6 +3603,32 @@ class SysConfigFullFunction(trampoline.VersionedFunction):
             SELECT * FROM config_defaults WHERE name like '%::%'
         ),
 
+        config_static AS (
+            SELECT
+                s.name AS name,
+                s.value AS value,
+                (CASE
+                    WHEN s.type = 'A' THEN 'command line'
+                    -- Due to inplace upgrade limits, without adding a new
+                    -- layer, configuration file values are manually squashed
+                    -- into the `environment variables` layer, see below.
+                    ELSE 'environment variable'
+                END) AS source,
+                config_spec.backend_setting IS NOT NULL AS is_backend
+            FROM
+                _edgecon_state s
+                INNER JOIN config_spec ON (config_spec.name = s.name)
+            WHERE
+                -- Give precedence to configuration file values over
+                -- environment variables manually.
+                s.type = 'A' OR s.type = 'F' OR (
+                    s.type = 'E' AND NOT EXISTS (
+                        SELECT 1 FROM _edgecon_state ss
+                        WHERE ss.name = s.name AND ss.type = 'F'
+                    )
+                )
+        ),
+
         config_sys AS (
             SELECT
                 s.key AS name,
@@ -3609,16 +3659,12 @@ class SysConfigFullFunction(trampoline.VersionedFunction):
             SELECT
                 s.name AS name,
                 s.value AS value,
-                (CASE
-                    WHEN s.type = 'A' THEN 'command line'
-                    WHEN s.type = 'E' THEN 'environment variable'
-                    ELSE 'session'
-                END) AS source,
-                FALSE AS from_backend  -- only 'B' is for backend settings
+                'session' AS source,
+                FALSE AS is_backend  -- only 'B' is for backend settings
             FROM
                 _edgecon_state s
             WHERE
-                s.type != 'B'
+                s.type = 'C'
         ),
 
         pg_db_setting AS (
@@ -3725,11 +3771,14 @@ class SysConfigFullFunction(trampoline.VersionedFunction):
         pg_config AS (
             SELECT
                 spec.name,
-                edgedb_VER._interpret_config_value_to_json(
-                    settings.setting,
-                    settings.vartype,
-                    settings.multiplier,
-                    settings.unit
+                edgedb_VER._postgres_json_config_value_to_fe_config_value(
+                    settings.name,
+                    edgedb_VER._interpret_config_value_to_json(
+                        settings.setting,
+                        settings.vartype,
+                        settings.multiplier,
+                        settings.unit
+                    )
                 ) AS value,
                 source AS source,
                 TRUE AS is_backend
@@ -3788,6 +3837,7 @@ class SysConfigFullFunction(trampoline.VersionedFunction):
             FROM
                 (
                     SELECT * FROM config_defaults UNION ALL
+                    SELECT * FROM config_static UNION ALL
                     SELECT * FROM config_sys UNION ALL
                     SELECT * FROM config_db UNION ALL
                     SELECT * FROM config_sess
@@ -4071,7 +4121,7 @@ class ResetSessionConfigFunction(trampoline.VersionedFunction):
 
 
 class ApplySessionConfigFunction(trampoline.VersionedFunction):
-    """Apply an Gel config setting to the backend, if possible.
+    """Apply a Gel config setting to the backend, if possible.
 
     The function accepts any Gel config name/value pair. If this
     specific config setting happens to be implemented via a backend
@@ -4099,12 +4149,9 @@ class ApplySessionConfigFunction(trampoline.VersionedFunction):
             valql = '"value"->>0'
             if (
                 isinstance(setting.type, type)
-                and issubclass(setting.type, statypes.Duration)
+                and issubclass(setting.type, statypes.ScalarType)
             ):
-                valql = f"""
-                    edgedb_VER._interval_to_ms(({valql})::interval)::text \
-                    || 'ms'
-                """
+                valql = setting.type.to_backend_expr(valql)
 
             variants_list.append(f'''
                 WHEN "name" = {ql(setting_name)}
@@ -5020,6 +5067,27 @@ class ResetQueryStatsFunction(trampoline.VersionedFunction):
         )
 
 
+# This is not a VersionedFunction because the VersionedFunction wrapper - which
+# is a SQL function - cannot return type trigger.
+class ClearFELocalSQLSettingsFunction(dbops.Function):
+    text = r"""
+    BEGIN
+        DELETE FROM _edgecon_state WHERE type = 'L' AND name = NEW.name;
+        RETURN NEW;
+    END;
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            name=('edgedb', '_clear_fe_local_sql_settings'),
+            args=[],
+            returns='trigger',
+            language='plpgsql',
+            volatility='volatile',
+            text=self.text,
+        )
+
+
 def _maybe_trampoline(
     cmd: dbops.Command, out: list[trampoline.Trampoline]
 ) -> None:
@@ -5080,11 +5148,7 @@ def get_fixed_bootstrap_commands() -> dbops.CommandGroup:
             DBConfigTable(),
         ),
         # TODO: SHOULD THIS BE VERSIONED?
-        dbops.CreateTable(DMLDummyTable()),
-        # TODO: SHOULD THIS BE VERSIONED?
         dbops.CreateTable(QueryCacheTable()),
-
-        dbops.Query(DMLDummyTable.SETUP_QUERY),
 
         dbops.CreateDomain(BigintDomain()),
         dbops.CreateDomain(ConfigMemoryDomain()),
@@ -5220,6 +5284,8 @@ def get_bootstrap_commands(
         dbops.CreateFunction(TypeIDToConfigType()),
         dbops.CreateFunction(ConvertPostgresConfigUnitsFunction()),
         dbops.CreateFunction(InterpretConfigValueToJsonFunction()),
+        dbops.CreateFunction(
+            PostgresJsonConfigValueToFrontendConfigValueFunction(config_spec)),
         dbops.CreateFunction(PostgresConfigValueToJsonFunction()),
         dbops.CreateFunction(SysConfigFullFunction()),
         dbops.CreateFunction(SysConfigUncachedFunction()),
@@ -5246,6 +5312,7 @@ def get_bootstrap_commands(
         dbops.CreateFunction(FTSToRegconfig()),
         dbops.CreateFunction(PadBase64StringFunction()),
         dbops.CreateFunction(ResetQueryStatsFunction(False)),
+        dbops.CreateFunction(ClearFELocalSQLSettingsFunction()),
     ]
 
     commands = dbops.CommandGroup()
@@ -5381,7 +5448,7 @@ def format_fields(
     return ',\n'.join(cols)
 
 
-def _generate_branch_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_branch_views(schema: s_schema.Schema) -> list[dbops.View]:
     Branch = schema.get('sys::Branch', type=s_objtypes.ObjectType)
     annos = Branch.getptr(
         schema, s_name.UnqualName('annotations'), type=s_links.Link)
@@ -5491,7 +5558,7 @@ def _generate_branch_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_extension_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_extension_views(schema: s_schema.Schema) -> list[dbops.View]:
     ExtPkg = schema.get('sys::ExtensionPackage', type=s_objtypes.ObjectType)
     annos = ExtPkg.getptr(
         schema, s_name.UnqualName('annotations'), type=s_links.Link)
@@ -5624,7 +5691,7 @@ def _generate_extension_views(schema: s_schema.Schema) -> List[dbops.View]:
 
 def _generate_extension_migration_views(
     schema: s_schema.Schema
-) -> List[dbops.View]:
+) -> list[dbops.View]:
     ExtPkgMigration = schema.get(
         'sys::ExtensionPackageMigration', type=s_objtypes.ObjectType)
     annos = ExtPkgMigration.getptr(
@@ -5751,7 +5818,7 @@ def _generate_extension_migration_views(
     return views
 
 
-def _generate_role_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     Role = schema.get('sys::Role', type=s_objtypes.ObjectType)
     member_of = Role.getptr(
         schema, s_name.UnqualName('member_of'), type=s_links.Link)
@@ -5941,7 +6008,7 @@ def _generate_role_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_single_role_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     Role = schema.get('sys::Role', type=s_objtypes.ObjectType)
     member_of = Role.getptr(
         schema, s_name.UnqualName('member_of'), type=s_links.Link)
@@ -6065,7 +6132,7 @@ def _generate_single_role_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_schema_ver_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_schema_ver_views(schema: s_schema.Schema) -> list[dbops.View]:
     Ver = schema.get(
         'sys::GlobalSchemaVersion',
         type=s_objtypes.ObjectType,
@@ -6105,7 +6172,7 @@ def _generate_schema_ver_views(schema: s_schema.Schema) -> List[dbops.View]:
     return views
 
 
-def _generate_stats_views(schema: s_schema.Schema) -> List[dbops.View]:
+def _generate_stats_views(schema: s_schema.Schema) -> list[dbops.View]:
     QueryStats = schema.get(
         'sys::QueryStats',
         type=s_objtypes.ObjectType,
@@ -6241,7 +6308,7 @@ def _make_json_caster(
 def _generate_schema_alias_views(
     schema: s_schema.Schema,
     module: s_name.UnqualName,
-) -> List[dbops.View]:
+) -> list[dbops.View]:
     views = []
 
     schema_objs = schema.get_objects(
@@ -6291,13 +6358,29 @@ def _schema_alias_view_name(
 
 def _generate_sql_information_schema(
     backend_version: params.BackendVersion
-) -> List[dbops.Command]:
+) -> list[dbops.Command]:
+
+    # Helper to create wrappers around materialized views.  For
+    # performance, we use MATERIALIZED VIEW for some of our SQL
+    # emulation tables. Unfortunately we can't use those directly,
+    # since we need tableoid to match the real pg_catalog table.
+    def make_wrapper_view(name: str) -> trampoline.VersionedView:
+        return trampoline.VersionedView(
+            name=("edgedbsql", name),
+            query=f"""
+            SELECT *,
+            'pg_catalog.{name}'::regclass::oid as tableoid,
+            xmin, cmin, xmax, cmax, ctid
+            FROM edgedbsql_VER.{name}_
+            """,
+        )
 
     # A helper view that contains all data tables we expose over SQL, excluding
     # introspection tables.
     # It contains table & schema names and associated module id.
     virtual_tables = trampoline.VersionedView(
         name=('edgedbsql', 'virtual_tables'),
+        materialized=True,
         query='''
         WITH obj_ty_pre AS (
             SELECT
@@ -6372,12 +6455,14 @@ def _generate_sql_information_schema(
         name=('edgedbsql', 'uuid_to_oid'),
         args=(
             ('id', 'uuid'),
+            # extra is two extra bits to throw into the oid, for now
+            ('extra', 'int4', '0'),
         ),
         returns=('oid',),
         volatility='immutable',
         text="""
             SELECT (
-                ('x' || substring(id::text, 2, 7))::bit(28)::bigint
+                ('x' || substring(id::text, 2, 7))::bit(28)::bigint*4 + extra
                  + 40000)::oid;
         """
     )
@@ -6421,7 +6506,7 @@ def _generate_sql_information_schema(
                             split_part(name, '::', 2) AS name,
                             backend_id
                         FROM edgedb_VER."_SchemaScalarType"
-                        WHERE NOT builtin
+                        WHERE NOT builtin AND arg_values IS NULL
                         UNION ALL
                         -- get the tuples
                         SELECT
@@ -6468,6 +6553,61 @@ def _generate_sql_information_schema(
                 nsdef
         '''
     )
+    # pg_settings is a function because "_edgecon_state" is a temporary table
+    # and therefore cannot be used in a view.
+    fe_pg_settings = trampoline.VersionedFunction(
+        name=('edgedbsql', 'pg_show_all_settings'),
+        args=[],
+        returns=('pg_catalog', 'pg_settings'),
+        set_returning=True,
+        volatility='volatile',
+        text='''
+            SELECT
+                p.name,
+                COALESCE(
+                    COALESCE(l.value, s.value, d.value) #>> '{}',
+                    p.setting
+                ) AS setting,
+                unit,
+                category,
+                short_desc,
+                extra_desc,
+                context,
+                vartype,
+                CASE
+                    WHEN l.value IS NOT NULL THEN 'session'
+                    WHEN s.value IS NOT NULL THEN 'session'
+                    WHEN d.value IS NOT NULL THEN 'default'
+                    ELSE p.source
+                END AS source,
+                min_val,
+                max_val,
+                enumvals,
+                boot_val,
+                CASE
+                    WHEN d.value IS NOT NULL THEN d.value #>> '{}'
+                    ELSE p.reset_val
+                END AS reset_val,
+                sourcefile,
+                sourceline,
+                pending_restart
+            FROM
+                pg_settings p
+                LEFT JOIN _edgecon_state l ON p.name = l.name AND l.type = 'L'
+                LEFT JOIN _edgecon_state s ON p.name = s.name AND s.type = 'S'
+                LEFT JOIN (
+                    SELECT
+                        (j->>'name') AS name,
+                        (j->'value') AS value
+                    FROM
+                        edgedbinstdata_VER.instdata
+                        CROSS JOIN LATERAL
+                            jsonb_array_elements(instdata.json) AS j
+                    WHERE
+                        key = 'sql_default_fe_settings'
+                ) d ON p.name = d.name
+        '''
+    )
 
     sql_ident = 'information_schema.sql_identifier'
     sql_str = 'information_schema.character_data'
@@ -6505,10 +6645,10 @@ def _generate_sql_information_schema(
             vt_table_schema::{sql_ident} AS table_schema,
             vt_table_name::{sql_ident} AS table_name,
             v_column_name::{sql_ident} as column_name,
-            ROW_NUMBER() OVER (
+            cast(ROW_NUMBER() OVER (
                 PARTITION BY vt_table_schema, vt_table_name
                 ORDER BY position, v_column_name
-            ) AS ordinal_position,
+            ) AS INT) AS ordinal_position,
             column_default,
             is_nullable,
             data_type,
@@ -6636,20 +6776,15 @@ def _generate_sql_information_schema(
 
     pg_catalog_views = [
         trampoline.VersionedView(
-            name=("edgedbsql", "pg_namespace"),
+            name=("edgedbsql", "pg_namespace_"),
+            materialized=True,
             query="""
         -- system schemas
         SELECT
             oid,
             nspname,
             nspowner,
-            nspacl,
-            tableoid,
-            xmin,
-            cmin,
-            xmax,
-            cmax,
-            ctid
+            nspacl
         FROM pg_namespace
         WHERE nspname IN ('pg_catalog', 'pg_toast', 'information_schema',
                           'edgedb', 'edgedbstd', 'edgedbt',
@@ -6664,18 +6799,7 @@ def _generate_sql_information_schema(
              FROM pg_roles
              WHERE rolname = CURRENT_USER
              LIMIT 1)                           AS nspowner,
-            NULL AS nspacl,
-            (SELECT pg_class.oid
-             FROM pg_class
-             JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
-             WHERE pg_namespace.nspname = 'pg_catalog'::name
-             AND pg_class.relname = 'pg_namespace'::name
-             )                                  AS tableoid,
-            '0'::xid                            AS xmin,
-            '0'::cid                            AS cmin,
-            '0'::xid                            AS xmax,
-            '0'::cid                            AS cmax,
-            NULL                                AS ctid
+            NULL AS nspacl
         FROM (
             SELECT schema_name, module_id
             FROM edgedbsql_VER.virtual_tables
@@ -6690,8 +6814,10 @@ def _generate_sql_information_schema(
         ) t
         """,
         ),
+        make_wrapper_view("pg_namespace"),
         trampoline.VersionedView(
-            name=("edgedbsql", "pg_type"),
+            name=("edgedbsql", "pg_type_"),
+            materialized=True,
             query="""
         SELECT
             pt.oid,
@@ -6699,8 +6825,7 @@ def _generate_sql_information_schema(
                 AS typname,
             edgedbsql_VER._pg_namespace_rename(pt.oid, pt.typnamespace)
                 AS typnamespace,
-            {0},
-            pt.tableoid, pt.xmin, pt.cmin, pt.xmax, pt.cmax, pt.ctid
+            {0}
         FROM pg_type pt
         JOIN pg_namespace pn ON pt.typnamespace = pn.oid
         WHERE
@@ -6714,14 +6839,16 @@ def _generate_sql_information_schema(
                 )
             ),
         ),
+        make_wrapper_view("pg_type"),
         # pg_class that contains classes only for tables
         # This is needed so we can use it to filter pg_index to indexes only on
         # visible tables.
         trampoline.VersionedView(
             name=("edgedbsql", "pg_class_tables"),
+            materialized=True,
             query="""
         -- Postgres tables
-        SELECT pc.*, pc.tableoid, pc.xmin, pc.cmin, pc.xmax, pc.cmax, pc.ctid
+        SELECT pc.*
         FROM pg_class pc
         JOIN pg_namespace pn ON pc.relnamespace = pn.oid
         WHERE nspname IN ('pg_catalog', 'pg_toast', 'information_schema')
@@ -6762,19 +6889,14 @@ def _generate_sql_information_schema(
             relminmxid,
             relacl,
             reloptions,
-            relpartbound,
-            pc.tableoid,
-            pc.xmin,
-            pc.cmin,
-            pc.xmax,
-            pc.cmax,
-            pc.ctid
+            relpartbound
         FROM pg_class pc
         JOIN edgedbsql_VER.virtual_tables vt ON vt.pg_type_id = pc.reltype
         """,
         ),
         trampoline.VersionedView(
-            name=("edgedbsql", "pg_index"),
+            name=("edgedbsql", "pg_index_"),
+            materialized=True,
             query=f"""
         SELECT
             pi.indexrelid,
@@ -6809,8 +6931,7 @@ def _generate_sql_information_schema(
             pi.indclass,
             pi.indoption,
             pi.indexprs,
-            pi.indpred,
-            pi.tableoid, pi.xmin, pi.cmin, pi.xmax, pi.cmax, pi.ctid
+            pi.indpred
         FROM pg_index pi
 
         -- filter by tables visible in pg_class
@@ -6830,8 +6951,10 @@ def _generate_sql_information_schema(
         WHERE vt.id IS NULL OR is_id.t IS NOT NULL
         """,
         ),
+        make_wrapper_view('pg_index'),
         trampoline.VersionedView(
-            name=("edgedbsql", "pg_class"),
+            name=("edgedbsql", "pg_class_"),
+            materialized=True,
             query="""
         -- tables
         SELECT pc.*
@@ -6840,7 +6963,7 @@ def _generate_sql_information_schema(
         UNION
 
         -- indexes
-        SELECT pc.*, pc.tableoid, pc.xmin, pc.cmin, pc.xmax, pc.cmax, pc.ctid
+        SELECT pc.*
         FROM pg_class pc
         JOIN pg_index pi ON pc.oid = pi.indexrelid
 
@@ -6880,13 +7003,7 @@ def _generate_sql_information_schema(
             pc.relminmxid,
             pc.relacl,
             pc.reloptions,
-            pc.relpartbound,
-            pc.tableoid,
-            pc.xmin,
-            pc.cmin,
-            pc.xmax,
-            pc.cmax,
-            pc.ctid
+            pc.relpartbound
         FROM pg_class pc
         JOIN edgedb_VER."_SchemaTuple" tup ON tup.backend_id = pc.reltype
         JOIN (
@@ -6896,7 +7013,7 @@ def _generate_sql_information_schema(
         ) nsdef ON TRUE
         """,
         ),
-
+        make_wrapper_view("pg_class"),
         # Because we hide some columns and
         # because pg_dump expects attnum to be sequential numbers
         # we have to invent new attnums with ROW_NUMBER().
@@ -6906,6 +7023,7 @@ def _generate_sql_information_schema(
         # attnum_internal column.
         trampoline.VersionedView(
             name=("edgedbsql", "pg_attribute_ext"),
+            materialized=True,
             query=r"""
         SELECT attrelid,
             attname,
@@ -6932,13 +7050,7 @@ def _generate_sql_information_schema(
             attacl,
             attoptions,
             attfdwoptions,
-            null::int[] as attmissingval,
-            pa.tableoid,
-            pa.xmin,
-            pa.cmin,
-            pa.xmax,
-            pa.cmax,
-            pa.ctid
+            null::int[] as attmissingval
         FROM pg_attribute pa
         JOIN pg_class pc ON pa.attrelid = pc.oid
         JOIN pg_namespace pn ON pc.relnamespace = pn.oid
@@ -6979,8 +7091,7 @@ def _generate_sql_information_schema(
             attacl,
             attoptions,
             attfdwoptions,
-            null::int[] as attmissingval,
-            tableoid, xmin, cmin, xmax, cmax, ctid
+            null::int[] as attmissingval
         FROM (
         SELECT
             COALESCE(
@@ -6991,8 +7102,7 @@ def _generate_sql_information_schema(
             COALESCE(spec.position, 2) AS col_position,
             (sp.required IS TRUE OR spec.k IS NOT NULL) as required,
             pc.oid AS pc_oid,
-            pa.*,
-            pa.tableoid, pa.xmin, pa.cmin, pa.xmax, pa.cmax, pa.ctid
+            pa.*
 
         FROM edgedb_VER."_SchemaPointer" sp
         JOIN edgedbsql_VER.virtual_tables vt ON vt.id = sp.source
@@ -7032,8 +7142,7 @@ def _generate_sql_information_schema(
             spec.position as position,
             TRUE as required,
             pa.attrelid as pc_oid,
-            pa.*,
-            pa.tableoid, pa.xmin, pa.cmin, pa.xmax, pa.cmax, pa.ctid
+            pa.*
         FROM edgedb_VER."_SchemaProperty" sp
         JOIN pg_class pc ON pc.relname = sp.id::TEXT
         JOIN pg_attribute pa ON pa.attrelid = pc.oid
@@ -7056,8 +7165,7 @@ def _generate_sql_information_schema(
             pa.attnum as position,
             TRUE as required,
             pa.attrelid as pc_oid,
-            pa.*,
-            pa.tableoid, pa.xmin, pa.cmin, pa.xmax, pa.cmax, pa.ctid
+            pa.*
         FROM pg_attribute pa
         JOIN pg_class pc ON pc.oid = pa.attrelid
         JOIN edgedbsql_VER.virtual_tables vt ON vt.pg_type_id = pc.reltype
@@ -7094,7 +7202,7 @@ def _generate_sql_information_schema(
           attoptions,
           attfdwoptions,
           attmissingval,
-          tableoid,
+          'pg_catalog.pg_attribute'::regclass::oid as tableoid,
           xmin,
           cmin,
           xmax,
@@ -7106,25 +7214,39 @@ def _generate_sql_information_schema(
 
         trampoline.VersionedView(
             name=("edgedbsql", "pg_database"),
-            query="""
+            query=f"""
         SELECT
             oid,
-            edgedb_VER.get_current_database()::name as datname,
+            frontend_name.n as datname,
             datdba,
             encoding,
+            {'datlocprovider,' if backend_version.major >= 15 else ''}
             datcollate,
             datctype,
             datistemplate,
             datallowconn,
+            {'dathasloginevt,' if backend_version.major >= 17 else ''}
             datconnlimit,
             0::oid AS datlastsysoid,
             datfrozenxid,
             datminmxid,
             dattablespace,
+            {'datlocale,' if backend_version.major >= 17 else ''}
+            {'daticurules,' if backend_version.major >= 16 else ''}
+            {'datcollversion,' if backend_version.major >= 15 else ''}
             datacl,
             tableoid, xmin, cmin, xmax, cmax, ctid
-        FROM pg_database
-        WHERE datname LIKE '%_edgedb'
+        FROM
+            pg_database,
+            LATERAL (
+                SELECT edgedb_VER.get_database_frontend_name(datname) AS n
+            ) frontend_name,
+            LATERAL (
+                SELECT edgedb_VER.get_database_metadata(frontend_name.n) AS j
+            ) metadata
+        WHERE
+            metadata.j->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
+            AND NOT (metadata.j->'builtin')::bool
         """,
         ),
 
@@ -7209,7 +7331,9 @@ def _generate_sql_information_schema(
 
         -- foreign keys for object tables
         SELECT
-          edgedbsql_VER.uuid_to_oid(sl.id) as oid,
+          -- uuid_to_oid needs "extra" arg to disambiguate from the link table
+          -- keys below
+          edgedbsql_VER.uuid_to_oid(sl.id, 0) as oid,
           vt.table_name || '_fk_' || sl.name AS conname,
           edgedbsql_VER.uuid_to_oid(vt.module_id) AS connamespace,
           'f'::"char" AS contype,
@@ -7255,7 +7379,9 @@ def _generate_sql_information_schema(
         -- - single link with link properties (source & target),
         -- these constraints do not actually exist, so we emulate it entierly
         SELECT
-            edgedbsql_VER.uuid_to_oid(sp.id) AS oid,
+            -- uuid_to_oid needs "extra" arg to disambiguate from other
+            -- constraints using this pointer
+            edgedbsql_VER.uuid_to_oid(sp.id, spec.attnum) AS oid,
             vt.table_name || '_fk_' || spec.name AS conname,
             edgedbsql_VER.uuid_to_oid(vt.module_id) AS connamespace,
             'f'::"char" AS contype,
@@ -7350,7 +7476,7 @@ def _generate_sql_information_schema(
             NULL::real[] AS stavalues3,
             NULL::real[] AS stavalues4,
             NULL::real[] AS stavalues5,
-            tableoid, xmin, cmin, xmax, cmax, ctid
+            s.tableoid, s.xmin, s.cmin, s.xmax, s.cmax, s.ctid
         FROM pg_statistic s
         JOIN edgedbsql_VER.pg_attribute_ext a ON (
             a.attrelid = s.starelid AND a.attnum_internal = s.staattnum
@@ -7503,6 +7629,75 @@ def _generate_sql_information_schema(
         WHERE FALSE
         """,
         ),
+        trampoline.VersionedView(
+            name=("edgedbsql", "pg_settings"),
+            query="""
+            select * from edgedbsql_VER.pg_show_all_settings()
+        """,
+        ),
+        # A helper view for the `SHOW` SQL command.
+        # See also NormalizedPgSettingsView, InterpretConfigValueToJsonFunction
+        # as well as the Postgres C function ShowGUCOption.
+        trampoline.VersionedView(
+            name=("edgedbsql", "pg_settings_for_show"),
+            query=r"""
+        SELECT
+            s.name AS name,
+            CASE
+                WHEN vartype = 'bool'
+                THEN (
+                    CASE
+                    WHEN lower(setting) = any(ARRAY['on', 'true', 'yes', '1'])
+                    THEN 'on'
+                    ELSE 'off'
+                    END
+                )
+
+                WHEN vartype = 'enum' OR vartype = 'string'
+                THEN setting
+
+                WHEN vartype = 'integer' OR vartype = 'real'
+                THEN (
+                    CASE
+                    WHEN setting::numeric > 0 AND unit.unit IS NOT NULL
+                    THEN (setting::numeric * unit.multiplier)::text || unit.unit
+                    ELSE setting
+                    END
+                )
+
+                ELSE
+                    edgedb_VER.raise(
+                        NULL::text,
+                        msg => (
+                            'unknown configuration type "' ||
+                            COALESCE(vartype, '<NULL>') ||
+                            '"'
+                        )
+                    )
+            END AS setting,
+            short_desc AS description
+
+        FROM
+            edgedbsql_VER.pg_settings AS s,
+
+            LATERAL (
+                SELECT regexp_match(
+                    s.unit, '^(\d*)\s*([a-zA-Z]{1,3})$') AS v
+            ) AS _unit,
+
+            LATERAL (
+                SELECT
+                    COALESCE(
+                        CASE
+                            WHEN _unit.v[1] = '' THEN 1
+                            ELSE _unit.v[1]::int
+                        END,
+                        1
+                    ) AS multiplier,
+                    COALESCE(_unit.v[2], '') AS unit
+            ) AS unit
+        """
+        ),
     ]
 
     # We expose most of the views as empty tables, just to prevent errors when
@@ -7552,6 +7747,7 @@ def _generate_sql_information_schema(
         'pg_tables',
         'pg_views',
         'pg_description',
+        'pg_settings',
     }
 
     PG_TABLES_WITH_SYSTEM_COLS = {
@@ -7654,6 +7850,326 @@ def _generate_sql_information_schema(
             views.append(v)
 
     util_functions = [
+        # A 1:1 PL/pgSQL replication of the Postgres SplitIdentifierString
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'split_identifier_string'),
+            args=(
+                ('rawstring', 'text',),
+                ('separator', 'text',),
+            ),
+            returns=('text[]',),
+            language="plpgsql",
+            volatility="immutable",
+            text=r"""
+DECLARE
+    namelist text[] := '{}';
+    pos integer := 1;
+    len integer;
+    c char;
+    sep_char char;
+    curname text;
+    in_quote boolean;
+    db_encoding text := getdatabaseencoding();
+BEGIN
+    -- Initialization
+    IF length(separator) != 1 THEN
+        RAISE EXCEPTION 'Separator must be a single character';
+    END IF;
+    sep_char := substring(separator FROM 1 FOR 1);
+    len := length(rawstring);
+
+    -- Skip leading whitespace
+    WHILE pos <= len LOOP
+        c := substring(rawstring FROM pos FOR 1);
+        IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+            pos := pos + 1;
+        ELSE
+            EXIT;
+        END IF;
+    END LOOP;
+
+    -- Allow empty string
+    IF pos > len THEN
+        RETURN namelist;
+    END IF;
+
+    -- At the top of the loop, we are at start of a new identifier.
+    LOOP
+        IF substring(rawstring FROM pos FOR 1) = '"' THEN
+            -- Quoted name --- collapse quote-quote pairs, no downcasing
+            pos := pos + 1;
+            curname := '';
+            in_quote := TRUE;
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c = '"' THEN
+                    IF pos < len
+                        AND substring(rawstring FROM pos + 1 FOR 1) = '"'
+                    THEN
+                        -- Collapse adjacent quotes into one quote,
+                        -- and look again
+                        curname := curname || '"';
+                        pos := pos + 2;
+                    ELSE
+                        -- Found end of quoted name
+                        pos := pos + 1;
+                        in_quote := FALSE;
+                        EXIT;
+                    END IF;
+                ELSE
+                    curname := curname || c;
+                    pos := pos + 1;
+                END IF;
+            END LOOP;
+
+            -- Mismatched quotes
+            IF in_quote THEN
+                RAISE EXCEPTION 'Unterminated quoted identifier';
+            END IF;
+
+        ELSE
+            -- Unquoted name --- extends to separator or whitespace
+            curname := '';
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c = sep_char OR c IN (' ', '\t', '\n', '\r', '\f') THEN
+                    EXIT;
+                END IF;
+                curname := curname || c;
+                pos := pos + 1;
+            END LOOP;
+
+            IF curname = '' THEN
+                RAISE EXCEPTION 'Empty unquoted identifier';
+            END IF;
+
+            -- Downcase the identifier
+            curname := lower(curname);
+        END IF;
+
+        -- Truncate name if it's overlength
+        IF octet_length(curname) > 63 THEN
+            RAISE NOTICE 'identifier "%" will be truncated', curname;
+            curname := convert_from(
+                substring(convert_to(curname, db_encoding) FROM 1 FOR 63),
+                db_encoding
+            );
+        END IF;
+
+        -- Finished isolating current name --- add it to list
+        namelist := array_append(namelist, curname);
+
+        -- Skip trailing whitespace
+        WHILE pos <= len LOOP
+            c := substring(rawstring FROM pos FOR 1);
+            IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+                pos := pos + 1;
+            ELSE
+                EXIT;
+            END IF;
+        END LOOP;
+
+        IF pos > len THEN
+            EXIT; -- End of string
+        ELSIF substring(rawstring FROM pos FOR 1) = sep_char THEN
+            pos := pos + 1;
+            -- Skip leading whitespace for next
+            WHILE pos <= len LOOP
+                c := substring(rawstring FROM pos FOR 1);
+                IF c IN (' ', '\t', '\n', '\r', '\f') THEN
+                    pos := pos + 1;
+                ELSE
+                    EXIT;
+                END IF;
+            END LOOP;
+        ELSE
+            RAISE EXCEPTION 'Invalid character at position %: "%"', pos, c;
+        END IF;
+    END LOOP;
+
+    RETURN namelist;
+END;
+            """,
+        ),
+        # current_schemas() is an emulation of Postgres current_schemas(),
+        # fetch_search_path() and recomputeNamespacePath() internal functions.
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'current_schemas'),
+            args=(
+                ('include_implicit', 'bool',),
+            ),
+            returns=('name[]',),
+            language="plpgsql",
+            volatility="stable",
+            text="""
+DECLARE
+    search_path_str text;
+    schema_list text[];
+    rv name[] := '{}'::name[];
+    is_valid_namespace boolean;
+    has_pg_catalog boolean;
+    resolved_schema text;
+BEGIN
+    -- Get the current search_path from the emulated pg_settings view
+    SELECT COALESCE(setting, 'public') INTO search_path_str
+    FROM edgedbsql_VER.pg_settings
+    WHERE name = 'search_path';
+
+    -- Split using our custom function with comma separator
+    schema_list := edgedbsql_VER.split_identifier_string(search_path_str, ',');
+
+    -- Handle implicit schemas if requested
+    IF include_implicit THEN
+        -- Temporary schema is not supported yet
+
+        -- Check if pg_catalog is already present
+        has_pg_catalog := 'pg_catalog' = ANY(schema_list);
+
+        -- Add pg_catalog if not present and GUC variables allow it
+        IF NOT has_pg_catalog THEN
+            rv := array_append(rv, 'pg_catalog'::name);
+        END IF;
+    END IF;
+
+    -- Process each schema element
+    FOR i IN 1..array_length(schema_list, 1) LOOP
+        -- Handle $user substitution
+        IF schema_list[i] = '$user' THEN
+            resolved_schema := current_user;
+        ELSE
+            resolved_schema := schema_list[i];
+        END IF;
+
+        -- Check existence in namespace catalog
+        IF EXISTS (
+            SELECT 1
+            FROM edgedbsql_VER.pg_namespace
+            WHERE nspname = resolved_schema
+        ) THEN
+            rv := array_append(rv, resolved_schema::name);
+        END IF;
+    END LOOP;
+
+    RETURN rv;
+END;
+            """,
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('name_or_oid', 'text',),
+            ),
+            returns=('regclass',),
+            language="plpgsql",
+            text="""
+DECLARE
+    parts text[];
+    result regclass;
+BEGIN
+    IF name_or_oid = '-' THEN
+        RETURN 0::regclass;
+    END IF;
+
+    IF name_or_oid ~ '^[0-9]+$' THEN
+        RETURN name_or_oid::oid::regclass;
+    END IF;
+
+    parts := parse_ident(name_or_oid);
+    IF array_length(parts, 1) = 1 THEN
+        SELECT pc.oid::regclass INTO result
+        FROM unnest(edgedbsql_VER.current_schemas(true))
+            WITH ORDINALITY AS ns(nspname, ord)
+        JOIN edgedbsql_VER.pg_namespace pn
+            USING (nspname)
+        JOIN edgedbsql_VER.pg_class pc
+            ON pn.oid = pc.relnamespace
+        WHERE pc.relname = parts[1]
+        ORDER BY ns.ord
+        LIMIT 1;
+    ELSEIF array_length(parts, 1) = 2 THEN
+        SELECT pc.oid::regclass INTO result
+        FROM edgedbsql_VER.pg_class pc
+        JOIN edgedbsql_VER.pg_namespace pn
+            ON pn.oid = pc.relnamespace
+        WHERE relname = parts[2] AND nspname = parts[1];
+    ELSE
+        RAISE EXCEPTION
+            'improper relation name (too many dotted names): %', name_or_oid;
+    END IF;
+    RETURN result;
+END;
+            """
+        ),
+        # Unlike pg_catalog.to_regclass(), edgedbsql.to_regclass() also takes
+        # numeric parameters to support compiled `::regclass` typecasting.
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'integer',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'smallint',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'bigint',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'to_regclass'),
+            args=(
+                ('oid', 'oid',),
+            ),
+            returns=('regclass',),
+            volatility="stable",
+            text="""
+                SELECT oid::regclass
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_database_privilege'),
+            args=(
+                ('database_name', 'text'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_database_privilege(oid, privilege)
+                FROM edgedbsql_VER.pg_database
+                WHERE datname = database_name
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_database_privilege'),
+            args=(
+                ('database_oid', 'oid'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_database_privilege(database_oid, privilege)
+            """
+        ),
         trampoline.VersionedFunction(
             name=('edgedbsql', 'has_schema_privilege'),
             args=(
@@ -7690,20 +8206,19 @@ def _generate_sql_information_schema(
             ),
             returns=('bool',),
             text="""
-                SELECT has_table_privilege(oid, privilege)
-                FROM edgedbsql_VER.pg_class
-                WHERE relname = table_name;
+                SELECT has_table_privilege(
+                    edgedbsql_VER.to_regclass(table_name), privilege)
             """
         ),
         trampoline.VersionedFunction(
             name=('edgedbsql', 'has_table_privilege'),
             args=(
-                ('schema_oid', 'oid'),
+                ('table_oid', 'oid'),
                 ('privilege', 'text'),
             ),
             returns=('bool',),
             text="""
-                SELECT has_table_privilege(schema_oid, privilege)
+                SELECT has_table_privilege(table_oid, privilege)
             """
         ),
 
@@ -7728,9 +8243,8 @@ def _generate_sql_information_schema(
             ),
             returns=('bool',),
             text="""
-                SELECT has_column_privilege(oid, col, privilege)
-                FROM edgedbsql_VER.pg_class
-                WHERE relname = tbl;
+                SELECT has_column_privilege(
+                    edgedbsql_VER.to_regclass(tbl), col, privilege)
             """
         ),
         trampoline.VersionedFunction(
@@ -7757,9 +8271,32 @@ def _generate_sql_information_schema(
             returns=('bool',),
             text="""
                 SELECT has_column_privilege(pc.oid, attnum_internal, privilege)
-                FROM edgedbsql_VER.pg_class pc
-                JOIN edgedbsql_VER.pg_attribute_ext pa ON pa.attrelid = pc.oid
-                WHERE pc.relname = tbl AND pa.attname = col;
+                FROM edgedbsql_VER.pg_attribute_ext pa,
+                LATERAL (SELECT edgedbsql_VER.to_regclass(tbl) AS oid) pc
+                WHERE pa.attrelid = pc.oid AND pa.attname = col
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_any_column_privilege'),
+            args=(
+                ('tbl', 'oid'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_any_column_privilege(tbl, privilege)
+            """
+        ),
+        trampoline.VersionedFunction(
+            name=('edgedbsql', 'has_any_column_privilege'),
+            args=(
+                ('tbl', 'text'),
+                ('privilege', 'text'),
+            ),
+            returns=('bool',),
+            text="""
+                SELECT has_any_column_privilege(
+                    edgedbsql_VER.to_regclass(tbl), privilege)
             """
         ),
         trampoline.VersionedFunction(
@@ -7871,6 +8408,10 @@ def _generate_sql_information_schema(
             returns=('text',),
             volatility='stable',
             text=r"""
+                -- Wrap in a subquery SELECT so that we get a clear failure
+                -- if something is broken and this returns multiple rows.
+                -- (By default it would silently return the first.)
+                SELECT (
                 SELECT CASE
                     WHEN contype = 'p' THEN
                     'PRIMARY KEY(' || (
@@ -7883,7 +8424,6 @@ def _generate_sql_information_schema(
                         SELECT attname
                         FROM edgedbsql_VER.pg_attribute
                         WHERE attrelid = conrelid AND attnum = ANY(conkey)
-                        LIMIT 1
                     ) || '")' || ' REFERENCES "'
                     || pn.nspname || '"."' || pc.relname || '"(id)'
                     ELSE ''
@@ -7893,6 +8433,7 @@ def _generate_sql_information_schema(
                 LEFT JOIN edgedbsql_VER.pg_namespace pn
                   ON pc.relnamespace = pn.oid
                 WHERE con.oid = conid
+                )
             """
         ),
         trampoline.VersionedFunction(
@@ -7916,10 +8457,27 @@ def _generate_sql_information_schema(
             cast(dbops.Command, dbops.CreateFunction(long_name)),
             cast(dbops.Command, dbops.CreateFunction(type_rename)),
             cast(dbops.Command, dbops.CreateFunction(namespace_rename)),
+            cast(dbops.Command, dbops.CreateFunction(fe_pg_settings)),
         ]
         + [dbops.CreateView(view) for view in views]
         + [dbops.CreateFunction(func) for func in util_functions]
     )
+
+
+@functools.cache
+def generate_sql_information_schema_refresh(
+    backend_version: params.BackendVersion
+) -> dbops.Command:
+    refresh = dbops.CommandGroup()
+    for command in _generate_sql_information_schema(backend_version):
+        if (
+            isinstance(command, dbops.CreateView)
+            and command.view.materialized
+        ):
+            refresh.add_command(dbops.Query(
+                text=f'REFRESH MATERIALIZED VIEW {q(*command.view.name)}'
+            ))
+    return refresh
 
 
 class ObjectAncestorsView(trampoline.VersionedView):
@@ -8052,6 +8610,17 @@ def get_synthetic_type_views(
     return commands
 
 
+def _get_wrapper_views() -> dbops.CommandGroup:
+    # Create some trampolined wrapper views around _Schema types we need
+    # to reference from functions.
+    wrapper_commands = dbops.CommandGroup()
+    wrapper_commands.add_command(
+        dbops.CreateView(ObjectAncestorsView(), or_replace=True))
+    wrapper_commands.add_command(
+        dbops.CreateView(LinksView(), or_replace=True))
+    return wrapper_commands
+
+
 def get_support_views(
     schema: s_schema.Schema,
     backend_params: params.BackendRuntimeParams,
@@ -8081,13 +8650,7 @@ def get_support_views(
     synthetic_types = get_synthetic_type_views(schema, backend_params)
     commands.add_command(synthetic_types)
 
-    # Create some trampolined wrapper views around _Schema types we need
-    # to reference from functions.
-    wrapper_commands = dbops.CommandGroup()
-    wrapper_commands.add_command(
-        dbops.CreateView(ObjectAncestorsView(), or_replace=True))
-    wrapper_commands.add_command(
-        dbops.CreateView(LinksView(), or_replace=True))
+    wrapper_commands = _get_wrapper_views()
     commands.add_command(wrapper_commands)
 
     sys_alias_views = _generate_schema_alias_views(
@@ -8151,6 +8714,34 @@ async def generate_support_functions(
     return trampoline_functions(cmds)
 
 
+def _get_regenerated_config_support_functions(
+    config_spec: edbconfig.Spec,
+) -> dbops.CommandGroup:
+    # Regenerate functions dependent on config spec.
+    commands = dbops.CommandGroup()
+
+    funcs = [
+        ApplySessionConfigFunction(config_spec),
+        PostgresJsonConfigValueToFrontendConfigValueFunction(config_spec),
+    ]
+
+    cmds = [dbops.CreateFunction(func, or_replace=True) for func in funcs]
+    commands.add_commands(cmds)
+
+    return commands
+
+
+async def regenerate_config_support_functions(
+    conn: PGConnection,
+    config_spec: edbconfig.Spec,
+) -> None:
+    # Regenerate functions dependent on config spec.
+    commands = _get_regenerated_config_support_functions(config_spec)
+    block = dbops.PLTopBlock()
+    commands.generate(block)
+    await _execute_block(conn, block)
+
+
 async def generate_more_support_functions(
     conn: PGConnection,
     compiler: edbcompiler.Compiler,
@@ -8209,7 +8800,7 @@ def _build_key_source(
 
 
 def _build_key_expr(
-    key_components: List[str],
+    key_components: list[str],
     versioned: bool,
 ) -> str:
     prefix = 'edgedb_VER' if versioned else 'edgedb'
@@ -8275,14 +8866,14 @@ def _generate_config_type_view(
     stype: s_objtypes.ObjectType,
     *,
     scope: Optional[qltypes.ConfigScope],
-    path: List[Tuple[s_pointers.Pointer, List[s_pointers.Pointer]]],
+    path: list[tuple[s_pointers.Pointer, list[s_pointers.Pointer]]],
     rptr: Optional[s_pointers.Pointer],
     existing_view_columns: Optional[dict[str, list[str]]],
     override_exclusive_props: Optional[list[s_pointers.Pointer]] = None,
-    _memo: Optional[Set[s_obj.Object]] = None,
-) -> Tuple[
-    List[Tuple[Tuple[str, str], str]],
-    List[s_pointers.Pointer],
+    _memo: Optional[set[s_obj.Object]] = None,
+) -> tuple[
+    list[tuple[tuple[str, str], str]],
+    list[s_pointers.Pointer],
 ]:
     X = xdedent.escape
 
@@ -8794,10 +9385,11 @@ async def execute_sql_script(
         elif pl_func_line:
             point = ql_parser.offset_of_line(sql_text, pl_func_line)
             text = sql_text
+        assert text
 
         if point is not None:
             span = qlast.Span(
-                'query', text, start=point, end=point, context_lines=30
+                None, text, start=point, end=point, context_lines=30
             )
             exceptions.replace_context(e, span)
 

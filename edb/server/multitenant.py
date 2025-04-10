@@ -46,7 +46,6 @@ from . import pgcluster
 from . import server
 from . import tenant as edbtenant
 from .compiler_pool import pool as compiler_pool
-from .pgcon import errors as pgerrors
 
 logger = logging.getLogger("edb.server")
 
@@ -63,6 +62,7 @@ TenantConfig = TypedDict(
         "jwt-revocation-list-file": str,
         "readiness-state-file": str,
         "admin": bool,
+        "config-file": str,
     },
 )
 
@@ -70,7 +70,7 @@ TenantConfig = TypedDict(
 class MultiTenantServer(server.BaseServer):
     _config_file: pathlib.Path
     _sys_config: Mapping[str, config.SettingValue]
-    _backend_settings: Mapping[str, str]
+    _init_con_data: list[config.ConState]
 
     _tenants_by_sslobj: MutableMapping
     _tenants_conf: dict[str, dict[str, str]]
@@ -89,7 +89,7 @@ class MultiTenantServer(server.BaseServer):
         *,
         compiler_pool_tenant_cache_size: int,
         sys_config: Mapping[str, config.SettingValue],
-        backend_settings: Mapping[str, str],
+        init_con_data: list[config.ConState],
         sys_queries: Mapping[str, bytes],
         report_config_typedesc: dict[defines.ProtocolVersion, bytes],
         **kwargs,
@@ -97,7 +97,7 @@ class MultiTenantServer(server.BaseServer):
         super().__init__(**kwargs)
         self._config_file = config_file
         self._sys_config = sys_config
-        self._backend_settings = backend_settings
+        self._init_con_data = init_con_data
         self._compiler_pool_tenant_cache_size = compiler_pool_tenant_cache_size
 
         self._tenants_by_sslobj = weakref.WeakKeyDictionary()
@@ -237,22 +237,32 @@ class MultiTenantServer(server.BaseServer):
             "edgedb.server_version": buildmeta.get_version_json(),
         })
 
+        if self._jws_key is None:
+            raise server.StartupError(
+                "No secret key"
+            )
+
         tenant = edbtenant.Tenant(
             cluster,
             instance_name=conf["instance-name"],
             max_backend_connections=max_conns,
             backend_adaptive_ha=conf.get("backend-adaptive-ha", False),
         )
+        tenant.set_init_con_data(self._init_con_data)
+        config_file = conf.get("config-file")
         tenant.set_reloadable_files(
             readiness_state_file=conf.get("readiness-state-file"),
             jwt_sub_allowlist_file=conf.get("jwt-sub-allowlist-file"),
             jwt_revocation_list_file=conf.get("jwt-revocation-list-file"),
+            config_file=config_file,
         )
         tenant.set_server(self)
-        tenant.load_jwcrypto()
+        tenant.load_jwcrypto(self._jws_key)
+        if config_file:
+            await tenant.load_config_file(self.get_compiler_pool())
         try:
             await tenant.init_sys_pgcon()
-            await tenant.init()
+            await tenant.init(compat_check=True)
             tenant.start_watching_files()
             await tenant.start_accepting_new_tasks()
             tenant.start_running()
@@ -310,7 +320,7 @@ class MultiTenantServer(server.BaseServer):
             rloop = retryloop.RetryLoop(
                 backoff=retryloop.exp_backoff(),
                 timeout=300,
-                ignore=(pgerrors.BackendError, IOError),
+                ignore=Exception,
                 retry_cb=_warn,
             )
             async for iteration in rloop:
@@ -379,6 +389,7 @@ class MultiTenantServer(server.BaseServer):
                             "readiness-state-file",
                             "jwt-sub-allowlist-file",
                             "jwt-revocation-list-file",
+                            "config-file",
                         }
                         if diff:
                             logger.warning(
@@ -395,6 +406,7 @@ class MultiTenantServer(server.BaseServer):
                                 "jwt-sub-allowlist-file"),
                             jwt_revocation_list_file=conf.get(
                                 "jwt-revocation-list-file"),
+                            config_file=conf.get("config-file"),
                         ):
                             # none of the reloadable values was modified
                             return
@@ -429,7 +441,7 @@ async def run_server(
     args: srvargs.ServerConfig,
     *,
     sys_config: Mapping[str, config.SettingValue],
-    backend_settings: Mapping[str, str],
+    init_con_data: list[config.ConState],
     sys_queries: Mapping[str, bytes],
     report_config_typedesc: dict[defines.ProtocolVersion, bytes],
     runstate_dir: pathlib.Path,
@@ -444,7 +456,7 @@ async def run_server(
         ss = MultiTenantServer(
             multitenant_config_file,
             sys_config=sys_config,
-            backend_settings=backend_settings,
+            init_con_data=init_con_data,
             sys_queries=sys_queries,
             report_config_typedesc=report_config_typedesc,
             runstate_dir=runstate_dir,
@@ -460,6 +472,7 @@ async def run_server(
             default_auth_method=args.default_auth_method,
             testmode=args.testmode,
             admin_ui=args.admin_ui,
+            cors_always_allowed_origins=args.cors_always_allowed_origins,
             disable_dynamic_system_config=args.disable_dynamic_system_config,
             compiler_pool_size=args.compiler_pool_size,
             compiler_pool_mode=srvargs.CompilerPoolMode.MultiTenant,

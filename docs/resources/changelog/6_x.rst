@@ -1,0 +1,712 @@
+====
+v6.0
+====
+
+:edb-alt-title: Gel v6
+
+To explore the new features, ensure you specify version 6.0 when initializing
+your project. Pre-release versions are not considered stable and will not be
+automatically suggested:
+
+.. code-block:: bash
+
+  $ gel project init --server-version 6.0-rc.2
+
+
+Upgrading
+=========
+
+.. edb:collapsed::
+
+**Local instances**
+
+To upgrade a local project, first ensure that your CLI is up to date with
+:gelcmd:`cli upgrade`. Then run the following command inside the project
+directory.
+
+.. code-block:: bash
+
+  $ gel project upgrade --to-testing
+
+Alternatively, specify an instance name if you aren't using a project:
+
+.. code-block:: bash
+
+  $ gel instance upgrade -I my_instance
+
+The CLI will check if your schema can migrate cleanly to Gel 6.0. If any
+issues are found, they will be reported.
+
+**Hosted instances**
+
+To upgrade a remote instance, we recommend the following dump-and-restore
+process:
+
+1. Gel v6.0 supports PostgreSQL 14 or above. Verify your PostgreSQL version
+   before upgrading Gel. If you're using Postgres 13 or below, upgrade
+   Postgres first.
+
+2. Spin up an empty 6.0 instance. You can use one of our :ref:`deployment
+   guides <ref_guide_deployment>`.
+
+   For Debian/Ubuntu, when adding the Gel package repository, use this
+   command:
+
+   .. code-block:: bash
+
+       $ echo deb [signed-by=/usr/local/share/keyrings/gel-keyring.gpg] \
+           https://packages.geldata.com/apt \
+           $(grep "VERSION_CODENAME=" /etc/os-release | cut -d= -f2) main \
+           | sudo tee /etc/apt/sources.list.d/gel.list
+       $ sudo apt-get update && sudo apt-get install gel-6
+
+   For CentOS/RHEL, use this installation command:
+
+   .. code-block:: bash
+
+       $ sudo yum install gel-6
+
+   In any required ``systemctl`` commands, replace ``edgedb-server-5`` with
+   ``gel-server-6``.
+
+   For Docker setups, use the ``6.0`` tag.
+
+3. Take your application offline, then dump your v5.x database with the CLI:
+
+   .. code-block:: bash
+
+       $ gel dump --dsn <old dsn> --all --format dir my_database.dump/
+
+   This will dump the schema and contents of your current database to a
+   directory on your local disk called ``my_database.dump``. The directory name
+   isn't important.
+
+4. Restore the empty v6.x instance from the dump:
+
+   .. code-block:: bash
+
+       $ gel restore --all my_database.dump/ --dsn <new dsn>
+
+   Once the restore is complete, update your application to connect to the new
+   instance.
+
+   This process will involve some downtime, specifically during steps 2 and 3.
+
+
+New features
+============
+
+SQL write support
+-----------------
+
+You can now use SQL DML (``insert``, ``update``, ``delete``) when connecting to
+your |Gel| instance via the PostgreSQL protocol. Our aim is to support most
+typical use cases from tools like SQL ORMs and SQL clients.
+
+This allows more developers to use Gel, leveraging our advanced data model,
+tooling, and high-performance connection management. Teams can migrate their
+existing SQL codebases to Gel without rewriting their queries. Once adopted,
+you can gradually take advantage of EdgeQL's powerful query capabilities.
+
+Existing Gel users who already use EdgeQL can benefit too. While some SQL
+features like window functions, recursive queries, and explicit locking are not
+yet supported, you can use these features in SQL today. We will continue to add
+support for more features in the future.
+
+In-place upgrade
+----------------
+
+We aim for this version to be the last requiring a full dump and restore
+process for major version upgrades. We understand that dump-and-restore is
+disruptive, so enabling in-place upgrades will make it easier for teams to
+upgrade more frequently.
+
+Query performance observability
+-------------------------------
+
+We now store statistics about query performance. These statistics are available
+in ``sys::QueryStats`` objects.
+
+.. code-block:: edgeql
+
+  select sys::QueryStats {
+    query,
+    queryType,
+    tag,
+    plans,
+    total_plan_time,
+    mean_plan_time,
+    calls,
+    total_exec_time,
+    mean_exec_time,
+  } filter .branch.name = sys::get_current_branch();
+
+More details to come in the reference documentation.
+
+ext::postgis
+----------------
+
+We've added support for the popular PostGIS extension for PostgreSQL. This
+extension adds support for geographic objects and spatial data types.
+
+std::net
+------------
+
+We've introduced a new standard library module for sending network requests,
+initially supporting HTTP. This module schedules asynchronous requests and
+allows you to poll for responses.
+
+ext::auth
+-------------
+
+We've introduced several new features to our authentication extension:
+
+- You can now configure generic OpenID Connect providers.
+- If using an OAuth provider that returns an ``id_token`` (like an OpenID
+  Connect compatible provider), you will now receive that validated token in
+  your callback. This simplifies using some of that data for your own User or
+  Profile objects, saving a roundtrip to the identity provider.
+- As an alternative (or in addition) to configuring SMTP for sending emails,
+  you can now configure a webhook for various authentication lifecycle events.
+  Use these webhooks to send custom emails, update analytics, or trigger other
+  workflows.
+- Previously, a missing PKCE session during email verification was treated as
+  an error. Now, we support verifying end-user emails from a different device
+  than the one used to start the sign-up or sign-in process. To enable
+  verification without PKCE, direct the end-user to attempt a login after
+  verifying their email, which will initiate a new flow.
+
+  Previously, the application couldn't identify which identity was being
+  created during sign-up until email verification was successful. When
+  verification occurred on the same device, it concluded with an auth token,
+  allowing the creation of a new ``User`` based on that token's identity. With
+  the new process, where users are directed to sign in after email
+  verification, there's no clear distinction between a regular sign-in (which
+  shouldn't create a new ``User``) and an interrupted sign-up (which should
+  create a new ``User``). To address this, we now return an ``identity_id`` in
+  the sign-up response, enabling you to create a ``User`` type before the email
+  is verified.
+- We now configure a development-only SMTP provider for instances hosted on
+  our Cloud. This SMTP proxy is heavily rate limited, and requires a fixed
+  sender email address. It is intended to be used for development and testing
+  purposes. Once you're ready to start sending real emails, you can configure
+  your own SMTP provider. We hope this will make it easier to get started with
+  a simple email-based authentication flow during early development.
+- Handle multiple WebAuthn email factors.
+  (:eql:gh:`#7861`)
+- Add logs to ``auth`` extension.
+  (:eql:gh:`#7944`)
+- Migrate ``ext::auth::SMTPConfig`` to ``cfg::EmailProvider``.
+  (:eql:gh:`#7942`)
+- Allow Magic Link to specify a custom link URL.
+  (:eql:gh:`#8030`)
+- Do not fail if SMTP provider is not configured.
+  (:eql:gh:`#8228`)
+
+**Breaking changes**
+
+- We have moved our SMTP configuration into a new top-level
+  ``cfg::SMTPProviderConfig`` configuration object. During the upgrade process,
+  your existing SMTP configuration will be migrated to this new object. If you
+  have any scripts that configure SMTP directly, update them to use the new
+  object.
+
+ext::ai
+-----------
+
+- We've updated the built-in list of models from our first-party LLM providers
+  to match the latest offerings from OpenAI, Anthropic, and Mistral.
+- We now pass LLM configuration query parameters through to the downstream
+  provider.
+- Add delays to AI embeddings requests based on rate limits provided by
+  provider.
+- Allow specifying underlying vector dimensions when creating an index.
+  (:eql:gh:`#8068`)
+
+Simpler scoping rules
+---------------------
+
+We've simplified the scoping rules for queries. See `our RFC 1027 outlining the
+changes <https://github.com/geldata/rfcs/blob/master/text/1027-no-factoring.rst>`_.
+
+The RFC highlights two main reasons for removing path factoring: the need to
+simplify and enhance the language, and concerns about implementation. Path
+factoring is complex and makes it hard to quickly understand a query's
+behavior. It also undermines several key design principles of EdgeQL. Although
+EdgeQL is intended to be read from top to bottom, path factoring allows later
+parts of a query to change its meaning significantly.
+
+By default in 6.0, we will generate new schemas that opt-in to the new scoping
+rules. Existing schemas will continue to use the old rules and emit warnings
+when queries that trigger the old behavior are encountered at query time.
+
+Command Hooks
+-------------
+
+We've added hooks for |gelcmd| CLI operations. Certain operations like
+switching branches or applying migrations have a profound effect on the state
+of the database. These types of changes may occasionally need to be
+synchronized with the rest of the project codebase. Whether it's a need to
+re-run some schema introspection tools or some fixture validation or
+re-generation tools, we now have a way to add hooks that will automatically
+execute after certain commands in your project.
+
+These hooks are declared in the |gel.toml| file. For example:
+
+.. code-block::
+
+    [hooks]
+    schema.update.after="scripts/extract_schema_docs.sh"
+
+This would run ``scripts/extract_schema_docs.sh`` script any time the schema
+changes (whether due to branch switch or applying a migration). In this
+example the script is meant to introspect the schema annotations and
+automatically generate some documentation files used in the project. But the
+mechanism is flexible enough to be used for automating a variety of project
+tasks.
+
+See `our RFC 1028 for more detials on the changes
+<https://github.com/edgedb/rfcs/blob/master/text/1028-cli-hooks.rst>`_.
+
+File Watchers
+-------------
+
+We've also added a way to respond to certain file changes within a project.
+The |gel.toml| now supports ``[[watch]]`` configuration to specify the files
+being watched and the script to be executed when changes occur. In order to
+enable this mode the |gelcmd| ``watch`` command is used.
+
+For example, the following configuration will watch for changes in the queries
+files and automatically attempt to re-generate the functions that allow
+executing these queries in a type-safe way:
+
+.. code-block::
+
+    [[watch]]
+    files = ["queries/*.edgeql"]
+    script = "npx @edgedb/generate queries"
+
+Multiple ``[[watch]]`` entires can be added to the |gel.toml| file, so that
+you can fine-tune how your project responds to important file changes.
+
+This changes how ``watch`` command funcitons. By default, ``gel watch`` will
+start the watch process and monitor files specified in |gel.toml|. In order to
+access the old functionality of ``edgedb watch`` (which was monitoring schema
+file changes and automatically applying them to the database) you now need to
+run ``gel watch --migrate``.
+
+See `our RFC 1028 for more detials on the changes
+<https://github.com/edgedb/rfcs/blob/master/text/1028-cli-hooks.rst>`_.
+
+
+Additional changes
+==================
+
+EdgeQL
+------
+
+* Free objects no longer have an ``id`` property. This is a breaking
+  change, though we expect the real-world impact to be minor. If you
+  need a dynamically generated new ID for free objects, it can be
+  added manually, using one of our UUID generation functions.
+
+  .. code-block:: edgeql
+
+    select {
+        id := uuid_generate_v1mc(),
+        property := 'Some string',
+    }
+
+* Add ``__default__`` keyword to refer to default value.
+  (:eql:gh:`#7214`)
+
+  This keyword allows referring to the default value in ``insert`` and
+  ``update`` statements. For example, consider the following schema:
+
+  .. code-block:: sdl
+
+      type Item {
+          name: str { default := 'New item' }
+      }
+
+  We can then insert a 'New item #1' by using the ``__default__`` value:
+
+  .. code-block:: edgeql-repl
+
+      db> insert Item {name := __default__ ++ ' #1'};
+      {default::Item {id: ebcfff62-eb91-11ef-a6b9-5ffb2f0b2940}}
+      db> select Item{name};
+      {default::Item {name: 'New item #1'}}
+
+* Add support for type expressions in intersections.
+  (:eql:gh:`#7172`)
+
+  Allow using ``&`` and ``|`` in expressions like this:
+
+  .. code-block:: edgeql
+
+      select Shape[is Circle | Triangle & HasRightAngle];
+
+* Add array modifying functions :eql:func:`array_set` and
+  :eql:func:`array_insert`.
+  (:eql:gh:`#7427`)
+
+* Add trigonometry functions.
+  (:eql:gh:`#8071`)
+
+  Add :eql:func:`math::pi`, :eql:func:`math::acos`, :eql:func:`math::asin`,
+  :eql:func:`math::atan`, :eql:func:`math::atan2`, :eql:func:`math::cos`,
+  :eql:func:`math::cot`, :eql:func:`math::sin`, :eql:func:`math::tan`.
+
+* Allow ``update`` and ``delete`` on type intersections.
+  (:eql:gh:`#7655`)
+
+  Given types ``A``, ``B``, and ``C``, allows expressions such as:
+
+  .. code-block:: edgeql
+
+      update A[is B & C]
+      set { foo := 123 }
+
+* Implement ``\(expr)``-style string interpolation.
+  (:eql:gh:`#8210`)
+
+  This enables the following expression:
+
+  .. code-block:: edgeql-repl
+
+      db> select "1 + 1 = \(1 + 1)"
+      {'1 + 1 = 2'}
+
+* Allow complex types as function params.
+  (:eql:gh:`#7759`)
+
+  Allow functions such as:
+
+  .. code-block:: sdl
+
+      function foo(x: A | B) -> int64 using (x.n);
+
+* Search ``std`` for module name when using ``with`` clause.
+  (:eql:gh:`#7753`, :eql:gh:`#7836`, :eql:gh:`#7743`)
+
+  We've consolidated many of the built-in modules as sub-modules under the
+  ``std`` umbrella.
+
+* Support accessing link properties through :eql:stmt:`for` bindings.
+  (:eql:gh:`#7805`)
+
+  Now you can write something like this:
+
+  .. code-block:: edgeql
+
+      select User {
+          cards := ((
+              for c in .deck[is HeartsCard]
+              select (c.name, c@order)
+          )),
+      }
+
+* Enable DML in user-defined functions.
+  (:eql:gh:`#7945`)
+
+  It is now possible to create this kind of function:
+
+  .. code-block:: sdl
+
+      function add_foo(x: int64) -> Foo using ((
+          insert Foo { val := x }
+      ));
+
+  A new ``Modifying`` volatility level is introduced to represent this.
+  (:eql:gh:`#7808`)
+
+* Support ``drop extension package`` of user-installed extensions.
+  (:eql:gh:`#7926`)
+
+* Warn when a ``filter`` clause has ``Many`` cardinality.
+  (:eql:gh:`#8089`)
+
+* Mark :eql:func:`assert_exists`, :eql:func:`assert_single`, and
+  :eql:func:`assert_distinct`  functions as being ``Immutable``.
+  (:eql:gh:`#8292`)
+
+* Expose ``administer statistics_update()``.
+  (:eql:gh:`#8335`)
+
+
+Other changes
+-------------
+
+* Require extension modules to live in ``ext::``.
+  (:eql:gh:`#7526`)
+
+* Use LRU/MRU to improve connection re-use.
+  (:eql:gh:`#7583`)
+
+* Change how globals affect internal alias names that may appear in
+  introspection.
+  (:eql:gh:`#7641`)
+
+* Rename ``sys::Database`` to ``sys::Branch``.
+  (:eql:gh:`#7653`)
+
+* Add ``std::net`` and ``std::net::http`` modules.
+  (:eql:gh:`#7676`, :eql:gh:`#7736`)
+
+* Add ``sys::Branch.last_migration``.
+  (:eql:gh:`#7654`)
+
+* Record SDL in ``schema::Migration`` object.
+  (:eql:gh:`#7673`)
+
+* Get ``std::net::http`` max connections from config.
+  (:eql:gh:`#7767`)
+
+* Add extension ``ext::pg_unaccent``.
+  (:eql:gh:`#7741`)
+
+* Implement warnings in the server.
+  (:eql:gh:`#7823`)
+
+* Update the ``ext::pgvector`` extension.
+  (:eql:gh:`#7812`)
+
+  Add ``sparcevec`` and ``halfvec`` types and update indexes and operators.
+
+* Avoid computing globals json if not needed for inlined function.
+  (:eql:gh:`#7920`)
+
+* Allow volatile ``with`` in DML statements.
+  (:eql:gh:`#7969`)
+
+* Make ``admin`` the default role instead of ``edgedb``.
+  (:eql:gh:`#8010`)
+
+* Support extension upgrades.
+  (:eql:gh:`#7998`)
+
+* Replace headers with annotations in Parse/Execute.
+  (:eql:gh:`#8037`)
+
+* Add TOML config file support.
+  (:eql:gh:`#8121`)
+
+* Allow tuples in GIN, GIST and BRIN indexes.
+  (:eql:gh:`#8232`)
+
+* Add a ``cors-always-allowed-origins`` option.
+  (:eql:gh:`#8233`)
+
+
+Bug fixes
+---------
+
+* Tweak parser to correctly report certain missing semicolons.
+  (:eql:gh:`#7252`)
+
+* Fix regression in using some tuple literals as a default.
+  (:eql:gh:`#7281`)
+
+* Fix handling of enums in arrays and multi properties in GraphQL.
+  (:eql:gh:`#3990`)
+
+* Improve error message when casting to collections.
+  (:eql:gh:`#7300`)
+
+* Improve :eql:type:`json` cast error messages.
+  (:eql:gh:`#7312`)
+
+* Improve error when accessing a non-existent tuple field.
+  (:eql:gh:`#7373`)
+
+* Fix an ISE on some specific operations with arrays.
+  (:eql:gh:`#7363`)
+
+* Catch illegal aggregate calls in constraints and indexes during
+  ``migration create``.
+  (:eql:gh:`#7343`)
+
+* Raise error when computed ``global`` is set or reset.
+  (:eql:gh:`#7374`)
+
+* Improve error messages for casts, :eql:op:`is`, and :eql:op:`introspect`.
+  (:eql:gh:`#7351`)
+
+* Fix recursive definition error when computed property refers to different
+  object's computed property.
+  (:eql:gh:`#7431`)
+
+* Fix issue with abstract types, exclusive constraints, and ``analyze``.
+  (:eql:gh:`#7454`)
+
+* Fix an issue with deletion policies affecting properties.
+  (:eql:gh:`#7675`)
+
+* Fix errors when resolving type intersections.
+  (:eql:gh:`#7662`)
+
+* Fix issues with ``branch`` commands that arise from network issues.
+  (:eql:gh:`#7773`)
+
+* Fix a regression involving optional arguments and :eql:func:`assert_exists`.
+  (:eql:gh:`#7798`)
+
+* Include more information in HTTP protocol errors.
+  (:eql:gh:`#7817`)
+
+* Raise error when passing multi cardinality args to modifying functions.
+  (:eql:gh:`#7816`)
+
+* Fix an issue with cardinality of :eql:type:`json` parameters.
+  (:eql:gh:`#7843`)
+
+* Encode offset positions as integers in json error encoding.
+  (:eql:gh:`#7842`)
+
+* Make ``configure current database`` block until configuration is actually
+  set.
+  (:eql:gh:`#7865`)
+
+* Fix shape not being copied when inlining parameters.
+  (:eql:gh:`#7872`)
+
+* Garbage collect ``std::net::http::ScheduleRequest``.
+  (:eql:gh:`#7888`)
+
+* Fix error when dropping non overloaded function.
+  (:eql:gh:`#7899`)
+
+* Fix embedding data being stored with the wrong entry.
+  (:eql:gh:`#7932`)
+
+* Fix an obscure bug deleting doubly nested alias tuples.
+  (:eql:gh:`#7956`)
+
+* Fix an schema issue with deleting collections.
+  (:eql:gh:`#7957`)
+
+* Automatically create array types for all scalars to avoid introspeciton
+  issues.
+  (:eql:gh:`#7970`)
+
+* Fix an edge case of calling value functions from range vars.
+  (:eql:gh:`#7982`)
+
+* Fix ISE when enumerating a call to an aggregate function.
+  (:eql:gh:`#7988`)
+
+* Fix free objects being materialized as if they are volatile.
+  (:eql:gh:`#8000`)
+
+* Fix aliases always being considered ``Immutable``.
+  (:eql:gh:`#8009`)
+
+* Fix ISE when taking intersection of types with pointers of the same name.
+  (:eql:gh:`#8012`)
+
+* Fix static types in subtypes under ``sysconfig``.
+  (:eql:gh:`#8054`)
+
+* Fix extension package installation on non ``--testmode`` servers.
+  (:eql:gh:`#8096`)
+
+* Fix cache key of source.
+  (:eql:gh:`#8103`)
+
+* Fix handling of invalid link properties.
+  (:eql:gh:`#8156`)
+
+* Delete old ``.s.EDGEDB.admin.XXX`` sockets.
+  (:eql:gh:`#8248`)
+
+* Fix broken error messages for type mismatches in a number of schema objects.
+  (:eql:gh:`#8294`)
+
+* Don't emit instance configs matching their defaults in
+  ``describe instance config``.
+  (:eql:gh:`#8316`)
+
+
+6.1
+===
+
+* Report migration count and object count as metrics
+  (:eql:gh:`#8369`)
+
+* Increase recursion limit in compiler worker processes.
+  This should fix dumps in some cases.
+  (:eql:gh:`#8379`)
+
+
+6.2
+===
+
+* Fix systemd service descriptions in distro packages
+
+* Fix tagging SQL over binary protocol
+  (:eql:gh:`#8371`)
+
+* Improve error message for $0 over SQL adapter
+  (:eql:gh:`#8388`)
+
+* Fix referencing ``ext::auth::ClientTokenIdentity`` from a link default
+  (:eql:gh:`#8394`)
+
+* Add default value for ``ai::EmbeddingModel::embedding_model_max_batch_tokens``
+  (:eql:gh:`#8406`)
+
+* Prevent ai extension connecting to branch being dropped
+  (:eql:gh:`#8416`)
+
+* Fix ``ON TARGET DELETE ALLOW`` behavior when link optionality is changed
+  (:eql:gh:`#8419`)
+
+* Fix server error when trying to register a new WebAuthn identity in the auth extension
+  (:eql:gh:`#8428`)
+
+* Fix schema reflection losing track of changes made while ``using future``
+  (:eql:gh:`#8435`)
+
+* Use correct docker repository when checking tags
+  (:eql:gh:`#8407`)
+
+* Fix parser span over SQL adapter
+  (:eql:gh:`#8399`)
+
+* Fix ``IS`` when the left-hand side is not just a path
+  (:eql:gh:`#8410`)
+
+6.3
+===
+
+* Make ``std::net`` polling output quieter
+  (:eql:gh:`#8450`)
+
+* Fix regression with ``UPDATE`` on a complex path with rewrite
+  (:eql:gh:`#8463`)
+
+* Make free objects always considered UNIQUE. This also fixes a regression
+  seen when using ``assert_distinct`` on free objects.
+  (:eql:gh:`#8464`)
+
+* Fix regression when using ``fts::index`` and certain inheritance patterns
+  (:eql:gh:`#8468`)
+
+* Fix function cache storage of queries that take enum parameters
+  (:eql:gh:`#8471`)
+
+6.4
+===
+
+* Use ``read committed`` when restoring dumps to improve restore performance
+  (:eql:gh:`#8496`)
+
+* Use ``COPY ... FREEZE`` when restoring dumps to improve restore performance
+  (:eql:gh:`#8494`)
+
+* pg-ext: add table name parsing in ``has_*privilege`` functions and fix ``pg_database`` view
+  (:eql:gh:`#8488`, fixes :eql:gh:`#8457`)
+
+* Fixed computed ptr with group by incorrectly inferring multiplicity
+  (:eql:gh:`#8485`, regression from :eql:gh:`#8464` in 6.3)

@@ -26,8 +26,6 @@ from edb.tools import test
 
 class TestEdgeQLFuncCalls(tb.QueryTestCase):
 
-    NO_FACTOR = True
-
     async def test_edgeql_calls_01(self):
         await self.con.execute('''
             CREATE FUNCTION call1(

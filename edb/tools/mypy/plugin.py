@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, AbstractSet, List, Set, NamedTuple
+from typing import Optional, AbstractSet, NamedTuple
 
 from mypy import exprtotype
 import mypy.plugin as mypy_plugin
@@ -67,7 +67,7 @@ class EDBPlugin(mypy_plugin.Plugin):
         mcls = ctx.cls.info.metaclass_type
         mcls_mro = mcls.type.mro if mcls else []
 
-        transformers: List[BaseTransformer] = []
+        transformers: list[BaseTransformer] = []
 
         if any(c.fullname in SCHEMA_BASE_METACLASSES for c in mcls_mro):
             transformers.append(
@@ -238,7 +238,7 @@ class BaseTransformer:
         metadata['fields'] = {f.name: f.serialize() for f in fields}
         metadata['processed'] = True
 
-    def _transform(self) -> List[Field]:
+    def _transform(self) -> list[Field]:
         raise NotImplementedError
 
     def _field_from_field_def(
@@ -249,14 +249,14 @@ class BaseTransformer:
     ) -> Optional[Field]:
         raise NotImplementedError
 
-    def _collect_fields(self) -> List[Field]:
+    def _collect_fields(self) -> list[Field]:
         """Collect all fields declared in a class and its ancestors."""
 
         cls = self._ctx.cls
 
-        fields: List[Field] = []
+        fields: list[Field] = []
 
-        known_fields: Set[str] = set()
+        known_fields: set[str] = set()
 
         for stmt in cls.defs.body:
             if not isinstance(stmt, nodes.AssignmentStmt):
@@ -313,10 +313,10 @@ class BaseTransformer:
         accessor = cls.info.names.get(f'get_{fieldname}')
         return accessor is not None and not accessor.plugin_generated
 
-    def _get_inherited_fields(self, self_fields: Set[str]) -> List[Field]:
+    def _get_inherited_fields(self, self_fields: set[str]) -> list[Field]:
         ctx = self._ctx
         cls = ctx.cls
-        all_fields: List[Field] = []
+        all_fields: list[Field] = []
         known_fields = set(self_fields)
 
         for ancestor_info in cls.info.mro[1:-1]:
@@ -344,7 +344,7 @@ class BaseTransformer:
 
         return all_fields
 
-    def _synthesize_init(self, fields: List[Field]) -> None:
+    def _synthesize_init(self, fields: list[Field]) -> None:
         ctx = self._ctx
         cls_info = ctx.cls.info
 
@@ -470,7 +470,7 @@ class BaseStructTransformer(BaseTransformer):
 
 class StructTransformer(BaseStructTransformer):
 
-    def _transform(self) -> List[Field]:
+    def _transform(self) -> list[Field]:
         fields = self._collect_fields()
         self._synthesize_init(fields)
         return fields
@@ -504,7 +504,7 @@ class StructTransformer(BaseStructTransformer):
 
 class SchemaClassTransformer(BaseStructTransformer):
 
-    def _transform(self) -> List[Field]:
+    def _transform(self) -> list[Field]:
         ctx = self._ctx
         fields = self._collect_fields()
         schema_t = self._lookup_type('edb.schema.schema.Schema')
@@ -535,7 +535,7 @@ class SchemaClassTransformer(BaseStructTransformer):
 
 class ASTClassTransformer(BaseTransformer):
 
-    def _transform(self) -> List[Field]:
+    def _transform(self) -> list[Field]:
         fields = self._collect_fields()
         self._synthesize_init(fields)
         return fields

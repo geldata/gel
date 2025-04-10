@@ -248,3 +248,20 @@ class WebAuthnAuthenticationFailed(AuthExtError):
 
     def __str__(self) -> str:
         return self.description
+
+
+class WebAuthnRegistrationFailed(AuthExtError):
+    """WebAuthn registration failed"""
+
+    def __init__(self, description: str = "WebAuthn registration failed"):
+        self.description = description
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"description={self.description!r}"
+            ")"
+        )
+
+    def __str__(self) -> str:
+        return self.description

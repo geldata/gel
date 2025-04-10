@@ -16,15 +16,18 @@
 # limitations under the License.
 #
 
+import asyncio
 import csv
+import decimal
 import io
 import os.path
-from typing import Coroutine, Optional, Tuple
+import subprocess
+from typing import Coroutine, Optional
 import unittest
 import uuid
-import asyncio
 
 from edb.tools import test
+from edb.server import pgcluster
 from edb.testbase import server as tb
 
 import edgedb
@@ -42,8 +45,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
     SCHEMA_INVENTORY = os.path.join(
         os.path.dirname(__file__), 'schemas', 'inventory.esdl'
     )
-
-    TRANSACTION_ISOLATION = False  # needed for test_sql_query_set_04
 
     SETUP = [
         '''
@@ -92,17 +93,46 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         };
 
         create global glob_mod::a: str;
-        create global glob_mod::b: str;
+        create global glob_mod::b: bool;
         create type glob_mod::Computed {
             create property a := global glob_mod::a;
             create property b := global glob_mod::b;
         };
         insert glob_mod::Computed;
+
+        create module Dup;
+        create type Dup::Movie;
         ''',
         os.path.join(
             os.path.dirname(__file__), 'schemas', 'movies_setup.edgeql'
         ),
     ]
+
+    async def test_sql_query_psql_describe_01(self):
+        dsn = self.get_sql_proto_dsn()
+        pg_bin_dir = await pgcluster.get_pg_bin_dir()
+
+        # Run a describe command in psql
+        cmd = [
+            pg_bin_dir / 'psql',
+            '--dbname', dsn,
+            '-c',
+            '\\d "Person"',
+        ]
+        try:
+            subprocess.run(
+                cmd,
+                input=None,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT
+            )
+        except subprocess.CalledProcessError as e:
+            raise AssertionError(
+                f'command {cmd} returned non-zero exit status '
+                f'{e.returncode}\n{e.output}'
+            ) from e
 
     async def test_sql_query_00(self):
         # basic
@@ -478,7 +508,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
 
         # multi
         res = await self.scon.fetch('SELECT * FROM "Movie.actors"')
-        self.assert_shape(res, 3, ['source', 'target', 'role'])
+        self.assert_shape(res, 3, ['source', 'target', 'role', 'role_lower'])
 
         # single with properties
         res = await self.scon.fetch('SELECT * FROM "Movie.director"')
@@ -621,8 +651,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
 
     async def test_sql_query_33a(self):
         # system columns when access policies are applied
-        tran = self.scon.transaction()
-        await tran.start()
         await self.scon.execute('SET LOCAL apply_access_policies_pg TO true')
         await self.scon.execute(
             """SET LOCAL "global default::filter_title" TO 'Halo 3'"""
@@ -649,8 +677,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             '''
         )
         self.assertEqual(len(res[0]), 6)
-
-        await tran.rollback()
 
     async def test_sql_query_34(self):
         # GROUP and ORDER BY aliased column
@@ -717,6 +743,17 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ],
         )
 
+    async def test_sql_query_38a(self):
+        res = await self.squery_values(
+            'VALUES (1), (NULL)'
+        )
+        self.assertEqual(res, [[1], [None]])
+
+        res = await self.squery_values(
+            'VALUES (NULL), (1)'
+        )
+        self.assertEqual(res, [[None], [1]])
+
     async def test_sql_query_39(self):
         res = await self.squery_values(
             '''
@@ -778,9 +815,19 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         self.assertEqual(res, [[id]])
 
     async def test_sql_query_41(self):
-        # bytea literal
+        from asyncpg.types import BitString
+
+        # bit string literal
         res = await self.squery_values("SELECT x'00abcdef00';")
-        self.assertEqual(res, [[b'\x00\xab\xcd\xef\x00']])
+        self.assertEqual(res, [[BitString.frombytes(b'\x00\xab\xcd\xef\x00')]])
+
+        res = await self.squery_values("SELECT x'01001ab';")
+        self.assertEqual(
+            res, [[BitString.frombytes(b'\x01\x00\x1a\xb0', bitlength=28)]]
+        )
+
+        res = await self.squery_values("SELECT b'101';")
+        self.assertEqual(res, [[BitString.frombytes(b'\xa0', bitlength=3)]])
 
     async def test_sql_query_42(self):
         # params out of order
@@ -793,8 +840,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         )
         self.assertEqual(res, [[42, True, 'hello']])
 
-        tran = self.scon.transaction()
-        await tran.start()
         res = await self.scon.execute(
             '''
             UPDATE "Book" SET pages = $1 WHERE (title = $2)
@@ -803,7 +848,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             'Chronicles of Narnia',
         )
         self.assertEqual(res, 'UPDATE 1')
-        await tran.rollback()
 
     async def test_sql_query_43(self):
         # USING factoring
@@ -881,9 +925,13 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         # we'd ideally want a message that hints that it should use quotes
 
         with self.assertRaisesRegex(
-            asyncpg.InvalidColumnReferenceError, 'cannot find column `name`'
+            asyncpg.UndefinedColumnError, 'column \"name\" does not exist'
         ):
             await self.squery_values('SELECT name FROM User')
+
+        val = await self.scon.fetch('SELECT * FROM User')
+        self.assert_shape(val, 1, ['user'])
+        self.assertEqual(tuple(val[0].values()), ('admin',))
 
     async def test_sql_query_45(self):
         res = await self.scon.fetch('SELECT 1 AS a, 2 AS a')
@@ -995,7 +1043,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         # where you can issue only one statement.
         with self.assertRaisesRegex(
             asyncpg.PostgresSyntaxError,
-            'cannot insert multiple commands into a prepared statement'
+            'cannot insert multiple commands into a prepared statement',
         ):
             await self.scon.execute(
                 '''
@@ -1003,20 +1051,159 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 SELECT $2::int as i;
                 ''',
                 'hello',
-                42
+                42,
             )
 
     async def test_sql_query_54(self):
         with self.assertRaisesRegex(
-            asyncpg.UndefinedParameterError,
-            'there is no parameter \\$0'
+            asyncpg.UndefinedParameterError, 'param out of bounds: \\$0',
+            hint='query parameters start with 1'
         ):
             await self.scon.fetch(
                 '''
                 SELECT $0::text as t;
                 ''',
-                'hello'
+                'hello',
             )
+
+    async def test_sql_query_55(self):
+        res = await self.squery_values(
+            '''
+            SELECT ROW(TRUE, 1, 1.1, 'hello', x'012', b'001')
+            ''',
+        )
+        self.assertEqual(res, [[
+            (
+                True,
+                1,
+                decimal.Decimal('1.1'),
+                'hello',
+                asyncpg.BitString.frombytes(b'\x01\x20', 12),
+                asyncpg.BitString.frombytes(b'\x20', 3),
+            )
+        ]])
+
+    async def test_sql_query_56(self):
+        # recursive
+
+        res = await self.squery_values(
+            '''
+            WITH RECURSIVE
+              integers(n) AS (
+                  SELECT 0
+                UNION ALL
+                  SELECT n + 1 FROM integers
+                  WHERE n + 1 < 5
+              )
+            SELECT n FROM integers
+            ''',
+        )
+        self.assertEqual(res, [
+            [0],
+            [1],
+            [2],
+            [3],
+            [4],
+        ])
+
+        res = await self.squery_values(
+            '''
+            WITH RECURSIVE
+              fibonacci(n, prev, val) AS (
+                  SELECT 1, 0, 1
+                UNION ALL
+                  SELECT n + 1, val, prev + val
+                  FROM fibonacci
+                  WHERE n + 1 < 10
+              )
+            SELECT n, val FROM fibonacci;
+            '''
+        )
+        self.assertEqual(res, [
+            [1, 1],
+            [2, 1],
+            [3, 2],
+            [4, 3],
+            [5, 5],
+            [6, 8],
+            [7, 13],
+            [8, 21],
+            [9, 34],
+        ])
+
+        res = await self.squery_values(
+            '''
+            WITH RECURSIVE
+              fibonacci(n, prev, val) AS (
+                  SELECT 1, 0, 1
+                UNION ALL
+                  SELECT n + 1, val, prev + val
+                  FROM fibonacci
+                  WHERE n + 1 < 8
+              ),
+              integers(n) AS (
+                  SELECT 0
+                UNION ALL
+                  SELECT n + 1 FROM integers
+                  WHERE n + 1 < 5
+              )
+            SELECT f.n, f.val FROM fibonacci f, integers i where f.n = i.n;
+            '''
+        )
+        self.assertEqual(res, [
+            [1, 1],
+            [2, 1],
+            [3, 2],
+            [4, 3],
+        ])
+
+        res = await self.squery_values(
+            '''
+            WITH RECURSIVE
+              a as (SELECT 12 as n),
+              integers(n) AS (
+                  SELECT 0
+                UNION ALL
+                  SELECT n + 1 FROM integers
+                  WHERE n + 1 < 5
+              )
+            SELECT * FROM a, integers;
+            '''
+        )
+        self.assertEqual(res, [
+            [12, 0],
+            [12, 1],
+            [12, 2],
+            [12, 3],
+            [12, 4],
+        ])
+
+    async def test_sql_query_57(self):
+        res = await self.squery_values(
+            f'''
+            (select 1 limit 1) union (select 2 limit 1);
+            '''
+        )
+        self.assertEqual(
+            res,
+            [
+                [1],
+                [2],
+            ]
+        )
+
+        res = await self.squery_values(
+            f'''
+            (select 1) union (select 2) LIMIT $1;
+            ''',
+            1
+        )
+        self.assertEqual(
+            res,
+            [
+                [1],
+            ]
+        )
 
     async def test_sql_query_introspection_00(self):
         dbname = self.con.dbname
@@ -1095,16 +1282,18 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 ['Movie.actors', 'source', 'NO', 1],
                 ['Movie.actors', 'target', 'NO', 2],
                 ['Movie.actors', 'role', 'YES', 3],
+                ['Movie.actors', 'role_lower', 'YES', 4],
                 ['Movie.director', 'source', 'NO', 1],
                 ['Movie.director', 'target', 'NO', 2],
                 ['Movie.director', 'bar', 'YES', 3],
                 ['Person', 'id', 'NO', 1],
                 ['Person', '__type__', 'NO', 2],
-                ['Person', 'favorite_genre_id', 'YES', 3],
-                ['Person', 'first_name', 'NO', 4],
-                ['Person', 'full_name', 'NO', 5],
-                ['Person', 'last_name', 'YES', 6],
-                ['Person', 'username', 'NO', 7],
+                ['Person', 'directed_movie_id', 'YES', 3],
+                ['Person', 'favorite_genre_id', 'YES', 4],
+                ['Person', 'first_name', 'NO', 5],
+                ['Person', 'full_name', 'NO', 6],
+                ['Person', 'last_name', 'YES', 7],
+                ['Person', 'username', 'NO', 8],
                 ['novel', 'id', 'NO', 1],
                 ['novel', '__type__', 'NO', 2],
                 ['novel', 'foo', 'YES', 3],
@@ -1156,13 +1345,27 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'pg_toast'
                 AND has_schema_privilege(n.oid, 'USAGE')
-            ORDER BY relname LIMIT 1
+            ORDER BY relname
             '''
         )
-        # res may be empty
+        if len(res) == 0:
+            return
+
+        # verify that at least one of the pg_toast tables exists
+        had_success = False
+        exception = None
         for [toast_table] in res:
-            # Result will probably be empty, so we cannot validate column names
-            await self.squery_values(f'SELECT * FROM pg_toast.{toast_table}')
+            try:
+                # Result will probably be empty, so we cannot validate column
+                # names
+                await self.squery_values(
+                    f'SELECT * FROM pg_toast.{toast_table}'
+                )
+                had_success = True
+            except BaseException as e:
+                exception = e
+        if not had_success:
+            raise exception
 
     async def test_sql_query_introspection_04(self):
         res = await self.squery_values(
@@ -1202,6 +1405,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             SELECT pc.relname, pcon.contype, pa.key, pcf.relname, paf.key
             FROM pg_constraint pcon
             JOIN pg_class pc ON pc.oid = pcon.conrelid
+            LEFT JOIN pg_namespace pn ON pn.oid = pc.relnamespace
             LEFT JOIN pg_class pcf ON pcf.oid = pcon.confrelid
             LEFT JOIN LATERAL (
                 SELECT string_agg(attname, ',') as key
@@ -1218,7 +1422,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             WHERE pc.relname IN (
                 'Book.chapters', 'Movie', 'Movie.director', 'Movie.actors'
             )
-            ORDER BY pc.relname ASC, pcon.contype DESC, pa.key
+            ORDER BY pc.relname ASC, pn.nspname ASC, pcon.contype DESC, pa.key
             '''
         )
 
@@ -1226,6 +1430,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             res,
             [
                 ['Book.chapters', b'f', 'source', 'Book', 'id'],
+                ['Movie', b'p', 'id', None, None],
                 ['Movie', b'p', 'id', None, None],
                 ['Movie', b'f', 'director_id', 'Person', 'id'],
                 ['Movie', b'f', 'genre_id', 'Genre', 'id'],
@@ -1236,6 +1441,28 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 ['Movie.director', b'f', 'source', 'Movie', 'id'],
                 ['Movie.director', b'f', 'target', 'Person', 'id'],
             ],
+        )
+
+    async def test_sql_query_introspection_06(self):
+        res = await self.squery_values(
+            '''
+            SELECT column_name, col_description(
+                'public.novel'::regclass::oid, ordinal_position)
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'novel'
+            ORDER BY ordinal_position
+            '''
+        )
+        self.assertEqual(
+            res,
+            [
+                ['id', '__::pages'],
+                ['__type__', '__::id'],
+                ['foo', '__::title'],
+                ['genre_id', '__::genre'],
+                ['pages', '__::foo'],
+                ['title', None],
+            ]
         )
 
     async def test_sql_query_schemas_01(self):
@@ -1279,151 +1506,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         # HACK: Set search_path back to public
         await self.scon.execute('SET search_path TO public;')
 
-    async def test_sql_query_set_01(self):
-        # initial state: search_path=public
-        res = await self.squery_values('SHOW search_path;')
-        self.assertEqual(res, [['public']])
-
-        # enter transaction
-        tran = self.scon.transaction()
-        await tran.start()
-
-        # set
-        await self.scon.execute('SET LOCAL search_path TO inventory;')
-
-        await self.scon.fetch('SELECT id FROM "Item";')
-        res = await self.squery_values('SHOW search_path;')
-        self.assertEqual(res, [["inventory"]])
-
-        # finish
-        await tran.commit()
-
-        # because we used LOCAL, value should be reset after transaction is over
-        res = await self.squery_values('SHOW search_path;')
-        self.assertEqual(res, [["public"]])
-
-    async def test_sql_query_set_02(self):
-        # initial state: search_path=public
-        res = await self.squery_values('SHOW search_path;')
-        self.assertEqual(res, [['public']])
-
-        # enter transaction
-        tran = self.scon.transaction()
-        await tran.start()
-
-        # set
-        await self.scon.execute('SET search_path TO inventory;')
-
-        res = await self.squery_values('SHOW search_path;')
-        self.assertEqual(res, [["inventory"]])
-
-        # commit
-        await tran.commit()
-
-        # it should still be changed, since we SET was not LOCAL
-        await self.scon.fetch('SELECT id FROM "Item";')
-        res = await self.squery_values('SHOW search_path;')
-        self.assertEqual(res, [["inventory"]])
-
-        # reset to default value
-        await self.scon.execute('RESET search_path;')
-        res = await self.squery_values('SHOW search_path;')
-        self.assertEqual(res, [["public"]])
-
-    async def test_sql_query_set_03(self):
-        # initial state: search_path=public
-        res = await self.squery_values('SHOW search_path;')
-        self.assertEqual(res, [['public']])
-
-        # start
-        tran = self.scon.transaction()
-        await tran.start()
-
-        # set
-        await self.scon.execute('SET search_path TO inventory;')
-
-        res = await self.squery_values('SHOW search_path;')
-        self.assertEqual(res, [["inventory"]])
-
-        # rollback
-        await tran.rollback()
-
-        # because transaction was rolled back, value should be reset
-        res = await self.squery_values('SHOW search_path;')
-        self.assertEqual(res, [["public"]])
-
-    async def test_sql_query_set_04(self):
-        # database settings allow_user_specified_ids & apply_access_policies_pg
-        # should be unified over EdgeQL and SQL adapter
-
-        async def set_current_database(val: Optional[bool]):
-            if val is None:
-                await self.con.execute(
-                    f'''
-                    configure current database
-                        reset apply_access_policies_pg;
-                    '''
-                )
-            else:
-                await self.con.execute(
-                    f'''
-                    configure current database
-                        set apply_access_policies_pg := {str(val).lower()};
-                    '''
-                )
-
-        async def set_sql(val: Optional[bool]):
-            if val is None:
-                await self.scon.execute(
-                    f'''
-                    RESET apply_access_policies_pg;
-                    '''
-                )
-            else:
-                await self.scon.execute(
-                    f'''
-                    SET apply_access_policies_pg TO '{str(val).lower()}';
-                    '''
-                )
-
-        async def are_policies_applied() -> bool:
-            res = await self.squery_values(
-                'SELECT title FROM "Content" ORDER BY title'
-            )
-            return len(res) == 0
-
-        await set_current_database(True)
-        await set_sql(True)
-        self.assertEqual(await are_policies_applied(), True)
-
-        await set_sql(False)
-        self.assertEqual(await are_policies_applied(), False)
-
-        await set_sql(None)
-        self.assertEqual(await are_policies_applied(), True)
-
-        await set_current_database(False)
-        await set_sql(True)
-        self.assertEqual(await are_policies_applied(), True)
-
-        await set_sql(False)
-        self.assertEqual(await are_policies_applied(), False)
-
-        await set_sql(None)
-        self.assertEqual(await are_policies_applied(), False)
-
-        await set_current_database(None)
-        await set_sql(True)
-        self.assertEqual(await are_policies_applied(), True)
-
-        await set_sql(False)
-        self.assertEqual(await are_policies_applied(), False)
-
-        await set_sql(None)
-        self.assertEqual(await are_policies_applied(), False)
-
-        # setting cleanup not needed, since with end with the None, None
-
     async def test_sql_query_static_eval_01(self):
         res = await self.squery_values('select current_schema;')
         self.assertEqual(res, [['public']])
@@ -1439,8 +1521,15 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         res = await self.squery_values('select current_catalog;')
         self.assertEqual(res, [[self.con.dbname]])
 
+        res = await self.squery_values('select current_schemas(false);')
+        self.assertEqual(res, [[['blah', 'foo']]])
+
+        # Make sure the static evaluation doesn't get cached incorrectly.
         res = await self.squery_values('select current_schemas(true);')
         self.assertEqual(res, [[['pg_catalog', 'blah', 'foo']]])
+
+        with self.assertRaises(asyncpg.UndefinedFunctionError):
+            await self.squery_values('select current_schemas($1);')
 
     async def test_sql_query_static_eval_02(self):
         await self.scon.execute(
@@ -1473,8 +1562,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             '''
         )
         self.assertEqual(res1, res2)
-        assert isinstance(res1, int)
-        assert isinstance(res2, int)
 
         res = await self.squery_values(
             r'''
@@ -1483,6 +1570,15 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             '''
         )
         self.assertEqual(res, [[11]])
+
+    async def test_sql_query_static_eval_04a(self):
+        [[res1, res2]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie.actors"'),
+                format('%I.%I', 'public', 'Movie.actors')::regclass
+            '''
+        )
+        self.assertEqual(res1, res2)
 
     async def test_sql_query_static_eval_05(self):
         # pg_get_serial_sequence always returns NULL, we don't expose sequences
@@ -1498,6 +1594,20 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 AS OID
               )
             '''
+        )
+        self.assertEqual(res, [[None]])
+
+    @test.xerror('TODO')
+    async def test_sql_query_static_eval_05a(self):
+        # This fails becuase params are not in the compiled query and postgres
+        # cannot infer the type of params.
+
+        res = await self.squery_values(
+            '''
+            SELECT pg_catalog.pg_get_serial_sequence($1, $2)
+            ''',
+            'a',
+            'b',
         )
         self.assertEqual(res, [[None]])
 
@@ -1530,6 +1640,58 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ],
         )
 
+    async def test_sql_query_static_eval_07(self):
+        # to_regclass() is aware of search_path
+        await self.scon.execute('SET search_path TO public, "Dup";')
+        [[res1, res2]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie"'), 'public."Movie"'::regclass;
+            '''
+        )
+        self.assertEqual(res1, res2)
+
+        # Now flip the search_path
+        await self.scon.execute('SET search_path TO "Dup", public;')
+        [[res3, res4]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie"'), '"Dup"."Movie"'::regclass;
+            '''
+        )
+        self.assertEqual(res3, res4)
+
+        self.assertNotEqual(res1, res3)
+
+        # Emulate a typo in search_path, Dup without quotes will be lowercased,
+        # and thus not found; `public` will be used instead.
+        await self.scon.execute('SET search_path TO Dup, public;')
+        [[res5]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie"')
+            '''
+        )
+        self.assertEqual(res5, res1)
+
+    async def test_sql_query_static_eval_08(self):
+        # to_regclass() is aware of implicit search_path like pg_catalog
+        await self.scon.execute('SET search_path TO nonexist;')
+        [[res1, res2]] = await self.squery_values(
+            '''
+            SELECT to_regclass('pg_database'),
+                'pg_catalog.pg_database'::regclass;
+            '''
+        )
+        self.assertEqual(res1, res2)
+
+    async def test_sql_native_query_static_eval_01(self):
+        await self.assert_sql_query_result(
+            'select current_schemas(false);',
+            [{'current_schemas': ['public']}],
+        )
+        await self.assert_sql_query_result(
+            'select current_schemas(true);',
+            [{'current_schemas': ['pg_catalog', 'public']}],
+        )
+
     async def test_sql_query_be_state(self):
         con = await self.connect(database=self.con.dbname)
         try:
@@ -1554,21 +1716,93 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         finally:
             await con.aclose()
 
+    async def test_sql_query_privileges_01(self):
+
+        res = await self.squery_values(
+            '''
+            select has_database_privilege($1, 'CONNECT');
+            ''',
+            self.con.dbname,
+        )
+        self.assertEqual(res, [[True]])
+
+    async def test_sql_query_privileges_02(self):
+        res = await self.squery_values(
+            '''
+            select has_table_privilege('"Movie"', 'SELECT');
+            '''
+        )
+        self.assertEqual(res, [[True]])
+
+    async def test_sql_query_privileges_03(self):
+        res = await self.squery_values(
+            '''
+            select has_column_privilege('"Movie"', 'title', 'SELECT');
+            '''
+        )
+        self.assertEqual(res, [[True]])
+
+    async def test_sql_query_privileges_04(self):
+        res = await self.squery_values(
+            '''
+            select has_any_column_privilege('"Movie"', 'SELECT');
+            '''
+        )
+        self.assertEqual(res, [[True]])
+
     async def test_sql_query_client_encoding_1(self):
+        self.assertEqual(
+            self.scon.get_settings().client_encoding.lower(), "utf_8"
+        )
         rv1 = await self.squery_values('select * from "Genre" order by id')
         await self.squery_values("set client_encoding to 'GBK'")
         rv2 = await self.squery_values('select * from "Genre" order by id')
+        self.assertEqual(
+            self.scon.get_settings().client_encoding.lower(), "gbk"
+        )
         self.assertEqual(rv1, rv2)
 
     async def test_sql_query_client_encoding_2(self):
         await self.squery_values("set client_encoding to 'sql-ascii'")
+        self.assertEqual(
+            self.scon.get_settings().client_encoding.lower(), "sql_ascii"
+        )
         await self.squery_values('select * from "Movie"')
         with self.assertRaises(UnicodeDecodeError):
             await self.squery_values('select * from "Genre"')
 
         await self.squery_values("set client_encoding to 'latin1'")
+        self.assertEqual(
+            self.scon.get_settings().client_encoding.lower(), "latin1"
+        )
         with self.assertRaises(asyncpg.UntranslatableCharacterError):
             await self.squery_values('select * from "Genre"')
+
+        # Bug workaround: because of MagicStack/asyncpg#1215, if an
+        # error occurs inside a transaction where a config was set,
+        # when the transaction is rolled back the client-side version
+        # of that config is not reverted. This was causing other tests
+        # to fail with encoding errors.
+        # Get things back into a good state.
+        await self.stran.rollback()
+        self.stran = self.scon.transaction()
+        await self.stran.start()
+        # ... need to change it away then change it back to have it show up
+        await self.squery_values("set client_encoding to 'latin1'")
+        await self.squery_values("set client_encoding to 'UTF8'")
+        self.assertEqual(
+            self.scon.get_settings().client_encoding.lower(), "utf8"
+        )
+
+    async def test_sql_query_client_encoding_3(self):
+        non_english = "奇奇怪怪"
+        rv1 = await self.squery_values('select $1::text', non_english)
+        await self.squery_values("set client_encoding to 'GBK'")
+        rv2 = await self.squery_values('select $1::text', non_english)
+        self.assertEqual(
+            self.scon.get_settings().client_encoding.lower(), "gbk"
+        )
+        self.assertEqual(rv1, rv2)
 
     async def test_sql_query_server_version(self):
         version = await self.scon.fetchval("show server_version")
@@ -1592,26 +1826,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         version = await self.scon.fetchrow("select version()")
         self.assertTrue(version["version"].startswith("PostgreSQL "))
         self.assertIn("Gel", version["version"])
-
-    async def test_sql_transaction_01(self):
-        await self.scon.execute(
-            """
-            BEGIN;
-            SELECT * FROM "Genre" ORDER BY id;
-            COMMIT;
-            """,
-        )
-
-    async def test_sql_transaction_02(self):
-        await self.scon.execute("BEGIN")
-        await self.scon.execute(
-            "SET TRANSACTION ISOLATION LEVEL read uncommitted"
-        )
-        v1 = await self.scon.fetchval("SHOW transaction_isolation")
-        self.assertEqual(v1, "read uncommitted")
-        await self.scon.execute("ROLLBACK")
-        v2 = await self.scon.fetchval("SHOW transaction_isolation")
-        self.assertNotEqual(v1, v2)
 
     async def test_sql_query_copy_01(self):
         # copy without columns should select all columns
@@ -1686,152 +1900,121 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ),
         )
 
+    async def test_sql_query_copy_05(self):
+        # copy of a link table with link prop
+
+        out = io.BytesIO()
+        await self.scon.copy_from_table(
+            "Movie.actors",
+            output=out,
+            format="csv",
+            delimiter="\t",
+        )
+        out = io.StringIO(out.getvalue().decode("utf-8"))
+        res = list(csv.reader(out, delimiter="\t"))
+
+        # columns: 0      1      2
+        #          source target role
+        self.assertEqual(
+            {row[2] for row in res},
+            {"Captain Miller", ""}
+        )
+
     async def test_sql_query_error_01(self):
         with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            "type integer",
+            asyncpg.UndefinedFunctionError,
+            "does not exist",
             position="12",
         ):
-            await self.scon.execute("SELECT 1 + 'foo'")
+            await self.scon.execute("SELECT 1 + asdf()")
 
     async def test_sql_query_error_02(self):
         with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            "type integer",
+            asyncpg.UndefinedFunctionError,
+            "does not exist",
             position="10",
         ):
-            await self.scon.execute("SELECT 1+'foo'")
+            await self.scon.execute("SELECT 1+asdf()")
 
     async def test_sql_query_error_03(self):
         with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            "type integer",
+            asyncpg.UndefinedFunctionError,
+            "does not exist",
             position="28",
         ):
             await self.scon.execute(
                 """SELECT 1 +
-                'foo'"""
+                asdf()"""
             )
 
     async def test_sql_query_error_04(self):
         with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            "type integer",
+            asyncpg.UndefinedFunctionError,
+            "does not exist",
             position="12",
         ):
             await self.scon.execute(
-                '''SELECT 1 + 'foo' FROM "Movie" ORDER BY id'''
+                '''SELECT 1 + asdf() FROM "Movie" ORDER BY id'''
             )
 
     async def test_sql_query_error_05(self):
         with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            "type integer",
+            asyncpg.UndefinedFunctionError,
+            "does not exist",
             position="28",
         ):
             await self.scon.execute(
                 '''SELECT 1 +
-                'foo' FROM "Movie" ORDER BY id'''
+                asdf() FROM "Movie" ORDER BY id'''
             )
 
     async def test_sql_query_error_06(self):
         with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            "type integer",
+            asyncpg.UndefinedFunctionError,
+            "does not exist",
             position="12",
         ):
-            await self.scon.fetch("SELECT 1 + 'foo'")
+            await self.scon.fetch("SELECT 1 + asdf()")
 
     async def test_sql_query_error_07(self):
         with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            "type integer",
+            asyncpg.UndefinedFunctionError,
+            "does not exist",
             position="10",
         ):
-            await self.scon.fetch("SELECT 1+'foo'")
+            await self.scon.fetch("SELECT 1+asdf()")
 
     async def test_sql_query_error_08(self):
         with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            "type integer",
+            asyncpg.UndefinedFunctionError,
+            "does not exist",
             position="28",
         ):
             await self.scon.fetch(
                 """SELECT 1 +
-                'foo'"""
+                asdf()"""
             )
 
     async def test_sql_query_error_09(self):
         with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            "type integer",
+            asyncpg.UndefinedFunctionError,
+            "does not exist",
             position="12",
         ):
             await self.scon.fetch(
-                '''SELECT 1 + 'foo' FROM "Movie" ORDER BY id'''
+                '''SELECT 1 + asdf() FROM "Movie" ORDER BY id'''
             )
 
     async def test_sql_query_error_10(self):
         with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            "type integer",
+            asyncpg.UndefinedFunctionError,
+            "does not exist",
             position="28",
         ):
             await self.scon.fetch(
                 '''SELECT 1 +
-                'foo' FROM "Movie" ORDER BY id'''
+                asdf() FROM "Movie" ORDER BY id'''
             )
-
-    async def test_sql_query_error_11(self):
-        # extended query protocol
-        with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            'invalid input syntax for type uuid',
-            position="8",
-        ):
-            await self.scon.fetch("""SELECT 'bad uuid'::uuid""")
-
-        # simple query protocol
-        with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            'invalid input syntax for type uuid',
-            position="8",
-        ):
-            await self.scon.execute("""SELECT 'bad uuid'::uuid""")
-
-        # test that the connection has not be spuriously closed
-        res = await self.squery_values("SELECT 1")
-        self.assertEqual(res, [[1]])
-
-    async def test_sql_query_error_12(self):
-        tran = self.scon.transaction()
-        await tran.start()
-
-        with self.assertRaisesRegex(
-            asyncpg.InvalidTextRepresentationError,
-            'invalid input syntax for type uuid',
-            position="8",
-        ):
-            await self.scon.fetch("""SELECT 'bad uuid'::uuid""")
-
-        await tran.rollback()
-
-        # test that the connection has not be spuriously closed
-        res = await self.squery_values("SELECT 1")
-        self.assertEqual(res, [[1]])
-
-    async def test_sql_query_error_13(self):
-        # forbidden functions
-
-        with self.assertRaisesRegex(
-            asyncpg.InsufficientPrivilegeError,
-            'forbidden function',
-            position="8",
-        ):
-            await self.scon.fetch("""SELECT pg_ls_dir('/')""")
-
-        res = await self.squery_values("""SELECT pg_is_in_recovery()""")
-        self.assertEqual(res, [[False]])
 
     @unittest.skip("this test flakes: #5783")
     async def test_sql_query_prepare_01(self):
@@ -1913,7 +2096,8 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         await self.scon.execute("SET DateStyle=ISO;")
         await self.scon.execute("SET client_min_messages=notice;")
         await self.scon.execute(
-            "SELECT set_config('bytea_output','hex',false) FROM pg_settings"
+            "SELECT set_config('bytea_output','hex',false)"
+            "  FROM pg_catalog.pg_show_all_settings()"
             " WHERE name = 'bytea_output'; "
         )
         await self.scon.execute("SET client_encoding='WIN874';")
@@ -1932,7 +2116,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
     async def test_sql_query_computed_02(self):
         # computeds can only be accessed on the table, not rel vars
         with self.assertRaisesRegex(
-            asyncpg.PostgresError, "cannot find column `full_name`"
+            asyncpg.UndefinedColumnError, "column \"full_name\" does not exist"
         ):
             await self.squery_values(
                 """
@@ -2026,11 +2210,9 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             """
         )
 
+    @test.skip("This is flaking in CI")
     async def test_sql_query_computed_10(self):
         # globals
-
-        tran = self.scon.transaction()
-        await tran.start()
 
         await self.scon.execute(
             """
@@ -2046,14 +2228,8 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         )
         self.assertEqual(res, [["user_robin"]])
 
-        await tran.rollback()
-
-    @test.skip("This is flaking in CI")
     async def test_sql_query_computed_11(self):
         # globals
-
-        tran = self.scon.transaction()
-        await tran.start()
 
         await self.scon.execute(
             f"""
@@ -2100,41 +2276,87 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ],
         )
 
-        await tran.rollback()
-
     async def test_sql_query_computed_12(self):
         # globals
+        res = await self.squery_values(
+            '''
+            SELECT a, b FROM glob_mod."Computed"
+            '''
+        )
+        self.assertEqual(res, [[None, None]])
 
-        tran = self.scon.transaction()
-        await tran.start()
-        try:
-            res = await self.squery_values(
-                '''
-                SELECT a, b FROM glob_mod."Computed"
-                '''
-            )
-            self.assertEqual(res, [[None, None]])
+        await self.scon.execute(
+            f"""
+            SET LOCAL "global glob_mod::a" TO hello;
+            SET LOCAL "global glob_mod::b" TO no;
+            """
+        )
 
+        res = await self.squery_values(
+            '''
+            SELECT a, b FROM glob_mod."Computed"
+            '''
+        )
+        self.assertEqual(res, [["hello", False]])
+
+    async def test_sql_query_computed_13(self):
+        # globals bool values
+
+        async def query_glob_bool(value: str) -> bool:
             await self.scon.execute(
                 f"""
-                SET LOCAL "global glob_mod::a" TO hello;
-                SET LOCAL "global glob_mod::b" TO world;
+                SET LOCAL "global glob_mod::b" TO {value};
                 """
             )
-
             res = await self.squery_values(
                 '''
-                SELECT a, b FROM glob_mod."Computed"
+                SELECT b FROM glob_mod."Computed"
                 '''
             )
-            self.assertEqual(res, [["hello", "world"]])
-        finally:
-            await tran.rollback()
+            return res[0][0]
+
+        self.assertEqual(await query_glob_bool('on'), True)
+        self.assertEqual(await query_glob_bool('off'), False)
+        self.assertEqual(await query_glob_bool('o'), None)
+        self.assertEqual(await query_glob_bool('of'), False)
+        self.assertEqual(await query_glob_bool('true'), True)
+        self.assertEqual(await query_glob_bool('tru'), True)
+        self.assertEqual(await query_glob_bool('tr'), True)
+        self.assertEqual(await query_glob_bool('t'), True)
+        self.assertEqual(await query_glob_bool('false'), False)
+        self.assertEqual(await query_glob_bool('fals'), False)
+        self.assertEqual(await query_glob_bool('fal'), False)
+        self.assertEqual(await query_glob_bool('fa'), False)
+        self.assertEqual(await query_glob_bool('f'), False)
+        self.assertEqual(await query_glob_bool('yes'), True)
+        self.assertEqual(await query_glob_bool('ye'), True)
+        self.assertEqual(await query_glob_bool('y'), True)
+        self.assertEqual(await query_glob_bool('no'), False)
+        self.assertEqual(await query_glob_bool('n'), False)
+        self.assertEqual(await query_glob_bool('"1"'), True)
+        self.assertEqual(await query_glob_bool('"0"'), False)
+        self.assertEqual(await query_glob_bool('1'), True)
+        self.assertEqual(await query_glob_bool('0'), False)
+        self.assertEqual(await query_glob_bool('1231231'), True)
+        self.assertEqual(await query_glob_bool('hello'), None)
+        self.assertEqual(await query_glob_bool("'ON'"), True)
+        self.assertEqual(await query_glob_bool("'OFF'"), False)
+        self.assertEqual(await query_glob_bool("'HELLO'"), None)
+
+    async def test_sql_query_computed_14(self):
+        # single link, using a backlink
+
+        res = await self.squery_values(
+            """
+            SELECT first_name, directed_movie_id IS NOT NULL FROM "Person"
+            ORDER BY first_name
+            """
+        )
+        self.assertEqual(
+            res, [["Robin", False], ["Steven", True], ["Tom", False]]
+        )
 
     async def test_sql_query_access_policy_01(self):
-        tran = self.scon.transaction()
-        await tran.start()
-
         # no access policies
         res = await self.squery_values(
             'SELECT title FROM "Content" ORDER BY title'
@@ -2167,13 +2389,8 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         )
         self.assertEqual(res, [['Forrest Gump']])
 
-        await tran.rollback()
-
     async def test_sql_query_access_policy_02(self):
         # access policies from computeds
-
-        tran = self.scon.transaction()
-        await tran.start()
 
         # no access policies
         res = await self.squery_values('SELECT x FROM "ContentSummary"')
@@ -2192,13 +2409,8 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         res = await self.squery_values('SELECT x FROM "ContentSummary"')
         self.assertEqual(res, [[1]])
 
-        await tran.rollback()
-
     async def test_sql_query_access_policy_03(self):
         # access policies for dml
-
-        tran = self.scon.transaction()
-        await tran.start()
 
         # allowed without applying access policies
 
@@ -2221,13 +2433,8 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 'INSERT INTO "ContentSummary" DEFAULT VALUES'
             )
 
-        await tran.rollback()
-
     async def test_sql_query_access_policy_04(self):
         # access policies without inheritance
-
-        tran = self.scon.transaction()
-        await tran.start()
 
         # there is only one object that is of exactly type Content
         res = await self.squery_values('SELECT * FROM ONLY "Content"')
@@ -2247,7 +2454,29 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         res = await self.squery_values('SELECT * FROM ONLY "Content"')
         self.assertEqual(len(res), 0)
 
-        await tran.rollback()
+    async def test_sql_query_subquery_splat_01(self):
+        res = await self.squery_values(
+            '''
+            with "average_pages" as (select avg("pages") as "value" from "Book")
+            select pages from "Book"
+            where "Book".pages < (select * from "average_pages")
+            '''
+        )
+        self.assertEqual(
+            res,
+            [[206]],
+        )
+
+    async def test_sql_query_having_01(self):
+        res = await self.squery_values(
+            '''
+            select 1 having false
+            '''
+        )
+        self.assertEqual(
+            res,
+            [],
+        )
 
     async def test_sql_query_unsupported_01(self):
         # test error messages of unsupported queries
@@ -2306,8 +2535,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             )
 
         # fail because access policies
-        tran = self.scon.transaction()
-        await tran.start()
         with self.assertRaisesRegex(
             asyncpg.FeatureNotSupportedError,
             "locking clause not supported",
@@ -2320,7 +2547,6 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 SELECT id FROM "Movie" LIMIT 1 FOR UPDATE;
                 '''
             )
-        await tran.rollback()
 
     async def test_sql_query_locking_02(self):
         # we are locking just Movie
@@ -2364,92 +2590,20 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             '''
         )
 
-    @test.skip(
-        'blocking the connection causes other tests which trigger a '
-        'PostgreSQL error to encounter a InternalServerError and close '
-        'the connection'
-    )
-    async def test_sql_query_locking_04(self):
-        # test that we really obtain a lock
-
-        # we will obtain a lock on the main connection
-        # and then check that another connection is blocked
-        con_other = await self.create_sql_connection()
-
-        tran = self.scon.transaction()
-        await tran.start()
-
-        # obtain a lock
-        await self.scon.execute(
-            '''
-            SELECT * FROM "Movie" WHERE title = 'Forrest Gump'
-            FOR UPDATE;
-            '''
-        )
-
-        async def assert_not_blocked(coroutine: Coroutine) -> None:
-            await asyncio.wait_for(coroutine, 0.25)
-
-        async def assert_blocked(
-            coroutine: Coroutine
-        ) -> Tuple[asyncio.Task]:
-            task: asyncio.Task = asyncio.create_task(coroutine)
-            done, pending = await asyncio.wait((task,), timeout=0.25)
-            if len(done) != 0:
-                self.fail("expected this action to block, but it completed")
-            task_t = (next(iter(pending)),)
-            return task_t
-
-        # querying is allowed
-        await assert_not_blocked(
-            con_other.execute(
-                '''
-                SELECT title FROM "Movie" WHERE title = 'Forrest Gump';
-                '''
-            )
-        )
-
-        # another FOR UPDATE is now blocked
-        (task,) = await assert_blocked(
-            con_other.execute(
-                '''
-                SELECT * FROM "Movie" WHERE title = 'Forrest Gump'
-                FOR UPDATE;
-                '''
-            )
-        )
-
-        # release the lock
-        await tran.rollback()
-
-        # now we can finish the second SELECT FOR UPDATE
-        await task
-
-        # and subsequent FOR UPDATE are not blocked
-        await assert_not_blocked(
-            con_other.execute(
-                '''
-                SELECT * FROM "Movie" WHERE title = 'Forrest Gump'
-                FOR UPDATE;
-                '''
-            )
-        )
-
-        await con_other.close()
-
-    async def test_native_sql_query_00(self):
+    async def test_sql_native_query_00(self):
         await self.assert_sql_query_result(
             """
                 SELECT
                     1 AS a,
                     'two' AS b,
-                    to_json('three') AS c,
+                    to_json('three'::text) AS c,
                     timestamp '2000-12-16 12:21:13' AS d,
                     timestamp with time zone '2000-12-16 12:21:13' AS e,
                     date '0001-01-01 AD' AS f,
                     interval '2000 years' AS g,
                     ARRAY[1, 2, 3] AS h,
-                    FALSE AS i
+                    FALSE AS i,
+                    3.4 AS j
             """,
             [
                 {
@@ -2462,11 +2616,12 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                     "g": edgedb.RelativeDuration(months=2000 * 12),
                     "h": [1, 2, 3],
                     "i": False,
+                    "j": 3.4,
                 }
             ],
         )
 
-    async def test_native_sql_query_01(self):
+    async def test_sql_native_query_01(self):
         await self.assert_sql_query_result(
             """
                 SELECT
@@ -2494,7 +2649,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             apply_access_policies=False,
         )
 
-    async def test_native_sql_query_02(self):
+    async def test_sql_native_query_02(self):
         await self.assert_sql_query_result(
             """
                 SELECT
@@ -2517,13 +2672,13 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 }
             ],
             variables={
-                "0": "Drama",
-                "1": 14,
+                "1": "Drama",
+                "2": 14,
             },
             apply_access_policies=False,
         )
 
-    async def test_native_sql_query_03(self):
+    async def test_sql_native_query_03(self):
         # No output at all
         await self.assert_sql_query_result(
             """
@@ -2544,7 +2699,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             apply_access_policies=False,
         )
 
-    async def test_native_sql_query_04(self):
+    async def test_sql_native_query_04(self):
         with self.assertRaisesRegex(
             edgedb.errors.QueryError,
             'duplicate column name: `a`',
@@ -2552,7 +2707,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         ):
             await self.assert_sql_query_result('SELECT 1 AS a, 2 AS a', [])
 
-    async def test_native_sql_query_05(self):
+    async def test_sql_native_query_05(self):
         # `a` would be duplicated,
         # so second and third instance are prefixed with rel var name
         await self.assert_sql_query_result(
@@ -2566,7 +2721,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             [{'a': 1, 'y_a': 2, 'u_a': 3}],
         )
 
-    async def test_native_sql_query_06(self):
+    async def test_sql_native_query_06(self):
         await self.assert_sql_query_result(
             '''
             WITH
@@ -2577,7 +2732,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             [{'a': 1, 'u_a': 2}, {'a': 1, 'u_a': 3}],
         )
 
-    async def test_native_sql_query_07(self):
+    async def test_sql_native_query_07(self):
         with self.assertRaisesRegex(
             edgedb.errors.QueryError,
             'duplicate column name: `y_a`',
@@ -2593,7 +2748,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 [],
             )
 
-    async def test_native_sql_query_08(self):
+    async def test_sql_native_query_08(self):
         with self.assertRaisesRegex(
             edgedb.errors.QueryError,
             'duplicate column name: `x_a`',
@@ -2608,7 +2763,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 [],
             )
 
-    async def test_native_sql_query_09(self):
+    async def test_sql_native_query_09(self):
         await self.assert_sql_query_result(
             '''
             WITH
@@ -2618,7 +2773,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             [{'a': 1, 'x_a': 2}],
         )
 
-    async def test_native_sql_query_10(self):
+    async def test_sql_native_query_10(self):
         await self.assert_sql_query_result(
             '''
             WITH
@@ -2628,7 +2783,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             [{'a': 1, 'b': 2, 'c': 3}],  # values are swapped around
         )
 
-    async def test_native_sql_query_11(self):
+    async def test_sql_native_query_11(self):
         # JOIN ... ON TRUE fails, saying it expects bool, but it got an int
         await self.assert_sql_query_result(
             '''
@@ -2641,7 +2796,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             [{'a': 1, 'b': 2, 'c': 3}],
         )
 
-    async def test_native_sql_query_12(self):
+    async def test_sql_native_query_12(self):
         await self.assert_sql_query_result(
             '''
             WITH
@@ -2657,7 +2812,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ],
         )
 
-    async def test_native_sql_query_13(self):
+    async def test_sql_native_query_13(self):
         # globals
 
         await self.assert_sql_query_result(
@@ -2665,7 +2820,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             SELECT username FROM "Person"
             ORDER BY first_name LIMIT 1
             """,
-            [{'username': "u_robin"}]
+            [{'username': "u_robin"}],
         )
 
         await self.con.execute(
@@ -2679,10 +2834,10 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             SELECT username FROM "Person"
             ORDER BY first_name LIMIT 1
             """,
-            [{'username': "user_robin"}]
+            [{'username': "user_robin"}],
         )
 
-    async def test_native_sql_query_14(self):
+    async def test_sql_native_query_14(self):
         # globals
 
         await self.con.execute(
@@ -2727,7 +2882,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ],
         )
 
-    async def test_native_sql_query_15(self):
+    async def test_sql_native_query_15(self):
         # no access policies
         await self.assert_sql_query_result(
             'SELECT title FROM "Content" ORDER BY title',
@@ -2743,8 +2898,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
 
         # access policies applied
         await self.assert_sql_query_result(
-            'SELECT title FROM "Content" ORDER BY title',
-            []
+            'SELECT title FROM "Content" ORDER BY title', []
         )
 
         # access policies use globals
@@ -2753,52 +2907,41 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         )
         await self.assert_sql_query_result(
             'SELECT title FROM "Content" ORDER BY title',
-            [{'title': 'Forrest Gump'}]
+            [{'title': 'Forrest Gump'}],
         )
 
-    async def test_native_sql_query_16(self):
-        with self.assertRaisesRegex(
+    async def test_sql_native_query_16(self):
+        async with self.assertRaisesRegexTx(
             edgedb.UnsupportedFeatureError,
             "not supported: VARIABLE SET",
             _position=14,  # this point to `1`, but hey, better than nothing
         ):
-            await self.assert_sql_query_result(
-                'SET my_var TO 1',
-                []
-            )
+            await self.assert_sql_query_result('SET my_var TO 1', [])
 
-        with self.assertRaisesRegex(
+        async with self.assertRaisesRegexTx(
             edgedb.UnsupportedFeatureError,
             "not supported: VARIABLE RESET",
         ):
-            await self.assert_sql_query_result(
-                'RESET my_var',
-                []
-            )
+            await self.assert_sql_query_result('RESET my_var', [])
 
-        with self.assertRaisesRegex(
+        async with self.assertRaisesRegexTx(
             edgedb.UnsupportedFeatureError,
             "not supported: VARIABLE SHOW",
         ):
-            await self.assert_sql_query_result(
-                'SHOW my_var',
-                []
-            )
+            await self.assert_sql_query_result('SHOW my_var', [])
 
-    async def test_native_sql_query_17(self):
+    async def test_sql_native_query_17(self):
         await self.assert_sql_query_result(
             """SELECT $1::text as t, $2::int as i""",
-            [
-                {"t": "Hello", "i": 42}
-            ],
+            [{"t": "Hello", "i": 42}],
             variables={
-                "0": "Hello",
-                "1": 42,
+                "1": "Hello",
+                "2": 42,
             },
             apply_access_policies=False,
         )
 
-        with self.assertRaisesRegex(
+        async with self.assertRaisesRegexTx(
             edgedb.UnsupportedFeatureError,
             'multi-statement SQL scripts are not supported yet',
         ):
@@ -2811,7 +2954,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 apply_access_policies=False,
             )
 
-        with self.assertRaisesRegex(
+        async with self.assertRaisesRegexTx(
             edgedb.UnsupportedFeatureError,
             'multi-statement SQL scripts are not supported yet',
         ):
@@ -2822,12 +2965,12 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 """,
                 [],
                 variables={
-                    "0": 42,
+                    "1": 42,
                 },
                 apply_access_policies=False,
             )
 
-        with self.assertRaisesRegex(
+        async with self.assertRaisesRegexTx(
             edgedb.UnsupportedFeatureError,
             'multi-statement SQL scripts are not supported yet',
         ):
@@ -2838,12 +2981,12 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 """,
                 [],
                 variables={
-                    "0": "Hello",
+                    "1": "Hello",
                 },
                 apply_access_policies=False,
             )
 
-        with self.assertRaisesRegex(
+        async with self.assertRaisesRegexTx(
             edgedb.UnsupportedFeatureError,
             'multi-statement SQL scripts are not supported yet',
         ):
@@ -2854,41 +2997,516 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 """,
                 [],
                 variables={
-                    "0": "Hello",
-                    "1": 42,
+                    "1": "Hello",
+                    "2": 42,
                 },
                 apply_access_policies=False,
             )
 
-    async def test_native_sql_query_18(self):
+    async def test_sql_native_query_18(self):
         with self.assertRaisesRegex(
             edgedb.errors.QueryError,
-            'cannot find column `asdf`',
+            'column \"asdf\" does not exist',
             _position=35,
         ):
             await self.con.query_sql(
                 '''select title, 'aaaaaaaaaaaaaaaaa', asdf from "Content";'''
             )
 
-    @test.xerror('See #8077')
-    async def test_native_sql_query_19(self):
+    async def test_sql_native_query_19(self):
         with self.assertRaisesRegex(
-            edgedb.errors.QueryError,
-            '',
-            _position=37,
+            edgedb.errors.ExecutionError,
+            'does not exist',
+            _position=35,
+            _hint=(
+                'No function matches the given name and argument types. '
+                'You might need to add explicit type casts.'
+            ),
         ):
             await self.con.query_sql(
                 '''select title, 'aaaaaaaaaaaaaaaaa', asdf() from "Content";'''
             )
 
-    @test.xfail('See #8077')
-    async def test_native_sql_query_20(self):
+    @test.xfail('We translate the type name to std::int32')
+    async def test_sql_native_query_20(self):
+        # This test was originally added to test the position is
+        # right, but it turns out that postgres doesn't report a
+        # position here.
         with self.assertRaisesRegex(
             edgedb.errors.InvalidValueError,
             'invalid input syntax for type integer',
-            _position=35,
         ):
-            await self.con.query_sql(
-                '''\
-select title, 'aaaaaaaaaaaaaaaaa', ('goo'::text::integer) from "Content";'''
+            await self.con.query_sql('''
+                select 'aaaaaaaaaaaaaaaaa', ('goo'::text::integer);
+            ''')
+
+    async def test_sql_native_query_21(self):
+        await self.assert_sql_query_result(
+            "SELECT 1 as a", [{"a": 1}]
+        )
+
+        await self.assert_sql_query_result(
+            "SELECT 'test' as a", [{"a": "test"}]
+        )
+
+    async def test_sql_native_query_22(self):
+        await self.assert_sql_query_result(
+            "SELECT 1 as a UNION SELECT 2 as a", [{"a": 1}, {"a": 2}]
+        )
+
+    async def test_sql_native_query_23(self):
+        await self.assert_sql_query_result(
+            "VALUES (1, 2)", [{"column1": 1, "column2": 2}]
+        )
+
+    async def test_sql_native_query_24(self):
+        with self.assertRaisesRegex(
+            edgedb.errors.UnsupportedFeatureError, 'not supported: COPY'
+        ):
+            await self.assert_sql_query_result(
+                'COPY "Genre" TO STDOUT', []
             )
+
+    async def test_sql_native_query_25(self):
+        # implict limit
+        await self.assert_sql_query_result(
+            'VALUES (1), (2), (3), (4), (5), (6), (7)',
+            [{'column1': 1}, {'column1': 2}, {'column1': 3}],
+            implicit_limit=3,
+        )
+
+    async def test_sql_native_query_26(self):
+        await self.assert_sql_query_result(
+            """
+                select distinct title, pages from "Book"
+                order by title, pages;
+            """,
+            [
+                {'title': 'Chronicles of Narnia', 'pages': 206},
+                {'title': 'Hunger Games', 'pages': 374},
+            ],
+            apply_access_policies=False,
+        )
+
+    async def test_sql_native_query_27(self):
+        with self.assertRaisesRegex(
+            edgedb.errors.EdgeQLSyntaxError,
+            'syntax error at or near',
+            _position=54,
+            _col=25,
+            _line=3,
+        ):
+            await self.con.query_sql('''
+                -- a comment
+                select (), asdf
+            ''')
+
+    async def test_sql_native_query_28(self):
+        await self.assert_sql_query_result(
+            "SELECT current_setting('search_path') as path",
+            [{"path": 'public'}],
+        )
+
+        await self.assert_sql_query_result(
+            '''
+            SELECT pg_get_serial_sequence('"public"."Book"', 1)
+                ::regclass::text as seq;
+            ''',
+            [{"seq": None}],
+        )
+
+    async def test_sql_native_query_29(self):
+        # test that we can query internal pg_catalog types
+        # (such as oid and name)
+
+        await self.con.query_sql('''
+            select oid, relname from pg_class limit 1
+        ''')
+        await self.con.query_sql('''
+            select oid, typname, typtype, typsubscript, typdefaultbin
+            from pg_type limit 1
+        ''')
+
+    async def test_sql_native_query_30(self):
+        # there are pg_catalog types that don't have a binary repr
+        # so they cannot be sent over edgeql protocol without casting
+
+        with self.assertRaisesRegex(
+            edgedb.UnsupportedFeatureError,
+            'unsupported SQL type in column',
+        ):
+            await self.con.query_sql('''
+                select relacl from pg_class limit 1
+            ''')
+
+    async def test_sql_native_query_31(self):
+        with self.assertRaisesRegex(
+            edgedb.EdgeQLSyntaxError,
+            'syntax error at or near "from"',
+            _position=48,
+            _col=25,
+            _line=3,
+        ):
+            await self.con.query_sql('''
+                select
+                  limit from x
+            ''')
+
+
+class TestSQLQueryNonTransactional(tb.SQLQueryTestCase):
+
+    SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas', 'movies.esdl')
+    SCHEMA_INVENTORY = os.path.join(
+        os.path.dirname(__file__), 'schemas', 'inventory.esdl'
+    )
+
+    SETUP = [
+        os.path.join(
+            os.path.dirname(__file__), 'schemas', 'movies_setup.edgeql'
+        ),
+    ]
+
+    TRANSACTION_ISOLATION = False
+
+    async def test_sql_query_set_01(self):
+        # initial state: search_path=public
+        res = await self.squery_values('SHOW search_path;')
+        self.assertEqual(res, [['public']])
+
+        # enter transaction
+        tran = self.scon.transaction()
+        await tran.start()
+
+        # set
+        await self.scon.execute('SET LOCAL search_path TO inventory;')
+
+        await self.scon.fetch('SELECT id FROM "Item";')
+        res = await self.squery_values('SHOW search_path;')
+        self.assertEqual(res, [["inventory"]])
+
+        # finish
+        await tran.commit()
+
+        # because we used LOCAL, value should be reset after transaction is over
+        res = await self.squery_values('SHOW search_path;')
+        self.assertEqual(res, [["public"]])
+
+    async def test_sql_query_set_02(self):
+        # initial state: search_path=public
+        res = await self.squery_values('SHOW search_path;')
+        self.assertEqual(res, [['public']])
+
+        # enter transaction
+        tran = self.scon.transaction()
+        await tran.start()
+
+        # set
+        await self.scon.execute('SET search_path TO inventory;')
+
+        res = await self.squery_values('SHOW search_path;')
+        self.assertEqual(res, [["inventory"]])
+
+        # commit
+        await tran.commit()
+
+        # it should still be changed, since we SET was not LOCAL
+        await self.scon.fetch('SELECT id FROM "Item";')
+        res = await self.squery_values('SHOW search_path;')
+        self.assertEqual(res, [["inventory"]])
+
+        # reset to default value
+        await self.scon.execute('RESET search_path;')
+        res = await self.squery_values('SHOW search_path;')
+        self.assertEqual(res, [["public"]])
+
+    async def test_sql_query_set_03(self):
+        # initial state: search_path=public
+        res = await self.squery_values('SHOW search_path;')
+        self.assertEqual(res, [['public']])
+
+        # start
+        tran = self.scon.transaction()
+        await tran.start()
+
+        # set
+        await self.scon.execute('SET search_path TO inventory;')
+
+        res = await self.squery_values('SHOW search_path;')
+        self.assertEqual(res, [["inventory"]])
+
+        # rollback
+        await tran.rollback()
+
+        # because transaction was rolled back, value should be reset
+        res = await self.squery_values('SHOW search_path;')
+        self.assertEqual(res, [["public"]])
+
+    async def test_sql_query_set_04(self):
+        # database settings allow_user_specified_ids & apply_access_policies_pg
+        # should be unified over EdgeQL and SQL adapter
+
+        async def set_current_database(val: Optional[bool]):
+            # for this to have effect, it must not be ran within a transaction
+            if val is None:
+                await self.con.execute(
+                    f'''
+                    configure current database
+                        reset apply_access_policies_pg;
+                    '''
+                )
+            else:
+                await self.con.execute(
+                    f'''
+                    configure current database
+                        set apply_access_policies_pg := {str(val).lower()};
+                    '''
+                )
+
+        async def set_sql(val: Optional[bool]):
+            if val is None:
+                await self.scon.execute(
+                    f'''
+                    RESET apply_access_policies_pg;
+                    '''
+                )
+            else:
+                await self.scon.execute(
+                    f'''
+                    SET apply_access_policies_pg TO '{str(val).lower()}';
+                    '''
+                )
+
+        async def are_policies_applied() -> bool:
+            res = await self.squery_values(
+                'SELECT title FROM "Content" ORDER BY title'
+            )
+            return len(res) == 0
+
+        await set_current_database(True)
+        await set_sql(True)
+        self.assertEqual(await are_policies_applied(), True)
+
+        await set_sql(False)
+        self.assertEqual(await are_policies_applied(), False)
+
+        await set_sql(None)
+        self.assertEqual(await are_policies_applied(), True)
+
+        await set_current_database(False)
+        await set_sql(True)
+        self.assertEqual(await are_policies_applied(), True)
+
+        await set_sql(False)
+        self.assertEqual(await are_policies_applied(), False)
+
+        await set_sql(None)
+        self.assertEqual(await are_policies_applied(), False)
+
+        await set_current_database(None)
+        await set_sql(True)
+        self.assertEqual(await are_policies_applied(), True)
+
+        await set_sql(False)
+        self.assertEqual(await are_policies_applied(), False)
+
+        await set_sql(None)
+        self.assertEqual(await are_policies_applied(), False)
+
+        # setting cleanup not needed, since with end with the None, None
+
+    async def test_sql_query_set_05(self):
+        # IntervalStyle
+
+        await self.scon.execute('SET IntervalStyle TO ISO_8601;')
+        [[res]] = await self.squery_values(
+            "SELECT '2 years 15 months 100 weeks 99 hours'::interval::text;"
+        )
+        self.assertEqual(res, 'P3Y3M700DT99H')
+
+        await self.scon.execute('SET IntervalStyle TO postgres_verbose;')
+        [[res]] = await self.squery_values(
+            "SELECT '2 years 15 months 100 weeks 99 hours'::interval::text;"
+        )
+        self.assertEqual(res, '@ 3 years 3 mons 700 days 99 hours')
+
+        await self.scon.execute('SET IntervalStyle TO sql_standard;')
+        [[res]] = await self.squery_values(
+            "SELECT '2 years 15 months 100 weeks 99 hours'::interval::text;"
+        )
+        self.assertEqual(res, '+3-3 +700 +99:00:00')
+
+    async def test_sql_query_set_06(self):
+        # bytea_output
+
+        await self.scon.execute('SET bytea_output TO hex')
+        [[res]] = await self.squery_values(
+            "SELECT '\\x01abcdef01'::bytea::text"
+        )
+        self.assertEqual(res, r'\x01abcdef01')
+
+        await self.scon.execute('SET bytea_output TO escape')
+        [[res]] = await self.squery_values(
+            "SELECT '\\x01abcdef01'::bytea::text"
+        )
+        self.assertEqual(res, r'\001\253\315\357\001')
+
+    async def test_sql_query_set_07(self):
+        # enable_memoize
+
+        await self.scon.execute('SET enable_memoize TO ye')
+        [[res]] = await self.squery_values(
+            "SELECT 'hello'"
+        )
+        self.assertEqual(res, 'hello')
+
+        await self.scon.execute('SET enable_memoize TO off')
+        [[res]] = await self.squery_values(
+            "SELECT 'hello'"
+        )
+        self.assertEqual(res, 'hello')
+
+    @test.skip(
+        'blocking the connection causes other tests which trigger a '
+        'PostgreSQL error to encounter a InternalServerError and close '
+        'the connection'
+    )
+    async def test_sql_query_locking_04(self):
+        # test that we really obtain a lock
+
+        # we will obtain a lock on the main connection
+        # and then check that another connection is blocked
+
+        con_other = await self.create_sql_connection()
+
+        tran = self.scon.transaction()
+        await tran.start()
+
+        # obtain a lock
+        await self.scon.execute(
+            '''
+            SELECT * FROM "Movie" WHERE title = 'Forrest Gump'
+            FOR UPDATE;
+            '''
+        )
+
+        async def assert_not_blocked(coroutine: Coroutine) -> None:
+            await asyncio.wait_for(coroutine, 0.25)
+
+        async def assert_blocked(coroutine: Coroutine) -> tuple[asyncio.Task]:
+            task: asyncio.Task = asyncio.create_task(coroutine)
+            done, pending = await asyncio.wait((task,), timeout=0.25)
+            if len(done) != 0:
+                self.fail("expected this action to block, but it completed")
+            task_t = (next(iter(pending)),)
+            return task_t
+
+        # querying is allowed
+        await assert_not_blocked(
+            con_other.execute(
+                '''
+                SELECT title FROM "Movie" WHERE title = 'Forrest Gump';
+                '''
+            )
+        )
+
+        # another FOR UPDATE is now blocked
+        (task,) = await assert_blocked(
+            con_other.execute(
+                '''
+                SELECT * FROM "Movie" WHERE title = 'Forrest Gump'
+                FOR UPDATE;
+                '''
+            )
+        )
+
+        # release the lock
+        await tran.rollback()
+
+        # now we can finish the second SELECT FOR UPDATE
+        await task
+
+        # and subsequent FOR UPDATE are not blocked
+        await assert_not_blocked(
+            con_other.execute(
+                '''
+                SELECT * FROM "Movie" WHERE title = 'Forrest Gump'
+                FOR UPDATE;
+                '''
+            )
+        )
+
+        await con_other.close()
+
+    async def test_sql_transaction_01(self):
+        await self.scon.execute(
+            """
+            BEGIN;
+            SELECT * FROM "Genre" ORDER BY id;
+            COMMIT;
+            """,
+        )
+
+    async def test_sql_transaction_02(self):
+        await self.scon.execute("BEGIN")
+        await self.scon.execute(
+            "SET TRANSACTION ISOLATION LEVEL read uncommitted"
+        )
+        v1 = await self.scon.fetchval("SHOW transaction_isolation")
+        self.assertEqual(v1, "read uncommitted")
+        await self.scon.execute("ROLLBACK")
+        v2 = await self.scon.fetchval("SHOW transaction_isolation")
+        self.assertNotEqual(v1, v2)
+
+    async def test_sql_query_error_11(self):
+        # extended query protocol
+        with self.assertRaisesRegex(
+            asyncpg.InvalidTextRepresentationError,
+            'invalid input syntax for type uuid',
+            # TODO
+            # position="8",
+        ):
+            await self.scon.fetch("""SELECT 'bad uuid'::uuid""")
+
+        # simple query protocol
+        with self.assertRaisesRegex(
+            asyncpg.InvalidTextRepresentationError,
+            'invalid input syntax for type uuid',
+            # TODO
+            # position="8",
+        ):
+            await self.scon.execute("""SELECT 'bad uuid'::uuid""")
+
+        # test that the connection has not be spuriously closed
+        res = await self.squery_values("SELECT 1")
+        self.assertEqual(res, [[1]])
+
+    async def test_sql_query_error_12(self):
+        tran = self.scon.transaction()
+        await tran.start()
+
+        with self.assertRaisesRegex(
+            asyncpg.InvalidTextRepresentationError,
+            'invalid input syntax for type uuid',
+            # TODO
+            # position="8",
+        ):
+            await self.scon.fetch("""SELECT 'bad uuid'::uuid""")
+
+        await tran.rollback()
+
+        # test that the connection has not be spuriously closed
+        res = await self.squery_values("SELECT 1")
+        self.assertEqual(res, [[1]])
+
+    async def test_sql_query_error_13(self):
+        # forbidden functions
+
+        with self.assertRaisesRegex(
+            asyncpg.InsufficientPrivilegeError,
+            'forbidden function',
+            position="8",
+        ):
+            await self.scon.fetch("""SELECT pg_ls_dir('/')""")
+
+        res = await self.squery_values("""SELECT pg_is_in_recovery()""")
+        self.assertEqual(res, [[False]])

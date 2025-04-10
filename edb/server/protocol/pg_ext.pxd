@@ -19,6 +19,14 @@
 
 from edb.server.pgproto.pgproto cimport WriteBuffer
 from edb.server.protocol cimport frontend
+from edb.server.pgcon.pgcon cimport PGMessage
+cimport edb.pgsql.parser.parser as pg_parser
+
+
+cdef class PreparedStmt:
+    cdef:
+        PGMessage parse_action
+        pg_parser.Source source
 
 
 cdef class ConnectionView:
@@ -45,6 +53,7 @@ cdef class ConnectionView:
     cdef inline _reset_tx_state(
         self, bint chain_implicit, bint chain_explicit
     )
+    cdef bint needs_commit_after_state_sync(self)
     cpdef inline close_portal_if_exists(self, str name)
     cpdef inline close_portal(self, str name)
     cdef inline find_portal(self, str name)
@@ -67,5 +76,6 @@ cdef class PgConnection(frontend.FrontendConnection):
         object endpoint_security
         bint is_tls
         bint _disable_cache
+        bint _disable_normalization
 
     cdef inline WriteBuffer ready_for_query(self)

@@ -21,7 +21,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Tuple, Iterable, Sequence, Dict, List, Set
+from typing import Optional, Iterable, Sequence
 
 from edb import errors
 
@@ -55,8 +55,14 @@ def _get_needed_ptrs(
     subject_typ: s_objtypes.ObjectType,
     obj_constrs: Sequence[s_constr.Constraint],
     initial_ptrs: Iterable[str],
+    rewrite_kind: Optional[qltypes.RewriteKind],
     ctx: context.ContextLevel,
-) -> Tuple[Set[str], Dict[str, qlast.Expr]]:
+) -> tuple[set[str], dict[str, qlast.Expr]]:
+    """Find all the pointers needed by a list of constraints and pointers.
+
+    This chases down computed pointer definitions, rewrites, and
+    constraint expressions.
+    """
     needed_ptrs = set(initial_ptrs)
     for constr in obj_constrs:
         subjexpr: Optional[s_expr.Expression] = (
@@ -73,7 +79,14 @@ def _get_needed_ptrs(
     while wl:
         p = wl.pop()
         ptr = subject_typ.getptr(ctx.env.schema, s_name.UnqualName(p))
+        exprs = []
         if expr := ptr.get_expr(ctx.env.schema):
+            exprs.append(expr)
+        if rewrite_kind and (
+            rewrite := ptr.get_rewrite(ctx.env.schema, rewrite_kind)
+        ):
+            exprs.append(rewrite.get_expr(ctx.env.schema))
+        for expr in exprs:
             assert isinstance(expr.parse(), qlast.Expr)
             ptr_anchors[p] = expr.parse()
             for ref in qlutils.find_subject_ptrs(expr.parse()):
@@ -84,6 +97,35 @@ def _get_needed_ptrs(
     return needed_ptrs, ptr_anchors
 
 
+def _get_rewrite_kind(stmt: irast.MutatingStmt) -> qltypes.RewriteKind | None:
+    return (
+        qltypes.RewriteKind.Insert
+        if isinstance(stmt, irast.InsertStmt)
+        else qltypes.RewriteKind.Update
+        if isinstance(stmt, irast.UpdateStmt)
+        else None
+    )
+
+
+def _get_rewritten_ptrs(
+    stmt: irast.MutatingStmt,
+    subject_typ: s_objtypes.ObjectType,
+    *,
+    ctx: context.ContextLevel,
+) -> set[str]:
+    schema = ctx.env.schema
+    rewrite_kind = _get_rewrite_kind(stmt)
+
+    rewritten = set()
+    for ptr in subject_typ.get_pointers(schema).objects(schema):
+        if rewrite_kind:
+            rewrite = ptr.get_rewrite(ctx.env.schema, rewrite_kind)
+            if rewrite:
+                rewritten.add(ptr.get_shortname(schema).name)
+
+    return rewritten
+
+
 def _compile_conflict_select_for_obj_type(
     stmt: irast.MutatingStmt,
     subject_typ: s_objtypes.ObjectType,
@@ -91,7 +133,7 @@ def _compile_conflict_select_for_obj_type(
     for_inheritance: bool,
     fake_dml_set: Optional[irast.Set],
     obj_constrs: Sequence[s_constr.Constraint],
-    constrs: Dict[str, Tuple[s_pointers.Pointer, List[s_constr.Constraint]]],
+    constrs: dict[str, tuple[s_pointers.Pointer, list[s_constr.Constraint]]],
     span: Optional[irast.Span],
     ctx: context.ContextLevel,
 ) -> tuple[Optional[qlast.Expr], bool]:
@@ -102,22 +144,22 @@ def _compile_conflict_select_for_obj_type(
 
     `cnstrs` contains the constraints to consider.
     """
+    # We have a fake_dml_set to represent the root exactly when we are
+    # compiling this for inheritance checking reasons (and not for
+    # real UNLESS CONFLICTs)
+    assert for_inheritance == bool(fake_dml_set)
+
+    rewrite_kind = _get_rewrite_kind(stmt)
+
     # Find which pointers we need to grab
     needed_ptrs, ptr_anchors = _get_needed_ptrs(
-        subject_typ, obj_constrs, constrs.keys(), ctx=ctx
+        subject_typ, obj_constrs, constrs.keys(), rewrite_kind, ctx=ctx
     )
 
     # Check that no pointers in constraints are rewritten
-    for p in needed_ptrs:
-        ptr = subject_typ.getptr(ctx.env.schema, s_name.UnqualName(p))
-        rewrite_kind = (
-            qltypes.RewriteKind.Insert
-            if isinstance(stmt, irast.InsertStmt)
-            else qltypes.RewriteKind.Update
-            if isinstance(stmt, irast.UpdateStmt)
-            else None
-        )
-        if rewrite_kind:
+    if rewrite_kind and not fake_dml_set:
+        for p in needed_ptrs:
+            ptr = subject_typ.getptr(ctx.env.schema, s_name.UnqualName(p))
             rewrite = ptr.get_rewrite(ctx.env.schema, rewrite_kind)
             if rewrite:
                 raise errors.UnsupportedFeatureError(
@@ -130,8 +172,10 @@ def _compile_conflict_select_for_obj_type(
 
     # If we are given a fake_dml_set to directly represent the result
     # of our DML, use that instead of populating the result.
+    # TODO: XXX: always use fake_dml_set??
+    # (would we need to still disallow MUTATING properties?)
     if fake_dml_set:
-        for p in needed_ptrs | {'id'}:
+        for p in needed_ptrs | {'id', '__type__'}:
             ptr = subject_typ.getptr(ctx.env.schema, s_name.UnqualName(p))
             val = setgen.extend_path(fake_dml_set, ptr, ctx=ctx)
 
@@ -153,19 +197,11 @@ def _compile_conflict_select_for_obj_type(
             if inference.infer_volatility(
                 rptr.expr, ctx.env, exclude_dml=True
             ).is_volatile():
-                if for_inheritance:
-                    error = (
-                        'INSERT does not support volatile properties with '
-                        'exclusive constraints when another statement in '
-                        'the same query modifies a related type'
-                    )
-                else:
-                    error = (
-                        'INSERT UNLESS CONFLICT ON does not support volatile '
-                        'properties'
-                    )
+                assert not for_inheritance
                 raise errors.UnsupportedFeatureError(
-                    error, span=span
+                    'INSERT UNLESS CONFLICT ON does not support volatile '
+                    'properties',
+                    span=span,
                 )
 
             # We want to use the same path_scope_id as the original
@@ -195,7 +231,7 @@ def _compile_conflict_select_for_obj_type(
             span=span,
         )
 
-    conds: List[qlast.Expr] = []
+    conds: list[qlast.Expr] = []
     for ptrname, (ptr, ptr_cnstrs) in constrs.items():
         if ptrname not in present_ptrs:
             continue
@@ -283,15 +319,19 @@ def _compile_conflict_select_for_obj_type(
             args=[qlast.Set(elements=conds)],
         )
 
-    # For the result filtering we need to *ignore* the same object
+    # For the result filtering we ignore any objects from the same type.
     if fake_dml_set:
         anchor = qlutils.subject_paths_substitute(
-            ptr_anchors['id'], ptr_anchors)
-        ptr_val = qlast.Path(partial=True, steps=[qlast.Ptr(name='id')])
+            ptr_anchors['__type__'], ptr_anchors)
+        anchor_val = qlast.Path(steps=[anchor, qlast.Ptr(name='id')])
+        ptr_val = qlast.Path(
+            partial=True,
+            steps=[qlast.Ptr(name='__type__'), qlast.Ptr(name='id')],
+        )
         cond = qlast.BinOp(
             op='AND',
             left=cond,
-            right=qlast.BinOp(op='!=', left=anchor, right=ptr_val),
+            right=qlast.BinOp(op='!=', left=anchor_val, right=ptr_val),
         )
 
     # Produce a query that finds the conflicting objects
@@ -335,12 +375,12 @@ def _constr_matters(
     )
 
 
-PointerConstraintMap = Dict[
+PointerConstraintMap = dict[
     str,
-    Tuple[s_pointers.Pointer, List[s_constr.Constraint]],
+    tuple[s_pointers.Pointer, list[s_constr.Constraint]],
 ]
-ConstraintPair = Tuple[PointerConstraintMap, List[s_constr.Constraint]]
-ConflictTypeMap = Dict[s_objtypes.ObjectType, ConstraintPair]
+ConstraintPair = tuple[PointerConstraintMap, list[s_constr.Constraint]]
+ConflictTypeMap = dict[s_objtypes.ObjectType, ConstraintPair]
 
 
 def _split_constraints(
@@ -391,7 +431,7 @@ def _compile_conflict_select(
     constrs: PointerConstraintMap,
     span: Optional[irast.Span],
     ctx: context.ContextLevel,
-) -> Tuple[irast.Set, bool, bool]:
+) -> tuple[irast.Set, bool, bool]:
     """Synthesize a select of conflicting objects
 
     This teases apart the constraints we care about based on which
@@ -452,7 +492,7 @@ def _get_exclusive_ptr_constraints(
     typ: s_objtypes.ObjectType,
     include_id: bool,
     *, ctx: context.ContextLevel,
-) -> Dict[str, Tuple[s_pointers.Pointer, List[s_constr.Constraint]]]:
+) -> dict[str, tuple[s_pointers.Pointer, list[s_constr.Constraint]]]:
     schema = ctx.env.schema
     pointers = {}
 
@@ -645,24 +685,14 @@ def _disallow_exclusive_linkprops(
                 )
 
 
-def _compile_inheritance_conflict_selects(
+def _get_type_conflict_constraint_entries(
     stmt: irast.MutatingStmt,
-    conflict: irast.MutatingStmt,
     typ: s_objtypes.ObjectType,
-    subject_type: s_objtypes.ObjectType,
     *, ctx: context.ContextLevel,
-) -> List[irast.OnConflictClause]:
-    """Compile the selects needed to resolve multiple DML to related types
+) -> list[tuple[s_constr.Constraint, ConstraintPair]]:
+    # TODO: why do we return this in such a hinky way?
+    rewrite_kind = _get_rewrite_kind(stmt)
 
-    Generate a SELECT that finds all objects of type `typ` that conflict with
-    the insert `stmt`. The backend will use this to explicitly check that
-    no conflicts exist, and raise an error if they do.
-
-    This is needed because we mostly use triggers to enforce these
-    cross-type exclusive constraints, and they use a snapshot
-    beginning at the start of the statement.
-    """
-    _disallow_exclusive_linkprops(stmt, typ, ctx=ctx)
     has_id_write = _has_explicit_id_write(stmt)
     pointers = _get_exclusive_ptr_constraints(
         typ, include_id=has_id_write, ctx=ctx)
@@ -677,11 +707,12 @@ def _compile_inheritance_conflict_selects(
     for elem, op in stmt.subject.shape:
         if op != qlast.ShapeOp.MATERIALIZE:
             shape_ptrs.add(elem.expr.ptrref.shortname.name)
+    shape_ptrs |= _get_rewritten_ptrs(stmt, typ, ctx=ctx)
 
     # This is a little silly, but for *this* we need to do one per
     # constraint (so that we can properly identify which constraint
     # failed in the error messages)
-    entries: List[Tuple[s_constr.Constraint, ConstraintPair]] = []
+    entries: list[tuple[s_constr.Constraint, ConstraintPair]] = []
     for name, (ptr, ptr_constrs) in pointers.items():
         for ptr_constr in ptr_constrs:
             # For updates, we only need to emit the check if we actually
@@ -692,7 +723,10 @@ def _compile_inheritance_conflict_selects(
                 _constr_matters(ptr_constr, ctx=ctx)
                 and (
                     isinstance(stmt, irast.InsertStmt)
-                    or (_get_needed_ptrs(typ, (), [name], ctx)[0] & shape_ptrs)
+                    or (
+                        _get_needed_ptrs(typ, (), [name], rewrite_kind, ctx)[0]
+                        & shape_ptrs
+                    )
                 )
             ):
                 entries.append((ptr_constr, ({name: (ptr, [ptr_constr])}, [])))
@@ -703,19 +737,41 @@ def _compile_inheritance_conflict_selects(
             and (
                 isinstance(stmt, irast.InsertStmt)
                 or (_get_needed_ptrs(
-                    typ, [obj_constr], (), ctx)[0] & shape_ptrs)
+                    typ, [obj_constr], (), rewrite_kind, ctx)[0] & shape_ptrs)
             )
         ):
             entries.append((obj_constr, ({}, [obj_constr])))
 
-    # For updates, we need to pull from the actual result overlay,
-    # since the final row can depend on things not in the query.
-    fake_dml_set = None
-    if isinstance(stmt, irast.UpdateStmt):
-        fake_subject = qlast.DetachedExpr(expr=qlast.Path(steps=[
-            s_utils.name_to_ast_ref(subject_type.get_name(ctx.env.schema))]))
+    return entries
 
-        fake_dml_set = dispatch.compile(fake_subject, ctx=ctx)
+
+def _compile_inheritance_conflict_selects(
+    stmt: irast.MutatingStmt,
+    conflict: irast.MutatingStmt,
+    typ: s_objtypes.ObjectType,
+    subject_type: s_objtypes.ObjectType,
+    *, ctx: context.ContextLevel,
+) -> list[irast.OnConflictClause]:
+    """Compile the selects needed to resolve multiple DML to related types
+
+    Generate a SELECT that finds all objects of type `typ` that conflict with
+    the insert `stmt`. The backend will use this to explicitly check that
+    no conflicts exist, and raise an error if they do.
+
+    This is needed because we mostly use triggers to enforce these
+    cross-type exclusive constraints, and they use a snapshot
+    beginning at the start of the statement.
+    """
+    _disallow_exclusive_linkprops(stmt, typ, ctx=ctx)
+    entries = _get_type_conflict_constraint_entries(stmt, typ, ctx=ctx)
+
+    # We need to pull from the actual result overlay,
+    # since the final row can depend on things not in the query
+    # (on updates always, on inserts due to rewrites).
+    fake_subject = qlast.DetachedExpr(expr=qlast.Path(steps=[
+        s_utils.name_to_ast_ref(subject_type.get_name(ctx.env.schema))]))
+
+    fake_dml_set = dispatch.compile(fake_subject, ctx=ctx)
 
     clauses = []
     for cnstr, (p, o) in entries:
@@ -733,7 +789,7 @@ def _compile_inheritance_conflict_selects(
             irast.OnConflictClause(
                 constraint=cnstr_ref, select_ir=select_ir, always_check=False,
                 else_ir=None, else_fail=conflict,
-                update_query_set=fake_dml_set)
+                check_anchor=fake_dml_set.path_id)
         )
     return clauses
 
@@ -742,7 +798,7 @@ def compile_inheritance_conflict_checks(
     stmt: irast.MutatingStmt,
     subject_stype: s_objtypes.ObjectType,
     *, ctx: context.ContextLevel,
-) -> Optional[List[irast.OnConflictClause]]:
+) -> Optional[list[irast.OnConflictClause]]:
 
     has_id_write = _has_explicit_id_write(stmt)
 

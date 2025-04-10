@@ -3,7 +3,7 @@ use crate::{keywords::Keyword, position::Span};
 
 use super::{CSTNode, Context, Error, Parser, StackNode, Terminal};
 
-impl<'s> Parser<'s> {
+impl Parser<'_> {
     pub(super) fn custom_error(&self, ctx: &Context, token: &Terminal) -> Option<Error> {
         let ltok = self.get_from_top(0).unwrap();
 
@@ -107,6 +107,17 @@ impl<'s> Parser<'s> {
                 });
             },
 
+            ParserRule::Create => {
+                if matches!(token.kind, Kind::Keyword(Keyword("branch"))) {
+                    return Some(Error {
+                        message: "Missing one of keywords 'EMPTY', 'SCHEMA' or 'DATA'".to_string(),
+                        span: Span { start: token.span.start - 1, end: token.span.start },
+                        hint: None,
+                        details: None,
+                    })
+                }
+            }
+
             _ => {}
         }
         None
@@ -207,6 +218,11 @@ impl<'s> Parser<'s> {
                         return Some((i, ParserRule::Array));
                     }
                 }
+
+                CSTNode::Terminal(Terminal {
+                    kind: Kind::Keyword(Keyword("create")),
+                    ..
+                }) => return Some((i, ParserRule::Create)),
 
                 _ => {}
             }
@@ -343,6 +359,7 @@ enum ParserRule {
     Array,
     Tuple,
     ListOfArguments,
+    Create,
 }
 
 impl std::fmt::Display for ParserRule {
@@ -355,6 +372,7 @@ impl std::fmt::Display for ParserRule {
             ParserRule::Array => f.write_str("array"),
             ParserRule::Tuple => f.write_str("tuple"),
             ParserRule::ListOfArguments => f.write_str("list of arguments"),
+            ParserRule::Create => f.write_str("create"),
         }
     }
 }

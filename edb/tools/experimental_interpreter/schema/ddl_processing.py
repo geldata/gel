@@ -1,5 +1,4 @@
 from ..data import data_ops as e
-from typing import List
 
 from edb.edgeql import ast as qlast
 from edb.common import debug
@@ -176,6 +175,6 @@ def process_ddl(schema: e.DBSchema, ddl: qlast.DDLOperation) -> None:
             raise ValueError("DDL not yet supported", ddl)
 
 
-def process_ddls(schema: e.DBSchema, ddls: List[qlast.DDLOperation]) -> None:
+def process_ddls(schema: e.DBSchema, ddls: list[qlast.DDLOperation]) -> None:
     for ddl in ddls:
         process_ddl(schema, ddl)

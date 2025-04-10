@@ -20,13 +20,11 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Tuple,
     Iterator,
     Iterable,
     Mapping,
     Coroutine,
     AsyncGenerator,
-    Set,
     Optional,
     TypedDict,
     TYPE_CHECKING,
@@ -34,7 +32,7 @@ from typing import (
 
 import asyncio
 import contextlib
-import functools
+import dataclasses
 import json
 import logging
 import os
@@ -42,6 +40,7 @@ import pathlib
 import pickle
 import struct
 import sys
+import textwrap
 import time
 import tomllib
 import uuid
@@ -51,10 +50,13 @@ import immutables
 
 from edb import buildmeta
 from edb import errors
+from edb.common import asyncutil
+from edb.common import lru
 from edb.common import retryloop
 from edb.common import verutils
 from edb.common.log import current_tenant
 
+from . import auth
 from . import args as srvargs
 from . import config
 from . import connpool
@@ -76,6 +78,7 @@ if TYPE_CHECKING:
 
     from . import pgcluster
     from . import server as edbserver
+    from . import compiler_pool as edbcompiler_pool
 
 
 logger = logging.getLogger("edb.server")
@@ -104,7 +107,7 @@ class Tenant(ha_base.ClusterProtocol):
 
     __loop: asyncio.AbstractEventLoop
     _task_group: asyncio.TaskGroup | None
-    _tasks: Set[asyncio.Task]
+    _tasks: set[asyncio.Task]
     _accept_new_tasks: bool
     _file_watch_finalizers: list[Callable[[], None]]
 
@@ -116,12 +119,15 @@ class Tenant(ha_base.ClusterProtocol):
     _suggested_client_pool_size: int
     _pg_pool: connpool.Pool
     _pg_unavailable_msg: str | None
+    _init_con_data: list[config.ConState]
+    _init_con_sql: bytes | None
 
     _ha_master_serial: int
     _backend_adaptive_ha: adaptive_ha.AdaptiveHASupport | None
     _readiness_state_file: pathlib.Path | None
     _readiness: srvargs.ReadinessState
     _readiness_reason: str
+    _config_file: pathlib.Path | None
 
     _extensions_dirs: tuple[pathlib.Path, ...]
 
@@ -130,7 +136,7 @@ class Tenant(ha_base.ClusterProtocol):
     _report_config_data: dict[defines.ProtocolVersion, bytes]
 
     _roles: Mapping[str, RoleDescriptor]
-    _sys_auth: Tuple[Any, ...]
+    _sys_auth: tuple[Any, ...]
     _jwt_sub_allowlist_file: pathlib.Path | None
     _jwt_sub_allowlist: frozenset[str] | None
     _jwt_revocation_list_file: pathlib.Path | None
@@ -182,6 +188,7 @@ class Tenant(ha_base.ClusterProtocol):
         self._readiness_state_file = None
         self._readiness = srvargs.ReadinessState.Default
         self._readiness_reason = ""
+        self._config_file = None
 
         self._max_backend_connections = max_backend_connections
         self._suggested_client_pool_size = max(
@@ -199,6 +206,8 @@ class Tenant(ha_base.ClusterProtocol):
         self._pg_unavailable_msg = None
         self._block_new_connections = set()
         self._report_config_data = {}
+        self._init_con_data = []
+        self._init_con_sql = None
 
         # DB state will be initialized in init().
         self._dbindex = None
@@ -222,6 +231,7 @@ class Tenant(ha_base.ClusterProtocol):
         readiness_state_file: str | pathlib.Path | None = None,
         jwt_sub_allowlist_file: str | pathlib.Path | None = None,
         jwt_revocation_list_file: str | pathlib.Path | None = None,
+        config_file: str | pathlib.Path | None = None,
     ) -> bool:
         rv = False
 
@@ -243,14 +253,41 @@ class Tenant(ha_base.ClusterProtocol):
             self._jwt_revocation_list_file = jwt_revocation_list_file
             rv = True
 
+        if isinstance(config_file, str):
+            config_file = pathlib.Path(config_file)
+        if self._config_file != config_file:
+            self._config_file = config_file
+            rv = True
+
         return rv
 
     def set_server(self, server: edbserver.BaseServer) -> None:
         self._server = server
         self.__loop = server.get_loop()
 
-    def set_sidechannel_configs(self, configs: list[Any]) -> None:
-        self._sidechannel_email_configs = configs
+    async def load_sidechannel_configs(
+        self,
+        value: Any,
+        *,
+        compiler: (
+            edbcompiler.Compiler | edbcompiler_pool.AbstractPool | None
+        ) = None,
+    ) -> None:
+        if compiler is None:
+            compiler = self._server.get_compiler_pool()
+        objects = {"cfg::Config": {"email_providers": value}}
+        if isinstance(compiler, edbcompiler.Compiler):
+            result = compiler.compile_structured_config(
+                objects, source="magic", allow_nested=True
+            )
+        else:
+            result = await compiler.compile_structured_config(
+                objects,
+                "magic",  # source
+                True,  # allow_nested
+            )
+        email_providers = result["cfg::Config"]["email_providers"]
+        self._sidechannel_email_configs = list(email_providers.value)
 
     def get_http_client(self, *, originator: str) -> HttpClient:
         if self._http_client is None:
@@ -262,7 +299,7 @@ class Tenant(ha_base.ClusterProtocol):
                 user_agent=f"EdgeDB {buildmeta.get_version_string(short=True)}",
                 stat_callback=lambda stat: logger.debug(
                     f"HTTP stat: {originator} {stat}"
-                ),
+                )
             )
         return self._http_client
 
@@ -317,7 +354,7 @@ class Tenant(ha_base.ClusterProtocol):
     def get_pgaddr(self) -> pgconnparams.ConnectionParams:
         return self._cluster.get_pgaddr()
 
-    @functools.lru_cache
+    @lru.method_cache
     def get_backend_runtime_params(self) -> pgparams.BackendRuntimeParams:
         return self._cluster.get_runtime_params()
 
@@ -394,9 +431,55 @@ class Tenant(ha_base.ClusterProtocol):
         self._sys_pgcon_ready_evt = asyncio.Event()
         self._sys_pgcon_reconnect_evt = asyncio.Event()
 
-    async def init(self) -> None:
+    async def get_patch_count(self, conn: pgcon.PGConnection) -> int:
+        """Get the number of applied patches."""
+        num_patches = await instdata.get_instdata(
+            conn, 'num_patches', 'json')
+        res: int = json.loads(num_patches) if num_patches else 0
+        return res
+
+    async def _check_metaschema_compatibility(
+        self, con: pgcon.PGConnection
+    ) -> None:
+        from edb.pgsql import patches as pg_patches
+
+        # Check catalog version
+        result = await instdata.get_instdata(
+            con, 'instancedata', 'json', versioned=False
+        )
+        catver = json.loads(result).get('catver')
+        if catver != defines.EDGEDB_CATALOG_VERSION:
+            raise errors.ConfigurationError(
+                'database instance incompatible with this version of Gel',
+                details=(
+                    f'The database instance was initialized with '
+                    f'Gel format version {catver}, but this version '
+                    f'of the server expects format version '
+                    f'{defines.EDGEDB_CATALOG_VERSION}.'
+                ),
+                hint=(
+                    'You need to either recreate the instance and upgrade '
+                    'using dump/restore, or do an inplace upgrade.'
+                )
+            )
+
+        # Check patch count
+        num_patches = await self.get_patch_count(con)
+        if num_patches < len(pg_patches.PATCHES):
+            raise errors.ConfigurationError(
+                'database instance incompatible with this version of Gel',
+                details=f"expected {len(pg_patches.PATCHES)} patches, "
+                        f"but only {num_patches} applied",
+                hint="if you are adding an old backend to a multi-tenant "
+                     "server, firstly run a new single-tenant server on "
+                     "that backend to apply the patches.",
+            )
+
+    async def init(self, compat_check: bool = False) -> None:
         logger.debug("starting database introspection")
         async with self.use_sys_pgcon() as syscon:
+            if compat_check:
+                await self._check_metaschema_compatibility(syscon)
             result = await instdata.get_instdata(
                 syscon, 'instancedata', 'json')
             self._instance_data = immutables.Map(json.loads(result))
@@ -464,16 +547,19 @@ class Tenant(ha_base.ClusterProtocol):
 
     async def load_extension_packages(self, path: pathlib.Path) -> None:
         exts = []
-        try:
-            with os.scandir(path) as it:
-                for entry in it:
-                    if (
-                        entry.is_dir()
-                        and (pathlib.Path(entry) / 'MANIFEST.toml').exists()
-                    ):
-                        exts.append(pathlib.Path(entry))
-        except FileNotFoundError:
-            pass
+        if self._is_extension_package(path):
+            exts.append(path)
+        else:
+            try:
+                with os.scandir(path) as it:
+                    for entry in it:
+                        if (
+                            entry.is_dir()
+                            and self._is_extension_package(entry)
+                        ):
+                            exts.append(pathlib.Path(entry))
+            except FileNotFoundError:
+                pass
 
         if not exts:
             return
@@ -498,6 +584,9 @@ class Tenant(ha_base.ClusterProtocol):
 
         for ext in exts:
             await self._load_extension_package(ext, ext_packages)
+
+    def _is_extension_package(self, path: pathlib.Path | os.DirEntry) -> bool:
+        return (pathlib.Path(path) / 'MANIFEST.toml').exists()
 
     async def _load_extension_package(
         self,
@@ -536,20 +625,12 @@ class Tenant(ha_base.ClusterProtocol):
             global_schema=global_schema,
             user_schema=s_schema.FlatSchema(),
             internal_schema_mode=True,
+            # Extension installation only works if stdmode or testmode is
+            # set.  Force testmode to be set, since we don't want to set
+            # stdmode, because we want any externally loaded extensions to
+            # be marked as *not* builtin.
+            force_testmode=True,
         )
-
-        # Extension installation only works if stdmode or testmode is
-        # set.  Force testmode to be set, since we don't want to set
-        # stdmode, because we want any externally loaded extensions to
-        # be marked as *not* builtin.
-        compilerctx.state.current_tx().update_session_config(immutables.Map({
-            '__internal_testmode': config.SettingValue(
-                name='__internal_testmode',
-                value=True,
-                source='hack',
-                scope=None,  # type: ignore
-            )
-        }))
 
         script = '\n'.join(scripts)
         _, sql_script = edbcompiler.compile_edgeql_script(compilerctx, script)
@@ -595,6 +676,15 @@ class Tenant(ha_base.ClusterProtocol):
                     self._jwt_revocation_list_file,
                     reload_jwt_revocation_list_file,
                 )
+            )
+
+        if self._config_file is not None:
+
+            def reload_config_file():
+                self.reload_config_file.schedule()
+
+            self._file_watch_finalizers.append(
+                self.server.monitor_fs(self._config_file, reload_config_file)
             )
 
     async def start_accepting_new_tasks(self) -> None:
@@ -694,6 +784,27 @@ class Tenant(ha_base.ClusterProtocol):
             self.__sys_pgcon = None
         del self._sys_pgcon_waiter
 
+    def set_init_con_data(self, data: list[config.ConState]) -> None:
+        self._init_con_data = data
+        self._init_con_sql = None
+        if data:
+            self._init_con_sql = self._make_init_con_sql(data)
+
+    def _make_init_con_sql(self, data: list[config.ConState]) -> bytes:
+        if not data:
+            return b""
+
+        from edb.pgsql import common
+
+        quoted_json = common.quote_literal(json.dumps(data))
+        return textwrap.dedent(
+            f'''
+                INSERT INTO _edgecon_state
+                    SELECT * FROM jsonb_to_recordset({quoted_json}::jsonb)
+                        AS cfg(name text, value jsonb, type text);
+            '''
+        ).strip().encode()
+
     async def _pg_connect(
         self,
         dbname: str,
@@ -713,6 +824,11 @@ class Tenant(ha_base.ClusterProtocol):
             )
             if self._server.stmt_cache_size is not None:
                 rv.set_stmt_cache_size(self._server.stmt_cache_size)
+
+            if self._init_con_sql:
+                await rv.sql_execute(self._init_con_sql)
+            rv.last_init_con_data = self._init_con_data
+
         except Exception:
             metrics.backend_connection_establishment_errors.inc(
                 1.0, self._instance_name
@@ -964,11 +1080,24 @@ class Tenant(ha_base.ClusterProtocol):
 
         for _ in range(self._pg_pool.max_capacity):
             conn = await self._pg_pool.acquire(dbname)
-            if conn.is_healthy():
-                return conn
+            if not conn.is_healthy():
+                logger.warning("acquired an unhealthy pgcon; discard now")
+            elif conn.last_init_con_data is not self._init_con_data:
+                try:
+                    await conn.sql_execute(
+                        pgcon.RESET_STATIC_CFG_SCRIPT +
+                        (self._init_con_sql or b'')
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "failed to update pgcon; discard now: %s", e
+                    )
+                else:
+                    conn.last_init_con_data = self._init_con_data
+                    return conn
             else:
-                logger.warning("Acquired an unhealthy pgcon; discard now.")
-                self._pg_pool.release(dbname, conn, discard=True)
+                return conn
+            self._pg_pool.release(dbname, conn, discard=True)
         else:
             # This is unlikely to happen, but we defer to the caller to retry
             # when it does happen
@@ -1348,9 +1477,13 @@ class Tenant(ha_base.ClusterProtocol):
     async def _load_sys_config(
         self,
         query_name: str = "sysconfig",
+        syscon: pgcon.PGConnection | None = None,
     ) -> Mapping[str, config.SettingValue]:
-        async with self.use_sys_pgcon() as syscon:
-            query = self._server.get_sys_query(query_name)
+        query = self._server.get_sys_query(query_name)
+        if syscon is None:
+            async with self.use_sys_pgcon() as syscon:
+                sys_config_json = await syscon.sql_fetch_val(query)
+        else:
             sys_config_json = await syscon.sql_fetch_val(query)
 
         return config.from_json(self._server.config_settings, sys_config_json)
@@ -1449,7 +1582,8 @@ class Tenant(ha_base.ClusterProtocol):
         if setting and setting.report and self._accept_new_tasks:
             self.create_task(self._load_reported_config(), interruptable=True)
 
-    def load_jwcrypto(self) -> None:
+    def load_jwcrypto(self, jwk_key: auth.JWKSet) -> None:
+        self._jws_key = jwk_key
         self.load_jwt_sub_allowlist()
         self.load_jwt_revocation_list()
 
@@ -1463,6 +1597,15 @@ class Tenant(ha_base.ClusterProtocol):
                 self._jwt_sub_allowlist = frozenset(
                     self._jwt_sub_allowlist_file.read_text().splitlines(),
                 )
+                if self._jws_key is not None:
+                    self._jws_key.default_validation_context.allow(
+                        "sub", self._jwt_sub_allowlist
+                    )
+                else:
+                    from . import server as edbserver
+                    raise edbserver.StartupError(
+                        "cannot load JWT sub allowlist: no secret key"
+                    )
             except Exception as e:
                 from . import server as edbserver
 
@@ -1480,39 +1623,21 @@ class Tenant(ha_base.ClusterProtocol):
                 self._jwt_revocation_list = frozenset(
                     self._jwt_revocation_list_file.read_text().splitlines(),
                 )
+                if self._jws_key is not None:
+                    self._jws_key.default_validation_context.deny(
+                        "jti", self._jwt_revocation_list
+                    )
+                else:
+                    from . import server as edbserver
+                    raise edbserver.StartupError(
+                        "cannot load JWT revocation list: no secret key"
+                    )
             except Exception as e:
                 from . import server as edbserver
 
                 raise edbserver.StartupError(
                     f"cannot load JWT revocation list: {e}"
                 ) from e
-
-    def check_jwt(self, claims: dict[str, Any]) -> None:
-        """Check JWT for validity"""
-
-        if self._jwt_sub_allowlist is not None:
-            subject = claims.get("sub")
-            if not subject:
-                raise errors.AuthenticationError(
-                    "authentication failed: "
-                    "JWT does not contain a valid subject claim"
-                )
-            if subject not in self._jwt_sub_allowlist:
-                raise errors.AuthenticationError(
-                    "authentication failed: unauthorized subject"
-                )
-
-        if self._jwt_revocation_list is not None:
-            key_id = claims.get("jti")
-            if not key_id:
-                raise errors.AuthenticationError(
-                    "authentication failed: "
-                    "JWT does not contain a valid key id"
-                )
-            if key_id in self._jwt_revocation_list:
-                raise errors.AuthenticationError(
-                    "authentication failed: revoked key"
-                )
 
     def reload_readiness_state(self) -> None:
         if self._readiness_state_file is None:
@@ -1562,6 +1687,93 @@ class Tenant(ha_base.ClusterProtocol):
         self._readiness = state
         self._readiness_reason = reason
 
+    @asyncutil.exclusive_task
+    async def reload_config_file(self):
+        if self._config_file is None:
+            return
+
+        try:
+            await self._reload_config_file()
+        except Exception:
+            logger.error("failed to reload config file", exc_info=True)
+            metrics.background_errors.inc(
+                1.0, self._instance_name, "reload_config_file"
+            )
+
+    async def load_config_file(self, compiler):
+        logger.info("loading config file")
+
+        # Read the TOML file
+        with self._config_file.open('rb') as f:
+            toml_data = tomllib.load(f)
+
+        # Handle special case for `magic_smtp_config`
+        magic_smtp_config = toml_data.pop("magic_smtp_config", None)
+        if magic_smtp_config:
+            await self.load_sidechannel_configs(
+                magic_smtp_config, compiler=compiler
+            )
+
+        # Parse TOML config file content into JSON
+        if toml_data and toml_data.get("cfg::Config"):
+            result = compiler.compile_structured_config(
+                toml_data, "configuration file"
+            )
+            if asyncio.iscoroutine(result):
+                result = await result
+
+            def setting_filter(value: config.SettingValue) -> bool:
+                if self._server.config_settings[value.name].backend_setting:
+                    raise errors.ConfigurationError(
+                        f"backend config {value.name!r} cannot be set "
+                        f"via config file"
+                    )
+                return True
+
+            json_obj = config.to_json_obj(
+                self._server.config_settings,
+                result["cfg::Config"],
+                include_source=False,
+                setting_filter=setting_filter,
+            )
+            config_file_data = [
+                {
+                    "name": name,
+                    "value": value,
+                    "type": config.ConStateType.config_file,
+                }
+                for name, value in json_obj.items()
+            ]
+        else:
+            config_file_data = []
+
+        # Update init_con_data and SQL
+        self.set_init_con_data(
+            [
+                cs
+                for cs in self._init_con_data
+                if cs["type"] != config.ConStateType.config_file
+            ]
+            + config_file_data
+        )
+
+    async def _reload_config_file(self):
+        # Load TOML config file
+        compiler = self._server.get_compiler_pool()
+        await self.load_config_file(compiler)
+
+        # Update sys pgcon and reload system config
+        async with self.use_sys_pgcon() as syscon:
+            if syscon.last_init_con_data is not self._init_con_data:
+                await syscon.sql_execute(
+                    pgcon.RESET_STATIC_CFG_SCRIPT + (self._init_con_sql or b'')
+                )
+                syscon.last_init_con_data = self._init_con_data
+            sys_config = await self._load_sys_config(syscon=syscon)
+            # GOTCHA: no need to notify other EdgeDBs on the same backend about
+            # such change to sysconfig, because static config is instance-local
+        self._dbindex.update_sys_config(sys_config)
+
     def reload(self):
         # In multi-tenant mode, the file paths for the following states may be
         # unset in a reload, while it's impossible in a regular server.
@@ -1576,6 +1788,7 @@ class Tenant(ha_base.ClusterProtocol):
 
         self.reload_readiness_state()
         self.load_jwcrypto()
+        self.reload_config_file.schedule()
 
         self.start_watching_files()
 
@@ -1914,6 +2127,8 @@ class Tenant(ha_base.ClusterProtocol):
         self.create_task(task(), interruptable=True)
 
     def get_debug_info(self) -> dict[str, Any]:
+        from . import smtp
+
         pgaddr = self.get_pgaddr()
         pgaddr.clear_server_settings()
         pgdict = pgaddr.__dict__
@@ -1942,6 +2157,12 @@ class Tenant(ha_base.ClusterProtocol):
                 if db.name in defines.EDGEDB_SPECIAL_DBS:
                     continue
 
+                try:
+                    email_provider = dataclasses.asdict(
+                        smtp.get_current_email_provider(db)
+                    )
+                except errors.ConfigurationError:
+                    email_provider = None
                 dbs[db.name] = dict(
                     name=db.name,
                     dbver=db.dbver,
@@ -1962,6 +2183,7 @@ class Tenant(ha_base.ClusterProtocol):
                         )
                         for view in db.iter_views()
                     ],
+                    current_email_provider=email_provider,
                 )
 
         obj["databases"] = dbs

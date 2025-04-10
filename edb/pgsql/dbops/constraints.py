@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence, List
+from typing import Optional, Sequence
 
 from .. import common
 from . import base
@@ -60,5 +60,5 @@ class Constraint(base.DBObject):
         else:
             return self._constraint_name or ''
 
-    def constraint_code(self, block: base.PLBlock) -> str | List[str]:
+    def constraint_code(self, block: base.PLBlock) -> str | list[str]:
         raise NotImplementedError

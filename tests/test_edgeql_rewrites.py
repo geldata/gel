@@ -24,9 +24,7 @@ import edgedb
 from edb.testbase import server as tb
 
 
-class TestRewrites(tb.QueryTestCase):
-
-    NO_FACTOR = True
+class TestRewrites(tb.DDLTestCase):
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas', 'movies.esdl')
     # Setting up some rewrites makes the tests run a bit faster
@@ -68,6 +66,16 @@ class TestRewrites(tb.QueryTestCase):
           drop access policy filter_title;
           drop access policy dml;
         };
+
+        create type CT {
+            create property a -> str;
+            create property b -> str {
+                create rewrite update using (.a);
+                create constraint exclusive;
+            };
+        };
+        create type CS extending CT;
+
     """
     ]
 
@@ -1110,3 +1118,87 @@ class TestRewrites(tb.QueryTestCase):
             update Project set { name := '## redacted ##' }
             '''
         )
+
+    async def test_edgeql_rewrites_30(self):
+        await self.con.execute('''
+            insert Document { name := '1' };
+            insert Document { name := '2' };
+            insert Document { name := '3' };
+        ''')
+
+        await self.con.execute('''
+            with H := ( x := (select Document filter .name = '1') )
+            update H.x set { text := 'full' };
+        ''')
+        await self.con.execute('''
+            with H := { x := (select Document filter .name = '1') }
+            update H.x set { text := 'full' };
+        ''')
+        await self.con.execute('''
+            with H := { x := (select Document filter .name = '1' limit 1) }
+            update H.x set { text := 'full' };
+        ''')
+
+    async def test_edgeql_rewrites_triggers_01(self):
+        await self.con.execute('''
+            create type Pidgeon {
+                create required link hole: Document;
+                create trigger set_hole_full
+                    after insert
+                    for each do (update
+                        __new__.hole
+                    set {
+                        text := 'full'
+                    });
+            };
+        ''')
+
+        await self.con.execute('''
+            insert Document { name := '1' };
+            insert Document { name := '2' };
+            insert Document { name := '3' };
+        ''')
+
+        # A 6.0 regression (#8444)
+        await self.con.execute('''
+            insert Pidgeon {
+                hole := (
+                    (select Document filter .name = '1' limit 1)
+                ),
+            };
+        ''')
+
+    async def test_edgeql_rewrites_conflicts_01(self):
+        await self.con.execute('''
+            insert CT; insert CS;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+            edgedb.ConstraintViolationError,
+            r""
+        ):
+            await self.con.execute('''
+                update CT set { a := 'x' }
+            ''')
+
+        await self.con.execute('''
+            update CT set { a := <str>random() }
+        ''')
+
+    async def test_edgeql_rewrites_conflicts_02(self):
+        await self.con.execute('''
+            alter type CT alter property b create rewrite insert using (.a);
+        ''')
+
+        async with self.assertRaisesRegexTx(
+            edgedb.ConstraintViolationError,
+            r""
+        ):
+            await self.con.execute('''
+                select {(insert CT { a := "y" }), (insert CS { a := "y" })}
+            ''')
+
+        await self.con.execute('''
+            select {(insert CT { a := <str>random() }),
+                    (insert CS { a := <str>random() })}
+        ''')

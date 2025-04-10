@@ -1,20 +1,20 @@
 use super::ConnectionSslRequirement;
 use crate::{
-    connection::{invalid_state, ConnectionError, Credentials, SslError},
+    connection::{invalid_state, Credentials, PGConnectionError, SslError},
     errors::PgServerError,
-    protocol::{
-        match_message,
-        postgres::data::{
+    protocol::postgres::{
+        builder,
+        data::{
             AuthenticationCleartextPassword, AuthenticationMD5Password, AuthenticationMessage,
             AuthenticationOk, AuthenticationSASL, AuthenticationSASLContinue,
-            AuthenticationSASLFinal, BackendKeyData, ErrorResponse, Message, ParameterStatus,
-            ReadyForQuery, SSLResponse,
+            AuthenticationSASLFinal, BackendKeyData, ErrorResponse, Message, NoticeResponse,
+            ParameterStatus, ReadyForQuery, SSLResponse,
         },
-        postgres::{builder, FrontendBuilder, InitialBuilder},
-        ParseError,
+        FrontendBuilder, InitialBuilder,
     },
 };
 use base64::Engine;
+use db_proto::{match_message, ParseError};
 use gel_auth::{
     scram::{generate_salted_password, ClientEnvironment, ClientTransaction, Sha256Out},
     AuthType,
@@ -93,7 +93,12 @@ pub trait ConnectionStateUpdate: ConnectionStateSend {
     fn parameter(&mut self, name: &str, value: &str) {}
     fn cancellation_key(&mut self, pid: i32, key: i32) {}
     fn state_changed(&mut self, state: ConnectionStateType) {}
-    fn server_error(&mut self, error: &PgServerError) {}
+    fn server_error(&mut self, error: &PgServerError) {
+        error!("Server error during handshake: {:?}", error);
+    }
+    fn server_notice(&mut self, notice: &PgServerError) {
+        warn!("Server notice during handshake: {:?}", notice);
+    }
     fn auth(&mut self, auth: AuthType) {}
 }
 
@@ -152,7 +157,7 @@ impl ConnectionState {
         &mut self,
         drive: ConnectionDrive,
         update: &mut impl ConnectionStateUpdate,
-    ) -> Result<(), ConnectionError> {
+    ) -> Result<(), PGConnectionError> {
         use ConnectionStateImpl::*;
         trace!("Received drive {drive:?} in state {:?}", self.0);
         match (&mut self.0, drive) {
@@ -175,12 +180,12 @@ impl ConnectionState {
                 } else if response.code() == b'N' {
                     // Rejected
                     if *mode == ConnectionSslRequirement::Required {
-                        return Err(ConnectionError::SslError(SslError::SslRequiredByClient));
+                        return Err(PGConnectionError::SslError(SslError::SslRequiredByClient));
                     }
                     Self::send_startup_message(credentials, update)?;
                     self.0 = Connecting(std::mem::take(credentials), false);
                 } else {
-                    return Err(ConnectionError::UnexpectedResponse(format!(
+                    return Err(PGConnectionError::UnexpectedResponse(format!(
                         "Unexpected SSL response from server: {:?}",
                         response.code() as char
                     )));
@@ -216,7 +221,7 @@ impl ConnectionState {
                             }
                         }
                         if !found_scram_sha256 {
-                            return Err(ConnectionError::UnexpectedResponse("Server requested SASL authentication but does not support SCRAM-SHA-256".into()));
+                            return Err(PGConnectionError::UnexpectedResponse("Server requested SASL authentication but does not support SCRAM-SHA-256".into()));
                         }
                         let credentials = credentials.clone();
                         let mut tx = ClientTransaction::new("".into());
@@ -235,7 +240,7 @@ impl ConnectionState {
                     (AuthenticationMD5Password as md5) => {
                         *sent_auth = true;
                         trace!("auth md5");
-                        let md5_hash = gel_auth::md5::md5_password(&credentials.password, &credentials.username, &md5.salt());
+                        let md5_hash = gel_auth::md5::md5_password(&credentials.password, &credentials.username, md5.salt());
                         update.auth(AuthType::Md5);
                         update.send(builder::PasswordMessage {
                             password: &md5_hash,
@@ -248,6 +253,10 @@ impl ConnectionState {
                         update.send(builder::PasswordMessage {
                             password: &credentials.password,
                         }.into())?;
+                    },
+                    (NoticeResponse as notice) => {
+                        let err = PgServerError::from(notice);
+                        update.server_notice(&err);
                     },
                     (ErrorResponse as error) => {
                         self.0 = Error;
@@ -283,6 +292,10 @@ impl ConnectionState {
                     (AuthenticationMessage as auth) => {
                         trace!("SCRAM Unknown auth message: {}", auth.status())
                     },
+                    (NoticeResponse as notice) => {
+                        let err = PgServerError::from(notice);
+                        update.server_notice(&err);
+                    },
                     (ErrorResponse as error) => {
                         self.0 = Error;
                         let err = PgServerError::from(error);
@@ -309,6 +322,10 @@ impl ConnectionState {
                         trace!("-> Ready");
                         self.0 = Ready;
                         update.state_changed(ConnectionStateType::Ready);
+                    },
+                    (NoticeResponse as notice) => {
+                        let err = PgServerError::from(notice);
+                        update.server_notice(&err);
                     },
                     (ErrorResponse as error) => {
                         self.0 = Error;

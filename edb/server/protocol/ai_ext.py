@@ -50,6 +50,7 @@ from edb.common import markup
 from edb.common import uuidgen
 
 from edb.server import compiler, http
+from edb.server import defines as edbdef
 from edb.server.compiler import sertypes
 from edb.server.protocol import execute
 from edb.server.protocol import request_scheduler as rs
@@ -62,6 +63,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger("edb.server.ai_ext")
+keepalive_token = "ai-index-builder"
 
 
 class AIExtError(Exception):
@@ -291,7 +293,13 @@ async def _ext_ai_index_builder_controller_loop(
     provider_schedulers: dict[str, ProviderScheduler] = {}
 
     try:
-        while True:
+        while tenant.accept_new_tasks:
+            if not db.tenant.is_database_connectable(dbname):
+                # Don't do work if the database is not connectable,
+                # e.g. being dropped
+                await asyncio.sleep(naptime)
+                continue
+
             models = []
             sleep_timer: rs.Timer = rs.Timer(None, False)
             try:
@@ -299,7 +307,7 @@ async def _ext_ai_index_builder_controller_loop(
                     models = await _ext_ai_fetch_active_models(pgconn)
                     if models:
                         if not holding_lock:
-                            holding_lock = await _ext_ai_lock(pgconn)
+                            holding_lock = await _ext_ai_lock(tenant, pgconn)
                         if holding_lock:
                             provider_contexts = _prepare_provider_contexts(
                                 db,
@@ -319,10 +327,23 @@ async def _ext_ai_index_builder_controller_loop(
                             finally:
                                 if not sleep_timer.is_ready_and_urgent():
                                     await asyncutil.deferred_shield(
-                                        _ext_ai_unlock(pgconn))
+                                        _ext_ai_unlock(tenant))
+                                    tenant.server.remove_keepalive_token(
+                                        (
+                                            keepalive_token,
+                                            tenant.get_instance_name(),
+                                            dbname,
+                                        )
+                                    )
                                     holding_lock = False
             except Exception:
-                logger.exception(f"caught error in {task_name}")
+                logger.error(
+                    f"caught error in {task_name}",
+                    exc_info=tenant.accept_new_tasks,
+                )
+
+            if not tenant.accept_new_tasks:
+                break
 
             if not sleep_timer.is_ready_and_urgent():
                 delay = sleep_timer.remaining_time(naptime)
@@ -363,22 +384,73 @@ async def _ext_ai_fetch_active_models(
     return result
 
 
+# The _ext_ai_lock() is a long-term lock held in the system pgcon. It is used
+# in the index builder job above guarding multiple alternating database pgcons
+# and outgoing HTTP requests (free up pgcons while waiting for a response from
+# external services), so that different Gel tenants on the same backend
+# run this job exclusively.
+#
+# The following implementation is also safe to be used by multiple tasks within
+# the same tenant (though at the time of writing, there is only one such task
+# per tenant). To achieve this, we added an extra query on pg_locks to check if
+# it's already held by another task, because advisory locks allow reentrancy
+# from the same session (the same sys_pgcon). And to avoid racing conditions,
+# we use another advisory lock over the 2 queries of check-and-lock in the
+# local session. This also means, one must use _ext_ai_lock() instead of an
+# individual lock of the 2 locks here to avoid misuse.
+#
+# If you are editing the magic numbers here: make sure it fits in a Postgres
+# Oid type (uint32), or you'll need to change the `classid` query below.
 _EXT_AI_ADVISORY_LOCK = b"3987734540"
+_EXT_AI_ADVISORY_LOCK_LOCK = b"3987734541"
 
 
 async def _ext_ai_lock(
+    tenant: srv_tenant.Tenant,
     pgconn: pgcon.PGConnection,
 ) -> bool:
-    b = await pgconn.sql_fetch_val(
-        b"SELECT pg_try_advisory_lock(" + _EXT_AI_ADVISORY_LOCK + b")")
-    return b == b'\x01'
+    # We use transaction-level advisory locks to ensure releasing
+    await pgconn.sql_execute(b"START TRANSACTION")
+    try:
+        b = await pgconn.sql_fetch_val(
+            b"SELECT pg_try_advisory_xact_lock("
+            + _EXT_AI_ADVISORY_LOCK_LOCK
+            + b")"
+        )
+        if b == b'\x01':
+            lock_free = await pgconn.sql_fetch_val(
+                b'''
+                SELECT NOT EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        pg_locks
+                    WHERE
+                        locktype = 'advisory'
+                        AND classid = 0
+                        AND objid = \
+                ''' + _EXT_AI_ADVISORY_LOCK + b')')
+            if lock_free == b'\x01':
+                async with tenant.use_sys_pgcon() as syscon:
+                    # The long-term holding lock must be on session-level
+                    b = await syscon.sql_fetch_val(
+                        b"SELECT pg_try_advisory_lock("
+                        + _EXT_AI_ADVISORY_LOCK
+                        + b")"
+                    )
+                    return b == b'\x01'
+    finally:
+        await pgconn.sql_execute(b"ROLLBACK")
+
+    return False
 
 
 async def _ext_ai_unlock(
-    pgconn: pgcon.PGConnection,
+    tenant: srv_tenant.Tenant,
 ) -> None:
-    await pgconn.sql_fetch_val(
-        b"SELECT pg_advisory_unlock(" + _EXT_AI_ADVISORY_LOCK + b")")
+    async with tenant.use_sys_pgcon() as syscon:
+        await syscon.sql_fetch_val(
+            b"SELECT pg_advisory_unlock(" + _EXT_AI_ADVISORY_LOCK + b")")
 
 
 def _prepare_provider_contexts(
@@ -490,7 +562,7 @@ class ProviderScheduler(rs.Scheduler[EmbeddingsData]):
         self, context: rs.Context,
     ) -> Optional[Sequence[EmbeddingsParams]]:
         assert isinstance(context, ProviderContext)
-        return await _generate_embeddings_params(
+        rv = await _generate_embeddings_params(
             context.db,
             context.pgconn,
             context.http_client,
@@ -503,6 +575,15 @@ class ProviderScheduler(rs.Scheduler[EmbeddingsData]):
                 None
             ),
         )
+        if rv:
+            context.db.server.add_keepalive_token(
+                (
+                    keepalive_token,
+                    context.db.tenant.get_instance_name(),
+                    context.db.name,
+                )
+            )
+        return rv
 
     def finalize(self, execution_report: rs.ExecutionReport) -> None:
         task_name = _task_name.get()
@@ -524,6 +605,7 @@ class EmbeddingsParams(rs.Params[EmbeddingsData]):
     inputs: list[tuple[PendingEmbedding, str]]
     token_count: int
     shortening: Optional[int]
+    user: Optional[str]
 
     def costs(self) -> dict[str, int]:
         return {
@@ -547,7 +629,8 @@ class EmbeddingsRequest(rs.Request[EmbeddingsData]):
                 self.params.model_name,
                 [input[1] for input in self.params.inputs],
                 self.params.shortening,
-                self.params.http_client
+                self.params.user,
+                self.params.http_client,
             )
             result.pgconn = self.params.pgconn
             result.pending_entries = [
@@ -757,6 +840,7 @@ async def _generate_embeddings_params(
                         inputs=inputs,
                         token_count=batch_token_count,
                         shortening=shortening,
+                        user=None,
                         http_client=http_client,
                     ))
 
@@ -774,6 +858,7 @@ async def _generate_embeddings_params(
                     inputs=inputs,
                     token_count=total_token_count,
                     shortening=shortening,
+                    user=None,
                     http_client=http_client,
                 ))
 
@@ -837,7 +922,8 @@ async def _get_pending_embeddings(
         {where_clause}
         ORDER BY
             q."target_dims_shortening"
-        """.encode()
+        """.encode(),
+        tx_isolation=edbdef.TxIsolationLevel.RepeatableRead,
     )
 
     if not entries:
@@ -937,7 +1023,8 @@ async def _update_embeddings_in_db(
     embeddings: bytes,
     offset: int,
 ) -> int:
-    id_array = '", "'.join(id.hex for id in ids)
+
+    id_array = '{' + ', '.join(f'"{id.hex}"' for id in ids) + '}'
     entries = await pgconn.sql_fetch_val(
         f"""
         WITH upd AS (
@@ -970,9 +1057,10 @@ async def _update_embeddings_in_db(
         """.encode(),
         args=(
             embeddings,
-            f'{{"{id_array}"}}'.encode(),
+            id_array.encode(),
             str(offset).encode(),
         ),
+        tx_isolation=edbdef.TxIsolationLevel.RepeatableRead,
     )
 
     return int(entries.decode())
@@ -983,6 +1071,7 @@ async def _generate_embeddings(
     model_name: str,
     inputs: list[str],
     shortening: Optional[int],
+    user: Optional[str],
     http_client: http.HttpClient,
 ) -> EmbeddingsResult:
     task_name = _task_name.get()
@@ -995,7 +1084,7 @@ async def _generate_embeddings(
 
     if provider.api_style == ApiStyle.OpenAI:
         return await _generate_openai_embeddings(
-            provider, model_name, inputs, shortening, http_client
+            provider, model_name, inputs, shortening, user, http_client
         )
     else:
         raise RuntimeError(
@@ -1009,6 +1098,7 @@ async def _generate_openai_embeddings(
     model_name: str,
     inputs: list[str],
     shortening: Optional[int],
+    user: Optional[str],
     http_client: http.HttpClient,
 ) -> EmbeddingsResult:
 
@@ -1029,6 +1119,9 @@ async def _generate_openai_embeddings(
     }
     if shortening is not None:
         params["dimensions"] = shortening
+
+    if user is not None:
+        params["user"] = user
 
     result = await client.post(
         "/embeddings",
@@ -1329,13 +1422,28 @@ async def _start_openai_like_chat(
                             + b'data: ' + event_data + b'\n\n'
                         )
                         protocol.write_raw(event)
+
+                        event_data = json.dumps({
+                            "type": "content_block_start",
+                            "index": 0,
+                            "content_block": {
+                                "type": "text",
+                                "text": ""
+                            }
+                        }).encode("utf-8")
+                        event = (
+                            b'event: content_block_start\n'
+                            + b'data: ' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+
                         # if there's only one openai tool call it shows up here
                         if tool_calls:
                             for tool_call in tool_calls:
                                 tool_index = tool_call["index"]
                                 event_data = json.dumps({
                                     "type": "content_block_start",
-                                    "index": tool_call["index"],
+                                    "index": tool_call["index"] + 1,
                                     "content_block": {
                                         "id": tool_call["id"],
                                         "type": "tool_use",
@@ -1366,14 +1474,14 @@ async def _start_openai_like_chat(
                                         + b'data: { \
                                         "type": "content_block_stop",'
                                         + b'"index": '
-                                        + str(currentIndex - 1).encode()
+                                        + str(currentIndex).encode()
                                         + b'}\n\n'
                                     )
                                     protocol.write_raw(event)
 
                                 event_data = json.dumps({
                                     "type": "content_block_start",
-                                    "index": currentIndex,
+                                    "index": currentIndex + 1,
                                     "content_block": {
                                         "id": tool_call.get("id"),
                                         "type": "tool_use",
@@ -1391,7 +1499,7 @@ async def _start_openai_like_chat(
                             else:
                                 event_data = json.dumps({
                                         "type": "content_block_delta",
-                                        "index": currentIndex,
+                                        "index": currentIndex + 1,
                                         "delta": {
                                             "type": "tool_call_delta",
                                             "args":
@@ -1405,7 +1513,9 @@ async def _start_openai_like_chat(
                                 protocol.write_raw(event)
                     elif finish_reason := data.get("finish_reason"):
                         index = (
-                            tool_index if finish_reason == "tool_calls" else 0
+                            tool_index + 1
+                            if finish_reason == "tool_calls"
+                            else 0
                         )
                         event = (
                             b'event: content_block_stop\n'
@@ -2215,15 +2325,31 @@ async def _handle_embeddings_request(
             raise TypeError(
                 'the body of the request must be a JSON object')
 
-        inputs = body.get("input")
+        inputs = body.get("inputs")
+        input = body.get("input")
+
+        if inputs is not None and input is not None:
+            raise TypeError(
+                "You cannot provide both 'inputs' and 'input'. "
+                "Please provide 'inputs'; 'input' has been deprecated."
+            )
+
+        if input is not None:
+            logger.warning("'input' is deprecated, use 'inputs' instead")
+            inputs = input
+
         if not inputs:
             raise TypeError(
-                'missing or empty required "input" value in request')
+                'missing or empty required "inputs" value in request'
+            )
 
         model_name = body.get("model")
         if not model_name:
             raise TypeError(
                 'missing or empty required "model" value in request')
+
+        shortening = body.get("dimensions")
+        user = body.get("user")
 
     except Exception as ex:
         raise BadRequestError(str(ex)) from None
@@ -2246,8 +2372,9 @@ async def _handle_embeddings_request(
         provider,
         model_name,
         inputs,
-        shortening=None,
-        http_client=tenant.get_http_client(originator="ai/embeddings")
+        shortening,
+        user,
+        http_client=tenant.get_http_client(originator="ai/embeddings"),
     )
     if isinstance(result.data, rs.Error):
         raise AIProviderError(result.data.message)
@@ -2270,6 +2397,7 @@ async def _edgeql_query_json(
             query,
             variables=variables or {},
             globals_=globals_,
+            query_tag='gel/ai',
         )
 
         content = json.loads(result)
@@ -2415,21 +2543,68 @@ async def _generate_embeddings_for_type(
     type_query: str,
     content: str,
 ) -> bytes:
-    try:
-        type_desc = await execute.describe(
-            db,
-            f"SELECT ({type_query})",
-            allow_capabilities=compiler.Capability.NONE,
+    type_desc = await execute.describe(
+        db,
+        f"SELECT ({type_query})",
+        allow_capabilities=compiler.Capability.NONE,
+        query_tag='gel/ai',
+    )
+    if (
+        not isinstance(type_desc, sertypes.ShapeDesc)
+        or not isinstance(type_desc.type, sertypes.ObjectDesc)
+    ):
+        raise errors.InvalidReferenceError(
+            'context query does not return an '
+            'object type indexed with an `ext::ai::index`'
         )
-        if (
-            not isinstance(type_desc, sertypes.ShapeDesc)
-            or not isinstance(type_desc.type, sertypes.ObjectDesc)
-        ):
-            raise errors.InvalidReferenceError(
-                'context query does not return an '
-                'object type indexed with an `ext::ai::index`'
-            )
 
+    return await generate_embeddings_for_text(
+        db, http_client, type_desc.type.tid, content
+    )
+
+
+async def generate_embeddings_for_text(
+    db: dbview.Database,
+    http_client: http.HttpClient,
+    type_id: str | uuid.UUID,
+    content: str,
+) -> bytes:
+
+    index = await get_ai_index_for_type(db, type_id)
+    provider = _get_provider_config(db=db, provider_name=index.provider)
+    if (
+        index.index_embedding_dimensions
+        < index.model_embedding_dimensions
+    ):
+        shortening = index.index_embedding_dimensions
+    else:
+        shortening = None
+    result = await _generate_embeddings(
+        provider,
+        index.model,
+        [content],
+        shortening,
+        None,
+        http_client,
+    )
+    if isinstance(result.data, rs.Error):
+        raise AIProviderError(result.data.message)
+    return result.data.embeddings
+
+
+@dataclass
+class AIIndex:
+    model: str
+    provider: str
+    model_embedding_dimensions: int
+    index_embedding_dimensions: int
+
+
+async def get_ai_index_for_type(
+    db: dbview.Database,
+    type_id: str | uuid.UUID,
+) -> AIIndex:
+    try:
         indexes = await _edgeql_query_json(
             db=db,
             query="""
@@ -2479,7 +2654,7 @@ async def _generate_embeddings_for_type(
             FILTER
                 .ancestors.name = 'ext::ai::index'
             """,
-            variables={"type_id": str(type_desc.type.tid)},
+            variables={"type_id": str(type_id)},
         )
         if len(indexes) == 0:
             raise errors.InvalidReferenceError(
@@ -2496,17 +2671,9 @@ async def _generate_embeddings_for_type(
         await _db_error(db, ex, context="context.query")
 
     index = indexes[0]
-    provider = _get_provider_config(db=db, provider_name=index["provider"])
-    if (
-        index["index_embedding_dimensions"]
-        < index["model_embedding_dimensions"]
-    ):
-        shortening = index["index_embedding_dimensions"]
-    else:
-        shortening = None
-    result = await _generate_embeddings(
-        provider, index["model"], [content], shortening=shortening,
-        http_client=http_client)
-    if isinstance(result.data, rs.Error):
-        raise AIProviderError(result.data.message)
-    return result.data.embeddings
+    return AIIndex(
+        model=index["model"],
+        provider=index["provider"],
+        model_embedding_dimensions=index["model_embedding_dimensions"],
+        index_embedding_dimensions=index["index_embedding_dimensions"],
+    )

@@ -23,6 +23,7 @@ import json
 import os.path
 import re
 import textwrap
+import unittest
 import uuid
 
 import edgedb
@@ -2912,7 +2913,7 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
                 property name -> str;
                 multi link tweets := (
                     WITH U := User
-                    SELECT Tweet FILTER .author = U
+                    SELECT Tweet FILTER .author IN U
                 );
             }
             type Tweet {
@@ -2948,7 +2949,7 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
                 property name -> str;
                 multi link tweets := (
                     WITH U := DETACHED User
-                    SELECT Tweet FILTER .author = U
+                    SELECT Tweet FILTER .author IN U
                 );
             }
             type Tweet {
@@ -3059,6 +3060,7 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
             }],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_migration_computed_04(self):
         await self.migrate(r'''
             type User {
@@ -8359,6 +8361,31 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
             }],
         )
 
+    async def test_edgeql_migration_eq_index_05(self):
+        await self.migrate('''
+            abstract type Named {
+                index fts::index on (
+                    std::fts::with_options(
+                        .name, language := std::fts::Language.eng));
+                required property name: std::str;
+            };
+        ''')
+
+        await self.start_migration('''
+            abstract type Named {
+                index std::fts::index on (
+                    std::fts::with_options(
+                        .name, language := std::fts::Language.eng));
+                required property name: std::str;
+            };
+        ''')
+
+        # no changes
+        await self.assert_describe_migration({
+            'confirmed': [],
+            'complete': True,
+        })
+
     async def test_edgeql_migration_eq_collections_01(self):
         await self.migrate(r"""
             type Base;
@@ -12895,6 +12922,46 @@ class EdgeQLAIMigrationTestCase(EdgeQLDataMigrationTestCase):
                 };
             ''', explicit_modules=True)
 
+    async def test_edgeql_migration_ai_10(self):
+        # EmbeddingModel with default embedding_model_max_batch_tokens.
+
+        await self.migrate('''
+            using extension ai;
+
+            module default {
+                type TestEmbeddingModel
+                    extending ext::ai::EmbeddingModel
+                {
+                    annotation ext::ai::model_name := "text-embedding-test";
+                    annotation ext::ai::model_provider := "custom::test";
+                    annotation ext::ai::embedding_model_max_input_tokens
+                      := "8191";
+                    annotation ext::ai::embedding_model_max_output_dimensions
+                      := "10";
+                    annotation ext::ai::embedding_model_supports_shortening
+                      := "true";
+                };
+            };
+        ''', explicit_modules=True)
+
+        await self.assert_query_result(
+            r"""
+                with model := (
+                    select schema::ObjectType {
+                        x := (
+                            for ann in .annotations
+                            select ann@value
+                            filter ann.name
+                            = 'ext::ai::embedding_model_max_batch_tokens'
+                        )
+                    }
+                    filter .name = 'default::TestEmbeddingModel'
+                )
+                select model.x
+            """,
+            ['8191'],
+        )
+
 
 class EdgeQLMigrationRewriteTestCase(EdgeQLDataMigrationTestCase):
     DEFAULT_MODULE = 'default'
@@ -13253,4 +13320,16 @@ class TestEdgeQLMigrationRewriteNonisolated(TestEdgeQLMigrationRewrite):
                 };
                 POPULATE MIGRATION;
                 COMMIT MIGRATION;
+            """)
+
+    @unittest.skipIf(
+        True,
+        """
+        This test is still pretty slow
+        """
+    )
+    async def test_edgeql_migration_rewrite_raw_02(self):
+        for _ in range(1200):
+            await self.con.execute(r"""
+                create applied migration { }
             """)

@@ -18,7 +18,9 @@
 
 
 from __future__ import annotations
-from typing import Any, Mapping
+from typing import Any, Mapping, TypedDict
+
+import enum
 
 import immutables
 
@@ -29,7 +31,7 @@ from .ops import OpCode, Operation, SettingValue
 from .ops import (
     spec_to_json, to_json_obj, to_json, from_json, set_value, to_edgeql
 )
-from .ops import value_from_json, value_to_json_value, coerce_single_value
+from .ops import value_from_json, value_to_json_value
 from .spec import (
     Spec, FlatSpec, ChainedSpec, Setting,
     load_spec_from_schema, load_ext_spec_from_schema,
@@ -49,9 +51,24 @@ __all__ = (
     'load_spec_from_schema', 'load_ext_spec_from_schema',
     'load_ext_settings_from_schema',
     'get_compilation_config',
-    'coerce_single_value',
     'QueryCacheMode',
+    'ConState', 'ConStateType',
 )
+
+
+# See edb/server/pgcon/connect.py for documentation of the types
+class ConStateType(enum.StrEnum):
+    session_config = "C"
+    backend_session_config = "B"
+    command_line_argument = "A"
+    environment_variable = "E"
+    config_file = "F"
+
+
+class ConState(TypedDict):
+    name: str
+    value: Any
+    type: ConStateType
 
 
 def lookup(
@@ -60,6 +77,7 @@ def lookup(
     spec: Spec,
     allow_unrecognized: bool = False,
 ) -> Any:
+    assert len(configs) > 0
 
     try:
         setting = spec[name]

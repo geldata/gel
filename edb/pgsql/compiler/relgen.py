@@ -25,18 +25,15 @@ from typing import (
     Callable,
     Optional,
     Protocol,
-    Tuple,
     Iterable,
     Collection,
-    List,
-    Set,
     NamedTuple,
     Generic,
     TypeVar,
-    Type,
     cast,
 )
 
+import dataclasses
 import contextlib
 import functools
 
@@ -71,26 +68,19 @@ from . import pathctx
 from . import relctx
 
 
+@dataclasses.dataclass(repr=False, eq=False)
 class SetRVar:
-    __slots__ = ('rvar', 'path_id', 'aspects')
-
-    def __init__(
-        self,
-        rvar: pgast.PathRangeVar,
-        path_id: irast.PathId,
-        aspects: Iterable[pgce.PathAspect]=(pgce.PathAspect.VALUE,),
-    ) -> None:
-        self.aspects = aspects
-        self.path_id = path_id
-        self.rvar = rvar
+    rvar: pgast.PathRangeVar
+    path_id: irast.PathId
+    aspects: Iterable[pgce.PathAspect] = dataclasses.field(
+        default=(pgce.PathAspect.VALUE,)
+    )
 
 
+@dataclasses.dataclass(kw_only=True, repr=False, eq=False)
 class SetRVars:
-    __slots__ = ('main', 'new')
-
-    def __init__(self, main: SetRVar, new: List[SetRVar]) -> None:
-        self.main = main
-        self.new = new
+    main: SetRVar
+    new: list[SetRVar]
 
 
 def new_simple_set_rvar(
@@ -398,7 +388,7 @@ class _GetExprRvarFunc(Protocol, Generic[T_expr]):
 
 
 def register_get_rvar(
-    typ: Type[T_expr],
+    typ: type[T_expr],
 ) -> Callable[[_GetExprRvarFunc[T_expr]], _GetExprRvarFunc[T_expr]]:
     def func(f: _GetExprRvarFunc[T_expr]) -> _GetExprRvarFunc[T_expr]:
         _get_expr_set_rvar.register(typ)(
@@ -495,7 +485,7 @@ def ensure_source_rvar(
 def set_as_subquery(
         ir_set: irast.Set, *,
         as_value: bool=False,
-        explicit_cast: Optional[Tuple[str, ...]] = None,
+        explicit_cast: Optional[tuple[str, ...]] = None,
         ctx: context.CompilerContextLevel) -> pgast.Query:
     # Compile *ir_set* into a subquery as follows:
     #     (
@@ -600,7 +590,7 @@ def can_omit_optional_wrapper(
 def prepare_optional_rel(
         *, ir_set: irast.Set, stmt: pgast.SelectStmt,
         ctx: context.CompilerContextLevel) \
-        -> Tuple[pgast.SelectStmt, OptionalRel]:
+        -> tuple[pgast.SelectStmt, OptionalRel]:
 
     # For OPTIONAL sets we compute a UNION of both sides and annotate
     # each side with a marker.  We then select only rows that match
@@ -862,7 +852,7 @@ def process_set_as_link_property_ref(
         link_path_id = ir_set.path_id.src_path()
         assert link_path_id is not None
 
-        rptr_specialization: Optional[Set[irast.PointerRef]] = None
+        rptr_specialization: Optional[set[irast.PointerRef]] = None
 
         if link_path_id.is_type_intersection_path():
             rptr_specialization = set()
@@ -3115,8 +3105,8 @@ def process_set_as_call(
 def _process_set_func_with_ordinality(
         ir_set: irast.Set, *,
         outer_func_set: irast.Set,
-        func_name: Tuple[str, ...],
-        args: List[pgast.BaseExpr],
+        func_name: tuple[str, ...],
+        args: list[pgast.BaseExpr],
         ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
     expr = ir_set.expr
     assert isinstance(expr, irast.FunctionCall)
@@ -3254,8 +3244,8 @@ def _process_set_func_with_ordinality(
 
 def _process_set_func(
         ir_set: irast.Set, *,
-        func_name: Tuple[str, ...],
-        args: List[pgast.BaseExpr],
+        func_name: tuple[str, ...],
+        args: list[pgast.BaseExpr],
         ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
     expr = ir_set.expr
     assert isinstance(expr, irast.FunctionCall)
@@ -3349,7 +3339,7 @@ def _compile_func_epilogue(
         aspect=pgce.PathAspect.VALUE,
     )
 
-    aspects: Tuple[pgce.PathAspect, ...]
+    aspects: tuple[pgce.PathAspect, ...]
     if expr.body:
         # For inlined functions, we want all of the aspects provided.
         aspects = tuple(pathctx.list_path_aspects(func_rel, ir_set.path_id))
@@ -3509,42 +3499,57 @@ def _compile_inlined_call_args(
     if irutils.contains_dml(expr.body):
         last_iterator = ctx.enclosing_cte_iterator
 
-        # Compile args into an iterator CTE
-        with ctx.newrel() as arg_ctx:
-            dml.merge_iterator(last_iterator, arg_ctx.rel, ctx=arg_ctx)
-            clauses.setup_iterator_volatility(last_iterator, ctx=arg_ctx)
+        # If this function call has already been compiled to a CTE, don't
+        # recompile the arguments.
+        # (This will happen when a DML-containing funcion in a FOR loop is
+        # WITH bound, for example.)
+        if ir_set.path_id in ctx.inline_dml_ctes:
+            args_pathid, arg_cte = ctx.inline_dml_ctes[ir_set.path_id]
 
-            _compile_call_args(ir_set, ctx=arg_ctx)
+        else:
+            # Compile args into an iterator CTE
+            with ctx.newrel() as arg_ctx:
+                dml.merge_iterator(last_iterator, arg_ctx.rel, ctx=arg_ctx)
+                clauses.setup_iterator_volatility(last_iterator, ctx=arg_ctx)
 
-            # Add iterator identity
-            args_pathid = irast.PathId.new_dummy(ctx.env.aliases.get('args'))
-            with arg_ctx.subrel() as args_pathid_ctx:
-                relctx.create_iterator_identity_for_path(
-                    args_pathid, args_pathid_ctx.rel, ctx=args_pathid_ctx
+                _compile_call_args(ir_set, ctx=arg_ctx)
+
+                # Add iterator identity
+                args_pathid = irast.PathId.new_dummy(
+                    ctx.env.aliases.get('args')
                 )
-            args_id_rvar = relctx.rvar_for_rel(
-                args_pathid_ctx.rel, lateral=True, ctx=arg_ctx
-            )
-            relctx.include_rvar(
-                arg_ctx.rel, args_id_rvar, path_id=args_pathid, ctx=arg_ctx
-            )
-
-            for ir_arg in expr.args.values():
-                arg_path_id = ir_arg.expr.path_id
-                # Ensure args appear in arg CTE
-                pathctx.get_path_output(
-                    arg_ctx.rel,
-                    arg_path_id,
-                    aspect=pgce.PathAspect.VALUE,
-                    env=arg_ctx.env,
+                with arg_ctx.subrel() as args_pathid_ctx:
+                    relctx.create_iterator_identity_for_path(
+                        args_pathid, args_pathid_ctx.rel, ctx=args_pathid_ctx
+                    )
+                args_id_rvar = relctx.rvar_for_rel(
+                    args_pathid_ctx.rel, lateral=True, ctx=arg_ctx
                 )
-                pathctx.put_path_bond(arg_ctx.rel, arg_path_id, iterator=True)
+                relctx.include_rvar(
+                    arg_ctx.rel, args_id_rvar, path_id=args_pathid, ctx=arg_ctx
+                )
 
-        arg_cte = pgast.CommonTableExpr(
-            name=ctx.env.aliases.get('args'),
-            query=arg_ctx.rel,
-            materialized=False,
-        )
+                for ir_arg in expr.args.values():
+                    arg_path_id = ir_arg.expr.path_id
+                    # Ensure args appear in arg CTE
+                    pathctx.get_path_output(
+                        arg_ctx.rel,
+                        arg_path_id,
+                        aspect=pgce.PathAspect.VALUE,
+                        env=arg_ctx.env,
+                    )
+                    pathctx.put_path_bond(
+                        arg_ctx.rel, arg_path_id, iterator=True
+                    )
+
+            arg_cte = pgast.CommonTableExpr(
+                name=ctx.env.aliases.get('args'),
+                query=arg_ctx.rel,
+                materialized=False,
+            )
+            ctx.toplevel_stmt.append_cte(arg_cte)
+
+            ctx.inline_dml_ctes[ir_set.path_id] = (args_pathid, arg_cte)
 
         arg_iterator = pgast.IteratorCTE(
             path_id=args_pathid,
@@ -3556,7 +3561,6 @@ def _compile_inlined_call_args(
             ),
             iterator_bond=True,
         )
-        ctx.toplevel_stmt.append_cte(arg_cte)
 
         # Merge the new iterator
         ctx.path_scope = ctx.path_scope.new_child()
@@ -4038,7 +4042,7 @@ def process_set_as_json_object_pack(
 
 def build_array_expr(
         ir_expr: irast.Base,
-        elements: List[pgast.BaseExpr], *,
+        elements: list[pgast.BaseExpr], *,
         ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
 
     array = astutils.safe_array_expr(elements, ctx=ctx)
@@ -4053,7 +4057,7 @@ def build_array_expr(
             # to a generic function, e.g. `count(array_agg({}))`.  In this
             # case, amend the array type to a concrete type,
             # since Postgres balks at `[]::anyarray`.
-            pg_type: Tuple[str, ...] = ('text[]',)
+            pg_type: tuple[str, ...] = ('text[]',)
         else:
             serialized = output.in_serialization_ctx(ctx=ctx)
             pg_type = pg_types.pg_type_from_ir_typeref(
@@ -4216,7 +4220,7 @@ def _ext_ai_search_inner_pgvector(
     _ctx: context.CompilerContextLevel,
     newctx: context.CompilerContextLevel,
     _inner_ctx: context.CompilerContextLevel,
-) -> Tuple[pgast.BaseExpr, Optional[pgast.BaseExpr]]:
+) -> tuple[pgast.BaseExpr, Optional[pgast.BaseExpr]]:
     assert isinstance(call, irast.FunctionCall)
     if call.extras is None:
         raise AssertionError(
@@ -4436,7 +4440,7 @@ def _fts_search_inner_pg(
     ctx: context.CompilerContextLevel,
     newctx: context.CompilerContextLevel,
     inner_ctx: context.CompilerContextLevel,
-) -> Tuple[pgast.BaseExpr, pgast.BaseExpr]:
+) -> tuple[pgast.BaseExpr, pgast.BaseExpr]:
     lang, weights, query = args_pg
     el_name = sn.QualName('__object__', '__fts_document__')
     fts_document_ptrref = irast.SpecialPointerRef(
@@ -4542,7 +4546,7 @@ def _fts_search_inner_zombo(
     _ctx: context.CompilerContextLevel,
     newctx: context.CompilerContextLevel,
     _inner_ctx: context.CompilerContextLevel,
-) -> Tuple[pgast.BaseExpr, pgast.BaseExpr]:
+) -> tuple[pgast.BaseExpr, pgast.BaseExpr]:
     _, _, query = args_pg
     el_name = sn.QualName('__object__', 'ctid')
     ctid_ptrref = irast.SpecialPointerRef(

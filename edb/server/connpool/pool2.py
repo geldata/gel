@@ -68,8 +68,8 @@ class SnapshotLog:
 class Snapshot:
     timestamp: float
     capacity: int
-    blocks: typing.List[BlockSnapshot]
-    log: typing.List[SnapshotLog]
+    blocks: list[BlockSnapshot]
+    log: list[SnapshotLog]
 
     failed_connects: int
     failed_disconnects: int
@@ -134,7 +134,7 @@ class Pool(typing.Generic[C]):
 
         self._loop = asyncio.get_running_loop()
         self._channel = rust_async_channel.RustAsyncChannel(
-            self._pool,
+            self._pool._channel,
             self._process_message,
         )
 

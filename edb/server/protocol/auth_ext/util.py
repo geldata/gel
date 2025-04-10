@@ -19,19 +19,17 @@
 
 from __future__ import annotations
 
-import base64
 import urllib.parse
-import datetime
 import html
+import logging
+import asyncio
 
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
-from cryptography.hazmat.backends import default_backend
+from typing import (
+    TypeVar, overload, Any, cast, Optional, TYPE_CHECKING, Callable,
+    Awaitable
+)
 
-from jwcrypto import jwt, jwk
-from typing import TypeVar, Type, overload, Any, cast, Optional, TYPE_CHECKING
-
-from edb.server import config as edb_config
+from edb.server import config as edb_config, auth as jwt_auth
 from edb.server.config.types import CompositeConfigType
 
 from . import errors, config
@@ -41,13 +39,18 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
+logger = logging.getLogger('edb.server.ext.auth')
+
+# Cache JWKSets for 10 minutes
+jwtset_cache = jwt_auth.JWKSetCache(60 * 10)
+
 
 def maybe_get_config_unchecked(db: edbtenant.dbview.Database, key: str) -> Any:
     return edb_config.lookup(key, db.db_config, spec=db.user_config_spec)
 
 
 @overload
-def maybe_get_config(db: Any, key: str, expected_type: Type[T]) -> T | None: ...
+def maybe_get_config(db: Any, key: str, expected_type: type[T]) -> T | None: ...
 
 
 @overload
@@ -55,7 +58,7 @@ def maybe_get_config(db: Any, key: str) -> str | None: ...
 
 
 def maybe_get_config(
-    db: Any, key: str, expected_type: Type[object] = str
+    db: Any, key: str, expected_type: type[object] = str
 ) -> object:
     value = maybe_get_config_unchecked(db, key)
 
@@ -72,14 +75,14 @@ def maybe_get_config(
 
 
 @overload
-def get_config(db: Any, key: str, expected_type: Type[T]) -> T: ...
+def get_config(db: Any, key: str, expected_type: type[T]) -> T: ...
 
 
 @overload
 def get_config(db: Any, key: str) -> str: ...
 
 
-def get_config(db: Any, key: str, expected_type: Type[object] = str) -> object:
+def get_config(db: Any, key: str, expected_type: type[object] = str) -> object:
     value = maybe_get_config(db, key, expected_type)
     if value is None:
         raise errors.MissingConfiguration(
@@ -154,55 +157,33 @@ def join_url_params(url: str, params: dict[str, str]) -> str:
     return parsed_url._replace(query=new_query_params).geturl()
 
 
-def make_token(
-    signing_key: jwk.JWK,
-    issuer: str,
-    subject: str,
-    additional_claims: dict[str, str | int | float | bool | None] | None = None,
-    include_issued_at: bool = False,
-    expires_in: datetime.timedelta | None = None,
-) -> str:
-    now = datetime.datetime.now(datetime.timezone.utc)
-    expires_in = (
-        datetime.timedelta(seconds=0) if expires_in is None else expires_in
-    )
-    expires_at = now + expires_in
+async def get_remote_jwtset(
+    url: str,
+    fetch_lambda: Callable[[str], Awaitable[jwt_auth.JWKSet]],
+) -> jwt_auth.JWKSet:
+    """
+    Get a JWKSet from the cache, or fetch it from the given URL if it's not in
+    the cache.
+    """
+    is_fresh, jwtset = jwtset_cache.get(url)
+    match (is_fresh, jwtset):
+        case (_, None):
+            jwtset = await fetch_lambda(url)
+            jwtset_cache.set(url, jwtset)
+        case (True, jwtset):
+            pass
+        case _:
+            # Run fetch in background to refresh cache
+            async def refresh_cache(url: str) -> None:
+                try:
+                    new_jwtset = await fetch_lambda(url)
+                    jwtset_cache.set(url, new_jwtset)
+                except Exception:
+                    logger.exception(
+                        f"Failed to refresh JWKSet cache for {url}"
+                    )
 
-    claims: dict[str, Any] = {
-        "iss": issuer,
-        "sub": subject,
-        **(additional_claims or {}),
-    }
-    if expires_in.total_seconds() != 0:
-        claims["exp"] = expires_at.timestamp()
-    if include_issued_at:
-        claims["iat"] = now.timestamp()
+            asyncio.create_task(refresh_cache(url))
 
-    token = jwt.JWT(
-        header={"alg": "HS256"},
-        claims=claims,
-    )
-    token.make_signed_token(signing_key)
-
-    return cast(str, token.serialize())
-
-
-def derive_key(key: jwk.JWK, info: str) -> jwk.JWK:
-    """Derive a new key from the given symmetric key using HKDF."""
-
-    # n.b. the key is returned as a base64url-encoded string
-    raw_key_base64url = cast(str, key.get_op_key())
-    input_key_material = base64.urlsafe_b64decode(raw_key_base64url)
-
-    backend = default_backend()
-    hkdf = HKDFExpand(
-        algorithm=hashes.SHA256(),
-        length=32,
-        info=info.encode("utf-8"),
-        backend=backend,
-    )
-    new_key_bytes = hkdf.derive(input_key_material)
-    return jwk.JWK(
-        kty="oct",
-        k=new_key_bytes.hex(),
-    )
+    assert jwtset is not None
+    return jwtset

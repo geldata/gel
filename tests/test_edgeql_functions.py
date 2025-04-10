@@ -32,7 +32,6 @@ from edb.tools import test
 
 
 class TestEdgeQLFunctions(tb.QueryTestCase):
-    NO_FACTOR = True
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')

@@ -24,6 +24,7 @@ type Person {
 
     full_name := __source__.first_name ++ ((' ' ++ .last_name) ?? '');
     favorite_genre := (select Genre filter .name = 'Drama' limit 1);
+    directed_movie := (select .<director[is Movie] limit 1);
     username := (global username_prefix ?? 'u_') ++ str_lower(.first_name);
 }
 
@@ -46,7 +47,8 @@ type Content {
 type Movie extending Content {
     release_year: int64;
     multi actors: Person {
-        role: str;
+        property role: str;
+        property role_lower := str_lower(@role);
     };
     director: Person {
         bar: str;

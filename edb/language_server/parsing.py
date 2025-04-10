@@ -16,35 +16,27 @@
 # limitations under the License.
 #
 
-from typing import Any, List, Tuple, Optional, TypeVar, Generic
-from dataclasses import dataclass
+from typing import Any, Optional
 
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
 from lsprotocol import types as lsp_types
 
-
+from edb import errors
 from edb.edgeql import ast as qlast
 from edb.edgeql import tokenizer
 from edb.edgeql import parser as qlparser
 from edb.edgeql.parser.grammar import tokens as qltokens
 import edb._edgeql_parser as rust_parser
 
-
-T = TypeVar('T', covariant=True)
-E = TypeVar('E', covariant=True)
-
-
-@dataclass(kw_only=True, slots=True)
-class Result(Generic[T, E]):
-    ok: Optional[T] = None
-    error: Optional[E] = None
+from . import Result, is_schema_file
+from . import utils as ls_utils
 
 
 def parse(
     doc: TextDocument, ls: LanguageServer
-) -> Result[List[qlast.Base] | qlast.Schema, List[lsp_types.Diagnostic]]:
-    sdl = doc.filename.endswith('.esdl') if doc.filename else False
+) -> Result[list[qlast.Base] | qlast.Schema, list[lsp_types.Diagnostic]]:
+    sdl = is_schema_file(doc.filename) if doc.filename else False
 
     source, result, productions = _parse_inner(doc.source, sdl)
 
@@ -57,34 +49,32 @@ def parse(
                 message += f"\n{details}"
             if hint:
                 message += f"\nHint: {hint}"
-            (start, end) = tokenizer.inflate_span(source.text(), span)
-            assert end
 
             diagnostics.append(
                 lsp_types.Diagnostic(
-                    range=lsp_types.Range(
-                        start=lsp_types.Position(
-                            line=start.line - 1,
-                            character=start.column - 1,
-                        ),
-                        end=lsp_types.Position(
-                            line=end.line - 1,
-                            character=end.column - 1,
-                        ),
-                    ),
+                    range=ls_utils.span_to_lsp(source.text(), span),
                     severity=lsp_types.DiagnosticSeverity.Error,
                     message=message,
                 )
             )
 
-        return Result(error=diagnostics)
+        return Result(err=diagnostics)
 
     # parsing successful
     assert isinstance(result.out, rust_parser.CSTNode)
 
-    ast = qlparser._cst_to_ast(
-        result.out, productions, source, doc.filename
-    ).val
+    try:
+        ast = qlparser._cst_to_ast(
+            result.out, productions, source, doc.filename
+        ).val
+    except errors.EdgeDBError as e:
+        return Result(err=[
+            lsp_types.Diagnostic(
+                range=ls_utils.span_to_lsp(source.text(), e.get_span()),
+                severity=lsp_types.DiagnosticSeverity.Error,
+                message=e.args[0],
+            )
+        ])
     if sdl:
         assert isinstance(ast, qlast.Schema), ast
     else:
@@ -117,7 +107,7 @@ def parse_and_suggest(
     return None
 
 
-def _position_in_span(pos: lsp_types.Position, span: Tuple[Any, Any]):
+def _position_in_span(pos: lsp_types.Position, span: tuple[Any, Any]):
     start, end = span
 
     if pos.line < start.line - 1:
@@ -133,7 +123,7 @@ def _position_in_span(pos: lsp_types.Position, span: Tuple[Any, Any]):
 
 def _parse_inner(
     source_str: str, sdl: bool
-) -> Tuple[tokenizer.Source, rust_parser.ParserResult, Any]:
+) -> tuple[tokenizer.Source, rust_parser.ParserResult, Any]:
     try:
         source = tokenizer.Source.from_string(source_str)
     except Exception as e:

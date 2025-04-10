@@ -249,7 +249,7 @@ class DumpTestCaseMixin:
                         FILTER EXISTS .annotations
                         ORDER BY .name,
                     } # keep only links with user-annotated props
-                    FILTER .properties.annotations.name = 'std::title'
+                    FILTER 'std::title' IN .properties.annotations.name
                     ORDER BY .name,
                 }
                 FILTER
@@ -1901,6 +1901,11 @@ class TestDump01(tb.StableDumpTestCase, DumpTestCaseMixin):
         await self.check_branching(
             include_data=True,
             check_method=DumpTestCaseMixin.ensure_schema_data_integrity)
+
+    async def test_dump01_future_scope(self):
+        await self.con.execute('''
+            create future _scoping_noop_test;
+        ''')
 
 
 class TestDump01Compat(

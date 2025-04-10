@@ -20,7 +20,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Type, Dict, NamedTuple
+from typing import Any, Optional, NamedTuple
 
 import json
 import re
@@ -30,6 +30,8 @@ from edb.common import value_dispatch
 from edb.common import uuidgen
 
 from edb.graphql import types as gql_types
+
+from edb.pgsql.parser import exceptions as parser_errors
 
 from edb.schema import name as sn
 from edb.schema import objtypes as s_objtypes
@@ -61,13 +63,13 @@ SCHEMA_CODES = frozenset({
 class ErrorDetails(NamedTuple):
     message: str
     detail: Optional[str] = None
-    detail_json: Optional[Dict[str, Any]] = None
+    detail_json: Optional[dict[str, Any]] = None
     code: Optional[str] = None
     schema_name: Optional[str] = None
     table_name: Optional[str] = None
     column_name: Optional[str] = None
     constraint_name: Optional[str] = None
-    errcls: Optional[Type[errors.EdgeDBError]] = None
+    errcls: Optional[type[errors.EdgeDBError]] = None
 
 
 constraint_errors = frozenset({
@@ -748,3 +750,21 @@ def _interpret_wrong_object_type(
         )
 
     return errors.InternalServerError(err_details.message)
+
+
+def static_interpret_psql_parse_error(
+    exc: parser_errors.PSqlParseError
+) -> errors.EdgeDBError:
+    res: errors.EdgeDBError
+    if isinstance(exc, parser_errors.PSqlSyntaxError):
+        res = errors.EdgeQLSyntaxError(str(exc))
+        res.set_position(exc.cursor_pos - 1, None)
+        res.compute_line_col(exc.query_source)
+    elif isinstance(exc, parser_errors.PSqlUnsupportedError):
+        res = errors.UnsupportedFeatureError(str(exc))
+        if exc.location is not None:
+            res.set_position(exc.location, None)
+    else:
+        res = errors.InternalServerError(str(exc))
+
+    return res

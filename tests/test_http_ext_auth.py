@@ -3,7 +3,7 @@
 #
 # Copyright 2016-present MagicStack Inc. and the EdgeDB authors.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
+# Licensed under the Apache License, Version 2.0 (the "License")
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
@@ -30,14 +30,14 @@ import re
 import hashlib
 import hmac
 
-from typing import Any, Optional, cast
-from jwcrypto import jwt, jwk
+from typing import Optional, cast
 from email.message import EmailMessage
 
 from edgedb import QueryAssertionError
 from edb.testbase import http as tb
 from edb.common import assert_data_shape
-from edb.server.protocol.auth_ext import util as auth_util
+from edb.server.protocol.auth_ext import jwt as auth_jwt
+from edb.server.auth import JWKSet
 
 ph = argon2.PasswordHasher()
 
@@ -256,7 +256,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
         }};
 
         CONFIGURE CURRENT DATABASE SET
-        cfg::current_email_provider_name := "email_hosting_is_easy";
+        current_email_provider_name := "email_hosting_is_easy";
 
         CONFIGURE CURRENT DATABASE SET
         ext::auth::AuthConfig::auth_signing_key := '{SIGNING_KEY}';
@@ -347,6 +347,15 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
         CONFIGURE CURRENT DATABASE
         INSERT ext::auth::MagicLinkProviderConfig {{}};
+
+        # Pure testing code:
+        CREATE TYPE TestUser;
+        ALTER TYPE TestUser {{
+            CREATE REQUIRED LINK identity: ext::auth::Identity {{
+                SET default := (GLOBAL ext::auth::ClientTokenIdentity)
+            }};
+        }};
+
         """,
     ]
 
@@ -359,6 +368,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
     mock_oauth_server: tb.MockHttpServer
     mock_net_server: tb.MockHttpServer
+    jwkset_cache: dict[str, JWKSet] = {}
 
     def setUp(self):
         self.mock_oauth_server = tb.MockHttpServer(
@@ -378,6 +388,13 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             self.mock_net_server.stop()
         self.mock_oauth_server = None
         super().tearDown()
+
+    def signing_key(self):
+        return auth_jwt.SigningKey(
+            lambda: SIGNING_KEY,
+            self.http_addr,
+            is_key_for_testing=True,
+        )
 
     @classmethod
     def get_setup_script(cls):
@@ -429,7 +446,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     [is ext::auth::OAuthProviderConfig].client_id,
                     [is ext::auth::OAuthProviderConfig].additional_scope,
                 } filter .name = <str>$0
-            );
+            )
             """,
             fqn,
         )
@@ -445,38 +462,9 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             SELECT assert_single(
                 cfg::Config.extensions[is ext::auth::AuthConfig]
                     .{key}
-            );
+            )
             """
         )
-
-    async def get_signing_key(self):
-        auth_signing_key = SIGNING_KEY
-        key_bytes = base64.b64encode(auth_signing_key.encode())
-        signing_key = jwk.JWK(k=key_bytes.decode(), kty="oct")
-        return signing_key
-
-    def generate_state_value(
-        self,
-        state_claims: dict[str, str | float],
-        auth_signing_key: jwk.JWK,
-    ) -> str:
-        state_token = jwt.JWT(
-            header={"alg": "HS256"},
-            claims=state_claims,
-        )
-        state_token.make_signed_token(auth_signing_key)
-        return state_token.serialize()
-
-    async def extract_jwt_claims(self, raw_jwt: str, info: str | None = None):
-        input_key_material = await self.get_signing_key()
-        if info is not None:
-            signing_key = auth_util.derive_key(input_key_material, info)
-        else:
-            signing_key = input_key_material
-
-        jwt_token = jwt.JWT(key=signing_key, jwt=raw_jwt)
-        claims = json.loads(jwt_token.claims)
-        return claims
 
     def maybe_get_cookie_value(
         self, headers: dict[str, str], name: str
@@ -491,6 +479,76 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
     def maybe_get_auth_token(self, headers: dict[str, str]) -> Optional[str]:
         return self.maybe_get_cookie_value(headers, "edgedb-session")
+
+    def generate_and_serve_jwk(
+        self,
+        client_id: str,
+        jwk_cert_url: str,
+        token_url: str,
+        issuer: str,
+        access_token_name: str,
+        sub: str = "1",
+    ) -> tuple[str, str, str]:
+        parts = jwk_cert_url.split("/", 3)
+        host = parts[0] + "//" + parts[2]
+        path = parts[3]
+        jwks_request = (
+            "GET",
+            host,
+            path,
+        )
+
+        # Because we have an internal cache, ensure that we only generate one
+        # set per issuer
+        jwks = self.jwkset_cache.get(issuer)
+        if jwks is None:
+            jwks = JWKSet()
+            jwks.default_signing_context.set_issuer(issuer)
+            jwks.generate(kid=None, kty="RS256")
+            self.jwkset_cache[issuer] = jwks
+
+        jwk_json = jwks.export_json(private_keys=False).decode()
+
+        self.mock_oauth_server.register_route_handler(*jwks_request)(
+            (
+                jwk_json,
+                200,
+            )
+        )
+
+        parts = token_url.split("/", 3)
+        host = parts[0] + "//" + parts[2]
+        path = parts[3]
+        token_request = (
+            "POST",
+            host,
+            path,
+        )
+
+        jwks.default_signing_context.set_issuer(issuer)
+        jwks.default_signing_context.set_audience(client_id)
+        jwks.default_signing_context.set_expiry(3600)
+        jwks.default_signing_context.set_not_before(30)
+
+        id_token = jwks.sign({
+            "sub": sub,
+            "email": "test@example.com",
+        })
+
+        self.mock_oauth_server.register_route_handler(*token_request)(
+            (
+                json.dumps(
+                    {
+                        "access_token": access_token_name,
+                        "id_token": id_token,
+                        "scope": "openid",
+                        "token_type": "bearer",
+                    }
+                ),
+                200,
+            )
+        )
+        return token_request
 
     async def test_http_auth_ext_github_authorize_01(self):
         with self.http_con() as http_con:
@@ -537,10 +595,11 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             state = qs.get("state")
             assert state is not None
 
-            claims = await self.extract_jwt_claims(state[0])
-            self.assertEqual(claims.get("provider"), provider_name)
-            self.assertEqual(claims.get("iss"), self.http_addr)
-            self.assertEqual(claims.get("redirect_to"), redirect_to)
+            claims = auth_jwt.OAuthStateToken.verify(
+                state[0], self.signing_key()
+            )
+            self.assertEqual(claims.provider, provider_name)
+            self.assertEqual(claims.redirect_to, redirect_to)
 
             self.assertEqual(
                 qs.get("redirect_uri"), [callback_url]
@@ -574,16 +633,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
     async def test_http_auth_ext_github_callback_missing_provider_01(self):
         with self.http_con() as http_con:
-            signing_key = await self.get_signing_key()
-
-            expires_at = utcnow() + datetime.timedelta(minutes=5)
-            missing_provider_state_claims = {
-                "iss": self.http_addr,
-                "exp": expires_at.timestamp(),
-            }
-            state_token = self.generate_state_value(
-                missing_provider_state_claims, signing_key
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=None,
+                redirect_to=None,
+                challenge=None,
             )
+            state_token = state_claims.sign(self.signing_key())
 
             _, _, status = self.http_con_request(
                 http_con,
@@ -599,23 +654,19 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 "oauth_github"
             )
             provider_name = provider_config.name
-            signing_key = jwk.JWK(
-                k=base64.b64encode(("abcd" * 8).encode()).decode(), kty="oct"
-            )
 
-            expires_at = utcnow() + datetime.timedelta(minutes=5)
-            missing_provider_state_claims = {
-                "iss": self.http_addr,
-                "provider": provider_name,
-                "exp": expires_at.timestamp(),
-            }
-            state_token_value = self.generate_state_value(
-                missing_provider_state_claims, signing_key
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                challenge="1234",
+            )
+            state_token = state_claims.sign(
+                auth_jwt.SigningKey(lambda: 'wrong key', self.http_addr),
             )
 
             _, _, status = self.http_con_request(
                 http_con,
-                {"state": state_token_value, "code": "abc123"},
+                {"state": state_token, "code": "abc123"},
                 path="callback",
             )
 
@@ -623,15 +674,13 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
     async def test_http_auth_ext_github_unknown_provider_01(self):
         with self.http_con() as http_con:
-            signing_key = await self.get_signing_key()
-
-            expires_at = utcnow() + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": "beepboopbeep",
-                "exp": expires_at.timestamp(),
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider="beepboopbeep",
+                redirect_to="https://example.com",
+                redirect_to_on_signup=None,
+                challenge="challenge",
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             body, _, status = self.http_con_request(
                 http_con,
@@ -717,17 +766,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 challenge=challenge,
             )
 
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-                "challenge": challenge,
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                challenge=challenge,
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             data, headers, status = self.http_con_request(
                 http_con,
@@ -828,7 +872,6 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             )
             provider_name = provider_config.name
 
-            now = utcnow()
             token_request = (
                 "POST",
                 "https://github.com",
@@ -847,16 +890,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
             )
 
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                challenge="challenge",
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             data, headers, status = self.http_con_request(
                 http_con,
@@ -894,7 +933,6 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             )
             provider_name = provider_config.name
 
-            now = utcnow()
             token_request = (
                 "POST",
                 "https://github.com",
@@ -913,16 +951,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
             )
 
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                challenge="challenge",
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             data, headers, status = self.http_con_request(
                 http_con,
@@ -991,10 +1025,11 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             state = qs.get("state")
             assert state is not None
 
-            claims = await self.extract_jwt_claims(state[0])
-            self.assertEqual(claims.get("provider"), provider_name)
-            self.assertEqual(claims.get("iss"), self.http_addr)
-            self.assertEqual(claims.get("redirect_to"), redirect_to)
+            claims = auth_jwt.OAuthStateToken.verify(
+                state[0], self.signing_key()
+            )
+            self.assertEqual(claims.provider, provider_name)
+            self.assertEqual(claims.redirect_to, redirect_to)
 
             self.assertEqual(
                 qs.get("redirect_uri"), [f"{self.http_addr}/callback"]
@@ -1088,17 +1123,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 challenge=challenge,
             )
 
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-                "challenge": challenge,
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                challenge=challenge,
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             data, headers, status = self.http_con_request(
                 http_con,
@@ -1200,8 +1230,6 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             client_id = provider_config.client_id
             client_secret = GOOGLE_SECRET
 
-            now = utcnow()
-
             discovery_request = (
                 "GET",
                 "https://accounts.google.com",
@@ -1215,56 +1243,13 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
             )
 
-            jwks_request = (
-                "GET",
-                "https://www.googleapis.com",
-                "oauth2/v3/certs",
+            token_request = self.generate_and_serve_jwk(
+                client_id,
+                "https://www.googleapis.com/oauth2/v3/certs",
+                "https://oauth2.googleapis.com/token",
+                "https://accounts.google.com",
+                "google_access_token",
             )
-            # Generate a JWK Set
-            k = jwk.JWK.generate(kty='RSA', size=4096)
-            ks = jwk.JWKSet()
-            ks.add(k)
-            jwk_set: dict[str, Any] = ks.export(
-                private_keys=False, as_dict=True
-            )
-
-            self.mock_oauth_server.register_route_handler(*jwks_request)(
-                (
-                    json.dumps(jwk_set),
-                    200,
-                )
-            )
-
-            token_request = (
-                "POST",
-                "https://oauth2.googleapis.com",
-                "token",
-            )
-            id_token_claims = {
-                "iss": "https://accounts.google.com",
-                "sub": "1",
-                "aud": client_id,
-                "exp": (now + datetime.timedelta(minutes=5)).timestamp(),
-                "iat": now.timestamp(),
-                "email": "test@example.com",
-            }
-            id_token = jwt.JWT(header={"alg": "RS256"}, claims=id_token_claims)
-            id_token.make_signed_token(k)
-
-            self.mock_oauth_server.register_route_handler(*token_request)(
-                (
-                    json.dumps(
-                        {
-                            "access_token": "google_access_token",
-                            "id_token": id_token.serialize(),
-                            "scope": "openid",
-                            "token_type": "bearer",
-                        }
-                    ),
-                    200,
-                )
-            )
-
             challenge = (
                 base64.urlsafe_b64encode(
                     hashlib.sha256(
@@ -1283,17 +1268,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 challenge=challenge,
             )
 
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-                "challenge": challenge,
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                challenge=challenge,
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             data, headers, status = self.http_con_request(
                 http_con,
@@ -1315,7 +1295,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             requests_for_discovery = self.mock_oauth_server.requests[
                 discovery_request
             ]
-            self.assertEqual(len(requests_for_discovery), 2)
+            self.assertEqual(len(requests_for_discovery), 1)
 
             requests_for_token = self.mock_oauth_server.requests[token_request]
             self.assertEqual(len(requests_for_token), 1)
@@ -1393,10 +1373,11 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             state = qs.get("state")
             assert state is not None
 
-            claims = await self.extract_jwt_claims(state[0])
-            self.assertEqual(claims.get("provider"), provider_name)
-            self.assertEqual(claims.get("iss"), self.http_addr)
-            self.assertEqual(claims.get("redirect_to"), redirect_to)
+            claims = auth_jwt.OAuthStateToken.verify(
+                state[0], self.signing_key()
+            )
+            self.assertEqual(claims.provider, provider_name)
+            self.assertEqual(claims.redirect_to, redirect_to)
 
             self.assertEqual(
                 qs.get("redirect_uri"), [f"{self.http_addr}/callback"]
@@ -1465,10 +1446,11 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             state = qs.get("state")
             assert state is not None
 
-            claims = await self.extract_jwt_claims(state[0])
-            self.assertEqual(claims.get("provider"), provider_name)
-            self.assertEqual(claims.get("iss"), self.http_addr)
-            self.assertEqual(claims.get("redirect_to"), redirect_to)
+            claims = auth_jwt.OAuthStateToken.verify(
+                state[0], self.signing_key()
+            )
+            self.assertEqual(claims.provider, provider_name)
+            self.assertEqual(claims.redirect_to, redirect_to)
 
             self.assertEqual(
                 qs.get("redirect_uri"), [f"{self.http_addr}/callback"]
@@ -1498,8 +1480,6 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             client_id = provider_config.client_id
             client_secret = AZURE_SECRET
 
-            now = utcnow()
-
             discovery_request = (
                 "GET",
                 "https://login.microsoftonline.com",
@@ -1512,56 +1492,13 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
             )
 
-            jwks_request = (
-                "GET",
+            token_request = self.generate_and_serve_jwk(
+                client_id,
+                "https://login.microsoftonline.com/common/discovery/v2.0/keys",
+                "https://login.microsoftonline.com/common/oauth2/v2.0/token",
                 "https://login.microsoftonline.com",
-                "common/discovery/v2.0/keys",
+                "azure_access_token",
             )
-            # Generate a JWK Set
-            k = jwk.JWK.generate(kty='RSA', size=4096)
-            ks = jwk.JWKSet()
-            ks.add(k)
-            jwk_set: dict[str, Any] = ks.export(
-                private_keys=False, as_dict=True
-            )
-
-            self.mock_oauth_server.register_route_handler(*jwks_request)(
-                (
-                    json.dumps(jwk_set),
-                    200,
-                )
-            )
-
-            token_request = (
-                "POST",
-                "https://login.microsoftonline.com",
-                "common/oauth2/v2.0/token",
-            )
-            id_token_claims = {
-                "iss": "https://login.microsoftonline.com/common/v2.0",
-                "sub": "1",
-                "aud": client_id,
-                "exp": (now + datetime.timedelta(minutes=5)).timestamp(),
-                "iat": now.timestamp(),
-                "email": "test@example.com",
-            }
-            id_token = jwt.JWT(header={"alg": "RS256"}, claims=id_token_claims)
-            id_token.make_signed_token(k)
-
-            self.mock_oauth_server.register_route_handler(*token_request)(
-                (
-                    json.dumps(
-                        {
-                            "access_token": "azure_access_token",
-                            "id_token": id_token.serialize(),
-                            "scope": "openid",
-                            "token_type": "bearer",
-                        }
-                    ),
-                    200,
-                )
-            )
-
             challenge = (
                 base64.urlsafe_b64encode(
                     hashlib.sha256(
@@ -1580,17 +1517,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 challenge=challenge,
             )
 
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-                "challenge": challenge,
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                challenge=challenge,
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             data, headers, status = self.http_con_request(
                 http_con,
@@ -1598,7 +1530,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 path="callback",
             )
 
-            self.assertEqual(data, b"")
+            self.assertEqual(data, b"", data)
             self.assertEqual(status, 302)
 
             location = headers.get("location")
@@ -1681,10 +1613,11 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             state = qs.get("state")
             assert state is not None
 
-            claims = await self.extract_jwt_claims(state[0])
-            self.assertEqual(claims.get("provider"), provider_name)
-            self.assertEqual(claims.get("iss"), self.http_addr)
-            self.assertEqual(claims.get("redirect_to"), redirect_to)
+            claims = auth_jwt.OAuthStateToken.verify(
+                state[0], self.signing_key()
+            )
+            self.assertEqual(claims.provider, provider_name)
+            self.assertEqual(claims.redirect_to, redirect_to)
 
             self.assertEqual(
                 qs.get("redirect_uri"), [f"{self.http_addr}/callback"]
@@ -1714,8 +1647,6 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             client_id = provider_config.client_id
             client_secret = APPLE_SECRET
 
-            now = utcnow()
-
             discovery_request = (
                 "GET",
                 "https://appleid.apple.com",
@@ -1728,54 +1659,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
             )
 
-            jwks_request = (
-                "GET",
+            token_request = self.generate_and_serve_jwk(
+                client_id,
+                "https://appleid.apple.com/auth/keys",
+                "https://appleid.apple.com/auth/token",
                 "https://appleid.apple.com",
-                "auth/keys",
-            )
-            # Generate a JWK Set
-            k = jwk.JWK.generate(kty='RSA', size=4096)
-            ks = jwk.JWKSet()
-            ks.add(k)
-            jwk_set: dict[str, Any] = ks.export(
-                private_keys=False, as_dict=True
-            )
-
-            self.mock_oauth_server.register_route_handler(*jwks_request)(
-                (
-                    json.dumps(jwk_set),
-                    200,
-                )
-            )
-
-            token_request = (
-                "POST",
-                "https://appleid.apple.com",
-                "auth/token",
-            )
-            id_token_claims = {
-                "iss": "https://appleid.apple.com",
-                "sub": "1",
-                "aud": client_id,
-                "exp": (now + datetime.timedelta(minutes=5)).timestamp(),
-                "iat": now.timestamp(),
-                "email": "test@example.com",
-            }
-            id_token = jwt.JWT(header={"alg": "RS256"}, claims=id_token_claims)
-            id_token.make_signed_token(k)
-
-            self.mock_oauth_server.register_route_handler(*token_request)(
-                (
-                    json.dumps(
-                        {
-                            "access_token": "apple_access_token",
-                            "id_token": id_token.serialize(),
-                            "scope": "openid",
-                            "token_type": "bearer",
-                        }
-                    ),
-                    200,
-                )
+                "apple_access_token",
             )
 
             challenge = (
@@ -1796,17 +1685,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 challenge=challenge,
             )
 
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-                "challenge": challenge,
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                challenge=challenge,
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             data, headers, status = self.http_con_request(
                 http_con,
@@ -1858,8 +1742,6 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             provider_name = provider_config.name
             client_id = provider_config.client_id
 
-            now = utcnow()
-
             discovery_request = (
                 "GET",
                 "https://appleid.apple.com",
@@ -1872,54 +1754,13 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
             )
 
-            jwks_request = (
-                "GET",
+            _token_request = self.generate_and_serve_jwk(
+                client_id,
+                "https://appleid.apple.com/auth/keys",
+                "https://appleid.apple.com/auth/token",
                 "https://appleid.apple.com",
-                "auth/keys",
-            )
-            # Generate a JWK Set
-            k = jwk.JWK.generate(kty='RSA', size=4096)
-            ks = jwk.JWKSet()
-            ks.add(k)
-            jwk_set: dict[str, Any] = ks.export(
-                private_keys=False, as_dict=True
-            )
-
-            self.mock_oauth_server.register_route_handler(*jwks_request)(
-                (
-                    json.dumps(jwk_set),
-                    200,
-                )
-            )
-
-            token_request = (
-                "POST",
-                "https://appleid.apple.com",
-                "auth/token",
-            )
-            id_token_claims = {
-                "iss": "https://appleid.apple.com",
-                "sub": "2",
-                "aud": client_id,
-                "exp": (now + datetime.timedelta(minutes=5)).timestamp(),
-                "iat": now.timestamp(),
-                "email": "test@example.com",
-            }
-            id_token = jwt.JWT(header={"alg": "RS256"}, claims=id_token_claims)
-            id_token.make_signed_token(k)
-
-            self.mock_oauth_server.register_route_handler(*token_request)(
-                (
-                    json.dumps(
-                        {
-                            "access_token": "apple_access_token",
-                            "id_token": id_token.serialize(),
-                            "scope": "openid",
-                            "token_type": "bearer",
-                        }
-                    ),
-                    200,
-                )
+                "apple_access_token",
+                sub="2",
             )
 
             challenge = (
@@ -1940,18 +1781,13 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 challenge=challenge,
             )
 
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-                "redirect_to_on_signup": f"{self.http_addr}/some/other/path",
-                "challenge": challenge,
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                redirect_to_on_signup=f"{self.http_addr}/some/other/path",
+                challenge=challenge,
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             data, headers, status = self.http_con_request(
                 http_con,
@@ -1964,7 +1800,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
-            self.assertEqual(data, b"")
+            self.assertEqual(data, b"", data)
             self.assertEqual(status, 302)
 
             location = headers.get("location")
@@ -2006,8 +1842,6 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             client_id = provider_config.client_id
             client_secret = SLACK_SECRET
 
-            now = utcnow()
-
             discovery_request = (
                 "GET",
                 "https://slack.com",
@@ -2021,54 +1855,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
             )
 
-            jwks_request = (
-                "GET",
+            token_request = self.generate_and_serve_jwk(
+                client_id,
+                "https://slack.com/openid/connect/keys",
+                "https://slack.com/api/openid.connect.token",
                 "https://slack.com",
-                "openid/connect/keys",
-            )
-            # Generate a JWK Set
-            k = jwk.JWK.generate(kty='RSA', size=4096)
-            ks = jwk.JWKSet()
-            ks.add(k)
-            jwk_set: dict[str, Any] = ks.export(
-                private_keys=False, as_dict=True
-            )
-
-            self.mock_oauth_server.register_route_handler(*jwks_request)(
-                (
-                    json.dumps(jwk_set),
-                    200,
-                )
-            )
-
-            token_request = (
-                "POST",
-                "https://slack.com",
-                "api/openid.connect.token",
-            )
-            id_token_claims = {
-                "iss": "https://slack.com",
-                "sub": "1",
-                "aud": client_id,
-                "exp": (now + datetime.timedelta(minutes=5)).timestamp(),
-                "iat": now.timestamp(),
-                "email": "test@example.com",
-            }
-            id_token = jwt.JWT(header={"alg": "RS256"}, claims=id_token_claims)
-            id_token.make_signed_token(k)
-
-            self.mock_oauth_server.register_route_handler(*token_request)(
-                (
-                    json.dumps(
-                        {
-                            "access_token": "slack_access_token",
-                            "id_token": id_token.serialize(),
-                            "scope": "openid",
-                            "token_type": "bearer",
-                        }
-                    ),
-                    200,
-                )
+                "slack_access_token",
             )
 
             challenge = (
@@ -2089,17 +1881,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 challenge=challenge,
             )
 
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-                "challenge": challenge,
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                challenge=challenge,
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             data, headers, status = self.http_con_request(
                 http_con,
@@ -2121,7 +1908,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             requests_for_discovery = self.mock_oauth_server.requests[
                 discovery_request
             ]
-            self.assertEqual(len(requests_for_discovery), 2)
+            self.assertEqual(len(requests_for_discovery), 1)
 
             requests_for_token = self.mock_oauth_server.requests[token_request]
             self.assertEqual(len(requests_for_token), 1)
@@ -2199,10 +1986,11 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             state = qs.get("state")
             assert state is not None
 
-            claims = await self.extract_jwt_claims(state[0])
-            self.assertEqual(claims.get("provider"), provider_name)
-            self.assertEqual(claims.get("iss"), self.http_addr)
-            self.assertEqual(claims.get("redirect_to"), redirect_to)
+            claims = auth_jwt.OAuthStateToken.verify(
+                state[0], self.signing_key()
+            )
+            self.assertEqual(claims.provider, provider_name)
+            self.assertEqual(claims.redirect_to, redirect_to)
 
             self.assertEqual(
                 qs.get("redirect_uri"), [f"{self.http_addr}/callback"]
@@ -2253,7 +2041,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             )
 
             redirect_to = f"{self.http_addr}/some/path"
-            _, headers, status = self.http_con_request(
+            body, headers, status = self.http_con_request(
                 http_con,
                 {
                     "provider": provider_name,
@@ -2263,7 +2051,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 path="authorize",
             )
 
-            self.assertEqual(status, 302)
+            self.assertEqual(status, 302, body)
 
             location = headers.get("location")
             assert location is not None
@@ -2280,10 +2068,11 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             state = qs.get("state")
             assert state is not None
 
-            claims = await self.extract_jwt_claims(state[0])
-            self.assertEqual(claims.get("provider"), provider_name)
-            self.assertEqual(claims.get("iss"), self.http_addr)
-            self.assertEqual(claims.get("redirect_to"), redirect_to)
+            claims = auth_jwt.OAuthStateToken.verify(
+                state[0], self.signing_key()
+            )
+            self.assertEqual(claims.provider, provider_name)
+            self.assertEqual(claims.redirect_to, redirect_to)
 
             self.assertEqual(
                 qs.get("redirect_uri"), [f"{self.http_addr}/callback"]
@@ -2313,8 +2102,6 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             client_id = provider_config.client_id
             client_secret = GENERIC_OIDC_SECRET
 
-            now = utcnow()
-
             discovery_request = (
                 "GET",
                 "https://example.com",
@@ -2328,54 +2115,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
             )
 
-            jwks_request = (
-                "GET",
+            token_request = self.generate_and_serve_jwk(
+                client_id,
+                "https://example.com/jwks",
+                "https://example.com/token",
                 "https://example.com",
-                "jwks",
-            )
-            # Generate a JWK Set
-            k = jwk.JWK.generate(kty='RSA', size=4096)
-            ks = jwk.JWKSet()
-            ks.add(k)
-            jwk_set: dict[str, Any] = ks.export(
-                private_keys=False, as_dict=True
-            )
-
-            self.mock_oauth_server.register_route_handler(*jwks_request)(
-                (
-                    json.dumps(jwk_set),
-                    200,
-                )
-            )
-
-            token_request = (
-                "POST",
-                "https://example.com",
-                "token",
-            )
-            id_token_claims = {
-                "iss": "https://example.com",
-                "sub": "1",
-                "aud": client_id,
-                "exp": (now + datetime.timedelta(minutes=5)).timestamp(),
-                "iat": now.timestamp(),
-                "email": "test@example.com",
-            }
-            id_token = jwt.JWT(header={"alg": "RS256"}, claims=id_token_claims)
-            id_token.make_signed_token(k)
-
-            self.mock_oauth_server.register_route_handler(*token_request)(
-                (
-                    json.dumps(
-                        {
-                            "access_token": "oidc_access_token",
-                            "id_token": id_token.serialize(),
-                            "scope": "openid",
-                            "token_type": "bearer",
-                        }
-                    ),
-                    200,
-                )
+                "oidc_access_token",
             )
 
             challenge = (
@@ -2396,17 +2141,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 challenge=challenge,
             )
 
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-                "challenge": challenge,
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
+            state_claims = auth_jwt.OAuthStateToken(
+                provider=provider_name,
+                redirect_to=f"{self.http_addr}/some/path",
+                challenge=challenge,
+            )
+            state_token = state_claims.sign(self.signing_key())
 
             data, headers, status = self.http_con_request(
                 http_con,
@@ -2428,7 +2168,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             requests_for_discovery = self.mock_oauth_server.requests[
                 discovery_request
             ]
-            self.assertEqual(len(requests_for_discovery), 2)
+            self.assertEqual(len(requests_for_discovery), 1)
 
             requests_for_token = self.mock_oauth_server.requests[token_request]
             self.assertEqual(len(requests_for_token), 1)
@@ -2589,13 +2329,14 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
                 # Test Webhook side effect
                 async for tr in self.try_until_succeeds(
-                    delay=2, timeout=120, ignore=(KeyError,)
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
                 ):
                     async with tr:
                         requests_for_webhook = self.mock_net_server.requests[
                             webhook_request
                         ]
-                self.assertEqual(len(requests_for_webhook), 3)
+                        self.assertEqual(len(requests_for_webhook), 3)
+
                 event_types: dict[str, dict | None] = {
                     "IdentityCreated": None,
                     "EmailFactorCreated": None,
@@ -2621,14 +2362,13 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
                 # Test for alt_url webhook
                 async for tr in self.try_until_succeeds(
-                    delay=2, timeout=120, ignore=(KeyError,)
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
                 ):
                     async with tr:
                         requests_for_alt_webhook = (
                             self.mock_net_server.requests[alt_webhook_request]
                         )
-
-                self.assertEqual(len(requests_for_alt_webhook), 1)
+                        self.assertEqual(len(requests_for_alt_webhook), 1)
 
                 # Try to register the same user again (no redirect_to)
                 _, _, conflict_status = self.http_con_request(
@@ -2817,6 +2557,47 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
             self.assertEqual(status, 400)
 
+    async def test_http_auth_ext_local_password_register_form_no_smtp(self):
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE RESET
+            current_email_provider_name;
+            """,
+        )
+        await self._wait_for_db_config(
+            "cfg::current_email_provider_name", is_reset=True
+        )
+        try:
+            with self.http_con() as http_con:
+                email = f"{uuid.uuid4()}@example.com"
+                form_data = {
+                    "provider": "builtin::local_emailpassword",
+                    "email": email,
+                    "password": "test_password",
+                    "challenge": str(uuid.uuid4()),
+                }
+                form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+                _, _, status = self.http_con_request(
+                    http_con,
+                    None,
+                    path="register",
+                    method="POST",
+                    body=form_data_encoded,
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                )
+
+                self.assertEqual(status, 201)
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE SET
+                current_email_provider_name := "email_hosting_is_easy";
+                """,
+            )
+
     async def test_http_auth_ext_local_password_register_json_02(self):
         with self.http_con() as http_con:
             provider_name = "builtin::local_emailpassword"
@@ -2839,7 +2620,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 headers={"Content-Type": "application/json"},
             )
 
-            self.assertEqual(status, 201)
+            self.assertEqual(status, 201, body)
 
             identity = await self.con.query_single(
                 """
@@ -2848,7 +2629,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     select LocalIdentity
                     filter .<identity[is EmailPasswordFactor]
                         .email = <str>$email
-                ));
+                ))
                 """,
                 email=email,
             )
@@ -3233,6 +3014,21 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             )[0]
             assert verification_token is not None
 
+            # Rebuild the verification token but make it expired
+            token = auth_jwt.VerificationToken.verify(
+                verification_token, self.signing_key()
+            )
+            verification_token = token.sign(
+                self.signing_key(),
+                datetime.timedelta(seconds=0)
+            )
+
+            # Expired immediately
+            with self.assertRaises(auth_jwt.errors.InvalidData):
+                auth_jwt.VerificationToken.verify(
+                    verification_token, self.signing_key()
+                )
+
             # Resend verification email with the verification token
             resend_data = {
                 "provider": form_data["provider"],
@@ -3240,7 +3036,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             }
             resend_data_encoded = urllib.parse.urlencode(resend_data).encode()
 
-            _, _, status = self.http_con_request(
+            body, _, status = self.http_con_request(
                 http_con,
                 None,
                 path="resend-verification-email",
@@ -3249,7 +3045,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 200, body)
 
             # Resend verification email with just the email
             resend_data = {
@@ -3258,7 +3054,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             }
             resend_data_encoded = urllib.parse.urlencode(resend_data).encode()
 
-            _, _, status = self.http_con_request(
+            body, _, status = self.http_con_request(
                 http_con,
                 None,
                 path="resend-verification-email",
@@ -3267,7 +3063,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 200, body)
 
             # Resend verification email with email and challenge
             resend_data = {
@@ -3276,7 +3072,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 "challenge": form_data["challenge"],
             }
             resend_data_encoded = urllib.parse.urlencode(resend_data).encode()
-            _, _, status = self.http_con_request(
+            body, _, status = self.http_con_request(
                 http_con,
                 None,
                 path="resend-verification-email",
@@ -3284,7 +3080,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 body=resend_data_encoded,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 200, body)
 
             # Resend verification email with email and code_challenge
             resend_data = {
@@ -3293,7 +3089,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 "code_challenge": form_data["challenge"],
             }
             resend_data_encoded = urllib.parse.urlencode(resend_data).encode()
-            _, _, status = self.http_con_request(
+            body, _, status = self.http_con_request(
                 http_con,
                 None,
                 path="resend-verification-email",
@@ -3301,7 +3097,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 body=resend_data_encoded,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 200, body)
 
             # Resend verification email with no email or token
             resend_data = {
@@ -3309,7 +3105,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             }
             resend_data_encoded = urllib.parse.urlencode(resend_data).encode()
 
-            _, _, status = self.http_con_request(
+            body, _, status = self.http_con_request(
                 http_con,
                 None,
                 path="resend-verification-email",
@@ -3318,7 +3114,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
-            self.assertEqual(status, 400)
+            self.assertEqual(status, 400, body)
 
     async def test_http_auth_ext_local_webauthn_resend_verification(self):
         with self.http_con() as http_con:
@@ -3422,7 +3218,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             }
             resend_data_encoded = urllib.parse.urlencode(resend_data).encode()
 
-            _, _, status = self.http_con_request(
+            body, _, status = self.http_con_request(
                 http_con,
                 None,
                 path="resend-verification-email",
@@ -3431,7 +3227,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 200, body)
 
             # Resend verification email with email
             resend_data = {
@@ -3547,7 +3343,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     path="token",
                 )
 
-                self.assertEqual(status, 200)
+                self.assertEqual(status, 200, body)
                 body_json = json.loads(body)
                 self.assertEqual(
                     body_json,
@@ -3560,14 +3356,14 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     },
                 )
                 async for tr in self.try_until_succeeds(
-                    delay=2, timeout=120, ignore=(KeyError,)
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
                 ):
                     async with tr:
                         requests_for_webhook = self.mock_net_server.requests[
                             webhook_request
                         ]
+                        self.assertEqual(len(requests_for_webhook), 1)
 
-                self.assertEqual(len(requests_for_webhook), 1)
                 webhook_request = requests_for_webhook[0]
                 maybe_json_body = webhook_request.body
                 self.assertIsNotNone(maybe_json_body)
@@ -3727,15 +3523,11 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             self.assertTrue(
                 reset_url.startswith(form_data['reset_url'] + '?reset_token=')
             )
-            claims = await self.extract_jwt_claims(
-                reset_url.split('=', maxsplit=1)[1], "reset"
+            claims = auth_jwt.ResetToken.verify(
+                reset_url.split('=', maxsplit=1)[1], self.signing_key()
             )
-            self.assertEqual(claims.get("sub"), str(identity[0].id))
-            self.assertEqual(claims.get("iss"), str(self.http_addr))
-            now = utcnow()
-            tenMinutesLater = now + datetime.timedelta(minutes=10)
-            self.assertTrue(claims.get("exp") > now.timestamp())
-            self.assertTrue(claims.get("exp") < tenMinutesLater.timestamp())
+            # Expiry checked as part of the validation
+            self.assertEqual(claims.subject, str(identity[0].id))
 
             password_credential = await self.con.query(
                 """
@@ -3750,7 +3542,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                         password_credential[0].password_hash.encode()
                     ).digest()
                 ).decode()
-                == claims.get('jti')
+                == claims.secret
             )
 
             # Send reset with redirect_to
@@ -3891,7 +3683,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 200, body)
 
             file_name_hash = hashlib.sha256(
                 f"{SENDER}{email}".encode()
@@ -4345,8 +4137,10 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     SELECT EXISTS (
                         SELECT ext::auth::WebAuthnAuthenticationChallenge
                         filter .challenge = <bytes>$challenge
-                        AND .factors.email = <str>$email
-                        AND .factors.user_handle = <bytes>$user_handle
+                        AND any(
+                            .factors.email = <str>$email
+                            AND .factors.user_handle = <bytes>$user_handle
+                        )
                     )
                     ''',
                     challenge=challenge_bytes,
@@ -4354,6 +4148,61 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     user_handle=user_handle,
                 )
             )
+
+    async def test_http_auth_ext_webauthn_register_invalid_request(self):
+        with self.http_con() as http_con:
+            email = f"{uuid.uuid4()}@example.com"
+            body, _, status = self.http_con_request(
+                http_con,
+                method="GET",
+                path=f"webauthn/register/options?email={email}",
+            )
+            self.assertEqual(status, 200, body.decode())
+            body_json = json.loads(body)
+            self.assertIn("user", body_json)
+            self.assertIn("id", body_json["user"])
+            user_handle = body_json["user"]["id"]
+            credentials = {
+                "rawId": base64.urlsafe_b64encode(uuid.uuid4().bytes)
+                .rstrip(b"=")
+                .decode(),
+                "response": {
+                    "clientDataJSON": base64.urlsafe_b64encode(
+                        uuid.uuid4().bytes
+                    )
+                    .rstrip(b"=")
+                    .decode(),
+                    "authenticatorData": base64.urlsafe_b64encode(
+                        uuid.uuid4().bytes
+                    )
+                    .rstrip(b"=")
+                    .decode(),
+                    "signature": base64.urlsafe_b64encode(uuid.uuid4().bytes)
+                    .rstrip(b"=")
+                    .decode(),
+                    "userHandle": user_handle,
+                },
+            }
+
+            body, _, status = self.http_con_request(
+                http_con,
+                method="POST",
+                headers={
+                    "Content-Type": "application/json",
+                },
+                body=json.dumps(
+                    {
+                        "provider": "builtin::local_webauthn",
+                        "email": email,
+                        "user_handle": user_handle,
+                        "credentials": credentials,
+                        "verify_url": "https://example.com/app/auth/verify",
+                        "challenge": "some_pkce_challenge",
+                    }
+                ).encode(),
+                path="webauthn/register",
+            )
+            self.assertEqual(status, 400, body.decode())
 
     async def test_http_auth_ext_magic_link_with_link_url(self):
         email = f"{uuid.uuid4()}@example.com"
@@ -4364,7 +4213,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
         with self.http_con() as http_con:
             # Register with link_url
-            _, _, status = self.http_con_request(
+            body, _, status = self.http_con_request(
                 http_con,
                 method="POST",
                 path="magic-link/register",
@@ -4383,7 +4232,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     "Accept": "application/json",
                 },
             )
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 200, body)
 
             # Get the token from email
             file_name_hash = hashlib.sha256(
@@ -4516,7 +4365,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
         with self.http_con() as http_con:
             # Register without link_url
-            _, _, status = self.http_con_request(
+            body, _, status = self.http_con_request(
                 http_con,
                 method="POST",
                 path="magic-link/register",
@@ -4534,7 +4383,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     "Accept": "application/json",
                 },
             )
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 200, body)
 
             # Get the token from email
             file_name_hash = hashlib.sha256(

@@ -23,19 +23,18 @@
 from __future__ import annotations
 
 from typing import (
+    Any,
     Optional,
-    Tuple,
-    Union,
     AbstractSet,
     Iterable,
     Mapping,
     Sequence,
-    Dict,
-    List,
-    Set,
     NamedTuple,
     cast,
 )
+
+import hashlib
+import json
 
 from edb import errors
 
@@ -47,6 +46,8 @@ from edb.schema import name as sn
 from edb.schema import types as s_types
 from edb.schema import pseudo as s_pseudo
 from edb.schema import expr as s_expr
+from edb.schema import scalars as s_scalars
+from edb.schema import schema as s_schema
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes as ft
@@ -55,6 +56,7 @@ from . import context
 from . import dispatch
 from . import pathctx
 from . import setgen
+from . import tuple_args
 from . import typegen
 
 
@@ -65,7 +67,7 @@ class BoundArg(NamedTuple):
     val: irast.Set
     valtype: s_types.Type
     cast_distance: int
-    arg_id: Optional[Union[int, str]]
+    arg_id: Optional[int | str]
     is_default: bool = False
 
 
@@ -78,11 +80,16 @@ class MissingArg(NamedTuple):
 class BoundCall(NamedTuple):
 
     func: s_func.CallableLike
-    args: List[BoundArg]
-    null_args: Set[str]
+    args: list[BoundArg]
+    null_args: set[str]
     return_type: s_types.Type
     variadic_arg_id: Optional[int]
     variadic_arg_count: Optional[int]
+
+    server_param_conversions: Optional[dict[
+        str,
+        dict[str, context.ServerParamConversion],
+    ]] = None
 
 
 _VARIADIC = ft.ParameterKind.VariadicParam
@@ -100,14 +107,14 @@ def find_callable_typemods(
     num_args: int,
     kwargs_names: AbstractSet[str],
     ctx: context.ContextLevel,
-) -> Dict[Union[int, str], ft.TypeModifier]:
+) -> dict[int | str, ft.TypeModifier]:
     """Find the type modifiers for a callable.
 
     We do this early, before we've compiled/checked the arguments,
     so that we can compile the arguments with the proper fences.
     """
 
-    typ = s_pseudo.PseudoType.get(ctx.env.schema, 'anytype')
+    typ: s_types.Type = s_pseudo.PseudoType.get(ctx.env.schema, 'anytype')
     dummy = irast.DUMMY_SET
     args = [(typ, dummy)] * num_args
     kwargs = {k: (typ, dummy) for k in kwargs_names}
@@ -121,7 +128,7 @@ def find_callable_typemods(
     if not options:
         return {k: _SINGLETON for k in set(range(num_args)) | kwargs_names}
 
-    fts: Dict[Union[int, str], ft.TypeModifier] = {}
+    fts: dict[int | str, ft.TypeModifier] = {}
     for choice in options:
         for barg in choice.args:
             if not barg.param or barg.arg_id is None:
@@ -148,19 +155,49 @@ def find_callable_typemods(
 def find_callable(
     candidates: Iterable[s_func.CallableLike],
     *,
-    args: Sequence[Tuple[s_types.Type, irast.Set]],
-    kwargs: Mapping[str, Tuple[s_types.Type, irast.Set]],
+    args: list[tuple[s_types.Type, irast.Set]],
+    kwargs: dict[str, tuple[s_types.Type, irast.Set]],
     basic_matching_only: bool = False,
     ctx: context.ContextLevel,
-) -> List[BoundCall]:
+) -> list[BoundCall]:
 
     implicit_cast_distance = None
     matched = []
 
     candidates = list(candidates)
     for candidate in candidates:
-        call = try_bind_call_args(
-            args, kwargs, candidate, basic_matching_only, ctx=ctx)
+        call = None
+        if (
+            not basic_matching_only
+            and (conversion := _check_server_arg_conversion(
+                candidate, args, kwargs, ctx=ctx
+            ))
+        ):
+            # If there is a server param conversion, the argument should be
+            # treated as if it has already been converted.
+            #
+            # This means we need to check the other candidates to see if they
+            # match the converted args.
+            converted_args, converted_kwargs, converted_params = conversion
+
+            for alt_candidate in candidates:
+                if alt_candidate is candidate:
+                    continue
+                if call := try_bind_call_args(
+                    converted_args,
+                    converted_kwargs,
+                    alt_candidate,
+                    basic_matching_only,
+                    ctx=ctx,
+                    server_param_conversions=converted_params,
+                ):
+                    # A call which matches the conversion exists.
+                    # Add the server param conversions to the env.
+                    break
+
+        else:
+            call = try_bind_call_args(
+                args, kwargs, candidate, basic_matching_only, ctx=ctx)
 
         if call is None:
             continue
@@ -212,12 +249,15 @@ def find_callable(
 
 
 def try_bind_call_args(
-    args: Sequence[Tuple[s_types.Type, irast.Set]],
-    kwargs: Mapping[str, Tuple[s_types.Type, irast.Set]],
+    args: Sequence[tuple[s_types.Type, irast.Set]],
+    kwargs: Mapping[str, tuple[s_types.Type, irast.Set]],
     func: s_func.CallableLike,
     basic_matching_only: bool,
     *,
     ctx: context.ContextLevel,
+    server_param_conversions: Optional[
+        dict[str, dict[str, context.ServerParamConversion]]
+    ] = None,
 ) -> Optional[BoundCall]:
 
     return_type = func.get_return_type(ctx.env.schema)
@@ -330,7 +370,7 @@ def try_bind_call_args(
         if no_args_call:
             # Match: `func` is a function without parameters
             # being called with no arguments.
-            bargs: List[BoundArg] = []
+            bargs: list[BoundArg] = []
             if has_inlined_defaults:
                 bytes_t = ctx.env.get_schema_type_and_track(
                     sn.QualName('std', 'bytes'))
@@ -341,7 +381,13 @@ def try_bind_call_args(
                     ctx=ctx)
                 bargs = [BoundArg(None, bytes_t, argval, bytes_t, 0, -1)]
             return BoundCall(
-                func, bargs, set(), return_type, None, None
+                func,
+                bargs,
+                set(),
+                return_type,
+                None,
+                None,
+                server_param_conversions=server_param_conversions,
             )
         else:
             # No match: `func` is a function without parameters
@@ -355,7 +401,7 @@ def try_bind_call_args(
         # one parameter without default.
         return None
 
-    bound_args_prep: List[Union[MissingArg, BoundArg]] = []
+    bound_args_prep: list[MissingArg | BoundArg] = []
 
     params = func_params.get_in_canonical_order(schema)
     nparams = len(params)
@@ -481,8 +527,8 @@ def try_bind_call_args(
 
     # Populate defaults.
     defaults_mask = 0
-    null_args: Set[str] = set()
-    bound_param_args: List[BoundArg] = []
+    null_args: set[str] = set()
+    bound_param_args: list[BoundArg] = []
     if has_missing_args:
         if has_inlined_defaults or named_only:
             for i, barg in enumerate(bound_args_prep):
@@ -568,7 +614,7 @@ def try_bind_call_args(
                 barg for barg in bound_args_prep if isinstance(barg, BoundArg)
             ]
     else:
-        bound_param_args = cast(List[BoundArg], bound_args_prep)
+        bound_param_args = cast(list[BoundArg], bound_args_prep)
 
     if has_inlined_defaults:
         # If we are compiling an EdgeQL function, inject the defaults
@@ -613,7 +659,351 @@ def try_bind_call_args(
         return_type,
         variadic_arg_id,
         variadic_arg_count,
+        server_param_conversions=server_param_conversions,
     )
+
+
+def _check_server_arg_conversion(
+    func: s_func.CallableLike,
+    args: list[tuple[s_types.Type, irast.Set]],
+    kwargs: dict[str, tuple[s_types.Type, irast.Set]],
+    *,
+    ctx: context.ContextLevel,
+) -> Optional[tuple[
+    Sequence[tuple[s_types.Type, irast.Set]],
+    Mapping[str, tuple[s_types.Type, irast.Set]],
+    dict[str, dict[str, context.ServerParamConversion]],
+]]:
+    """Check if there is a server param conversion and get the effective args.
+
+    Server param conversion allows the server to replace a function arg with
+    another parameter which it computes before executing the query.
+
+    For example when `ext::ai::search(anyobject, str)` is called, the server
+    gets an embedding vector for string arg which it then substitutes into a
+    call to `ext::ai::search(anyobject, array<float32>)`.
+
+    If any conversions are applied, returns (args, kwargs) with new query
+    parameters representing the converted parameters.
+    """
+    schema = ctx.env.schema
+
+    func_params: s_func.FuncParameterList = cast(
+        s_func.FuncParameterList,
+        func.get_params(schema),
+    )
+
+    if arg_conversions_json := (
+        isinstance(func, s_func.Function)
+        and func.get_server_param_conversions(schema)
+    ):
+        curr_server_param_conversions: dict[
+            str,
+            dict[str, context.ServerParamConversion],
+        ] = {}
+
+        arg_conversions: dict[str, str | list[str]] = json.loads(
+            arg_conversions_json
+        )
+        for arg_name, conversion_info in arg_conversions.items():
+            if isinstance(conversion_info, str):
+                conversion_name = conversion_info
+            else:
+                conversion_name = conversion_info[0]
+
+            # Get the arg being converted
+            arg_key: int | str
+            arg: tuple[s_types.Type, irast.Set]
+            param, arg_key, arg = _get_arg(
+                func_params,
+                arg_name,
+                args,
+                kwargs,
+                error_msg=f'Server param conversion {conversion_name} error',
+                schema=schema,
+            )
+
+            if arg[1].expr is None:
+                # Dummy set, do nothing
+                continue
+
+            original_type: s_types.Type = arg[0].material_type(schema)[1]
+            if original_type != param.get_type(schema):
+                # Wrong param type, function candidate doesn't apply.
+                # TODO: Check "any" params
+                return None
+
+            is_param_query_parameter = (
+                isinstance(arg[1].expr, irast.Parameter)
+                and not arg[1].expr.is_global
+            )
+            is_param_ir_constant = isinstance(arg[1].expr, irast.BaseConstant)
+            if (
+                not original_type.is_array()
+                and not is_param_query_parameter
+                and not is_param_ir_constant
+            ):
+                raise errors.QueryError(
+                    f"Argument '{arg_name}' "
+                    f"must be a constant or query parameter",
+                    span=arg[1].expr.span,
+                )
+            elif (
+                original_type.is_array()
+                and not is_param_query_parameter
+            ):
+                # Array literals are normalized as expressions
+                # For now, don't support them as constants
+                raise errors.QueryError(
+                    f"Argument '{arg_name}' must be a query parameter",
+                    span=arg[1].expr.span,
+                )
+
+            # Get info about the conversion
+            converted_type, additional_info, conversion_volatility = (
+                _resolve_server_param_conversion(
+                    func_params,
+                    args,
+                    kwargs,
+                    conversion_name,
+                    schema=schema,
+                    conversion_info=(
+                        conversion_info
+                        if isinstance(conversion_info, list)
+                        else None
+                    )
+                )
+            )
+
+            query_param_name: str
+            constant_value: Optional[Any] = None
+            if isinstance(arg[1].expr, irast.BaseConstant):
+                # Currently only support str constants
+                constant_expr = arg[1].expr
+                if isinstance(constant_expr, irast.StringConstant):
+                    constant_value = constant_expr.value
+                elif isinstance(
+                    constant_expr, (irast.IntegerConstant, irast.BigintConstant)
+                ):
+                    constant_value = int(constant_expr.value)
+                elif isinstance(
+                    constant_expr, (irast.FloatConstant, irast.DecimalConstant)
+                ):
+                    constant_value = float(constant_expr.value)
+                else:
+                    raise RuntimeError(
+                        f'Unsupported constant argument: {arg_name}'
+                    )
+                # Use a hash of the text value as the name
+                value_hash = (
+                    hashlib.sha1(constant_expr.value.encode()).hexdigest()
+                )
+                query_param_name = f'const_{value_hash}'
+            elif isinstance(arg[1].expr, irast.Parameter):
+                query_param_name = arg[1].expr.name
+
+            # Create a substitute parameter set with the correct type
+            existing_converted_path_id = None
+            if (
+                (curr_conversions := (
+                    ctx.env.server_param_conversions.get(query_param_name, None)
+                ))
+                and (
+                    existing_param_conversion := (
+                        curr_conversions.get(conversion_name, None)
+                    )
+                )
+            ):
+                # If the param was converted in another call, reuse its path id
+                existing_converted_path_id = existing_param_conversion.path_id
+
+            converted_param_name = f'{query_param_name}~{conversion_name}'
+            converted_required = (
+                isinstance(arg[1].expr, irast.Parameter)
+                and arg[1].expr.required
+            )
+            converted_typeref = typegen.type_to_typeref(
+                converted_type, ctx.env
+            )
+            conversion_set: irast.Set = setgen.ensure_set(
+                irast.Parameter(
+                    name=converted_param_name,
+                    required=converted_required,
+                    typeref=converted_typeref,
+                    span=arg[1].span,
+                ),
+                path_id=existing_converted_path_id,
+                ctx=ctx,
+            )
+
+            if query_param_name not in curr_server_param_conversions:
+                curr_server_param_conversions[query_param_name] = {}
+            curr_conversions = (
+                curr_server_param_conversions[query_param_name]
+            )
+
+            if existing_converted_path_id is None:
+                # If this is the first time this conversion was applied to this
+                # query param, save the conversion to be possibly reused by
+                # another call.
+
+                # Create the sub-params in case the resulting converted param
+                # is a tuple. Currently, no such conversion exists, but this
+                # is here to prepare for that distant future.
+                sub_params = tuple_args.create_sub_params(
+                    converted_param_name,
+                    converted_required,
+                    typeref=converted_typeref,
+                    pt=converted_type,
+                    ctx=ctx
+                )
+
+                curr_conversions[conversion_name] = (
+                    context.ServerParamConversion(
+                        path_id=conversion_set.path_id,
+                        ir_param=irast.Param(
+                            name=converted_param_name,
+                            required=converted_required,
+                            schema_type=converted_type,
+                            ir_type=converted_typeref,
+                            sub_params=sub_params,
+                        ),
+                        additional_info=additional_info,
+                        volatility=conversion_volatility,
+                        constant_value=constant_value,
+                    )
+                )
+
+            # Substitute the old arg
+            if isinstance(arg_key, int):
+                args = args.copy()
+                args[arg_key] = (converted_type, conversion_set)
+            else:
+                kwargs = kwargs.copy()
+                kwargs[arg_key] = (converted_type, conversion_set)
+
+        if len(curr_server_param_conversions) != len(arg_conversions):
+            # Not all conversions were applied, function candidate doesn't
+            # apply.
+            return None
+
+        return args, kwargs, curr_server_param_conversions
+
+    else:
+        return None
+
+
+def _resolve_server_param_conversion(
+    func_params: s_func.FuncParameterList,
+    args: list[tuple[s_types.Type, irast.Set]],
+    kwargs: dict[str, tuple[s_types.Type, irast.Set]],
+    conversion_name: str,
+    *,
+    schema: s_schema.Schema,
+    conversion_info: Optional[list[str]] = None,
+) -> tuple[
+    s_types.Type,
+    tuple[str, ...],
+    ft.Volatility,
+]:
+    converted_type: s_types.Type
+    additional_info: tuple[str, ...] = tuple()
+    conversion_volatility: ft.Volatility
+
+    if conversion_name == 'cast_int64_to_str':
+        converted_type = schema.get(
+            'std::str', type=s_scalars.ScalarType
+        )
+        conversion_volatility = ft.Volatility.Immutable
+
+    elif conversion_name == 'cast_int64_to_str_volatile':
+        converted_type = schema.get(
+            'std::str', type=s_scalars.ScalarType
+        )
+        conversion_volatility = ft.Volatility.Volatile
+
+    elif conversion_name == 'cast_int64_to_float64':
+        converted_type = schema.get(
+            'std::float64', type=s_scalars.ScalarType
+        )
+        conversion_volatility = ft.Volatility.Immutable
+
+    elif conversion_name == 'join_str_array':
+        assert conversion_info is not None
+        separator = conversion_info[1]
+
+        converted_type = schema.get(
+            'std::str', type=s_scalars.ScalarType
+        )
+        additional_info = (separator,)
+        conversion_volatility = ft.Volatility.Immutable
+
+    elif conversion_name == 'ai_text_embedding':
+        assert isinstance(conversion_info, list)
+        object_param_name = conversion_info[1]
+
+        converted_type = schema.get_global(
+            s_types.Array,
+            s_types.Array.generate_name(
+                sn.QualName('std', 'float32')
+            )
+        )
+
+        _, _, object_arg = _get_arg(
+            func_params,
+            object_param_name,
+            args,
+            kwargs,
+            error_msg=f'Server param conversion {conversion_name} '
+            f'error finding object argument',
+            schema=schema,
+        )
+
+        object_type = object_arg[0].material_type(schema)[1]
+        additional_info = (str(object_type.get_id(schema)),)
+        conversion_volatility = ft.Volatility.Volatile
+
+    else:
+        raise RuntimeError(
+            f'Unknown server param conversion: {conversion_name}'
+        )
+
+    return (
+        converted_type,
+        additional_info,
+        conversion_volatility,
+    )
+
+
+def _get_arg(
+    func_params: s_func.FuncParameterList,
+    param_name: str,
+    args: Sequence[tuple[s_types.Type, irast.Set]],
+    kwargs: Mapping[str, tuple[s_types.Type, irast.Set]],
+    *,
+    error_msg: str,
+    schema: s_schema.Schema,
+) -> tuple[
+    s_func.Parameter,
+    int | str,
+    tuple[s_types.Type, irast.Set],
+]:
+    param = func_params.get_by_name(name=param_name, schema=schema)
+    if param is None:
+        raise RuntimeError(
+            f'{error_msg}: missing param "{param_name}"'
+        )
+
+    param_kind = param.get_kind(schema)
+    if param_kind == ft.ParameterKind.PositionalParam:
+        param_index: int = param.get_num(schema)
+        return param, param_index, args[param_index]
+    elif param_kind == ft.ParameterKind.NamedOnlyParam:
+        return param, param_name, kwargs[param_name]
+    else:
+        raise RuntimeError(
+            f'{error_msg}: variadic param "{param_name}" not allowed'
+        )
 
 
 def compile_arg(

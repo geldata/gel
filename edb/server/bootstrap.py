@@ -22,17 +22,14 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Iterable,
     Mapping,
     Awaitable,
-    Dict,
-    List,
-    Set,
+    Sequence,
     NamedTuple,
     TYPE_CHECKING,
+    cast,
 )
 
 import dataclasses
@@ -50,9 +47,10 @@ from edb import buildmeta
 from edb import errors
 
 from edb import edgeql
-from edb.ir import statypes
 from edb.ir import typeutils as irtyputils
 from edb.edgeql import ast as qlast
+from edb.edgeql import codegen as qlcodegen
+from edb.edgeql import qltypes
 
 from edb.common import debug
 from edb.common import devmode
@@ -71,10 +69,12 @@ from edb.schema import reflection as s_refl
 from edb.schema import schema as s_schema
 from edb.schema import std as s_std
 from edb.schema import types as s_types
+from edb.schema import utils as s_utils
 
 from edb.server import args as edbargs
 from edb.server import config
 from edb.server import compiler as edbcompiler
+from edb.server.compiler import dbstate
 from edb.server import defines as edbdef
 from edb.server import pgcluster
 from edb.server import pgcon
@@ -106,6 +106,7 @@ class ClusterMode(enum.IntEnum):
 
 
 _T = TypeVar("_T")
+_T_Schema = TypeVar("_T_Schema", bound=s_schema.Schema)
 
 
 # A simple connection proxy that reconnects and retries queries
@@ -503,7 +504,7 @@ async def _store_static_bin_cache_conn(
         INSERT INTO edgedbinstdata_VER.instdata (key, bin)
         VALUES(
             {pg_common.quote_literal(key)},
-            {pg_common.quote_bytea_literal(data)}::bytea
+            {pg_common.quote_bytea_literal(data)}
         )
     """)
 
@@ -553,11 +554,11 @@ async def _store_static_json_cache(
 
 
 def _process_delta_params(
-    delta, schema: s_schema.Schema, params,
+    delta, schema: _T_Schema, params,
     stdmode: bool=True,
     **kwargs,
 ) -> tuple[
-    s_schema.ChainedSchema,
+    _T_Schema,
     delta_cmds.MetaCommand,
     delta_cmds.CreateTrampolines,
 ]:
@@ -579,13 +580,15 @@ def _process_delta_params(
         backend_runtime_params=params,
         **kwargs,
     )
-    schema = sd.apply(delta, schema=schema, context=context)
+    schema = cast(
+        _T_Schema,
+        sd.apply(delta, schema=schema, context=context),
+    )
 
     if debug.flags.delta_pgsql_plan:
         debug.header('PgSQL Delta Plan')
         debug.dump(delta, schema=schema)
 
-    assert isinstance(schema, s_schema.ChainedSchema)
     if isinstance(delta, delta_cmds.DeltaRoot):
         out = delta.create_trampolines
     else:
@@ -613,8 +616,7 @@ def compile_bootstrap_script(
     bootstrap_mode: bool = True,
     expected_cardinality_one: bool = False,
     output_format: edbcompiler.OutputFormat = edbcompiler.OutputFormat.JSON,
-) -> Tuple[s_schema.Schema, str]:
-
+) -> tuple[s_schema.Schema, str]:
     ctx = edbcompiler.new_compiler_context(
         compiler_state=compiler.state,
         user_schema=schema,
@@ -639,7 +641,7 @@ def compile_single_query(
 
 
 def _get_all_subcommands(
-    cmd: sd.Command, type: Optional[Type[sd.Command]] = None
+    cmd: sd.Command, type: Optional[type[sd.Command]] = None
 ) -> list[sd.Command]:
     cmds = []
 
@@ -655,7 +657,7 @@ def _get_all_subcommands(
 
 def _get_schema_object_ids(
     delta: sd.Command,
-) -> Mapping[Tuple[sn.Name, Optional[str]], uuid.UUID]:
+) -> Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]:
     schema_object_ids = {}
     for cmd in _get_all_subcommands(delta, sd.CreateObject):
         assert isinstance(cmd, sd.CreateObject)
@@ -686,8 +688,7 @@ def prepare_repair_patch(
     globalschema: s_schema.Schema,
     schema_class_layout: s_refl.SchemaClassLayout,
     backend_params: params.BackendRuntimeParams,
-    config: Any,
-) -> bytes:
+) -> str:
     compiler = edbcompiler.new_compiler(
         std_schema=stdschema,
         reflection_schema=reflschema,
@@ -701,13 +702,13 @@ def prepare_repair_patch(
     )
     res = edbcompiler.repair_schema(compilerctx)
     if not res:
-        return b""
+        return ""
     sql, _, _ = res
 
-    return sql
+    return sql.decode('utf-8')
 
 
-PatchEntry = tuple[tuple[str, ...], tuple[str, ...], dict[str, Any], bool]
+PatchEntry = tuple[tuple[str, ...], tuple[str, ...], dict[str, Any]]
 
 
 async def gather_patch_info(
@@ -744,16 +745,25 @@ async def gather_patch_info(
 
 
 def _generate_drop_views(
-    group: dbops.CommandGroup,
+    group: Sequence[dbops.Command | trampoline.Trampoline],
     preblock: dbops.PLBlock,
 ) -> None:
     for cv in reversed(list(group)):
         dv: Any
         if isinstance(cv, dbops.CreateView):
-            dv = dbops.DropView(
+            # We try deleting both a MATERIALIZED and not materialized
+            # version, since that allows us to switch between them
+            # more easily.
+            dv = dbops.CommandGroup()
+            dv.add_command(dbops.DropView(
                 cv.view.name,
                 conditions=[dbops.ViewExists(cv.view.name)],
-            )
+            ))
+            dv.add_command(dbops.DropView(
+                cv.view.name,
+                conditions=[dbops.ViewExists(cv.view.name, materialized=True)],
+                materialized=True,
+            ))
         elif isinstance(cv, dbops.CreateFunction):
             dv = dbops.DropFunction(
                 cv.function.name,
@@ -761,6 +771,8 @@ def _generate_drop_views(
                 has_variadic=bool(cv.function.has_variadic),
                 if_exists=True,
             )
+        elif isinstance(cv, trampoline.Trampoline):
+            dv = cv.drop()
         else:
             raise AssertionError(f'unsupported support view command {cv}')
         dv.generate(preblock)
@@ -777,6 +789,8 @@ def prepare_patch(
     patch_info: Optional[dict[str, list[str]]],
     user_schema: Optional[s_schema.Schema]=None,
     global_schema: Optional[s_schema.Schema]=None,
+    *,
+    dbname: Optional[str]=None,
 ) -> PatchEntry:
     val = f'{pg_common.quote_literal(json.dumps(num + 1))}::jsonb'
     # TODO: This is an INSERT because 2.0 shipped without num_patches.
@@ -790,9 +804,15 @@ def prepare_patch(
 
     existing_view_columns = patch_info
 
+    if '+testmode' in kind:
+        if schema.get('cfg::TestSessionConfig', default=None):
+            kind = kind.replace('+testmode', '')
+        else:
+            return (update,), (), {}
+
     # Pure SQL patches are simple
     if kind == 'sql':
-        return (patch, update), (), {}, False
+        return (patch, update), (), {}
 
     # metaschema-sql: just recreate a function from metaschema
     if kind == 'metaschema-sql':
@@ -800,11 +820,37 @@ def prepare_patch(
         create = dbops.CreateFunction(func(), or_replace=True)
         block = dbops.PLTopBlock()
         create.generate(block)
-        return (block.to_string(), update), (), {}, False
+        return (block.to_string(), update), (), {}
 
     if kind == 'repair':
         assert not patch
-        return (update,), (), {}, True
+        if not user_schema:
+            return (update,), (), dict(is_user_update=True)
+        assert global_schema
+
+        # TODO: Implement the last-repair-only optimization?
+        try:
+            logger.info("repairing database '%s'", dbname)
+            sql = prepare_repair_patch(
+                schema,
+                reflschema,
+                user_schema,
+                global_schema,
+                schema_class_layout,
+                backend_params
+            )
+        except errors.EdgeDBError as e:
+            if isinstance(e, errors.InternalServerError):
+                raise
+            raise errors.SchemaError(
+                f'Could not repair schema inconsistencies in '
+                f'database branch "{dbname}". Probably the schema is '
+                f'no longer valid due to a bug fix.\n'
+                f'Downgrade to the last working version, fix '
+                f'the schema issue, and try again.'
+            ) from e
+
+        return (update, sql), (), {}
 
     # EdgeQL and reflection schema patches need to be compiled.
     current_block = dbops.PLTopBlock()
@@ -833,7 +879,9 @@ def prepare_patch(
         assert '+user_ext' not in kind
 
         for ddl_cmd in edgeql.parse_block(patch):
-            assert isinstance(ddl_cmd, qlast.DDLCommand)
+            if not isinstance(ddl_cmd, qlast.DDLCommand):
+                assert isinstance(ddl_cmd, qlast.Query)
+                ddl_cmd = qlast.DDLQuery(query=ddl_cmd)
             # First apply it to the regular schema, just so we can update
             # stdschema
             delta_command = s_ddl.delta_from_ddl(
@@ -865,7 +913,7 @@ def prepare_patch(
         # There isn't anything to do on the system database for
         # userext updates.
         if user_schema is None:
-            return (update,), (), dict(is_user_ext_update=True), False
+            return (update,), (), dict(is_user_update=True)
 
         # Only run a userext update if the extension we are trying to
         # update is installed.
@@ -874,7 +922,7 @@ def prepare_patch(
             s_exts.Extension, extension_name, default=None)
 
         if not extension:
-            return (update,), (), {}, False
+            return (update,), (), {}
 
         assert global_schema
         cschema = s_schema.ChainedSchema(
@@ -884,7 +932,9 @@ def prepare_patch(
         )
 
         for ddl_cmd in edgeql.parse_block(patch):
-            assert isinstance(ddl_cmd, qlast.DDLCommand)
+            if not isinstance(ddl_cmd, qlast.DDLCommand):
+                assert isinstance(ddl_cmd, qlast.Query)
+                ddl_cmd = qlast.DDLQuery(query=ddl_cmd)
 
             delta_command = s_ddl.delta_from_ddl(
                 ddl_cmd, modaliases={}, schema=cschema,
@@ -912,7 +962,7 @@ def prepare_patch(
         )
         support_view_commands.generate(subblock)
 
-        _generate_drop_views(support_view_commands, preblock)
+        _generate_drop_views(list(support_view_commands), preblock)
 
         metadata_user_schema = reflschema
 
@@ -967,8 +1017,17 @@ def prepare_patch(
                 backend_params.instance_params.version
             )
         )
+        wrapper_views = metaschema._get_wrapper_views()
+        support_view_commands.add_commands(list(wrapper_views))
+        trampolines = metaschema.trampoline_command(wrapper_views)
 
-        _generate_drop_views(support_view_commands, preblock)
+        _generate_drop_views(
+            tuple(support_view_commands) + tuple(trampolines),
+            preblock,
+        )
+
+        # Now add the trampolines to support_view_commands
+        support_view_commands.add_commands([t.make() for t in trampolines])
 
         # We want to limit how much unconditional work we do, so only recreate
         # extension views if requested.
@@ -977,15 +1036,21 @@ def prepare_patch(
                 support_view_commands.add_command(
                     dbops.CreateView(extview, or_replace=True))
 
-        # Similarly, only do config system updates if requested.
-        if '+config' in kind:
-            support_view_commands.add_command(
-                metaschema.get_config_views(schema, existing_view_columns))
-
         # Though we always update the instdata for the config system,
         # because it is currently the most convenient way to make sure
         # all the versioned fields get updated.
         config_spec = config.load_spec_from_schema(schema)
+
+        # Similarly, only do config system updates if requested.
+        if '+config' in kind:
+            support_view_commands.add_command(
+                metaschema.get_config_views(schema, existing_view_columns))
+            support_view_commands.add_command(
+                metaschema._get_regenerated_config_support_functions(
+                    config_spec
+                )
+            )
+
         (
             sysqueries,
             report_configs_typedesc_1_0,
@@ -1060,7 +1125,7 @@ def prepare_patch(
         if k in bins:
             if k not in rawbin:
                 v = pickle.dumps(v, protocol=pickle.HIGHEST_PROTOCOL)
-            val = f'{pg_common.quote_bytea_literal(v)}::bytea'
+            val = f'{pg_common.quote_bytea_literal(v)}'
             sys_updates += (trampoline.fixup_query(f'''
                 INSERT INTO edgedbinstdata_VER.instdata (key, bin)
                 VALUES({key}, {val})
@@ -1088,13 +1153,13 @@ def prepare_patch(
         sys_updates = (patch,) + sys_updates
     else:
         regular_updates = spatches + (update,)
-        # FIXME: This is a hack to make the is_user_ext_update cases
+        # FIXME: This is a hack to make the is_user_update cases
         # work (by ensuring we can always read their current state),
         # but this is actually a pretty dumb approach and we can do
         # better.
         regular_updates += sys_updates
 
-    return regular_updates, sys_updates, updates, False
+    return regular_updates, sys_updates, updates
 
 
 async def create_branch(
@@ -1217,9 +1282,9 @@ class StdlibBits(NamedTuple):
     #: Descriptors of all the needed trampolines
     trampolines: list[trampoline.Trampoline]
     #: A set of ids of all types in std.
-    types: Set[uuid.UUID]
+    types: set[uuid.UUID]
     #: Schema class reflection layout.
-    classlayout: Dict[Type[s_obj.Object], s_refl.SchemaTypeLayout]
+    classlayout: dict[type[s_obj.Object], s_refl.SchemaTypeLayout]
     #: Schema introspection SQL query.
     local_intro_query: str
     #: Global object introspection SQL query.
@@ -1261,8 +1326,8 @@ def _make_stdlib(
             std_texts.append(s_std.get_std_module_text(modname))
 
     ddl_text = '\n'.join(std_texts)
-    types: Set[uuid.UUID] = set()
-    std_plans: List[sd.Command] = []
+    types: set[uuid.UUID] = set()
+    std_plans: list[sd.Command] = []
 
     for ddl_cmd in edgeql.parse_block(ddl_text):
         assert isinstance(ddl_cmd, qlast.DDLCommand)
@@ -1381,7 +1446,7 @@ async def _amend_stdlib(
     ctx: BootstrapContext,
     ddl_text: str,
     stdlib: StdlibBits,
-) -> Tuple[StdlibBits, str, list[trampoline.Trampoline]]:
+) -> tuple[StdlibBits, str, list[trampoline.Trampoline]]:
     schema = s_schema.ChainedSchema(
         s_schema.EMPTY_SCHEMA,
         stdlib.stdschema,
@@ -1441,7 +1506,7 @@ def compile_intro_queries_stdlib(
     user_schema: s_schema.Schema,
     global_schema: s_schema.Schema=s_schema.EMPTY_SCHEMA,
     reflection: s_refl.SchemaReflectionParts,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     compilerctx = edbcompiler.new_compiler_context(
         compiler_state=compiler.state,
         user_schema=user_schema,
@@ -1744,8 +1809,10 @@ async def _init_stdlib(
             await conn.sql_execute(testmode_sql.encode("utf-8"))
             trampolines.extend(new_trampolines)
         # _testmode includes extra config settings, so make sure
-        # those are picked up.
+        # those are picked up...
         config_spec = config.load_spec_from_schema(stdlib.stdschema)
+        # ...and that config functions dependent on it are regenerated
+        await metaschema.regenerate_config_support_functions(conn, config_spec)
 
     logger.info('Finalizing database setup...')
 
@@ -1920,13 +1987,13 @@ async def _configure(
                 backend_params.has_configfile_access
             )
         ):
-            if isinstance(setting.default, statypes.Duration):
-                val = f'<std::duration>"{setting.default.to_iso8601()}"'
-            else:
-                val = repr(setting.default)
-            script = f'''
-                CONFIGURE INSTANCE SET {setting.name} := {val};
-            '''
+            script = qlcodegen.generate_source(
+                qlast.ConfigSet(
+                    name=qlast.ObjectRef(name=setting.name),
+                    scope=qltypes.ConfigScope.INSTANCE,
+                    expr=s_utils.const_ast_from_python(setting.default),
+                )
+            )
             schema, sql = compile_bootstrap_script(compiler, schema, script)
             await _execute(ctx.conn, sql)
 
@@ -2144,7 +2211,7 @@ def compile_sys_queries(
 
 async def _populate_misc_instance_data(
     ctx: BootstrapContext,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
 
     mock_auth_nonce = scram.generate_nonce()
     json_instance_data = {
@@ -2191,6 +2258,18 @@ async def _populate_misc_instance_data(
             f'{edbdef.EDGEDB_SYSTEM_DB}metadata',
             json.dumps({}),
         )
+
+    await _store_static_json_cache(
+        ctx,
+        'sql_default_fe_settings',
+        json.dumps(
+            [
+                {"name": key, "value": pg_common.setting_to_sql(key, val)}
+                for key, val in dbstate.DEFAULT_SQL_FE_SETTINGS.items()
+            ]
+        )
+    )
+
     return json_instance_data
 
 
@@ -2269,7 +2348,7 @@ async def _get_instance_data(
     conn: metaschema.PGConnection,
     *,
     versioned: bool=True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     schema = 'edgedbinstdata_VER' if versioned else 'edgedbinstdata'
     data = await conn.sql_fetch_val(
         trampoline.fixup_query(f"""
@@ -2436,7 +2515,7 @@ async def _pg_ensure_database_not_connected(
             f'database {dbname!r} is being accessed by other users')
 
 
-async def _start(ctx: BootstrapContext) -> edbcompiler.CompilerState:
+async def _start(ctx: BootstrapContext) -> edbcompiler.Compiler:
     conn = await _check_catalog_compatibility(ctx)
 
     try:
@@ -2445,7 +2524,7 @@ async def _start(ctx: BootstrapContext) -> edbcompiler.CompilerState:
         ctx.cluster.overwrite_capabilities(struct.Struct('!Q').unpack(caps)[0])
         _check_capabilities(ctx)
 
-        return (await edbcompiler.new_compiler_from_pg(conn)).state
+        return await edbcompiler.new_compiler_from_pg(conn)
 
     finally:
         conn.terminate()
@@ -2473,7 +2552,7 @@ async def _bootstrap_edgedb_super_roles(ctx: BootstrapContext) -> uuid.UUID:
 async def _bootstrap(
     ctx: BootstrapContext,
     no_template: bool=False,
-) -> edbcompiler.CompilerState:
+) -> edbcompiler.Compiler:
     args = ctx.args
     cluster = ctx.cluster
     backend_params = cluster.get_runtime_params()
@@ -2524,9 +2603,11 @@ async def _bootstrap(
         await tpl_ctx.conn.sql_execute(b"SELECT pg_advisory_lock(3987734529)")
 
     try:
-        # Some of the views need access to the _edgecon_state table,
-        # so set it up.
-        tmp_table_query = pgcon.SETUP_TEMP_TABLE_SCRIPT
+        # Some of the views need access to the _edgecon_state table and the
+        # _dml_dummy table, so set it up.
+        tmp_table_query = (
+            pgcon.SETUP_TEMP_TABLE_SCRIPT + pgcon.SETUP_DML_DUMMY_TABLE_SCRIPT
+        )
         await _execute(tpl_ctx.conn, tmp_table_query)
 
         stdlib, config_spec, compiler = await _init_stdlib(
@@ -2690,13 +2771,13 @@ async def _bootstrap(
             args.default_database_user or edbdef.EDGEDB_SUPERUSER,
         )
 
-    return compiler.state
+    return compiler
 
 
 async def ensure_bootstrapped(
     cluster: pgcluster.BaseCluster,
     args: edbargs.ServerConfig,
-) -> tuple[bool, edbcompiler.CompilerState]:
+) -> tuple[bool, edbcompiler.Compiler]:
     """Bootstraps Gel instance if it hasn't been bootstrapped already.
 
     Returns True if bootstrap happened and False if the instance was already
@@ -2712,10 +2793,10 @@ async def ensure_bootstrapped(
         mode = await _get_cluster_mode(ctx)
         ctx = dataclasses.replace(ctx, mode=mode)
         if mode == ClusterMode.pristine:
-            state = await _bootstrap(ctx)
-            return True, state
+            compiler = await _bootstrap(ctx)
+            return True, compiler
         else:
-            state = await _start(ctx)
-            return False, state
+            compiler = await _start(ctx)
+            return False, compiler
     finally:
         pgconn.terminate()

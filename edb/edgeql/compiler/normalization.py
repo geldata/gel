@@ -24,13 +24,9 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Union,
     AbstractSet,
     Mapping,
     Collection,
-    Dict,
-    List,
     cast,
 )
 
@@ -74,7 +70,7 @@ def renormalize_compat(
     """
     orig_qltree = qlparser.parse_fragment(orig_text)
 
-    norm_aliases: Dict[Optional[str], str] = {}
+    norm_aliases: dict[Optional[str], str] = {}
     assert isinstance(norm_qltree, (
         qlast.Query, qlast.Command, qlast.DDLCommand
     ))
@@ -85,7 +81,7 @@ def renormalize_compat(
     if isinstance(orig_qltree, (
         qlast.Query, qlast.Command, qlast.DDLCommand
     )):
-        orig_aliases: Dict[Optional[str], str] = {}
+        orig_aliases: dict[Optional[str], str] = {}
         for alias in (orig_qltree.aliases or ()):
             if isinstance(alias, qlast.ModuleAliasDecl):
                 orig_aliases[alias.alias] = alias.module
@@ -194,13 +190,13 @@ def _normalize_with_block(
     schema: s_schema.Schema,
     modaliases: Mapping[Optional[str], str],
     localnames: AbstractSet[str] = frozenset(),
-) -> Tuple[Mapping[Optional[str], str], AbstractSet[str]]:
+) -> tuple[Mapping[Optional[str], str], AbstractSet[str]]:
 
     # Update the default aliases, modaliases, and localnames.
     modaliases = dict(modaliases)
-    newaliases: List[Union[qlast.AliasedExpr, qlast.ModuleAliasDecl]] = []
+    newaliases: list[qlast.AliasedExpr | qlast.ModuleAliasDecl] = []
 
-    aliases: Optional[List[qlast.AliasedExpr]] = getattr(node, field)
+    aliases: Optional[list[qlast.AliasedExpr]] = getattr(node, field)
     for alias in (aliases or ()):
         if isinstance(alias, qlast.ModuleAliasDecl):
             if alias.alias:
@@ -224,7 +220,7 @@ def _normalize_with_block(
 
 
 def _normalize_aliased_field(
-    node: Union[qlast.SubjectQuery, qlast.ReturningQuery],
+    node: qlast.SubjectQuery | qlast.ReturningQuery,
     fname: str,
     *,
     schema: s_schema.Schema,

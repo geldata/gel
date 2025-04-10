@@ -36,6 +36,7 @@ import httptools
 import immutables
 
 from edb.common import debug
+from edb.common import lru
 from edb.common import markup
 
 from .. import metrics
@@ -189,8 +190,8 @@ class Worker(pool_mod.Worker):
 class MultiSchemaPool(pool_mod.FixedPool):
     _worker_class = Worker  # type: ignore
     _worker_mod = "multitenant_worker"
-    _workers: typing.Dict[int, Worker]  # type: ignore
-    _clients: typing.Dict[int, ClientSchema]
+    _workers: dict[int, Worker]  # type: ignore
+    _clients: dict[int, ClientSchema]
 
     def __init__(self, cache_size, *, secret, **kwargs):
         super().__init__(**kwargs)
@@ -204,7 +205,7 @@ class MultiSchemaPool(pool_mod.FixedPool):
         # this is deferred to _init_server()
         pass
 
-    @functools.cache
+    @lru.method_cache
     def _get_init_args(self):
         init_args = (
             self._backend_runtime_params,
@@ -287,7 +288,7 @@ class MultiSchemaPool(pool_mod.FixedPool):
     ):
         # EdgeDB instance syncs the schema with the compiler server
         client = self._clients[client_id]
-        client_updates: typing.Dict[str, typing.Any] = {}
+        client_updates: dict[str, typing.Any] = {}
         db = client.dbs.get(dbname)
         if db is None:
             assert user_schema is not None

@@ -26,6 +26,7 @@ from edb.tools import test
 
 
 class TestEdgeQLSelect(tb.QueryTestCase):
+    NO_FACTOR = False
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 
@@ -1292,8 +1293,10 @@ class TestEdgeQLSelect(tb.QueryTestCase):
 
     async def test_edgeql_select_limit_08(self):
         with self.assertRaisesRegex(
-                edgedb.QueryError,
-                r'could not resolve partial path'):
+            edgedb.QueryError,
+            r'could not resolve partial path',
+            _hint=None
+        ):
 
             await self.con.query("""
                 SELECT
@@ -1303,8 +1306,10 @@ class TestEdgeQLSelect(tb.QueryTestCase):
 
     async def test_edgeql_select_limit_09(self):
         with self.assertRaisesRegex(
-                edgedb.QueryError,
-                r'could not resolve partial path'):
+            edgedb.QueryError,
+            r'could not resolve partial path',
+            _hint=None
+        ):
 
             await self.con.query("""
                 SELECT
@@ -2534,7 +2539,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             r"""
             # equivalent to ?=
             SELECT Issue {number}
-            FILTER
+            FILTER any((
                 # Issue.priority.name ?= 'High'
                 # equivalent to this via an if/else translation
                 (SELECT Issue.priority.name = 'High'
@@ -2542,6 +2547,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 UNION
                 (SELECT EXISTS Issue.priority.name = TRUE
                  FILTER NOT EXISTS Issue.priority.name)
+            ))
             ORDER BY Issue.number;
             """,
             [{'number': '2'}],
@@ -2696,6 +2702,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             ],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_select_setops_10(self):
         await self.assert_query_result(
             r"""
@@ -3190,6 +3197,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 ORDER BY User.<owner[IS Issue].number;
             """)
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_select_where_01(self):
         await self.assert_query_result(
             r'''
@@ -3201,6 +3209,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             [{'number': '1'}, {'number': '4'}],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_select_where_02(self):
         await self.assert_query_result(
             r'''
@@ -3771,15 +3780,17 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             WITH
                 I2 := Issue
             SELECT Issue {number}
-            FILTER
+            FILTER any(
                 I2 != Issue
                 AND
                 I2.priority.name ?= Issue.priority.name
+            )
             ORDER BY Issue.number;
             ''',
             [{'number': '1'}, {'number': '4'}],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_select_equivalence_02b(self):
         await self.assert_query_result(
             r'''
@@ -4946,11 +4957,12 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 Issue {
                     number
                 }
-            FILTER
+            FILTER any(
                 Issue != Issue2
                 AND
                 # NOTE: this condition is false when one of the sides is empty
                 Issue.priority = Issue2.priority
+            )
             ORDER BY
                 Issue.number;
             """,
@@ -4969,14 +4981,16 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 Issue {
                     number
                 }
-            FILTER
+            FILTER any(
                 Issue != Issue2 AND Issue.priority ?= Issue2.priority
+            )
             ORDER BY
                 Issue.number;
             """,
             [{'number': '1'}, {'number': '4'}],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_select_subqueries_07(self):
         await self.assert_query_result(
             r"""
@@ -5000,6 +5014,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             [{'number': '2'}, {'number': '3'}],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_select_subqueries_08(self):
         await self.assert_query_result(
             r"""
@@ -5140,6 +5155,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             [{'name': 'Elvis'}],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_select_subqueries_15(self):
         await self.assert_query_result(
             r"""
@@ -5188,6 +5204,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             [{'body': 'EdgeDB needs to happen soon.'}],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_select_subqueries_17(self):
         await self.assert_query_result(
             r"""
@@ -6060,6 +6077,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             ]
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_select_tuple_03(self):
         await self.assert_query_result(
             r"""
@@ -6546,6 +6564,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 SELECT Issue.number FILTER .number > '1';
             ''')
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_union_target_01(self):
         await self.assert_query_result(
             r'''
@@ -8309,6 +8328,38 @@ class TestEdgeQLSelect(tb.QueryTestCase):
         ''')
         self.assertFalse(hasattr(foo, 'id'))
 
+    async def test_edgeql_select_free_object_distinct_02(self):
+        # This was a 6.x regression :(
+        await self.assert_query_result(
+            '''
+            select {
+              lol := assert_distinct((for x in {1,2,3} select { x := x }))
+            };
+            ''',
+            [{"lol": [{"x": 1}, {"x": 2}, {"x": 3}]}]
+        )
+        # This was always supposed to work but was broken forever :(
+        await self.assert_query_result(
+            '''
+            select {
+              lol := (for x in {1,2,3} select { x := x })
+            };
+            ''',
+            [{"lol": [{"x": 1}, {"x": 2}, {"x": 3}]}]
+        )
+
+    @test.xerror('''
+        Can't compile ref to visible binding ns~1@@(__derived__::x@w~2)
+    ''')
+    async def test_edgeql_select_free_object_distinct_03(self):
+        await self.assert_query_result(
+            '''
+            with X := { lol := ((for x in {1,2,3} select { x := x })) },
+            select X {lol: { x }};
+            ''',
+            [{"lol": [{"x": 1}, {"x": 2}, {"x": 3}]}]
+        )
+
     async def test_edgeql_select_shadow_computable_01(self):
         # The thing this is testing for
         await self.assert_query_result(
@@ -8484,4 +8535,5 @@ class TestEdgeQLSelectNoFactor(TestEdgeQLSelect):
 
 
 class TestEdgeQLSelectWarnFactor(TestEdgeQLSelect):
+    NO_FACTOR = False
     WARN_FACTOR = True

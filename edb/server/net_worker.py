@@ -89,6 +89,7 @@ async def _http_task(tenant: edbtenant.Tenant, http_client) -> None:
                         """,
                         cached_globally=True,
                         tx_isolation=defines.TxIsolationLevel.RepeatableRead,
+                        query_tag='gel/net',
                     )
                 except Exception as ex:
                     # If the query fails (because the database branch
@@ -257,6 +258,7 @@ async def handle_request(
                     },
                     cached_globally=True,
                     tx_isolation=defines.TxIsolationLevel.RepeatableRead,
+                    query_tag='gel/net',
                 )
 
     await _update_request()
@@ -298,12 +300,13 @@ async def _delete_requests(
                 variables={"expires_in": expires_in.to_backend_str()},
                 cached_globally=True,
                 tx_isolation=defines.TxIsolationLevel.RepeatableRead,
+                query_tag='gel/net',
             )
             result: list[int] = json.loads(result_json)
             if result[0] > 0:
-                logger.info(f"Deleted {result[0]} requests")
+                logger.debug(f"Deleted {result[0]} requests")
             else:
-                logger.info(f"No requests to delete")
+                logger.debug(f"No requests to delete")
 
 
 async def _gc(tenant: edbtenant.Tenant, expires_in: statypes.Duration) -> None:

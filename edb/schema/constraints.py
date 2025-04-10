@@ -21,13 +21,8 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Mapping,
-    Dict,
-    List,
-    Set,
     cast,
     Iterable,
     TYPE_CHECKING,
@@ -75,7 +70,7 @@ def _assert_not_none(value: Optional[T]) -> T:
 
 def merge_constraint_params(
     constraint: Constraint,
-    supers: List[Constraint],
+    supers: list[Constraint],
     field_name: str,
     *,
     ignore_local: bool,
@@ -175,7 +170,12 @@ class Constraint(
     )
 
     errmessage = so.SchemaField(
-        str, default=None, compcoef=0.971, allow_ddl_set=True)
+        str,
+        default=None,
+        compcoef=0.971,
+        allow_ddl_set=True,
+        allow_interpolation=True,
+    )
 
     is_aggregate = so.SchemaField(
         bool, default=False, compcoef=0.971, allow_ddl_set=False)
@@ -183,7 +183,7 @@ class Constraint(
     def get_name_impacting_ancestors(
         self,
         schema: s_schema.Schema,
-    ) -> List[Constraint]:
+    ) -> list[Constraint]:
         if self.is_non_concrete(schema):
             return []
         else:
@@ -191,7 +191,7 @@ class Constraint(
 
     def get_constraint_origins(
         self, schema: s_schema.Schema
-    ) -> List[Constraint]:
+    ) -> list[Constraint]:
         """
         Origins of a constraint are the constraints that should actually perform
         validation on their subjects.
@@ -215,7 +215,7 @@ class Constraint(
         """
 
         # collect origins from all ancestors
-        origins: Set[Constraint] = set()
+        origins: set[Constraint] = set()
         for base in self.get_bases(schema).objects(schema):
             # abstract bases are not an origin
             if base.is_non_concrete(schema):
@@ -280,7 +280,7 @@ class Constraint(
         assert text
         args: Optional[s_expr.ExpressionList] = self.get_args(schema)
         if args:
-            args_ql: List[qlast.Base] = [
+            args_ql: list[qlast.Base] = [
                 qlast.Path(steps=[qlast.ObjectRef(name=subject_name)]),
             ]
 
@@ -335,7 +335,7 @@ class Constraint(
     def get_ddl_identity(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[Dict[str, str]]:
+    ) -> Optional[dict[str, str]]:
         ddl_identity = super().get_ddl_identity(schema)
 
         if (
@@ -353,7 +353,7 @@ class Constraint(
         return ddl_identity
 
     @classmethod
-    def get_root_classes(cls) -> Tuple[sn.QualName, ...]:
+    def get_root_classes(cls) -> tuple[sn.QualName, ...]:
         return (
             sn.QualName(module='std', name='constraint'),
         )
@@ -440,7 +440,7 @@ class ConstraintCommand(
         base_name: sn.Name,
         referrer_name: sn.QualName,
         context: sd.CommandContext,
-    ) -> Tuple[str, ...]:
+    ) -> tuple[str, ...]:
         if isinstance(astnode, qlast.CreateConstraint):
             return ()
         exprs = []
@@ -465,7 +465,7 @@ class ConstraintCommand(
         return (cls._name_qual_from_exprs(schema, exprs),)
 
     @classmethod
-    def _classname_quals_from_name(cls, name: sn.QualName) -> Tuple[str, ...]:
+    def _classname_quals_from_name(cls, name: sn.QualName) -> tuple[str, ...]:
         quals = sn.quals_from_fullname(name)
         return (quals[-1],)
 
@@ -475,7 +475,7 @@ class ConstraintCommand(
         schema: s_schema.Schema,
         astnode: qlast.ObjectDDL,
         context: sd.CommandContext,
-    ) -> List[s_expr.Expression]:
+    ) -> list[s_expr.Expression]:
         args = []
         assert isinstance(astnode, qlast.ConcreteConstraintOp)
 
@@ -654,7 +654,7 @@ class ConstraintCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         refcls: Constraint,
-        implicit_bases: List[Constraint],
+        implicit_bases: list[Constraint],
     ) -> inheriting.BaseDelta_T[Constraint]:
         child_bases = refcls.get_bases(schema).objects(schema)
 
@@ -667,7 +667,7 @@ class ConstraintCommand(
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if field in ('subjectexpr', 'args', 'except_expr'):
             return field
@@ -682,7 +682,7 @@ class ConstraintCommand(
     def get_ddl_identity_fields(
         self,
         context: sd.CommandContext,
-    ) -> Tuple[so.Field[Any], ...]:
+    ) -> tuple[so.Field[Any], ...]:
         id_fields = super().get_ddl_identity_fields(context)
         omit_fields = set()
         if not self.has_ddl_identity('subjectexpr'):
@@ -701,7 +701,7 @@ class ConstraintCommand(
         schema: s_schema.Schema,
         astnode: qlast.DDLOperation,
         context: sd.CommandContext,
-    ) -> Set[str]:
+    ) -> set[str]:
         localnames = super().localnames_from_ast(
             schema, astnode, context
         )
@@ -739,7 +739,7 @@ class ConstraintCommand(
         name: sn.QualName,
         subjectexpr: Optional[s_expr.Expression] = None,
         subjectexpr_inherited: bool = False,
-        sourcectx: Optional[c_parsing.Span] = None,
+        span: Optional[c_parsing.Span] = None,
         args: Optional[Iterable[s_expr.Expression]] = None,
         **kwargs: Any
     ) -> None:
@@ -777,7 +777,7 @@ class ConstraintCommand(
                 and subjectexpr.text != base_subjectexpr.text):
                 raise errors.InvalidConstraintDefinitionError(
                     f'subjectexpr is already defined for {name}',
-                    span=sourcectx,
+                    span=span,
                 )
 
             base_subjectexpr = constr_base.get_subjectexpr(schema)
@@ -790,7 +790,7 @@ class ConstraintCommand(
             raise errors.InvalidConstraintDefinitionError(
                 f'{constr_base.get_verbosename(schema)} may not '
                 f'be used on scalar types',
-                span=sourcectx,
+                span=span,
             )
 
         if (
@@ -799,7 +799,7 @@ class ConstraintCommand(
         ):
             raise errors.InvalidConstraintDefinitionError(
                 "constraints on object types must have an 'on' clause",
-                span=sourcectx,
+                span=span,
             )
 
         expr: s_expr.Expression = constr_base.get_field_value(schema, 'expr')
@@ -823,7 +823,7 @@ class ConstraintCommand(
             args = constr_base.get_field_value(schema, 'args')
 
         if args:
-            args_ql: List[qlast.Base] = [
+            args_ql: list[qlast.Base] = [
                 qlast.Path(steps=[qlast.SpecialAnchor(name='__subject__')]),
             ]
             args_ql.extend(arg.parse() for arg in args)
@@ -860,7 +860,7 @@ class ConstraintCommand(
                 f'{name} constraint expression expected '
                 f'to return a bool value, got '
                 f'{expr_type.get_verbosename(expr_schema)}',
-                span=sourcectx
+                span=span
             )
 
         except_expr: s_expr.Expression | None = attrs.get('except_expr')
@@ -916,13 +916,13 @@ class ConstraintCommand(
                             raise errors.InvalidConstraintDefinitionError(
                                 "link constraints may not access "
                                 "the link target",
-                                span=sourcectx
+                                span=span
                             )
                         else:
                             raise errors.InvalidConstraintDefinitionError(
                                 "constraints cannot contain paths with more "
                                 "than one hop",
-                                span=sourcectx
+                                span=span
                             )
 
                     ref = rptr.source
@@ -931,7 +931,7 @@ class ConstraintCommand(
                 raise errors.InvalidConstraintDefinitionError(
                     "cannot reference multiple links or properties in a "
                     "constraint where at least one link or property is MULTI",
-                    span=sourcectx
+                    span=span
                 )
 
             if set_of_op := ir_utils.find_set_of_op(
@@ -972,7 +972,7 @@ class ConstraintCommand(
         if final_expr.irast.volatility != qltypes.Volatility.Immutable:
             raise errors.InvalidConstraintDefinitionError(
                 f'constraint expressions must be immutable',
-                span=sourcectx,
+                span=span,
             )
 
         attrs['finalexpr'] = final_expr
@@ -1001,7 +1001,7 @@ class CreateConstraint(
         astnode: qlast.ObjectDDL,
         *,
         param_offset: int=0
-    ) -> List[s_func.ParameterDesc]:
+    ) -> list[s_func.ParameterDesc]:
         if not isinstance(astnode, qlast.CallableObjectCommandTuple):
             # Concrete constraint.
             return []
@@ -1164,7 +1164,7 @@ class CreateConstraint(
                 name=shortname,
                 subjectexpr_inherited=self.is_attribute_inherited(
                     'subjectexpr'),
-                sourcectx=self.span,
+                span=self.span,
                 **props,
             )
 
@@ -1179,7 +1179,7 @@ class CreateConstraint(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         astnode: qlast.ObjectDDL,
-        bases: List[Constraint],
+        bases: list[Constraint],
         referrer: so.Object,
     ) -> sd.ObjectCommand[Constraint]:
         cmd = super().as_inherited_ref_cmd(
@@ -1304,7 +1304,7 @@ class CreateConstraint(
         assert isinstance(cmd, CreateConstraint)
         return cmd
 
-    def _skip_param(self, props: Dict[str, Any]) -> bool:
+    def _skip_param(self, props: dict[str, Any]) -> bool:
         pname = s_func.Parameter.paramname_from_fullname(props['name'])
         return pname == '__subject__'
 
@@ -1313,7 +1313,7 @@ class CreateConstraint(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         node: qlast.DDLOperation,
-    ) -> List[Tuple[int, qlast.FuncParam]]:
+    ) -> list[tuple[int, qlast.FuncParam]]:
         if isinstance(node, qlast.CreateConstraint):
             return super()._get_params_ast(schema, context, node)
         else:
@@ -1348,7 +1348,7 @@ class CreateConstraint(
         schema: s_schema.Schema,
         astnode: qlast.ObjectDDL,
         context: sd.CommandContext,
-    ) -> List[so.ObjectShell[Constraint]]:
+    ) -> list[so.ObjectShell[Constraint]]:
         if isinstance(astnode, qlast.CreateConcreteConstraint):
             classname = cls._classname_from_ast(schema, astnode, context)
             base_name = sn.shortname_from_fullname(classname)
@@ -1381,7 +1381,7 @@ class RenameConstraint(
         base_name: sn.Name,
         referrer_name: sn.QualName,
         context: sd.CommandContext,
-    ) -> Tuple[str, ...]:
+    ) -> tuple[str, ...]:
         parent_op = cls.get_parent_op(context)
         assert isinstance(parent_op.classname, sn.QualName)
         return cls._classname_quals_from_name(parent_op.classname)
@@ -1454,7 +1454,7 @@ class AlterConstraint(
                 subjectexpr=subjectexpr,
                 subjectexpr_inherited=subjectexpr_inherited,
                 args=args,
-                sourcectx=self.span,
+                span=self.span,
                 **props,
             )
 
@@ -1615,12 +1615,12 @@ class RebaseConstraint(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        bases: Tuple[so.ObjectShell[Constraint], ...],
-    ) -> Tuple[so.ObjectShell[Constraint], ...]:
+        bases: tuple[so.ObjectShell[Constraint], ...],
+    ) -> tuple[so.ObjectShell[Constraint], ...]:
         return ()
 
 
-def interpolate_error_text(text: str, args: Dict[str, str]) -> str:
+def interpolate_error_text(text: str, args: dict[str, str]) -> str:
     """
     Converts message template "hello {world}! {nope}{{world}}" and
     arguments {"world": "Alice", "hell": "Eve"}

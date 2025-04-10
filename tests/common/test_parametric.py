@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import ClassVar, Generic, Type, TypeVar
+from typing import ClassVar, Generic, TypeVar
 
 # I'm not really sure why this is needed here
 # These are things needed for ParametricType?
@@ -53,9 +53,9 @@ class ParametricTypeTests(unittest.TestCase):
 
         class P2(ParametricType, Generic[T]):
             random_class_var: ClassVar[int]
-            another_class_var: ClassVar[Type[str]]
+            another_class_var: ClassVar[type[str]]
             not_class_var: int
-            t: ClassVar[Type[T]]  # type: ignore
+            t: ClassVar[type[T]]  # type: ignore
 
         self.assertTrue(issubclass(P2[int].t, int))  # type: ignore
 

@@ -21,14 +21,9 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
-    Union,
     Mapping,
     Sequence,
-    Dict,
-    List,
     cast,
     overload,
     TYPE_CHECKING,
@@ -71,21 +66,19 @@ def is_index_valid_for_type(
     schema: s_schema.Schema,
     context: sd.CommandContext,
 ) -> bool:
-    index_name = str(index.get_name(schema))
+    index_allows_tuples = is_index_supporting_tuples(index, schema)
 
     for index_match in schema.get_referrers(
         index, scls_type=IndexMatch, field_name='index',
     ):
         valid_type = index_match.get_valid_type(schema)
-        if index_name == 'std::fts::index':
-            # FTS index works not only on its valid type (document), but also
-            # on tuples comtaining document as an element.
+        if index_allows_tuples:
             if is_subclass_or_tuple(expr_type, valid_type, schema):
                 return True
         elif expr_type.issubclass(schema, valid_type):
             return True
 
-    if context.testmode and index_name == 'default::test':
+    if context.testmode and str(index.get_name(schema)) == 'default::test':
         # For functional tests of abstract indexes.
         return expr_type.issubclass(
             schema,
@@ -93,6 +86,21 @@ def is_index_valid_for_type(
         )
 
     return False
+
+
+def is_index_supporting_tuples(
+    index: Index,
+    schema: s_schema.Schema,
+) -> bool:
+    index_name = str(index.get_name(schema))
+    return index_name in {
+        "std::fts::index",
+        "ext::pg_trgm::gin",
+        "ext::pg_trgm::gist",
+        "std::pg::gist",
+        "std::pg::gin",
+        "std::pg::brin",
+    }
 
 
 def is_subclass_or_tuple(
@@ -124,7 +132,7 @@ def _merge_deferrability(
 
 def merge_deferrability(
     idx: Index,
-    bases: List[Index],
+    bases: list[Index],
     field_name: str,
     *,
     ignore_local: bool = False,
@@ -145,7 +153,7 @@ def merge_deferrability(
 
 def merge_deferred(
     idx: Index,
-    bases: List[Index],
+    bases: list[Index],
     field_name: str,
     *,
     ignore_local: bool = False,
@@ -418,7 +426,7 @@ class Index(
     def get_ddl_identity(
         self,
         schema: s_schema.Schema,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[dict[str, Any]]:
         v = super().get_ddl_identity(schema) or {}
         v['kwargs'] = self.get_all_kwargs(schema)
         return v
@@ -564,9 +572,18 @@ class IndexCommand(
     ) -> sn.QualName:
         # We actually want to override how ReferencedObjectCommand determines
         # the classname
-        shortname = super(
-            referencing.ReferencedObjectCommand, cls
-        )._classname_from_ast(schema, astnode, context)
+        #
+        # We need to resolve the name so that we get fully
+        # canonicalized names for things like fts::index, which are
+        # properly std::fts::index.
+        # (We have to do that ourselves here because we are skipping
+        # ReferencedObjectCommand, which would otherwise handle it.)
+        shortname = utils.resolve_name(
+            utils.ast_ref_to_name(astnode.name),
+            modaliases=context.modaliases,
+            schema=schema,
+            metaclass=cls.get_schema_metaclass(),
+        )
 
         referrer_ctx = cls.get_referrer_context(context)
         if referrer_ctx is not None:
@@ -597,7 +614,7 @@ class IndexCommand(
         base_name: sn.Name,
         referrer_name: sn.QualName,
         context: sd.CommandContext,
-    ) -> Tuple[str, ...]:
+    ) -> tuple[str, ...]:
         assert isinstance(astnode, qlast.ConcreteIndexCommand)
         exprs = []
 
@@ -620,7 +637,7 @@ class IndexCommand(
         return (cls._name_qual_from_exprs(schema, exprs),)
 
     @classmethod
-    def _classname_quals_from_name(cls, name: sn.QualName) -> Tuple[str, ...]:
+    def _classname_quals_from_name(cls, name: sn.QualName) -> tuple[str, ...]:
         quals = sn.quals_from_fullname(name)
         return tuple(quals[-1:])
 
@@ -630,7 +647,7 @@ class IndexCommand(
         schema: s_schema.Schema,
         astnode: qlast.ObjectDDL,
         context: sd.CommandContext,
-    ) -> Dict[str, s_expr.Expression]:
+    ) -> dict[str, s_expr.Expression]:
         kwargs = dict()
         # Some abstract indexes and all concrete index commands have kwargs.
         assert isinstance(astnode, (qlast.CreateIndex,
@@ -649,8 +666,8 @@ class IndexCommand(
         context: sd.CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[Index, so.NoDefaultT] = so.NoDefault,
-        sourcectx: Optional[parsing.Span] = None,
+        default: Index | so.NoDefaultT = so.NoDefault,
+        span: Optional[parsing.Span] = None,
     ) -> Index:
         ...
 
@@ -662,7 +679,7 @@ class IndexCommand(
         *,
         name: Optional[sn.Name] = None,
         default: None = None,
-        sourcectx: Optional[parsing.Span] = None,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[Index]:
         ...
 
@@ -672,13 +689,13 @@ class IndexCommand(
         context: sd.CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[Index, so.NoDefaultT, None] = so.NoDefault,
-        sourcectx: Optional[parsing.Span] = None,
+        default: Index | so.NoDefaultT | None = so.NoDefault,
+        span: Optional[parsing.Span] = None,
     ) -> Optional[Index]:
         try:
             return super().get_object(
                 schema, context, name=name,
-                default=default, sourcectx=sourcectx,
+                default=default, span=span,
             )
         except errors.InvalidReferenceError:
             referrer_ctx = self.get_referrer_context_or_die(context)
@@ -736,7 +753,7 @@ class IndexCommand(
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if field in ('kwargs', 'expr', 'except_expr'):
             return field
@@ -751,7 +768,7 @@ class IndexCommand(
     def get_ddl_identity_fields(
         self,
         context: sd.CommandContext,
-    ) -> Tuple[so.Field[Any], ...]:
+    ) -> tuple[so.Field[Any], ...]:
         id_fields = super().get_ddl_identity_fields(context)
         omit_fields = set()
 
@@ -1373,7 +1390,7 @@ class CreateIndex(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         params = self._get_params(schema, context)
         props = super().get_resolved_attributes(schema, context)
         props['params'] = params
@@ -1385,7 +1402,7 @@ class CreateIndex(
         schema: s_schema.Schema,
         astnode: qlast.ObjectDDL,
         context: sd.CommandContext,
-    ) -> List[so.ObjectShell[Index]]:
+    ) -> list[so.ObjectShell[Index]]:
         if (
             isinstance(astnode, qlast.CreateConcreteIndex)
             and astnode.name

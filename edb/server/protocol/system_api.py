@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Type, TYPE_CHECKING
+from typing import TYPE_CHECKING
 import http
 import json
 
@@ -107,7 +107,7 @@ def _response_error(
     response: protocol.HttpResponse,
     status: http.HTTPStatus,
     message: str,
-    ex_type: Type[errors.EdgeDBError],
+    ex_type: type[errors.EdgeDBError],
 ) -> None:
     err_dct = {
         'message': message,
@@ -148,6 +148,7 @@ async def _ping(tenant: edbtenant.Tenant) -> bytes:
         query_cache_enabled=False,
         cached_globally=True,
         use_metrics=False,
+        query_tag='gel/system',
     )
 
 

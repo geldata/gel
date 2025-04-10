@@ -21,11 +21,8 @@ from __future__ import annotations
 from typing import (
     Callable,
     Optional,
-    Tuple,
     Iterable,
     Mapping,
-    Dict,
-    List,
     cast,
     TYPE_CHECKING,
 )
@@ -79,7 +76,6 @@ def delta_schemas(
     include_module_diff: bool=True,
     include_std_diff: bool=False,
     include_derived_types: bool=True,
-    include_migrations: bool=False,
     include_extensions: bool=False,
     linearize_delta: bool=True,
     descriptive_mode: bool=False,
@@ -132,9 +128,6 @@ def delta_schemas(
 
         include_derived_types:
             Whether to include derived types, like unions, in the diff.
-
-        include_migrations:
-            Whether to include migrations in the diff.
 
         linearize_delta:
             Whether the resulting diff should be properly ordered
@@ -296,6 +289,7 @@ def delta_schemas(
         s_mod.Module,
         s_func.Parameter,
         s_pseudo.PseudoType,
+        s_migr.Migration,
     )
 
     schemaclasses = [
@@ -304,10 +298,6 @@ def delta_schemas(
         if (
             not issubclass(schemacls, excluded_classes)
             and not schemacls.is_abstract()
-            and (
-                include_migrations
-                or not issubclass(schemacls, s_migr.Migration)
-            )
         )
     ]
 
@@ -322,7 +312,7 @@ def delta_schemas(
         objects = sd.DeltaRoot()
 
         for sclass in schemaclasses:
-            filters: List[Callable[[s_schema.Schema, so.Object], bool]] = []
+            filters: list[Callable[[s_schema.Schema, so.Object], bool]] = []
 
             if not issubclass(sclass, so.QualifiedObject):
                 # UnqualifiedObjects (like anonymous tuples and arrays)
@@ -449,7 +439,7 @@ def cmd_from_ddl(
     testmode: bool=False
 ) -> sd.Command:
     ddl = s_expr.imprint_expr_context(stmt, modaliases)
-    assert isinstance(ddl, qlast.DDLCommand)
+    assert isinstance(ddl, qlast.DDLOperation)
 
     if context is None:
         context = sd.CommandContext(
@@ -464,12 +454,11 @@ def apply_sdl(
     sdl_document: qlast.Schema,
     *,
     base_schema: s_schema.Schema,
-    current_schema: s_schema.Schema,
     stdmode: bool = False,
     testmode: bool = False,
 ) -> tuple[s_schema.Schema, list[errors.EdgeDBError]]:
     # group declarations by module
-    documents: Dict[str, List[qlast.DDLCommand]] = defaultdict(list)
+    documents: dict[str, list[qlast.DDLCommand]] = defaultdict(list)
     # initialize the "default" module
     documents[s_mod.DEFAULT_MODULE_ALIAS] = []
     extensions = {}
@@ -625,11 +614,12 @@ def apply_ddl_script_ex(
     stdmode: bool = False,
     internal_schema_mode: bool = False,
     testmode: bool = False,
+    store_migration_sdl: bool=False,
     schema_object_ids: Optional[
-        Mapping[Tuple[sn.Name, Optional[str]], uuid.UUID]
+        Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
-) -> Tuple[s_schema.Schema, sd.DeltaRoot]:
+) -> tuple[s_schema.Schema, sd.DeltaRoot]:
 
     delta = sd.DeltaRoot()
 
@@ -646,6 +636,7 @@ def apply_ddl_script_ex(
             stdmode=stdmode,
             internal_schema_mode=internal_schema_mode,
             testmode=testmode,
+            store_migration_sdl=store_migration_sdl,
             schema_object_ids=schema_object_ids,
             compat_ver=compat_ver,
         )
@@ -664,7 +655,7 @@ def delta_from_ddl(
     testmode: bool=False,
     store_migration_sdl: bool=False,
     schema_object_ids: Optional[
-        Mapping[Tuple[sn.Name, Optional[str]], uuid.UUID]
+        Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
 ) -> sd.DeltaRoot:
@@ -691,10 +682,10 @@ def delta_and_schema_from_ddl(
     testmode: bool=False,
     store_migration_sdl: bool=False,
     schema_object_ids: Optional[
-        Mapping[Tuple[sn.Name, Optional[str]], uuid.UUID]
+        Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
-) -> Tuple[s_schema.Schema, sd.DeltaRoot]:
+) -> tuple[s_schema.Schema, sd.DeltaRoot]:
     delta = sd.DeltaRoot()
     context = sd.CommandContext(
         modaliases=modaliases,
@@ -755,7 +746,7 @@ def ddlast_from_delta(
     testmode: bool = False,
     descriptive_mode: bool = False,
     include_ext_version: bool = True,
-) -> Dict[qlast.DDLOperation, sd.Command]:
+) -> dict[qlast.DDLOperation, sd.Command]:
     context = sd.CommandContext(
         descriptive_mode=descriptive_mode,
         declarative=sdlmode,
@@ -799,7 +790,7 @@ def statements_from_delta(
     uppercase: bool = False,
     limit_ref_classes: Iterable[so.ObjectMeta] = tuple(),
     include_ext_version: bool = True,
-) -> Tuple[Tuple[str, qlast.DDLOperation, sd.Command], ...]:
+) -> tuple[tuple[str, qlast.DDLOperation, sd.Command], ...]:
 
     stmts = ddlast_from_delta(
         schema_a,
@@ -818,8 +809,8 @@ def statements_from_delta(
 
     # If we're generating SDL and it includes modules, try to nest the
     # module contents in the actual modules.
-    processed: List[Tuple[qlast.DDLOperation, sd.Command]] = []
-    unqualified: List[Tuple[qlast.DDLOperation, sd.Command]] = []
+    processed: list[tuple[qlast.DDLOperation, sd.Command]] = []
+    unqualified: list[tuple[qlast.DDLOperation, sd.Command]] = []
     modules = dict()
     for stmt_ast, cmd in stmts.items():
         if sdlmode:
@@ -996,8 +987,12 @@ def ddl_text_from_schema(
         include_module_diff=include_module_ddl,
         include_std_diff=include_std_ddl,
         include_derived_types=False,
-        include_migrations=include_migrations,
     )
+    if include_migrations:
+        context = so.ComparisonContext()
+        for mig in s_migr.get_ordered_migrations(schema):
+            diff.add(mig.as_create_delta(schema, context))
+
     return ddl_text_from_delta(None, schema, diff,
                                include_ext_version=not include_migrations)
 

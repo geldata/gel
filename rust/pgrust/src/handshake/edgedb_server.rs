@@ -1,11 +1,9 @@
 use crate::{
-    connection::ConnectionError,
+    connection::PGConnectionError,
     errors::edgedb::EdbError,
-    protocol::{
-        edgedb::{data::*, *},
-        match_message, ParseError, StructBuffer,
-    },
+    protocol::edgedb::{data::*, *},
 };
+use db_proto::{match_message, ParseError, StructBuffer};
 use gel_auth::{
     handshake::{ServerAuth, ServerAuthDrive, ServerAuthError, ServerAuthResponse},
     AuthType, CredentialData,
@@ -142,8 +140,10 @@ enum ServerStateImpl {
     Error,
 }
 
+#[derive(derive_more::Debug, Default)]
 pub struct ServerState {
     state: ServerStateImpl,
+    #[debug(skip)]
     buffer: StructBuffer<meta::Message>,
 }
 
@@ -164,7 +164,7 @@ impl ServerState {
         &mut self,
         drive: ConnectionDrive,
         update: &mut impl ConnectionStateUpdate,
-    ) -> Result<(), ConnectionError> {
+    ) -> Result<(), PGConnectionError> {
         trace!("SERVER DRIVE: {:?} {:?}", self.state, drive);
         let res = match drive {
             ConnectionDrive::RawMessage(raw) => self.buffer.push_fallible(raw, |message| {

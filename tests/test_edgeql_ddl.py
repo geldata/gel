@@ -749,7 +749,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             r"""
                 SELECT schema::Link {
                     pnames := .properties.name
-                } FILTER .name = {"connected", '__type__'}
+                } FILTER .name IN {"connected", '__type__'}
                   AND .source.name = 'default::Alias2'
             """,
             [
@@ -2045,6 +2045,28 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             };
             insert T;
         """)
+
+    async def test_edgeql_ddl_default_16(self):
+        await self.con.execute(r"""
+            create type T;
+            insert T;
+            alter type T {
+                create required property y: str {
+                    set default := (with x := { y := "lol" }, select x.y)
+                }
+            };
+            insert T;
+        """)
+
+        await self.assert_query_result(
+            r"""
+                select T { y }
+            """,
+            [
+                {'y': "lol"},
+                {'y': "lol"},
+            ],
+        )
 
     async def test_edgeql_ddl_default_circular(self):
         await self.con.execute(r"""
@@ -4294,12 +4316,21 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             """)
 
     async def test_edgeql_ddl_function_08(self):
-        with self.assertRaisesRegex(
+        async with self.assertRaisesRegexTx(
                 edgedb.InvalidFunctionDefinitionError,
                 r'invalid declaration.*unexpected type of the default'):
 
             await self.con.execute("""
                 CREATE FUNCTION ddlf_08(s: std::str = 1) -> std::str
+                    USING EdgeQL $$ SELECT "1" $$;
+            """)
+
+        async with self.assertRaisesRegexTx(
+                edgedb.InvalidFunctionDefinitionError,
+                r'invalid declaration.*unexpected type of the default'):
+
+            await self.con.execute("""
+                CREATE FUNCTION ddlf_08(s: std::str = ()) -> std::str
                     USING EdgeQL $$ SELECT "1" $$;
             """)
 
@@ -5209,6 +5240,24 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                     using (1);
                 };
             ''')
+
+    async def test_edgeql_ddl_function_42(self):
+        await self.con.execute("""
+            create abstract type Named {
+                create required property name: str;
+            };
+            create function all_names() -> SET OF str {
+                USING (Named.name)
+            };
+            create type Z extending Named {
+                create access policy ok allow all;
+            };
+            create type T;
+        """)
+
+        await self.con.execute("""
+            drop type Z;
+        """)
 
     async def test_edgeql_ddl_function_inh_01(self):
         await self.con.execute("""
@@ -6149,8 +6198,10 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 }
                 FILTER
                     .name = 'default::+++'
-                    AND .annotations.name = 'std::description'
-                    AND .annotations@value = 'my plus';
+                    AND any(
+                        .annotations.name = 'std::description'
+                        AND .annotations@value = 'my plus'
+                    );
             ''',
             [{
                 'name': 'default::+++',
@@ -6860,6 +6911,17 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 create type X {
                     create access policy test
                         allow all using (1);
+                };
+            """)
+
+        async with self.assertRaisesRegexTx(
+            edgedb.SchemaDefinitionError,
+            r"using expression.* is of invalid type",
+        ):
+            await self.con.execute("""
+                create type X {
+                    create access policy test
+                        allow all using (());
                 };
             """)
 
@@ -9430,30 +9492,6 @@ type default::Foo {
             DROP EXTENSION TestAuthExtension;
         """)
 
-    async def test_edgeql_ddl_all_extensions_01(self):
-        # Install all extensions and then delete them all
-        exts = await self.con.query('''
-            select distinct sys::ExtensionPackage.name
-        ''')
-
-        ext_commands = ''.join(f'using extension {ext};\n' for ext in exts)
-        await self.con.execute(f"""
-            START MIGRATION TO {{
-                {ext_commands}
-                module default {{ }}
-            }};
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
-
-        await self.con.execute(f"""
-            START MIGRATION TO {{
-                module default {{ }}
-            }};
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
-
     async def test_edgeql_ddl_role_01(self):
         if not self.has_create_role:
             self.skipTest("create role is not supported by the backend")
@@ -12022,9 +12060,10 @@ type default::Foo {
             r"""
                 WITH MODULE schema
                 SELECT Constraint {name}
-                FILTER
+                FILTER any(
                     .annotations.name = 'std::description'
-                    AND .annotations@value = 'test_delta_drop_01_constraint';
+                    AND .annotations@value = 'test_delta_drop_01_constraint'
+                )
             """,
             [
                 {
@@ -12041,9 +12080,10 @@ type default::Foo {
             r"""
                 WITH MODULE schema
                 SELECT Constraint {name}
-                FILTER
+                FILTER any(
                     .annotations.name = 'std::description'
-                    AND .annotations@value = 'test_delta_drop_01_constraint';
+                    AND .annotations@value = 'test_delta_drop_01_constraint'
+                )
             """,
             []
         )
@@ -12063,9 +12103,10 @@ type default::Foo {
             r"""
                 WITH MODULE schema
                 SELECT Property {name}
-                FILTER
+                FILTER any(
                     .annotations.name = 'std::description'
-                    AND .annotations@value = 'test_delta_drop_02_link';
+                    AND .annotations@value = 'test_delta_drop_02_link'
+                )
             """,
             [
                 {
@@ -12082,9 +12123,10 @@ type default::Foo {
             r"""
                 WITH MODULE schema
                 SELECT Property {name}
-                FILTER
+                FILTER any(
                     .annotations.name = 'std::description'
-                    AND .annotations@value = 'test_delta_drop_02_link';
+                    AND .annotations@value = 'test_delta_drop_02_link'
+                )
             """,
             []
         )
@@ -13540,6 +13582,34 @@ type default::Foo {
                     CREATE INDEX ON (std::count (.has_bad_index));
                 };
             """)
+
+    async def test_edgeql_ddl_index_fts_01(self):
+        await self.con.execute('''
+            CREATE ABSTRACT TYPE default::Named {
+                CREATE REQUIRED PROPERTY name: std::str;
+                CREATE INDEX fts::index ON (
+                  fts::with_options(.name, language := fts::Language.eng)
+                );
+            };
+
+            CREATE ABSTRACT TYPE default::Project EXTENDING default::Named
+            {
+                ALTER PROPERTY name {
+                    SET OWNED;
+                    CREATE CONSTRAINT std::exclusive;
+                };
+            };
+        ''')
+
+        # Names canonicalized as std::fts::index
+        await self.assert_query_result(
+            '''
+            select schema::Index { name }
+            filter exists .<indexes[is schema::ObjectType]
+            and .name like '%index';
+            ''',
+            [{"name": "std::fts::index"}, {"name": "std::fts::index"}]
+        )
 
     async def test_edgeql_ddl_abstract_index_01(self):
         for _ in range(2):
@@ -16235,6 +16305,46 @@ DDLStatement);
             [],
         )
 
+    async def test_edgeql_ddl_link_policy_17(self):
+        # Make sure that ALLOW works when changing optionality
+        await self.con.execute(r"""
+            CREATE TYPE Tgt;
+            CREATE TYPE Src {
+                CREATE MULTI LINK tgt -> Tgt {
+                    ON TARGET DELETE ALLOW;
+                }
+            };
+        """)
+
+        await self.con.execute(r"""
+            INSERT Src { tgt := (INSERT Tgt) };
+        """)
+
+        await self.con.execute(r"""
+            ALTER TYPE Src {
+                ALTER LINK tgt {
+                    SET REQUIRED
+                }
+            };
+        """)
+
+        async with self.assertRaisesRegexTx(edgedb.MissingRequiredError, ''):
+            await self.con.execute("""
+                DELETE Tgt;
+            """)
+
+        await self.con.execute(r"""
+            ALTER TYPE Src {
+                ALTER LINK tgt {
+                    SET OPTIONAL
+                }
+            };
+        """)
+
+        await self.con.execute("""
+            DELETE Tgt;
+        """)
+
     async def test_edgeql_ddl_link_policy_implicit_01(self):
         await self.con.execute("""
             create type T;
@@ -16297,9 +16407,14 @@ DDLStatement);
 
     async def test_edgeql_ddl_scoping_future_01(self):
         await self.con.execute("""
+            configure session reset simple_scoping
+        """)
+
+        await self.con.execute("""
             create type T;
             insert T;
             insert T;
+            create function f(x: int64 = 0) -> int64 using (x);
             create function get_whatever() -> bool using (
                 all(T = T)
             );
@@ -16360,6 +16475,14 @@ DDLStatement);
             Q,
             [dict(func=False, alias=False, query=False)],
         )
+
+    async def test_edgeql_ddl_scoping_future_02(self):
+        await self.con.execute("""
+            create future simple_scoping;
+        """)
+        await self.con.execute("""
+            drop future simple_scoping;
+        """)
 
     async def test_edgeql_ddl_no_volatile_computable_01(self):
         async with self.assertRaisesRegexTx(
@@ -17408,6 +17531,16 @@ DDLStatement);
             'select Object',
             [{}],
         )
+
+    async def test_edgeql_ddl_schema_repair(self):
+        await self.con.execute('''
+            create type Tgt {
+                create property lol := count(Object)
+            }
+        ''')
+        await self.con.execute('''
+            administer schema_repair()
+        ''')
 
     async def test_edgeql_ddl_alias_and_create_set_required(self):
         await self.con.execute(r"""

@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Dict, List, FrozenSet
+from typing import Any, Optional
 
 import dataclasses
 import json
@@ -348,7 +348,7 @@ def _get_delta_context_args(ctx: compiler.CompileContext) -> dict[str, Any]:
     """Get the args needed for delta_and_schema_from_ddl"""
     return dict(
         stdmode=ctx.bootstrap_mode,
-        testmode=compiler._get_config_val(ctx, '__internal_testmode'),
+        testmode=ctx.is_testmode(),
         store_migration_sdl=(
             compiler._get_config_val(ctx, 'store_migration_sdl')
         ) == 'AlwaysStore',
@@ -359,7 +359,7 @@ def _get_delta_context_args(ctx: compiler.CompileContext) -> dict[str, Any]:
 
 def _process_delta(
     ctx: compiler.CompileContext, delta: s_delta.DeltaRoot
-) -> tuple[pg_dbops.SQLBlock, FrozenSet[str], Any]:
+) -> tuple[pg_dbops.SQLBlock, frozenset[str], Any]:
     """Adapt and process the delta command."""
 
     current_tx = ctx.state.current_tx()
@@ -381,7 +381,7 @@ def _process_delta(
 
     if db_cmd:
         block = pg_dbops.SQLBlock()
-        new_types: FrozenSet[str] = frozenset()
+        new_types: frozenset[str] = frozenset()
     else:
         block = pg_dbops.PLTopBlock()
         new_types = frozenset(str(tid) for tid in pgdelta.new_types)
@@ -396,6 +396,25 @@ def _process_delta(
     compiler.compile_schema_storage_in_delta(
         ctx, pgdelta, subblock, context=context
     )
+
+    # Performance hack; we really want trivial migration commands
+    # (that only mutate the migration log) to not trigger a pg_catalog
+    # view refresh, since many get issued as part of MIGRATION
+    # REWRITEs.
+    all_migration_tweaks = all(
+        isinstance(
+            cmd, (s_ver.AlterSchemaVersion, s_migrations.MigrationCommand)
+        )
+        and not cmd.get_subcommands(type=s_delta.ObjectCommand)
+        for cmd in delta.get_subcommands()
+    )
+
+    if not ctx.bootstrap_mode and not all_migration_tweaks:
+        from edb.pgsql import metaschema
+        refresh = metaschema.generate_sql_information_schema_refresh(
+            ctx.compiler_state.backend_runtime_params.instance_params.version
+        )
+        refresh.generate(subblock)
 
     return block, new_types, pgdelta.config_ops
 
@@ -509,8 +528,7 @@ def _start_migration(
         target_schema, warnings = s_ddl.apply_sdl(
             ql.target,
             base_schema=base_schema,
-            current_schema=schema,
-            testmode=(compiler._get_config_val(ctx, '__internal_testmode')),
+            testmode=ctx.is_testmode(),
         )
         query = dataclasses.replace(query, warnings=tuple(warnings))
 
@@ -546,12 +564,12 @@ def _populate_migration(
         debug.header('Populate Migration Diff')
         debug.dump(diff, schema=schema)
 
-    new_ddl: Tuple[qlast.DDLCommand, ...] = tuple(
+    new_ddl: tuple[qlast.DDLCommand, ...] = tuple(
         s_ddl.ddlast_from_delta(  # type: ignore
             schema,
             mstate.target_schema,
             diff,
-            testmode=compiler._get_config_val(ctx, '__internal_testmode'),
+            testmode=ctx.is_testmode(),
         ),
     )
     all_ddl = mstate.accepted_cmds + new_ddl
@@ -1010,7 +1028,6 @@ def _start_migration_rewrite(
             ]
         ),
         base_schema=base_schema,
-        current_schema=base_schema,
     )
 
     # Set our current schema to be the empty one
@@ -1051,13 +1068,10 @@ def _commit_migration_rewrite(
     current_tx.update_schema(schema)
     current_tx.update_migration_rewrite_state(None)
 
-    cmds: List[qlast.DDLCommand] = []
+    cmds: list[qlast.DDLCommand] = []
     # Now we find all the migrations...
-    migrations = s_delta.sort_by_cross_refs(
-        schema,
-        schema.get_objects(type=s_migrations.Migration),
-    )
-    for mig in migrations:
+    migrations = s_migrations.get_ordered_migrations(schema)
+    for mig in reversed(migrations):
         cmds.append(
             qlast.DropMigration(
                 name=qlast.ObjectRef(name=mig.get_name(schema).name)
@@ -1162,12 +1176,11 @@ def _reset_schema(
             ]
         ),
         base_schema=empty_schema,
-        current_schema=empty_schema,
     )
 
     # diff and create migration that drops all objects
     diff = s_ddl.delta_schemas(schema, empty_schema)
-    new_ddl: Tuple[qlast.DDLCommand, ...] = tuple(
+    new_ddl: tuple[qlast.DDLCommand, ...] = tuple(
         s_ddl.ddlast_from_delta(schema, empty_schema, diff),  # type: ignore
     )
     create_mig = qlast.CreateMigration(  # type: ignore
@@ -1214,6 +1227,7 @@ _FEATURE_NAMES: dict[type[s_obj.Object], str] = {
     s_func.Function: 'function',
     s_indexes.Index: 'index',
     s_scalars.ScalarType: 'scalar',
+    s_migrations.Migration: 'migration',
 }
 
 
@@ -1231,7 +1245,7 @@ def produce_feature_used_metrics(
     features: dict[str, float] = {}
 
     def _track(key: str) -> None:
-        features[key] = 1
+        features[key] = features.get(key, 0) + 1
 
     # TODO(perf): Should we optimize peeking into the innards directly
     # so we can skip creating the proxies?
@@ -1286,6 +1300,11 @@ def produce_feature_used_metrics(
             and len(obj.get_bases(schema).objects(schema)) > 1
         ):
             _track('multiple_inheritance')
+        elif (
+            isinstance(obj, s_objtypes.ObjectType)
+            and obj.is_material_object_type(schema)
+        ):
+            _track('object_type')
         elif (
             isinstance(obj, s_scalars.ScalarType)
             and obj.is_enum(schema)
@@ -1389,9 +1408,10 @@ def administer_repair_schema(
 
     return dbstate.DDLQuery(
         sql=sql,
-        user_schema=current_tx.get_user_schema_if_updated(),  # type: ignore
+        user_schema=current_tx.get_user_schema_if_updated(),
         global_schema=current_tx.get_global_schema_if_updated(),
         config_ops=config_ops,
+        feature_used_metrics=None,
     )
 
 
@@ -1537,39 +1557,20 @@ def administer_reindex(
     return dbstate.MaintenanceQuery(sql=block.to_string().encode("utf-8"))
 
 
-def administer_vacuum(
+def _identify_administer_tables_and_cols(
     ctx: compiler.CompileContext,
-    ql: qlast.AdministerStmt,
-) -> dbstate.BaseQuery:
+    call: qlast.FunctionCall,
+) -> list[str]:
     from edb.ir import ast as irast
     from edb.ir import typeutils as irtypeutils
     from edb.schema import objtypes as s_objtypes
 
-    # check that the kwargs are valid
-    kwargs: Dict[str, str] = {}
-    for name, val in ql.expr.kwargs.items():
-        if name != 'full':
-            raise errors.QueryError(
-                f'unrecognized keyword argument {name!r} for vacuum()',
-                span=val.span,
-            )
-        elif (
-            not isinstance(val, qlast.Constant)
-            or val.kind != qlast.ConstantKind.BOOLEAN
-        ):
-            raise errors.QueryError(
-                f'argument {name!r} for vacuum() must be a boolean literal',
-                span=val.span,
-            )
-        kwargs[name] = val.value
-
-    # Next go over the args (if any) and convert paths to tables/columns
-    args: List[Tuple[irast.Pointer | None, s_objtypes.ObjectType]] = []
+    args: list[tuple[irast.Pointer | None, s_objtypes.ObjectType]] = []
     current_tx = ctx.state.current_tx()
     schema = current_tx.get_schema(ctx.compiler_state.std_schema)
     modaliases = current_tx.get_modaliases()
 
-    for arg in ql.expr.args:
+    for arg in call.args:
         match arg:
             case qlast.Path(
                 steps=[qlast.ObjectRef()],
@@ -1626,7 +1627,7 @@ def administer_vacuum(
 
     tables: set[s_pointers.Pointer | s_objtypes.ObjectType] = set()
 
-    for arg, (rptr, obj) in zip(ql.expr.args, args):
+    for arg, (rptr, obj) in zip(call.args, args):
         if not rptr:
             # On a type, we just vacuum the type and its descendants
             tables.update({obj} | {
@@ -1671,21 +1672,72 @@ def administer_vacuum(
             }
             tables.update(ptrclses)
 
-    tables_and_columns = [
+    return [
         pg_common.get_backend_name(schema, table)
         for table in tables
     ]
 
-    if kwargs.get('full', '').lower() == 'true':
-        options = 'FULL'
-    else:
-        options = ''
 
-    command = f'VACUUM {options} ' + ', '.join(tables_and_columns)
+def administer_vacuum(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    # check that the kwargs are valid
+    kwargs: dict[str, str] = {}
+    for name, val in ql.expr.kwargs.items():
+        if name not in ('statistics_update', 'full'):
+            raise errors.QueryError(
+                f'unrecognized keyword argument {name!r} for vacuum()',
+                span=val.span,
+            )
+        elif (
+            not isinstance(val, qlast.Constant)
+            or val.kind != qlast.ConstantKind.BOOLEAN
+        ):
+            raise errors.QueryError(
+                f'argument {name!r} for vacuum() must be a boolean literal',
+                span=val.span,
+            )
+        kwargs[name] = val.value
+
+    option_map = {
+        "statistics_update": "ANALYZE",
+        "full": "FULL",
+    }
+    command = "VACUUM"
+    options = ",".join(
+        f"{option_map[k.lower()]} {v.upper()}"
+        for k, v in kwargs.items()
+    )
+    if options:
+        command += f" ({options})"
+    command += " " + ", ".join(
+        _identify_administer_tables_and_cols(ctx, ql.expr),
+    )
 
     return dbstate.MaintenanceQuery(
         sql=command.encode('utf-8'),
         is_transactional=False,
+    )
+
+
+def administer_statistics_update(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    for name, val in ql.expr.kwargs.items():
+        raise errors.QueryError(
+            f'unrecognized keyword argument {name!r} for statistics_update()',
+            span=val.span,
+        )
+
+    command = "ANALYZE " + ", ".join(
+        _identify_administer_tables_and_cols(ctx, ql.expr),
+    )
+
+    return dbstate.MaintenanceQuery(
+        sql=command.encode('utf-8'),
+        is_transactional=True,
     )
 
 

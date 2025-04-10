@@ -28,15 +28,11 @@ from typing import (
     Final,
     Literal,
     Optional,
-    Tuple,
-    Type,
-    Union,
     AbstractSet,
     ContextManager,
     Iterable,
     Iterator,
     Sequence,
-    List,
     NoReturn,
     TYPE_CHECKING,
 )
@@ -93,7 +89,7 @@ def new_set(
     stype: s_types.Type,
     expr: irast.Expr,
     ctx: context.ContextLevel,
-    ircls: Type[irast.Set] = irast.Set,
+    ircls: type[irast.Set] = irast.Set,
     **kwargs: Any,
 ) -> irast.Set:
     """Create a new ir.Set instance with given attributes.
@@ -232,7 +228,7 @@ def new_set_from_set(
 
 
 def new_tuple_set(
-    elements: List[irast.TupleElement],
+    elements: list[irast.TupleElement],
     *,
     named: bool,
     ctx: context.ContextLevel,
@@ -319,9 +315,35 @@ def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
         if ctx.partial_path_prefix is not None:
             path_tip = ctx.partial_path_prefix
         else:
+            hint = None
+
+            # If there are anchors, suggest one
+            if anchors:
+                anchor_names: list[str] = [
+                    key if isinstance(key, str) else key.name
+                    for key in anchors
+                ]
+
+                import edb.edgeql.codegen
+                suggestion = (
+                    f'{anchor_names[0]}'
+                    f'{edb.edgeql.codegen.generate_source(expr)}'
+                )
+
+                if len(anchor_names) == 1:
+                    hint = (
+                        f'Did you mean {suggestion}?'
+                    )
+                else:
+                    hint = (
+                        f'Did you mean to use one of: {anchor_names}? '
+                        f'eg. {suggestion}'
+                    )
+
             raise errors.QueryError(
                 'could not resolve partial path ',
-                span=expr.span
+                span=expr.span,
+                hint=hint
             )
 
     computables: list[irast.Set] = []
@@ -683,7 +705,7 @@ def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
 
 def resolve_name(
     name: qlast.ObjectRef, *, ctx: context.ContextLevel
-) -> Tuple[Optional[irast.Set], s_types.Type]:
+) -> tuple[Optional[irast.Set], s_types.Type]:
 
     view_set = None
     stype = None
@@ -787,7 +809,7 @@ def resolve_ptr(
         s_pointers.PointerDirection.Outbound
     ),
     span: Optional[qlast.Span] = None,
-    track_ref: Optional[Union[qlast.Base, Literal[False]]],
+    track_ref: Optional[qlast.Base | Literal[False]],
     ctx: context.ContextLevel,
 ) -> s_pointers.Pointer:
     return resolve_ptr_with_intersections(
@@ -806,7 +828,7 @@ def resolve_ptr_with_intersections(
         s_pointers.PointerDirection.Outbound
     ),
     span: Optional[qlast.Span] = None,
-    track_ref: Optional[Union[qlast.Base, Literal[False]]],
+    track_ref: Optional[qlast.Base | Literal[False]],
     ctx: context.ContextLevel,
 ) -> tuple[s_pointers.Pointer, s_pointers.Pointer]:
     """Resolve a pointer, taking into account upcoming intersections.
@@ -1436,7 +1458,7 @@ def expression_set(
 
 
 def scoped_set(
-    expr: Union[irast.Set, irast.Expr],
+    expr: irast.Set | irast.Expr,
     *,
     type_override: Optional[s_types.Type] = None,
     typehint: Optional[s_types.Type] = None,
@@ -1474,7 +1496,7 @@ def scoped_set(
 
 
 def ensure_set(
-    expr: Union[irast.Set, irast.Expr],
+    expr: irast.Set | irast.Expr,
     *,
     type_override: Optional[s_types.Type] = None,
     typehint: Optional[s_types.Type] = None,
@@ -1522,7 +1544,7 @@ def ensure_set(
 
 
 def ensure_stmt(
-    expr: Union[irast.Set, irast.Expr], *, ctx: context.ContextLevel
+    expr: irast.Set | irast.Expr, *, ctx: context.ContextLevel
 ) -> irast.Stmt:
     if not isinstance(expr, irast.Stmt):
         expr = irast.SelectStmt(
@@ -1906,7 +1928,7 @@ def _get_computable_ctx(
 
 
 def maybe_materialize(
-    stype: Union[s_types.Type, s_pointers.PointerLike],
+    stype: s_types.Type | s_pointers.PointerLike,
     ir: irast.Set,
     *,
     ctx: context.ContextLevel,
@@ -1951,7 +1973,7 @@ def should_materialize(
     ctx: context.ContextLevel,
 ) -> Sequence[irast.MaterializeReason]:
     volatility = inference.infer_volatility(ir, ctx.env, exclude_dml=True)
-    reasons: List[irast.MaterializeReason] = []
+    reasons: list[irast.MaterializeReason] = []
 
     if volatility.is_volatile():
         reasons.append(irast.MaterializeVolatile())
@@ -1997,9 +2019,9 @@ def should_materialize(
 
 def should_materialize_type(
     typ: s_types.Type, *, ctx: context.ContextLevel
-) -> List[irast.MaterializeReason]:
+) -> list[irast.MaterializeReason]:
     schema = ctx.env.schema
-    reasons: List[irast.MaterializeReason] = []
+    reasons: list[irast.MaterializeReason] = []
     if isinstance(
             typ, (s_objtypes.ObjectType, s_pointers.Pointer)):
         for pointer in typ.get_pointers(schema).objects(schema):
@@ -2040,7 +2062,7 @@ def get_global_param_sets(
     *,
     ctx: context.ContextLevel,
     is_implicit_global: bool = False,
-) -> Tuple[irast.Set, Optional[irast.Set]]:
+) -> tuple[irast.Set, Optional[irast.Set]]:
     param = get_global_param(glob, ctx=ctx)
     default = glob.get_default(ctx.env.schema)
 
@@ -2103,7 +2125,7 @@ def get_func_global_param_sets(
     glob: s_globals.Global,
     *,
     ctx: context.ContextLevel,
-) -> Tuple[qlast.Expr, Optional[qlast.Expr]]:
+) -> tuple[qlast.Expr, Optional[qlast.Expr]]:
     # NB: updates ctx anchors
 
     if ctx.env.options.func_params is not None:

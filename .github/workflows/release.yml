@@ -22,6 +22,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-buster@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "debian"
@@ -44,6 +45,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-buster@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "debian"
@@ -66,6 +68,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-bullseye@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "debian"
@@ -88,6 +91,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-bullseye@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "debian"
@@ -110,6 +114,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-bookworm@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "debian"
@@ -132,6 +137,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-bookworm@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "debian"
@@ -145,50 +151,6 @@ jobs:
         name: builds-debian-bookworm-aarch64
         path: artifacts/debian-bookworm
 
-  build-ubuntu-bionic-x86_64:
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-    needs: prep
-
-
-    steps:
-    - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-bionic@master
-      env:
-        SRC_REF: "${{ github.sha }}"
-        PKG_REVISION: "<current-date>"
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "bionic"
-        EXTRA_OPTIMIZATIONS: "true"
-        BUILD_IS_RELEASE: "true"
-        METAPKG_GIT_CACHE: disabled
-
-    - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874  # v4.4.0
-      with:
-        name: builds-ubuntu-bionic-x86_64
-        path: artifacts/ubuntu-bionic
-
-  build-ubuntu-bionic-aarch64:
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-    needs: prep
-
-
-    steps:
-    - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-bionic@master
-      env:
-        SRC_REF: "${{ github.sha }}"
-        PKG_REVISION: "<current-date>"
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "bionic"
-        EXTRA_OPTIMIZATIONS: "true"
-        BUILD_IS_RELEASE: "true"
-        METAPKG_GIT_CACHE: disabled
-
-    - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874  # v4.4.0
-      with:
-        name: builds-ubuntu-bionic-aarch64
-        path: artifacts/ubuntu-bionic
-
   build-ubuntu-focal-x86_64:
     runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
     needs: prep
@@ -198,6 +160,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-focal@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "ubuntu"
@@ -220,6 +183,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-focal@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "ubuntu"
@@ -242,6 +206,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-jammy@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "ubuntu"
@@ -264,6 +229,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-jammy@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "ubuntu"
@@ -286,6 +252,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-noble@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "ubuntu"
@@ -308,6 +275,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-noble@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "ubuntu"
@@ -330,6 +298,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/centos-8@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "centos"
@@ -352,6 +321,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/centos-8@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "centos"
@@ -374,6 +344,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/rockylinux-9@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "rockylinux"
@@ -396,6 +367,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/rockylinux-9@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "rockylinux"
@@ -418,6 +390,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/linux-x86_64@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "linux"
@@ -441,6 +414,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/linux-aarch64@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "linux"
@@ -464,6 +438,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/linuxmusl-x86_64@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "linux"
@@ -488,6 +463,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/linuxmusl-aarch64@master
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_PLATFORM: "linux"
@@ -553,8 +529,17 @@ jobs:
       run: |
         env HOMEBREW_NO_AUTO_UPDATE=1 brew install libmagic
 
+    - name: Install an alias
+      # This is probably not strictly needed, but sentencepiece build script reports
+      # errors without it.
+      if: true
+      run: |
+        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc
+        chmod +x /usr/local/bin/nproc
+
     - name: Build
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         BUILD_IS_RELEASE: "true"
         PKG_REVISION: "<current-date>"
@@ -564,6 +549,7 @@ jobs:
         EXTRA_OPTIMIZATIONS: "true"
         METAPKG_GIT_CACHE: disabled
         BUILD_GENERIC: true
+        CMAKE_POLICY_VERSION_MINIMUM: '3.5'
       run: |
         edgedb-pkg/integration/macos/build.sh
 
@@ -622,8 +608,17 @@ jobs:
       run: |
         env HOMEBREW_NO_AUTO_UPDATE=1 brew install libmagic
 
+    - name: Install an alias
+      # This is probably not strictly needed, but sentencepiece build script reports
+      # errors without it.
+      if: true
+      run: |
+        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc
+        chmod +x /usr/local/bin/nproc
+
     - name: Build
       env:
+        PACKAGE: edgedbpkg.edgedb:Gel
         SRC_REF: "${{ github.sha }}"
         BUILD_IS_RELEASE: "true"
         PKG_REVISION: "<current-date>"
@@ -633,6 +628,7 @@ jobs:
         EXTRA_OPTIMIZATIONS: "true"
         METAPKG_GIT_CACHE: disabled
         BUILD_GENERIC: true
+        CMAKE_POLICY_VERSION_MINIMUM: '3.5'
       run: |
         edgedb-pkg/integration/macos/build.sh
 
@@ -756,46 +752,6 @@ jobs:
       env:
         PKG_PLATFORM: "debian"
         PKG_PLATFORM_VERSION: "bookworm"
-        PKG_PLATFORM_LIBC: ""
-        # edb test with -j higher than 1 seems to result in workflow
-        # jobs getting killed arbitrarily by Github.
-        PKG_TEST_JOBS: 0
-
-  test-ubuntu-bionic-x86_64:
-    needs: [build-ubuntu-bionic-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-bionic-x86_64
-        path: artifacts/ubuntu-bionic
-
-    - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/ubuntu-bionic@master
-      env:
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "bionic"
-        PKG_PLATFORM_LIBC: ""
-        # edb test with -j higher than 1 seems to result in workflow
-        # jobs getting killed arbitrarily by Github.
-        PKG_TEST_JOBS: 0
-
-  test-ubuntu-bionic-aarch64:
-    needs: [build-ubuntu-bionic-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-bionic-aarch64
-        path: artifacts/ubuntu-bionic
-
-    - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/ubuntu-bionic@master
-      env:
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "bionic"
         PKG_PLATFORM_LIBC: ""
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
@@ -1139,8 +1095,6 @@ jobs:
     - test-debian-bullseye-aarch64
     - test-debian-bookworm-x86_64
     - test-debian-bookworm-aarch64
-    - test-ubuntu-bionic-x86_64
-    - test-ubuntu-bionic-aarch64
     - test-ubuntu-focal-x86_64
     - test-ubuntu-focal-aarch64
     - test-ubuntu-jammy-x86_64
@@ -1453,106 +1407,6 @@ jobs:
         PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
         PKG_PLATFORM: "debian"
         PKG_PLATFORM_VERSION: "bookworm"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-ubuntu-bionic-x86_64:
-    needs: [collect]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-bionic-x86_64
-        path: artifacts/ubuntu-bionic
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "bionic"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-ubuntu-bionic-x86_64:
-    needs: [publish-ubuntu-bionic-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-bionic-x86_64
-        path: artifacts/ubuntu-bionic
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: ubuntu-bionic
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/ubuntu-bionic@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "bionic"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-ubuntu-bionic-aarch64:
-    needs: [collect]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-bionic-aarch64
-        path: artifacts/ubuntu-bionic
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "bionic"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-ubuntu-bionic-aarch64:
-    needs: [publish-ubuntu-bionic-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-bionic-aarch64
-        path: artifacts/ubuntu-bionic
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: ubuntu-bionic
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/ubuntu-bionic@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "bionic"
         PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
         PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
 
@@ -2328,19 +2182,33 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        repository: edgedb/edgedb-docker
+        repository: geldata/gel-docker
         ref: master
         path: dockerfile
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+      with:
+        registry: ghcr.io
+        username: "edgedb-ci"
+        password: ${{ secrets.GITHUB_CI_BOT_TOKEN }}
 
     - env:
         VERSION_SLOT: "${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }}"
         VERSION_CORE: "${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }}"
+        CATALOG_VERSION: "${{ needs.check-published-debian-bookworm-x86_64.outputs.catalog-version }}"
         PKG_SUBDIST: ""
       id: tags
       run: |
         set -e
 
-        url='https://registry.hub.docker.com/v2/repositories/edgedb/edgedb/tags?page_size=100'
+        url='https://registry.hub.docker.com/v2/repositories/geldata/gel/tags?page_size=100'
         repo_tags=$(
           while [ -n "$url" ]; do
             resp=$(curl -L -s "$url")
@@ -2352,53 +2220,58 @@ jobs:
           done | grep "^[[:digit:]]\+.*" | grep -v "alpha\|beta\|rc" || :
         )
 
-        tags=( "$VERSION_CORE" )
+        tags=()
 
-        top=$(printf "%s\n%s\n" "$VERSION_CORE" "$repo_tags" \
-              | grep "^${VERSION_SLOT}[\.-]" \
-              | sort --version-sort --reverse | head -n 1)
-        if [ "$top" == "$VERSION_CORE" ]; then
-          tags+=( "$VERSION_SLOT" )
-        fi
+        if [ "$PKG_SUBDIST" = "nightly" ]; then
+          tags+=(
+            "nightly"
+            "nightly_${VERSION_SLOT}_cv${CATALOG_VERSION}"
+          )
+        else
+          tags+=( "$VERSION_CORE" )
 
-        if [ -z "$PKG_SUBDIST" ]; then
           top=$(printf "%s\n%s\n" "$VERSION_CORE" "$repo_tags" \
+                | grep "^${VERSION_SLOT}[\.-]" \
                 | sort --version-sort --reverse | head -n 1)
           if [ "$top" == "$VERSION_CORE" ]; then
-            tags+=( "latest" )
+            tags+=( "$VERSION_SLOT" )
+          fi
+
+          if [ -z "$PKG_SUBDIST" ]; then
+            top=$(printf "%s\n%s\n" "$VERSION_CORE" "$repo_tags" \
+                  | sort --version-sort --reverse | head -n 1)
+            if [ "$top" == "$VERSION_CORE" ]; then
+              tags+=( "latest" )
+            fi
           fi
         fi
 
+        fq_tags=()
+        images=("geldata/gel" "ghcr.io/geldata/gel")
+
+        for image in "${images[@]}"; do
+          fq_tags+=("${tags[@]/#/${image}:}")
+        done
+
         IFS=,
-        echo "tags=${tags[*]}" >> $GITHUB_OUTPUT
+        echo "tags=${fq_tags[*]}" >> $GITHUB_OUTPUT
 
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v2
+      uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@edfb0fe6204400c56fbfd3feba3fe9ad1adfa345  # v3
+      uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
-    - name: Publish Docker Image (docker.io)
-      uses: elgohr/Publish-Docker-Github-Action@43dc228e327224b2eda11c8883232afd5b34943b  # v5
+    - name: Build and Publish Docker Image
+      uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.10.0
       with:
-        name: edgedb/edgedb
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+        push: true
+        provenance: mode=max
         tags: "${{ steps.tags.outputs.tags }}"
-        workdir: dockerfile
-        buildargs: version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }},exact_version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }}
-        platforms: linux/amd64,linux/arm64
-
-    - name: Publish Docker Image (ghcr.io)
-      uses: elgohr/Publish-Docker-Github-Action@43dc228e327224b2eda11c8883232afd5b34943b  # v5
-      with:
-        registry: ghcr.io
-        name: ${{ github.repository }}
-        username: "edgedb-ci"
-        password: ${{ secrets.GITHUB_CI_BOT_TOKEN }}
-        tags: "${{ steps.tags.outputs.tags }}"
-        workdir: dockerfile
-        buildargs: version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }},exact_version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }}
+        context: dockerfile
+        build-args: |
+          version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }}
+          exact_version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }}
         platforms: linux/amd64,linux/arm64
 
   workflow-notifications:
@@ -2432,14 +2305,6 @@ jobs:
       - test-debian-bookworm-aarch64
       - publish-debian-bookworm-aarch64
       - check-published-debian-bookworm-aarch64
-      - build-ubuntu-bionic-x86_64
-      - test-ubuntu-bionic-x86_64
-      - publish-ubuntu-bionic-x86_64
-      - check-published-ubuntu-bionic-x86_64
-      - build-ubuntu-bionic-aarch64
-      - test-ubuntu-bionic-aarch64
-      - publish-ubuntu-bionic-aarch64
-      - check-published-ubuntu-bionic-aarch64
       - build-ubuntu-focal-x86_64
       - test-ubuntu-focal-x86_64
       - publish-ubuntu-focal-x86_64

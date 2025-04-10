@@ -56,7 +56,9 @@ CREATE TYPE cfg::TestInstanceConfigStatTypes EXTENDING cfg::TestInstanceConfig {
 };
 
 
-CREATE SCALAR TYPE cfg::TestEnum extending enum<One, Two, Three>;
+CREATE SCALAR TYPE cfg::TestEnum EXTENDING enum<One, Two, Three>;
+CREATE SCALAR TYPE cfg::TestEnabledDisabledEnum
+    EXTENDING enum<Enabled, Disabled>;
 
 
 ALTER TYPE cfg::AbstractConfig {
@@ -132,9 +134,20 @@ ALTER TYPE cfg::AbstractConfig {
         SET default := cfg::TestEnum.One;
     };
 
+    CREATE PROPERTY boolprop -> std::bool {
+        CREATE ANNOTATION cfg::internal := 'true';
+        SET default := true;
+    };
+
     CREATE PROPERTY __pg_max_connections -> std::int64 {
         CREATE ANNOTATION cfg::internal := 'true';
         CREATE ANNOTATION cfg::backend_setting := '"max_connections"';
+    };
+
+    CREATE PROPERTY __check_function_bodies -> cfg::TestEnabledDisabledEnum {
+        CREATE ANNOTATION cfg::internal := 'true';
+        CREATE ANNOTATION cfg::backend_setting := '"check_function_bodies"';
+        SET default := cfg::TestEnabledDisabledEnum.Enabled;
     };
 };
 
@@ -285,6 +298,17 @@ sys::_sleep(duration: std::duration) -> std::bool
     SET volatility := 'Volatile';
     USING SQL $$
     SELECT pg_sleep_for("duration") IS NOT NULL;
+    $$;
+};
+
+
+CREATE FUNCTION
+sys::_postgres_version() -> std::str
+{
+    CREATE ANNOTATION std::description :=
+        'Get the postgres version string';
+    USING SQL $$
+    SELECT version()
     $$;
 };
 

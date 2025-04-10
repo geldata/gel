@@ -16,16 +16,21 @@
 # limitations under the License.
 #
 
+import sys
+import json
+
+
 from lsprotocol import types as lsp_types
 import click
-import sys
 
 from edb import buildmeta
 from edb.common import traceback as edb_traceback
 from edb.edgeql import parser as qlparser
+from edb.edgeql import tokenizer as qltokenizer
 
 from . import parsing as ls_parsing
 from . import server as ls_server
+from . import is_schema_file, is_edgeql_file
 
 
 @click.command()
@@ -35,12 +40,13 @@ from . import server as ls_server
     is_flag=True,
     help="Use stdio for LSP. This is currently the only transport.",
 )
-def main(*, version: bool, stdio: bool):
+@click.argument("options", type=str, default='{}')
+def main(options: str | None, *, version: bool, stdio: bool):
     if version:
-        print(f"edgedb-ls, version {buildmeta.get_version()}")
+        print(f"gel-ls, version {buildmeta.get_version()}")
         sys.exit(0)
 
-    ls = init()
+    ls = init(options)
 
     if stdio:
         ls.start_io()
@@ -48,9 +54,19 @@ def main(*, version: bool, stdio: bool):
         print("Error: no LSP transport enabled. Use --stdio.")
 
 
-def init() -> ls_server.EdgeDBLanguageServer:
-    ls = ls_server.EdgeDBLanguageServer()
+def init(options_json: str | None) -> ls_server.GelLanguageServer:
 
+    # load config
+    options_dict = json.loads(options_json or '{}')
+    project_dir = '.'
+    if 'project_dir' in options_dict:
+        project_dir = options_dict['project_dir']
+    config = ls_server.Config(project_dir=project_dir)
+
+    # construct server
+    ls = ls_server.GelLanguageServer(config)
+
+    # register hooks
     @ls.feature(
         lsp_types.INITIALIZE,
     )
@@ -66,6 +82,10 @@ def init() -> ls_server.EdgeDBLanguageServer:
     @ls.feature(lsp_types.TEXT_DOCUMENT_DID_CHANGE)
     def text_document_did_change(params: lsp_types.DidChangeTextDocumentParams):
         document_updated(ls, params.text_document.uri)
+
+    @ls.feature(lsp_types.TEXT_DOCUMENT_DEFINITION)
+    def text_document_definition(params: lsp_types.DefinitionParams):
+        return document_definition(ls, params)
 
     @ls.feature(
         lsp_types.TEXT_DOCUMENT_COMPLETION,
@@ -84,32 +104,94 @@ def init() -> ls_server.EdgeDBLanguageServer:
     return ls
 
 
-def document_updated(ls: ls_server.EdgeDBLanguageServer, doc_uri: str):
+def document_updated(ls: ls_server.GelLanguageServer, doc_uri: str):
     # each call to this function should yield in exactly one publish_diagnostics
     # for this document
 
     document = ls.workspace.get_text_document(doc_uri)
-    ql_ast = ls_parsing.parse(document, ls)
-    if diagnostics := ql_ast.error:
-        ls.publish_diagnostics(document.uri, diagnostics, document.version)
-        return
-    assert ql_ast.ok
+    diagnostic_set: ls_server.DiagnosticsSet
 
     try:
-        if isinstance(ql_ast.ok, list):
-            diagnostics = ls_server.compile(ls, ql_ast.ok)
-            ls.publish_diagnostics(document.uri, diagnostics, document.version)
+        if is_schema_file(doc_uri):
+            # schema file
+
+            diagnostics = ls_server.update_schema_doc(ls, document)
+
+            # recompile schema
+            ls.state.schema = None
+            _schema, diagnostic_set, err_msg = ls_server.get_schema(ls)
+            diagnostic_set.extend(document, diagnostics)
+
+            if err_msg:
+                ls.show_message(f'Error: {err_msg}')
+
+        elif is_edgeql_file(doc_uri):
+            # query file
+            ql_ast_res = ls_parsing.parse(document, ls)
+            if diag := ql_ast_res.err:
+                ls.publish_diagnostics(document.uri, diag, document.version)
+                return
+            assert ql_ast_res.ok
+            ql_ast = ql_ast_res.ok
+
+            if isinstance(ql_ast, list):
+                diagnostic_set, _ = ls_server.compile(ls, document, ql_ast)
+            else:
+                # SDL in query files?
+                diagnostic_set = ls_server.DiagnosticsSet()
         else:
-            ls.publish_diagnostics(document.uri, [], document.version)
+            ls.show_message_log(f'Unknown file type: {doc_uri}')
+            diagnostic_set = ls_server.DiagnosticsSet()
+            # doc_uri in ('gel.toml')
+
+        diagnostic_set.extend(document, [])  # make sure we publish for document
+        for doc, diags in diagnostic_set.by_doc.items():
+            ls.publish_diagnostics(doc.uri, diags, doc.version)
     except BaseException as e:
         send_internal_error(ls, e)
         ls.publish_diagnostics(document.uri, [], document.version)
 
 
-def send_internal_error(ls: ls_server.EdgeDBLanguageServer, e: BaseException):
+def document_definition(
+    ls: ls_server.GelLanguageServer, params: lsp_types.DefinitionParams
+) -> lsp_types.Location | None:
+    doc_uri = params.text_document.uri
+    document = ls.workspace.get_text_document(doc_uri)
+
+    position: int = qltokenizer.line_col_to_source_point(
+        document.source, params.position.line, params.position.character
+    ).offset
+    ls.show_message_log(f'position = {position}')
+
+    try:
+        if is_schema_file(doc_uri):
+            ls.show_message_log(
+                'Definition in schema files are not supported yet'
+            )
+
+        elif is_edgeql_file(doc_uri):
+
+            ql_ast_res = ls_parsing.parse(document, ls)
+            if not ql_ast_res.ok:
+                return None
+            ql_ast = ql_ast_res.ok
+
+            if isinstance(ql_ast, list):
+                return ls_server.get_definition_in_ql(
+                    ls, document, ql_ast, position
+                )
+            else:
+                # SDL in query files?
+                pass
+        else:
+            ls.show_message_log(f'Unknown file type: {doc_uri}')
+
+    except BaseException as e:
+        send_internal_error(ls, e)
+
+    return None
+
+
+def send_internal_error(ls: ls_server.GelLanguageServer, e: BaseException):
     text = edb_traceback.format_exception(e)
     ls.show_message_log(f'Internal error: {text}')
-
-
-if __name__ == '__main__':
-    main()

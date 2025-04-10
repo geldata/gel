@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Type, AbstractSet, TYPE_CHECKING
+from typing import Any, Optional, AbstractSet, TYPE_CHECKING
 
 from edb import errors
 
@@ -153,8 +153,8 @@ class TriggerCommand(
                     raise errors.SchemaDefinitionError(
                         f'{vname} expression for {trig_name} is of invalid '
                         f'type: '
-                        f'{expr_type.get_displayname(schema)}, '
-                        f'expected {target.get_displayname(schema)}',
+                        f'{expr_type.get_displayname(expression.irast.schema)}'
+                        f', expected {target.get_displayname(schema)}',
                         span=span,
                     )
 
@@ -288,7 +288,7 @@ class CreateTrigger(
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if (
             field in ('timing', 'condition', 'kinds', 'scope', 'expr')

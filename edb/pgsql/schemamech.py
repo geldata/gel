@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Tuple, Sequence, Collection, Dict, List, Set
+from typing import Optional, Sequence, Collection
 
 import itertools
 import dataclasses
@@ -62,15 +62,14 @@ def _get_exclusive_refs(tree: irast.Statement) -> Sequence[irast.Base] | None:
     # Check if the expression is
     #   std::_is_exclusive(<arg>) [and std::_is_exclusive(<arg>)...]
 
-    assert isinstance(tree.expr.expr, irast.SelectStmt)
-    expr = tree.expr.expr.result
+    expr = tree.expr.expr
 
     return irastexpr.get_constraint_references(expr)
 
 
 @dataclasses.dataclass(kw_only=True, repr=False, eq=False, slots=True)
 class PGConstrData:
-    subject_db_name: Optional[Tuple[str, str]]
+    subject_db_name: Optional[tuple[str, str]]
     expressions: list[ExprData]
     relative_expressions: list[ExprData]
     table_type: str
@@ -85,7 +84,7 @@ class ExprData:
     exprdata: ExprDataSources
     is_multicol: bool
     is_trivial: bool
-    subject_db_name: Optional[Tuple[str, str]] = None
+    subject_db_name: Optional[tuple[str, str]] = None
     except_data: Optional[ExprDataSources] = None
 
 
@@ -108,7 +107,7 @@ def _to_source(sql_expr: pgast.Base) -> str:
 
 
 def _edgeql_tree_to_expr_data(
-    sql_expr: pgast.Base, refs: Optional[Set[pgast.ColumnRef]] = None
+    sql_expr: pgast.Base, refs: Optional[set[pgast.ColumnRef]] = None
 ) -> ExprDataSources:
     if refs is None:
         refs = set(
@@ -131,12 +130,12 @@ def _edgeql_tree_to_expr_data(
         refs.add(sql_expr)
 
     for ref in refs:
-        assert isinstance(ref.name, List)
+        assert isinstance(ref.name, list)
         ref.name.insert(0, 'NEW')
     new_expr = _to_source(sql_expr)
 
     for ref in refs:
-        assert isinstance(ref.name, List)
+        assert isinstance(ref.name, list)
         ref.name[0] = 'OLD'
     old_expr = _to_source(sql_expr)
 
@@ -216,7 +215,7 @@ def _edgeql_ref_to_pg_constr(
 class CompiledConstraintData:
     subject: s_types.Type | s_pointers.Pointer
     exclusive_expr_refs: Optional[Sequence[irast.Base]]
-    subject_db_name: Optional[Tuple[str, str]]
+    subject_db_name: Optional[tuple[str, str]]
     except_data: Optional[ExprDataSources]
     ir: irast.Statement
     subject_table_type: str
@@ -256,7 +255,6 @@ def _compile_constraint_data(
         options=options,
     )
     assert isinstance(ir, irast.Statement)
-    assert isinstance(ir.expr.expr, irast.SelectStmt)
 
     except_ir: Optional[irast.Statement] = None
     except_data = None
@@ -273,7 +271,7 @@ def _compile_constraint_data(
         except_data = _edgeql_tree_to_expr_data(except_sql.ast)
 
     terminal_refs: set[irast.Set] = (
-        ir_utils.get_longest_paths(ir.expr.expr.result)
+        ir_utils.get_longest_paths(ir.expr.expr)
     )
     if except_ir is not None:
         terminal_refs.update(
@@ -754,10 +752,10 @@ def ptr_default_to_col_default(schema, ptr, expr):
     return sql_text
 
 
-RefTables = Dict[
-    Optional[Tuple[str, str]],
-    List[
-        Tuple[
+RefTables = dict[
+    Optional[tuple[str, str]],
+    list[
+        tuple[
             irast.Set,
             s_pointers.PointerLike,
             s_pointers.PointerLike | s_types.Type,
@@ -770,13 +768,13 @@ RefTables = Dict[
 def get_ref_storage_info(
     schema: s_schema.Schema, refs: Collection[irast.Set]
 ) -> RefTables:
-    link_biased: Dict[irast.Set, types.PointerStorageInfo] = {}
-    objtype_biased: Dict[irast.Set, types.PointerStorageInfo] = {}
+    link_biased: dict[irast.Set, types.PointerStorageInfo] = {}
+    objtype_biased: dict[irast.Set, types.PointerStorageInfo] = {}
 
-    RefPtr = Tuple[
+    RefPtr = tuple[
         s_pointers.PointerLike, s_types.Type | s_pointers.PointerLike
     ]
-    ref_ptrs: Dict[irast.Set, RefPtr] = {}
+    ref_ptrs: dict[irast.Set, RefPtr] = {}
     refs = list(refs)
     for ref in refs:
         ptr: s_pointers.PointerLike
@@ -786,6 +784,8 @@ def get_ref_storage_info(
         if rptr is None:
             source_typeref = ref.typeref
             if not irtyputils.is_object(source_typeref):
+                continue
+            if irtyputils.is_free_object(source_typeref):
                 continue
             schema, t = irtyputils.ir_typeref_to_type(schema, ref.typeref)
             assert isinstance(t, s_sources.Source)

@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Tuple, Mapping, NamedTuple, Callable
+from typing import Any, Mapping, NamedTuple, Callable
 
 import asyncio
 import http
@@ -33,6 +33,7 @@ import subprocess
 import ssl
 import sys
 import tempfile
+import textwrap
 import time
 import unittest
 import urllib.error
@@ -70,7 +71,7 @@ class TestServerApi(tb.ClusterTestCase):
             self.assertEqual(status, http.HTTPStatus.OK)
 
 
-class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
+class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
 
     async def kill_process(self, proc: asyncio.subprocess.Process):
         proc.terminate()
@@ -111,7 +112,7 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
                 # and the cluster to be shutdown soon.
                 await sd.connect(wait_until_available=0)
 
-    async def test_server_ops_auto_shutdown_after_one(self):
+    async def test_server_ops_auto_shutdown_after_one_1(self):
         async with tb.start_edgedb_server(
             auto_shutdown_after=1,
         ) as sd:
@@ -119,6 +120,27 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
 
             with self.assertRaises(
                     (ConnectionError, edgedb.ClientConnectionError)):
+                await sd.connect(wait_until_available=0)
+
+    async def test_server_ops_auto_shutdown_after_one_2(self):
+        async with tb.start_edgedb_server(
+            auto_shutdown_after=1,
+            http_endpoint_security=(
+                args.ServerEndpointSecurityMode.Optional
+            ),
+        ) as sd:
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(2)
+
+            with self.assertRaises(
+                (ConnectionError, edgedb.ClientConnectionError)):
                 await sd.connect(wait_until_available=0)
 
     @unittest.skipIf(
@@ -226,7 +248,7 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
                     else:
                         return result
 
-        async def _waiter() -> Tuple[str, Mapping[str, Any]]:
+        async def _waiter() -> tuple[str, Mapping[str, Any]]:
             loop = asyncio.get_running_loop()
             line = await loop.run_in_executor(None, _read, status_file)
             status, _, dataline = line.partition('=')
@@ -294,7 +316,7 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
                     else:
                         return result
 
-        async def _waiter() -> Tuple[str, Mapping[str, Any]]:
+        async def _waiter() -> tuple[str, Mapping[str, Any]]:
             loop = asyncio.get_running_loop()
             lines = await asyncio.gather(
                 loop.run_in_executor(None, _read, status_file),
@@ -743,13 +765,40 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
             ) as sd:
                 con = await sd.connect()
                 try:
-                    qry = 'select schema::Object { name }'
+                    qry = '''
+                        select schema::Object {
+                            name,
+                            enumval := <cfg::TestEnum>$0,
+                        }
+                    '''
+                    sql = '''
+                        SELECT
+                            n.nspname::text AS table_schema,
+                            c.relname::text AS table_name,
+                            CASE
+                                WHEN c.relkind = 'r' THEN 'table'
+                                WHEN c.relkind = 'v' THEN 'view'
+                                WHEN c.relkind = 'm' THEN 'materialized_view'
+                            END AS type,
+                            c.relrowsecurity AS rls_enabled
+                        FROM
+                            pg_catalog.pg_class c
+                        JOIN
+                            pg_catalog.pg_namespace n
+                                ON n.oid::text = c.relnamespace::text
+                        WHERE
+                            c.relkind IN ('r', 'v', 'm')
+                            AND n.nspname = 'public';
+                    '''
 
-                    await con.query(qry)
+                    await con.query(qry, 'Two')
+                    await con.query_sql(sql)
 
                     # Querying a second time should hit the cache
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
+                    with self.assertChange(measure_sql_compilations(sd), 0):
+                        await con.query_sql(sql)
 
                     await con.query('''
                         create type X
@@ -759,14 +808,22 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
                     # the type, so doing the query shouldn't cause another
                     # compile!
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
+
+                    # The SQL cache is reset after DDL, because recompiling SQL
+                    # requires backend connection for amending in/out tids, and
+                    # we don't have the infra for that yet.
+                    with self.assertChange(measure_sql_compilations(sd), 1):
+                        await con.query_sql(sql)
+                    with self.assertChange(measure_sql_compilations(sd), 0):
+                        await con.query_sql(sql)
 
                     # TODO: this does not behave the way I thing it should
                     # with self.assertChange(measure_compilations(sd), 1):
                     #     con_c = con.with_config(apply_access_policies=False)
-                    #     await con_c.query(qry)
+                    #     await con_c.query(qry, 'Two')
 
                     # Set the compilation timeout to 2ms.
                     #
@@ -792,7 +849,13 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
                     ''')
 
                     with self.assertChange(measure_compilations(sd), 1):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
+                    with self.assertChange(measure_compilations(sd), 0):
+                        await con.query(qry, 'Two')
+                    with self.assertChange(measure_sql_compilations(sd), 1):
+                        await con.query_sql(sql)
+                    with self.assertChange(measure_sql_compilations(sd), 0):
+                        await con.query_sql(sql)
 
                     await con.execute(
                         "configure current database "
@@ -801,24 +864,24 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
 
                     # Now, a similar thing for SQL queries
 
-                    with self.assertChange(measure_compilations(sd), 1):
+                    with self.assertChange(measure_sql_compilations(sd), 1):
                         await con.query_sql('select 1')
 
                     # cache hit
-                    with self.assertChange(measure_compilations(sd), 0):
+                    with self.assertChange(measure_sql_compilations(sd), 0):
                         await con.query_sql('select 1')
 
                     # changing globals: cache hit
-                    with self.assertChange(measure_compilations(sd), 0):
+                    with self.assertChange(measure_sql_compilations(sd), 0):
                         con_g = con.with_globals({'g': 'hello'})
                         await con_g.query_sql('select 1')
 
                     # normalization: pg_query_normalize is underwhelming
-                    with self.assertChange(measure_compilations(sd), 1):
+                    with self.assertChange(measure_sql_compilations(sd), 1):
                         await con.query_sql('sElEct  1')
 
                     # constant extraction: cache hit
-                    with self.assertChange(measure_compilations(sd), 0):
+                    with self.assertChange(measure_sql_compilations(sd), 0):
                         await con.query_sql('select 2')
 
                     # TODO: this does not behave the way I though it should
@@ -826,6 +889,27 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
                     # with self.assertChange(measure_compilations(sd), 1):
                     #     con_c = con.with_config(apply_access_policies=False)
                     #     await con_c.query_sql(qry_sql)
+
+                    # At last, make sure recompilation switch works fine
+                    await con.execute(
+                        "configure current database "
+                        "set auto_rebuild_query_cache := false"
+                    )
+                    await con.query('''
+                        create type X
+                    ''')
+                    with self.assertChange(measure_compilations(sd), 1):
+                        await con.query(qry, 'Two')
+                    with self.assertChange(measure_compilations(sd), 0):
+                        await con.query(qry, 'Two')
+                    with self.assertChange(measure_sql_compilations(sd), 1):
+                        await con.query_sql(sql)
+                    with self.assertChange(measure_sql_compilations(sd), 0):
+                        await con.query_sql(sql)
+                    await con.execute(
+                        "configure current database "
+                        "reset auto_rebuild_query_cache"
+                    )
 
                 finally:
                     await con.aclose()
@@ -849,9 +933,12 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
                         with self.assertChange(measure_sql_compilations(sd), 0):
                             await scon.fetch('select 1')
 
-                        # TODO: normalization & constant extraction
-                        with self.assertChange(measure_sql_compilations(sd), 2):
+                        # cache hit because of query normalization
+                        with self.assertChange(measure_sql_compilations(sd), 0):
                             await scon.fetch('select 2')
+
+                        # TODO: better normalization
+                        with self.assertChange(measure_sql_compilations(sd), 1):
                             await scon.fetch('sELEcT  1')
 
                         # cache hit, even after global has been changed
@@ -877,7 +964,10 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
                 try:
                     # It should hit the cache no problem.
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
+                    # TODO(fantix): persistent SQL cache not working?
+                    # with self.assertChange(measure_sql_compilation(sd), 0):
+                    #     await con.query_sql(sql)
 
                 finally:
                     await con.aclose()
@@ -898,6 +988,7 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
         async with tb.start_edgedb_server(
             default_auth_method=args.ServerAuthMethod.Trust,
             net_worker_mode='disabled',
+            force_new=True,
         ) as sd:
             con = await sd.connect()
             con2 = None
@@ -1527,7 +1618,6 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
             raise
         return cluster, connect_args
 
-    @unittest.skip('Test was failing mysteriously in CI. See #7933.')
     async def test_server_ops_multi_tenant(self):
         with (
             tempfile.TemporaryDirectory() as td1,
@@ -1535,18 +1625,28 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
             tempfile.NamedTemporaryFile("w+") as conf_file,
             tempfile.NamedTemporaryFile("w+") as rd1,
             tempfile.NamedTemporaryFile("w+") as rd2,
+            tempfile.NamedTemporaryFile("w+") as cf1,
+            tempfile.NamedTemporaryFile("w+") as cf2,
         ):
             fs = []
             conf = {}
-            for i, td, rd in [(1, td1, rd1), (2, td2, rd2)]:
+            for i, td, rd, cf in [(1, td1, rd1, cf1), (2, td2, rd2, cf2)]:
                 rd.file.write("default:ok")
                 rd.file.flush()
+                cf.write(textwrap.dedent(f"""
+                    [[magic_smtp_config]]
+                    _tname = "cfg::SMTPProviderConfig"
+                    name = "provider:{i}"
+                    sender = "sender@host{i}.com"
+                """))
+                cf.flush()
                 fs.append(self.loop.create_task(self._init_pg_cluster(td)))
                 conf[f"{i}.localhost"] = {
                     "instance-name": f"localtest{i}",
                     "backend-dsn": f'postgres:///?user=postgres&host={td}',
                     "max-backend-connections": 10,
                     "readiness-state-file": rd.name,
+                    "config-file": cf.name,
                 }
             await asyncio.wait(fs)
             cluster1, args1 = await fs[0]
@@ -1562,13 +1662,25 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
                     runstate_dir=runstate_dir,
                     multitenant_config=conf_file.name,
                     max_allowed_connections=None,
+                    http_endpoint_security=args.ServerEndpointSecurityMode.Optional,
                 )
                 async with srv as sd:
                     mtargs = MultiTenantArgs(
-                        srv, sd, conf_file, conf, args1, args2, rd1, rd2
+                        srv,
+                        sd,
+                        conf_file,
+                        conf,
+                        args1,
+                        args2,
+                        rd1,
+                        rd2,
+                        cf1,
+                        cf2
                     )
-                    for i in range(1, 7):
-                        name = f"_test_server_ops_multi_tenant_{i}"
+                    test_prefix = '_test_server_ops_multi_tenant_'
+                    tests = [s for s in dir(self) if s.startswith(test_prefix)]
+                    for name in tests:
+                        i = name.replace(test_prefix, '')
                         with self.subTest(name, i=i):
                             await getattr(self, name)(mtargs)
             finally:
@@ -1601,9 +1713,6 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
             '\nedgedb_server_mt_tenants_current 2.0\n', data
         )
         self.assertIn(
-            '\nedgedb_server_mt_config_reload_errors_total 0.0\n', data
-        )
-        self.assertIn(
             '\nedgedb_server_mt_tenant_add_total'
             '{tenant="localtest1"} 1.0\n',
             data,
@@ -1631,10 +1740,6 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
             data,
         )
         self.assertIn(
-            '\nedgedb_server_mt_config_reload_errors_total 0.0\n',
-            data,
-        )
-        self.assertIn(
             '\nedgedb_server_mt_tenant_add_total'
             '{tenant="localtest1"} 1.0\n',
             data,
@@ -1659,10 +1764,6 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
         data = mtargs.sd.fetch_metrics()
         self.assertIn(
             '\nedgedb_server_mt_tenants_current 2.0\n',
-            data,
-        )
-        self.assertIn(
-            '\nedgedb_server_mt_config_reload_errors_total 0.0\n',
             data,
         )
         self.assertIn(
@@ -1729,7 +1830,7 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
         await self._test_server_ops_multi_tenant_2(mtargs)
 
     async def _test_server_ops_global_compile_cache(
-        self, mtargs: MultiTenantArgs, ddl, **kwargs
+        self, mtargs: MultiTenantArgs, ddl, i, **kwargs
     ):
         conn = await mtargs.sd.connect(**kwargs)
         try:
@@ -1744,6 +1845,9 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
                 insert ext::auth::EmailPasswordProviderConfig {{
                     require_verification := false,
                 }};
+
+                configure current database set
+                current_email_provider_name := 'provider:{i}';
             ''')
         finally:
             await conn.aclose()
@@ -1771,13 +1875,112 @@ class TestServerOps(tb.BaseHTTPTestCase, tb.CLITestCaseMixin):
         await self._test_server_ops_global_compile_cache(
             mtargs,
             "create type GlobalCache1 { create property name: str }",
+            1,
             **mtargs.args1,
         )
         await self._test_server_ops_global_compile_cache(
             mtargs,
             "create type GlobalCache2 { create property active: bool }",
+            2,
             **mtargs.args2,
         )
+
+    async def _test_server_ops_multi_tenant_7(self, mtargs: MultiTenantArgs):
+        self.assertEqual(
+            (await mtargs.current_email_provider(1))["sender"],
+            "sender@host1.com",
+        )
+        self.assertEqual(
+            (await mtargs.current_email_provider(2))["sender"],
+            "sender@host2.com",
+        )
+
+        mtargs.cf1.seek(0)
+        mtargs.cf1.truncate(0)
+        mtargs.cf1.write(textwrap.dedent("""
+            [[magic_smtp_config]]
+            _tname = "cfg::SMTPProviderConfig"
+            name = "provider:1"
+            sender = "updated@example.com"
+        """))
+        mtargs.cf1.flush()
+        assert mtargs.srv.proc is not None
+        mtargs.srv.proc.send_signal(signal.SIGHUP)
+
+        async for tr in self.try_until_succeeds(ignore=AssertionError):
+            async with tr:
+                self.assertEqual(
+                    (await mtargs.current_email_provider(1))["sender"],
+                    "updated@example.com",
+                )
+                self.assertEqual(
+                    (await mtargs.current_email_provider(2))["sender"],
+                    "sender@host2.com",
+                )
+
+    async def _test_server_ops_multi_tenant_8(self, mtargs: MultiTenantArgs):
+        # Start with 2 tenants
+        data = mtargs.sd.fetch_metrics()
+        self.assertIn(
+            '\nedgedb_server_mt_tenants_current 2.0\n',
+            data,
+        )
+        await self._test_server_ops_multi_tenant_1(mtargs)
+
+        with tempfile.TemporaryDirectory() as td:
+            # Test adding tenant with a non-existing jwt-sub-allowlist-file
+            tf = tempfile.mktemp(dir=td)
+            conf = mtargs.conf["1.localhost"].copy()
+            conf.update({
+                "instance-name": "localtest3",
+                "jwt-sub-allowlist-file": tf,
+            })
+            mtargs.conf["3.localhost"] = conf
+            mtargs.reload_server()
+
+            # The tenant should not be ready at this moment, while the server
+            # keeps retrying to add the tenant
+            args3 = mtargs.args1.copy()
+            args3["server_hostname"] = "3.localhost"
+            with self.assertRaises(edgedb.AvailabilityError):
+                async for tr in self.try_until_succeeds(
+                    ignore=edgedb.AvailabilityError, timeout=3
+                ):
+                    async with tr:
+                        conn = await mtargs.sd.connect(**args3)
+                        await conn.aclose()
+
+            # Though, the metrics should reflect the ongoing attempt
+            data = mtargs.sd.fetch_metrics()
+            self.assertIn(
+                '\nedgedb_server_mt_tenant_add_total'
+                '{tenant="localtest3"} 1.0\n',
+                data,
+            )
+            self.assertIn(
+                '\nedgedb_server_mt_tenants_current 2.0\n',
+                data,
+            )
+
+            # Now, create the missing file and the tenant should be added
+            with open(tf, "w") as f:
+                f.write("\n")
+            async for tr in self.try_until_succeeds(
+                ignore=edgedb.AvailabilityError
+            ):
+                async with tr:
+                    conn = await mtargs.sd.connect(**args3)
+                    await conn.aclose()
+            data = mtargs.sd.fetch_metrics()
+            self.assertIn(
+                '\nedgedb_server_mt_tenant_add_total'
+                '{tenant="localtest3"} 1.0\n',
+                data,
+            )
+            self.assertIn(
+                '\nedgedb_server_mt_tenants_current 3.0\n',
+                data,
+            )
 
 
 class MultiTenantArgs(NamedTuple):
@@ -1789,6 +1992,9 @@ class MultiTenantArgs(NamedTuple):
     args2: dict[str, str]
     rd1: tempfile._TemporaryFileWrapper
     rd2: tempfile._TemporaryFileWrapper
+    cf1: tempfile._TemporaryFileWrapper
+    cf2: tempfile._TemporaryFileWrapper
+    dbnames: list[str | None] = [None, None]
 
     def reload_server(self):
         self.conf_file.file.seek(0)
@@ -1796,6 +2002,23 @@ class MultiTenantArgs(NamedTuple):
         json.dump(self.conf, self.conf_file.file)
         self.conf_file.file.flush()
         self.srv.proc.send_signal(signal.SIGHUP)
+
+    def fetch_server_info(self, i):
+        return self.sd.fetch_server_info()["tenants"][f"{i}.localhost"]
+
+    async def current_email_provider(self, i):
+        tenant_info = self.fetch_server_info(i)
+        dbname = self.dbnames[i - 1]
+        if dbname is None:
+            conn = await self.sd.connect(**getattr(self, f"args{i}"))
+            try:
+                dbname = await conn.query_single("""\
+                    select sys::get_current_branch()
+                """)
+                self.dbnames[i - 1] = dbname
+            finally:
+                await conn.aclose()
+        return tenant_info["databases"][dbname]["current_email_provider"]
 
 
 class TestPGExtensions(tb.TestCase):
@@ -1829,6 +2052,13 @@ class TestPGExtensions(tb.TestCase):
                     'make',
                     f'PG_CONFIG={pg_config}',
                     'installcheck',
-                ], cwd=str(ext_home), env=env)
+                ], cwd=str(ext_home), env=env, text=True)
+            except subprocess.CalledProcessError as e:
+                output = ext_home / "regression.out"
+                if output.exists():
+                    regression_out = output.read_text()
+                else:
+                    regression_out = ""
+                raise AssertionError(f"{e}:\n{regression_out}") from e
             finally:
                 await cluster.stop()

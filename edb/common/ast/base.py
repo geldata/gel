@@ -28,10 +28,6 @@ from typing import (
     Any,
     Callable,
     TypeVar,
-    Dict,
-    List,
-    Set,
-    FrozenSet,
     cast,
     get_type_hints,
     TYPE_CHECKING,
@@ -102,16 +98,16 @@ def _check_type_real(type_, value, raise_error):
     elif typing_inspect.is_generic_type(type_):
         ot = typing_inspect.get_origin(type_)
 
-        if ot in (list, List, collections.abc.Sequence):
+        if ot in (list, list, collections.abc.Sequence):
             _check_container_type(type_, value, raise_error, list)
 
-        elif ot in (set, Set):
+        elif ot in (set, set):
             _check_container_type(type_, value, raise_error, set)
 
-        elif ot in (frozenset, FrozenSet):
+        elif ot in (frozenset, frozenset):
             _check_container_type(type_, value, raise_error, frozenset)
 
-        elif ot in (dict, Dict):
+        elif ot in (dict, dict):
             _check_mapping_type(type_, value, raise_error, dict)
 
         elif ot is not None:
@@ -335,6 +331,11 @@ def serialize_to_markup(ast, *, ctx):
     node = markup.elements.lang.TreeNode(id=id(ast), name=type(ast).__name__)
     include_meta = ctx.kwargs.get('_ast_include_meta', True)
     exclude_unset = ctx.kwargs.get('_ast_exclude_unset', True)
+
+    if debug.flags.ast_span:
+        s = getattr(ast, 'span', None)
+        if s:
+            node.add_child(label='span', node=markup.serialize(str(s), ctx=ctx))
 
     fields = iter_fields(
         ast, include_meta=include_meta, exclude_unset=exclude_unset)

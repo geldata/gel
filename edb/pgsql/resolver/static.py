@@ -20,17 +20,17 @@
 
 import functools
 import platform
-from typing import Optional, Sequence, List
+from typing import Optional, Sequence
 
 from edb import errors
 
 from edb.pgsql import ast as pgast
 from edb.pgsql.ast import SQLValueFunctionOP as val_func_op
 from edb.pgsql import common
-from edb.pgsql import parser as pgparser
 
 from edb.server import defines
 from edb.server.pgcon import errors as pgerror
+from edb.server.compiler.sql import DisableNormalization
 
 from . import context
 from . import dispatch
@@ -50,11 +50,12 @@ def eval(expr: pgast.BaseExpr, *, ctx: Context) -> Optional[pgast.BaseExpr]:
 
 
 def eval_list(
-    exprs: List[pgast.BaseExpr], *, ctx: Context
-) -> Optional[List[pgast.BaseExpr]]:
+    exprs: list[pgast.BaseExpr], *, ctx: Context
+) -> Optional[list[pgast.BaseExpr]]:
     """
     Tries to statically evaluate exprs, recursing into sub-expressions.
     Returns None if that is not possible.
+    Raises DisableNormalization if param refs are encountered.
     """
     res = []
     for expr in exprs:
@@ -218,6 +219,20 @@ ALLOWED_ADMIN_FUNCTIONS = frozenset(
         'pg_visible_in_snapshot',
         'pg_xact_commit_timestamp',
         'pg_xact_status',
+        'pg_partition_ancestors',
+        'pg_backend_pid',
+        'pg_wal_lsn_diff',
+        'pg_last_wal_replay_lsn',
+        'pg_current_wal_flush_lsn',
+        'pg_relation_is_publishable',
+        'pg_show_all_settings',
+    }
+)
+
+WRAPPED_FUNCTIONS = frozenset(
+    {
+        "to_regclass",
+        'pg_show_all_settings',
     }
 )
 
@@ -237,7 +252,7 @@ def eval_FuncCall(
 
     if fn_name.startswith('pg_') and fn_name not in ALLOWED_ADMIN_FUNCTIONS:
         raise errors.QueryError(
-            "forbidden function",
+            f"forbidden function '{fn_name}'",
             span=expr.span,
             pgext_code=pgerror.ERROR_INSUFFICIENT_PRIVILEGE,
         )
@@ -318,7 +333,7 @@ def eval_FuncCall(
         )
 
     if fn_name == 'current_setting':
-        arg = require_a_string_literal(expr, fn_name, ctx)
+        arg = require_string_param(expr, ctx)
 
         val = None
         if arg == 'search_path':
@@ -335,12 +350,16 @@ def eval_FuncCall(
         )
 
     if fn_name == "pg_get_serial_sequence":
+        eval_list(expr.args, ctx=ctx)
         # we do not expose sequences, so any calls to this function returns NULL
         return pgast.NullConstant()
 
-    if fn_name == "to_regclass":
-        arg = require_a_string_literal(expr, fn_name, ctx)
-        return to_regclass(arg, ctx=ctx)
+    if fn_name in WRAPPED_FUNCTIONS:
+        args = eval_list(expr.args, ctx=ctx)
+        return pgast.FuncCall(
+            name=(V('edgedbsql'), fn_name),
+            args=expr.args if args is None else args,
+        )
 
     cast_arg_to_regclass = {
         'pg_relation_filenode',
@@ -370,9 +389,11 @@ def eval_FuncCall(
         # schema and table names need to be remapped. This is accomplished
         # with wrapper functions defined in metaschema.py.
         has_wrapper = {
+            'has_database_privilege',
             'has_schema_privilege',
             'has_table_privilege',
             'has_column_privilege',
+            'has_any_column_privilege',
         }
         if fn_name in has_wrapper:
             return pgast.FuncCall(name=(V('edgedbsql'), fn_name), args=fn_args)
@@ -398,19 +419,36 @@ def eval_FuncCall(
     return None
 
 
-def require_a_string_literal(
-    expr: pgast.FuncCall, fn_name: str, ctx: Context
+def require_string_param(
+    expr: pgast.FuncCall, ctx: Context
 ) -> str:
     args = eval_list(expr.args, ctx=ctx)
-    if not (
-        args and len(args) == 1 and isinstance(args[0], pgast.StringConstant)
-    ):
+
+    arg = args[0] if args and len(args) == 1 else None
+    if not isinstance(arg, pgast.StringConstant):
         raise errors.QueryError(
-            f"function pg_catalog.{fn_name} requires a string literal",
+            f"function pg_catalog.{expr.name[-1]} requires a string literal",
             span=expr.span,
+            pgext_code=pgerror.ERROR_UNDEFINED_FUNCTION
         )
 
-    return args[0].val
+    return arg.val
+
+
+def require_bool_param(
+    expr: pgast.FuncCall, ctx: Context
+) -> bool:
+    args = eval_list(expr.args, ctx=ctx)
+
+    arg = args[0] if args and len(args) == 1 else None
+    if not isinstance(arg, pgast.BooleanConstant):
+        raise errors.QueryError(
+            f"function pg_catalog.{expr.name[-1]} requires a boolean literal",
+            span=expr.span,
+            pgext_code=pgerror.ERROR_UNDEFINED_FUNCTION
+        )
+
+    return arg.val
 
 
 def cast_to_regclass(param: pgast.BaseExpr, ctx: Context) -> pgast.BaseExpr:
@@ -423,112 +461,35 @@ def cast_to_regclass(param: pgast.BaseExpr, ctx: Context) -> pgast.BaseExpr:
     """
 
     expr = eval(param, ctx=ctx)
-    if isinstance(expr, pgast.NullConstant):
-        return pgast.NullConstant()
-    if isinstance(expr, pgast.StringConstant):
-        return to_regclass(expr.val, ctx=ctx)
-
-    oid: pgast.BaseExpr
-    if isinstance(expr, pgast.NumericConstant):
-        oid = expr
-    else:
-        # This is a complex expression of unknown type.
-        # If we knew the type is numeric, we could lookup the internal oid by
-        # the public oid.
-        # But if the type if string, we'd have to implement to_regclass in SQL.
-
-        # The problem is that we don't know the type statically.
-        # So let's insert a runtime type check with an 'unsupported' message for
-        # strings.
+    if expr is None:
         param = dispatch.resolve(param, ctx=ctx)
-        oid = pgast.CaseExpr(
-            args=[
-                pgast.CaseWhen(
-                    expr=pgast.Expr(
-                        lexpr=pgast.FuncCall(
-                            name=('pg_typeof',),
-                            args=[param]
-                        ),
-                        name='IN',
-                        rexpr=pgast.ImplicitRowExpr(
-                            args=[
-                                pgast.StringConstant(val='integer'),
-                                pgast.StringConstant(val='smallint'),
-                                pgast.StringConstant(val='bigint'),
-                                pgast.StringConstant(val='oid'),
-                            ]
-                        )
-                    ),
-                    result=param
-                )
-            ],
-            defresult=pgast.FuncCall(
-                name=(V('edgedb'), 'raise'),
-                args=[
-                    pgast.NumericConstant(val='1'),
-                    pgast.StringConstant(
-                        val=pgerror.ERROR_FEATURE_NOT_SUPPORTED
-                    ),
-                    pgast.StringConstant(val='cannot cast text to regclass'),
-                ]
-            )
+        return pgast.FuncCall(
+            name=(V('edgedbsql'), "to_regclass"), args=[param]
         )
-    return oid
-
-
-def to_regclass(reg_class_name: str, ctx: Context) -> pgast.BaseExpr:
-    """
-    Equivalent to `to_regclass(text reg_class_name)` in SQL.
-
-    Parses a string as an SQL identifier (with optional schema name and
-    database name) and returns an SQL expression that evaluates to the
-    "registered class" of that ident.
-    """
-    from edb.pgsql.common import quote_literal as ql
-
-    try:
-        [stmt] = pgparser.parse(f'SELECT {reg_class_name}')
-        assert isinstance(stmt, pgast.SelectStmt)
-        [target] = stmt.target_list
-        assert isinstance(target.val, pgast.ColumnRef)
-        name = target.val.name
-    except Exception:
+    elif isinstance(expr, pgast.NullConstant):
         return pgast.NullConstant()
-
-    if len(name) < 2:
-        name = (ctx.options.search_path[0], name[0])
-
-    namespace, rel_name = name
-    assert isinstance(namespace, str)
-    assert isinstance(rel_name, str)
-
-    # A bit hacky to parse SQL here, but I don't want to construct pgast
-    [stmt] = pgparser.parse(
-        f'''
-        SELECT pc.oid
-        FROM {V('edgedbsql')}.pg_class pc
-        JOIN {V('edgedbsql')}.pg_namespace pn ON pn.oid = pc.relnamespace
-        WHERE {ql(namespace)} = pn.nspname AND pc.relname = {ql(rel_name)}
-        '''
-    )
-    assert isinstance(stmt, pgast.SelectStmt)
-    return pgast.SubLink(operator=None, expr=stmt)
+    elif isinstance(expr, pgast.StringConstant):
+        return pgast.FuncCall(
+            name=(V('edgedbsql'), "to_regclass"),
+            args=[expr],
+        )
+    elif isinstance(expr, pgast.NumericConstant):
+        return pgast.TypeCast(
+            arg=expr,
+            type_name=pgast.TypeName(name=('pg_catalog', 'regclass')),
+        )
+    else:
+        return pgast.FuncCall(
+            name=(V('edgedbsql'), "to_regclass"), args=[expr]
+        )
 
 
 def eval_current_schemas(
     expr: pgast.FuncCall, ctx: Context
 ) -> Optional[pgast.BaseExpr]:
-    args = eval_list(expr.args, ctx=ctx)
-    if not args:
-        return None
-
-    if isinstance(args[0], pgast.BooleanConstant):
-        include_implicit = args[0].val
-    else:
-        return None
+    include_implicit = require_bool_param(expr, ctx)
 
     res = []
-
     if include_implicit:
         # if any temporary object has been created in current session,
         # here we should also append res.append('pg_temp_xxx') were xxx is
@@ -582,3 +543,15 @@ def eval_SQLValueFunction(
 
     # this should never happen
     raise NotImplementedError()
+
+
+@eval.register
+def eval_ParamRef(
+    _expr: pgast.ParamRef,
+    *,
+    ctx: Context,
+) -> Optional[pgast.BaseExpr]:
+    if len(ctx.options.normalized_params) > 0:
+        raise DisableNormalization()
+    else:
+        return None

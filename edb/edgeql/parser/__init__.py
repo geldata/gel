@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Callable, Optional, Tuple, Type, Union, Mapping, List
+from typing import Any, Callable, Optional, Mapping
 import pathlib
 
 from edb import errors
@@ -49,7 +49,7 @@ def append_module_aliases(tree, aliases):
 
 
 def parse_fragment(
-    source: Union[qltokenizer.Source, str],
+    source: qltokenizer.Source | str,
     filename: Optional[str] = None,
 ) -> qlast.Expr:
     res = parse(tokens.T_STARTFRAGMENT, source, filename=filename)
@@ -58,7 +58,7 @@ def parse_fragment(
 
 
 def parse_query(
-    source: Union[qltokenizer.Source, str],
+    source: qltokenizer.Source | str,
     module_aliases: Optional[Mapping[Optional[str], str]] = None,
 ) -> qlast.Query:
     """Parse some EdgeQL potentially adding some module aliases.
@@ -115,8 +115,8 @@ def parse_sdl(expr: str):
 
 
 def parse(
-    start_token: Type[tokens.Token],
-    source: Union[str, qltokenizer.Source],
+    start_token: type[tokens.Token],
+    source: str | qltokenizer.Source,
     filename: Optional[str] = None,
 ):
     if not SPEC_LOADED:
@@ -176,7 +176,7 @@ def parse(
 
 def _cst_to_ast(
     cst: rust_parser.CSTNode,
-    productions: List[Tuple[Type, Callable]],
+    productions: list[tuple[type, Callable]],
     source: qltokenizer.Source,
     filename: Optional[str],
 ) -> Any:
@@ -191,8 +191,8 @@ def _cst_to_ast(
     #   are are ready to be passed to the production method. The result is
     #   obviously pushed onto the result stack
 
-    stack: List[rust_parser.CSTNode | rust_parser.Production] = [cst]
-    result: List[Any] = []
+    stack: list[rust_parser.CSTNode | rust_parser.Production] = [cst]
+    result: list[Any] = []
 
     while len(stack) > 0:
         node = stack.pop()
@@ -203,7 +203,7 @@ def _cst_to_ast(
             if terminal := node.terminal:
                 # Terminal is simple: just convert to parsing.Token
                 span = parsing.Span(
-                    name=filename,
+                    filename=filename,
                     buffer=source.text(),
                     start=terminal.start,
                     end=terminal.end,

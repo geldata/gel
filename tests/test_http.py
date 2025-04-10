@@ -17,18 +17,35 @@
 #
 
 import asyncio
+import inspect
 import json
 import random
+import unittest
 
 from edb.server import http
-from edb.testbase import http as tb
-from edb.tools.test import async_timeout
+from edb.testbase import http as http_tb
 
 
-class HttpTest(tb.BaseHttpTest):
+async def async_timeout(coroutine, timeout=5):
+    return await asyncio.wait_for(coroutine, timeout=timeout)
+
+
+def run_async(coroutine, timeout=5):
+    with asyncio.Runner(debug=True) as runner:
+        runner.run(async_timeout(coroutine, timeout))
+
+
+class BaseHttpAsyncTest(unittest.TestCase):
+    def __getattribute__(self, name):
+        attr = super().__getattribute__(name)
+        if name.startswith("test_") and inspect.iscoroutinefunction(attr):
+            return lambda: run_async(attr())
+        return attr
+
+
+class HttpTest(BaseHttpAsyncTest):
     def setUp(self):
-        super().setUp()
-        self.mock_server = tb.MockHttpServer()
+        self.mock_server = http_tb.MockHttpServer()
         self.mock_server.start()
         self.base_url = self.mock_server.get_base_url().rstrip("/")
 
@@ -36,9 +53,7 @@ class HttpTest(tb.BaseHttpTest):
         if self.mock_server is not None:
             self.mock_server.stop()
         self.mock_server = None
-        super().tearDown()
 
-    @async_timeout(timeout=5)
     async def test_get(self):
         async with http.HttpClient(100) as client:
             example_request = (
@@ -63,7 +78,52 @@ class HttpTest(tb.BaseHttpTest):
             self.assertEqual(result.status_code, 200)
             self.assertEqual(result.json(), {"message": "Hello, world!"})
 
-    @async_timeout(timeout=5)
+    async def test_get_with_cache(self):
+        async with http.HttpClient(100) as client:
+            example_request = (
+                'GET',
+                self.base_url,
+                '/test-get-cache',
+            )
+            url = f"{example_request[1]}{example_request[2]}"
+
+            # Register handler that returns different data each time
+            counter = 0
+
+            def handler(_handler, _request):
+                nonlocal counter
+                counter += 1
+                return (
+                    json.dumps({"count": counter}),
+                    200,
+                    {
+                        "Content-Type": "application/json",
+                        "Cache-Control": "max-age=3600",
+                    },
+                )
+
+            self.mock_server.register_route_handler(*example_request)(handler)
+
+            # First request should get count=1
+            result = await client.get(url, cache=True)
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(result.json(), {"count": 1})
+
+            # Second request with cache should get same response
+            result = await client.get(url, cache=True)
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(result.json(), {"count": 1})
+
+            # Request without cache should get new response
+            result = await client.get(url, cache=False)
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(result.json(), {"count": 2})
+
+            # Re-using cache will get the old response
+            result = await client.get(url, cache=True)
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(result.json(), {"count": 1})
+
     async def test_post(self):
         async with http.HttpClient(100) as client:
             example_request = (
@@ -88,7 +148,6 @@ class HttpTest(tb.BaseHttpTest):
                 result.json(), {"message": f"Hello, world! {random_data}"}
             )
 
-    @async_timeout(timeout=5)
     async def test_post_with_headers(self):
         async with http.HttpClient(100) as client:
             example_request = (
@@ -116,13 +175,11 @@ class HttpTest(tb.BaseHttpTest):
             )
             self.assertEqual(result.headers["X-Test"], "test!")
 
-    @async_timeout(timeout=5)
     async def test_bad_url(self):
         async with http.HttpClient(100) as client:
             with self.assertRaisesRegex(Exception, "Scheme"):
                 await client.get("httpx://uh-oh")
 
-    @async_timeout(timeout=5)
     async def test_immediate_connection_drop(self):
         """Test handling of a connection that is dropped immediately by the
         server"""
@@ -150,7 +207,6 @@ class HttpTest(tb.BaseHttpTest):
             server.close()
             await server.wait_closed()
 
-    @async_timeout(timeout=5)
     async def test_streaming_get_with_no_sse(self):
         async with http.HttpClient(100) as client:
             example_request = (
@@ -170,8 +226,7 @@ class HttpTest(tb.BaseHttpTest):
             self.assertEqual(result.json(), "ok")
 
 
-class HttpSSETest(tb.BaseHttpTest):
-    @async_timeout(timeout=5)
+class HttpSSETest(BaseHttpAsyncTest):
     async def test_immediate_connection_drop_streaming(self):
         """Test handling of a connection that is dropped immediately by the
         server"""
@@ -199,7 +254,6 @@ class HttpSSETest(tb.BaseHttpTest):
             server.close()
             await server.wait_closed()
 
-    @async_timeout(timeout=5)
     async def test_sse_with_mock_server_client_close(self):
         """Since the regular mock server doesn't support SSE, we need to test
         with a real socket. We handle just enough HTTP to get the job done."""
@@ -276,7 +330,6 @@ class HttpSSETest(tb.BaseHttpTest):
 
         assert is_closed
 
-    @async_timeout(timeout=5)
     async def test_sse_with_mock_server_close(self):
         """Try to close the server-side stream and see if the client detects
         an end for the iterator. Note that this is technically not correct SSE:
@@ -343,7 +396,6 @@ class HttpSSETest(tb.BaseHttpTest):
                     assert events[1].data == 'Event 2'
                     assert events[2].data == 'Event 3'
 
-        client_future = asyncio.create_task(client_task())
         async with server:
             client_future = asyncio.create_task(client_task())
             await asyncio.wait_for(client_future, timeout=5.0)

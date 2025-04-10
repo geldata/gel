@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Dict, NamedTuple
+from typing import Any, NamedTuple
 
 import asyncio
 import collections
@@ -37,6 +37,7 @@ import time
 import immutables
 
 from edb.common import debug
+from edb.common import lru
 
 from edb.pgsql import params as pgparams
 
@@ -189,7 +190,7 @@ class AbstractPool:
         assert self._dbindex is not None
         return self._make_init_args(*self._dbindex.get_cached_compiler_args())
 
-    @functools.lru_cache(1)
+    @lru.lru_method_cache(1)
     def _make_init_args(self, dbs, global_schema_pickle, system_config):
         init_args = (
             dbs,
@@ -607,6 +608,10 @@ class AbstractPool:
         return await self._simple_call(
             'validate_schema_equivalence', *args, **kwargs)
 
+    async def compile_structured_config(self, *args, **kwargs):
+        return await self._simple_call(
+            'compile_structured_config', *args, **kwargs)
+
     def get_debug_info(self):
         return {}
 
@@ -621,7 +626,7 @@ class BaseLocalPool(
     _worker_class = Worker
     _worker_mod = "worker"
     _workers_queue: queue.WorkerQueue[Worker]
-    _workers: Dict[int, Worker]
+    _workers: dict[int, Worker]
 
     def __init__(
         self,
@@ -1099,7 +1104,7 @@ class RemotePool(AbstractPool):
             if worker.done():
                 (await worker).close()
 
-    @functools.lru_cache(1)
+    @lru.lru_method_cache(1)
     def _make_init_args(self, dbs, global_schema_pickle, system_config):
         init_args = (
             dbs,
@@ -1141,7 +1146,7 @@ class RemotePool(AbstractPool):
             if self._worker is not None:
                 self._worker.set_exception(ex)
                 self._worker = None
-        except BaseException as ex:  # noqa: B036
+        except BaseException as ex:
             transport.abort()
             if self._worker is not None:
                 if retry:
@@ -1319,7 +1324,7 @@ class MultiTenantWorker(Worker):
 class MultiTenantPool(FixedPool):
     _worker_class = MultiTenantWorker  # type: ignore
     _worker_mod = "multitenant_worker"
-    _workers: Dict[int, MultiTenantWorker]  # type: ignore
+    _workers: dict[int, MultiTenantWorker]  # type: ignore
 
     def __init__(self, *, cache_size, **kwargs):
         super().__init__(**kwargs)
@@ -1333,7 +1338,7 @@ class MultiTenantPool(FixedPool):
         for worker in self._workers.values():
             worker.invalidate(client_id)
 
-    @functools.cache
+    @lru.method_cache
     def _get_init_args(self):
         init_args = (
             self._backend_runtime_params,

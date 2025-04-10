@@ -20,11 +20,12 @@
 
 
 from __future__ import annotations
+import re
 from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
+    Hashable,
     Iterator,
     Mapping,
     Sequence,
@@ -47,7 +48,6 @@ import time
 import uuid
 
 import immutables
-from jwcrypto import jwk
 
 from edb import buildmeta
 from edb import errors
@@ -61,6 +61,7 @@ from edb.common.log import current_tenant
 from edb.schema import reflection as s_refl
 from edb.schema import schema as s_schema
 
+from edb.server import auth
 from edb.server import args as srvargs
 from edb.server import cache
 from edb.server import config
@@ -160,6 +161,7 @@ class BaseServer:
         default_auth_method: srvargs.ServerAuthMethods = (
             srvargs.DEFAULT_AUTH_METHODS),
         admin_ui: bool = False,
+        cors_always_allowed_origins: Optional[str] = None,
         disable_dynamic_system_config: bool = False,
         compiler_state: edbcompiler.CompilerState,
         use_monitor_fs: bool = False,
@@ -208,6 +210,7 @@ class BaseServer:
         # and there have been no new connections for n seconds
         self._auto_shutdown_after = auto_shutdown_after
         self._auto_shutdown_handler: Any = None
+        self._keepalive_tokens: set = set()
 
         self._echo_runtime_info = echo_runtime_info
         self._status_sinks = status_sinks
@@ -239,7 +242,7 @@ class BaseServer:
         self._sslctx: ssl.SSLContext | Any = None
         self._sslctx_pgext: ssl.SSLContext | Any = None
 
-        self._jws_key: jwk.JWK | None = None
+        self._jws_key: auth.JWKSet | None = None
         self._jws_keys_newly_generated = False
 
         self._default_auth_method_spec = default_auth_method
@@ -251,6 +254,15 @@ class BaseServer:
         self._idle_gc_handler = None
 
         self._admin_ui = admin_ui
+
+        self._cors_always_allowed_origins = [
+            re.compile(
+                '^' + origin
+                    .replace('.', '\\.')
+                    .replace('*', '.*') + '$'
+            ) if '*' in origin else origin
+            for origin in cors_always_allowed_origins.split(',')
+        ] if cors_always_allowed_origins else []
 
         self._file_watch_handles = []
         self._tls_certs_reload_retry_handle: Any | asyncio.TimerHandle = None
@@ -308,13 +320,11 @@ class BaseServer:
     def is_admin_ui_enabled(self):
         return self._admin_ui
 
+    def get_cors_always_allowed_origins(self):
+        return self._cors_always_allowed_origins
+
     def on_binary_client_created(self) -> str:
         self._binary_proto_id_counter += 1
-
-        if self._auto_shutdown_handler:
-            self._auto_shutdown_handler.cancel()
-            self._auto_shutdown_handler = None
-
         return str(self._binary_proto_id_counter)
 
     def on_binary_client_connected(self, conn):
@@ -348,9 +358,15 @@ class BaseServer:
         )
         self.maybe_auto_shutdown()
 
+    def maybe_delay_auto_shutdown(self):
+        if self._auto_shutdown_handler:
+            self._auto_shutdown_handler.cancel()
+            self._auto_shutdown_handler = None
+
     def maybe_auto_shutdown(self):
         if (
             not self._binary_conns
+            and not self._keepalive_tokens
             and self._auto_shutdown_after >= 0
             and self._auto_shutdown_handler is None
         ):
@@ -363,6 +379,14 @@ class BaseServer:
             event,
             len(self._binary_conns),
         )
+
+    def add_keepalive_token(self, token: Hashable) -> None:
+        self.maybe_delay_auto_shutdown()
+        self._keepalive_tokens.add(token)
+
+    def remove_keepalive_token(self, token: Hashable) -> None:
+        self._keepalive_tokens.discard(token)
+        self.maybe_auto_shutdown()
 
     def on_pgext_client_connected(self, conn):
         self._pgext_conns[conn.get_id()] = conn
@@ -669,13 +693,6 @@ class BaseServer:
         json_data = await syscon.sql_fetch_val(dbs_query)
         return json.loads(json_data)
 
-    async def get_patch_count(self, conn: pgcon.PGConnection) -> int:
-        """Get the number of applied patches."""
-        num_patches = await instdata.get_instdata(
-            conn, 'num_patches', 'json')
-        res: int = json.loads(num_patches) if num_patches else 0
-        return res
-
     async def _on_system_config_add(self, setting_name, value):
         # CONFIGURE INSTANCE INSERT ConfigObject;
         pass
@@ -714,13 +731,9 @@ class BaseServer:
         # CONFIGURE INSTANCE RESET setting_name;
         pass
 
-    async def _start_server(
-        self,
-        host: str,
-        port: int,
-        sock: Optional[socket.socket] = None,
-    ) -> Optional[asyncio.base_events.Server]:
-        proto_factory = lambda: protocol.HttpProtocol(
+    def _make_protocol(self):
+        self.maybe_delay_auto_shutdown()
+        return protocol.HttpProtocol(
             self,
             self._sslctx,
             self._sslctx_pgext,
@@ -728,13 +741,21 @@ class BaseServer:
             http_endpoint_security=self._http_endpoint_security,
         )
 
+    async def _start_server(
+        self,
+        host: str,
+        port: int,
+        sock: Optional[socket.socket] = None,
+    ) -> Optional[asyncio.base_events.Server]:
         try:
             kwargs: dict[str, Any]
             if sock is not None:
                 kwargs = {"sock": sock}
             else:
                 kwargs = {"host": host, "port": port}
-            return await self.__loop.create_server(proto_factory, **kwargs)
+            return await self.__loop.create_server(
+                self._make_protocol, **kwargs
+            )
         except Exception as e:
             logger.warning(
                 f"could not create listen socket for '{host}:{port}': {e}"
@@ -749,7 +770,17 @@ class BaseServer:
             self._runstate_dir, f'.s.GEL.admin.{port}')
         symlink = os.path.join(
             self._runstate_dir, f'.s.EDGEDB.admin.{port}')
-        if not os.path.exists(symlink):
+
+        exists = False
+        try:
+            mode = os.lstat(symlink).st_mode
+            if stat.S_ISSOCK(mode):
+                os.unlink(symlink)
+            else:
+                exists = True
+        except FileNotFoundError:
+            pass
+        if not exists:
             os.symlink(admin_unix_sock_path, symlink)
 
         assert len(admin_unix_sock_path) <= (
@@ -994,10 +1025,12 @@ class BaseServer:
         # TODO(fantix): include the monitor_fs() lines above
         pass
 
-    def load_jwcrypto(self, jws_key_file: pathlib.Path) -> None:
+    def load_jwcrypto(self, jws_key_file: pathlib.Path) -> auth.JWKSet:
         try:
-            self._jws_key = secretkey.load_secret_key(jws_key_file)
-        except secretkey.SecretKeyReadError as e:
+            jws_key = auth.load_secret_key(jws_key_file)
+            self._jws_key = jws_key
+            return jws_key
+        except auth.SecretKeyReadError as e:
             raise StartupError(e.args[0]) from e
 
     def init_jwcrypto(
@@ -1008,7 +1041,7 @@ class BaseServer:
         self.load_jwcrypto(jws_key_file)
         self._jws_keys_newly_generated = jws_keys_newly_generated
 
-    def get_jws_key(self) -> jwk.JWK | None:
+    def get_jws_key(self) -> auth.JWKSet | None:
         return self._jws_key
 
     async def _stop_servers(self, servers):
@@ -1240,7 +1273,7 @@ class BaseServer:
                 logger.info(
                     f'generating JOSE key pair in "{args.jws_key_file}"'
                 )
-                secretkey.generate_jwk(args.jws_key_file)
+                auth.generate_jwk(args.jws_key_file)
                 jws_keys_newly_generated = True
         return tls_cert_newly_generated, jws_keys_newly_generated
 
@@ -1274,7 +1307,6 @@ class Server(BaseServer):
         await self._load_instance_data()
         await self._maybe_patch()
         await self._tenant.init()
-        self._load_sidechannel_configs()
         await super().init()
 
     def get_default_tenant(self) -> edbtenant.Tenant:
@@ -1282,20 +1314,6 @@ class Server(BaseServer):
 
     def iter_tenants(self) -> Iterator[edbtenant.Tenant]:
         yield self._tenant
-
-    def _load_sidechannel_configs(self) -> None:
-        # TODO(fantix): Do something like this for multitenant
-        magic_smtp = os.getenv('EDGEDB_MAGIC_SMTP_CONFIG')
-        if magic_smtp:
-            email_type = self._config_settings['email_providers'].type
-            assert not isinstance(email_type, type)
-            configs = [
-                config.CompositeConfigType.from_json_value(
-                    entry, tspec=email_type, spec=self._config_settings
-                )
-                for entry in json.loads(magic_smtp)
-            ]
-            self._tenant.set_sidechannel_configs(configs)
 
     async def _get_patch_log(
         self, conn: pgcon.PGConnection, idx: int
@@ -1321,7 +1339,7 @@ class Server(BaseServer):
         self, conn: pgcon.PGConnection
     ) -> dict[int, bootstrap.PatchEntry]:
         """Prepare all the patches"""
-        num_patches = await self.get_patch_count(conn)
+        num_patches = await self._tenant.get_patch_count(conn)
 
         if num_patches < len(pg_patches.PATCHES):
             logger.info("preparing patches for database upgrade")
@@ -1348,7 +1366,7 @@ class Server(BaseServer):
                     conn, f'patch_log_{idx}', pickle.dumps(entry))
 
             patches[num] = entry
-            _, _, updates, _ = entry
+            _, _, updates = entry
             if 'std_and_reflection_schema' in updates:
                 self._std_schema, self._refl_schema = updates[
                     'std_and_reflection_schema']
@@ -1382,17 +1400,17 @@ class Server(BaseServer):
         sys: bool=False,
     ) -> None:
         """Apply any un-applied patches to the database."""
-        num_patches = await self.get_patch_count(conn)
-        for num, (sql_b, syssql, keys, repair) in patches.items():
+        num_patches = await self._tenant.get_patch_count(conn)
+        for num, (sql_b, syssql, keys) in patches.items():
             if num_patches <= num:
                 if sys:
                     sql_b += syssql
                 logger.info("applying patch %d to database '%s'", num, dbname)
                 sql = tuple(x.encode('utf-8') for x in sql_b)
 
-                # If we are doing a user_ext update, we need to
-                # actually run that against each user database.
-                if keys.get('is_user_ext_update'):
+                # For certain things, we need to actually run it
+                # against each user database.
+                if keys.get('is_user_update'):
                     from . import bootstrap
 
                     kind, patch = pg_patches.PATCHES[num]
@@ -1426,48 +1444,10 @@ class Server(BaseServer):
                         patch_info=patch_info,
                         user_schema=user_schema,
                         global_schema=global_schema,
+                        dbname=dbname,
                     )
 
                     sql += tuple(x.encode('utf-8') for x in entry[0])
-
-                # Only do repairs when they are the *last* pending
-                # repair in the patch queue. We make sure that every
-                # patch that changes the user schema is followed by a
-                # repair, so this allows us to only ever have to do
-                # repairs on up-to-date std schemas.
-                last_repair = repair and not any(
-                    patches[i][3] for i in range(num + 1, len(patches))
-                )
-                if last_repair:
-                    from . import bootstrap
-
-                    global_schema = await self.introspect_global_schema(conn)
-                    user_schema = await self._introspect_user_schema(
-                        conn, global_schema)
-                    config_json = await self.introspect_db_config(conn)
-                    db_config = self._parse_db_config(config_json, user_schema)
-                    try:
-                        logger.info("repairing database '%s'", dbname)
-                        rep_sql = bootstrap.prepare_repair_patch(
-                            self._std_schema,
-                            self._refl_schema,
-                            user_schema,
-                            global_schema,
-                            self._schema_class_layout,
-                            self._tenant.get_backend_runtime_params(),
-                            db_config,
-                        )
-                        sql += (rep_sql,)
-                    except errors.EdgeDBError as e:
-                        if isinstance(e, errors.InternalServerError):
-                            raise
-                        raise errors.SchemaError(
-                            f'Could not repair schema inconsistencies in '
-                            f'database "{dbname}". Probably the schema is '
-                            f'no longer valid due to a bug fix.\n'
-                            f'Downgrade to the last working version, fix '
-                            f'the schema issue, and try again.'
-                        ) from e
 
                 if sql:
                     await conn.sql_execute(sql)
@@ -1545,7 +1525,7 @@ class Server(BaseServer):
     async def _load_instance_data(self):
         logger.info("loading instance data")
         async with self._tenant.use_sys_pgcon() as syscon:
-            patch_count = await self.get_patch_count(syscon)
+            patch_count = await self._tenant.get_patch_count(syscon)
             version_key = pg_patches.get_version_key(patch_count)
 
             result = await instdata.get_instdata(
@@ -1793,9 +1773,10 @@ class Server(BaseServer):
         status["tenant_id"] = self._tenant.tenant_id
         return status
 
-    def load_jwcrypto(self, jws_key_file: pathlib.Path) -> None:
-        super().load_jwcrypto(jws_key_file)
-        self._tenant.load_jwcrypto()
+    def load_jwcrypto(self, jws_key_file: pathlib.Path) -> auth.JWKSet:
+        jws_key = super().load_jwcrypto(jws_key_file)
+        self._tenant.load_jwcrypto(jws_key)
+        return jws_key
 
     def request_shutdown(self):
         self._tenant.stop_accepting_connections()
@@ -1931,7 +1912,7 @@ async def _resolve_host(host: str) -> list[str] | Exception:
 
 async def _resolve_interfaces(
     hosts: Sequence[str],
-) -> Tuple[Sequence[str], bool, bool]:
+) -> tuple[Sequence[str], bool, bool]:
 
     async with asyncio.TaskGroup() as g:
         resolve_tasks = {

@@ -1,16 +1,13 @@
 use super::ConnectionSslRequirement;
 use crate::{
-    connection::ConnectionError,
+    connection::PGConnectionError,
     errors::{
         PgError, PgErrorConnectionException, PgErrorFeatureNotSupported,
         PgErrorInvalidAuthorizationSpecification, PgServerError, PgServerErrorField,
     },
-    protocol::{
-        match_message,
-        postgres::{data::*, *},
-        ParseError, StructBuffer,
-    },
+    protocol::postgres::{data::*, *},
 };
+use db_proto::{match_message, ParseError, StructBuffer};
 use gel_auth::{
     handshake::{ServerAuth, ServerAuthDrive, ServerAuthError, ServerAuthResponse},
     AuthType, CredentialData,
@@ -253,7 +250,7 @@ impl ServerState {
         &mut self,
         drive: ConnectionDrive,
         update: &mut impl ConnectionStateUpdate,
-    ) -> Result<(), ConnectionError> {
+    ) -> Result<(), PGConnectionError> {
         trace!("SERVER DRIVE: {:?} {:?}", self.state, drive);
         let res = match drive {
             ConnectionDrive::RawMessage(raw) => match self.state {

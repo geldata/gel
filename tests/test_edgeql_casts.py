@@ -49,6 +49,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
     If x can be losslessly cast into Y, then casting it back is also lossless:
         x = <X><Y>x
     '''
+
     # FIXME: a special schema should be used here since we need to
     # cover all known scalars and even some arrays and tuples.
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
@@ -542,7 +543,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # values.
         await self.assert_query_result(
             r'''
-                WITH x := {'true', 'false'}
+                FOR x in {'true', 'false'}
                 SELECT <str><bool>x = x;
             ''',
             [True, True],
@@ -550,7 +551,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                WITH x := {'True', 'False', 'TRUE', 'FALSE', '  TrUe   '}
+                FOR x in {'True', 'False', 'TRUE', 'FALSE', '  TrUe   '}
                 SELECT <str><bool>x = x;
             ''',
             [False, False, False, False, False],
@@ -558,7 +559,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                WITH x := {'True', 'False', 'TRUE', 'FALSE', 'TrUe'}
+                FOR x in {'True', 'False', 'TRUE', 'FALSE', 'TrUe'}
                 SELECT <str><bool>x = str_lower(x);
             ''',
             [True, True, True, True, True],
@@ -580,7 +581,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # str to json is always lossless
         await self.assert_query_result(
             r'''
-                WITH x := {'any', 'arbitrary', '♠gibberish♠'}
+                FOR x in {'any', 'arbitrary', '♠gibberish♠'}
                 SELECT <str><json>x = x;
             ''',
             [True, True, True],
@@ -590,7 +591,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # canonical uuid representation as a string is using lowercase
         await self.assert_query_result(
             r'''
-                WITH x := 'd4288330-eea3-11e8-bc5f-7faf132b1d84'
+                FOR x in 'd4288330-eea3-11e8-bc5f-7faf132b1d84'
                 SELECT <str><uuid>x = x;
             ''',
             [True],
@@ -599,7 +600,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # non-canonical
             r'''
-                WITH x := {
+                FOR x in {
                     'D4288330-EEA3-11E8-BC5F-7FAF132B1D84',
                     'D4288330-Eea3-11E8-Bc5F-7Faf132B1D84',
                     'D4288330-eea3-11e8-bc5f-7faf132b1d84',
@@ -611,7 +612,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                WITH x := {
+                FOR x in {
                     'D4288330-EEA3-11E8-BC5F-7FAF132B1D84',
                     'D4288330-Eea3-11E8-Bc5F-7Faf132B1D84',
                     'D4288330-eea3-11e8-bc5f-7faf132b1d84',
@@ -627,7 +628,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # in UTC time zone.
         await self.assert_query_result(
             r'''
-                WITH x := '2018-05-07T20:01:22.306916+00:00'
+                FOR x in '2018-05-07T20:01:22.306916+00:00'
                 SELECT <str><datetime>x = x;
             ''',
             [True],
@@ -636,7 +637,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # validating that these are all in fact the same datetime
             r'''
-                WITH x := {
+                FOR x in {
                     '2018-05-07T15:01:22.306916-05:00',
                     '2018-05-07T15:01:22.306916-05',
                     '2018-05-07T20:01:22.306916Z',
@@ -690,7 +691,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # in UTC time zone.
         await self.assert_query_result(
             r'''
-                WITH x := '2018-05-07T20:01:22.306916'
+                FOR x in '2018-05-07T20:01:22.306916'
                 SELECT <str><cal::local_datetime>x = x;
             ''',
             [True],
@@ -699,7 +700,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # validating that these are all in fact the same datetime
             r'''
-                WITH x := {
+                FOR x in {
                     # the '-' and ':' separators may be omitted
                     '20180507T200122.306916',
                     # acceptable RFC 3339
@@ -755,7 +756,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # 8601.
         await self.assert_query_result(
             r'''
-                WITH x := '2018-05-07'
+                FOR x in '2018-05-07'
                 SELECT <str><cal::local_date>x = x;
             ''',
             [True],
@@ -764,7 +765,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # validating that these are all in fact the same date
             r'''
-                WITH x := {
+                FOR x in {
                     # the '-' separators may be omitted
                     '20180507',
                 }
@@ -802,7 +803,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # 8601.
         await self.assert_query_result(
             r'''
-                WITH x := '20:01:22.306916'
+                FOR x in '20:01:22.306916'
                 SELECT <str><cal::local_time>x = x;
             ''',
             [True],
@@ -810,7 +811,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                WITH x := {
+                FOR x in {
                     '20:01',
                     '20:01:00',
                     # the ':' separators may be omitted
@@ -838,7 +839,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # Canonical duration
         await self.assert_query_result(
             r'''
-                WITH x := 'PT20H1M22.306916S'
+                FOR x in 'PT20H1M22.306916S'
                 SELECT <str><duration>x = x;
             ''',
             [True],
@@ -847,7 +848,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # non-canonical
             r'''
-                WITH x := {
+                FOR x in {
                     '20:01:22.306916',
                     '20h 1m 22.306916s',
                     '20 hours 1 minute 22.306916 seconds',
@@ -862,7 +863,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # validating that these are all in fact the same duration
             r'''
-                WITH x := {
+                FOR x in {
                     '20:01:22.306916',
                     '20h 1m 22.306916s',
                     '20 hours 1 minute 22.306916 seconds',
@@ -879,7 +880,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # there's no whitespace, which is trimmed
         await self.assert_query_result(
             r'''
-                WITH x := {'-20', '0', '7', '12345'}
+                FOR x in {'-20', '0', '7', '12345'}
                 SELECT <str><int16>x = x;
             ''',
             [True, True, True, True],
@@ -887,7 +888,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                WITH x := {'-20', '0', '7', '12345'}
+                FOR x in {'-20', '0', '7', '12345'}
                 SELECT <str><int32>x = x;
             ''',
             [True, True, True, True],
@@ -895,7 +896,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                WITH x := {'-20', '0', '7', '12345'}
+                FOR x in {'-20', '0', '7', '12345'}
                 SELECT <str><int64>x = x;
             ''',
             [True, True, True, True],
@@ -904,7 +905,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # with whitespace
             r'''
-                WITH x := {
+                FOR x in {
                     '       42',
                     '42     ',
                     '       42      ',
@@ -917,7 +918,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # validating that these are all in fact the same value
             r'''
-                WITH x := {
+                FOR x in {
                     '       42',
                     '42     ',
                     '       42      ',
@@ -934,7 +935,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # lossy.
         await self.assert_query_result(
             r'''
-                WITH x := {'-20', '0', '7.2'}
+                FOR x in {'-20', '0', '7.2'}
                 SELECT <str><float32>x = x;
             ''',
             [True, True, True],
@@ -942,7 +943,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                WITH x := {'-20', '0', '7.2'}
+                FOR x in {'-20', '0', '7.2'}
                 SELECT <str><float64>x = x;
             ''',
             [True, True, True],
@@ -951,7 +952,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # non-canonical
             r'''
-                WITH x := {
+                FOR x in {
                     '0.0000000001234',
                     '1234E-13',
                     '0.1234e-9',
@@ -963,7 +964,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                WITH x := {
+                FOR x in {
                     '0.0000000001234',
                     '1234E-13',
                     '0.1234e-9',
@@ -976,7 +977,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # validating that these are all in fact the same value
             r'''
-                WITH x := {
+                FOR x in {
                     '0.0000000001234',
                     '1234E-13',
                     '0.1234e-9',
@@ -991,7 +992,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # use of scientific notation.
         await self.assert_query_result(
             r'''
-                WITH x := {
+                FOR x in {
                     '-20', '0', '7.2', '0.0000000001234', '1234.00000001234'
                 }
                 SELECT <str><decimal>x = x;
@@ -1002,7 +1003,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # non-canonical
             r'''
-                WITH x := {
+                FOR x in {
                     '1234E-13',
                     '0.1234e-9',
                 }
@@ -1014,7 +1015,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # validating that these are all in fact the same date
             r'''
-                WITH x := {
+                FOR x in {
                     '1234E-13',
                     '0.1234e-9',
                 }
@@ -1156,7 +1157,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
                 # technically we're already casting a literal int64
                 # to int16 first
                 f'''
-                    WITH x := <int16>{{-32768, -32767, -100,
+                    FOR x in <int16>{{-32768, -32767, -100,
                                       0, 13, 32766, 32767}}
                     SELECT <int16><{numtype}>x = x;
                 ''',
@@ -1167,7 +1168,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
                 # technically we're already casting a literal int64
                 # to int32 first
                 f'''
-                    WITH x := <int32>{{-2147483648, -2147483647, -65536, -100,
+                    FOR x in <int32>{{-2147483648, -2147483647, -65536, -100,
                                       0, 13, 32768, 2147483646, 2147483647}}
                     SELECT <int32><{numtype}>x = x;
                 ''',
@@ -1176,7 +1177,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
             await self.assert_query_result(
                 f'''
-                    WITH x := <int64>{{
+                    FOR x in <int64>{{
                         -9223372036854775808,
                         -9223372036854775807,
                         -4294967296,
@@ -1203,7 +1204,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
             # technically we're already casting a literal int64 or
             # float64 to float32 first
             r'''
-                WITH x := <float32>{-3.31234e+38, -1.234e+12, -1.234e-12,
+                FOR x in <float32>{-3.31234e+38, -1.234e+12, -1.234e-12,
                                     -100, 0, 13, 1.234e-12, 1.234e+12, 3.4e+38}
                 SELECT <float32><decimal>x = x;
             ''',
@@ -1212,7 +1213,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                WITH x := <float64>{-1.61234e+308, -1.234e+42, -1.234e-42,
+                FOR x in <float64>{-1.61234e+308, -1.234e+42, -1.234e-42,
                                     -100, 0, 13, 1.234e-42, 1.234e+42,
                                     1.7e+308}
                 SELECT <float64><decimal>x = x;
@@ -1230,7 +1231,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # ints <= 2^24 can be represented exactly in a float32
             r'''
-            WITH x := <int32>{16777216, 16777215, 16777214,
+            FOR x in <int32>{16777216, 16777215, 16777214,
                               1677721, 167772, 16777}
             SELECT <int32><float32>x = x;
             ''',
@@ -1240,7 +1241,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # max int32 -100, -1000
             r'''
-            WITH x := <int32>{2147483548, 2147482648}
+            FOR x in <int32>{2147483548, 2147482648}
             SELECT <int32><float32>x = x;
             ''',
             [False, False],
@@ -1248,7 +1249,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-            WITH x := <int32>{2147483548, 2147482648}
+            FOR x in <int32>{2147483548, 2147482648}
             SELECT <int32><float32>x;
             ''',
             [2147483520, 2147482624],
@@ -1258,7 +1259,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # ints <= 2^24 can be represented exactly in a float32
             r'''
-                WITH x := <int32>{16777216, 16777215, 16777214,
+                FOR x in <int32>{16777216, 16777215, 16777214,
                                   1677721, 167772, 16777}
                 SELECT <int32><float64>x = x;
             ''',
@@ -1268,7 +1269,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # max int32 -1, -2, -3, -10, -100, -1000
             r'''
-            WITH x := <int32>{2147483647, 2147483646, 2147483645,
+            FOR x in <int32>{2147483647, 2147483646, 2147483645,
                               2147483638, 2147483548, 2147482648}
             SELECT <int32><float64>x = x;
             ''',
@@ -1282,7 +1283,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             r'''
                 # 2^31 -1, -2, -3, -10
-                WITH x := <int32>{2147483647, 2147483646, 2147483645,
+                FOR x in <int32>{2147483647, 2147483646, 2147483645,
                                   2147483638}
                 # 2147483647 is the max int32
                 SELECT x <= <int32>2147483647;
@@ -2218,7 +2219,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # in UTC time zone.
         await self.assert_query_result(
             r'''
-                WITH x := <json>'2018-05-07T20:01:22.306916+00:00'
+                FOR x in <json>'2018-05-07T20:01:22.306916+00:00'
                 SELECT <json><datetime>x = x;
             ''',
             [True],
@@ -2227,7 +2228,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # validating that these are all in fact the same datetime
             r'''
-                WITH x := <json>{
+                FOR x in <json>{
                     '2018-05-07T15:01:22.306916-05:00',
                     '2018-05-07T15:01:22.306916-05',
                     '2018-05-07T20:01:22.306916Z',
@@ -2288,7 +2289,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # in UTC time zone.
         await self.assert_query_result(
             r'''
-                WITH x := <json>'2018-05-07T20:01:22.306916'
+                FOR x in <json>'2018-05-07T20:01:22.306916'
                 SELECT <json><cal::local_datetime>x = x;
             ''',
             [True],
@@ -2297,7 +2298,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         await self.assert_query_result(
             # validating that these are all in fact the same datetime
             r'''
-                WITH x := <json>{
+                FOR x in <json>{
                     # the '-' and ':' separators may be omitted
                     '20180507T200122.306916',
                     # acceptable RFC 3339
@@ -2358,7 +2359,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # 8601.
         await self.assert_query_result(
             r'''
-                WITH x := <json>'2018-05-07'
+                FOR x in <json>'2018-05-07'
                 SELECT <json><cal::local_date>x = x;
             ''',
             [True],
@@ -2368,7 +2369,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
             # validating that these are all in fact the same date
             r'''
                 # the '-' separators may be omitted
-                WITH x := <json>'20180507'
+                FOR x in <json>'20180507'
                 SELECT
                     <cal::local_date>x = <cal::local_date><json>'2018-05-07';
             ''',
@@ -2409,7 +2410,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
         # 8601.
         await self.assert_query_result(
             r'''
-                WITH x := <json>'20:01:22.306916'
+                FOR x in <json>'20:01:22.306916'
                 SELECT <json><cal::local_time>x = x;
             ''',
             [True],
@@ -2417,7 +2418,7 @@ class TestEdgeQLCasts(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-                WITH x := <json>{
+                FOR x in <json>{
                     '20:01',
                     '20:01:00',
                     # the ':' separators may be omitted

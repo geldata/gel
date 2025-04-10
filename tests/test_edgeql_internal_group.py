@@ -303,7 +303,7 @@ class TestEdgeQLGroupInternal(tb.QueryTestCase):
         await self.assert_query_result(
             r"""
                 SELECT
-                    R := (
+                    R := (for User in User union (
                         name := User.name,
                         issues := array_agg(
                             (
@@ -320,7 +320,7 @@ class TestEdgeQLGroupInternal(tb.QueryTestCase):
                                 ORDER BY .status
                             )
                         )
-                    )
+                    ))
                 ORDER BY R.name;
             """,
             [
@@ -405,6 +405,7 @@ class TestEdgeQLGroupInternal(tb.QueryTestCase):
             ],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_igroup_returning_04(self):
         await self.assert_query_result(
             r'''
@@ -520,6 +521,7 @@ class TestEdgeQLGroupInternal(tb.QueryTestCase):
             ],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_igroup_returning_07(self):
         await self.assert_query_result(
             r'''
@@ -887,8 +889,9 @@ class TestEdgeQLGroupInternal(tb.QueryTestCase):
                 IN Issue
                 UNION (
                     # array_agg with ordering instead of sum
-                    numbers := array_agg(
-                        <int64>Issue.number ORDER BY Issue.number),
+                    numbers := array_agg((
+                        select
+                        _ := <int64>Issue.number ORDER BY _)),
                     status := Stat,
                     time_estimate := Est ?? 0
                 )
@@ -925,10 +928,10 @@ class TestEdgeQLGroupInternal(tb.QueryTestCase):
                 IN Issue
                 UNION (
                     # a couple of array_agg
-                    numbers := array_agg(
-                        <int64>Issue.number ORDER BY Issue.number),
-                    watchers := array_agg(
-                        <str>Issue.watchers.name ORDER BY Issue.watchers.name),
+                    numbers := array_agg((select
+                        _ := <int64>Issue.number ORDER BY _)),
+                    watchers := array_agg((select
+                        _ := Issue.watchers.name ORDER BY _)),
                     status := Stat,
                     time_estimate := Est ?? 0
                 )
@@ -1012,8 +1015,8 @@ class TestEdgeQLGroupInternal(tb.QueryTestCase):
                 BY Stat, X
                 IN Issue
                 UNION (
-                    numbers := array_agg(
-                        <int64>Issue.number ORDER BY Issue.number),
+                    numbers := array_agg((select
+                        _ := <int64>Issue.number ORDER BY _)),
                     watchers := count(DISTINCT Issue.watchers),
                     status := Stat,
                     cnt := count(DISTINCT Issue),

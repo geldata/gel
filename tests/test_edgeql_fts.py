@@ -674,20 +674,20 @@ class TestEdgeQLFTSQuery(tb.QueryTestCase):
         # Use a property to provide the search query
         await self.assert_query_result(
             r'''
-            with res := fts::search(
+            with res := (for Post in Post select fts::search(
                 Post,
                 Post.note,
                 language := 'eng',
                 weights := [0.5, 1.0],
-            )
-            select res.object {
+            ))
+            select (for res in res select res.object {
                 title,
                 body,
                 note,
                 score := res.score
-            }
-            filter res.score > 0
-            order by res.score desc
+            })
+            filter .score > 0
+            order by .score desc
             ''',
             [
                 {
@@ -965,17 +965,17 @@ class TestEdgeQLFTSQuery(tb.QueryTestCase):
         # Use a property to define the language.
         await self.assert_query_result(
             r'''
-            with res := fts::search(
+            with res := (for DynamicLang in DynamicLang select fts::search(
                 DynamicLang,
                 'clear pane',
                 language := <str>DynamicLang.lang,
-            )
-            select res.object {
+            ))
+            select (for res in res select res.object {
                 text,
                 score := res.score
-            }
-            filter res.score > 0
-            order by res.score desc
+            })
+            filter .score > 0
+            order by .score desc
             ''',
             [
                 {"text": "The window pane is clear", "score": 0.6079271},
@@ -985,17 +985,17 @@ class TestEdgeQLFTSQuery(tb.QueryTestCase):
 
         await self.assert_query_result(
             r'''
-            with res := fts::search(
+            with res := (for DynamicLang in DynamicLang select fts::search(
                 DynamicLang,
                 'pain gain',
                 language := <str>DynamicLang.lang,
-            )
-            select res.object {
+            ))
+            select (for res in res select res.object {
                 text,
                 score := res.score
-            }
-            filter res.score > 0
-            order by res.score desc
+            })
+            filter .score > 0
+            order by .score desc
             ''',
             [
                 {"text": "No pain no gain", "score": 0.6079271},
@@ -1182,21 +1182,21 @@ class TestEdgeQLFTSQuery(tb.QueryTestCase):
         # Use weights to change search priority: weights from property
         await self.assert_query_result(
             r'''
-            with res := fts::search(
+            with res := (for Post in Post select fts::search(
                 Post,
                 'random angry replying giraffes',
                 language := 'eng',
                 # Note that if the weight property is {}, the default weights
                 # will be used.
                 weights := [Post.weight_a, 0.7],
-            )
-            select res.object {
+            ))
+            select (for res in res select res.object {
                 title,
                 body,
                 score := res.score
-            }
-            filter res.score > 0
-            order by res.score desc
+            })
+            filter .score > 0
+            order by .score desc
             ''',
             [
                 {

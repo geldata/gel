@@ -130,8 +130,50 @@ jobs:
         path: shared-artifacts
         retention-days: 1
 
+  ui-test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    <<- restore_cache() >>
+
+    # Setup UI test dependencies
+
+    - uses: actions/checkout@v4
+      with:
+        repository: geldata/gel-ui
+        path: build/gel-ui
+        fetch-depth: 2
+
+    - name: Set up Node
+      uses: actions/setup-node@v3
+      with:
+        node-version: lts/*
+
+    - name: Set up chrome
+      uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce #v1.7.3
+      with:
+        chrome-version: stable
+
+    - name: Set up chromedriver
+      uses: nanasess/setup-chromedriver@e93e57b843c0c92788f22483f1a31af8ee48db25 #v2.3.0
+
+    - name: Install dev deps
+      working-directory: build/gel-ui/web
+      run: |
+        yarn
+
+    # Run the tests
+
+    - name: Run tests
+      working-directory: build/gel-ui/web
+      env:
+        __EDGEDB_DEVMODE: 1
+      run: |
+        yarn test
+
   test-conclusion:
-    needs: [cargo-test, python-test, python-test-list]
+    needs: [cargo-test, python-test, python-test-list, ui-test]
     runs-on: ubuntu-latest
     if: ${{ always() }}
     steps:

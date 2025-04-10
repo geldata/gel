@@ -20,7 +20,7 @@
 from __future__ import annotations
 
 import textwrap
-from typing import Optional, Tuple, Sequence, List, cast
+from typing import Optional, Sequence, cast
 
 from ..common import qname as qn
 from ..common import quote_literal as ql
@@ -29,21 +29,21 @@ from ..common import quote_type as qt
 from . import base
 from . import ddl
 
-FunctionArgType = str | Tuple[str, ...]
-FunctionArgTyped = Tuple[Optional[str], FunctionArgType]
-FunctionArgDefaulted = Tuple[Optional[str], FunctionArgType, str]
+FunctionArgType = str | tuple[str, ...]
+FunctionArgTyped = tuple[Optional[str], FunctionArgType]
+FunctionArgDefaulted = tuple[Optional[str], FunctionArgType, str]
 FunctionArg = FunctionArgTyped | FunctionArgDefaulted
 
-NormalizedFunctionArg = Tuple[Optional[str], Tuple[str, ...], Optional[str]]
+NormalizedFunctionArg = tuple[Optional[str], tuple[str, ...], Optional[str]]
 
 
 class Function(base.DBObject):
     def __init__(
         self,
-        name: Tuple[str, ...],
+        name: tuple[str, ...],
         *,
         args: Optional[Sequence[FunctionArg]] = None,
-        returns: str | Tuple[str, ...],
+        returns: str | tuple[str, ...],
         text: str,
         volatility: str = "volatile",
         language: str = "sql",
@@ -77,7 +77,7 @@ class FunctionExists(base.Condition):
         self.args = FunctionOperation.normalize_args(args)
 
     def code(self) -> str:
-        targs = [f"{ql('.'.join(a))}::regtype::oid" for _, a, _ in self.args]
+        targs = [f"{ql(qt(a))}::regtype::oid" for _, a, _ in self.args]
         args = f"ARRAY[{','.join(targs)}]"
 
         return textwrap.dedent(f'''\
@@ -190,15 +190,14 @@ class CreateFunction(ddl.DDLOperation, FunctionOperation):
 class DropFunction(ddl.DDLOperation, FunctionOperation):
     def __init__(
         self,
-        name: Tuple[str, ...],
+        name: tuple[str, ...],
         args: Sequence[FunctionArg],
         *,
         if_exists: bool = False,
         has_variadic: bool = False,
-        conditions: Optional[List[str | base.Condition]] = None,
-        neg_conditions: Optional[List[str | base.Condition]] = None,
+        conditions: Optional[list[str | base.Condition]] = None,
+        neg_conditions: Optional[list[str | base.Condition]] = None,
     ):
-        # breakpoint()
         self.conditional = if_exists
         super().__init__(conditions=conditions, neg_conditions=neg_conditions)
         self.name = name

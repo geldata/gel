@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from edb.tools.pygments.edgeql import EdgeQLLexer
 
@@ -36,7 +36,7 @@ class CLISynopsisDirective(shared.CodeBlock):
     has_content = True
     optional_arguments = 0
     required_arguments = 0
-    option_spec: Dict[str, Any] = {
+    option_spec: dict[str, Any] = {
         'version-lt': d_directives.unchanged_required
     }
 

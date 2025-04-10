@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Mapping, Dict, TYPE_CHECKING
+from typing import Any, Optional, Mapping, TYPE_CHECKING
 
 import asyncio
 import json
@@ -30,8 +30,6 @@ import sys
 import tempfile
 import time
 
-from jwcrypto import jwk
-
 from edb import buildmeta
 from edb.common import devmode
 from edb.edgeql import quote
@@ -39,6 +37,7 @@ from edb.edgeql import quote
 from edb.server import args as edgedb_args
 from edb.server import defines as edgedb_defines
 from edb.server import pgconnparams
+from edb.server import auth
 
 from . import pgcluster
 
@@ -173,7 +172,7 @@ class BaseCluster:
         else:
             return 'running' if db_exists else 'not-initialized,running'
 
-    def get_connect_args(self) -> Dict[str, Any]:
+    def get_connect_args(self) -> dict[str, Any]:
         return {
             'host': 'localhost',
             'port': self._effective_port,
@@ -215,7 +214,7 @@ class BaseCluster:
             status_r, status_w = socket.socketpair()
             extra_args.append(f'--emit-server-status=fd://{status_w.fileno()}')
 
-        env: Optional[Dict[str, str]]
+        env: Optional[dict[str, str]]
         if self._env:
             env = os.environ.copy()
             env.update(self._env)
@@ -249,7 +248,7 @@ class BaseCluster:
             self._pg_cluster.destroy()
 
     def _init(self) -> None:
-        env: Optional[Dict[str, str]]
+        env: Optional[dict[str, str]]
         if self._env:
             env = os.environ.copy()
             env.update(self._env)
@@ -283,7 +282,7 @@ class BaseCluster:
 
         async def _read_server_status(
             stream: asyncio.StreamReader,
-        ) -> Dict[str, Any]:
+        ) -> dict[str, Any]:
             while True:
                 line = await stream.readline()
                 if not line:
@@ -324,7 +323,11 @@ class BaseCluster:
             started = time.monotonic()
             await test()
             left -= (time.monotonic() - started)
-        if res := self._admin_query("SELECT ();", f"{max(1, int(left))}s"):
+        if res := self._admin_query(
+            "SELECT ();",
+            f"{max(1, int(left))}s",
+            check=False,
+        ):
             raise ClusterError(
                 f'could not connect to edgedb-server '
                 f'within {timeout} seconds (exit code = {res})') from None
@@ -333,9 +336,10 @@ class BaseCluster:
         self,
         query: str,
         wait_until_available: str = "0s",
+        check: bool=True,
     ) -> int:
         args = [
-            "edgedb",
+            "gel",
             "query",
             "--unix-path",
             str(os.path.abspath(self._runstate_dir)),
@@ -350,12 +354,13 @@ class BaseCluster:
             wait_until_available,
             query,
         ]
-        res = subprocess.call(
+        res = subprocess.run(
             args=args,
-            stdout=subprocess.DEVNULL,
+            check=check,
+            stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
-        return res
+        return res.returncode
 
     async def set_test_config(self) -> None:
         self._admin_query(f'''
@@ -422,7 +427,7 @@ class Cluster(BaseCluster):
         self._edgedb_cmd.extend(['-D', str(self._data_dir)])
         self._pg_connect_args['user'] = pg_superuser
         self._pg_connect_args['database'] = 'template1'
-        self._jws_key: Optional[jwk.JWK] = None
+        self._jws_key: Optional[auth.JWKSet] = None
 
     async def _new_pg_cluster(self) -> pgcluster.Cluster:
         return await pgcluster.get_local_pg_cluster(
@@ -498,7 +503,7 @@ class RunningCluster(BaseCluster):
     def ensure_initialized(self) -> bool:
         return False
 
-    def get_connect_args(self) -> Dict[str, Any]:
+    def get_connect_args(self) -> dict[str, Any]:
         return dict(self.conn_args)
 
     async def get_status(self) -> str:

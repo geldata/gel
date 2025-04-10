@@ -24,10 +24,8 @@ import json
 from typing import (
     Any,
     Callable,
-    Dict,
     Optional,
     TypeVar,
-    Union,
     Iterable,
     Mapping,
     Collection,
@@ -98,6 +96,9 @@ def coerce_single_value(setting: spec.Setting, value: Any) -> Any:
     elif (isinstance(value, (str, int)) and
           _issubclass(setting.type, statypes.ConfigMemory)):
         return statypes.ConfigMemory(value)
+    elif (isinstance(value, str) and
+          _issubclass(setting.type, statypes.EnumScalarType)):
+        return setting.type(value)
     else:
         raise errors.ConfigurationError(
             f'invalid value type for the {setting.name!r} setting')
@@ -163,7 +164,7 @@ class Operation(NamedTuple):
     opcode: OpCode
     scope: qltypes.ConfigScope
     setting_name: str
-    value: Union[str, int, bool, Collection[Union[str, int, bool, None]], None]
+    value: str | int | bool | Collection[str | int | bool | None] | None
 
     def get_setting(self, spec: spec.Spec) -> spec.Setting:
         try:
@@ -229,7 +230,13 @@ class Operation(NamedTuple):
             # the value has explicitly been set to {}.
             return b[4:] if b[:4] != b'\xff\xff\xff\xff' else None
 
-    def apply(self, spec: spec.Spec, storage: SettingsMap) -> SettingsMap:
+    def apply(
+        self,
+        spec: spec.Spec,
+        storage: SettingsMap,
+        *,
+        source: str | None = None,
+    ) -> SettingsMap:
 
         allow_missing = (
             self.opcode is OpCode.CONFIG_REM
@@ -245,7 +252,7 @@ class Operation(NamedTuple):
             value = self.coerce_global_value(allow_missing=allow_missing)
 
         if self.opcode is OpCode.CONFIG_SET:
-            storage = self._set_value(storage, value)
+            storage = self._set_value(storage, value, source=source)
 
         elif self.opcode is OpCode.CONFIG_RESET:
             try:
@@ -269,7 +276,7 @@ class Operation(NamedTuple):
 
             new_value = _check_object_set_uniqueness(
                 setting, list(exist_value) + [value])
-            storage = self._set_value(storage, new_value)
+            storage = self._set_value(storage, new_value, source=source)
 
         elif self.opcode is OpCode.CONFIG_REM:
             assert setting
@@ -285,7 +292,7 @@ class Operation(NamedTuple):
             else:
                 exist_value = setting.default
             new_value = exist_value - {value}
-            storage = self._set_value(storage, new_value)
+            storage = self._set_value(storage, new_value, source=source)
 
         return storage
 
@@ -293,18 +300,21 @@ class Operation(NamedTuple):
         self,
         storage: SettingsMap,
         value: Any,
+        *,
+        source: str | None = None,
     ) -> SettingsMap:
 
-        if self.scope is qltypes.ConfigScope.INSTANCE:
-            source = 'system override'
-        elif self.scope is qltypes.ConfigScope.DATABASE:
-            source = 'database'
-        elif self.scope is qltypes.ConfigScope.SESSION:
-            source = 'session'
-        elif self.scope is qltypes.ConfigScope.GLOBAL:
-            source = 'global'
-        else:
-            raise AssertionError(f'unexpected config scope: {self.scope}')
+        if source is None:
+            if self.scope is qltypes.ConfigScope.INSTANCE:
+                source = 'system override'
+            elif self.scope is qltypes.ConfigScope.DATABASE:
+                source = 'database'
+            elif self.scope is qltypes.ConfigScope.SESSION:
+                source = 'session'
+            elif self.scope is qltypes.ConfigScope.GLOBAL:
+                source = 'global'
+            else:
+                raise AssertionError(f'unexpected config scope: {self.scope}')
 
         return set_value(
             storage,
@@ -343,6 +353,8 @@ def spec_to_json(spec: spec.Spec):
             typeid = s_obj.get_known_type_id('std::duration')
         elif _issubclass(setting.type, statypes.ConfigMemory):
             typeid = s_obj.get_known_type_id('cfg::memory')
+        elif _issubclass(setting.type, statypes.EnumScalarType):
+            typeid = setting.type.get_edgeql_typeid()
         elif isinstance(setting.type, types.ConfigTypeSpec):
             typeid = types.CompositeConfigType.get_edgeql_typeid()
         else:
@@ -411,6 +423,8 @@ def value_from_json_value(spec: spec.Spec, setting: spec.Setting, value: Any):
             return statypes.Duration.from_iso8601(value)
         elif _issubclass(setting.type, statypes.ConfigMemory):
             return statypes.ConfigMemory(value)
+        elif _issubclass(setting.type, statypes.EnumScalarType):
+            return setting.type(value)
         else:
             return value
 
@@ -434,7 +448,7 @@ def to_json_obj(
     *,
     setting_filter: Optional[Callable[[SettingValue], bool]] = None,
     include_source: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     dct = {}
     for name, value in storage.items():
         if setting_filter is None or setting_filter(value):

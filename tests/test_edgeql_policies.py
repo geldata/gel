@@ -28,8 +28,6 @@ from edb.testbase import server as tb
 class TestEdgeQLPolicies(tb.QueryTestCase):
     '''Tests for policies.'''
 
-    NO_FACTOR = True
-
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 
@@ -920,10 +918,10 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             alter type Issue {
                 create access policy foo_1 deny all using (
                     not exists (select .watchers { foo := .todo }
-                                filter .foo.name = "x"));
+                                filter "x" in .foo.name));
                 create access policy foo_2 deny all using (
                     not exists (select .watchers { todo }
-                                filter .todo.name = "x"));
+                                filter "x" in .todo.name));
              };
         ''')
 
@@ -1352,3 +1350,29 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             ''',
             [{"s": [], "foo": None}]
         )
+
+    async def test_edgeql_policies_diamond_01(self):
+        # Verify that selecting a type with overlapping children and
+        # access policies in at least one child works
+
+        await self.con.execute('''
+            create type Base;
+            create type A extending Base;
+            create type B extending Base;
+            create type AB extending A, B;
+            create type T extending Base {
+                create access policy ok allow all;
+            };
+            insert T;
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select Base
+            ''',
+            [{}]
+        )
+
+        await self.con.execute('''
+            drop type T
+        ''')

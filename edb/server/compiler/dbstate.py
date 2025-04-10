@@ -21,10 +21,7 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
     Iterator,
-    Dict,
-    List,
     NamedTuple,
     Self,
     cast,
@@ -83,10 +80,10 @@ class BaseQuery:
     sql: bytes
     is_transactional: bool = True
     has_dml: bool = False
-    cache_sql: Optional[Tuple[bytes, bytes]] = dataclasses.field(
+    cache_sql: Optional[tuple[bytes, bytes]] = dataclasses.field(
         kw_only=True, default=None
     )  # (persist, evict)
-    cache_func_call: Optional[Tuple[bytes, bytes]] = dataclasses.field(
+    cache_func_call: Optional[tuple[bytes, bytes]] = dataclasses.field(
         kw_only=True, default=None
     )
     warnings: tuple[errors.EdgeDBError, ...] = dataclasses.field(
@@ -100,6 +97,21 @@ class NullQuery(BaseQuery):
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
+class ServerParamConversion:
+    param_name: str
+    conversion_name: str
+    additional_info: tuple[str, ...]
+
+    # Explicitly store the value if it is a literal which was turned into a
+    # parameter during normalization.
+    #
+    # Normalized constants are passed to the backend as a blob of bytes.
+    # Since no encode/decode information is associated with this blob, the
+    # value to be converted needs to be passed in separately.
+    source_value: Optional[Any] = None
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class Query(BaseQuery):
     sql_hash: bytes
 
@@ -109,9 +121,11 @@ class Query(BaseQuery):
     out_type_id: bytes
     in_type_data: bytes
     in_type_id: bytes
-    in_type_args: Optional[List[Param]] = None
+    in_type_args: Optional[list[Param]] = None
 
     globals: Optional[list[tuple[str, bool]]] = None
+
+    server_param_conversions: Optional[list[ServerParamConversion]] = None
 
     cacheable: bool = True
     is_explain: bool = False
@@ -122,7 +136,7 @@ class Query(BaseQuery):
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SimpleQuery(BaseQuery):
     # XXX: Temporary hack, since SimpleQuery will die
-    in_type_args: Optional[List[Param]] = None
+    in_type_args: Optional[list[Param]] = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -138,7 +152,7 @@ class SessionStateQuery(BaseQuery):
 
     in_type_data: Optional[bytes] = None
     in_type_id: Optional[bytes] = None
-    in_type_args: Optional[List[Param]] = None
+    in_type_args: Optional[list[Param]] = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -155,7 +169,7 @@ class DDLQuery(BaseQuery):
     create_db_mode: Optional[qlast.BranchType] = None
     db_op_trailer: tuple[bytes, ...] = ()
     ddl_stmt_id: Optional[str] = None
-    config_ops: List[config.Operation] = dataclasses.field(default_factory=list)
+    config_ops: list[config.Operation] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -217,8 +231,8 @@ class QueryUnit:
     status: bytes
 
     cache_key: Optional[uuid.UUID] = None
-    cache_sql: Optional[Tuple[bytes, bytes]] = None  # (persist, evict)
-    cache_func_call: Optional[Tuple[bytes, bytes]] = None  # (sql, hash)
+    cache_sql: Optional[tuple[bytes, bytes]] = None  # (persist, evict)
+    cache_func_call: Optional[tuple[bytes, bytes]] = None  # (sql, hash)
 
     # Output format of this query unit
     output_format: enums.OutputFormat = enums.OutputFormat.NONE
@@ -295,9 +309,11 @@ class QueryUnit:
     out_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
     in_type_data: bytes = sertypes.NULL_TYPE_DESC
     in_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
-    in_type_args: Optional[List[Param]] = None
+    in_type_args: Optional[list[Param]] = None
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
+
+    server_param_conversions: Optional[list[ServerParamConversion]] = None
 
     warnings: tuple[errors.EdgeDBError, ...] = ()
 
@@ -317,7 +333,7 @@ class QueryUnit:
     # Set only when this unit contains a CONFIGURE command which
     # alters a system configuration setting.
     is_system_config: bool = False
-    config_ops: List[config.Operation] = dataclasses.field(default_factory=list)
+    config_ops: list[config.Operation] = dataclasses.field(default_factory=list)
     modaliases: Optional[immutables.Map[Optional[str], str]] = None
 
     # If present, represents the future schema state after
@@ -344,6 +360,12 @@ class QueryUnit:
     query_asts: Any = None
     run_and_rollback: bool = False
     append_tx_op: bool = False
+
+    # Translation source map.
+    source_map: Optional[pgcodegen.SourceMap] = None
+    # For SQL queries, the length of the query prefix applied
+    # after translation.
+    sql_prefix_len: int = 0
 
     @property
     def has_ddl(self) -> bool:
@@ -400,25 +422,30 @@ class QueryUnitGroup:
     out_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
     in_type_data: bytes = sertypes.NULL_TYPE_DESC
     in_type_id: bytes = sertypes.NULL_TYPE_ID.bytes
-    in_type_args: Optional[List[Param]] = None
+    in_type_args: Optional[list[Param]] = None
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
+
+    server_param_conversions: Optional[list[ServerParamConversion]] = None
+    unit_converted_param_indexes: Optional[dict[int, list[int]]] = None
 
     warnings: Optional[list[errors.EdgeDBError]] = None
 
     # Cacheable QueryUnit is serialized in the compiler, so that the I/O server
     # doesn't need to serialize it again for persistence.
-    _units: List[QueryUnit | bytes] = dataclasses.field(default_factory=list)
+    _units: list[QueryUnit | bytes] = dataclasses.field(default_factory=list)
     # This is a I/O server-only cache for unpacked QueryUnits
-    _unpacked_units: List[QueryUnit] | None = None
+    _unpacked_units: list[QueryUnit] | None = None
 
     state_serializer: Optional[sertypes.StateSerializer] = None
 
     cache_state: int = 0
     tx_seq_id: int = 0
 
+    force_non_normalized: bool = False
+
     @property
-    def units(self) -> List[QueryUnit]:
+    def units(self) -> list[QueryUnit]:
         if self._unpacked_units is None:
             self._unpacked_units = [
                 QueryUnit.deserialize(unit) if isinstance(unit, bytes) else unit
@@ -465,6 +492,32 @@ class QueryUnitGroup:
             if self.globals is None:
                 self.globals = []
             self.globals.extend(query_unit.globals)
+        if query_unit.server_param_conversions is not None:
+            if self.server_param_conversions is None:
+                self.server_param_conversions = []
+            if self.unit_converted_param_indexes is None:
+                self.unit_converted_param_indexes = {}
+
+            # De-duplicate param conversions and store information about which
+            # units access which converted params.
+            # If two units request the same conversion on the same parameter,
+            # we should assume the conversion is stable and only do it once.
+            unit_index = len(self._units)
+            converted_param_indexes: list[int] = []
+            for spc in query_unit.server_param_conversions:
+                if spc in self.server_param_conversions:
+                    converted_param_indexes.append(
+                        self.server_param_conversions.index(spc)
+                    )
+                else:
+                    converted_param_indexes.append(
+                        len(self.server_param_conversions)
+                    )
+                    self.server_param_conversions.append(spc)
+            self.unit_converted_param_indexes[unit_index] = (
+                converted_param_indexes
+            )
+
         if query_unit.warnings is not None:
             if self.warnings is None:
                 self.warnings = []
@@ -493,7 +546,7 @@ class PrepareData(PreparedStmtOpData):
 
     query: str
     """Translated query string"""
-    translation_data: Optional[pgcodegen.TranslationData] = None
+    source_map: Optional[pgcodegen.SourceMap] = None
     """Translation source map"""
 
 
@@ -517,18 +570,18 @@ class SQLQueryUnit:
     """Translated query text."""
 
     prefix_len: int = 0
-    translation_data: Optional[pgcodegen.TranslationData] = None
+    source_map: Optional[pgcodegen.SourceMap] = None
     """Translation source map."""
 
     eql_format_query: Optional[str] = dataclasses.field(
         repr=False, default=None)
     """Translated query text returning data in single-column format."""
 
-    eql_format_translation_data: Optional[pgcodegen.TranslationData] = None
-    """Translation source map for single-column format query."""
-
     orig_query: str = dataclasses.field(repr=False)
     """Original query text before translation."""
+
+    # True if it is safe to cache this unit.
+    cacheable: bool = True
 
     cardinality: enums.Cardinality = enums.Cardinality.NO_RESULT
 
@@ -546,7 +599,6 @@ class SQLQueryUnit:
     deallocate: Optional[DeallocateData] = None
 
     set_vars: Optional[dict[Optional[str], Optional[SQLSetting]]] = None
-    get_var: Optional[str] = None
     is_local: bool = False
 
     stmt_name: bytes = b""
@@ -561,7 +613,7 @@ class SQLQueryUnit:
     This is useful, for example, for setting the tag of DML statements,
     which return the number of modified rows."""
 
-    params: Optional[List[SQLParam]] = None
+    params: Optional[list[SQLParam]] = None
 
 
 class CommandCompleteTag:
@@ -595,7 +647,9 @@ class TagUnpackRow(CommandCompleteTag):
 class SQLParam:
     # Internal query param. Represents params in the compiled SQL, so the params
     # that are sent to PostgreSQL.
-    pass
+
+    # True for params that are actually used in the compiled query.
+    used: bool = False
 
 
 @dataclasses.dataclass(kw_only=True, eq=False, slots=True, repr=False)
@@ -608,12 +662,20 @@ class SQLParamExternal(SQLParam):
 
 
 @dataclasses.dataclass(kw_only=True, eq=False, slots=True, repr=False)
+class SQLParamExtractedConst(SQLParam):
+    # An internal query param whose value is a constant that this param has
+    # replaced during query normalization.
+
+    type_oid: int
+
+
+@dataclasses.dataclass(kw_only=True, eq=False, slots=True, repr=False)
 class SQLParamGlobal(SQLParam):
     # An internal query param whose value is provided by a global.
 
     global_name: s_name.QualName
 
-    pg_type: Tuple[str, ...]
+    pg_type: tuple[str, ...]
 
 
 @dataclasses.dataclass
@@ -739,7 +801,7 @@ class SQLTransactionState:
 
 
 class ProposedMigrationStep(NamedTuple):
-    statements: Tuple[str, ...]
+    statements: tuple[str, ...]
     confidence: float
     prompt: str
     prompt_id: str
@@ -749,7 +811,7 @@ class ProposedMigrationStep(NamedTuple):
     # what to prohibit when something is rejected.
     operation_key: s_delta.CommandKey
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return {
             "statements": [{"text": stmt} for stmt in self.statements],
             "confidence": self.confidence,
@@ -766,14 +828,14 @@ class MigrationState(NamedTuple):
     initial_savepoint: Optional[str]
     target_schema: s_schema.Schema
     guidance: s_obj.DeltaGuidance
-    accepted_cmds: Tuple[qlast.Base, ...]
-    last_proposed: Optional[Tuple[ProposedMigrationStep, ...]]
+    accepted_cmds: tuple[qlast.Base, ...]
+    last_proposed: Optional[tuple[ProposedMigrationStep, ...]]
 
 
 class MigrationRewriteState(NamedTuple):
     initial_savepoint: Optional[str]
     target_schema: s_schema.Schema
-    accepted_migrations: Tuple[qlast.CreateMigration, ...]
+    accepted_migrations: tuple[qlast.CreateMigration, ...]
 
 
 class TransactionState(NamedTuple):
@@ -785,7 +847,7 @@ class TransactionState(NamedTuple):
     session_config: immutables.Map[str, config.SettingValue]
     database_config: immutables.Map[str, config.SettingValue]
     system_config: immutables.Map[str, config.SettingValue]
-    cached_reflection: immutables.Map[str, Tuple[str, ...]]
+    cached_reflection: immutables.Map[str, tuple[str, ...]]
     tx: Transaction
     migration_state: Optional[MigrationState] = None
     migration_rewrite_state: Optional[MigrationRewriteState] = None
@@ -799,7 +861,7 @@ class TransactionState(NamedTuple):
 
 
 class Transaction:
-    _savepoints: Dict[int, TransactionState]
+    _savepoints: dict[int, TransactionState]
     _constate: CompilerConnectionState
 
     def __init__(
@@ -812,7 +874,7 @@ class Transaction:
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
-        cached_reflection: immutables.Map[str, Tuple[str, ...]],
+        cached_reflection: immutables.Map[str, tuple[str, ...]],
         implicit: bool = True,
     ) -> None:
         assert not isinstance(user_schema, s_schema.ChainedSchema)
@@ -975,13 +1037,13 @@ class Transaction:
 
     def get_cached_reflection_if_updated(
         self,
-    ) -> Optional[immutables.Map[str, Tuple[str, ...]]]:
+    ) -> Optional[immutables.Map[str, tuple[str, ...]]]:
         if self._current.cached_reflection == self._state0.cached_reflection:
             return None
         else:
             return self._current.cached_reflection
 
-    def get_cached_reflection(self) -> immutables.Map[str, Tuple[str, ...]]:
+    def get_cached_reflection(self) -> immutables.Map[str, tuple[str, ...]]:
         return self._current.cached_reflection
 
     def get_migration_state(self) -> Optional[MigrationState]:
@@ -1018,7 +1080,7 @@ class Transaction:
 
     def update_cached_reflection(
         self,
-        new: immutables.Map[str, Tuple[str, ...]],
+        new: immutables.Map[str, tuple[str, ...]],
     ) -> None:
         self._current = self._current._replace(cached_reflection=new)
 
@@ -1031,13 +1093,13 @@ class Transaction:
         self._current = self._current._replace(migration_rewrite_state=mrstate)
 
 
-CStateStateType = Tuple[Dict[int, TransactionState], Transaction, int]
+CStateStateType = tuple[dict[int, TransactionState], Transaction, int]
 
 
 class CompilerConnectionState:
     __slots__ = ("_savepoints_log", "_current_tx", "_tx_count", "_user_schema")
 
-    _savepoints_log: Dict[int, TransactionState]
+    _savepoints_log: dict[int, TransactionState]
     _user_schema: Optional[s_schema.FlatSchema]
 
     def __init__(
@@ -1049,7 +1111,7 @@ class CompilerConnectionState:
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
-        cached_reflection: immutables.Map[str, Tuple[str, ...]],
+        cached_reflection: immutables.Map[str, tuple[str, ...]],
     ):
         assert isinstance(user_schema, s_schema.FlatSchema)
         self._user_schema = user_schema
@@ -1103,7 +1165,7 @@ class CompilerConnectionState:
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
-        cached_reflection: immutables.Map[str, Tuple[str, ...]],
+        cached_reflection: immutables.Map[str, tuple[str, ...]],
     ) -> None:
         assert isinstance(user_schema, s_schema.FlatSchema)
         assert isinstance(global_schema, s_schema.FlatSchema)

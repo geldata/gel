@@ -45,8 +45,8 @@ from . import schema as s_schema
 from . import utils
 
 if typing.TYPE_CHECKING:
-    from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional
-    from typing import AbstractSet, Sequence, Union, Callable
+    from typing import Any, Iterable, Iterator, Mapping, Optional
+    from typing import AbstractSet, Sequence, Callable
     from edb.common import parsing
 
 
@@ -179,13 +179,13 @@ class Type(
         inheritance_refdicts: Optional[AbstractSet[str]] = None,
         stdmode: bool = False,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, TypeT]:
+    ) -> tuple[s_schema.Schema, TypeT]:
 
         if self.get_name(schema) == name:
             raise errors.SchemaError(
                 f'cannot derive {self!r}({name}) from itself')
 
-        derived_attrs: Dict[str, object] = {}
+        derived_attrs: dict[str, object] = {}
 
         if attrs is not None:
             derived_attrs.update(attrs)
@@ -365,7 +365,7 @@ class Type(
 
     def to_nonpolymorphic(
         self: TypeT, schema: s_schema.Schema, concrete_type: Type
-    ) -> typing.Tuple[s_schema.Schema, Type]:
+    ) -> tuple[s_schema.Schema, Type]:
         """Produce an non-polymorphic version of self.
 
         Example:
@@ -392,7 +392,7 @@ class Type(
         self: TypeT,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> typing.Tuple[s_schema.Schema, Type]:
+    ) -> tuple[s_schema.Schema, Type]:
         raise NotImplementedError(
             f'{type(self)} does not support to_nonpolymorphic()')
 
@@ -432,7 +432,7 @@ class Type(
         self,
         other: Type,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[s_schema.Schema, Optional[Type]]:
+    ) -> tuple[s_schema.Schema, Optional[Type]]:
         return schema, None
 
     def get_union_of(
@@ -452,7 +452,7 @@ class Type(
 
     def material_type(
         self: TypeT, schema: s_schema.Schema
-    ) -> typing.Tuple[s_schema.Schema, TypeT]:
+    ) -> tuple[s_schema.Schema, TypeT]:
         return schema, self
 
     def peel_view(self, schema: s_schema.Schema) -> Type:
@@ -551,7 +551,7 @@ class InheritingType(so.DerivableInheritingObject, QualifiedType):
     def material_type(
         self: InheritingTypeT,
         schema: s_schema.Schema_T,
-    ) -> typing.Tuple[s_schema.Schema_T, InheritingTypeT]:
+    ) -> tuple[s_schema.Schema_T, InheritingTypeT]:
         return schema, self.get_nearest_non_derived_parent(schema)
 
     def peel_view(self, schema: s_schema.Schema) -> Type:
@@ -592,7 +592,7 @@ class InheritingType(so.DerivableInheritingObject, QualifiedType):
 
 class TypeShell(so.ObjectShell[TypeT_co]):
 
-    schemaclass: typing.Type[TypeT_co]
+    schemaclass: type[TypeT_co]
     extra_args: tuple[qlast.Expr | qlast.TypeExpr, ...] | None
 
     def __init__(
@@ -602,8 +602,8 @@ class TypeShell(so.ObjectShell[TypeT_co]):
         origname: Optional[s_name.Name] = None,
         displayname: Optional[str] = None,
         expr: Optional[str] = None,
-        schemaclass: typing.Type[TypeT_co],
-        sourcectx: Optional[parsing.Span] = None,
+        schemaclass: type[TypeT_co],
+        span: Optional[parsing.Span] = None,
         extra_args: tuple[qlast.Expr] | None = None,
     ) -> None:
         super().__init__(
@@ -611,7 +611,7 @@ class TypeShell(so.ObjectShell[TypeT_co]):
             origname=origname,
             displayname=displayname,
             schemaclass=schemaclass,
-            sourcectx=sourcectx,
+            span=span,
         )
 
         self.expr = expr
@@ -625,45 +625,45 @@ class TypeShell(so.ObjectShell[TypeT_co]):
         schema: s_schema.Schema,
         *,
         view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[Dict[str, Any]] = None,
+        attrs: Optional[dict[str, Any]] = None,
     ) -> sd.Command:
         raise errors.UnsupportedFeatureError(
             f'unsupported type intersection in schema {str(view_name)}',
             hint=f'Type intersections are currently '
                  f'unsupported as valid link targets.',
-            span=self.sourcectx,
+            span=self.span,
         )
 
 
 class TypeExprShell(TypeShell[TypeT_co]):
 
-    components: typing.Tuple[TypeShell[TypeT_co], ...]
+    components: tuple[TypeShell[TypeT_co], ...]
 
     def __init__(
         self,
         *,
         name: s_name.Name,
         components: Iterable[TypeShell[TypeT_co]],
-        schemaclass: typing.Type[TypeT_co],
-        sourcectx: Optional[parsing.Span] = None,
+        schemaclass: type[TypeT_co],
+        span: Optional[parsing.Span] = None,
     ) -> None:
         super().__init__(
             name=name,
             schemaclass=schemaclass,
-            sourcectx=sourcectx,
+            span=span,
         )
         self.components = tuple(components)
 
     def resolve_components(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[TypeT_co, ...]:
+    ) -> tuple[TypeT_co, ...]:
         return tuple(c.resolve(schema) for c in self.components)
 
     def get_components(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[TypeShell[TypeT_co], ...]:
+    ) -> tuple[TypeShell[TypeT_co], ...]:
         return self.components
 
 
@@ -675,8 +675,8 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
         module: str,
         components: Iterable[TypeShell[TypeT_co]],
         opaque: bool = False,
-        schemaclass: typing.Type[TypeT_co],
-        sourcectx: Optional[parsing.Span] = None,
+        schemaclass: type[TypeT_co],
+        span: Optional[parsing.Span] = None,
     ) -> None:
         name = get_union_type_name(
             (c.name for c in components),
@@ -687,7 +687,7 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
             name=name,
             components=components,
             schemaclass=schemaclass,
-            sourcectx=sourcectx,
+            span=span,
         )
         self.opaque = opaque
 
@@ -696,14 +696,14 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
         schema: s_schema.Schema,
         *,
         view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[Dict[str, Any]] = None,
+        attrs: Optional[dict[str, Any]] = None,
     ) -> sd.Command:
         assert isinstance(self.name, s_name.QualName)
         cmd = CreateUnionType(classname=self.name)
         cmd.set_attribute_value('name', self.name)
         cmd.set_attribute_value('components', tuple(self.components))
         cmd.set_attribute_value('is_opaque_union', self.opaque)
-        cmd.set_attribute_value('span', self.sourcectx)
+        cmd.set_attribute_value('span', self.span)
         return cmd
 
     def __repr__(self) -> str:
@@ -933,7 +933,7 @@ class IntersectionTypeShell(TypeExprShell[TypeT_co]):
         module: str,
         components: Iterable[TypeShell[TypeT_co]],
         schemaclass: type[TypeT_co],
-        sourcectx: parsing.Span | None = None,
+        span: parsing.Span | None = None,
     ) -> None:
         name = get_intersection_type_name(
             (c.name for c in components),
@@ -944,11 +944,11 @@ class IntersectionTypeShell(TypeExprShell[TypeT_co]):
             name=name,
             components=components,
             schemaclass=schemaclass,
-            sourcectx=sourcectx
+            span=span
         )
 
 
-_collection_impls: Dict[str, typing.Type[Collection]] = {}
+_collection_impls: dict[str, type[Collection]] = {}
 
 
 class Collection(Type, s_abc.Collection):
@@ -1100,10 +1100,7 @@ class Collection(Type, s_abc.Collection):
     def issubclass(
         self,
         schema: s_schema.Schema,
-        parent: Union[
-            so.SubclassableObject,
-            typing.Tuple[so.SubclassableObject, ...],
-        ],
+        parent: so.SubclassableObject | tuple[so.SubclassableObject, ...],
     ) -> bool:
         if isinstance(parent, tuple):
             return any(self.issubclass(schema, p) for p in parent)
@@ -1113,14 +1110,14 @@ class Collection(Type, s_abc.Collection):
 
         return self._issubclass(schema, parent)
 
-    def get_subtypes(self, schema: s_schema.Schema) -> typing.Tuple[Type, ...]:
+    def get_subtypes(self, schema: s_schema.Schema) -> tuple[Type, ...]:
         raise NotImplementedError
 
     def get_typemods(self, schema: s_schema.Schema) -> Any:
         return ()
 
     @classmethod
-    def get_class(cls, schema_name: str) -> typing.Type[Collection]:
+    def get_class(cls, schema_name: str) -> type[Collection]:
         coll_type = _collection_impls.get(schema_name)
         if coll_type:
             return coll_type
@@ -1134,7 +1131,7 @@ class Collection(Type, s_abc.Collection):
         schema: s_schema.Schema,
         subtypes: Any,
         typemods: Any = None,
-    ) -> typing.Tuple[s_schema.Schema, Collection]:
+    ) -> tuple[s_schema.Schema, Collection]:
         raise NotImplementedError
 
     def __repr__(self) -> str:
@@ -1176,7 +1173,7 @@ class CollectionTypeShell(TypeShell[CollectionTypeT_co]):
     def get_subtypes(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[TypeShell[Type], ...]:
+    ) -> tuple[TypeShell[Type], ...]:
         raise NotImplementedError
 
     def is_polymorphic(self, schema: s_schema.Schema) -> bool:
@@ -1192,7 +1189,7 @@ class CollectionExprAlias(QualifiedType, Collection):
         return 'expression alias'
 
     @classmethod
-    def get_underlying_schema_class(cls) -> typing.Type[Collection]:
+    def get_underlying_schema_class(cls) -> type[Collection]:
         """Return the concrete collection class for this ExprAlias class."""
         raise NotImplementedError
 
@@ -1254,7 +1251,7 @@ class Array(
 
     @classmethod
     def create(
-        cls: typing.Type[Array_T],
+        cls: type[Array_T],
         schema: s_schema.Schema,
         *,
         name: Optional[s_name.Name] = None,
@@ -1262,7 +1259,7 @@ class Array(
         dimensions: Sequence[int] = (),
         element_type: Any,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, Array_T]:
+    ) -> tuple[s_schema.Schema, Array_T]:
         if not dimensions:
             dimensions = [-1]
 
@@ -1314,7 +1311,7 @@ class Array(
         name: s_name.QualName,
         attrs: Optional[Mapping[str, Any]] = None,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, ArrayExprAlias]:
+    ) -> tuple[s_schema.Schema, ArrayExprAlias]:
         assert not kwargs
         return ArrayExprAlias.from_subtypes(
             schema,
@@ -1324,10 +1321,10 @@ class Array(
             **(attrs or {}),
         )
 
-    def get_subtypes(self, schema: s_schema.Schema) -> typing.Tuple[Type, ...]:
+    def get_subtypes(self, schema: s_schema.Schema) -> tuple[Type, ...]:
         return (self.get_element_type(schema),)
 
-    def get_typemods(self, schema: s_schema.Schema) -> typing.Tuple[Any, ...]:
+    def get_typemods(self, schema: s_schema.Schema) -> tuple[Any, ...]:
         return (self.get_dimensions(schema),)
 
     def implicitly_castable_to(
@@ -1388,7 +1385,7 @@ class Array(
         self,
         other: Type,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[s_schema.Schema, Optional[Array]]:
+    ) -> tuple[s_schema.Schema, Optional[Array]]:
 
         if not isinstance(other, Array):
             return schema, None
@@ -1420,7 +1417,7 @@ class Array(
         self,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> typing.Tuple[s_schema.Schema, Array]:
+    ) -> tuple[s_schema.Schema, Array]:
         st = self.get_subtypes(schema=schema)[0]
         # TODO: maybe we should have a generic nested polymorphic algo?
         if isinstance(st, (Range, MultiRange)):
@@ -1442,14 +1439,14 @@ class Array(
 
     @classmethod
     def from_subtypes(
-        cls: typing.Type[Array_T],
+        cls: type[Array_T],
         schema: s_schema.Schema,
         subtypes: Sequence[Type],
         typemods: Any = None,
         *,
         name: Optional[s_name.QualName] = None,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, Array_T]:
+    ) -> tuple[s_schema.Schema, Array_T]:
         if len(subtypes) != 1:
             raise errors.SchemaError(
                 f'unexpected number of subtypes, expecting 1: {subtypes!r}')
@@ -1473,7 +1470,7 @@ class Array(
 
     @classmethod
     def create_shell(
-        cls: typing.Type[Array_T],
+        cls: type[Array_T],
         schema: s_schema.Schema,
         *,
         subtypes: Sequence[TypeShell[Type]],
@@ -1511,7 +1508,7 @@ class Array(
     def material_type(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[s_schema.Schema, Array]:
+    ) -> tuple[s_schema.Schema, Array]:
         # We need to resolve material types based on the subtype recursively.
 
         st = self.get_element_type(schema)
@@ -1528,7 +1525,7 @@ class Array(
 
 class ArrayTypeShell(CollectionTypeShell[Array_T_co]):
 
-    schemaclass: typing.Type[Array_T_co]
+    schemaclass: type[Array_T_co]
 
     def __init__(
         self,
@@ -1536,8 +1533,8 @@ class ArrayTypeShell(CollectionTypeShell[Array_T_co]):
         name: Optional[s_name.Name],
         expr: Optional[str] = None,
         subtype: TypeShell[Type],
-        typemods: typing.Tuple[typing.Any, ...],
-        schemaclass: typing.Type[Array_T_co],
+        typemods: tuple[typing.Any, ...],
+        schemaclass: type[Array_T_co],
     ) -> None:
         if name is None:
             name = schemaclass.generate_name(subtype.name)
@@ -1549,7 +1546,7 @@ class ArrayTypeShell(CollectionTypeShell[Array_T_co]):
     def get_subtypes(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[TypeShell[Type], ...]:
+    ) -> tuple[TypeShell[Type], ...]:
         return (self.subtype,)
 
     def get_displayname(self, schema: s_schema.Schema) -> str:
@@ -1560,9 +1557,9 @@ class ArrayTypeShell(CollectionTypeShell[Array_T_co]):
         schema: s_schema.Schema,
         *,
         view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[Dict[str, Any]] = None,
+        attrs: Optional[dict[str, Any]] = None,
     ) -> sd.CommandGroup:
-        ca: Union[CreateArray, CreateArrayExprAlias]
+        ca: CreateArray | CreateArrayExprAlias
         cmd = sd.CommandGroup()
         if view_name is None:
             ca = CreateArray(
@@ -1602,7 +1599,7 @@ class ArrayExprAlias(
     # reflected properly (since this inherits from the concrete Array).
 
     @classmethod
-    def get_underlying_schema_class(cls) -> typing.Type[Collection]:
+    def get_underlying_schema_class(cls) -> type[Collection]:
         return Array
 
 
@@ -1651,7 +1648,7 @@ class Tuple(
 
     @classmethod
     def create(
-        cls: typing.Type[Tuple_T],
+        cls: type[Tuple_T],
         schema: s_schema.Schema,
         *,
         name: Optional[s_name.Name] = None,
@@ -1659,7 +1656,7 @@ class Tuple(
         element_types: Mapping[str, Type],
         named: bool = False,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, Tuple_T]:
+    ) -> tuple[s_schema.Schema, Tuple_T]:
         el_types = so.ObjectDict[str, Type].create(schema, element_types)
         if name is None:
             name = cls.generate_name(
@@ -1712,10 +1709,10 @@ class Tuple(
 
     def iter_subtypes(
         self, schema: s_schema.Schema
-    ) -> Iterator[typing.Tuple[str, Type]]:
+    ) -> Iterator[tuple[str, Type]]:
         yield from self.get_element_types(schema).items(schema)
 
-    def get_subtypes(self, schema: s_schema.Schema) -> typing.Tuple[Type, ...]:
+    def get_subtypes(self, schema: s_schema.Schema) -> tuple[Type, ...]:
         return self.get_element_types(schema).values(schema)
 
     def normalize_index(self, schema: s_schema.Schema, field: str) -> str:
@@ -1773,7 +1770,7 @@ class Tuple(
         name: s_name.QualName,
         attrs: Optional[Mapping[str, Any]] = None,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, TupleExprAlias]:
+    ) -> tuple[s_schema.Schema, TupleExprAlias]:
         assert not kwargs
         return TupleExprAlias.from_subtypes(
             schema,
@@ -1785,14 +1782,14 @@ class Tuple(
 
     @classmethod
     def from_subtypes(
-        cls: typing.Type[Tuple_T],
+        cls: type[Tuple_T],
         schema: s_schema.Schema,
-        subtypes: Union[Iterable[Type], Mapping[str, Type]],
+        subtypes: Iterable[Type] | Mapping[str, Type],
         typemods: Any = None,
         *,
         name: Optional[s_name.QualName] = None,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, Tuple_T]:
+    ) -> tuple[s_schema.Schema, Tuple_T]:
         named = False
         if typemods is not None:
             named = typemods.get('named', False)
@@ -1808,7 +1805,7 @@ class Tuple(
 
     @classmethod
     def create_shell(
-        cls: typing.Type[Tuple_T],
+        cls: type[Tuple_T],
         schema: s_schema.Schema,
         *,
         subtypes: Mapping[str, TypeShell[Type]],
@@ -1826,7 +1823,7 @@ class Tuple(
         self: Tuple_T,
         schema: s_schema.Schema,
     ) -> TupleTypeShell[Tuple_T]:
-        stshells: Dict[str, TypeShell[Type]] = {}
+        stshells: dict[str, TypeShell[Type]] = {}
 
         for n, st in self.iter_subtypes(schema):
             stshells[n] = st.as_shell(schema)
@@ -1951,7 +1948,7 @@ class Tuple(
         self,
         other: Type,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[s_schema.Schema, Optional[Tuple]]:
+    ) -> tuple[s_schema.Schema, Optional[Tuple]]:
 
         if not isinstance(other, Tuple):
             return schema, None
@@ -1965,7 +1962,7 @@ class Tuple(
         if len(subs) != len(other_subs):
             return schema, None
 
-        new_types: List[Type] = []
+        new_types: list[Type] = []
         for st, ot in zip(subs, other_subs):
             schema, nt = st.find_common_implicitly_castable_type(ot, schema)
             if nt is None:
@@ -1983,7 +1980,7 @@ class Tuple(
 
         return Tuple.from_subtypes(schema, new_types)
 
-    def get_typemods(self, schema: s_schema.Schema) -> Dict[str, bool]:
+    def get_typemods(self, schema: s_schema.Schema) -> dict[str, bool]:
         return {'named': self.is_named(schema)}
 
     def _resolve_polymorphic(
@@ -2010,8 +2007,8 @@ class Tuple(
         self: Tuple_T,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> typing.Tuple[s_schema.Schema, Tuple_T]:
-        new_types: List[Type] = []
+    ) -> tuple[s_schema.Schema, Tuple_T]:
+        new_types: list[Type] = []
         for st in self.get_subtypes(schema):
             if st.is_polymorphic(schema):
                 schema, nst = st.to_nonpolymorphic(schema, concrete_type)
@@ -2046,7 +2043,7 @@ class Tuple(
     def material_type(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[s_schema.Schema, Tuple]:
+    ) -> tuple[s_schema.Schema, Tuple]:
         # We need to resolve material types of all the subtypes recursively.
         new_material_type = False
         subtypes = {}
@@ -2066,7 +2063,7 @@ class Tuple(
 
 class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
 
-    schemaclass: typing.Type[Tuple_T_co]
+    schemaclass: type[Tuple_T_co]
 
     def __init__(
         self,
@@ -2074,7 +2071,7 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
         name: Optional[s_name.Name],
         subtypes: Mapping[str, TypeShell[Type]],
         typemods: Any = None,
-        schemaclass: typing.Type[Tuple_T_co],
+        schemaclass: type[Tuple_T_co],
     ) -> None:
         if name is None:
             named = typemods is not None and typemods.get('named', False)
@@ -2095,13 +2092,13 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
     def get_subtypes(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[TypeShell[Type], ...]:
+    ) -> tuple[TypeShell[Type], ...]:
         return tuple(self.subtypes.values())
 
     def iter_subtypes(
         self,
         schema: s_schema.Schema,
-    ) -> Iterator[typing.Tuple[str, TypeShell[Type]]]:
+    ) -> Iterator[tuple[str, TypeShell[Type]]]:
         return iter(self.subtypes.items())
 
     def is_named(self) -> bool:
@@ -2112,9 +2109,9 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
         schema: s_schema.Schema,
         *,
         view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[Dict[str, Any]] = None,
-    ) -> Union[CreateTuple, CreateTupleExprAlias]:
-        ct: Union[CreateTuple, CreateTupleExprAlias]
+        attrs: Optional[dict[str, Any]] = None,
+    ) -> CreateTuple | CreateTupleExprAlias:
+        ct: CreateTuple | CreateTupleExprAlias
 
         plain_tuple = self._as_plain_create_delta(schema)
         if view_name is None:
@@ -2147,9 +2144,9 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
     def _populate_create_delta(
         self,
         schema: s_schema.Schema,
-        ct: Union[CreateTuple, CreateTupleExprAlias],
+        ct: CreateTuple | CreateTupleExprAlias,
         *,
-        attrs: Optional[Dict[str, Any]] = None,
+        attrs: Optional[dict[str, Any]] = None,
     ) -> None:
         named = self.is_named()
         ct.set_attribute_value('name', ct.classname)
@@ -2172,7 +2169,7 @@ class TupleExprAlias(
     # reflected properly (since this inherits from the concrete Tuple).
 
     @classmethod
-    def get_underlying_schema_class(cls) -> typing.Type[Collection]:
+    def get_underlying_schema_class(cls) -> type[Collection]:
         return Tuple
 
 
@@ -2204,14 +2201,14 @@ class Range(
 
     @classmethod
     def create(
-        cls: typing.Type[Range_T],
+        cls: type[Range_T],
         schema: s_schema.Schema,
         *,
         name: Optional[s_name.Name] = None,
         id: Optional[uuid.UUID] = None,
         element_type: Any,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, Range_T]:
+    ) -> tuple[s_schema.Schema, Range_T]:
         if name is None:
             name = cls.generate_name(element_type.get_name(schema))
 
@@ -2250,7 +2247,7 @@ class Range(
         name: s_name.QualName,
         attrs: Optional[Mapping[str, Any]] = None,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, RangeExprAlias]:
+    ) -> tuple[s_schema.Schema, RangeExprAlias]:
         assert not kwargs
         return RangeExprAlias.from_subtypes(
             schema,
@@ -2260,7 +2257,7 @@ class Range(
             **(attrs or {}),
         )
 
-    def get_subtypes(self, schema: s_schema.Schema) -> typing.Tuple[Type, ...]:
+    def get_subtypes(self, schema: s_schema.Schema) -> tuple[Type, ...]:
         return (self.get_element_type(schema),)
 
     def implicitly_castable_to(
@@ -2315,7 +2312,7 @@ class Range(
         self,
         other: Type,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[s_schema.Schema, Optional[RangeLike]]:
+    ) -> tuple[s_schema.Schema, Optional[RangeLike]]:
 
         if not isinstance(other, (Range, MultiRange)):
             return schema, None
@@ -2372,7 +2369,7 @@ class Range(
         self,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> typing.Tuple[s_schema.Schema, Range]:
+    ) -> tuple[s_schema.Schema, Range]:
         return Range.from_subtypes(schema, (concrete_type,))
 
     def _test_polymorphic(self, schema: s_schema.Schema, other: Type) -> bool:
@@ -2387,14 +2384,14 @@ class Range(
 
     @classmethod
     def from_subtypes(
-        cls: typing.Type[Range_T],
+        cls: type[Range_T],
         schema: s_schema.Schema,
         subtypes: Sequence[Type],
         typemods: Any = None,
         *,
         name: Optional[s_name.QualName] = None,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, Range_T]:
+    ) -> tuple[s_schema.Schema, Range_T]:
         if len(subtypes) != 1:
             raise errors.SchemaError(
                 f'unexpected number of subtypes, expecting 1: {subtypes!r}')
@@ -2415,7 +2412,7 @@ class Range(
 
     @classmethod
     def create_shell(
-        cls: typing.Type[Range_T],
+        cls: type[Range_T],
         schema: s_schema.Schema,
         *,
         subtypes: Sequence[TypeShell[Type]],
@@ -2445,7 +2442,7 @@ class Range(
     def material_type(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[s_schema.Schema, Range]:
+    ) -> tuple[s_schema.Schema, Range]:
         # We need to resolve material types based on the subtype recursively.
 
         st = self.get_element_type(schema)
@@ -2462,15 +2459,15 @@ class Range(
 
 class RangeTypeShell(CollectionTypeShell[Range_T_co]):
 
-    schemaclass: typing.Type[Range_T_co]
+    schemaclass: type[Range_T_co]
 
     def __init__(
         self,
         *,
         name: Optional[s_name.Name],
         subtype: TypeShell[Type],
-        typemods: typing.Tuple[typing.Any, ...],
-        schemaclass: typing.Type[Range_T_co],
+        typemods: tuple[typing.Any, ...],
+        schemaclass: type[Range_T_co],
     ) -> None:
         if name is None:
             name = schemaclass.generate_name(subtype.name)
@@ -2482,7 +2479,7 @@ class RangeTypeShell(CollectionTypeShell[Range_T_co]):
     def get_subtypes(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[TypeShell[Type], ...]:
+    ) -> tuple[TypeShell[Type], ...]:
         return (self.subtype,)
 
     def get_displayname(self, schema: s_schema.Schema) -> str:
@@ -2493,9 +2490,9 @@ class RangeTypeShell(CollectionTypeShell[Range_T_co]):
         schema: s_schema.Schema,
         *,
         view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[Dict[str, Any]] = None,
+        attrs: Optional[dict[str, Any]] = None,
     ) -> sd.CommandGroup:
-        ca: Union[CreateRange, CreateRangeExprAlias]
+        ca: CreateRange | CreateRangeExprAlias
         cmd = sd.CommandGroup()
         if view_name is None:
             ca = CreateRange(
@@ -2534,7 +2531,7 @@ class RangeExprAlias(
     # reflected properly (since this inherits from the concrete Range).
 
     @classmethod
-    def get_underlying_schema_class(cls) -> typing.Type[Collection]:
+    def get_underlying_schema_class(cls) -> type[Collection]:
         return Range
 
 
@@ -2567,14 +2564,14 @@ class MultiRange(
 
     @classmethod
     def create(
-        cls: typing.Type[MultiRange_T],
+        cls: type[MultiRange_T],
         schema: s_schema.Schema,
         *,
         name: Optional[s_name.Name] = None,
         id: Optional[uuid.UUID] = None,
         element_type: Any,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, MultiRange_T]:
+    ) -> tuple[s_schema.Schema, MultiRange_T]:
         if name is None:
             name = cls.generate_name(element_type.get_name(schema))
 
@@ -2613,7 +2610,7 @@ class MultiRange(
         name: s_name.QualName,
         attrs: Optional[Mapping[str, Any]] = None,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, MultiRangeExprAlias]:
+    ) -> tuple[s_schema.Schema, MultiRangeExprAlias]:
         assert not kwargs
         return MultiRangeExprAlias.from_subtypes(
             schema,
@@ -2623,7 +2620,7 @@ class MultiRange(
             **(attrs or {}),
         )
 
-    def get_subtypes(self, schema: s_schema.Schema) -> typing.Tuple[Type, ...]:
+    def get_subtypes(self, schema: s_schema.Schema) -> tuple[Type, ...]:
         return (self.get_element_type(schema),)
 
     def implicitly_castable_to(
@@ -2670,7 +2667,7 @@ class MultiRange(
         self: MultiRange,
         other: Type,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[s_schema.Schema, Optional[MultiRange]]:
+    ) -> tuple[s_schema.Schema, Optional[MultiRange]]:
 
         if not isinstance(other, MultiRange):
             return schema, None
@@ -2704,7 +2701,7 @@ class MultiRange(
         self,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> typing.Tuple[s_schema.Schema, MultiRange]:
+    ) -> tuple[s_schema.Schema, MultiRange]:
         return MultiRange.from_subtypes(schema, (concrete_type,))
 
     def _test_polymorphic(self, schema: s_schema.Schema, other: Type) -> bool:
@@ -2719,14 +2716,14 @@ class MultiRange(
 
     @classmethod
     def from_subtypes(
-        cls: typing.Type[MultiRange_T],
+        cls: type[MultiRange_T],
         schema: s_schema.Schema,
         subtypes: Sequence[Type],
         typemods: Any = None,
         *,
         name: Optional[s_name.QualName] = None,
         **kwargs: Any,
-    ) -> typing.Tuple[s_schema.Schema, MultiRange_T]:
+    ) -> tuple[s_schema.Schema, MultiRange_T]:
         if len(subtypes) != 1:
             raise errors.SchemaError(
                 f'unexpected number of subtypes, expecting 1: {subtypes!r}')
@@ -2747,7 +2744,7 @@ class MultiRange(
 
     @classmethod
     def create_shell(
-        cls: typing.Type[MultiRange_T],
+        cls: type[MultiRange_T],
         schema: s_schema.Schema,
         *,
         subtypes: Sequence[TypeShell[Type]],
@@ -2782,7 +2779,7 @@ class MultiRange(
     def material_type(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[s_schema.Schema, MultiRange]:
+    ) -> tuple[s_schema.Schema, MultiRange]:
         # We need to resolve material types based on the subtype recursively.
 
         st = self.get_element_type(schema)
@@ -2799,15 +2796,15 @@ class MultiRange(
 
 class MultiRangeTypeShell(CollectionTypeShell[MultiRange_T_co]):
 
-    schemaclass: typing.Type[MultiRange_T_co]
+    schemaclass: type[MultiRange_T_co]
 
     def __init__(
         self,
         *,
         name: s_name.Name,
         subtype: TypeShell[Type],
-        typemods: typing.Tuple[typing.Any, ...],
-        schemaclass: typing.Type[MultiRange_T_co],
+        typemods: tuple[typing.Any, ...],
+        schemaclass: type[MultiRange_T_co],
     ) -> None:
         super().__init__(name=name, schemaclass=schemaclass)
         self.subtype = subtype
@@ -2816,7 +2813,7 @@ class MultiRangeTypeShell(CollectionTypeShell[MultiRange_T_co]):
     def get_subtypes(
         self,
         schema: s_schema.Schema,
-    ) -> typing.Tuple[TypeShell[Type], ...]:
+    ) -> tuple[TypeShell[Type], ...]:
         return (self.subtype,)
 
     def get_displayname(self, schema: s_schema.Schema) -> str:
@@ -2827,9 +2824,9 @@ class MultiRangeTypeShell(CollectionTypeShell[MultiRange_T_co]):
         schema: s_schema.Schema,
         *,
         view_name: Optional[s_name.QualName] = None,
-        attrs: Optional[Dict[str, Any]] = None,
+        attrs: Optional[dict[str, Any]] = None,
     ) -> sd.CommandGroup:
-        ca: Union[CreateMultiRange, CreateMultiRangeExprAlias]
+        ca: CreateMultiRange | CreateMultiRangeExprAlias
         cmd = sd.CommandGroup()
         if view_name is None:
             ca = CreateMultiRange(
@@ -2868,11 +2865,11 @@ class MultiRangeExprAlias(
     # reflected properly (since this inherits from the concrete MultiRange).
 
     @classmethod
-    def get_underlying_schema_class(cls) -> typing.Type[Collection]:
+    def get_underlying_schema_class(cls) -> type[Collection]:
         return MultiRange
 
 
-RangeLike = typing.Union[Range, MultiRange]
+RangeLike = Range | MultiRange
 
 
 def get_union_type_name(
@@ -2927,8 +2924,17 @@ def type_dummy_expr(
 ) -> Optional[s_expr.Expression]:
     if isinstance(typ, so.DerivableInheritingObject):
         typ = typ.get_nearest_non_derived_parent(schema)
-    text = f'assert_exists(<{typ.get_displayname(schema)}>{{}})'
-    return s_expr.Expression(text=text)
+
+    q = qlast.FunctionCall(
+        func=('__std__', 'assert_exists'),
+        args=[
+            qlast.TypeCast(
+                type=utils.typeref_to_ast(schema, typ),
+                expr=qlast.Set(elements=[]),
+            )
+        ],
+    )
+    return s_expr.Expression.from_ast(q, schema)
 
 
 class TypeCommand(sd.ObjectCommand[TypeT]):
@@ -3030,7 +3036,7 @@ class InheritingTypeCommand(
                 shell = shells.get(base.get_name(schema))
                 raise errors.SchemaError(
                     f"{base_type_name!r} cannot be a parent type",
-                    span=shell.sourcectx if shell is not None else None,
+                    span=shell.span if shell is not None else None,
                 )
 
 
@@ -3221,7 +3227,7 @@ class DeleteCollectionExprAlias(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         scls: CollectionExprAliasT,
-    ) -> List[sd.Command]:
+    ) -> list[sd.Command]:
         ops = super()._canonicalize(schema, context, scls)
         ops.append(scls.as_underlying_type_delete_if_unused(schema))
         return ops
@@ -3242,7 +3248,7 @@ class RenameTuple(RenameCollectionType[Tuple]):
 class CreateTupleExprAlias(CreateCollectionExprAlias[TupleExprAlias]):
     def _get_ast_node(
         self, schema: s_schema.Schema, context: sd.CommandContext
-    ) -> typing.Type[qlast.CreateAlias]:
+    ) -> type[qlast.CreateAlias]:
         # Can't just use class-level astnode because that creates a
         # duplicate in ast -> command mapping.
         return qlast.CreateAlias
@@ -3277,7 +3283,7 @@ class RenameArray(RenameCollectionType[Array]):
 class CreateArrayExprAlias(CreateCollectionExprAlias[ArrayExprAlias]):
     def _get_ast_node(
         self, schema: s_schema.Schema, context: sd.CommandContext
-    ) -> typing.Type[qlast.CreateAlias]:
+    ) -> type[qlast.CreateAlias]:
         # Can't just use class-level astnode because that creates a
         # duplicate in ast -> command mapping.
         return qlast.CreateAlias
@@ -3312,7 +3318,7 @@ class RenameRange(RenameCollectionType[Range]):
 class CreateRangeExprAlias(CreateCollectionExprAlias[RangeExprAlias]):
     def _get_ast_node(
         self, schema: s_schema.Schema, context: sd.CommandContext
-    ) -> typing.Type[qlast.CreateAlias]:
+    ) -> type[qlast.CreateAlias]:
         # Can't just use class-level astnode because that creates a
         # duplicate in ast -> command mapping.
         return qlast.CreateAlias
@@ -3347,7 +3353,7 @@ class RenameMultiRange(RenameCollectionType[MultiRange]):
 class CreateMultiRangeExprAlias(CreateCollectionExprAlias[MultiRangeExprAlias]):
     def _get_ast_node(
         self, schema: s_schema.Schema, context: sd.CommandContext
-    ) -> typing.Type[qlast.CreateAlias]:
+    ) -> type[qlast.CreateAlias]:
         # Can't just use class-level astnode because that creates a
         # duplicate in ast -> command mapping.
         return qlast.CreateAlias

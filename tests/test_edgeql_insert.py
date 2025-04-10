@@ -27,9 +27,9 @@ from edb.testbase import server as tb
 from edb.tools import test
 
 
-class TestInsert(tb.QueryTestCase):
+class TestInsert(tb.DDLTestCase):
     '''The scope of the tests is testing various modes of Object creation.'''
-    # NO_FACTOR = True
+    NO_FACTOR = False
     WARN_FACTOR = True
     INTERNAL_TESTMODE = False
 
@@ -103,6 +103,7 @@ class TestInsert(tb.QueryTestCase):
         with self.assertRaisesRegex(
             edgedb.QueryError,
             r"could not resolve partial path",
+            _hint=None
         ):
             await self.con.execute('''
                 INSERT Person { name := .name };
@@ -1350,6 +1351,7 @@ class TestInsert(tb.QueryTestCase):
             ]
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_insert_for_02(self):
         await self.con.execute(r'''
             # create 10 DefaultTest3 objects, each object is defined
@@ -1822,6 +1824,7 @@ class TestInsert(tb.QueryTestCase):
                                   INSERT Note {name := y ++ x.name}))))));
             """)
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_insert_default_01(self):
         await self.con.execute(r'''
             # create 10 DefaultTest3 objects, each object is defined
@@ -2315,6 +2318,7 @@ class TestInsert(tb.QueryTestCase):
             }],
         )
 
+    @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_insert_linkprops_with_for_01(self):
         await self.con.execute(r"""
             FOR i IN {'1', '2', '3'} UNION (
@@ -5148,9 +5152,18 @@ class TestInsert(tb.QueryTestCase):
             SELECT (B, F);
         '''
 
+        await self.con.execute(query)
+
+        query = r'''
+            WITH name := 'Madeline Hatch',
+                 B := (INSERT Person {name := name}),
+                 F := (INSERT DerivedPerson {name := <str>(0*random())}),
+            SELECT (B, F);
+        '''
+
         with self.assertRaisesRegex(
-                edgedb.UnsupportedFeatureError,
-                "does not support volatile properties with exclusive"):
+                edgedb.ConstraintViolationError,
+                "name violates exclusivity constraint"):
             await self.con.execute(query)
 
     async def test_edgeql_insert_cross_type_conflict_15(self):

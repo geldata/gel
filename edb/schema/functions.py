@@ -22,19 +22,14 @@ from __future__ import annotations
 import abc
 import types
 import uuid
+import builtins
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
-    Union,
     Iterable,
     Mapping,
     Sequence,
-    Dict,
-    List,
-    Set,
     cast,
     TYPE_CHECKING,
 )
@@ -78,7 +73,7 @@ FUNC_NAMESPACE = uuidgen.UUID('80cd3b19-bb51-4659-952d-6bb03e3347d7')
 
 def param_as_str(
     schema: s_schema.Schema,
-    param: Union[ParameterDesc, Parameter],
+    param: ParameterDesc | Parameter,
 ) -> str:
     ret = []
     kind = param.get_kind(schema)
@@ -95,7 +90,7 @@ def param_as_str(
         ret.append(typemod.to_edgeql())
         ret.append(' ')
 
-    paramt: Union[s_types.Type, s_types.TypeShell[s_types.Type]]
+    paramt: s_types.Type | s_types.TypeShell[s_types.Type]
     if isinstance(param, ParameterDesc):
         paramt = param.get_type_shell(schema)
     else:
@@ -112,7 +107,7 @@ def param_as_str(
 def canonical_param_sort(
     schema: s_schema.Schema,
     params: Iterable[ParameterLike_T],
-) -> Tuple[ParameterLike_T, ...]:
+) -> tuple[ParameterLike_T, ...]:
 
     canonical_order = []
     named = []
@@ -277,7 +272,7 @@ class ParameterDesc(ParameterLike):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         cmd: CreateParameter,
-    ) -> Tuple[s_schema.Schema, ParameterDesc]:
+    ) -> tuple[s_schema.Schema, ParameterDesc]:
         props = cmd.get_attributes(schema, context)
         props['name'] = Parameter.paramname_from_fullname(props['name'])
         if not isinstance(props['type'], s_types.TypeShell):
@@ -455,7 +450,7 @@ class Parameter(
     @classmethod
     def compare_field_value(
         cls,
-        field: so.Field[Type[so.T]],
+        field: so.Field[builtins.type[so.T]],
         our_value: so.T,
         their_value: so.T,
         *,
@@ -558,6 +553,19 @@ class ParameterCommand(
             return super().compile_expr_field(
                 schema, context, field, value, track_schema_ref_exprs)
 
+    def get_dummy_expr_field_value(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+        field: so.Field[Any],
+        value: Any,
+    ) -> Optional[s_expr.Expression]:
+        if field.name == 'default':
+            type = self.scls.get_type(schema)
+            return s_types.type_dummy_expr(type, schema)
+        else:
+            raise NotImplementedError(f'unhandled field {field.name!r}')
+
 
 class CreateParameter(ParameterCommand, sd.CreateObject[Parameter]):
 
@@ -650,14 +658,14 @@ class ParameterLikeList(abc.ABC):
     def objects(
         self,
         schema: s_schema.Schema,
-    ) -> Tuple[ParameterLike, ...]:
+    ) -> tuple[ParameterLike, ...]:
         raise NotImplementedError
 
     @abc.abstractmethod
     def get_in_canonical_order(
         self,
         schema: s_schema.Schema,
-    ) -> Tuple[ParameterLike, ...]:
+    ) -> tuple[ParameterLike, ...]:
         raise NotImplementedError
 
 
@@ -725,10 +733,10 @@ class FuncParameterList(so.ObjectList[Parameter], ParameterLikeList):
     def get_in_canonical_order(
         self,
         schema: s_schema.Schema,
-    ) -> Tuple[Parameter, ...]:
+    ) -> tuple[Parameter, ...]:
         return canonical_param_sort(schema, self.objects(schema))
 
-    def get_ast(self, schema: s_schema.Schema) -> List[qlast.FuncParam]:
+    def get_ast(self, schema: s_schema.Schema) -> list[qlast.FuncParam]:
         result = []
         for param in self.objects(schema):
             result.append(param.get_ast(schema))
@@ -910,9 +918,9 @@ class CallableObject(
     def _get_fqname_quals(
         cls,
         schema: s_schema.Schema,
-        params: List[ParameterDesc],
-    ) -> Tuple[str, ...]:
-        quals: List[str] = []
+        params: list[ParameterDesc],
+    ) -> tuple[str, ...]:
+        quals: list[str] = []
         canonical_order = canonical_param_sort(schema, params)
         for param in canonical_order:
             pt = param.get_type_shell(schema)
@@ -932,7 +940,7 @@ class CallableObject(
         cls,
         schema: s_schema.Schema,
         shortname: sn.QualName,
-        params: List[ParameterDesc],
+        params: list[ParameterDesc],
         *extra_quals: str,
     ) -> sn.QualName:
 
@@ -982,10 +990,10 @@ class ParametrizedCommand(sd.ObjectCommand[so.Object_T]):
         cls,
         schema: s_schema.Schema,
         modaliases: Mapping[Optional[str], str],
-        params: List[qlast.FuncParam],
+        params: list[qlast.FuncParam],
         *,
         param_offset: int=0,
-    ) -> List[ParameterDesc]:
+    ) -> list[ParameterDesc]:
         return [
             ParameterDesc.from_ast(schema, modaliases, num, param)
             for num, param in enumerate(params, param_offset)
@@ -999,7 +1007,7 @@ class ParametrizedCommand(sd.ObjectCommand[so.Object_T]):
         astnode: qlast.ObjectDDL,
         *,
         param_offset: int=0,
-    ) -> List[ParameterDesc]:
+    ) -> list[ParameterDesc]:
         if not hasattr(astnode, 'params'):
             # Some Callables, like the concrete constraints,
             # have no params in their AST.
@@ -1014,7 +1022,7 @@ class ParametrizedCommand(sd.ObjectCommand[so.Object_T]):
         schema: s_schema.Schema,
         context: sd.CommandContext,
         cmd: sd.Command,
-    ) -> Tuple[s_schema.Schema, List[ParameterDesc]]:
+    ) -> tuple[s_schema.Schema, list[ParameterDesc]]:
         params = []
         for subcmd in cmd.get_subcommands(type=CreateParameter):
             schema, param = ParameterDesc.from_create_delta(
@@ -1160,13 +1168,13 @@ class CreateCallableObject(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         params = self._get_params(schema, context)
         props = super().get_resolved_attributes(schema, context)
         props['params'] = params
         return props
 
-    def _skip_param(self, props: Dict[str, Any]) -> bool:
+    def _skip_param(self, props: dict[str, Any]) -> bool:
         return False
 
     def _get_params_ast(
@@ -1174,8 +1182,8 @@ class CreateCallableObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         node: qlast.DDLOperation,
-    ) -> List[Tuple[int, qlast.FuncParam]]:
-        params: List[Tuple[int, qlast.FuncParam]] = []
+    ) -> list[tuple[int, qlast.FuncParam]]:
+        params: list[tuple[int, qlast.FuncParam]] = []
         for op in self.get_subcommands(type=ParameterCommand):
             props = op.get_resolved_attributes(schema, context)
             if self._skip_param(props):
@@ -1319,6 +1327,20 @@ class Function(
 
     is_inlined = so.SchemaField(bool, default=False)
 
+    # A json string which describes any server param conversions to apply.
+    #
+    # The data should take the form: dict[str, str | list[str]]
+    #
+    # The key should be the names of the converted params.
+    # The value should be either: the conversion name, or a list of strings
+    # where the first item is the name of the conversion.
+    #
+    # If the value is a list, the additional items act as parameters to the
+    # conversion.
+    server_param_conversions = so.SchemaField(
+        str, default=None, compcoef=0.0
+    )
+
     def has_inlined_defaults(self, schema: s_schema.Schema) -> bool:
         # This can be relaxed to just `language is EdgeQL` when we
         # support non-constant defaults.
@@ -1346,7 +1368,7 @@ class Function(
         schema: s_schema.Schema,
         *,
         span: Optional[parsing.Span] = None,
-    ) -> Optional[Tuple[List[Function], int]]:
+    ) -> Optional[tuple[list[Function], int]]:
         """Find if this function overloads another in object parameter.
 
         If so, check the following rules:
@@ -1520,7 +1542,7 @@ class FunctionCommand(
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if field == 'nativecode':
             return 'nativecode'
@@ -1685,7 +1707,7 @@ class FunctionCommand(
         schema: s_schema.Schema,
         astnode: qlast.DDLOperation,
         context: sd.CommandContext,
-    ) -> Set[str]:
+    ) -> set[str]:
         localnames = super().localnames_from_ast(
             schema, astnode, context
         )
@@ -1940,13 +1962,16 @@ class CreateFunction(CreateCallableObject[Function], FunctionCommand):
 
             if check_default_type:
                 default_type = ir_default.stype
-                if not default_type.assignment_castable_to(p_type, schema):
+                if not default_type.assignment_castable_to(
+                    p_type, ir_default.schema
+                ):
                     raise errors.InvalidFunctionDefinitionError(
                         f'cannot create the `{signature}` function: '
                         f'invalid declaration of parameter '
                         f'{p.get_displayname(schema)!r}: '
                         f'unexpected type of the default expression: '
-                        f'{default_type.get_displayname(schema)}, expected '
+                        f'{default_type.get_displayname(ir_default.schema)}, '
+                        f'expected '
                         f'{p_type.get_displayname(schema)}',
                         span=self.span)
 
@@ -2158,7 +2183,7 @@ class AlterFunction(AlterCallableObject[Function], FunctionCommand):
         # We also need to propagate changes to "parent"
         # overloads. This is mainly so they can get the proper global
         # variables updated.
-        extra_refs: Optional[Dict[so.Object, List[str]]] = None
+        extra_refs: Optional[dict[so.Object, list[str]]] = None
         if (overloaded := scls.find_object_param_overloads(schema)):
             ov_funcs, ov_idx = overloaded
             cur_type = (
@@ -2315,9 +2340,9 @@ def get_params_symtable(
     schema: s_schema.Schema,
     *,
     inlined_defaults: bool,
-) -> Dict[str, qlast.Expr]:
+) -> dict[str, qlast.Expr]:
 
-    anchors: Dict[str, qlast.Expr] = {}
+    anchors: dict[str, qlast.Expr] = {}
 
     defaults_mask = qlast.TypeCast(
         expr=qlast.Parameter(name='__defaults_mask__'),

@@ -1577,6 +1577,36 @@ class TestServerProto(tb.QueryTestCase):
             await self.con.query('SELECT 42'),
             [42])
 
+    async def test_server_proto_tx_08(self):
+        try:
+            await self.con.query('''
+                START TRANSACTION ISOLATION REPEATABLE READ, READ ONLY;
+            ''')
+
+            self.assertEqual(
+                await self.con.query(
+                    'select <str>sys::get_transaction_isolation();',
+                ),
+                ["RepeatableRead"],
+            )
+        finally:
+            await self.con.query(f'''
+                ROLLBACK;
+            ''')
+
+    async def test_server_proto_tx_09(self):
+        try:
+            with self.assertRaisesRegex(
+                    edgedb.TransactionError,
+                    'only supported in read-only transactions'):
+                await self.con.query('''
+                    START TRANSACTION ISOLATION REPEATABLE READ;
+                ''')
+        finally:
+            await self.con.query(f'''
+                ROLLBACK;
+            ''')
+
     async def test_server_proto_tx_10(self):
         # Basic test that ROLLBACK works on SET ALIAS changes.
 
@@ -2038,6 +2068,366 @@ class TestServerProto(tb.QueryTestCase):
             await self.con.query('ROLLBACK')
 
         self.assertEqual(await self.con.query_single('SELECT 42'), 42)
+
+    async def assert_tx_isolation_and_default(
+        self, expected: str, *, default: str | None = None, conn=None
+    ):
+        if conn is None:
+            conn = self.con
+        if default is None:
+            default = expected
+        self.assertEqual(
+            await conn.query_single('''
+                select (
+                    <str>sys::get_transaction_isolation(),
+                    <str>assert_single(cfg::Config)
+                        .default_transaction_isolation,
+                );
+            '''),
+            (expected, default),
+        )
+
+    async def assert_read_only_and_default(
+        self, reason: str, *, default: str = 'ReadOnly', conn=None
+    ):
+        if conn is None:
+            conn = self.con
+        self.assertEqual(
+            await conn.query_single(
+                'select <str>assert_single(cfg::Config)'
+                '.default_transaction_access_mode;',
+            ),
+            default,
+        )
+        with self.assertRaisesRegex(
+            edgedb.TransactionError,
+            reason,
+        ):
+            await self.con.query('''
+                INSERT Tmp {
+                    tmp := 'aaa'
+                };
+            ''')
+
+    async def test_server_proto_tx_23(self):
+        # Test that default_transaction_isolation is respected
+
+        await self.con.query('''
+            CONFIGURE SESSION
+                SET default_transaction_isolation := 'RepeatableRead';
+        ''')
+
+        try:
+            await self.assert_tx_isolation_and_default('RepeatableRead')
+        finally:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_isolation;
+            ''')
+
+    async def test_server_proto_tx_24(self):
+        # default_transaction_isolation < Serializable enforces read-only
+
+        await self.con.query('''
+            CONFIGURE SESSION
+                SET default_transaction_isolation := 'RepeatableRead';
+        ''')
+
+        try:
+            await self.assert_read_only_and_default(
+                "cannot execute.*RepeatableRead",
+                default='ReadWrite',
+            )
+        finally:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_isolation;
+            ''')
+
+        self.assertEqual(
+            await self.con.query('SELECT 42'),
+            [42])
+
+    async def test_server_proto_tx_25(self):
+        # default_transaction_isolation < Serializable overrides read-write
+
+        try:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    SET default_transaction_isolation := 'RepeatableRead';
+            ''')
+            await self.con.query('''
+                CONFIGURE SESSION
+                    SET default_transaction_access_mode := 'ReadWrite';
+            ''')
+
+            await self.assert_read_only_and_default(
+                "cannot execute.*RepeatableRead",
+                default='ReadWrite',
+            )
+        finally:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_access_mode;
+            ''')
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_isolation;
+            ''')
+
+        self.assertEqual(
+            await self.con.query('SELECT 42'),
+            [42])
+
+    async def test_server_proto_tx_26(self):
+        # Test that default_transaction_access_mode is respected
+
+        await self.con.query('''
+            CONFIGURE SESSION
+                SET default_transaction_access_mode := 'ReadOnly';
+        ''')
+
+        try:
+            await self.assert_tx_isolation_and_default('Serializable')
+            await self.assert_read_only_and_default('cannot execute.*ReadOnly')
+        finally:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_access_mode;
+            ''')
+
+        self.assertEqual(
+            await self.con.query('SELECT 42'),
+            [42])
+
+    async def test_server_proto_tx_27(self):
+        # Test that START TRANSACTION respects the default isolation
+
+        try:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    SET default_transaction_isolation := 'RepeatableRead';
+            ''')
+            await self.con.query('''
+                START TRANSACTION;
+            ''')
+
+            await self.assert_tx_isolation_and_default('RepeatableRead')
+
+        finally:
+            await self.con.query(f'''
+                ROLLBACK;
+            ''')
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_isolation;
+            ''')
+
+        self.assertEqual(
+            await self.con.query('SELECT 42'),
+            [42])
+
+    async def test_server_proto_tx_28(self):
+        # Test that non-serializable START TRANSACTION enforces read-only
+
+        try:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    SET default_transaction_isolation := 'RepeatableRead';
+            ''')
+            await self.con.query('''
+                START TRANSACTION;
+            ''')
+
+            await self.assert_read_only_and_default(
+                'read-only transaction', default='ReadWrite'
+            )
+        finally:
+            await self.con.query(f'''
+                ROLLBACK;
+            ''')
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_isolation;
+            ''')
+
+        self.assertEqual(
+            await self.con.query('SELECT 42'),
+            [42])
+
+    async def test_server_proto_tx_29(self):
+        # Test that START TRANSACTION respects default read-only
+
+        try:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    SET default_transaction_access_mode:= 'ReadOnly';
+            ''')
+            await self.con.query('''
+                START TRANSACTION;
+            ''')
+
+            await self.assert_tx_isolation_and_default('Serializable')
+            await self.assert_read_only_and_default('read-only transaction')
+        finally:
+            await self.con.query(f'''
+                ROLLBACK;
+            ''')
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_access_mode;
+            ''')
+
+        self.assertEqual(
+            await self.con.query('SELECT 42'),
+            [42])
+
+    async def test_server_proto_tx_30(self):
+        # Test that non-serializable START TRANSACTION conflicts read-write
+
+        try:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    SET default_transaction_isolation := 'RepeatableRead';
+            ''')
+            with self.assertRaisesRegex(
+                edgedb.TransactionError,
+                'only supported in read-only transactions',
+            ):
+                await self.con.query('''
+                    START TRANSACTION READ WRITE;
+                ''')
+
+        finally:
+            await self.con.query(f'''
+                ROLLBACK;
+            ''')
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_isolation;
+            ''')
+
+        self.assertEqual(
+            await self.con.query('SELECT 42'),
+            [42])
+
+    async def test_server_proto_tx_31(self):
+        # Test that non-serializable START TRANSACTION works fine with the
+        # default read-only
+
+        try:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    SET default_transaction_access_mode:= 'ReadOnly';
+            ''')
+            await self.con.query('''
+                START TRANSACTION ISOLATION REPEATABLE READ;
+            ''')
+
+            await self.assert_tx_isolation_and_default(
+                'RepeatableRead', default='Serializable'
+            )
+            await self.assert_read_only_and_default('read-only transaction')
+        finally:
+            await self.con.query(f'''
+                ROLLBACK;
+            ''')
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_access_mode;
+            ''')
+
+        self.assertEqual(
+            await self.con.query('SELECT 42'),
+            [42])
+
+    async def test_server_proto_tx_32(self):
+        # Test state sync across 2 frontend connections works fine
+        con2 = await self.connect(database=self.con.dbname)
+        try:
+            await con2.query('''
+                CONFIGURE SESSION
+                    SET default_transaction_isolation := 'RepeatableRead';
+            ''')
+            await self.assert_tx_isolation_and_default(
+                'RepeatableRead', conn=con2
+            )
+
+            # Try a few times back and forth - this should be enough to hit
+            # the same backend connection.
+            for _ in range(5):
+                # Test state reset
+                await self.assert_tx_isolation_and_default('Serializable')
+
+                # Test state sync
+                await self.assert_tx_isolation_and_default(
+                    'RepeatableRead', conn=con2
+                )
+        finally:
+            await con2.aclose()
+
+    async def _test_with_sql_connection(self, test_func):
+        # Test state sync across EdgeQL / SQL interfaces
+        try:
+            import asyncpg
+        except ImportError:
+            self.skipTest("asyncpg is not installed")
+
+        conn_args = self.get_connect_args(database=self.con.dbname)
+        scon = await asyncpg.connect(
+            host=conn_args['host'],
+            port=conn_args['port'],
+            user=conn_args['user'],
+            database=conn_args['database'],
+            password=conn_args['password'],
+            ssl='require'
+        )
+
+        try:
+            await test_func(scon)
+        finally:
+            await self.con.query('''
+                CONFIGURE SESSION
+                    RESET default_transaction_isolation;
+            ''')
+            await scon.close()
+
+    async def test_server_proto_tx_33(self):
+        async def test(scon):
+            await scon.execute('''
+                set default_transaction_isolation to 'repeatable read';
+            ''')
+            for _ in range(5):
+                await self.assert_tx_isolation_and_default('Serializable')
+                self.assertEqual(
+                    await scon.fetchval('show transaction_isolation'),
+                    'repeatable read',
+                )
+                self.assertEqual(
+                    await scon.fetchval('show default_transaction_isolation'),
+                    'repeatable read',
+                )
+
+        await self._test_with_sql_connection(test)
+
+    async def test_server_proto_tx_34(self):
+        async def test(scon):
+            await self.con.query('''
+                CONFIGURE SESSION
+                    SET default_transaction_isolation := 'RepeatableRead';
+            ''')
+            for _ in range(5):
+                await self.assert_tx_isolation_and_default('RepeatableRead')
+                self.assertEqual(
+                    await scon.fetchval('show transaction_isolation'),
+                    'serializable',
+                )
+                self.assertEqual(
+                    await scon.fetchval('show default_transaction_isolation'),
+                    'serializable',
+                )
+
+        await self._test_with_sql_connection(test)
 
 
 class TestServerProtoMigration(tb.QueryTestCase):
@@ -3365,7 +3755,8 @@ class TestServerProtoConcurrentDDL(tb.DDLTestCase):
                     # deferred_shield ensures that none of the
                     # operations get cancelled, which allows us to
                     # aclose them all cleanly.
-                    g.create_task(asyncutil.deferred_shield(con.execute(f'''
+                    # Use _fetchall, because it doesn't retry
+                    g.create_task(asyncutil.deferred_shield(con._fetchall(f'''
                         CREATE TYPE {typename_prefix}{i} {{
                             CREATE REQUIRED PROPERTY prop1 -> std::int64;
                         }};
@@ -3411,7 +3802,8 @@ class TestServerProtoConcurrentGlobalDDL(tb.DDLTestCase):
                     # deferred_shield ensures that none of the
                     # operations get cancelled, which allows us to
                     # aclose them all cleanly.
-                    g.create_task(asyncutil.deferred_shield(con.execute(f'''
+                    # Use _fetchall, because it doesn't retry
+                    g.create_task(asyncutil.deferred_shield(con._fetchall(f'''
                         CREATE SUPERUSER ROLE concurrent_{i}
                     ''')))
         except ExceptionGroup as e:
