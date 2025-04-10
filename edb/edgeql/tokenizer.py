@@ -77,6 +77,12 @@ class Source:
     def extra_blobs(self) -> Sequence[bytes]:
         return ()
 
+    def extra_offsets(self) -> Sequence[Sequence[int]]:
+        return ()
+
+    def extra_variable_indexes(self) -> dict[str, tuple[int, int]]:
+        return {}
+
     def extra_formatted_as_text(self) -> bool:
         return False
 
@@ -113,6 +119,8 @@ class NormalizedSource(Source):
         self._first_extra = normalized.first_extra
         self._extra_counts = normalized.extra_counts
         self._extra_blobs = normalized.extra_blobs
+        self._extra_offsets = normalized.extra_offsets
+        self._extra_variable_indexes = normalized.get_extra_variable_indexes()
         self._serialized = serialized
 
     def text(self) -> str:
@@ -135,6 +143,12 @@ class NormalizedSource(Source):
 
     def extra_blobs(self) -> Sequence[bytes]:
         return self._extra_blobs
+
+    def extra_offsets(self) -> Sequence[Sequence[int]]:
+        return self._extra_offsets
+
+    def extra_variable_indexes(self) -> dict[str, tuple[int, int]]:
+        return self._extra_variable_indexes
 
     @staticmethod
     def from_string(text: str) -> NormalizedSource:

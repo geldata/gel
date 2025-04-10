@@ -32,12 +32,14 @@ class Entry:
     tokens: list[OpaqueToken]
 
     extra_blobs: list[bytes]
+    extra_offsets: list[list[int]]
 
     first_extra: typing.Optional[int]
 
     extra_counts: list[int]
 
     def get_variables(self) -> dict[str, typing.Any]: ...
+    def get_extra_variable_indexes(self) -> dict[str, tuple[int, int]]: ...
     def pack(self) -> bytes: ...
 
 def normalize(text: str) -> Entry: ...

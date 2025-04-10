@@ -8,7 +8,7 @@ use gel_protocol::codec;
 use gel_protocol::model::{BigInt, Decimal};
 use pyo3::exceptions::{PyAssertionError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyFloat, PyInt, PyList, PyString};
+use pyo3::types::{PyBytes, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple};
 
 use crate::errors::SyntaxError;
 use crate::normalize::{normalize as _normalize, Error, PackedEntry, Variable};
@@ -42,6 +42,9 @@ pub struct Entry {
     #[pyo3(get)]
     extra_blobs: PyObject,
 
+    #[pyo3(get)]
+    extra_offsets: PyObject,
+
     extra_named: bool,
 
     #[pyo3(get)]
@@ -55,13 +58,18 @@ pub struct Entry {
 
 impl Entry {
     pub fn new(py: Python, entry: crate::normalize::Entry) -> PyResult<Self> {
-        let blobs = serialize_all(py, &entry.variables)?;
+        let (blobs, offsets) =
+            serialize_all(&entry.variables).map_err(PyAssertionError::new_err)?;
+        let py_blobs = PyList::new(py, blobs.iter().map(|buf| PyBytes::new(py, buf)))?;
+        let py_offsets = PyList::new(py, offsets)?;
+
         let counts = entry.variables.iter().map(|x| x.len());
 
         Ok(Entry {
             key: PyBytes::new(py, &entry.hash[..]).into(),
             tokens: tokens_to_py(py, entry.tokens.clone())?.into_any(),
-            extra_blobs: blobs.into(),
+            extra_blobs: py_blobs.into(),
+            extra_offsets: py_offsets.into(),
             extra_named: entry.named_args,
             first_extra: entry.first_arg,
             extra_counts: PyList::new(py, counts)?.into(),
@@ -74,20 +82,20 @@ impl Entry {
 impl Entry {
     fn get_variables(&self, py: Python) -> PyResult<PyObject> {
         let vars = PyDict::new(py);
-        let first = match self.first_extra {
-            Some(first) => first,
-            None => return Ok(vars.into()),
-        };
-        for (idx, var) in self.entry_pack.variables.iter().flatten().enumerate() {
-            let s = if self.extra_named {
-                format!("__edb_arg_{}", first + idx)
-            } else {
-                (first + idx).to_string()
-            };
-            vars.set_item(s, TokenizerValue(&var.value))?;
+        for (param_name, _, _, value) in VariableNameIter::new(self) {
+            vars.set_item(param_name, TokenizerValue(value))?;
         }
 
         Ok(vars.into())
+    }
+
+    fn get_extra_variable_indexes(&self, py: Python) -> PyResult<PyObject> {
+        let indexes = PyDict::new(py);
+        for (param_name, blob_index, var_index, _) in VariableNameIter::new(self) {
+            indexes.set_item(param_name, PyTuple::new(py, [blob_index, var_index])?)?;
+        }
+
+        Ok(indexes.into())
     }
 
     fn pack(&self, py: Python) -> PyResult<PyObject> {
@@ -98,12 +106,80 @@ impl Entry {
     }
 }
 
-pub fn serialize_extra(variables: &[Variable]) -> Result<Bytes, String> {
+struct VariableNameIter<'a> {
+    entry_pack: &'a PackedEntry,
+    first_extra: Option<usize>,
+    extra_named: bool,
+    name_index: usize,
+    blob_index: usize,
+    var_index: usize,
+}
+
+impl<'a> VariableNameIter<'a> {
+    pub fn new(entry: &'a Entry) -> Self {
+        VariableNameIter {
+            entry_pack: &entry.entry_pack,
+            first_extra: entry.first_extra,
+            extra_named: entry.extra_named,
+            name_index: 0,
+            blob_index: 0,
+            var_index: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for VariableNameIter<'a> {
+    type Item = (String, usize, usize, &'a Value);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Check termination
+        let first = match self.first_extra {
+            Some(first) => first,
+            None => return None,
+        };
+        if self.blob_index >= self.entry_pack.variables.len() {
+            return None;
+        }
+        if self.var_index >= self.entry_pack.variables[self.blob_index].len() {
+            return None;
+        }
+
+        // Get result
+        let blob_vars = &self.entry_pack.variables[self.blob_index];
+
+        let name = if self.extra_named {
+            format!("__edb_arg_{}", first + self.name_index)
+        } else {
+            (first + self.name_index).to_string()
+        };
+
+        let result = (
+            name,
+            self.blob_index,
+            self.var_index,
+            &blob_vars[self.var_index].value,
+        );
+
+        // Advance indexes
+        self.var_index += 1;
+        if self.var_index >= blob_vars.len() {
+            self.var_index = 0;
+            self.blob_index += 1;
+        }
+        self.name_index += 1;
+
+        Some(result)
+    }
+}
+
+pub fn serialize_extra(variables: &[Variable]) -> Result<(Bytes, Vec<usize>), String> {
     use gel_protocol::codec::Codec;
     use gel_protocol::value::Value as P;
 
     let mut buf = BytesMut::new();
+    let mut offsets = Vec::new();
     buf.reserve(4 * variables.len());
+    offsets.reserve(1 + variables.len());
     for var in variables {
         buf.reserve(4);
         let pos = buf.len();
@@ -156,20 +232,21 @@ pub fn serialize_extra(variables: &[Variable]) -> Result<Bytes, String> {
                 .map_err(|_| "element isn't too long".to_owned())?
                 .to_be_bytes(),
         );
+        offsets.push(pos + 4);
     }
-    Ok(buf.freeze())
+    offsets.push(buf.len());
+    Ok((buf.freeze(), offsets))
 }
 
-pub fn serialize_all<'a>(
-    py: Python<'a>,
-    variables: &[Vec<Variable>],
-) -> PyResult<Bound<'a, PyList>> {
-    let mut buf = Vec::with_capacity(variables.len());
+pub fn serialize_all(variables: &[Vec<Variable>]) -> Result<(Vec<Bytes>, Vec<Vec<usize>>), String> {
+    let mut bufs = Vec::with_capacity(variables.len());
+    let mut offsets = Vec::with_capacity(variables.len());
     for vars in variables {
-        let bytes = serialize_extra(vars).map_err(PyAssertionError::new_err)?;
-        buf.push(PyBytes::new(py, &bytes));
+        let (bytes, curr_offsets) = serialize_extra(vars)?;
+        bufs.push(bytes);
+        offsets.push(curr_offsets);
     }
-    PyList::new(py, &buf)
+    Ok((bufs, offsets))
 }
 
 /// Newtype required to define a trait for a foreign type.
