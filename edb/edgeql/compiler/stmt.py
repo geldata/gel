@@ -621,7 +621,10 @@ def compile_UpdateQuery(
     ctx.env.dml_exprs.append(expr)
 
     with ctx.subquery() as ictx:
-        stmt = irast.UpdateStmt(span=expr.span)
+        stmt = irast.UpdateStmt(
+            span=expr.span,
+            sql_on_conflict=expr.sql_on_conflict,
+        )
         init_stmt(stmt, expr, ctx=ictx, parent_ctx=ctx)
 
         with ictx.new() as ectx:

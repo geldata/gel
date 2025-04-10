@@ -406,7 +406,9 @@ def _uncompile_insert_object_stmt(
         )
 
     # on conflict
-    conflict = _uncompile_on_conflict(stmt, sub, sub_table, ctx, stype_refs)
+    conflict = _uncompile_on_conflict(
+        stmt, sub, sub_table, value_id, ctx, stype_refs
+    )
     if conflict:
         ql_stmt_insert.unless_conflict = conflict.ql_unless_conflict
 
@@ -426,7 +428,7 @@ def _uncompile_insert_object_stmt(
 
     ql_singletons = {value_id}
     ql_anchors = {value_name: value_id}
-    external_rels = {
+    external_rels: dict[irast.PathId, ExternalRel] = {
         value_id: (
             value_rel,
             (pgce.PathAspect.SOURCE,),
@@ -436,10 +438,26 @@ def _uncompile_insert_object_stmt(
     if conflict and conflict.update_name is not None:
         assert conflict.update_id
         assert conflict.update_input_placeholder
+
+        # inject path_output for iterator
+        # (that will be injected after resolving)
+        conflict.update_input_placeholder.path_outputs[
+            (conflict.update_id, pgce.PathAspect.VALUE)
+        ] = pgast.ColumnRef(name=(value_iterator,))
+        conflict.update_input_placeholder.path_outputs[
+            (conflict.update_id, pgce.PathAspect.ITERATOR)
+        ] = pgast.ColumnRef(name=(value_iterator,))
+
+        # register __cu__ as singleton and provided by an external rel
         ql_singletons.add(conflict.update_id)
         ql_anchors[conflict.update_name] = conflict.update_id
         external_rels[conflict.update_id] = (
-            conflict.update_input_placeholder, (pgce.PathAspect.SOURCE,),
+            conflict.update_input_placeholder,
+            (
+                pgce.PathAspect.SOURCE,
+                pgce.PathAspect.ITERATOR,
+                pgce.PathAspect.VALUE,
+            ),
         )
 
     return UncompiledDML(
@@ -459,6 +477,9 @@ def _uncompile_insert_object_stmt(
 
             conflict_update_input=conflict.update_input if conflict else None,
             conflict_update_name=conflict.update_name if conflict else None,
+            conflict_update_iterator=(
+                conflict.update_iterator if conflict else None
+            ),
             # these will be populated after compilation
             output_ctes=[],
             output_relation_name='',
@@ -480,6 +501,9 @@ class UncompileOnConflict:
     # name of the CTE that will contain resolved update_input
     update_name: Optional[str] = None
 
+    # name of the IR anchor which provides the iterator to the update stmt
+    update_iterator: Optional[str] = None
+
     # IR id which can be used as an anchor that will refer to the update_input
     update_id: Optional[irast.PathId] = None
 
@@ -497,6 +521,7 @@ def _uncompile_on_conflict(
     stmt: pgast.InsertStmt,
     sub: s_objtypes.ObjectType,
     sub_table: context.Table,
+    value_id: irast.PathId,
     ctx: Context,
     stype_refs: dict[uuid.UUID, list[qlast.Set]]
 ) -> Optional[UncompileOnConflict]:
@@ -584,6 +609,7 @@ def _uncompile_on_conflict(
 
     # construct update shape
     update_name = ctx.alias_generator.get('cu')
+    iterator_name = ctx.alias_generator.get('cu_iter')
     update_id = irast.PathId.from_type(
         ctx.schema,
         sub,
@@ -597,7 +623,7 @@ def _uncompile_on_conflict(
     # IR anchor and placeholder relation for the relation that will provide
     # values for each of the updated columns. This relation will be replaced
     # by the resolved sql relation.
-    conflict_source_ql = qlast.IRAnchor(name=update_name)
+    conflict_source_ql = qlast.Path(steps=[qlast.ObjectRef(name=iterator_name)])
     update_input_placeholder = pgast.Relation(
         name=update_name,
         strip_output_namespaces=True,
@@ -617,11 +643,6 @@ def _uncompile_on_conflict(
             update_input_placeholder.path_outputs[
                 (ptr_id, pgce.PathAspect.VALUE)] = output
 
-        if ptr_name == 'id':
-            update_input_placeholder.path_outputs[
-                (update_id, pgce.PathAspect.VALUE)
-            ] = output
-
         conflict_update_shape.append(
             _construct_assign_element_for_ptr(
                 conflict_source_ql,
@@ -639,6 +660,15 @@ def _uncompile_on_conflict(
             steps=[s_utils.name_to_ast_ref(sub_name)]
         ),
         shape=conflict_update_shape,
+        sql_on_conflict=(value_id, update_id),
+    )
+
+    # update_value relation has to be evaluated *for each conflicting row*
+    # to express this in EdgeQL, we must wrap `update` into a `for` query
+    ql_stmt = qlast.ForQuery(
+        iterator=qlast.Path(steps=[qlast.IRAnchor(name=update_name)]),
+        iterator_alias=iterator_name,
+        result=ql_update,
     )
 
     # the relation that we will later resolve and which contains all columns
@@ -661,7 +691,7 @@ def _uncompile_on_conflict(
         where_clause=stmt.on_conflict.update_where,
     )
     return UncompileOnConflict(
-        ql_unless_conflict=(on_clause, ql_update),
+        ql_unless_conflict=(on_clause, ql_stmt),
         update_name=update_name,
         update_id=update_id,
         update_input=update_input,
@@ -1070,8 +1100,6 @@ def _uncompile_insert_pointer_stmt(
             value_relation_input=value_relation,
             value_columns=value_columns,
             value_iterator_name=value_iterator,
-            conflict_update_input=None,
-            conflict_update_name=None,
             # these will be populated after compilation
             output_ctes=[],
             output_relation_name='',
@@ -1351,8 +1379,6 @@ def _uncompile_delete_object_stmt(
             value_relation_input=value_relation,
             value_columns=value_columns,
             value_iterator_name=None,
-            conflict_update_input=None,
-            conflict_update_name=None,
             # these will be populated after compilation
             output_ctes=[],
             output_relation_name='',
@@ -1555,8 +1581,6 @@ def _uncompile_delete_pointer_stmt(
             value_relation_input=value_relation,
             value_columns=value_columns,
             value_iterator_name=value_iterator,
-            conflict_update_input=None,
-            conflict_update_name=None,
             # these will be populated after compilation
             output_ctes=[],
             output_relation_name='',
@@ -1815,8 +1839,6 @@ def _uncompile_update_object_stmt(
             value_relation_input=value_relation,
             value_columns=value_columns,
             value_iterator_name=None,
-            conflict_update_input=None,
-            conflict_update_name=None,
             # these will be populated after compilation
             output_ctes=[],
             output_relation_name='',
@@ -2014,6 +2036,7 @@ def _compile_uncompiled_dml(
             value_iterator_name=stmt.early_result.value_iterator_name,
             conflict_update_input=stmt.early_result.conflict_update_input,
             conflict_update_name=stmt.early_result.conflict_update_name,
+            conflict_update_iterator=stmt.early_result.conflict_update_iterator,
             output_ctes=stmt_ctes,
             output_relation_name=output_cte.name,
             output_namespace=output_namespace,
@@ -2043,10 +2066,12 @@ def _collect_stmt_ctes(
     ir_stmts = {ir_stmt}
     if isinstance(ir_stmt, irast.InsertStmt):
         if ir_stmt.on_conflict and ir_stmt.on_conflict.else_ir:
-            assert isinstance(
-                ir_stmt.on_conflict.else_ir.expr, irast.MutatingStmt
-            )
-            ir_stmts.add(ir_stmt.on_conflict.else_ir.expr)
+            else_expr = ir_stmt.on_conflict.else_ir.expr
+            assert isinstance(else_expr, irast.SelectStmt), else_expr
+            assert else_expr.iterator_stmt
+            dml_stmt = else_expr.result.expr
+            assert isinstance(dml_stmt, irast.MutatingStmt), dml_stmt
+            ir_stmts.add(dml_stmt)
 
     stmt_ctes = []
     found_it = False
@@ -2149,7 +2174,10 @@ def resolve_DMLQuery(
     return _fini_resolve_dml(stmt, compiled_dml, ctx=ctx)
 
 
-def _resolve_dml_value_rel(compiled_dml: context.CompiledDML, *, ctx: Context):
+def _resolve_dml_value_rel(
+    compiled_dml: context.CompiledDML, *, ctx: Context
+):
+
     # resolve the value relation
     with ctx.child() as sctx:
         # this subctx is needed so it is not deemed as top-level which would
@@ -2232,7 +2260,9 @@ def _resolve_dml_value_rel(compiled_dml: context.CompiledDML, *, ctx: Context):
 
 
 def _resolve_conflict_update_rel(
-    compiled_dml: context.CompiledDML, *, ctx: Context
+    compiled_dml: context.CompiledDML,
+    *,
+    ctx: Context,
 ):
     if not (
         compiled_dml.conflict_update_name
@@ -2249,10 +2279,41 @@ def _resolve_conflict_update_rel(
         # but it is not a "real" subquery context
         sctx.subquery_depth -= 1
 
+        # include 'excluded' rel var in scope
+        sctx.scope.tables.append(
+            context.Table(
+                name='excluded',
+                reference_as='excluded',
+                columns=[
+                    context.Column(
+                        name=col_name,
+                        kind=context.ColumnByName(reference_as=col_name),
+                    )
+                    for col_name, _ in compiled_dml.value_columns
+                ]
+            )
+        )
+
         cu_rel, cu_table = dispatch.resolve_relation(
             compiled_dml.conflict_update_input, ctx=sctx
         )
-        assert isinstance(cu_rel, pgast.Query)
+        assert isinstance(cu_rel, pgast.SelectStmt)
+
+        # actaully add the 'excluded' rel var
+        cu_rel.from_clause.append(
+            pgast.RelRangeVar(
+                relation=pgast.Relation(name=compiled_dml.value_cte_name),
+                alias=pgast.Alias(aliasname='excluded'),
+            )
+        )
+
+        # inject interator column, which we can pull from excluded
+        assert compiled_dml.value_iterator_name
+        cu_rel.target_list.append(pgast.ResTarget(
+            val=pgast.ColumnRef(
+                name=('excluded', compiled_dml.value_iterator_name)
+            ),
+        ))
 
     if cu_rel.ctes:
         ctx.ctes_buffer.extend(cu_rel.ctes)
