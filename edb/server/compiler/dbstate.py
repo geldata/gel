@@ -813,7 +813,16 @@ class TransactionState(NamedTuple):
 
 
 class Transaction:
+
+    # Fields that affects the state key are listed here. The key is used
+    # to determine if we can reuse a previously-pickled state, so remember
+    # to update get_state_key() below when adding new fields affecting the
+    # state key.  See also edb/server/compiler_pool/worker.py
+    _id: int
     _savepoints: dict[int, TransactionState]
+    _current: TransactionState
+
+    # backref to the owning state object
     _constate: CompilerConnectionState
 
     def __init__(
@@ -853,6 +862,13 @@ class Transaction:
 
         self._state0 = self._current
         self._savepoints = {}
+
+    def get_state_key(self) -> tuple[int, tuple[int, ...], TransactionState]:
+        return (
+            self._id,
+            tuple(self._savepoints.keys()),
+            self._current,  # TransactionState is immutable
+        )
 
     @property
     def id(self) -> int:
@@ -1044,7 +1060,14 @@ CStateStateType = tuple[dict[int, TransactionState], Transaction, int]
 class CompilerConnectionState:
     __slots__ = ("_savepoints_log", "_current_tx", "_tx_count", "_user_schema")
 
+    # Fields that affects the state key are listed here. The key is used
+    # to determine if we can reuse a previously-pickled state, so remember
+    # to update get_state_key() below when adding new fields affecting the
+    # state key.  See also edb/server/compiler_pool/worker.py
+    _tx_count: int
     _savepoints_log: dict[int, TransactionState]
+    _current_tx: Transaction
+
     _user_schema: Optional[s_schema.FlatSchema]
 
     def __init__(
@@ -1071,6 +1094,16 @@ class CompilerConnectionState:
             cached_reflection=cached_reflection,
         )
         self._savepoints_log = {}
+
+    def get_state_key(self) -> tuple[tuple[int, ...], int, tuple[Any, ...]]:
+        # This would be much more efficient if CompilerConnectionState
+        # and TransactionState objects were immutable. But they are not,
+        # so we have
+        return (
+            tuple(self._savepoints_log.keys()),
+            self._tx_count,
+            self._current_tx.get_state_key(),
+        )
 
     def __getstate__(self) -> CStateStateType:
         return self._savepoints_log, self._current_tx, self._tx_count
