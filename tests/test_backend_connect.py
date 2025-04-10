@@ -29,8 +29,10 @@ import shutil
 import socket
 import ssl
 import stat
+import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 import unittest.mock
 import urllib.parse
@@ -716,6 +718,62 @@ class TestConnection(ClusterTestCase):
             await verify_fails('require')
             await verify_fails('verify-ca')
             await verify_fails('verify-full')
+
+    async def test_connection_memory_leak(self):
+        import inspect
+
+        source_description = (
+            f"ClusterTestCase: {inspect.currentframe().f_back.f_code.co_name}"
+        )  # type: ignore
+        params = self.cluster.get_pgaddr()
+        params.update(database=self.dbname)
+
+        script = textwrap.dedent(f"""
+            import asyncio
+            import gc
+
+            from edb.server import pgcon
+            from edb.pgsql import params
+
+            async def run():
+                con = await pgcon.pg_connect(
+                    {params.to_dsn()!r},
+                    source_description={source_description!r},
+                    backend_params=params.get_default_runtime_params(),
+                    apply_init_script=False,
+                )
+                con.terminate()
+
+            asyncio.run(run())  # warm up
+
+            gc.collect()
+            gc.collect()
+            gc.collect()
+
+            count = len(gc.get_objects())
+
+            for i in range(100):
+                asyncio.run(run())
+
+                gc.collect()
+                gc.collect()
+                gc.collect()
+
+                new_count = len(gc.get_objects())
+                if count != new_count:
+                    raise AssertionError(
+                        f"Memory leak detected on iteration {{i}}: "
+                        f"{{count}} != {{new_count}}"
+                    )
+        """)
+        try:
+            subprocess.check_output(
+                [sys.executable, "-c", script],
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            self.fail(e.stdout)
 
 
 class BaseTestSSLConnection(ClusterTestCase):
