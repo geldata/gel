@@ -1279,7 +1279,7 @@ class OnConflictClause(Base):
     select_ir: Set
     always_check: bool
     else_ir: typing.Optional[Set]
-    update_query_set: typing.Optional[Set] = None
+    check_anchor: typing.Optional[PathId] = None
     else_fail: typing.Optional[MutatingStmt] = None
 
 

@@ -506,7 +506,7 @@ def fini_dml_stmt(
                 stop_ref=stop_ref,
                 dml_stmts=dml_stack, path_id=ir_stmt.subject.path_id, ctx=ctx)
 
-        process_update_conflicts(ir_stmt=ir_stmt, dml_parts=parts, ctx=ctx)
+        process_extra_conflicts(ir_stmt=ir_stmt, dml_parts=parts, ctx=ctx)
     elif isinstance(ir_stmt, irast.DeleteStmt):
         base_typeref = ir_stmt.subject.typeref.real_material_type
 
@@ -925,15 +925,8 @@ def process_insert_body(
         ctx.toplevel_stmt.append_cte(real_insert_cte)
         ctx.toplevel_stmt.append_cte(insert_cte)
 
-    for extra_conflict in (ir_stmt.conflict_checks or ()):
-        compile_insert_else_body(
-            insert_stmt,
-            ir_stmt,
-            extra_conflict,
-            inner_iterator,
-            None,
-            ctx=ctx,
-        )
+    # XXX: do we need to pass in inner_iterator here?
+    process_extra_conflicts(ir_stmt=ir_stmt, dml_parts=dml_parts, ctx=ctx)
 
 
 def process_insert_rewrites(
@@ -1488,7 +1481,7 @@ def compile_insert_else_body(
         ictx.expr_exposed = False
         ictx.path_scope[subject_id] = ictx.rel
 
-        compile_insert_else_body_failure_check(on_conflict, ctx=ictx)
+        compile_insert_else_body_failure_check(ir_stmt, on_conflict, ctx=ictx)
 
         merge_iterator(enclosing_cte_iterator, ictx.rel, ctx=ictx)
         clauses.setup_iterator_volatility(enclosing_cte_iterator, ctx=ictx)
@@ -1586,6 +1579,7 @@ def compile_insert_else_body(
 
 
 def compile_insert_else_body_failure_check(
+        ir_stmt: irast.MutatingStmt,
         on_conflict: irast.OnConflictClause,
         *,
         ctx: context.CompilerContextLevel) -> None:
@@ -1595,7 +1589,9 @@ def compile_insert_else_body_failure_check(
 
     # Copy the type rels from the possibly conflicting earlier DML
     # into the None overlays so it gets picked up.
-    merge_overlays_globally((else_fail,), ctx=ctx)
+    # Also copy our own overlays, which we care about just for
+    # the pointer overlays.
+    merge_overlays_globally((ir_stmt, else_fail,), ctx=ctx)
 
     # Do some work so that we aren't looking at the existing on-disk
     # data, just newly data created data.
@@ -2166,9 +2162,9 @@ def process_update_shape(
     return (values, external_updates, ptr_map)
 
 
-def process_update_conflicts(
+def process_extra_conflicts(
     *,
-    ir_stmt: irast.UpdateStmt,
+    ir_stmt: irast.MutatingStmt,
     dml_parts: DMLParts,
     ctx: context.CompilerContextLevel,
 ) -> None:
@@ -2176,16 +2172,16 @@ def process_update_conflicts(
         return
 
     for extra_conflict in ir_stmt.conflict_checks:
-        q_set = extra_conflict.update_query_set
-        assert q_set
-        typeref = q_set.path_id.target.real_material_type
+        q_path = extra_conflict.check_anchor
+        assert q_path
+        typeref = q_path.target.real_material_type
         cte, _ = dml_parts.dml_ctes[typeref]
 
         pathctx.put_path_id_map(
-            cte.query, q_set.path_id, ir_stmt.subject.path_id)
+            cte.query, q_path, ir_stmt.subject.path_id)
 
         conflict_iterator = pgast.IteratorCTE(
-            path_id=q_set.path_id, cte=cte,
+            path_id=q_path, cte=cte,
             parent=ctx.enclosing_cte_iterator)
 
         compile_insert_else_body(
