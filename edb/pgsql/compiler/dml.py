@@ -1670,6 +1670,48 @@ def process_update_body(
 
     put_iterator_bond(ctx.enclosing_cte_iterator, contents_select)
 
+    # XXX: remove when update value CTE has identity
+    # For updates that are performed in SQL ON CONFLICT UPDATE, join the
+    # update value CTE with the else-range CTE *on their iterator*. That's
+    # because they don't both have identities.
+    if on_conflict := ir_stmt.sql_on_conflict:
+        value_id, update_id = on_conflict
+        assert ctx.enclosing_cte_iterator
+
+        # XXX: This is hacky as shit.
+        update_iter = (
+            ctx.enclosing_cte_iterator.cte.query  # type: ignore
+            .from_clause[0]
+            .joins[0]
+            .rarg
+            .query
+        )
+        assert isinstance(update_iter, pgast.SelectStmt)
+        value_id = next(
+            p for p, _ in (
+                ctx.enclosing_cte_iterator.cte.query.path_rvar_map.keys()
+            )
+            if p.replace_namespace(set()) == value_id
+        )
+        update_iter.where_clause = astutils.extend_binop(
+            update_iter.where_clause,
+            pgast.Expr(
+                name='=',
+                rexpr=pathctx.get_path_var(
+                    update_iter,
+                    update_id,
+                    aspect=pgce.PathAspect.VALUE,
+                    env=ctx.env
+                ),
+                lexpr=pathctx.get_path_var(
+                    ctx.enclosing_cte_iterator.cte.query,
+                    value_id,
+                    aspect=pgce.PathAspect.ITERATOR,
+                    env=ctx.env
+                ),
+            )
+        )
+
     assert dml_parts.range_cte
     iterator = pgast.IteratorCTE(
         path_id=ir_stmt.subject.path_id,

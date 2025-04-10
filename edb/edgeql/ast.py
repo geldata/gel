@@ -599,6 +599,9 @@ class UpdateQuery(Query):
 
     where: typing.Optional[Expr] = None
 
+    # Temporary metadata needed for SQL ON CONFLICT
+    sql_on_conflict: typing.Optional[tuple[typing.Any, typing.Any]] = None
+
 
 class DeleteQuery(Query):
     subject: Expr

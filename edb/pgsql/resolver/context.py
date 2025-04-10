@@ -200,11 +200,13 @@ class CompiledDML:
 
     # for INSERTs, relation that provides values for UPDATE that happens ON
     # CONFLICT. not yet resolved
-    conflict_update_input: Optional[pgast.BaseRelation]
+    conflict_update_input: Optional[pgast.BaseRelation] = None
 
     # for INSERTs, name of CTE that provides values for UPDATE that happens ON
     # CONFLICT
-    conflict_update_name: Optional[str]
+    conflict_update_name: Optional[str] = None
+
+    conflict_update_iterator: Optional[str] = None
 
     # CTEs that perform the operation
     output_ctes: list[pgast.CommonTableExpr]
