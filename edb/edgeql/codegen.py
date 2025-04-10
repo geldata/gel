@@ -843,6 +843,9 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
 
     # DDL nodes
 
+    def visit_DDLQuery(self, node: qlast.DDLQuery) -> None:
+        self.visit(node.query)
+
     def visit_Position(self, node: qlast.Position) -> None:
         self.write(node.position)
         if node.ref:

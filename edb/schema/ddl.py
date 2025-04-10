@@ -439,7 +439,7 @@ def cmd_from_ddl(
     testmode: bool=False
 ) -> sd.Command:
     ddl = s_expr.imprint_expr_context(stmt, modaliases)
-    assert isinstance(ddl, qlast.DDLCommand)
+    assert isinstance(ddl, qlast.DDLOperation)
 
     if context is None:
         context = sd.CommandContext(

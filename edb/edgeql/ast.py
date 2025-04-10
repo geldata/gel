@@ -687,6 +687,11 @@ class DDLCommand(DDLOperation, Command):
     __abstract_node__ = True
 
 
+class DDLQuery(DDLCommand):
+    '''A query wrapped in DDL. Appears in migrations.'''
+    query: Query
+
+
 class NonTransactionalDDLCommand(DDLCommand):
     __abstract_node__ = True
 

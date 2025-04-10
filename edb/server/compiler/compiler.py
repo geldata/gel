@@ -1874,10 +1874,13 @@ def _compile_ql_query(
         (mstate := current_tx.get_migration_state())
         and not migration_block_query
     ):
-        mstate = mstate._replace(
-            accepted_cmds=mstate.accepted_cmds + (ql,),
-        )
-        current_tx.update_migration_state(mstate)
+        if isinstance(ql, qlast.Query):
+            mstate = mstate._replace(
+                accepted_cmds=(
+                    mstate.accepted_cmds + (qlast.DDLQuery(query=ql),)
+                )
+            )
+            current_tx.update_migration_state(mstate)
 
         return dbstate.NullQuery()
 
