@@ -356,7 +356,7 @@ def _uncompile_insert_object_stmt(
     stype_refs: dict[uuid.UUID, list[qlast.Set]] = {}
     for index, expected_col in enumerate(expected_columns):
         ptr, ptr_name, is_link = _get_pointer_for_column(expected_col, sub, ctx)
-        value_columns.append((ptr_name, is_link))
+        value_columns.append((expected_col.name, ptr_name, is_link))
 
         # inject type annotation into value relation
         _try_inject_ptr_type_cast(value_relation, index, ptr, ctx)
@@ -472,9 +472,9 @@ def _uncompile_insert_object_stmt(
         for column in sub_table.columns:
             if column.hidden:
                 continue
-            ptr, col_name, _ = _get_pointer_for_column(column, sub, ctx)
+            ptr, _, _ = _get_pointer_for_column(column, sub, ctx)
             path_id = _get_ptr_id(subject_id, ptr, ctx)
-            subject_columns.append((col_name, path_id))
+            subject_columns.append((column.name, path_id))
 
     return UncompiledDML(
         input=stmt,
@@ -955,7 +955,7 @@ def _uncompile_insert_pointer_stmt(
         name=value_cte_name,
         strip_output_namespaces=True,
     )
-    value_columns: list[tuple[str, bool]] = []
+    value_columns: list[tuple[str, str, bool]] = []
     for index, expected_col in enumerate(expected_columns):
         ptr: Optional[s_pointers.Pointer] = None
         if expected_col.name == 'source':
@@ -992,7 +992,7 @@ def _uncompile_insert_pointer_stmt(
             assert ptr
             _try_inject_ptr_type_cast(value_relation, index, ptr, ctx)
 
-        value_columns.append((ptr_name, is_link))
+        value_columns.append((expected_col.name, ptr_name, is_link))
 
     # source needs an iterator column, so we need to invent one
     # Here we only decide on the name of that iterator column, the actual column
@@ -1034,7 +1034,7 @@ def _uncompile_insert_pointer_stmt(
                         ],
                     ),
                 )
-                for ptr_name, _ in value_columns
+                for ptr_name, _, _ in value_columns
                 if ptr_name not in ('source', 'target')
             ],
         )
@@ -1349,7 +1349,7 @@ def _uncompile_delete_object_stmt(
         name=value_cte_name,
         strip_output_namespaces=True,
     )
-    value_columns = [('id', False)]
+    value_columns = [('id', 'id', False)]
 
     output_var = pgast.ColumnRef(name=('id',), nullable=False)
     value_rel.path_outputs[(value_id, pgce.PathAspect.IDENTITY)] = output_var
@@ -1493,7 +1493,7 @@ def _uncompile_delete_pointer_stmt(
         name=value_cte_name,
         strip_output_namespaces=True,
     )
-    value_columns = [('source', False), ('target', False)]
+    value_columns = [('source', 'source', False), ('target', 'target', False)]
 
     var = pgast.ColumnRef(name=('source',), nullable=True)
     value_rel.path_outputs[(source_id, pgce.PathAspect.VALUE)] = var
@@ -1753,13 +1753,13 @@ def _uncompile_update_object_stmt(
     value_rel.path_outputs[(value_id, pgce.PathAspect.ITERATOR)] = output_var
     value_rel.path_outputs[(value_id, pgce.PathAspect.VALUE)] = output_var
 
-    value_columns = [('id', False)]
+    value_columns = [('id', 'id', False)]
     update_shape = []
     stype_refs: dict[uuid.UUID, list[qlast.Set]] = {}
     for index, (col, val) in enumerate(column_updates):
         ptr, ptr_name, is_link = _get_pointer_for_column(col, sub, ctx)
         if not is_default(val):
-            value_columns.append((ptr_name, is_link))
+            value_columns.append((col.name, ptr_name, is_link))
 
         # inject type annotation into value relation
         _try_inject_ptr_type_cast(value_relation, index + 1, ptr, ctx)
@@ -2226,7 +2226,7 @@ def _resolve_dml_value_rel(
         assert isinstance(val_rel, pgast.Query)
 
     if len(compiled_dml.value_columns) != len(val_table.columns):
-        col_names = ', '.join(c for c, _ in compiled_dml.value_columns)
+        col_names = ', '.join(c for c, _, _ in compiled_dml.value_columns)
         raise errors.QueryError(
             f'Expected {len(compiled_dml.value_columns)} columns '
             f'({col_names}), but got {len(val_table.columns)}',
@@ -2242,11 +2242,11 @@ def _resolve_dml_value_rel(
     # wrap the value relation into a "pre-projection",
     # so we can add type casts for link ids and an iterator column
     pre_projection_needed = compiled_dml.value_iterator_name or (
-        any(cast_to_uuid for _, cast_to_uuid in compiled_dml.value_columns)
+        any(cast_to_uuid for _, _, cast_to_uuid in compiled_dml.value_columns)
     )
     if pre_projection_needed:
         value_target_list: list[pgast.ResTarget] = []
-        for val_col, (ptr_name, cast_to_uuid) in zip(
+        for val_col, (_col_name, ptr_name, cast_to_uuid) in zip(
             val_table.columns, compiled_dml.value_columns
         ):
             # prepare pre-projection of this pointer value
@@ -2332,9 +2332,9 @@ def _resolve_conflict_update_rel(
             columns=[
                 context.Column(
                     name=col_name,
-                    kind=context.ColumnByName(reference_as=col_name),
+                    kind=context.ColumnByName(reference_as=ptr_name),
                 )
-                for col_name, _ in compiled_dml.value_columns
+                for col_name, ptr_name, _ in compiled_dml.value_columns
             ]
         )
     )

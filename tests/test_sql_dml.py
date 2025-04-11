@@ -757,10 +757,9 @@ class TestSQLDataModificationLanguage(tb.SQLQueryTestCase):
             )
 
     async def test_sql_dml_insert_33(self):
-        # TODO: error message should say `owner_id` not `owner`
         with self.assertRaisesRegex(
             asyncpg.PostgresError,
-            'Expected 2 columns \\(title, owner\\), but got 1',
+            'Expected 2 columns \\(title, owner_id\\), but got 1',
         ):
             await self.squery_values(
                 '''
@@ -1434,6 +1433,134 @@ class TestSQLDataModificationLanguage(tb.SQLQueryTestCase):
             '''
         )
         self.assertEqual(res, [['y', 26], ['z', 32]])
+
+    async def test_sql_dml_insert_65(self):
+        # ON CONFLICT access link_id
+
+        [[doc_id]] = await self.squery_values(
+            '''
+            INSERT INTO "Document" DEFAULT VALUES RETURNING id
+            '''
+        )
+
+        res = await self.scon.execute(
+            '''
+            INSERT INTO "Map" (key, value, metadata_id) VALUES
+            ('x', 10, $1)
+            ON CONFLICT (key)
+            DO UPDATE SET key = (excluded.metadata_id)::text
+            ''',
+            doc_id
+        )
+        self.assertEqual(res, 'INSERT 0 1')
+
+        res = await self.squery_values(
+            '''
+            INSERT INTO "Map" (key, value) VALUES ('x', 15)
+            ON CONFLICT (key)
+            DO UPDATE SET key = ("Map".metadata_id)::text
+            RETURNING key, value
+            '''
+        )
+        self.assertEqual(res, [[str(doc_id), 10]])
+
+    async def test_sql_dml_insert_66(self):
+        # ON CONFLICT UPDATE multiple columns
+
+        [[doc_id]] = await self.squery_values(
+            '''
+            INSERT INTO "Document" DEFAULT VALUES RETURNING id
+            '''
+        )
+
+        res = await self.scon.execute(
+            '''
+            INSERT INTO "Map" (key, value, metadata_id) VALUES
+            ('x', 10, $1)
+            ''',
+            doc_id
+        )
+        self.assertEqual(res, 'INSERT 0 1')
+
+        res = await self.squery_values(
+            '''
+            INSERT INTO "Map" (key, value) VALUES ('x', 15)
+            ON CONFLICT (key)
+            DO UPDATE SET
+                key = ("Map".metadata_id)::text,
+                value = value + excluded.value
+            RETURNING key, value
+            '''
+        )
+        self.assertEqual(res, [[str(doc_id), 25]])
+
+    async def test_sql_dml_insert_67(self):
+        # multiple INSERT ON CONFLICT
+
+        res = await self.scon.execute(
+            '''
+            INSERT INTO "Map" (key, value) VALUES ('x', 5), ('y', 3)
+            '''
+        )
+        self.assertEqual(res, 'INSERT 0 2')
+
+        res = await self.squery_values(
+            '''
+            WITH hello as (
+                INSERT INTO "Map" (key, value) VALUES ('x', 15)
+                ON CONFLICT (key)
+                DO UPDATE SET value = value + excluded.value
+                RETURNING value
+            ),
+            world as (
+                INSERT INTO "Map" (key, value) VALUES ('y', 8)
+                ON CONFLICT (key)
+                DO UPDATE SET value = value + excluded.value
+                RETURNING value
+            )
+            SELECT hello.value, world.value FROM hello, world
+            '''
+        )
+        self.assertEqual(res, [[20, 11]])
+
+    async def test_sql_dml_insert_68(self):
+        # multiple INSERT ON CONFLICT
+
+        res = await self.scon.execute(
+            '''
+            INSERT INTO "Map" (key, value) VALUES ('x', 5)
+            '''
+        )
+        self.assertEqual(res, 'INSERT 0 1')
+
+        # these two inserts are in conflict with each other
+        # the first should execute normally
+        # the second should not see the inserted row of the first
+        # .. so it should not run the second update
+        # .. but it should also not violate the constraint
+        # .. so it is equivalent to ON CONFLICT DO NOTHING
+        # .. so RETURNING is empty
+        res = await self.squery_values(
+            '''
+            WITH hello as (
+                INSERT INTO "Map" (key, value) VALUES ('x', 15)
+                ON CONFLICT (key)
+                DO UPDATE SET value = value + excluded.value
+                RETURNING value
+            )
+            INSERT INTO "Map" (key, value)
+            SELECT 'x', value FROM hello
+            ON CONFLICT (key)
+            DO UPDATE SET value = value + excluded.value
+            RETURNING value
+            '''
+        )
+        self.assertEqual(res, [])
+
+        res = await self.squery_values(
+            'SELECT key, value FROM "Map"'
+        )
+        self.assertEqual(res, [['x', 20]])
 
     async def test_sql_dml_delete_01(self):
         # delete, inspect CommandComplete tag

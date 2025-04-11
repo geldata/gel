@@ -193,7 +193,8 @@ class CompiledDML:
     value_relation_input: pgast.BaseRelation
 
     # columns that are expected to be produced by the value relation
-    value_columns: list[tuple[str, bool]]
+    # contains: column name, ptr name, is_link
+    value_columns: list[tuple[str, str, bool]]
 
     # name of the column in the value relation, that should provide the identity
     value_iterator_name: Optional[str]
