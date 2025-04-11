@@ -178,6 +178,7 @@ cdef class DatabaseConnectionView:
         bint _in_tx_with_set
         bint _tx_error
         uint64_t _in_tx_seq
+        object _in_tx_isolation_level
 
         uint64_t _capability_mask
 
@@ -256,4 +257,5 @@ cdef class DatabaseConnectionView:
         allowed_capabilities,
         error_constructor,
         reason,
+        unsafe_isolation_dangers,
     )

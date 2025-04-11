@@ -44,6 +44,14 @@ class TestServerProto(tb.QueryTestCase):
             CREATE REQUIRED PROPERTY tmp -> std::str;
         };
 
+        CREATE TYPE Parent {
+            CREATE REQUIRED PROPERTY tmp -> std::str {
+                CREATE CONSTRAINT exclusive;
+            }
+        };
+        CREATE TYPE Child EXTENDING Parent;
+
+
         CREATE MODULE test;
         CREATE TYPE test::Tmp2 {
             CREATE REQUIRED PROPERTY tmp -> std::str;
@@ -1596,12 +1604,9 @@ class TestServerProto(tb.QueryTestCase):
 
     async def test_server_proto_tx_09(self):
         try:
-            with self.assertRaisesRegex(
-                    edgedb.TransactionError,
-                    'only supported in read-only transactions'):
-                await self.con.query('''
-                    START TRANSACTION ISOLATION REPEATABLE READ;
-                ''')
+            await self.con.query('''
+                START TRANSACTION ISOLATION REPEATABLE READ;
+            ''')
         finally:
             await self.con.query(f'''
                 ROLLBACK;
@@ -2109,6 +2114,27 @@ class TestServerProto(tb.QueryTestCase):
                 };
             ''')
 
+    async def assert_no_isolation_dangers(self):
+        with self.assertRaisesRegex(
+            edgedb.CapabilityError,
+            "with transaction isolation level REPEATABLE READ",
+        ):
+            await self.con.query('''
+                INSERT Parent {
+                    tmp := 'aaa'
+                };
+            ''')
+        if not self.con.is_in_transaction():
+            with self.assertRaisesRegex(
+                edgedb.CapabilityError,
+                "with transaction isolation level REPEATABLE READ",
+            ):
+                await self.con.query('''
+                    INSERT Child {
+                        tmp := 'aaa'
+                    };
+                ''')
+
     async def test_server_proto_tx_23(self):
         # Test that default_transaction_isolation is respected
 
@@ -2134,10 +2160,7 @@ class TestServerProto(tb.QueryTestCase):
         ''')
 
         try:
-            await self.assert_read_only_and_default(
-                "cannot execute.*RepeatableRead",
-                default='ReadWrite',
-            )
+            await self.assert_no_isolation_dangers()
         finally:
             await self.con.query('''
                 CONFIGURE SESSION
@@ -2161,10 +2184,7 @@ class TestServerProto(tb.QueryTestCase):
                     SET default_transaction_access_mode := 'ReadWrite';
             ''')
 
-            await self.assert_read_only_and_default(
-                "cannot execute.*RepeatableRead",
-                default='ReadWrite',
-            )
+            await self.assert_no_isolation_dangers()
         finally:
             await self.con.query('''
                 CONFIGURE SESSION
@@ -2228,7 +2248,8 @@ class TestServerProto(tb.QueryTestCase):
             [42])
 
     async def test_server_proto_tx_28(self):
-        # Test that non-serializable START TRANSACTION enforces read-only
+        # Test that non-serializable START TRANSACTION does *not*
+        # enforce read-only, because we changed that behavior.
 
         try:
             await self.con.query('''
@@ -2239,9 +2260,7 @@ class TestServerProto(tb.QueryTestCase):
                 START TRANSACTION;
             ''')
 
-            await self.assert_read_only_and_default(
-                'read-only transaction', default='ReadWrite'
-            )
+            await self.assert_no_isolation_dangers()
         finally:
             await self.con.query(f'''
                 ROLLBACK;
@@ -2290,13 +2309,11 @@ class TestServerProto(tb.QueryTestCase):
                 CONFIGURE SESSION
                     SET default_transaction_isolation := 'RepeatableRead';
             ''')
-            with self.assertRaisesRegex(
-                edgedb.TransactionError,
-                'only supported in read-only transactions',
-            ):
-                await self.con.query('''
-                    START TRANSACTION READ WRITE;
-                ''')
+            await self.con.query('''
+                START TRANSACTION READ WRITE;
+            ''')
+
+            await self.assert_no_isolation_dangers()
 
         finally:
             await self.con.query(f'''
