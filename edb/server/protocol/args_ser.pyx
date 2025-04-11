@@ -48,7 +48,7 @@ cdef recode_bind_args_for_script(
     dbview.DatabaseConnectionView dbv,
     dbview.CompiledQuery compiled,
     bytes bind_args,
-    list converted_args,
+    object converted_args,
     ssize_t start,
     ssize_t end,
 ):
@@ -95,13 +95,8 @@ cdef recode_bind_args_for_script(
 
         _inject_globals(dbv, query_unit, bind_data)
 
-        if (
-            unit_group.server_param_conversions
-            and i in unit_group.unit_converted_param_indexes
-        ):
-            # Inject any converted params for this unit
-            for converted_params_index in unit_group.unit_converted_param_indexes[i]:
-                arg = converted_args[converted_params_index]
+        if converted_args and i in converted_args:
+            for arg in converted_args[i]:
                 assert isinstance(arg, ConvertedArg)
                 arg.encode(bind_data)
 
@@ -636,14 +631,16 @@ cdef class ParamConversion:
         param_name,
         conversion_name,
         additional_info,
-        data,
-        source_value,
+        bind_arg_data,
+        constant_value,
+        extra_blob_offsets,
     ):
         self.param_name = param_name
         self.conversion_name = conversion_name
         self.additional_info = additional_info
-        self.data = data
-        self.source_value = source_value
+        self.bind_arg_data = bind_arg_data
+        self.constant_value = constant_value
+        self.extra_blob_offsets = extra_blob_offsets
 
     def get_param_name(self):
         return self.param_name
@@ -654,11 +651,14 @@ cdef class ParamConversion:
     def get_additional_info(self):
         return self.additional_info
 
-    def get_data(self):
-        return self.data
+    def get_bind_arg_data(self):
+        return self.bind_arg_data
 
-    def get_source_value(self):
-        return self.source_value
+    def get_constant_value(self):
+        return self.constant_value
+
+    def get_extra_blob_offsets(self):
+        return self.extra_blob_offsets
 
 
 cdef list[ParamConversion] get_param_conversions(
@@ -685,13 +685,14 @@ cdef list[ParamConversion] get_param_conversions(
         hton.unpack_int32(frb_read(&in_buf, 4))
 
     # First check which parameters' data we need to get
-    param_names = set(
+    # from bind args
+    bind_args_names: set[str] = set(
         param_conversion.param_name
         for param_conversion in server_param_conversions
     )
 
     # Next extract bytes from the bind_args
-    param_datas: dict[str, bytes] = {}
+    bind_arg_datas: dict[str, bytes] = {}
     if in_type_args is not None:
         for param in in_type_args:
             assert isinstance(param, dbstate.Param)
@@ -699,45 +700,77 @@ cdef list[ParamConversion] get_param_conversions(
             in_len = hton.unpack_int32(frb_read(&in_buf, 4))
             data_str = frb_read(&in_buf, in_len)
 
-            if param.name in param_names:
+            if param.name in bind_args_names:
                 data = cpython.PyBytes_FromStringAndSize(data_str, in_len)
-                param_datas[param.name] = data
+                bind_arg_datas[param.name] = data
 
     if frb_get_len(&in_buf):
         raise errors.InputDataError('unexpected trailing data in buffer')
 
-    # Finally, pack it with the resulting ParamConversion
+    # Finally, construct the ParamConversions
     result: list[ParamConversion] = []
     for param_conversion in server_param_conversions:
         assert isinstance(param_conversion, dbstate.ServerParamConversion)
         param_name = param_conversion.param_name
 
-        if param_name in param_datas:
-            if param_conversion.source_value is not None:
-                raise RuntimeError(
-                    f"Parameter '{param_name}' has both a source and a bind args value"
-                )
+        if (
+            param_name in bind_arg_datas
+            and param_conversion.extra_blob_offsets is not None
+        ):
+            raise RuntimeError(
+                f"Parameter '{param_name}' has both a source and a bind args value"
+            )
+        elif (
+            param_name in bind_arg_datas
+            and param_conversion.constant_value is not None
+        ):
+            raise RuntimeError(
+                f"Parameter '{param_name}' has both a constant and a bind args value"
+            )
+        elif (
+            param_conversion.extra_blob_offsets is not None
+            and param_conversion.constant_value is not None
+        ):
+            raise RuntimeError(
+                f"Parameter '{param_name}' has both a source and a constant args value"
+            )
 
+        elif param_name in bind_arg_datas:
+            # using data from the bind args
             result.append(ParamConversion(
                 param_name=param_name,
                 conversion_name=param_conversion.conversion_name,
                 additional_info=param_conversion.additional_info,
-                data=param_datas[param_name],
-                source_value=None,
+                bind_arg_data=bind_arg_datas[param_name],
+                constant_value=None,
+                extra_blob_offsets=None,
             ))
 
-        elif param_conversion.source_value:
+        elif param_conversion.constant_value is not None:
+            # using a constant from the query
             result.append(ParamConversion(
                 param_name=param_name,
                 conversion_name=param_conversion.conversion_name,
                 additional_info=param_conversion.additional_info,
-                data=None,
-                source_value=param_conversion.source_value,
+                bind_arg_data=None,
+                constant_value=param_conversion.constant_value,
+                extra_blob_offsets=None,
+            ))
+
+        elif param_conversion.extra_blob_offsets is not None:
+            # data to be extracted from the blob
+            result.append(ParamConversion(
+                param_name=param_name,
+                conversion_name=param_conversion.conversion_name,
+                additional_info=param_conversion.additional_info,
+                bind_arg_data=None,
+                constant_value=None,
+                extra_blob_offsets=param_conversion.extra_blob_offsets,
             ))
 
         else:
             raise RuntimeError(
-                f"Parameter '{param_name}' has no source or bind args value"
+                f"Parameter '{param_name}' has no value"
             )
 
     return result

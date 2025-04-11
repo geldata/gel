@@ -1925,37 +1925,43 @@ def _compile_ql_query(
         list[dbstate.ServerParamConversion]
     ] = None
     if isinstance(ir, irast.Statement) and ir.server_param_conversions:
-        source_variables = (
-            ctx.source.variables() if ctx.source else {}
+        extra_variable_indexes = (
+            ctx.source.extra_variable_indexes() if ctx.source else {}
         )
+
+        def get_offsets(param_name: str) -> Optional[tuple[int, int, int]]:
+            if not ctx.source:
+                return None
+            if param_name not in extra_variable_indexes:
+                return None
+
+            extra_offsets = ctx.source.extra_offsets()
+            blob_index, var_index = extra_variable_indexes[param_name]
+
+            return (
+                blob_index,
+                extra_offsets[blob_index][var_index],
+                extra_offsets[blob_index][var_index + 1],
+            )
+
         server_param_conversions = [
             dbstate.ServerParamConversion(
                 param_name=p.param_name,
                 conversion_name=p.conversion_name,
                 additional_info=p.additional_info,
-                source_value=(
+                extra_blob_offsets=(
+                    get_offsets(p.param_name)
+                    if p.constant_value is None else
+                    None
+                ),
+                constant_value=(
                     p.constant_value
                     if p.constant_value is not None else
-                    source_variables[p.param_name]
-                    if p.param_name in source_variables else
                     None
                 )
             )
             for p in ir.server_param_conversions
         ]
-
-        if any(
-            spc.source_value is not None
-            for spc in server_param_conversions
-        ):
-            # Source values are a way for normalized constants to be passed
-            # to the server for conversion.
-            #
-            # They should not be cached since they are not differentiated
-            # in the cache key value.
-            #
-            # This will not impact query parameters (eg. `<str>$0`).
-            cacheable = False
 
     sql_hash = _hash_sql(
         sql_text.encode(defines.EDGEDB_ENCODING),

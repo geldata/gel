@@ -37,7 +37,7 @@ cdef recode_bind_args_for_script(
     dbview.DatabaseConnectionView dbv,
     dbview.CompiledQuery compiled,
     bytes bind_args,
-    list converted_args,
+    object converted_args,
     ssize_t start,
     ssize_t end,
 )
@@ -56,8 +56,9 @@ cdef class ParamConversion:
         str param_name
         str conversion_name
         tuple additional_info
-        bytes data
-        object source_value
+        bytes bind_arg_data
+        object constant_value
+        tuple extra_blob_offsets
 
 cdef list[ParamConversion] get_param_conversions(
     dbview.DatabaseConnectionView dbv,
