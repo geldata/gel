@@ -36,7 +36,7 @@ import weakref
 import immutables
 
 from edb import errors
-from edb.common import debug, lru, uuidgen, asyncutil
+from edb.common import debug, lru, uuidgen, asyncutil, span
 from edb import edgeql
 from edb.edgeql import qltypes
 from edb.schema import schema as s_schema
@@ -637,6 +637,7 @@ cdef class DatabaseConnectionView:
         self._in_tx_state_serializer = None
         self._tx_error = False
         self._in_tx_dbver = 0
+        self._in_tx_isolation_level = None
 
     cdef clear_tx_error(self):
         self._tx_error = False
@@ -1070,6 +1071,8 @@ cdef class DatabaseConnectionView:
             )
         if query_unit.global_schema is not None:
             self._in_tx_global_schema_pickle = query_unit.global_schema
+        if query_unit.tx_isolation_level:
+            self._in_tx_isolation_level = query_unit.tx_isolation_level
 
     cdef start_implicit(self, query_unit):
         if self._tx_error:
@@ -1408,6 +1411,10 @@ cdef class DatabaseConnectionView:
                 allow_capabilities,
                 errors.DisabledCapabilityError,
                 "disabled by the client",
+                # In parse, we don't raise any errors based on
+                # unsafe_isolation_dangers. We do report them to the
+                # client in an annotation, though.
+                unsafe_isolation_dangers=None,
             )
             self._check_in_tx_error(query_unit_group)
 
@@ -1726,6 +1733,7 @@ cdef class DatabaseConnectionView:
         allowed_capabilities,
         error_constructor,
         reason,
+        unsafe_isolation_dangers,
     ):
         if query_capabilities & ~self._capability_mask:
             # _capability_mask is currently only used for system database
@@ -1754,15 +1762,35 @@ cdef class DatabaseConnectionView:
                     msg,
                 )
 
-        if not self.in_tx() and query_capabilities & enums.Capability.WRITE:
-            isolation = self.config_lookup("default_transaction_isolation")
-            if isolation and isolation.to_str() != "Serializable":
-                raise query_capabilities.make_error(
-                    ~enums.Capability.WRITE,
-                    errors.TransactionError,
-                    f"default_transaction_isolation is set to "
-                    f"{isolation.to_str()}",
+        has_write = query_capabilities & enums.Capability.WRITE
+        if has_write and unsafe_isolation_dangers:
+            isolation = None
+            # Sigh! We have two different isolation level enumerations!
+            if self.in_tx():
+                isolation = self._in_tx_isolation_level
+            else:
+                isolation = self.config_lookup(
+                    "default_transaction_isolation"
                 )
+                if isolation and isolation.to_str() == "RepeatableRead":
+                    isolation = (
+                        qltypes.TransactionIsolationLevel.REPEATABLE_READ)
+                else:
+                    isolation = qltypes.TransactionIsolationLevel.SERIALIZABLE
+
+            not_serializable = (
+                isolation != qltypes.TransactionIsolationLevel.SERIALIZABLE
+            )
+            if not_serializable:
+                body = '\n'.join(
+                    ' - ' + str(e) for e in unsafe_isolation_dangers
+                )
+                raise errors.UnsafeIsolationLevelError(
+                    f"Can not execute query with transaction isolation level "
+                    f"{isolation} because: \n{body}",
+                )
+
+        if not self.in_tx() and has_write:
             access_mode = self.config_lookup("default_transaction_access_mode")
             if access_mode and access_mode.to_str() == "ReadOnly":
                 raise query_capabilities.make_error(

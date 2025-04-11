@@ -542,6 +542,9 @@ def compile_InsertQuery(
                 stmt.on_conflict = conflicts.compile_insert_unless_conflict(
                     stmt, stmt_subject_stype, ctx=ictx)
 
+        conflicts.check_for_isolation_conflicts(
+            stmt, stmt_subject_stype, ctx=ictx)
+
         mat_stype = schemactx.get_material_type(stmt_subject_stype, ctx=ctx)
         result = setgen.class_set(
             mat_stype, path_id=stmt.subject.path_id, ctx=ctx
@@ -699,6 +702,9 @@ def compile_UpdateQuery(
                 dtype, result, mode=qltypes.AccessKind.UpdateWrite, ctx=ictx
             ):
                 stmt.write_policies[dtype.id] = write_pol
+
+            conflicts.check_for_isolation_conflicts(
+                stmt, dtype, mat_stype, ctx=ictx)
 
         stmt.conflict_checks = conflicts.compile_inheritance_conflict_checks(
             stmt, mat_stype, ctx=ictx)
