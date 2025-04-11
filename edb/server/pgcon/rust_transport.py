@@ -454,7 +454,7 @@ async def create_postgres_connection(
     connect_timeout = dsn.connect_timeout
     try:
         state = pgrust.PyConnectionState(
-            dsn._params, "postgres", str(get_pg_home_directory())
+            dsn._params, "postgres", get_pg_home_directory()
         )
     except Exception as e:
         raise ValueError(e)
