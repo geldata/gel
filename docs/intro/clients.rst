@@ -99,7 +99,7 @@ Install the Gel client library.
   .. code-tab:: txt
     :caption: Deno
 
-    n/a
+    deno install npm:gel
 
   .. code-tab:: bash
     :caption: Python
@@ -246,7 +246,7 @@ Finally, execute the file.
   .. code-tab:: bash
     :caption: Deno
 
-    $ deno run --allow-all --unstable index.deno.ts
+    $ deno run --allow-all index.ts
 
   .. code-tab:: bash
     :caption: Python
