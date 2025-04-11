@@ -107,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[allow(deprecated)]
         let home = std::env::home_dir().unwrap();
         conn.password
-            .resolve(&home, &conn.hosts, &conn.database, &conn.database)?;
+            .resolve(Some(&home), &conn.hosts, &conn.database, &conn.database)?;
         args.database = conn.database;
         args.username = conn.user;
         args.password = conn.password.password().unwrap_or_default().to_string();

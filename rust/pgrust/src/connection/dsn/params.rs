@@ -288,14 +288,16 @@ impl Ssl {
         let key = params
             .key
             .clone()
-            .or_else(|| home_dir.map(|p| p.join(USER_KEY_FILE)));
+            .or_else(|| home_dir.map(|p| p.join(USER_KEY_FILE)))
+            .filter(|p| p.exists());
         if key.is_some() {
             params.key = key;
         }
         let cert = params
             .cert
             .clone()
-            .or_else(|| home_dir.map(|p| p.join(USER_CERT_FILE)));
+            .or_else(|| home_dir.map(|p| p.join(USER_CERT_FILE)))
+            .filter(|p| p.exists());
         if cert.is_some() {
             params.cert = cert;
         }
