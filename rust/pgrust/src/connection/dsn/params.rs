@@ -26,7 +26,6 @@ mod cert_paths {
 
 use cert_paths::*;
 
-
 impl<'a, I: Into<RawConnectionParameters<'a>>, E: EnvVar> TryInto<ConnectionParameters> for (I, E) {
     type Error = ParseError;
     fn try_into(self) -> Result<ConnectionParameters, ParseError> {

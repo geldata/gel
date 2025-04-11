@@ -192,7 +192,12 @@ impl PyConnectionParams {
         }
     }
 
-    pub fn resolve(&self, py: Python, username: String, home_dir: Option<String>) -> PyResult<Self> {
+    pub fn resolve(
+        &self,
+        py: Python,
+        username: String,
+        home_dir: Option<String>,
+    ) -> PyResult<Self> {
         let os = py.import("os")?;
         let environ = os.getattr("environ")?;
 
