@@ -724,6 +724,20 @@ Major changes
   shared between multiple types (through inheritance).
   (:eql:gh:`#8561`)
 
+
+Features
+--------
+
+* Update bundled PostgreSQL to version 17.4
+  (:eql:gh:`#8543`)
+
+* Send a LogMessage to the client about query cache recompilation
+  (:eql:gh:`#8540`, :eql:gh:`#8552`)
+
+* Support ON CONFLICT over SQL adapter
+  (:eql:gh:`#8560`, :eql:gh:`#8587`, :eql:gh:`#8595`)
+
+
 Fixes
 -----
 
@@ -736,14 +750,8 @@ Fixes
 * Prevent server auto shutdown during building AI index
   (:eql:gh:`#8507`)
 
-* Send a LogMessage to the client about query cache recompilation
-  (:eql:gh:`#8540`, :eql:gh:`#8552`)
-
 * pg_ext: fix ``to_regclass()``, ``::regclass`` and ``pg_settings``
   (:eql:gh:`#8511`)
-
-* Update bundled PostgreSQL to version 17.4
-  (:eql:gh:`#8543`)
 
 * pg_ext: information_schema.columns.ordinal_position should be int
   (:eql:gh:`#8550`)
@@ -751,14 +759,11 @@ Fixes
 * Add replication to pg_hba and wal summarization
   (:eql:gh:`#8556`)
 
-* Fix how we pick output CTE of DML over SQL adapter
+* Fix UPDATE and DELETE on types that use inheritance over SQL adapter
   (:eql:gh:`#8562`)
 
 * Abort tenant initialization with incompatible backend
   (:eql:gh:`#8569`)
-
-* Complete SQL ast parsing for ON CONFLICT
-  (:eql:gh:`#8542`)
 
 * Fix computed link properties over SQL adapter
   (:eql:gh:`#8158`)
@@ -781,9 +786,6 @@ Fixes
 * Fix a cross-type conflict bug that can occur with rewrites
   (:eql:gh:`#8584`)
 
-* Add ``expression`` keyword for sql expression functions.
-  (:eql:gh:`#8586`)
-
 * Optimize compilation in transactions
   (:eql:gh:`#8082`)
 
@@ -792,6 +794,3 @@ Fixes
 
 * Fix CREATE ... BRANCH FROM ... when source uses ai extension
   (:eql:gh:`#8594`)
-
-* Support ON CONFLICT over SQL adapter
-  (:eql:gh:`#8560`, :eql:gh:`#8587`, :eql:gh:`#8595`)
