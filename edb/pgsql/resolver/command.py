@@ -313,6 +313,12 @@ def _uncompile_insert_object_stmt(
     Translates a 'SQL INSERT into an object type table' to an EdgeQL insert.
     """
 
+    subject_id = irast.PathId.from_type(
+        ctx.schema,
+        sub,
+        env=None,
+    )
+
     # handle DEFAULT and prepare the value relation
     value_relation, expected_columns = _uncompile_default_value(
         stmt.select_stmt, stmt.ctes, expected_columns, sub, ctx=ctx
@@ -435,18 +441,19 @@ def _uncompile_insert_object_stmt(
         )
     }
 
+    subject_columns = None
     if conflict and conflict.update_name is not None:
         assert conflict.update_id
         assert conflict.update_input_placeholder
 
-        # inject path_output for iterator
+        # inject path_output for identity aspect
         # (that will be injected after resolving)
         conflict.update_input_placeholder.path_outputs[
             (conflict.update_id, pgce.PathAspect.VALUE)
-        ] = pgast.ColumnRef(name=(value_iterator,))
+        ] = pgast.ColumnRef(name=('id',))
         conflict.update_input_placeholder.path_outputs[
-            (conflict.update_id, pgce.PathAspect.ITERATOR)
-        ] = pgast.ColumnRef(name=(value_iterator,))
+            (conflict.update_id, pgce.PathAspect.IDENTITY)
+        ] = pgast.ColumnRef(name=('id',))
 
         # register __cu__ as singleton and provided by an external rel
         ql_singletons.add(conflict.update_id)
@@ -455,10 +462,19 @@ def _uncompile_insert_object_stmt(
             conflict.update_input_placeholder,
             (
                 pgce.PathAspect.SOURCE,
-                pgce.PathAspect.ITERATOR,
                 pgce.PathAspect.VALUE,
+                pgce.PathAspect.IDENTITY,
             ),
         )
+
+        # subject columns are needed to pull them into the "conflict update" rel
+        subject_columns = []
+        for column in sub_table.columns:
+            if column.hidden:
+                continue
+            ptr, col_name, _ = _get_pointer_for_column(column, sub, ctx)
+            path_id = _get_ptr_id(subject_id, ptr, ctx)
+            subject_columns.append((col_name, path_id))
 
     return UncompiledDML(
         input=stmt,
@@ -480,6 +496,9 @@ def _uncompile_insert_object_stmt(
             conflict_update_iterator=(
                 conflict.update_iterator if conflict else None
             ),
+            subject_id=subject_id,
+            subject_columns=subject_columns,
+            value_id=value_id,
             # these will be populated after compilation
             output_ctes=[],
             output_relation_name='',
@@ -660,7 +679,15 @@ def _uncompile_on_conflict(
             steps=[s_utils.name_to_ast_ref(sub_name)]
         ),
         shape=conflict_update_shape,
-        sql_on_conflict=(value_id, update_id),
+        where=qlast.BinOp(
+            left=qlast.Path(steps=[
+                qlast.ObjectRef(name=iterator_name), qlast.Ptr(name='id')
+            ]),
+            op='=',
+            right=qlast.Path(steps=[
+                s_utils.name_to_ast_ref(sub_name), qlast.Ptr(name='id')
+            ]),
+        )
     )
 
     # update_value relation has to be evaluated *for each conflicting row*
@@ -675,10 +702,6 @@ def _uncompile_on_conflict(
     # that the user specified to need to be updated. When this is resolved,
     # it will replace conflict_source_rel CTE in the final compiled output.
     update_input = pgast.SelectStmt(
-        # TODO: inject two FROM clauses:
-        # - excluded, which contains the two proposed for insertion,
-        # - base table, which contain the row from database that causes the
-        #   conflict. This rel var should use alias from the INSERT subject rel
         target_list=[
             pgast.ResTarget(
                 name=ut.name,
@@ -2037,6 +2060,10 @@ def _compile_uncompiled_dml(
             conflict_update_input=stmt.early_result.conflict_update_input,
             conflict_update_name=stmt.early_result.conflict_update_name,
             conflict_update_iterator=stmt.early_result.conflict_update_iterator,
+            subject_id=stmt.early_result.subject_id,
+            subject_columns=stmt.early_result.subject_columns,
+            value_id=stmt.early_result.value_id,
+            env=sql_result.env,
             output_ctes=stmt_ctes,
             output_relation_name=output_cte.name,
             output_namespace=output_namespace,
@@ -2162,12 +2189,18 @@ def resolve_DMLQuery(
             pgext_code=pgerror.ERROR_FEATURE_NOT_SUPPORTED,
         )
 
+    subject_alias: str | None = None
+    if stmt.relation.alias and stmt.relation.alias.aliasname:
+        subject_alias = stmt.relation.alias.aliasname
+    assert stmt.relation.relation.name
+    subject_name = (stmt.relation.relation.name, subject_alias)
+
     compiled_dml = ctx.compiled_dml[stmt]
 
     _resolve_dml_value_rel(compiled_dml, ctx=ctx)
 
     if compiled_dml.conflict_update_input is not None:
-        _resolve_conflict_update_rel(compiled_dml, ctx=ctx)
+        _resolve_conflict_update_rel(compiled_dml, subject_name, ctx=ctx)
 
     ctx.ctes_buffer.extend(compiled_dml.output_ctes)
 
@@ -2261,6 +2294,7 @@ def _resolve_dml_value_rel(
 
 def _resolve_conflict_update_rel(
     compiled_dml: context.CompiledDML,
+    subject_name: tuple[str, str | None],
     *,
     ctx: Context,
 ):
@@ -2270,40 +2304,87 @@ def _resolve_conflict_update_rel(
     ):
         return
 
+    from edb.pgsql.compiler import enums as pgce
+    from edb.pgsql.compiler import astutils as pg_astutils
+
+    # Find "else" CTE in the list of compiled CTEs
+    # This is comparing by CTE name, which is hacky and error prone
+    # We are guaranteed to have only one such CTE, since these CTEs all
+    # belong to a single insert stmt.
+    else_index, else_cte = next(
+        (i, cte) for i, cte in enumerate(compiled_dml.output_ctes)
+        if cte.name.startswith('else')
+    )
+
+    # Apply a view_map_id_map to get around the fact that rvar map path_ids
+    # contain namespaces due to use using for loops around the insert stmt.
+    assert compiled_dml.subject_id
+    else_cte.query.view_path_id_map[compiled_dml.subject_id] = (
+        next(iter(else_cte.query.view_path_id_map.keys()))
+    )
+
+    # Include 'excluded' rel var in scope
+    # This is outside of the inner scope, so the subject table takes precedence
+    ctx.scope.tables.append(
+        context.Table(
+            name='excluded',
+            reference_as='excluded',
+            columns=[
+                context.Column(
+                    name=col_name,
+                    kind=context.ColumnByName(reference_as=col_name),
+                )
+                for col_name, _ in compiled_dml.value_columns
+            ]
+        )
+    )
+
     # resolve the relation
     with ctx.child() as sctx:
         # this subctx is needed so it is not deemed as top-level which would
         # extract and attach CTEs, but not make the available to all
         # following CTEs
 
-        # but it is not a "real" subquery context
-        sctx.subquery_depth -= 1
-
-        # include 'excluded' rel var in scope
+        # include subject rel var in scope
         sctx.scope.tables.append(
             context.Table(
-                name='excluded',
-                reference_as='excluded',
+                name=subject_name[0],
+                alias=subject_name[1],
+                reference_as='else',
                 columns=[
                     context.Column(
                         name=col_name,
-                        kind=context.ColumnByName(reference_as=col_name),
+                        kind=context.ColumnByName(
+                            reference_as=_get_path_id_output(
+                                else_cte.query,
+                                path_id,
+                                compiled_dml,
+                            )
+                        ),
                     )
-                    for col_name, _ in compiled_dml.value_columns
+                    for col_name, path_id in compiled_dml.subject_columns or []
                 ]
             )
         )
 
-        cu_rel, cu_table = dispatch.resolve_relation(
+        # the important bit: resolve "conflict update" rel
+        cu_rel, _ = dispatch.resolve_relation(
             compiled_dml.conflict_update_input, ctx=sctx
         )
         assert isinstance(cu_rel, pgast.SelectStmt)
 
-        # actaully add the 'excluded' rel var
+        # inject the 'excluded' rel var (from "value" CTE)
         cu_rel.from_clause.append(
             pgast.RelRangeVar(
                 relation=pgast.Relation(name=compiled_dml.value_cte_name),
                 alias=pgast.Alias(aliasname='excluded'),
+            )
+        )
+        # inject the subject rel var (from "else" CTE)
+        cu_rel.from_clause.append(
+            pgast.RelRangeVar(
+                relation=pgast.Relation(name=else_cte.name),
+                alias=pgast.Alias(aliasname='else'),
             )
         )
 
@@ -2315,17 +2396,82 @@ def _resolve_conflict_update_rel(
             ),
         ))
 
+        # inject subject id from "else" rvar
+        subject_id_col = _get_path_id_output(
+            else_cte.query, compiled_dml.subject_id, compiled_dml,
+            aspect=pgce.PathAspect.IDENTITY
+        )
+        assert isinstance(subject_id_col, pgast.ColumnRef)
+        cu_rel.target_list.append(pgast.ResTarget(
+            val=pgast.ColumnRef(
+                name=('else', subject_id_col.name[-1]),
+            ),
+            name='id'
+        ))
+
+        # add a join condition for "excluded" and "subject" rvars
+
+        # We start with a plain value_id, but because of for loops, rvar_map
+        # will contain path_ids polluted with namespaces. So instead of a plain
+        # one, we find a path_id from rvar_map that matches the plain one in all
+        # but the namespace.
+        value_id = next(
+            p for p, _ in else_cte.query.path_rvar_map.keys()
+            if p.replace_namespace(set()) == compiled_dml.value_id
+        )
+        # pull value iterator from the else CTE
+        value_iter = _get_path_id_output(
+            else_cte.query, value_id, compiled_dml
+        )
+        assert isinstance(value_iter, pgast.ColumnRef)
+        cu_rel.where_clause = pg_astutils.extend_binop(
+            cu_rel.where_clause,
+            pgast.Expr(
+                lexpr=pgast.ColumnRef(name=('else', value_iter)),
+                name='=',
+                rexpr=pgast.ColumnRef(
+                    name=('excluded', compiled_dml.value_iterator_name)
+                ),
+            )
+        )
+
+    # convert the resolved "conflict update" into a flat list of ctes
+    conflict_ctes = []
     if cu_rel.ctes:
-        ctx.ctes_buffer.extend(cu_rel.ctes)
+        conflict_ctes.extend(cu_rel.ctes)
         cu_rel.ctes = None
-
-    cu_table.alias = ctx.alias_generator.get('rel')
-
     cu_cte = pgast.CommonTableExpr(
         name=compiled_dml.conflict_update_name,
         query=cu_rel,
     )
-    ctx.ctes_buffer.append(cu_cte)
+    conflict_ctes.append(cu_cte)
+
+    # combine compiled CTEs and CTEs from "conflict update"
+    compiled_dml.output_ctes = (
+        compiled_dml.output_ctes[0:else_index + 1]
+        + conflict_ctes
+        + compiled_dml.output_ctes[else_index + 1:]
+    )
+
+
+# Invokes pg compiler machinery to pull value for columns out of a query
+def _get_path_id_output(
+    query: pgast.Query,
+    path_id: irast.PathId,
+    compiled_dml: context.CompiledDML,
+    *,
+    aspect: pgce.PathAspect = pgce.PathAspect.VALUE,
+) -> str:
+    # The mere fact that this is used outside of the pg compiler signals
+    # that this is hacky.
+    assert compiled_dml.env
+    output = pgcompiler.pathctx.get_path_output(
+        query, path_id, aspect=aspect, env=compiled_dml.env
+    )
+    assert isinstance(output, pgast.ColumnRef)
+    name = output.name[-1]
+    assert isinstance(name, str)
+    return name
 
 
 def _fini_resolve_dml(
