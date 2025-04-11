@@ -1310,9 +1310,6 @@ class Rewrites:
 class UpdateStmt(MutatingStmt, FilteredStmt):
     _material_type: TypeRef | None = None
 
-    # Temporary metadata needed for SQL ON CONFLICT
-    sql_on_conflict: typing.Optional[tuple[PathId, PathId]] = None
-
     @property
     def material_type(self) -> TypeRef:
         assert self._material_type
