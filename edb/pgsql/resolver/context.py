@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Optional, Sequence, Mapping
+from typing import Optional, Sequence, Mapping, Any
 from dataclasses import dataclass, field
 import enum
 import uuid
@@ -193,7 +193,8 @@ class CompiledDML:
     value_relation_input: pgast.BaseRelation
 
     # columns that are expected to be produced by the value relation
-    value_columns: list[tuple[str, bool]]
+    # contains: column name, ptr name, is_link
+    value_columns: list[tuple[str, str, bool]]
 
     # name of the column in the value relation, that should provide the identity
     value_iterator_name: Optional[str]
@@ -207,6 +208,11 @@ class CompiledDML:
     conflict_update_name: Optional[str] = None
 
     conflict_update_iterator: Optional[str] = None
+
+    subject_id: Optional[Any] = None
+    subject_columns: list[tuple[str, Any]] | None = None
+    value_id: Optional[Any] = None
+    env: Optional[Any] = None
 
     # CTEs that perform the operation
     output_ctes: list[pgast.CommonTableExpr]
