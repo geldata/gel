@@ -599,8 +599,6 @@ class UpdateQuery(Query):
 
     where: typing.Optional[Expr] = None
 
-    sql_mode_link_only: bool = False
-
 
 class DeleteQuery(Query):
     subject: Expr
@@ -687,6 +685,11 @@ class DDLOperation(DDL):
 
 class DDLCommand(DDLOperation, Command):
     __abstract_node__ = True
+
+
+class DDLQuery(DDLCommand):
+    '''A query wrapped in DDL. Appears in migrations.'''
+    query: Query
 
 
 class NonTransactionalDDLCommand(DDLCommand):

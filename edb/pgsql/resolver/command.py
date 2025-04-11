@@ -1017,7 +1017,6 @@ def _uncompile_insert_pointer_stmt(
                 compexpr=ql_ptr_val,
             )
         ],
-        sql_mode_link_only=is_multi,
     )
     if not is_value_single:
         # value relation might contain multiple rows

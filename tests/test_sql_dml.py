@@ -57,6 +57,7 @@ class TestSQLDataModificationLanguage(tb.SQLQueryTestCase):
           create property prop: str {
             create constraint exclusive;
           };
+          create multi property tags: str;
         };
 
         create type Child extending Base {
@@ -2183,3 +2184,59 @@ class TestSQLDataModificationLanguage(tb.SQLQueryTestCase):
 
         res = await self.squery_values('SELECT gy FROM "Globals" ORDER BY gy')
         self.assertEqual(res, [['Hello world!'], [None]])
+
+    async def test_sql_dml_03(self):
+        # deleting from a link table with inheritance
+
+        [[base_id]] = await self.squery_values(
+            '''
+            INSERT INTO "Base" (prop) VALUES ('base') RETURNING id
+            '''
+        )
+        [[child_id]] = await self.squery_values(
+            '''
+            INSERT INTO "Child" (prop) VALUES ('child') RETURNING id
+            '''
+        )
+        res = await self.scon.execute(
+            '''
+            INSERT INTO "Base.tags" (source, target) VALUES
+            ($1, 'high-priority'),
+            ($1, 'easy'),
+            ($1, 'payment'),
+            ($2, 'backlog'),
+            ($2, 'easy')
+            ''',
+            base_id,
+            child_id,
+        )
+        self.assertEqual(res, 'INSERT 0 3')
+        # TODO: this should actually be:
+        # self.assertEqual(res, 'INSERT 0 5')
+
+        res = await self.squery_values(
+            '''SELECT COUNT(*) FROM "Base.tags"'''
+        )
+        self.assertEqual(res, [[5]])
+
+        res = await self.squery_values(
+            '''SELECT COUNT(*) FROM "Child.tags"'''
+        )
+        self.assertEqual(res, [[2]])
+
+        res = await self.scon.execute(
+            '''DELETE FROM "Base.tags" WHERE target = 'easy' '''
+        )
+        self.assertEqual(res, 'DELETE 1')
+        # TODO: this should actually be:
+        # self.assertEqual(res, 'DELETE 2')
+
+        res = await self.squery_values(
+            '''SELECT COUNT(*) FROM "Base.tags"'''
+        )
+        self.assertEqual(res, [[3]])
+
+        res = await self.squery_values(
+            '''SELECT COUNT(*) FROM "Child.tags"'''
+        )
+        self.assertEqual(res, [[1]])

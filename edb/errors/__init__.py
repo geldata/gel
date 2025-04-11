@@ -23,6 +23,7 @@ __all__ = base.__all__ + (  # type: ignore
     'CapabilityError',
     'UnsupportedCapabilityError',
     'DisabledCapabilityError',
+    'UnsafeIsolationLevelError',
     'QueryError',
     'InvalidSyntaxError',
     'EdgeQLSyntaxError',
@@ -156,6 +157,10 @@ class UnsupportedCapabilityError(CapabilityError):
 
 class DisabledCapabilityError(CapabilityError):
     _code = 0x_03_04_02_00
+
+
+class UnsafeIsolationLevelError(CapabilityError):
+    _code = 0x_03_04_03_00
 
 
 class QueryError(EdgeDBError):

@@ -265,3 +265,12 @@ type ExceptTest {
     constraint exclusive on (.name) except (.deleted);
 };
 type ExceptTestSub extending ExceptTest;
+
+type ConflictA {
+  name: str;
+}
+type ConflictB {
+  name: str { constraint exclusive };
+  whatever: str;
+}
+type ConflictAB extending ConflictA, ConflictB;

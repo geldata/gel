@@ -879,7 +879,9 @@ def prepare_patch(
         assert '+user_ext' not in kind
 
         for ddl_cmd in edgeql.parse_block(patch):
-            assert isinstance(ddl_cmd, qlast.DDLCommand)
+            if not isinstance(ddl_cmd, qlast.DDLCommand):
+                assert isinstance(ddl_cmd, qlast.Query)
+                ddl_cmd = qlast.DDLQuery(query=ddl_cmd)
             # First apply it to the regular schema, just so we can update
             # stdschema
             delta_command = s_ddl.delta_from_ddl(
@@ -930,7 +932,9 @@ def prepare_patch(
         )
 
         for ddl_cmd in edgeql.parse_block(patch):
-            assert isinstance(ddl_cmd, qlast.DDLCommand)
+            if not isinstance(ddl_cmd, qlast.DDLCommand):
+                assert isinstance(ddl_cmd, qlast.Query)
+                ddl_cmd = qlast.DDLQuery(query=ddl_cmd)
 
             delta_command = s_ddl.delta_from_ddl(
                 ddl_cmd, modaliases={}, schema=cschema,

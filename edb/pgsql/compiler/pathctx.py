@@ -1432,7 +1432,7 @@ def get_path_identity_output(
 
 
 def get_path_value_output(
-    rel: pgast.Query,
+    rel: pgast.BaseRelation,
     path_id: irast.PathId,
     *,
     env: context.Environment,
