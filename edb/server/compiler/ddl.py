@@ -358,7 +358,9 @@ def _get_delta_context_args(ctx: compiler.CompileContext) -> dict[str, Any]:
 
 
 def _process_delta(
-    ctx: compiler.CompileContext, delta: s_delta.DeltaRoot
+    ctx: compiler.CompileContext,
+    delta: s_delta.DeltaRoot,
+    context_args: Any = None,
 ) -> tuple[pg_dbops.SQLBlock, frozenset[str], Any]:
     """Adapt and process the delta command."""
 
@@ -367,7 +369,7 @@ def _process_delta(
 
     pgdelta = pg_delta.CommandMeta.adapt(delta)
     assert isinstance(pgdelta, pg_delta.DeltaRoot)
-    context = _new_delta_context(ctx)
+    context = _new_delta_context(ctx, context_args)
     schema = pgdelta.apply(schema, context)
     current_tx.update_schema(schema)
 
@@ -1374,7 +1376,7 @@ def repair_schema(
 
     # Apply and adapt delta, build native delta plan, which
     # will also update the schema.
-    block, new_types, config_ops = _process_delta(ctx, delta)
+    block, new_types, config_ops = _process_delta(ctx, delta, context_args)
     is_transactional = block.is_transactional()
     assert not new_types
     assert is_transactional
