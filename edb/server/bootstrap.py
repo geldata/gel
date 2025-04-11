@@ -1173,10 +1173,14 @@ async def create_branch(
 ) -> None:
     """Create a new database (branch) based on an existing one."""
 
-    # Dump the edgedbpub schema that holds user data and any extensions.
+    # Dump the edgedbpub schema that holds user data and any
+    # extensions.  Also dump edgedbext, which can unfortunately
+    # include some tables/views for the AI extension.  (And some
+    # extensions, which get created with IF NOT EXISTS, so that is
+    # fine.)
     schema_dump = await cluster.dump_database(
         src_dbname,
-        include_schemas=('edgedbpub',),
+        include_schemas=('edgedbpub', 'edgedbext'),
         include_extensions=('*',),
         schema_only=True,
     )
