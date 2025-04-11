@@ -2401,10 +2401,9 @@ def _resolve_conflict_update_rel(
             else_cte.query, compiled_dml.subject_id, compiled_dml,
             aspect=pgce.PathAspect.IDENTITY
         )
-        assert isinstance(subject_id_col, pgast.ColumnRef)
         cu_rel.target_list.append(pgast.ResTarget(
             val=pgast.ColumnRef(
-                name=('else', subject_id_col.name[-1]),
+                name=('else', subject_id_col),
             ),
             name='id'
         ))
@@ -2423,7 +2422,6 @@ def _resolve_conflict_update_rel(
         value_iter = _get_path_id_output(
             else_cte.query, value_id, compiled_dml
         )
-        assert isinstance(value_iter, pgast.ColumnRef)
         cu_rel.where_clause = pg_astutils.extend_binop(
             cu_rel.where_clause,
             pgast.Expr(
