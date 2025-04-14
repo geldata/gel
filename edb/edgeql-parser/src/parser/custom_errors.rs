@@ -161,7 +161,7 @@ impl Parser<'_> {
                     } else if Cond::Production("OptExtending").check_opt(prevel, ctx) {
                         // This is some SDL/DDL
                         return Some((i, ParserRule::Definition));
-                    } else if prevel.map_or(false, |prevel| {
+                    } else if prevel.is_some_and(|prevel| {
                         Cond::Production("Expr").check(prevel, ctx)
                             || (Cond::Terminal(Kind::Colon).check(prevel, ctx)
                                 && Cond::Production("ShapePointer").check_opt(prevel.parent, ctx))
@@ -346,7 +346,7 @@ impl Cond {
     }
 
     fn check_opt(&self, node: Option<&StackNode>, ctx: &Context) -> bool {
-        node.map_or(false, |x| self.check(x, ctx))
+        node.is_some_and(|x| self.check(x, ctx))
     }
 }
 

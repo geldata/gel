@@ -206,7 +206,7 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
 fn starts_with_unexpected_error(a: &Parser) -> bool {
     a.errors
         .first()
-        .map_or(true, |x| x.message.starts_with(UNEXPECTED))
+        .is_none_or(|x| x.message.starts_with(UNEXPECTED))
 }
 
 impl Context<'_> {
