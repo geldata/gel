@@ -187,7 +187,7 @@ impl InflatedPos {
                 }
 
                 // stop if end of line
-                let eol = text_iter.peek().map_or(true, |c| *c == '\n' || *c == '\r');
+                let eol = text_iter.peek().is_none_or(|c| *c == '\n' || *c == '\r');
                 if eol {
                     break;
                 }
@@ -222,12 +222,12 @@ impl InflatedPos {
             }
 
             // consume \n or \r\n
-            if text_iter.peek().map_or(false, |c| *c == '\r') {
+            if text_iter.peek().is_some_and(|c| *c == '\r') {
                 text_iter.next();
                 offset += 1;
                 char_offset += 1;
             }
-            if text_iter.peek().map_or(false, |c| *c == '\n') {
+            if text_iter.peek().is_some_and(|c| *c == '\n') {
                 text_iter.next();
                 offset += 1;
                 char_offset += 1;
