@@ -133,10 +133,7 @@ impl<'a> Iterator for VariableNameIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // Check termination
-        let first = match self.first_extra {
-            Some(first) => first,
-            None => return None,
-        };
+        let first = self.first_extra?;
         if self.blob_index >= self.entry_pack.variables.len() {
             return None;
         }
@@ -145,7 +142,7 @@ impl<'a> Iterator for VariableNameIter<'a> {
         }
 
         // Get result
-        let blob_vars = &self.entry_pack.variables[self.blob_index];
+        let blob_vars = self.entry_pack.variables.get(self.blob_index)?;
 
         let name = if self.extra_named {
             format!("__edb_arg_{}", first + self.name_index)
@@ -176,10 +173,8 @@ pub fn serialize_extra(variables: &[Variable]) -> Result<(Bytes, Vec<usize>), St
     use gel_protocol::codec::Codec;
     use gel_protocol::value::Value as P;
 
-    let mut buf = BytesMut::new();
-    let mut offsets = Vec::new();
-    buf.reserve(4 * variables.len());
-    offsets.reserve(1 + variables.len());
+    let mut buf = BytesMut::with_capacity(4 * variables.len());
+    let mut offsets = Vec::with_capacity(1 + variables.len());
     for var in variables {
         buf.reserve(4);
         let pos = buf.len();
