@@ -2658,12 +2658,210 @@ async def generate_embeddings_for_text(
     return result.data.embeddings
 
 
-@dataclass
+@dataclass(frozen=True, kw_only=True)
+class TextEmbeddingsResult:
+    success: Optional[list[list[float]]] = None
+
+    too_long: Optional[list[int]] = None
+
+
+async def generate_embeddings_for_texts(
+    db: dbview.Database,
+    http_client: http.HttpClient,
+    inputs: list[tuple[str | uuid.UUID, str]],
+) -> TextEmbeddingsResult:
+    """Generate embeddings for strings to search for ai indexed objects.
+
+    Each input string may have a different object. The object is specified
+    by the object type id as either a string or uuid.
+
+    Produces embeddings for the input strings by:
+    - grouping string by their index model and shortening
+    - batching those groups
+    - then doing embeddings requests in batches
+
+    Input strings are truncated if allowed by their index.
+
+    If any string is too long and truncating is not allowed, a "too_long"
+    result is returned.
+
+    If all embeddings requests are successful, the embeddings are returned
+    as a "success" result in the same order as the inputs.
+    """
+    # Gather information about the indexes and embeddings
+    # For each type, we will need:
+    # - model name
+    # - max input tokens
+    # - max batch tokens
+    # - provider config
+    # - allowed to truncate
+    # - shortening, if any
+    type_ai_indexes: dict[str, AIIndex] = {}
+    for type_id, _ in inputs:
+        type_id = str(type_id)
+        if type_id not in type_ai_indexes:
+            type_ai_indexes[type_id] = await get_ai_index_for_type(db, type_id)
+
+    model_providers = {
+        ai_index.model: ai_index.provider
+        for ai_index in type_ai_indexes.values()
+    }
+    model_max_input_tokens: dict[str, int] = {
+        model_name: await _get_model_annotation_as_int(
+            db,
+            base_model_type="ext::ai::EmbeddingModel",
+            model_name=model_name,
+            annotation_name="ext::ai::embedding_model_max_input_tokens",
+        )
+        for model_name in model_providers.keys()
+    }
+    model_max_batch_tokens: dict[str, int] = {
+        model_name: await _get_model_annotation_as_int(
+            db,
+            base_model_type="ext::ai::EmbeddingModel",
+            model_name=model_name,
+            annotation_name="ext::ai::embedding_model_max_batch_tokens",
+        )
+        for model_name in model_providers.keys()
+    }
+
+    provider_configs = {
+        provider: _get_provider_config(db=db, provider_name=provider)
+        for provider in set(model_providers.values())
+    }
+
+    # Group the inputs by model and shortening
+    group_input_indexes: dict[tuple[str, Optional[int]], list[int]] = {}
+
+    for input_index, (type_id, _) in enumerate(inputs):
+        ai_index = type_ai_indexes[str(type_id)]
+
+        model_name = ai_index.model
+        shortening = (
+            ai_index.index_embedding_dimensions
+            if (
+                ai_index.index_embedding_dimensions
+                < ai_index.model_embedding_dimensions
+            ) else
+            None
+        )
+
+        group_key = (model_name, shortening)
+
+        if group_key not in group_input_indexes:
+            group_input_indexes[group_key] = []
+
+        group_input_indexes[group_key].append(input_index)
+
+    # Batch each group separately
+    group_batch_texts_and_indexes: dict[
+        tuple[str, Optional[int]],
+        list[tuple[
+            # texts, truncated if needed
+            list[str],
+            # the associated input index
+            list[int],
+        ]]
+    ] = {}
+    too_long: list[int] = []
+
+    for group_key, input_indexes in group_input_indexes.items():
+        model_name, shortening = group_key
+        provider = model_providers[model_name]
+
+        tokenizer = get_model_tokenizer(provider, model_name)
+        max_input_tokens = model_max_input_tokens[model_name]
+        max_batch_tokens = model_max_batch_tokens[model_name]
+
+        texts = [
+            (
+                inputs[input_index][1],
+                type_ai_indexes[str(inputs[input_index][0])].truncate_to_max,
+            )
+            for input_index in input_indexes
+        ]
+
+        text_batches, excluded_indexes = batch_texts(
+            texts,
+            tokenizer,
+            max_input_tokens,
+            max_batch_tokens,
+        )
+
+        if excluded_indexes or too_long:
+            # If any input is too long, collect all inputs that are too long
+            # and return them as a failure
+            too_long.extend(
+                input_indexes[excluded_index]
+                for excluded_index in excluded_indexes
+            )
+            continue
+
+        group_batch_texts_and_indexes[group_key] = []
+
+        for text_batch in text_batches:
+            batched_texts: list[str] = []
+            batched_input_indexes: list[int] = []
+
+            for entry in text_batch.entries:
+                batched_texts.append(entry.input_text)
+                batched_input_indexes.append(
+                    input_indexes[entry.input_index]
+                )
+
+            group_batch_texts_and_indexes[group_key].append(
+                (batched_texts, batched_input_indexes)
+            )
+
+    if too_long:
+        return TextEmbeddingsResult(too_long=too_long)
+
+    # Do the embeddings
+
+    # We have been tracking the input indexes of the batch texts this whole
+    # time. Use these indexes to fill in a result embeddings list
+    embeddings: list[Optional[list[float]]] = [None] * len(inputs)
+
+    for group_key, batched_texts_and_indexes in (
+        group_batch_texts_and_indexes.items()
+    ):
+        model_name, shortening = group_key
+        provider = model_providers[model_name]
+
+        provider_config = provider_configs[provider]
+
+        for batched_texts, batched_input_indexes in batched_texts_and_indexes:
+            embeddings_result = await _generate_embeddings(
+                provider_config,
+                model_name,
+                batched_texts,
+                shortening,
+                None,
+                http_client,
+            )
+            if isinstance(embeddings_result.data, rs.Error):
+                raise AIProviderError(embeddings_result.data.message)
+            decoded_result = json.loads(
+                embeddings_result.data.embeddings.decode("utf-8")
+            )
+            for entry_index, entry_result in enumerate(decoded_result["data"]):
+                input_index = batched_input_indexes[entry_index]
+                embeddings[input_index] = entry_result["embedding"]
+
+    assert all(e is not None for e in embeddings)
+
+    return TextEmbeddingsResult(
+        success=cast(list[list[float]], embeddings),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class AIIndex:
     model: str
     provider: str
     model_embedding_dimensions: int
     index_embedding_dimensions: int
+    truncate_to_max: bool
 
 
 async def get_ai_index_for_type(
@@ -2716,6 +2914,12 @@ async def get_ai_index_for_type(
                         LIMIT
                             1
                     ).0,
+                    truncate_to_max := any((
+                        for kwarg in array_unpack(.kwargs) select (
+                            kwarg.name = 'truncate_to_max'
+                            and str_lower(kwarg.expr) = 'true'
+                        )
+                    ))
                 }
             FILTER
                 .ancestors.name = 'ext::ai::index'
@@ -2742,4 +2946,5 @@ async def get_ai_index_for_type(
         provider=index["provider"],
         model_embedding_dimensions=index["model_embedding_dimensions"],
         index_embedding_dimensions=index["index_embedding_dimensions"],
+        truncate_to_max=index["truncate_to_max"],
     )
