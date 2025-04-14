@@ -655,6 +655,33 @@ cdef class ParamConversion:
     def get_constant_value(self):
         return self.constant_value
 
+    def param_as_int(self) -> int:
+        return self._decode_int() if self.constant_value is None else self.constant_value
+
+    def param_as_str(self) -> str:
+        return self._decode_str() if self.constant_value is None else self.constant_value
+
+    def param_as_array_of_str(self) -> list[str]:
+        return self._decode_array_of_str() if self.constant_value is None else self.constant_value
+
+    def _decode_int(self) -> int:
+        return int.from_bytes(self.encoded_data)
+
+    def _decode_str(self) -> str:
+        return self.encoded_data.decode("utf-8")
+
+    def _decode_array_of_str(self) -> list[str]:
+        # See gel-python for more details on array encoding
+        texts = []
+        text_count = int.from_bytes(self.encoded_data[12:16])
+        data = self.encoded_data[20:]
+        for _ in range(text_count):
+            text_length = int.from_bytes(data[:4])
+            data = data[4:]
+            texts.append(data[:(text_length)].decode("utf-8"))
+            data = data[text_length:]
+        return texts
+
 
 cdef list[ParamConversion] get_param_conversions(
     dbview.DatabaseConnectionView dbv,
