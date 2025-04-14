@@ -227,7 +227,7 @@ pub fn serialize_extra(variables: &[Variable]) -> Result<(Bytes, Vec<usize>), St
                 .map_err(|_| "element isn't too long".to_owned())?
                 .to_be_bytes(),
         );
-        offsets.push(pos + 4);
+        offsets.push(pos);
     }
     offsets.push(buf.len());
     Ok((buf.freeze(), offsets))

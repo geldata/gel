@@ -1929,19 +1929,19 @@ def _compile_ql_query(
             ctx.source.extra_variable_indexes() if ctx.source else {}
         )
 
-        def get_offsets(param_name: str) -> Optional[tuple[int, int, int]]:
+        def get_blob_offset_indexes(
+            param_name: str
+        ) -> Optional[tuple[int, int]]:
             if not ctx.source:
                 return None
             if param_name not in extra_variable_indexes:
                 return None
 
-            extra_offsets = ctx.source.extra_offsets()
-            blob_index, var_index = extra_variable_indexes[param_name]
+            blob_index, offset_index = extra_variable_indexes[param_name]
 
             return (
                 blob_index,
-                extra_offsets[blob_index][var_index],
-                extra_offsets[blob_index][var_index + 1],
+                offset_index,
             )
 
         server_param_conversions = [
@@ -1949,8 +1949,8 @@ def _compile_ql_query(
                 param_name=p.param_name,
                 conversion_name=p.conversion_name,
                 additional_info=p.additional_info,
-                extra_blob_offsets=(
-                    get_offsets(p.param_name)
+                extra_blob_offset_indexes=(
+                    get_blob_offset_indexes(p.param_name)
                     if p.constant_value is None else
                     None
                 ),

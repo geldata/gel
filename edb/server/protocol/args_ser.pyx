@@ -633,14 +633,14 @@ cdef class ParamConversion:
         additional_info,
         bind_arg_data,
         constant_value,
-        extra_blob_offsets,
+        extra_blob_offset_indexes,
     ):
         self.param_name = param_name
         self.conversion_name = conversion_name
         self.additional_info = additional_info
         self.bind_arg_data = bind_arg_data
         self.constant_value = constant_value
-        self.extra_blob_offsets = extra_blob_offsets
+        self.extra_blob_offset_indexes = extra_blob_offset_indexes
 
     def get_param_name(self):
         return self.param_name
@@ -657,8 +657,8 @@ cdef class ParamConversion:
     def get_constant_value(self):
         return self.constant_value
 
-    def get_extra_blob_offsets(self):
-        return self.extra_blob_offsets
+    def get_extra_blob_offset_indexes(self):
+        return self.extra_blob_offset_indexes
 
 
 cdef list[ParamConversion] get_param_conversions(
@@ -715,7 +715,7 @@ cdef list[ParamConversion] get_param_conversions(
 
         if (
             param_name in bind_arg_datas
-            and param_conversion.extra_blob_offsets is not None
+            and param_conversion.extra_blob_offset_indexes is not None
         ):
             raise RuntimeError(
                 f"Parameter '{param_name}' has both a source and a bind args value"
@@ -728,7 +728,7 @@ cdef list[ParamConversion] get_param_conversions(
                 f"Parameter '{param_name}' has both a constant and a bind args value"
             )
         elif (
-            param_conversion.extra_blob_offsets is not None
+            param_conversion.extra_blob_offset_indexes is not None
             and param_conversion.constant_value is not None
         ):
             raise RuntimeError(
@@ -743,7 +743,7 @@ cdef list[ParamConversion] get_param_conversions(
                 additional_info=param_conversion.additional_info,
                 bind_arg_data=bind_arg_datas[param_name],
                 constant_value=None,
-                extra_blob_offsets=None,
+                extra_blob_offset_indexes=None,
             ))
 
         elif param_conversion.constant_value is not None:
@@ -754,10 +754,10 @@ cdef list[ParamConversion] get_param_conversions(
                 additional_info=param_conversion.additional_info,
                 bind_arg_data=None,
                 constant_value=param_conversion.constant_value,
-                extra_blob_offsets=None,
+                extra_blob_offset_indexes=None,
             ))
 
-        elif param_conversion.extra_blob_offsets is not None:
+        elif param_conversion.extra_blob_offset_indexes is not None:
             # data to be extracted from the blob
             result.append(ParamConversion(
                 param_name=param_name,
@@ -765,7 +765,9 @@ cdef list[ParamConversion] get_param_conversions(
                 additional_info=param_conversion.additional_info,
                 bind_arg_data=None,
                 constant_value=None,
-                extra_blob_offsets=param_conversion.extra_blob_offsets,
+                extra_blob_offset_indexes=(
+                    param_conversion.extra_blob_offset_indexes
+                ),
             ))
 
         else:

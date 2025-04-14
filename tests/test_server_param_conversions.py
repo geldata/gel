@@ -121,6 +121,16 @@ class TestServerParamConversions(tb.QueryTestCase):
             ["456"],
         )
 
+        # Check conversion works with normalized constants whose size changes
+        await self.assert_query_result(
+            'select ("AAAAA", simple_to_str(456), "BBBBB")',
+            [("AAAAA", "456", "BBBBB")],
+        )
+        await self.assert_query_result(
+            'select ("A", simple_to_str(456), "B")',
+            [("A", "456", "B")],
+        )
+
     async def test_server_param_conversions_simple_03(self):
         # Scalar expression
         async with self.assertRaisesRegexTx(

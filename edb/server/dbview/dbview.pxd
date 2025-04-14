@@ -40,6 +40,7 @@ cdef class CompiledQuery:
     cdef public object first_extra  # Optional[int]
     cdef public object extra_counts
     cdef public object extra_blobs
+    cdef public object extra_offsets
     cdef public bint extra_formatted_as_text
     cdef public object extra_type_oids
     cdef public object request

@@ -503,8 +503,13 @@ async def _convert_parameters(
             elif value := conversion.get_constant_value():
                 add_to_cache = True
 
-            elif extra_blob_offsets := conversion.get_extra_blob_offsets():
-                blob_index, offset_start, offset_end = extra_blob_offsets
+            elif extra_blob_offset_indexes := (
+                conversion.get_extra_blob_offset_indexes()
+            ):
+                blob_index, offset_index = extra_blob_offset_indexes
+                # skip the length part of the data
+                offset_start = compiled.extra_offsets[blob_index][offset_index] + 4
+                offset_end = compiled.extra_offsets[blob_index][offset_index+1]
                 data = compiled.extra_blobs[blob_index][offset_start:offset_end]
                 # Don't cache conversion, since it may differ per unit
 

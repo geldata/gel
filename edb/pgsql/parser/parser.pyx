@@ -263,6 +263,9 @@ cdef class Source:
     def extra_blobs(self) -> Sequence[bytes]:
         return ()
 
+    def extra_offsets(self) -> Sequence[Sequence[int]]:
+        return ()
+
     def extra_formatted_as_text(self) -> bool:
         return True
 
@@ -332,6 +335,16 @@ cdef class NormalizedSource(Source):
             buf.write_len_prefixed_bytes(v)
 
         return [bytes(buf)]
+
+    def extra_offsets(self) -> list[list[int]]:
+        offsets = []
+        curr_offset = 0
+        for _, _, v in self._extracted_constants:
+            offsets.append(curr_offset)
+            curr_offset += 4 + len(v)
+        offsets.append(curr_offset)
+            
+        return [offsets]
 
     def extra_type_oids(self) -> Sequence[int]:
         oids = []

@@ -109,6 +109,7 @@ cdef class CompiledQuery:
         first_extra: Optional[int]=None,
         extra_counts=(),
         extra_blobs=(),
+        extra_offsets=(),
         extra_formatted_as_text: bool = False,
         extra_type_oids: Sequence[int] = (),
         request=None,
@@ -119,6 +120,7 @@ cdef class CompiledQuery:
         self.first_extra = first_extra
         self.extra_counts = extra_counts
         self.extra_blobs = extra_blobs
+        self.extra_offsets = extra_offsets
         self.extra_formatted_as_text = extra_formatted_as_text
         self.extra_type_oids = tuple(extra_type_oids)
         self.request = request
@@ -1501,6 +1503,7 @@ cdef class DatabaseConnectionView:
             first_extra=source.first_extra(),
             extra_counts=source.extra_counts(),
             extra_blobs=source.extra_blobs(),
+            extra_offsets=source.extra_offsets(),
             extra_formatted_as_text=source.extra_formatted_as_text(),
             extra_type_oids=source.extra_type_oids(),
             request=query_req,
@@ -1657,6 +1660,7 @@ cdef class DatabaseConnectionView:
             first_extra=source.first_extra(),
             extra_counts=source.extra_counts(),
             extra_blobs=source.extra_blobs(),
+            extra_offsets=source.extra_offsets(),
             extra_formatted_as_text=source.extra_formatted_as_text(),
             extra_type_oids=source.extra_type_oids(),
             use_pending_func_cache=use_pending_func_cache,
