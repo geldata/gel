@@ -1925,16 +1925,29 @@ def _compile_ql_query(
         list[dbstate.ServerParamConversion]
     ] = None
     if isinstance(ir, irast.Statement) and ir.server_param_conversions:
+        # A server param conversion is either:
+        # - a query parameter
+        #   eg. `<str>$my_var`;
+        # - a normalized constant
+        #   eg. `select 1` normalizes to `select <int64>$0`; or,
+        # - a constant value, when a conversion is part of a schema expression,
+        #   no normalization takes place.
+        #
+        # The irast.ServerParamConversion we get from the ql compiler contains
+        # either a script_param_index or a constant value.
+        #
+        # The script_param_index may refer to either a query param or a
+        # normalized constant. We need to check the source's extra variable
+        # indexes to see if a param_name refers to an normalized constant.
+        #
+        # If a parameter is a normalized constant, pass on the blob and arg
+        # indexes to the server.
+        #
+        # Query parameters and constant values can be passed on as they are.
+
         extra_variable_indexes = (
             ctx.source.extra_variable_indexes() if ctx.source else {}
         )
-
-        def get_extra_blob_arg_indexes(
-            param_name: str
-        ) -> Optional[tuple[int, int]]:
-            if not ctx.source:
-                return None
-            return extra_variable_indexes.get(param_name, None)
 
         server_param_conversions = [
             dbstate.ServerParamConversion(
@@ -1947,7 +1960,9 @@ def _compile_ql_query(
                     None
                 ),
                 extra_blob_arg_indexes=(
-                    get_extra_blob_arg_indexes(p.param_name)
+                    extra_variable_indexes[p.param_name]
+                    if p.param_name in extra_variable_indexes else
+                    None
                 ),
                 constant_value=p.constant_value
             )

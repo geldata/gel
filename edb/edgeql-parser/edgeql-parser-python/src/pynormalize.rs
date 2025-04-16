@@ -81,6 +81,7 @@ impl Entry {
         Ok(vars.into())
     }
 
+    // This function returns a dictionary mapping normalized parameter names to their blob and var indexes.
     fn get_extra_variable_indexes(&self, py: Python) -> PyResult<PyObject> {
         let indexes = PyDict::new(py);
         for (param_name, blob_index, var_index, _) in VariableNameIter::new(self) {
