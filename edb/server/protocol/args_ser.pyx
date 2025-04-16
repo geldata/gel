@@ -659,51 +659,21 @@ cdef class ParamConversion:
 cdef list[ParamConversion] get_param_conversions(
     dbview.DatabaseConnectionView dbv,
     list server_param_conversions,
-    list in_type_args,
     bytes bind_args,
     list[bytes] extra_blobs,
 ):
-    cdef:
-        FRBuffer in_buf
-        ssize_t in_len
-        const char *data_str
-
-    assert cpython.PyBytes_CheckExact(bind_args)
-    frb_init(
-        &in_buf,
-        cpython.PyBytes_AS_STRING(bind_args),
-        cpython.Py_SIZE(bind_args)
+    # Get encoded data from bind args
+    bind_args_datas: dict[int, bytes] = get_args_data_for_indexes(
+        bind_args,
+        [
+            param_conversion.bind_args_index
+            for param_conversion in server_param_conversions
+            if param_conversion.bind_args_index is not None
+        ],
+        True,
     )
 
-    if frb_get_len(&in_buf) == 0:
-        pass
-    else:
-        hton.unpack_int32(frb_read(&in_buf, 4))
-
-    # First check which parameters' data we need to get
-    # from bind args
-    bind_args_names: set[str] = set(
-        param_conversion.param_name
-        for param_conversion in server_param_conversions
-    )
-
-    # Next extract bytes from the bind_args
-    bind_arg_datas: dict[str, bytes] = {}
-    if in_type_args is not None:
-        for param in in_type_args:
-            assert isinstance(param, dbstate.Param)
-            frb_read(&in_buf, 4)  # reserved
-            in_len = hton.unpack_int32(frb_read(&in_buf, 4))
-            data_str = frb_read(&in_buf, in_len)
-
-            if param.name in bind_args_names:
-                data = cpython.PyBytes_FromStringAndSize(data_str, in_len)
-                bind_arg_datas[param.name] = data
-
-    if frb_get_len(&in_buf):
-        raise errors.InputDataError('unexpected trailing data in buffer')
-
-    # Gather indexes of extra blob vars to extract
+    # Get encoded data from extra blobs
     extra_blob_target_indexes: dict[int, list[int]] = {}
     for param_conversion in server_param_conversions:
         if param_conversion.extra_blob_arg_indexes is not None:
@@ -726,34 +696,39 @@ cdef list[ParamConversion] get_param_conversions(
         param_name = param_conversion.param_name
 
         if (
-            param_name in bind_arg_datas
+            param_conversion.bind_args_index is not None
             and param_conversion.extra_blob_arg_indexes is not None
         ):
             raise RuntimeError(
-                f"Parameter '{param_name}' has both a source and a bind args value"
+                f"Parameter '{param_name}' has both "
+                f"a normalized arg and a query arg value"
             )
         elif (
-            param_name in bind_arg_datas
+            param_conversion.bind_args_index is not None
             and param_conversion.constant_value is not None
         ):
             raise RuntimeError(
-                f"Parameter '{param_name}' has both a constant and a bind args value"
+                f"Parameter '{param_name}' has both "
+                f"a constant and a query arg value"
             )
         elif (
             param_conversion.extra_blob_arg_indexes is not None
             and param_conversion.constant_value is not None
         ):
             raise RuntimeError(
-                f"Parameter '{param_name}' has both a source and a constant args value"
+                f"Parameter '{param_name}' has both "
+                f"a normalized arg and a constant value"
             )
 
-        elif param_name in bind_arg_datas:
+        elif param_conversion.bind_args_index is not None:
             # using data from the bind args
             result.append(ParamConversion(
                 param_name=param_name,
                 conversion_name=param_conversion.conversion_name,
                 additional_info=param_conversion.additional_info,
-                bind_arg_data=bind_arg_datas[param_name],
+                bind_arg_data=bind_args_datas[
+                    param_conversion.bind_args_index
+                ],
                 constant_value=None,
             ))
 

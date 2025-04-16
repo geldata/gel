@@ -302,7 +302,6 @@ async def execute(
                             dbv,
                             compiled,
                             query_unit.server_param_conversions,
-                            query_unit.in_type_args,
                             bind_args,
                         )).get(0, None)
 
@@ -454,7 +453,6 @@ async def _convert_parameters(
     dbv: dbview.DatabaseConnectionView,
     compiled: dbview.CompiledQuery,
     server_param_conversions: list[dbstate.ServerParamConversion],
-    in_type_args: Optional[list[dbstate.Param]],
     bind_args: bytes,
 ) -> dict[int, list[args_ser.ConvertedArg]]:
     """
@@ -466,7 +464,6 @@ async def _convert_parameters(
         args_ser.get_param_conversions(
             dbv,
             server_param_conversions,
-            in_type_args,
             bind_args,
             compiled.extra_blobs,
         )
@@ -653,7 +650,6 @@ async def execute_script(
                     dbv,
                     compiled,
                     unit_group.server_param_conversions,
-                    unit_group.in_type_args,
                     bind_args,
                 )
 

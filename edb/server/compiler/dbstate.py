@@ -105,6 +105,9 @@ class ServerParamConversion:
     conversion_name: str
     additional_info: tuple[str, ...]
 
+    # If the parameter is a query parameter, track its bind_args index.
+    bind_args_index: Optional[int] = None
+
     # If the parameter was originally a literal which was normalized,
     # store the location in the extra blobs to find its encoded data.
     #

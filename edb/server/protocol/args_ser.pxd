@@ -62,7 +62,6 @@ cdef class ParamConversion:
 cdef list[ParamConversion] get_param_conversions(
     dbview.DatabaseConnectionView dbv,
     list server_param_conversions,
-    list in_type_args,
     bytes bind_args,
     list[bytes] extra_blobs,
 )

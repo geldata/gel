@@ -1941,16 +1941,15 @@ def _compile_ql_query(
                 param_name=p.param_name,
                 conversion_name=p.conversion_name,
                 additional_info=p.additional_info,
-                extra_blob_arg_indexes=(
-                    get_extra_blob_arg_indexes(p.param_name)
-                    if p.constant_value is None else
+                bind_args_index=(
+                    p.script_param_index
+                    if p.param_name not in extra_variable_indexes else
                     None
                 ),
-                constant_value=(
-                    p.constant_value
-                    if p.constant_value is not None else
-                    None
-                )
+                extra_blob_arg_indexes=(
+                    get_extra_blob_arg_indexes(p.param_name)
+                ),
+                constant_value=p.constant_value
             )
             for p in ir.server_param_conversions
         ]

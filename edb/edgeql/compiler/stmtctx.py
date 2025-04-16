@@ -427,6 +427,7 @@ def collect_server_param_conversions(
             param_name=param_name,
             conversion_name=conversion_name,
             additional_info=conversion.additional_info,
+            script_param_index=conversion.script_param_index,
             constant_value=conversion.constant_value,
         ))
         params.append(conversion.ir_param)
