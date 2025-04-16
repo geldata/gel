@@ -3213,7 +3213,7 @@ def _process_nested_array_set_func_with_ordinality(
     ir_set: irast.Set,
     *,
     outer_func_set: irast.Set,
-    args: List[pgast.BaseExpr],
+    args: list[pgast.BaseExpr],
     ctx: context.CompilerContextLevel
 ) -> _FuncWithOrdinalityInfo:
     # array<array<...>> is implemented as array<tuple<array<...>>>
@@ -3328,8 +3328,8 @@ def _process_set_func_with_ordinality(
     ir_set: irast.Set,
     *,
     outer_func_set: irast.Set,
-    func_name: Tuple[str, ...],
-    args: List[pgast.BaseExpr],
+    func_name: tuple[str, ...],
+    args: list[pgast.BaseExpr],
     ctx: context.CompilerContextLevel
 ) -> pgast.BaseExpr:
     expr = ir_set.expr
