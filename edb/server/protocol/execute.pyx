@@ -298,12 +298,12 @@ async def execute(
                 else:
                     converted_args: Optional[list[args_ser.ConvertedArg]] = None
                     if query_unit.server_param_conversions:
-                        converted_args = await _convert_parameters(
+                        converted_args = (await _convert_parameters(
                             dbv,
+                            compiled,
                             query_unit.server_param_conversions,
-                            query_unit.in_type_args,
                             bind_args,
-                        )
+                        )).get(0, None)
 
                     data_types = []
                     bound_args_buf = args_ser.recode_bind_args(
@@ -451,16 +451,79 @@ async def execute(
 
 async def _convert_parameters(
     dbv: dbview.DatabaseConnectionView,
+    compiled: dbview.CompiledQuery,
     server_param_conversions: list[dbstate.ServerParamConversion],
-    in_type_args: Optional[list[dbstate.Param]],
     bind_args: bytes,
-) -> Optional[list[args_ser.ConvertedArg]]:
+) -> dict[int, list[args_ser.ConvertedArg]]:
     """
     If there are server param conversions, compute them now so that they are
     injected into the recoded bind args later.
     """
 
-    # We receive the encoded param data from the bind_args
+    param_conversions: list[args_ser.ParamConversion] = (
+        args_ser.get_param_conversions(
+            dbv,
+            server_param_conversions,
+            bind_args,
+            compiled.extra_blobs,
+        )
+    )
+
+    # Cache converted args which may be used in multiple units
+    converted_args_cache: list[Optional[args_ser.ConvertedArg]] = (
+        [None] * len(param_conversions)
+    )
+
+    unit_group = compiled.query_unit_group
+
+    converted_args: dict[int, list[args_ser.ConvertedArg]] = {}
+    for unit_index, converted_params_indexes in unit_group.unit_converted_param_indexes.items():
+        unit_converted_args: list[args_ser.ParamConversion] = []
+
+        for conversion_index in converted_params_indexes:
+            # Check for a cached conversion arg
+            if converted_arg := converted_args_cache[conversion_index]:
+                unit_converted_args.append(converted_arg)
+                continue
+
+            conversion = param_conversions[conversion_index]
+
+            conversion_name: str = conversion.get_conversion_name()
+            additional_info: tuple[str, ...] = (
+                conversion.get_additional_info()
+            )
+
+            # Get encoded data or query constant value
+            data = conversion.get_encoded_data()
+            value = conversion.get_constant_value()
+
+            # Do the conversion
+            converted_arg = await _convert_parameter(
+                dbv,
+                conversion_name,
+                data,
+                value,
+                additional_info,
+            )
+
+            unit_converted_args.append(converted_arg)
+            converted_args_cache[conversion_index] = converted_arg
+
+        if unit_converted_args:
+            converted_args[unit_index] = unit_converted_args
+
+    return converted_args
+
+
+async def _convert_parameter(
+    dbv: dbview.DatabaseConnectionView,
+    conversion_name: str,
+    data: Optional[bytes],
+    value: Optional[Any],
+    additional_info: tuple[str, ...],
+) -> args_ser.ConvertedArg:
+
+    # We receive the encoded param data from the bind_args or extra blobs
     # and decode it manually.
     def decode_int(data: bytes) -> int:
         return int.from_bytes(data)
@@ -480,96 +543,64 @@ async def _convert_parameters(
             data = data[text_length:]
         return texts
 
-    param_conversions: list[args_ser.ParamConversion] = (
-        args_ser.get_param_conversions(
-            dbv, server_param_conversions, in_type_args, bind_args,
+    if (
+        conversion_name == 'cast_int64_to_str'
+        or conversion_name == 'cast_int64_to_str_volatile'
+    ):
+        decoded_param_data = (
+            decode_int(data) if value is None else value
         )
-    )
-
-    converted_args = []
-    for conversion in param_conversions:
-        conversion_name: str = conversion.get_conversion_name()
-        additional_info: tuple[str, ...] = (
-            conversion.get_additional_info()
+        return args_ser.ConvertedArgStr.new(
+            str(decoded_param_data)
         )
 
-        if (
-            conversion_name == 'cast_int64_to_str'
-            or conversion_name == 'cast_int64_to_str_volatile'
-        ):
-            decoded_param_data = (
-                decode_int(conversion.get_data())
-                if conversion.get_source_value() is None
-                else conversion.get_source_value()
-            )
-            converted_args.append(
-                args_ser.ConvertedArgStr.new(
-                    str(decoded_param_data)
-                )
-            )
+    elif conversion_name == 'cast_int64_to_float64':
+        decoded_param_data = (
+            decode_int(data) if value is None else value
+        )
 
-        elif conversion_name == 'cast_int64_to_float64':
-            decoded_param_data = (
-                decode_int(conversion.get_data())
-                if conversion.get_source_value() is None
-                else conversion.get_source_value()
-            )
-            converted_args.append(
-                args_ser.ConvertedArgFloat64.new(
-                    float(decoded_param_data)
-                )
-            )
+        return args_ser.ConvertedArgFloat64.new(
+            float(decoded_param_data)
+        )
 
-        elif conversion_name == 'join_str_array':
-            decoded_param_data = (
-                decode_array_of_str(
-                    conversion.get_data()
-                )
-                if conversion.get_source_value() is None
-                else conversion.get_source_value()
-            )
+    elif conversion_name == 'join_str_array':
+        decoded_param_data = (
+            decode_array_of_str(data) if value is None else value
+        )
 
-            separator = additional_info[0]
-            converted_args.append(
-                args_ser.ConvertedArgStr.new(
-                    separator.join(decoded_param_data)
-                )
-            )
+        separator = additional_info[0]
+        return args_ser.ConvertedArgStr.new(
+            separator.join(decoded_param_data)
+        )
 
-        elif conversion_name == 'ai_text_embedding':
-            decoded_param_data = (
-                decode_str(conversion.get_data())
-                if conversion.get_source_value() is None
-                else conversion.get_source_value()
-            )
+    elif conversion_name == 'ai_text_embedding':
+        decoded_param_data = (
+            decode_str(data) if value is None else value
+        )
 
-            object_type_id = additional_info[0]
+        object_type_id = additional_info[0]
 
-            tenant = dbv.tenant
-            db = tenant.maybe_get_db(dbname=dbv.dbname)
-            assert db is not None
-            embeddings_result = await ai_ext.generate_embeddings_for_text(
-                db,
-                tenant.get_http_client(originator="ai/index"),
-                object_type_id,
-                decoded_param_data,
-            )
-            embeddings = json.loads(
-                embeddings_result.decode("utf-8")
-            )["data"][0]["embedding"]
+        tenant = dbv.tenant
+        db = tenant.maybe_get_db(dbname=dbv.dbname)
+        assert db is not None
+        embeddings_result = await ai_ext.generate_embeddings_for_text(
+            db,
+            tenant.get_http_client(originator="ai/index"),
+            object_type_id,
+            decoded_param_data,
+        )
+        embeddings = json.loads(
+            embeddings_result.decode("utf-8")
+        )["data"][0]["embedding"]
 
-            converted_args.append(
-                args_ser.ConvertedArgListFloat32.new(
-                    embeddings
-                )
-            )
+        return args_ser.ConvertedArgListFloat32.new(
+            embeddings
+        )
 
-        else:
-            raise errors.QueryError(
-                f'unknown param conversion: {conversion_name}'
-            )
-
-    return converted_args
+    else:
+        raise errors.QueryError(
+            f'unknown param conversion: {conversion_name}'
+        )
 
 
 async def execute_script(
@@ -613,12 +644,12 @@ async def execute_script(
             state = None
         async with conn.parse_execute_script_context():
             
-            converted_args: Optional[list[args_ser.ConvertedArg]] = None
+            converted_args: Optional[dict[int, list[args_ser.ConvertedArg]]] = None
             if unit_group.server_param_conversions:
                 converted_args = await _convert_parameters(
                     dbv,
+                    compiled,
                     unit_group.server_param_conversions,
-                    unit_group.in_type_args,
                     bind_args,
                 )
 
@@ -654,7 +685,13 @@ async def execute_script(
                     sync = sent == len(unit_group) and not no_sync
 
                     bind_array = args_ser.recode_bind_args_for_script(
-                        dbv, compiled, bind_args, converted_args, idx, sent)
+                        dbv,
+                        compiled,
+                        bind_args,
+                        converted_args,
+                        idx,
+                        sent,
+                    )
 
                     dbver = dbv.dbver
                     conn.send_query_unit_group(

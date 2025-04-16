@@ -105,13 +105,19 @@ class ServerParamConversion:
     conversion_name: str
     additional_info: tuple[str, ...]
 
-    # Explicitly store the value if it is a literal which was turned into a
-    # parameter during normalization.
+    # If the parameter is a query parameter, track its bind_args index.
+    bind_args_index: Optional[int] = None
+
+    # If the parameter was originally a literal which was normalized,
+    # store the location in the extra blobs to find its encoded data.
     #
-    # Normalized constants are passed to the backend as a blob of bytes.
-    # Since no encode/decode information is associated with this blob, the
-    # value to be converted needs to be passed in separately.
-    source_value: Optional[Any] = None
+    # The location is stored as a tuple of:
+    # - blob index
+    # - arg index
+    extra_blob_arg_indexes: Optional[tuple[int, int]] = None
+
+    # If the parameter is a constant value, pass to directly to the server.
+    constant_value: Optional[Any] = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
