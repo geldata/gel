@@ -42,9 +42,6 @@ pub struct Entry {
     #[pyo3(get)]
     extra_blobs: PyObject,
 
-    #[pyo3(get)]
-    extra_offsets: PyObject,
-
     extra_named: bool,
 
     #[pyo3(get)]
@@ -58,18 +55,13 @@ pub struct Entry {
 
 impl Entry {
     pub fn new(py: Python, entry: crate::normalize::Entry) -> PyResult<Self> {
-        let (blobs, offsets) =
-            serialize_all(&entry.variables).map_err(PyAssertionError::new_err)?;
-        let py_blobs = PyList::new(py, blobs.iter().map(|buf| PyBytes::new(py, buf)))?;
-        let py_offsets = PyList::new(py, offsets)?;
-
+        let blobs = serialize_all(py, &entry.variables)?;
         let counts = entry.variables.iter().map(|x| x.len());
 
         Ok(Entry {
             key: PyBytes::new(py, &entry.hash[..]).into(),
             tokens: tokens_to_py(py, entry.tokens.clone())?.into_any(),
-            extra_blobs: py_blobs.into(),
-            extra_offsets: py_offsets.into(),
+            extra_blobs: blobs.into(),
             extra_named: entry.named_args,
             first_extra: entry.first_arg,
             extra_counts: PyList::new(py, counts)?.into(),
@@ -169,12 +161,12 @@ impl<'a> Iterator for VariableNameIter<'a> {
     }
 }
 
-pub fn serialize_extra(variables: &[Variable]) -> Result<(Bytes, Vec<usize>), String> {
+pub fn serialize_extra(variables: &[Variable]) -> Result<Bytes, String> {
     use gel_protocol::codec::Codec;
     use gel_protocol::value::Value as P;
 
-    let mut buf = BytesMut::with_capacity(4 * variables.len());
-    let mut offsets = Vec::with_capacity(1 + variables.len());
+    let mut buf = BytesMut::new();
+    buf.reserve(4 * variables.len());
     for var in variables {
         buf.reserve(4);
         let pos = buf.len();
@@ -227,21 +219,20 @@ pub fn serialize_extra(variables: &[Variable]) -> Result<(Bytes, Vec<usize>), St
                 .map_err(|_| "element isn't too long".to_owned())?
                 .to_be_bytes(),
         );
-        offsets.push(pos);
     }
-    offsets.push(buf.len());
-    Ok((buf.freeze(), offsets))
+    Ok(buf.freeze())
 }
 
-pub fn serialize_all(variables: &[Vec<Variable>]) -> Result<(Vec<Bytes>, Vec<Vec<usize>>), String> {
-    let mut bufs = Vec::with_capacity(variables.len());
-    let mut offsets = Vec::with_capacity(variables.len());
+pub fn serialize_all<'a>(
+    py: Python<'a>,
+    variables: &[Vec<Variable>],
+) -> PyResult<Bound<'a, PyList>> {
+    let mut buf = Vec::with_capacity(variables.len());
     for vars in variables {
-        let (bytes, curr_offsets) = serialize_extra(vars)?;
-        bufs.push(bytes);
-        offsets.push(curr_offsets);
+        let bytes = serialize_extra(vars).map_err(PyAssertionError::new_err)?;
+        buf.push(PyBytes::new(py, &bytes));
     }
-    Ok((bufs, offsets))
+    PyList::new(py, &buf)
 }
 
 /// Newtype required to define a trait for a foreign type.

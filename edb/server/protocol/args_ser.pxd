@@ -58,7 +58,6 @@ cdef class ParamConversion:
         tuple additional_info
         bytes bind_arg_data
         object constant_value
-        tuple extra_blob_offset_indexes
 
 cdef list[ParamConversion] get_param_conversions(
     dbview.DatabaseConnectionView dbv,

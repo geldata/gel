@@ -32,7 +32,6 @@ class Entry:
     tokens: list[OpaqueToken]
 
     extra_blobs: list[bytes]
-    extra_offsets: list[list[int]]
 
     first_extra: typing.Optional[int]
 

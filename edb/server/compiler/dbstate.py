@@ -110,8 +110,8 @@ class ServerParamConversion:
     #
     # The location is stored as a tuple of:
     # - blob index
-    # - offset index
-    extra_blob_offset_indexes: Optional[tuple[int, int]] = None
+    # - arg index
+    extra_blob_arg_indexes: Optional[tuple[int, int]] = None
 
     # If the parameter is a constant value, pass to directly to the server.
     constant_value: Optional[Any] = None

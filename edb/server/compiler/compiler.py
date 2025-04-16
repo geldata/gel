@@ -1929,28 +1929,20 @@ def _compile_ql_query(
             ctx.source.extra_variable_indexes() if ctx.source else {}
         )
 
-        def get_blob_offset_indexes(
+        def get_extra_blob_arg_indexes(
             param_name: str
         ) -> Optional[tuple[int, int]]:
             if not ctx.source:
                 return None
-            if param_name not in extra_variable_indexes:
-                return None
-
-            blob_index, offset_index = extra_variable_indexes[param_name]
-
-            return (
-                blob_index,
-                offset_index,
-            )
+            return extra_variable_indexes.get(param_name, None)
 
         server_param_conversions = [
             dbstate.ServerParamConversion(
                 param_name=p.param_name,
                 conversion_name=p.conversion_name,
                 additional_info=p.additional_info,
-                extra_blob_offset_indexes=(
-                    get_blob_offset_indexes(p.param_name)
+                extra_blob_arg_indexes=(
+                    get_extra_blob_arg_indexes(p.param_name)
                     if p.constant_value is None else
                     None
                 ),
