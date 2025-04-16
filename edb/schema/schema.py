@@ -1524,6 +1524,9 @@ class FlatSchema(Schema):
         return (
             f'<{type(self).__name__} gen:{self._generation} at {id(self):#x}>')
 
+    def __eq__(self, other) -> bool:
+        return self is other
+
 
 def apply_module_aliases(
     module: Optional[str],
@@ -2166,9 +2169,12 @@ class ChainedSchema(Schema):
             migration = self._base_schema.get_last_migration()
         return migration
 
+    def __eq__(self, other) -> bool:
+        return self is other
+
 
 # XXX: put on schema itself with my nonsense??
-@functools.lru_cache(maxsize=4)
+# @functools.lru_cache(maxsize=4)
 def _get_functions(
     schema: FlatSchema,
     name: sn.Name,
@@ -2182,7 +2188,7 @@ def _get_functions(
     )
 
 
-@functools.lru_cache(maxsize=4)
+# @functools.lru_cache(maxsize=4)
 def _get_operators(
     schema: FlatSchema,
     name: sn.Name,
@@ -2196,7 +2202,7 @@ def _get_operators(
         )
 
 
-@functools.lru_cache(maxsize=4)
+# @functools.lru_cache(maxsize=4)
 def _get_last_migration(
     schema: FlatSchema,
 ) -> Optional[s_migrations.Migration]:

@@ -534,7 +534,7 @@ def _pointer_storable_in_pointer(
     )
 
 
-@functools.lru_cache(maxsize=4)
+# @functools.lru_cache(maxsize=4)
 def get_pointer_storage_info(
     pointer: s_pointers.Pointer,
     *,
@@ -665,7 +665,8 @@ def get_ptrref_storage_info(
     )
 
 
-@functools.lru_cache()
+# XXX: bad!?
+# @functools.lru_cache()
 def _get_ptrref_storage_info(
     ptrref: irast.BasePointerRef,
     *,
