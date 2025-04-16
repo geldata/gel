@@ -666,6 +666,7 @@ cdef list[ParamConversion] get_param_conversions(
     list server_param_conversions,
     list in_type_args,
     bytes bind_args,
+    list[bytes] extra_blobs,
 ):
     cdef:
         FRBuffer in_buf
@@ -706,6 +707,22 @@ cdef list[ParamConversion] get_param_conversions(
 
     if frb_get_len(&in_buf):
         raise errors.InputDataError('unexpected trailing data in buffer')
+
+    # Gather indexes of extra blob vars to extract
+    extra_blob_target_indexes: dict[int, list[int]] = {}
+    for param_conversion in server_param_conversions:
+        if param_conversion.extra_blob_offset_indexes is not None:
+            blob_index, arg_index = param_conversion.extra_blob_offset_indexes
+            if blob_index not in extra_blob_target_indexes:
+                extra_blob_target_indexes[blob_index] = []
+            extra_blob_target_indexes[blob_index].append(arg_index)
+
+    extra_blob_arg_datas: dict[tuple[int, int], bytes] = {}
+    for blob_index, target_indexes in extra_blob_target_indexes.items():
+        for arg_index, data in get_args_data_for_indexes(
+            extra_blobs[blob_index], target_indexes, False
+        ).items():
+            extra_blob_arg_datas[(blob_index, arg_index)] = data
 
     # Finally, construct the ParamConversions
     result: list[ParamConversion] = []
@@ -758,22 +775,76 @@ cdef list[ParamConversion] get_param_conversions(
             ))
 
         elif param_conversion.extra_blob_offset_indexes is not None:
-            # data to be extracted from the blob
+            # using data from extra blobs
             result.append(ParamConversion(
                 param_name=param_name,
                 conversion_name=param_conversion.conversion_name,
                 additional_info=param_conversion.additional_info,
-                bind_arg_data=None,
-                constant_value=None,
-                extra_blob_offset_indexes=(
+                bind_arg_data=extra_blob_arg_datas[
                     param_conversion.extra_blob_offset_indexes
-                ),
+                ],
+                constant_value=None,
+                extra_blob_offset_indexes=None,
             ))
 
         else:
             raise RuntimeError(
                 f"Parameter '{param_name}' has no value"
             )
+
+    return result
+
+
+cdef dict[int, bytes] get_args_data_for_indexes(
+    bytes args,
+    list[int] target_indexes,
+    args_needs_recoding: bool,
+):
+    """Extract bytes from the args by reading the length of each variable and
+    skipping forward by that amount.
+
+    If args_needs_recoding, the args is prefixed by the argument count in int32.
+    Additionally, each argument is prefixed by a reserved int32.
+    """
+
+    cdef:
+        FRBuffer in_buf
+        ssize_t in_len
+        const char *data_str
+
+    assert cpython.PyBytes_CheckExact(args)
+    frb_init(
+        &in_buf,
+        cpython.PyBytes_AS_STRING(args),
+        cpython.Py_SIZE(args)
+    )
+
+    if args_needs_recoding:
+        # Skip prefix argument count
+        if frb_get_len(&in_buf) == 0:
+            pass
+        else:
+            frb_read(&in_buf, 4)
+
+    curr_arg_index = 0
+    target_indexes.sort()
+
+    result: dict[int, bytes] = {}
+    for target_index in target_indexes:
+        # Read up to the end of the target variable
+        for arg_index in range(curr_arg_index, target_index + 1):
+            if args_needs_recoding:
+                # Skip reserved
+                frb_read(&in_buf, 4)  # reserved
+            in_len = hton.unpack_int32(frb_read(&in_buf, 4))
+            data_str = frb_read(&in_buf, in_len)
+
+            if arg_index == target_index:
+                # Store the target variable data
+                data = cpython.PyBytes_FromStringAndSize(data_str, in_len)
+                result[target_index] = data
+
+        curr_arg_index = target_index + 1
 
     return result
 

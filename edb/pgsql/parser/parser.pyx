@@ -260,8 +260,8 @@ cdef class Source:
     def extra_counts(self) -> Sequence[int]:
         return []
 
-    def extra_blobs(self) -> Sequence[bytes]:
-        return ()
+    def extra_blobs(self) -> list[bytes]:
+        return []
 
     def extra_offsets(self) -> Sequence[Sequence[int]]:
         return ()

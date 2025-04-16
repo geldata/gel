@@ -464,7 +464,11 @@ async def _convert_parameters(
 
     param_conversions: list[args_ser.ParamConversion] = (
         args_ser.get_param_conversions(
-            dbv, server_param_conversions, in_type_args, bind_args,
+            dbv,
+            server_param_conversions,
+            in_type_args,
+            bind_args,
+            compiled.extra_blobs,
         )
     )
 
@@ -492,29 +496,9 @@ async def _convert_parameters(
                 conversion.get_additional_info()
             )
 
-            # Get bind arg data, query constant value, or extra blob data
-            data = None
-            value = None
-            add_to_cache = False
-
-            if data := conversion.get_bind_arg_data():
-                add_to_cache = True
-
-            elif value := conversion.get_constant_value():
-                add_to_cache = True
-
-            elif extra_blob_offset_indexes := (
-                conversion.get_extra_blob_offset_indexes()
-            ):
-                blob_index, offset_index = extra_blob_offset_indexes
-                # skip the length part of the data
-                offset_start = compiled.extra_offsets[blob_index][offset_index] + 4
-                offset_end = compiled.extra_offsets[blob_index][offset_index+1]
-                data = compiled.extra_blobs[blob_index][offset_start:offset_end]
-                # Don't cache conversion, since it may differ per unit
-
-            else:
-                raise RuntimeError('Missing data')
+            # Get encoded data or query constant value
+            data = conversion.get_bind_arg_data()
+            value = conversion.get_constant_value()
 
             # Do the conversion
             converted_arg = await _convert_parameter(
@@ -526,9 +510,7 @@ async def _convert_parameters(
             )
 
             unit_converted_args.append(converted_arg)
-            
-            if add_to_cache:
-                converted_args_cache[conversion_index] = converted_arg
+            converted_args_cache[conversion_index] = converted_arg
 
         if unit_converted_args:
             converted_args[unit_index] = unit_converted_args
@@ -544,7 +526,7 @@ async def _convert_parameter(
     additional_info: tuple[str, ...],
 ) -> args_ser.ConvertedArg:
 
-    # We receive the encoded param data from the bind_args
+    # We receive the encoded param data from the bind_args or extra blobs
     # and decode it manually.
     def decode_int(data: bytes) -> int:
         return int.from_bytes(data)
