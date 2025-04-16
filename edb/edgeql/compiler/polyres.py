@@ -874,6 +874,14 @@ def _check_server_arg_conversion(
                     )
                 )
 
+                # Don't include the newly created irast.Param in
+                # ctx.env.query_parameters.
+                # Such parameters need to have a corresponding entry in
+                # compiler.Context.Environment.script_params
+                #
+                # The parameters will be handled separately in fini_expression
+                # and compile_ir_to_sql_tree.
+
             # Substitute the old arg
             if isinstance(arg_key, int):
                 args = args.copy()

@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Optional, Mapping, TYPE_CHECKING
 from dataclasses import dataclass
+import itertools
+import uuid
 
 from edb import errors
 
@@ -92,10 +94,10 @@ def compile_ir_to_sql_tree(
 
     try:
         # Transform to sql tree
-        query_params = []
-        query_globals = []
-        server_param_conversion_params = []
-        type_rewrites = {}
+        query_params: list[irast.Param] = []
+        query_globals: list[irast.Global] = []
+        server_param_conversion_params: list[irast.Param] = []
+        type_rewrites: dict[tuple[uuid.UUID, bool], irast.Set] = {}
         triggers: tuple[tuple[irast.Trigger, ...], ...] = ()
 
         singletons = []
@@ -188,7 +190,10 @@ def compile_ir_to_sql_tree(
                         serialized=True,
                     )
                 )
-                for param in ctx.env.query_params
+                for param in itertools.chain(
+                    ctx.env.query_params,
+                    server_param_conversion_params,
+                )
                 if not param.sub_params
             }
         else:
