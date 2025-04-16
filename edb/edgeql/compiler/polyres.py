@@ -801,6 +801,8 @@ def _check_server_arg_conversion(
                 query_param_name = f'const_{value_hash}'
             elif isinstance(arg[1].expr, irast.Parameter):
                 query_param_name = arg[1].expr.name
+            else:
+                raise RuntimeError('Server param conversion has no parameter')
 
             # Create a substitute parameter set with the correct type
             existing_converted_path_id = None
@@ -870,9 +872,24 @@ def _check_server_arg_conversion(
                         ),
                         additional_info=additional_info,
                         volatility=conversion_volatility,
+                        script_param_index=(
+                            list(ctx.env.script_params.keys()).index(
+                                query_param_name
+                            )
+                            if query_param_name in ctx.env.script_params else
+                            None
+                        ),
                         constant_value=constant_value,
                     )
                 )
+
+                # Don't include the newly created irast.Param in
+                # ctx.env.query_parameters.
+                # Such parameters need to have a corresponding entry in
+                # compiler.Context.Environment.script_params
+                #
+                # The parameters will be handled separately in fini_expression
+                # and compile_ir_to_sql_tree.
 
             # Substitute the old arg
             if isinstance(arg_key, int):

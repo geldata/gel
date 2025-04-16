@@ -121,6 +121,16 @@ class TestServerParamConversions(tb.QueryTestCase):
             ["456"],
         )
 
+        # Check conversion works with normalized constants whose size changes
+        await self.assert_query_result(
+            'select ("AAAAA", simple_to_str(456), "BBBBB")',
+            [("AAAAA", "456", "BBBBB")],
+        )
+        await self.assert_query_result(
+            'select ("A", simple_to_str(456), "B")',
+            [("A", "456", "B")],
+        )
+
     async def test_server_param_conversions_simple_03(self):
         # Scalar expression
         async with self.assertRaisesRegexTx(
@@ -631,5 +641,45 @@ class TestServerParamConversions(tb.QueryTestCase):
             [
                 {'n': 1, 'val': "123!"},
                 {'n': 2, 'val': "123"},
+            ],
+        )
+
+    async def test_server_param_conversions_script_05(self):
+        # Script where layout of blobs is different
+        await self.con.execute(
+            '''
+            insert Result { n := 1, val := simple_to_str(123) };
+            insert Result { n := 1 + 1, val := simple_to_str(456) };
+            ''',
+        )
+
+        await self.assert_query_result(
+            'select Result { n, val } order by .n',
+            [
+                {'n': 1, 'val': "123"},
+                {'n': 2, 'val': "456"},
+            ],
+        )
+
+    async def test_server_param_conversions_script_06(self):
+        # Script with a cached query, where converted constants differ
+        await self.con.execute(
+            '''
+            insert Result { n := 0, val := simple_to_str(0) };
+            ''',
+        )
+        await self.con.execute(
+            '''
+            insert Result { n := 1, val := simple_to_str(123) };
+            insert Result { n := 2, val := simple_to_str(456) };
+            ''',
+        )
+
+        await self.assert_query_result(
+            'select Result { n, val } order by .n',
+            [
+                {'n': 0, 'val': "0"},
+                {'n': 1, 'val': "123"},
+                {'n': 2, 'val': "456"},
             ],
         )
