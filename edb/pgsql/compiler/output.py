@@ -199,12 +199,12 @@ def array_as_json_object(
                     )
 
             json_func = 'build_object' if is_named else 'build_array'
-            serialized_inner_array = _build_json(json_func, json_args, env=env)
+            agg_arg = _build_json(json_func, json_args, env=env)
 
             needs_unnest = bool(el_type.subtypes)
         else:
             val = pgast.ColumnRef(name=[out_alias])
-            serialized_inner_array = serialize_expr_to_json(
+            agg_arg = serialize_expr_to_json(
                 val, styperef=el_type, nested=True, env=env)
             needs_unnest = True
 
@@ -215,7 +215,7 @@ def array_as_json_object(
                         args=[
                             pgast.FuncCall(
                                 name=_get_json_func('agg', env=env),
-                                args=[serialized_inner_array],
+                                args=[agg_arg],
                             ),
                             pgast.StringConstant(val='[]'),
                         ]
