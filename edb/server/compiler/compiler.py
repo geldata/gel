@@ -1850,7 +1850,7 @@ def _compile_ql_query(
         output_format=_convert_format(ctx.output_format),
         backend_runtime_params=ctx.backend_runtime_params,
         is_explain=options.is_explain,
-        detach_params=(use_persistent_cache
+        cache_as_function=(use_persistent_cache
                        and cache_mode is config.QueryCacheMode.PgFunc),
         versioned_stdlib=True,
     )
@@ -2068,7 +2068,7 @@ def _build_cache_function(
     fname = (pg_common.versioned_schema("edgedb"), f"__qh_{key}")
     func = pg_dbops.Function(
         name=fname,
-        args=[(None, arg) for arg in sql_res.detached_params or []],
+        args=[(None, arg) for arg in sql_res.cached_params or []],
         returns=return_type,
         set_returning=set_returning,
         text=pg_codegen.generate_source(sql_ast),
@@ -2095,7 +2095,7 @@ def _build_cache_function(
                 arg=pgast.ParamRef(number=i),
                 type_name=pgast.TypeName(name=arg),
             )
-            for i, arg in enumerate(sql_res.detached_params or [], 1)
+            for i, arg in enumerate(sql_res.cached_params or [], 1)
         ],
         coldeflist=[],
     )

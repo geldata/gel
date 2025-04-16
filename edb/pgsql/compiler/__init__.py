@@ -57,7 +57,7 @@ class CompileResult:
 
     argmap: dict[str, pgast.Param]
 
-    detached_params: Optional[list[tuple[str, ...]]] = None
+    cached_params: Optional[list[tuple[str, ...]]] = None
 
 
 def compile_ir_to_sql_tree(
@@ -83,7 +83,7 @@ def compile_ir_to_sql_tree(
         ]
     ] = None,
     backend_runtime_params: Optional[pgparams.BackendRuntimeParams]=None,
-    detach_params: bool = False,
+    cache_as_function: bool = False,
     alias_generator: Optional[aliases.AliasGenerator] = None,
     versioned_stdlib: bool = True,
     # HACK?
@@ -179,8 +179,8 @@ def compile_ir_to_sql_tree(
                 # use inheritance CTEs. Ensure they are added here.
                 clauses.insert_ctes(qtree, ctx)
 
-        if detach_params:
-            detached_params_idx = {
+        if cache_as_function:
+            cached_params_idx = {
                 ctx.argmap[param.name].index: (
                     pgtypes.pg_type_from_ir_typeref(
                         param.ir_type.base_type or param.ir_type,
@@ -197,8 +197,8 @@ def compile_ir_to_sql_tree(
                 if not param.sub_params
             }
         else:
-            detached_params_idx = {}
-        detached_params = [p for _, p in sorted(detached_params_idx.items())]
+            cached_params_idx = {}
+        cached_params = [p for _, p in sorted(cached_params_idx.items())]
 
     except errors.EdgeDBError:
         # Don't wrap propertly typed EdgeDB errors into
@@ -213,7 +213,7 @@ def compile_ir_to_sql_tree(
         raise errors.InternalServerError(*args) from e
 
     return CompileResult(
-        ast=qtree, env=env, argmap=ctx.argmap, detached_params=detached_params
+        ast=qtree, env=env, argmap=ctx.argmap, cached_params=cached_params
     )
 
 
