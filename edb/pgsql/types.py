@@ -534,7 +534,7 @@ def _pointer_storable_in_pointer(
     )
 
 
-@functools.lru_cache()
+@functools.lru_cache(maxsize=4)
 def get_pointer_storage_info(
     pointer: s_pointers.Pointer,
     *,

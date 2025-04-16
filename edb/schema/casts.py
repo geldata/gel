@@ -68,7 +68,7 @@ def _is_reachable(
         )
 
 
-@functools.lru_cache()
+@functools.lru_cache(maxsize=4)
 def get_implicit_cast_distance(
     schema: s_schema.Schema,
     source: s_types.Type,
@@ -89,7 +89,7 @@ def is_implicitly_castable(
     return get_implicit_cast_distance(schema, source, target) >= 0
 
 
-@functools.lru_cache()
+@functools.lru_cache(maxsize=4)
 def find_common_castable_type(
     schema: s_schema.Schema,
     source: s_types.Type,
@@ -123,7 +123,7 @@ def find_common_castable_type(
                 return target
 
 
-@functools.lru_cache()
+@functools.lru_cache(maxsize=4)
 def is_assignment_castable(
     schema: s_schema.Schema,
     source: s_types.Type,
@@ -145,7 +145,7 @@ def is_assignment_castable(
     return False
 
 
-@functools.lru_cache()
+@functools.lru_cache(maxsize=4)
 def is_castable(
     schema: s_schema.Schema,
     source: s_types.Type,

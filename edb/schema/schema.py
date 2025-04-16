@@ -2167,7 +2167,8 @@ class ChainedSchema(Schema):
         return migration
 
 
-@functools.lru_cache()
+# XXX: put on schema itself with my nonsense??
+@functools.lru_cache(maxsize=4)
 def _get_functions(
     schema: FlatSchema,
     name: sn.Name,
@@ -2181,7 +2182,7 @@ def _get_functions(
     )
 
 
-@functools.lru_cache()
+@functools.lru_cache(maxsize=4)
 def _get_operators(
     schema: FlatSchema,
     name: sn.Name,
@@ -2195,7 +2196,7 @@ def _get_operators(
         )
 
 
-@functools.lru_cache()
+@functools.lru_cache(maxsize=4)
 def _get_last_migration(
     schema: FlatSchema,
 ) -> Optional[s_migrations.Migration]:
