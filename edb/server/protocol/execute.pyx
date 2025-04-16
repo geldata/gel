@@ -494,7 +494,7 @@ async def _convert_parameters(
             )
 
             # Get encoded data or query constant value
-            data = conversion.get_bind_arg_data()
+            data = conversion.get_encoded_data()
             value = conversion.get_constant_value()
 
             # Do the conversion

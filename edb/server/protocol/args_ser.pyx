@@ -631,13 +631,13 @@ cdef class ParamConversion:
         param_name,
         conversion_name,
         additional_info,
-        bind_arg_data,
+        encoded_data,
         constant_value,
     ):
         self.param_name = param_name
         self.conversion_name = conversion_name
         self.additional_info = additional_info
-        self.bind_arg_data = bind_arg_data
+        self.encoded_data = encoded_data
         self.constant_value = constant_value
 
     def get_param_name(self):
@@ -649,8 +649,8 @@ cdef class ParamConversion:
     def get_additional_info(self):
         return self.additional_info
 
-    def get_bind_arg_data(self):
-        return self.bind_arg_data
+    def get_encoded_data(self):
+        return self.encoded_data
 
     def get_constant_value(self):
         return self.constant_value
@@ -726,7 +726,7 @@ cdef list[ParamConversion] get_param_conversions(
                 param_name=param_name,
                 conversion_name=param_conversion.conversion_name,
                 additional_info=param_conversion.additional_info,
-                bind_arg_data=bind_args_datas[
+                encoded_data=bind_args_datas[
                     param_conversion.bind_args_index
                 ],
                 constant_value=None,
@@ -738,7 +738,7 @@ cdef list[ParamConversion] get_param_conversions(
                 param_name=param_name,
                 conversion_name=param_conversion.conversion_name,
                 additional_info=param_conversion.additional_info,
-                bind_arg_data=None,
+                encoded_data=None,
                 constant_value=param_conversion.constant_value,
             ))
 
@@ -748,7 +748,7 @@ cdef list[ParamConversion] get_param_conversions(
                 param_name=param_name,
                 conversion_name=param_conversion.conversion_name,
                 additional_info=param_conversion.additional_info,
-                bind_arg_data=extra_blob_arg_datas[
+                encoded_data=extra_blob_arg_datas[
                     param_conversion.extra_blob_arg_indexes
                 ],
                 constant_value=None,

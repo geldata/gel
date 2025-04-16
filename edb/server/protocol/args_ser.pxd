@@ -56,7 +56,7 @@ cdef class ParamConversion:
         str param_name
         str conversion_name
         tuple additional_info
-        bytes bind_arg_data
+        bytes encoded_data
         object constant_value
 
 cdef list[ParamConversion] get_param_conversions(
