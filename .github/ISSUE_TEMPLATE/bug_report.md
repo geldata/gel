@@ -6,12 +6,12 @@ about: Create a report to help us improve
 <!-- Please search existing issues to avoid creating duplicates. -->
 
 <!--
-For the EdgeDB Version: run `edgedb query 'select sys::get_version_as_str()'` from your project directory (or run `select sys::get_version_as_str();` in the EdgeDB interactive shell).
-For the EdgeDB CLI Version: Run `edgedb --version` from anywhere
+For the Gel Version: run `gel query 'select sys::get_version_as_str()'` from your project directory (or run `select sys::get_version_as_str();` in the Gel interactive shell).
+For the Gel CLI Version: Run `gel --version` from anywhere
 -->
 
-- EdgeDB Version:
-- EdgeDB CLI Version:
+- Gel Version:
+- Gel CLI Version:
 - OS Version:
 
 Steps to Reproduce:
