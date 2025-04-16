@@ -103,6 +103,18 @@ class JSMethodDirective(JSCallableDirective):
 
         return fullname, prefix
 
+class JSAttributeDirective(js.JSObject):
+
+    def handle_signature(self, sig, signode):
+        # if the attribute has a type specified, clip it before
+        # processing the rest of signature
+        if ':' in sig:
+            newsig, _ = sig.rsplit(':', 1)
+        else:
+            newsig = sig
+
+        return super().handle_signature(newsig, signode)
+
 
 class JSClassDirective(JSCallableDirective):
     """Like a callable but with an optional "extends" clause."""
@@ -140,6 +152,7 @@ class JSDomain(js.JavaScriptDomain):
             'function': JSCallableDirective,
             'method': JSMethodDirective,
             'class': JSClassDirective,
+            'attribute': JSAttributeDirective,
         }
     }
 
