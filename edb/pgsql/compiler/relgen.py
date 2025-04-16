@@ -2314,6 +2314,11 @@ def process_set_as_oper_expr(
         args = _compile_call_args(ir_set, ctx=newctx)
         oper_expr = exprcomp.compile_operator(ir_set.expr, args, ctx=newctx)
 
+        if _should_unwrap_polymorphic_return_array(ir_set.expr):
+            oper_expr = astutils.array_get_inner_array(
+                oper_expr, ir_set.expr.typeref
+            )
+
     pathctx.put_path_value_var_if_not_exists(
         ctx.rel, ir_set.path_id, oper_expr
     )
@@ -3102,19 +3107,29 @@ def process_set_as_call(
     return process_set_as_func_expr(ir_set, ctx=ctx)
 
 
-def _process_set_func_with_ordinality(
-        ir_set: irast.Set, *,
-        outer_func_set: irast.Set,
-        func_name: tuple[str, ...],
-        args: list[pgast.BaseExpr],
-        ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
+@dataclasses.dataclass
+class _FuncWithOrdinalityInfo:
+    rvar: pgast.BaseRangeVar
+    colnames: list[str]
+    inner_expr: pgast.OutputVar
+    arg_is_tuple: bool
+    nullable: bool
+
+
+def _process_typical_set_func_with_ordinality(
+    ir_set: irast.Set,
+    *,
+    outer_func_set: irast.Set,
+    func_name: tuple[str, ...],
+    args: list[pgast.BaseExpr],
+    ctx: context.CompilerContextLevel
+) -> _FuncWithOrdinalityInfo:
     expr = ir_set.expr
     assert isinstance(expr, irast.FunctionCall)
     rtype = outer_func_set.typeref
     outer_func_expr = outer_func_set.expr
     assert isinstance(outer_func_expr, irast.FunctionCall)
 
-    named_tuple = any(st.element_name for st in rtype.subtypes)
     inner_rtype = ir_set.typeref
 
     coldeflist = []
@@ -3185,15 +3200,177 @@ def _process_set_func_with_ordinality(
         inner_expr = astutils.get_column(
             func_rvar, colnames[0], nullable=fexpr.nullable)
 
+    return _FuncWithOrdinalityInfo(
+        rvar=func_rvar,
+        colnames=colnames,
+        inner_expr=inner_expr,
+        arg_is_tuple=arg_is_tuple,
+        nullable=bool(fexpr.nullable),
+    )
+
+
+def _process_nested_array_set_func_with_ordinality(
+    ir_set: irast.Set,
+    *,
+    outer_func_set: irast.Set,
+    args: list[pgast.BaseExpr],
+    ctx: context.CompilerContextLevel
+) -> _FuncWithOrdinalityInfo:
+    # array<array<...>> is implemented as array<tuple<array<...>>>
+    #
+    # If we are unnesting with ordinality, the ordinality is paired with
+    # the wrapping tuple. We need to unpack the tuple and re-pair the
+    # ordinality with the array.
+
+    expr = ir_set.expr
+    assert isinstance(expr, irast.FunctionCall)
+    outer_func_expr = outer_func_set.expr
+    assert isinstance(outer_func_expr, irast.FunctionCall)
+
+    inner_rtype = ir_set.typeref
+
+    colnames = [ctx.env.aliases.get('v'), '_i']
+    alias = pgast.Alias(
+        aliasname=ctx.env.aliases.get('f'),
+        colnames=colnames,
+    )
+
+    # Get (ordinal, tuple<array<...>>)
+    # - unnests the outer array with ordinal
+    # - select the resulting ordinal and tuple<array<...>>
+    ordinal_tuple_expr = pgast.SelectStmt(
+        target_list=[
+            pgast.ResTarget(
+                val=pgast.ColumnRef(name=[colname]),
+                name=colname
+            )
+            for colname in colnames
+        ],
+        from_clause=[
+            pgast.RangeFunction(
+                alias=alias,
+                functions=[
+                    pgast.FuncCall(
+                        name=('unnest',),
+                        args=[args[0]],
+                        coldeflist=[
+                            pgast.ColumnDef(
+                                name='0',
+                                typename=pgast.TypeName(
+                                    name=pg_types.pg_type_from_ir_typeref(
+                                        inner_rtype
+                                    )
+                                )
+                            )
+                        ]
+                    )
+                ],
+                lateral=True,
+                is_rowsfrom=True,
+                with_ordinality=True,
+            )
+        ]
+    )
+    ordinal_tuple_rvar = relctx.rvar_for_rel(
+        ordinal_tuple_expr,
+        lateral=True,
+        ctx=ctx,
+    )
+
+    # Get (ordinal, array<...>)
+    inner_array_expr = pgast.CoalesceExpr(
+        args=[
+            astutils.get_column(ordinal_tuple_rvar, colnames[0]),
+            pgast.TypeCast(
+                arg=pgast.ArrayExpr(elements=[]),
+                type_name=pgast.TypeName(
+                    name=pg_types.pg_type_from_ir_typeref(
+                        inner_rtype
+                    )
+                ),
+            ),
+        ]
+    )
+    ordinal_expr = astutils.get_column(ordinal_tuple_rvar, colnames[-1])
+    ordinal_array_expr = pgast.SelectStmt(
+        target_list=[
+            pgast.ResTarget(
+                val=inner_array_expr,
+                name=colnames[0],
+            ),
+            pgast.ResTarget(
+                val=ordinal_expr,
+                name=colnames[-1],
+            ),
+        ],
+        from_clause=[
+            ordinal_tuple_rvar,
+        ]
+    )
+
+    func_rvar = relctx.rvar_for_rel(
+        ordinal_array_expr,
+        lateral=True,
+        ctx=ctx,
+    )
+    ctx.rel.from_clause.append(func_rvar)
+
+    return _FuncWithOrdinalityInfo(
+        rvar=func_rvar,
+        colnames=colnames,
+        inner_expr=astutils.get_column(func_rvar, colnames[0]),
+        arg_is_tuple=False,
+        nullable=True,
+    )
+
+
+def _process_set_func_with_ordinality(
+    ir_set: irast.Set,
+    *,
+    outer_func_set: irast.Set,
+    func_name: tuple[str, ...],
+    args: list[pgast.BaseExpr],
+    ctx: context.CompilerContextLevel
+) -> pgast.BaseExpr:
+    expr = ir_set.expr
+    assert isinstance(expr, irast.FunctionCall)
+    rtype = outer_func_set.typeref
+    outer_func_expr = outer_func_set.expr
+    assert isinstance(outer_func_expr, irast.FunctionCall)
+
+    func_info: _FuncWithOrdinalityInfo
+    if (
+        func_name == ('unnest',)
+        and irtyputils.is_array(ir_set.typeref)
+    ):
+        func_info = _process_nested_array_set_func_with_ordinality(
+            ir_set,
+            outer_func_set=outer_func_set,
+            args=args,
+            ctx=ctx,
+        )
+    else:
+        func_info = _process_typical_set_func_with_ordinality(
+            ir_set,
+            outer_func_set=outer_func_set,
+            func_name=func_name,
+            args=args,
+            ctx=ctx,
+        )
+
+    named_tuple = any(st.element_name for st in rtype.subtypes)
+
     set_expr = pgast.TupleVar(
         elements=[
             pgast.TupleElement(
                 path_id=outer_func_expr.tuple_path_ids[0],
-                name=colnames[0],
+                name=func_info.colnames[0],
                 val=pgast.Expr(
                     name='-',
                     lexpr=astutils.get_column(
-                        func_rvar, colnames[-1], nullable=fexpr.nullable,
+                        func_info.rvar,
+                        func_info.colnames[-1],
+                        nullable=func_info.nullable,
                     ),
                     rexpr=pgast.NumericConstant(val='1')
                 )
@@ -3201,7 +3378,7 @@ def _process_set_func_with_ordinality(
             pgast.TupleElement(
                 path_id=outer_func_expr.tuple_path_ids[1],
                 name=rtype.subtypes[1].element_name or '1',
-                val=inner_expr,
+                val=func_info.inner_expr,
             ),
         ],
         named=named_tuple,
@@ -3211,7 +3388,7 @@ def _process_set_func_with_ordinality(
     for element in set_expr.elements:
         pathctx.put_path_value_var(ctx.rel, element.path_id, element.val)
 
-    if arg_is_tuple:
+    if func_info.arg_is_tuple:
         arg_tuple = set_expr.elements[1].val
         assert isinstance(arg_tuple, pgast.TupleVar)
         for element in arg_tuple.elements:
@@ -3243,10 +3420,12 @@ def _process_set_func_with_ordinality(
 
 
 def _process_set_func(
-        ir_set: irast.Set, *,
-        func_name: tuple[str, ...],
-        args: list[pgast.BaseExpr],
-        ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
+    ir_set: irast.Set,
+    *,
+    func_name: tuple[str, ...],
+    args: list[pgast.BaseExpr],
+    ctx: context.CompilerContextLevel,
+) -> pgast.BaseExpr:
     expr = ir_set.expr
     assert isinstance(expr, irast.FunctionCall)
 
@@ -3272,6 +3451,18 @@ def _process_set_func(
         colnames = list(subtypes)
     else:
         colnames = [ctx.env.aliases.get('v')]
+
+        if _should_unwrap_polymorphic_return_array(expr):
+            # If we are unwrapping a previously nested array, its pg type is
+            # record and so we need to provide a column definition list.
+            coldeflist = [
+                pgast.ColumnDef(
+                    name='v',
+                    typename=pgast.TypeName(
+                        name=pg_types.pg_type_from_ir_typeref(expr.typeref)
+                    )
+                )
+            ]
 
     if (
         # SQL functions declared with OUT params or returning
@@ -3401,6 +3592,58 @@ def _compile_arg_null_check(
         )
 
 
+# Polymorphic calls need special handling for nested arrays since
+# array<array<...>> is implemented as array<tuple<array<...>>>.
+#
+# Currently 2 cases are handled:
+#   A) At least 1 arg type is `anyarray`
+#   B) Return type is `anyarray`
+#
+# In both cases, any simple polymorphic types will be added into an array in
+# the result. If this parameter is also an array, then it needs to be wrapped
+# in a tuple.
+#
+# In case A and if the return type is anytype, the call is returning the
+# contents of the array. The result needs to be unwrapped to get the actual
+# array.
+
+def _has_polymorphic_array_arg(
+    expr: irast.Call
+) -> bool:
+    return any(
+        ir_arg.polymorphism == qltypes.Polymorphism.Array
+        for ir_arg in expr.args.values()
+    )
+
+
+def _should_wrap_polymorphic_array_args(
+    expr: irast.Call
+) -> bool:
+    return (
+        _has_polymorphic_array_arg(expr)
+        or expr.return_polymorphism == qltypes.Polymorphism.Array
+    )
+
+
+def _is_array_arg_as_simple_polymorphic(
+    arg: irast.CallArg
+) -> bool:
+    return (
+        arg.polymorphism == qltypes.Polymorphism.Simple
+        and irtyputils.is_array(arg.expr.typeref)
+    )
+
+
+def _should_unwrap_polymorphic_return_array(
+    expr: irast.Call
+) -> bool:
+    return (
+        _has_polymorphic_array_arg(expr)
+        and expr.return_polymorphism == qltypes.Polymorphism.Simple
+        and irtyputils.is_array(expr.typeref)
+    )
+
+
 def _compile_call_args(
     ir_set: irast.Set,
     *,
@@ -3451,6 +3694,13 @@ def _compile_call_args(
         else:
             arg_ref = dispatch.compile(ir_arg.expr, ctx=ctx)
             arg_ref = output.output_as_value(arg_ref, env=ctx.env)
+
+        if (
+            _should_wrap_polymorphic_array_args(expr)
+            and _is_array_arg_as_simple_polymorphic(ir_arg)
+        ):
+            arg_ref = pgast.RowExpr(args=[arg_ref])
+
         args.append(arg_ref)
         _compile_arg_null_check(expr, ir_arg, arg_ref, typemod, ctx=ctx)
 
@@ -3648,6 +3898,11 @@ def process_set_as_func_expr(
                 newctx.rel, ir_set.path_id, expr.body.path_id
             )
 
+            if _should_unwrap_polymorphic_return_array(expr):
+                set_expr = astutils.array_get_inner_array(
+                    set_expr, expr.typeref
+                )
+
         else:
             args = _compile_call_args(ir_set, ctx=newctx)
 
@@ -3655,9 +3910,19 @@ def process_set_as_func_expr(
 
             if expr.typemod is qltypes.TypeModifier.SetOfType:
                 set_expr = _process_set_func(
-                    ir_set, func_name=name, args=args, ctx=newctx)
+                    ir_set,
+                    func_name=name,
+                    args=args,
+                    ctx=newctx,
+                )
+
             else:
                 set_expr = pgast.FuncCall(name=name, args=args)
+
+                if _should_unwrap_polymorphic_return_array(expr):
+                    set_expr = astutils.array_get_inner_array(
+                        set_expr, expr.typeref
+                    )
 
         if expr.error_on_null_result:
             set_expr = pgast.FuncCall(
@@ -3828,6 +4093,17 @@ def process_set_as_agg_expr_inner(
 
                         query.sort_clause = []
 
+                if (
+                    _should_wrap_polymorphic_array_args(expr)
+                    and _is_array_arg_as_simple_polymorphic(ir_call_arg)
+                ):
+                    # Wrap aggregated arrays in a tuple
+                    arg_ref = pgast.RowExpr(args=[arg_ref])
+
+                    if aspect == pgce.PathAspect.SERIALIZED:
+                        arg_ref = output.serialize_expr(
+                            arg_ref, path_id=ir_arg.path_id, env=argctx.env)
+
                 args.append(arg_ref)
 
         name = exprcomp.get_func_call_backend_name(expr, ctx=newctx)
@@ -3835,6 +4111,11 @@ def process_set_as_agg_expr_inner(
         set_expr = pgast.FuncCall(
             name=name, args=args, agg_order=agg_sort, agg_filter=agg_filter,
             ser_safe=serialization_safe and all(x.ser_safe for x in args))
+
+        if _should_unwrap_polymorphic_return_array(expr):
+            set_expr = astutils.array_get_inner_array(
+                set_expr, expr.typeref
+            )
 
         if for_group_by and not expr.impl_is_strict:
             # If we are doing this for a GROUP BY, and the function is not
@@ -4088,6 +4369,9 @@ def process_set_as_array_expr(
 
     for ir_element in expr.elements:
         element = dispatch.compile(ir_element, ctx=ctx)
+        if irtyputils.is_array(ir_element.typeref):
+            # Wrap nested arrays in a tuple
+            element = pgast.RowExpr(args=[element])
         elements.append(element)
 
         if serializing:
