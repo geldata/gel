@@ -779,8 +779,6 @@ class ServerParamConversion:
     additional_info: tuple[str, ...]
 
     # If the parameter is a query parameter, track its script params index.
-    # This is passed to the server if the query parameter is not a normalized
-    # constant.
     script_param_index: typing.Optional[int] = None
 
     # If the parameter is a constant value, pass to directly to the server.
