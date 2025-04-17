@@ -259,9 +259,6 @@ class AbstractPool:
                     or reflection_cache is not None
                     or database_config is not None
                 ):
-                    if len(worker._dbs) > 4:
-                        worker._dbs = worker._dbs.delete(next(iter(worker._dbs)))
-
                     worker._dbs = worker._dbs.set(
                         dbname,
                         state.PickledDatabaseState(

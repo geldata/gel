@@ -142,9 +142,6 @@ def __sync__(
                 updates['database_config'] = pickle.loads(database_config)
 
             if updates:
-                if len(DBS) > 4:
-                    DBS = DBS.delete(next(iter(DBS)))
-                    print('trimmed')
                 db = db._replace(**updates)
                 DBS = DBS.set(dbname, db)
 
