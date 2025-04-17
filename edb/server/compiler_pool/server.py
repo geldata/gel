@@ -648,6 +648,7 @@ async def server_main(
     client_schema_cache_size: int,
     runstate_dir: Optional[str | pathlib.Path],
     metrics_port: Optional[int],
+    worker_max_rss: Optional[int],
 ):
     if listen_port is None:
         listen_port = defines.EDGEDB_REMOTE_COMPILER_PORT
@@ -674,6 +675,7 @@ async def server_main(
             pool_size=pool_size,
             cache_size=client_schema_cache_size,
             secret=secret.encode(),
+            worker_max_rss=worker_max_rss,
         )
         await pool.start()
         try:

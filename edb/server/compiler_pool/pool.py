@@ -46,6 +46,7 @@ import sys
 import time
 
 import immutables
+import psutil
 
 from edb.common import debug
 from edb.common import lru
@@ -208,6 +209,7 @@ class BaseWorker:
 class Worker(BaseWorker):
 
     _pid: int
+    _proc: psutil.Process
     _manager: BaseLocalPool
     _server: amsg.Server
 
@@ -221,6 +223,7 @@ class Worker(BaseWorker):
         super().__init__(*args)
 
         self._pid = pid
+        self._proc = psutil.Process(pid)
         self._manager = manager
         self._server = server
 
@@ -236,6 +239,9 @@ class Worker(BaseWorker):
 
     def get_pid(self) -> int:
         return self._pid
+
+    def get_rss(self) -> int:
+        return self._proc.memory_info().rss // 1024
 
     def close(self) -> None:
         if self._closed:
@@ -835,6 +841,7 @@ class BaseLocalPool(
 
     _poolsock_name: str
     _pool_size: int
+    _worker_max_rss: Optional[int]
     _server: Optional[amsg.Server]
     _ready_evt: asyncio.Event
     _running: Optional[bool]
@@ -846,6 +853,7 @@ class BaseLocalPool(
         *,
         runstate_dir: str,
         pool_size: int,
+        worker_max_rss: Optional[int] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -859,6 +867,7 @@ class BaseLocalPool(
 
         assert pool_size >= 1
         self._pool_size = pool_size
+        self._worker_max_rss = worker_max_rss
         self._workers = {}
 
         self._server = amsg.Server(self._poolsock_name, self._loop, self)
@@ -1036,6 +1045,12 @@ class BaseLocalPool(
     ) -> None:
         # Skip disconnected workers
         if worker.get_pid() in self._workers:
+            if self._worker_max_rss is not None:
+                if worker.get_rss() > self._worker_max_rss:
+                    if debug.flags.server:
+                        print(f"HIT MEMORY LIMIT, KILLING {worker.get_pid()}")
+                    worker.close()
+                    return
             self._workers_queue.release(worker, put_in_front=put_in_front)
 
     def get_debug_info(self) -> dict[str, Any]:
