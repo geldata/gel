@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Any, Optional
+from typing import Any
 
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
@@ -38,7 +38,16 @@ def parse(
 ) -> Result[list[qlast.Base] | qlast.Schema, list[lsp_types.Diagnostic]]:
     sdl = is_schema_file(doc.filename) if doc.filename else False
 
-    source, result, productions = _parse_inner(doc.source, sdl)
+    start_t = qltokens.T_STARTSDLDOCUMENT if sdl else qltokens.T_STARTBLOCK
+    start_t_name = start_t.__name__[2:]
+
+    source_res = _tokenize(doc.source)
+    if diagnostics := source_res.err:
+        return Result(err=diagnostics)
+    source = source_res.ok
+    assert source
+
+    result, productions = rust_parser.parse(start_t_name, source.tokens())
 
     if result.errors:
         diagnostics = []
@@ -68,13 +77,15 @@ def parse(
             result.out, productions, source, doc.filename
         ).val
     except errors.EdgeDBError as e:
-        return Result(err=[
-            lsp_types.Diagnostic(
-                range=ls_utils.span_to_lsp(source.text(), e.get_span()),
-                severity=lsp_types.DiagnosticSeverity.Error,
-                message=e.args[0],
-            )
-        ])
+        return Result(
+            err=[
+                lsp_types.Diagnostic(
+                    range=ls_utils.span_to_lsp(source.text(), e.get_span()),
+                    severity=lsp_types.DiagnosticSeverity.Error,
+                    message=e.args[0],
+                )
+            ]
+        )
     if sdl:
         assert isinstance(ast, qlast.Schema), ast
     else:
@@ -83,28 +94,58 @@ def parse(
 
 
 def parse_and_suggest(
-    doc: TextDocument, position: lsp_types.Position
-) -> Optional[lsp_types.CompletionItem]:
-    sdl = doc.filename.endswith('.esdl') if doc.filename else False
+    doc: TextDocument, position: lsp_types.Position, ls: LanguageServer
+) -> list[lsp_types.CompletionItem]:
+    sdl = is_schema_file(doc.path)
 
-    source, result, _productions = _parse_inner(doc.source, sdl)
-    for error in result.errors:
-        message: str
-        message, span, _hint, _details = error
-        if not message.startswith('Missing keyword '):
-            continue
-        (start, end) = tokenizer.inflate_span(source.text(), span)
+    start_t = qltokens.T_STARTSDLDOCUMENT if sdl else qltokens.T_STARTBLOCK
+    start_t_name = start_t.__name__[2:]
 
-        if not _position_in_span(position, (start, end)):
-            continue
+    # tokenize
+    source_res = _tokenize(doc.source)
+    if not source_res.ok:
+        return []
+    source: tokenizer.Source = source_res.ok
 
-        keyword = message.removeprefix('Missing keyword \'')[:-1]
+    # limit tokens to things preceding cursor position
+    target = tokenizer.line_col_to_source_point(
+        doc.source, position.line, position.character
+    )
+    cut_index = len(source.tokens())
+    for index, tok in enumerate(source.tokens()):
+        if not tok.span_end() <= target.offset:
+            cut_index = index
+            break
+    tokens = source.tokens()[0:cut_index]
 
-        return lsp_types.CompletionItem(
+    # run parser and suggest next possible keywords
+    suggestions = rust_parser.suggest_next_keywords(start_t_name, tokens)
+
+    # convert to CompletionItem
+    return [
+        lsp_types.CompletionItem(
             label=keyword,
             kind=lsp_types.CompletionItemKind.Keyword,
         )
-    return None
+        for keyword in suggestions
+    ]
+
+
+def _tokenize(
+    source: str,
+) -> Result[tokenizer.Source, list[lsp_types.Diagnostic]]:
+    try:
+        return Result(ok=tokenizer.Source.from_string(source))
+    except errors.EdgeQLSyntaxError as e:
+        return Result(
+            err=[
+                lsp_types.Diagnostic(
+                    range=ls_utils.span_to_lsp(source, e.get_span()),
+                    severity=lsp_types.DiagnosticSeverity.Error,
+                    message=e.args[0],
+                )
+            ]
+        )
 
 
 def _position_in_span(pos: lsp_types.Position, span: tuple[Any, Any]):
@@ -119,21 +160,3 @@ def _position_in_span(pos: lsp_types.Position, span: tuple[Any, Any]):
     if pos.line == end.line - 1 and pos.character > end.column - 1:
         return False
     return True
-
-
-def _parse_inner(
-    source_str: str, sdl: bool
-) -> tuple[tokenizer.Source, rust_parser.ParserResult, Any]:
-    try:
-        source = tokenizer.Source.from_string(source_str)
-    except Exception as e:
-        # TODO
-        print(e)
-        raise AssertionError(e)
-
-    start_t = qltokens.T_STARTSDLDOCUMENT if sdl else qltokens.T_STARTBLOCK
-    start_t_name = start_t.__name__[2:]
-    tokens = source.tokens()
-
-    result, productions = rust_parser.parse(start_t_name, tokens)
-    return source, result, productions

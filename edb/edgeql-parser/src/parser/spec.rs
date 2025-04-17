@@ -5,7 +5,6 @@ use crate::tokenizer::Kind;
 pub struct Spec {
     pub actions: Vec<IndexMap<Kind, Action>>,
     pub goto: Vec<IndexMap<String, usize>>,
-    pub start: String,
     pub inlines: IndexMap<usize, u8>,
     pub production_names: Vec<(String, String)>,
 }
@@ -34,7 +33,6 @@ pub struct Reduce {
 pub struct SpecSerializable {
     pub actions: Vec<Vec<(String, Action)>>,
     pub goto: Vec<Vec<(String, usize)>>,
-    pub start: String,
     pub inlines: Vec<(usize, u8)>,
     pub production_names: Vec<(String, String)>,
 }
@@ -54,7 +52,6 @@ impl From<SpecSerializable> for Spec {
         Spec {
             actions,
             goto,
-            start: v.start,
             inlines,
             production_names: v.production_names,
         }

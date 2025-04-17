@@ -92,13 +92,9 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
         lsp_types.CompletionOptions(trigger_characters=[',']),
     )
     def completions(params: lsp_types.CompletionParams):
-        items = []
-
         document = ls.workspace.get_text_document(params.text_document.uri)
 
-        if item := ls_parsing.parse_and_suggest(document, params.position):
-            items.append(item)
-
+        items = ls_parsing.parse_and_suggest(document, params.position, ls)
         return lsp_types.CompletionList(is_incomplete=False, items=items)
 
     return ls

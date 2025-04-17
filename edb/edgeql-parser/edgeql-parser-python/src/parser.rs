@@ -34,6 +34,25 @@ pub fn parse(
     Ok((res, productions))
 }
 
+#[pyfunction]
+pub fn suggest_next_keywords(
+    py: Python,
+    start_token_name: &Bound<PyString>,
+    tokens: PyObject,
+) -> PyResult<Py<PyList>> {
+    let start_token_name = start_token_name.to_string();
+
+    let (spec, _) = get_spec()?;
+
+    let tokens = downcast_tokens(py, &start_token_name, tokens)?;
+
+    let context = parser::Context::new(spec);
+    let suggestions = parser::suggest_next_keyword(&tokens, &context);
+
+    let suggestions_py = suggestions.iter().map(|k| PyString::new(py, k.0));
+    Ok(PyList::new(py, suggestions_py)?.into())
+}
+
 #[pyclass]
 pub struct CSTNode {
     #[pyo3(get)]

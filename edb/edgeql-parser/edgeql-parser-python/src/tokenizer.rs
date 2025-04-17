@@ -52,6 +52,14 @@ impl OpaqueToken {
         let tok = get_unpickle_token_fn(py);
         Ok((tok, (PyBytes::new(py, &data).into(),)))
     }
+
+    fn span_start(&self) -> u64 {
+        self.inner.span.start
+    }
+
+    fn span_end(&self) -> u64 {
+        self.inner.span.end
+    }
 }
 
 pub fn tokens_to_py(py: Python<'_>, rust_tokens: Vec<Token>) -> PyResult<Py<PyList>> {
