@@ -480,6 +480,7 @@ async def run_server(
             compiler_pool_tenant_cache_size=(
                 args.compiler_pool_tenant_cache_size
             ),
+            compiler_worker_max_rss=args.compiler_worker_max_rss,
             compiler_state=compiler_state,
             use_monitor_fs=args.reload_config_files in [
                 srvargs.ReloadTrigger.Default,
