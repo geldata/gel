@@ -11,9 +11,10 @@ that lets you keep track of books you've read along with your personal notes.
 We'll be using Gel as the database, Drizzle as the ORM layer, and Next.js as our
 full-stack framework.
 
-Gel is a data layer designed to help you figure out storage in your application
-*fast*. Drizzle is a TypeScript ORM that offers type safety and a great developer
-experience. Next.js is a React framework for building production-ready web applications with features like server components and built-in routing. By the end of this tutorial, you will see how these technologies work together to create a modern web application.
+Gel is a data layer designed to supercharge PostgreSQL with a graph-like object model, access control, Auth, and many other features. It provides a unified schema and tooling experience across multiple languages, making it ideal for projects with diverse tech stacks. With Gel, you get access to EdgeQL, which eliminates n+1 query problems, supports automatic embeddings, and offers a seamless developer experience.
+
+Drizzle, on the other hand, is a TypeScript ORM that offers type safety and a great developer experience. By combining Gel with Drizzle, you can leverage Gel's powerful features while using Drizzle as a familiar ORM layer to interact with your database. This approach is perfect for developers who want to start learning Gel or prefer using Drizzle for their projects.
+experience. Next.js is a React framework for building production-ready web applications with features like server components, built-in routing, and API routes. By the end of this tutorial, you will see how these technologies work together to create a modern, full-stack web application with a great developer experience.
 
 .. note::
 
@@ -191,8 +192,12 @@ Gel database.
 
 .. edb:split-section::
 
-  The schema file that Drizzle generated will look something like this. We've added
-  relations to make it easier to work with related data between books and notes.
+  Drizzle Kit generated the schema based on the Gel schema we defined earlier. You can find this file in the ``drizzle`` directory along with the ``relations.ts`` file. The ``relations.ts`` file contains the relationships between the tables in our schema. The schema file that Drizzle generated will look like this:
+
+  .. note::
+
+    You should not modify the reflected schema directly. The correct flow is always: [change `.gel` file] -> [run `drizzle-kit pull`].
+
 
   .. code-block:: typescript
       :caption: drizzle/schema.ts
