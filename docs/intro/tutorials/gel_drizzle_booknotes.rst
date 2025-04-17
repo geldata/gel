@@ -226,10 +226,10 @@ Gel database.
       }, (table) => [
       	uniqueIndex("5f1e4652-1943-11f0-a4a0-f1f912666606;schemaconstr").using("btree", table.id.asc().nullsLast().op("uuid_ops")),
       	foreignKey({
-      			columns: [table.bookId],
-      			foreignColumns: [book.id],
-      			name: "Note_fk_book"
-      		}),
+      		columns: [table.bookId],
+      		foreignColumns: [book.id],
+      		name: "Note_fk_book"
+      	}),
       ]);
 
 
