@@ -203,6 +203,7 @@ impl PyConnectionParams {
         }
     }
 
+    #[pyo3(signature = (username, home_dir))]
     pub fn resolve(
         &self,
         py: Python,
@@ -289,6 +290,7 @@ struct PyConnectionState {
 #[pymethods]
 impl PyConnectionState {
     #[new]
+    #[pyo3(signature = (dsn, username, home_dir))]
     fn new(
         py: Python,
         dsn: &PyConnectionParams,
