@@ -196,7 +196,7 @@ Gel database.
 
   .. note::
 
-    You should not modify the reflected schema directly. The correct flow is always: [change ``.gel`` file] -> [run ``drizzle-kit pull``].
+    You should not modify the reflected schema directly. The correct flow is always: [change :dotgel:`dbschema/default` file] -> [run ``drizzle-kit pull``].
 
 
   .. code-block:: typescript
