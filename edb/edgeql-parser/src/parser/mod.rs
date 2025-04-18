@@ -206,7 +206,15 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
     (node, errors)
 }
 
+/// Parses tokens and then inspects the state of the parser to suggest possible
+/// next keywords.
+/// This is done by looking at available actions in current state.
+/// An important detail is that not all of these actions are valid.
+/// They might trigger a chain of reductions that ends in a state that
+/// does not accept the suggested token.
 pub fn suggest_next_keyword<'a>(input: &'a [Terminal], ctx: &'a Context) -> Vec<Keyword> {
+
+    // init
     let stack_top = ctx.arena.alloc(StackNode {
         parent: None,
         state: 0,
@@ -221,9 +229,8 @@ pub fn suggest_next_keyword<'a>(input: &'a [Terminal], ctx: &'a Context) -> Vec<
         has_custom_error: false,
     };
 
-    let input = input.iter();
-
-    for token in input {
+    // parse tokens
+    for token in input.iter() {
         let res = parser.act(ctx, token);
 
         if res.is_err() {
@@ -231,6 +238,7 @@ pub fn suggest_next_keyword<'a>(input: &'a [Terminal], ctx: &'a Context) -> Vec<
         }
     }
 
+    // extract possible next actions
     let actions = &ctx.spec.actions[parser.stack_top.state];
 
     let can_be_ident = actions.contains_key(&Kind::Ident);
@@ -247,7 +255,7 @@ pub fn suggest_next_keyword<'a>(input: &'a [Terminal], ctx: &'a Context) -> Vec<
         })
         // never suggest dunder or bools, they should be suggested semantically
         .filter(|k| !k.is_dunder() && !k.is_bool())
-        // if next token cab be ident, hide all unreserved keywords
+        // if next token can be ident, hide all unreserved keywords
         .filter(|k| !(can_be_ident && k.is_unreserved()))
         // filter only valid actions
         .filter(|k| parser.can_act(ctx, &Kind::Keyword(*k)).is_some())
@@ -448,7 +456,11 @@ impl<'s> Parser<'s> {
         let mut state = self.stack_top.state;
 
         let mut node = &self.stack_top;
-        let mut pushed = 0;
+
+        // count of "ghost" stack nodes, which should have been pushed to the stack,
+        // but haven't because we don't actually need them there, only need to know
+        // how many of them there are
+        let mut ghosts = 0;
 
         loop {
             // find next action
@@ -460,20 +472,21 @@ impl<'s> Parser<'s> {
                 }
                 Action::Reduce(reduce) => {
                     // simulate reduce stack pops
-                    let mut to_pop = reduce.cnt;
-                    let cancel_out = usize::min(pushed, to_pop);
-                    to_pop -= cancel_out;
-                    pushed -= cancel_out;
-                    for _ in 0..to_pop {
+                    // (cancel out any ghost nodes if there is any)
+                    let cancel_out = usize::min(ghosts, reduce.cnt);
+                    ghosts -= cancel_out;
+                    for _ in 0..(reduce.cnt - cancel_out) {
                         node = node.parent.as_ref().unwrap();
                     }
 
                     // get state of current stack top
-                    let stack_state = if reduce.cnt == 0 { state } else { node.state };
+                    // Stack top is node.state, unless we have ghosts. In that case, the
+                    // state of node we would have pushed is stored in `state`.
+                    let stack_state = if ghosts > 0 { state } else { node.state };
 
-                    state = *ctx.spec.goto[stack_state].get(&reduce.non_term).unwrap();
+                    state = *ctx.spec.goto[stack_state].get(&reduce.non_term)?;
 
-                    pushed += 1;
+                    ghosts += 1;
                 }
             }
         }
