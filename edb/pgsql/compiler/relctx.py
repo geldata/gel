@@ -2364,10 +2364,14 @@ def _range_for_component_ptrref(
 def _prep_filter(larg: pgast.SelectStmt, rarg: pgast.SelectStmt) -> None:
     # Set up the proper join on the source field and clear the target list
     # of the rhs of a filter overlay.
+
+    # If the names don't have table refs, make them refer to the table
+    # being joined.
     lval = larg.target_list[0].val
     assert isinstance(lval, pgast.ColumnRef)
     if len(lval.name) == 1:
         lval = astutils.get_column(larg.from_clause[0], lval)
+
     rval = rarg.target_list[0].val
     assert isinstance(rval, pgast.ColumnRef)
     if len(rval.name) == 1:
