@@ -1428,3 +1428,55 @@ class TestTriggers(tb.QueryTestCase):
                 {'name': '1', 'note': '1'},
             ],
         )
+
+    async def test_edgeql_triggers_overlay_01(self):
+        # Issue #8604
+        await self.con.execute('''
+            create type User{
+                create property name: str;
+            };
+
+            create type Resource {
+                create property name: str;
+                create multi link users: User;
+
+                create trigger toomany after insert, update for each do (
+                   for user in __new__.users union
+                   assert(
+                      count((select user.<users[is Resource])) <= 1,
+                   )
+                );
+            };
+
+            select {
+              resources := {
+                (insert Resource { name := "A"}),
+                (insert Resource { name := "B"}),
+                (insert Resource { name := "C"}),
+              }
+            };
+            insert User {
+              name := "Bob"
+            };
+
+            insert User {
+              name := "Alice"
+            };
+
+            update Resource
+            filter .name = "A"
+            set {
+              users += (select User filter .name="Bob")
+            }
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.QueryAssertionError,
+                r""):
+            await self.con.query('''
+                update Resource
+                filter .name = "B"
+                set {
+                  users += (select User filter .name="Bob")
+                }
+            ''')
