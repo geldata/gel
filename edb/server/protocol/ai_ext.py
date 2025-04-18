@@ -129,12 +129,14 @@ class Tokenizer(abc.ABC):
         """Decode tokens into text."""
         raise NotImplementedError
 
-    def shorten_to_token_length(self, text: str, token_length: int) -> str:
+    def shorten_to_token_length(
+        self, text: str, token_length: int
+    ) -> tuple[str, int]:
         """Truncate text to a maximum token length."""
         encoded = self.encode(text)
         if len(encoded) > token_length:
             encoded = encoded[:token_length]
-        return self.decode(encoded)
+        return self.decode(encoded), len(encoded)
 
 
 class OpenAITokenizer(Tokenizer):
@@ -230,6 +232,21 @@ class TestTokenizer(Tokenizer):
 
     def decode(self, tokens: list[int]) -> str:
         return ''.join(chr(c) for c in tokens)
+
+
+def get_model_tokenizer(
+    provider_name: str,
+    model_name: str,
+) -> Optional[Tokenizer]:
+    """Get the tokenizer for a given provider and model"""
+    if provider_name == 'builtin::openai':
+        return OpenAITokenizer.for_model(model_name)
+    elif provider_name == 'builtin::mistral':
+        return MistralTokenizer.for_model(model_name)
+    elif provider_name == 'custom::test':
+        return TestTokenizer.for_model(model_name)
+    else:
+        return None
 
 
 @dataclass
@@ -701,23 +718,6 @@ async def _generate_embeddings_params(
         logger.error(f"{task_name}: {e}")
         return None
 
-    model_tokenizers: dict[str, Tokenizer] = {}
-    if provider_name == 'builtin::openai':
-        model_tokenizers = {
-            model_name: OpenAITokenizer.for_model(model_name)
-            for model_name in provider_models
-        }
-    elif provider_name == 'builtin::mistral':
-        model_tokenizers = {
-            model_name: MistralTokenizer.for_model(model_name)
-            for model_name in provider_models
-        }
-    elif provider_name == 'custom::test':
-        model_tokenizers = {
-            model_name: TestTokenizer.for_model(model_name)
-            for model_name in provider_models
-        }
-
     model_max_input_tokens: dict[str, int] = {
         model_name: await _get_model_annotation_as_int(
             db,
@@ -772,81 +772,30 @@ async def _generate_embeddings_params(
         )
         for shortening, part_iter in groups:
             part = list(part_iter)
+            part_texts = [(p.text, p.truncate_to_max) for p in part]
 
-            input_texts: list[str] = []
-            input_entries: list[PendingEmbedding] = []
-            total_token_count: int = 0
-            for pending_entry in part:
-                text = pending_entry.text
+            batches, excluded_indexes = batch_texts(
+                part_texts,
+                get_model_tokenizer(provider_name, model_name),
+                model_max_input_tokens[model_name],
+                model_max_batch_tokens[model_name]
+            )
 
-                if model_name in model_tokenizers:
-                    tokenizer = model_tokenizers[model_name]
-                    truncate_length = (
-                        model_max_input_tokens[model_name]
-                        - tokenizer.encode_padding()
-                    )
-
-                    if pending_entry.truncate_to_max:
-                        text = tokenizer.shorten_to_token_length(
-                            text, truncate_length
-                        )
-                        total_token_count += truncate_length
-                    else:
-                        current_token_count = len(tokenizer.encode(text))
-
-                        if current_token_count > truncate_length:
-                            # If the text is too long, mark it as excluded and
-                            # skip.
-                            if model_name not in model_excluded_ids:
-                                model_excluded_ids[model_name] = []
-                            model_excluded_ids[model_name].append(
-                                pending_entry.id.hex
-                            )
-                            continue
-
-                        total_token_count += current_token_count
-
-                input_texts.append(text)
-                input_entries.append(pending_entry)
-
-            if model_name in model_tokenizers:
-                tokenizer = model_tokenizers[model_name]
-                max_batch_tokens = model_max_batch_tokens[model_name]
-                if isinstance(tokens_rate_limit, int):
-                    # If the rate limit is lower than the batch limit, use that
-                    # instead.
-                    max_batch_tokens = min(max_batch_tokens, tokens_rate_limit)
-
-                # Group the input into batches based on token count
-                batches = _batch_embeddings_inputs(
-                    tokenizer, input_texts, max_batch_tokens
+            if excluded_indexes:
+                if model_name not in model_excluded_ids:
+                    model_excluded_ids[model_name] = []
+                model_excluded_ids[model_name].extend(
+                    part[excluded_index].id.hex
+                    for excluded_index in excluded_indexes
                 )
 
-                for batch_input_indexes, batch_token_count in batches:
-                    inputs = [
-                        (input_entries[index], input_texts[index])
-                        for index in batch_input_indexes
-                    ]
+            for batch in batches:
+                inputs = [
+                    (part[entry.input_index], entry.input_text)
+                    for entry in batch.entries
+                ]
 
-                    # Sort the batches by target_rel. This groups embeddings
-                    # for each table together.
-                    # This is necessary for `EmbeddingsResult.finalize()`
-                    inputs.sort(key=lambda e: e[0].target_rel)
-
-                    embeddings_params.append(EmbeddingsParams(
-                        pgconn=pgconn,
-                        provider=provider_cfg,
-                        model_name=model_name,
-                        inputs=inputs,
-                        token_count=batch_token_count,
-                        shortening=shortening,
-                        user=None,
-                        http_client=http_client,
-                    ))
-
-            else:
-                inputs = list(zip(input_entries, input_texts))
-                # Sort the inputs by target_rel. This groups embeddings
+                # Sort the batches by target_rel. This groups embeddings
                 # for each table together.
                 # This is necessary for `EmbeddingsResult.finalize()`
                 inputs.sort(key=lambda e: e[0].target_rel)
@@ -856,13 +805,129 @@ async def _generate_embeddings_params(
                     provider=provider_cfg,
                     model_name=model_name,
                     inputs=inputs,
-                    token_count=total_token_count,
+                    token_count=batch.token_count,
                     shortening=shortening,
                     user=None,
                     http_client=http_client,
                 ))
 
     return embeddings_params
+
+
+@dataclass(frozen=True, kw_only=True)
+class TextBatchEntry:
+    input_index: int
+    input_text: str
+
+
+@dataclass(frozen=True, kw_only=True)
+class TextBatch:
+    entries: list[TextBatchEntry]
+    token_count: int
+
+
+def batch_texts(
+    texts: list[tuple[str, bool]],
+    tokenizer: Optional[Tokenizer],
+    max_input_tokens: int,
+    max_batch_tokens: int,
+) -> tuple[list[TextBatch], list[int]]:
+    """Given a list of texts and whether each can be truncated, produce a list
+    of valid texts to batch.
+
+    Additionally, returns a list of indexes of texts which are too long and
+    should be excluded from future embeddings requests.
+    """
+    excluded_indexes: list[int] = []
+
+    if tokenizer:
+        input_indexes: list[int] = []
+        input_texts: list[str] = []
+
+        for index, (text, allowed_to_truncate) in enumerate(texts):
+            ensured = _ensure_text_token_length(
+                text,
+                allowed_to_truncate,
+                tokenizer,
+                max_input_tokens
+            )
+
+            if ensured is None:
+                # If the text is too long, mark it as excluded and
+                # skip.
+                excluded_indexes.append(index)
+                continue
+
+            input_indexes.append(index)
+            input_texts.append(ensured)
+
+        # Group the valid texts into batches based on token count
+        batched_inputs = _batch_embeddings_inputs(
+            tokenizer, input_texts, max_batch_tokens
+        )
+
+        # Gather results
+        batches = [
+            TextBatch(
+                entries=[
+                    TextBatchEntry(
+                        input_index=input_indexes[index],
+                        input_text=input_texts[index],
+                    )
+                    for index in batch_input_indexes
+                ],
+                token_count=token_count
+            )
+            for batch_input_indexes, token_count in batched_inputs
+        ]
+
+    else:
+        batches = [
+            TextBatch(
+                entries=[
+                    TextBatchEntry(
+                        input_index=index,
+                        input_text=texts[index][0],
+                    )
+                    for index in range(len(texts))
+                ],
+                token_count=0,
+            )
+        ]
+
+    return (batches, excluded_indexes)
+
+
+def _ensure_text_token_length(
+    text: str,
+    allowed_to_truncate: bool,
+    tokenizer: Tokenizer,
+    max_token_count: int,
+) -> Optional[str]:
+    """Ensure text does not exceed the allowed token length.
+
+    If the text is ok, return the text unchanged.
+
+    If the text is too long and `allowed_to_truncate` is true, return the
+    text truncated.
+
+    Otherwise return None.
+    """
+
+    truncate_length = max_token_count - tokenizer.encode_padding()
+
+    if allowed_to_truncate:
+        text, current_token_count = (
+            tokenizer.shorten_to_token_length(text, truncate_length)
+        )
+
+    else:
+        current_token_count = len(tokenizer.encode(text))
+
+        if current_token_count > truncate_length:
+            return None
+
+    return text
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -970,9 +1035,10 @@ def _batch_embeddings_inputs(
     ]
 
     # Get indexes of inputs, sorted from shortest to longest by token count
+    # Use the text itself as a tie breaker for consistency
     unbatched_input_indexes = list(range(len(inputs)))
     unbatched_input_indexes.sort(
-        key=lambda index: input_token_counts[index],
+        key=lambda index: (input_token_counts[index], inputs[index]),
         reverse=False,
     )
 
@@ -2592,12 +2658,210 @@ async def generate_embeddings_for_text(
     return result.data.embeddings
 
 
-@dataclass
+@dataclass(frozen=True, kw_only=True)
+class TextEmbeddingsResult:
+    success: Optional[list[list[float]]] = None
+
+    too_long: Optional[list[int]] = None
+
+
+async def generate_embeddings_for_texts(
+    db: dbview.Database,
+    http_client: http.HttpClient,
+    inputs: list[tuple[str | uuid.UUID, str]],
+) -> TextEmbeddingsResult:
+    """Generate embeddings for strings to search for ai indexed objects.
+
+    Each input string may have a different object. The object is specified
+    by the object type id as either a string or uuid.
+
+    Produces embeddings for the input strings by:
+    - grouping string by their index model and shortening
+    - batching those groups
+    - then doing embeddings requests in batches
+
+    Input strings are truncated if allowed by their index.
+
+    If any string is too long and truncating is not allowed, a "too_long"
+    result is returned.
+
+    If all embeddings requests are successful, the embeddings are returned
+    as a "success" result in the same order as the inputs.
+    """
+    # Gather information about the indexes and embeddings
+    # For each type, we will need:
+    # - model name
+    # - max input tokens
+    # - max batch tokens
+    # - provider config
+    # - allowed to truncate
+    # - shortening, if any
+    type_ai_indexes: dict[str, AIIndex] = {}
+    for type_id, _ in inputs:
+        type_id = str(type_id)
+        if type_id not in type_ai_indexes:
+            type_ai_indexes[type_id] = await get_ai_index_for_type(db, type_id)
+
+    model_providers = {
+        ai_index.model: ai_index.provider
+        for ai_index in type_ai_indexes.values()
+    }
+    model_max_input_tokens: dict[str, int] = {
+        model_name: await _get_model_annotation_as_int(
+            db,
+            base_model_type="ext::ai::EmbeddingModel",
+            model_name=model_name,
+            annotation_name="ext::ai::embedding_model_max_input_tokens",
+        )
+        for model_name in model_providers.keys()
+    }
+    model_max_batch_tokens: dict[str, int] = {
+        model_name: await _get_model_annotation_as_int(
+            db,
+            base_model_type="ext::ai::EmbeddingModel",
+            model_name=model_name,
+            annotation_name="ext::ai::embedding_model_max_batch_tokens",
+        )
+        for model_name in model_providers.keys()
+    }
+
+    provider_configs = {
+        provider: _get_provider_config(db=db, provider_name=provider)
+        for provider in set(model_providers.values())
+    }
+
+    # Group the inputs by model and shortening
+    group_input_indexes: dict[tuple[str, Optional[int]], list[int]] = {}
+
+    for input_index, (type_id, _) in enumerate(inputs):
+        ai_index = type_ai_indexes[str(type_id)]
+
+        model_name = ai_index.model
+        shortening = (
+            ai_index.index_embedding_dimensions
+            if (
+                ai_index.index_embedding_dimensions
+                < ai_index.model_embedding_dimensions
+            ) else
+            None
+        )
+
+        group_key = (model_name, shortening)
+
+        if group_key not in group_input_indexes:
+            group_input_indexes[group_key] = []
+
+        group_input_indexes[group_key].append(input_index)
+
+    # Batch each group separately
+    group_batch_texts_and_indexes: dict[
+        tuple[str, Optional[int]],
+        list[tuple[
+            # texts, truncated if needed
+            list[str],
+            # the associated input index
+            list[int],
+        ]]
+    ] = {}
+    too_long: list[int] = []
+
+    for group_key, input_indexes in group_input_indexes.items():
+        model_name, shortening = group_key
+        provider = model_providers[model_name]
+
+        tokenizer = get_model_tokenizer(provider, model_name)
+        max_input_tokens = model_max_input_tokens[model_name]
+        max_batch_tokens = model_max_batch_tokens[model_name]
+
+        texts = [
+            (
+                inputs[input_index][1],
+                type_ai_indexes[str(inputs[input_index][0])].truncate_to_max,
+            )
+            for input_index in input_indexes
+        ]
+
+        text_batches, excluded_indexes = batch_texts(
+            texts,
+            tokenizer,
+            max_input_tokens,
+            max_batch_tokens,
+        )
+
+        if excluded_indexes or too_long:
+            # If any input is too long, collect all inputs that are too long
+            # and return them as a failure
+            too_long.extend(
+                input_indexes[excluded_index]
+                for excluded_index in excluded_indexes
+            )
+            continue
+
+        group_batch_texts_and_indexes[group_key] = []
+
+        for text_batch in text_batches:
+            batched_texts: list[str] = []
+            batched_input_indexes: list[int] = []
+
+            for entry in text_batch.entries:
+                batched_texts.append(entry.input_text)
+                batched_input_indexes.append(
+                    input_indexes[entry.input_index]
+                )
+
+            group_batch_texts_and_indexes[group_key].append(
+                (batched_texts, batched_input_indexes)
+            )
+
+    if too_long:
+        return TextEmbeddingsResult(too_long=too_long)
+
+    # Do the embeddings
+
+    # We have been tracking the input indexes of the batch texts this whole
+    # time. Use these indexes to fill in a result embeddings list
+    embeddings: list[Optional[list[float]]] = [None] * len(inputs)
+
+    for group_key, batched_texts_and_indexes in (
+        group_batch_texts_and_indexes.items()
+    ):
+        model_name, shortening = group_key
+        provider = model_providers[model_name]
+
+        provider_config = provider_configs[provider]
+
+        for batched_texts, batched_input_indexes in batched_texts_and_indexes:
+            embeddings_result = await _generate_embeddings(
+                provider_config,
+                model_name,
+                batched_texts,
+                shortening,
+                None,
+                http_client,
+            )
+            if isinstance(embeddings_result.data, rs.Error):
+                raise AIProviderError(embeddings_result.data.message)
+            decoded_result = json.loads(
+                embeddings_result.data.embeddings.decode("utf-8")
+            )
+            for entry_index, entry_result in enumerate(decoded_result["data"]):
+                input_index = batched_input_indexes[entry_index]
+                embeddings[input_index] = entry_result["embedding"]
+
+    assert all(e is not None for e in embeddings)
+
+    return TextEmbeddingsResult(
+        success=cast(list[list[float]], embeddings),
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
 class AIIndex:
     model: str
     provider: str
     model_embedding_dimensions: int
     index_embedding_dimensions: int
+    truncate_to_max: bool
 
 
 async def get_ai_index_for_type(
@@ -2650,6 +2914,12 @@ async def get_ai_index_for_type(
                         LIMIT
                             1
                     ).0,
+                    truncate_to_max := any((
+                        for kwarg in array_unpack(.kwargs) select (
+                            kwarg.name = 'truncate_to_max'
+                            and str_lower(kwarg.expr) = 'true'
+                        )
+                    ))
                 }
             FILTER
                 .ancestors.name = 'ext::ai::index'
@@ -2676,4 +2946,5 @@ async def get_ai_index_for_type(
         provider=index["provider"],
         model_embedding_dimensions=index["model_embedding_dimensions"],
         index_embedding_dimensions=index["index_embedding_dimensions"],
+        truncate_to_max=index["truncate_to_max"],
     )
