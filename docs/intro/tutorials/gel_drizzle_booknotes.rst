@@ -100,7 +100,7 @@ For our Book Notes app, we'll create two main types:
 1. ``Book`` - to store information about books
 2. ``Note`` - to store notes associated with each book
 
-Let's edit the ``dbschema/default.esdl`` file that was created during initialization.
+Let's edit the :dotgel:`dbschema/default` file that was created during initialization.
 
 .. edb:split-section::
 
@@ -114,7 +114,7 @@ Let's edit the ``dbschema/default.esdl`` file that was created during initializa
   allow easy access to a book's notes.
 
   .. code-block:: sdl
-      :caption: dbschema/default.esdl
+      :caption: :dotgel:`dbschema/default`
 
       module default {
         type Book {
