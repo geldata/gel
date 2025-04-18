@@ -213,7 +213,6 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
 /// They might trigger a chain of reductions that ends in a state that
 /// does not accept the suggested token.
 pub fn suggest_next_keyword<'a>(input: &'a [Terminal], ctx: &'a Context) -> Vec<Keyword> {
-
     // init
     let stack_top = ctx.arena.alloc(StackNode {
         parent: None,
