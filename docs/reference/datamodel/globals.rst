@@ -59,22 +59,10 @@ behavior and principles are the same across all libraries.
 
 .. tabs::
 
-  .. code-tab:: typescript
+  .. code-tab:: edgeql
 
-    import createClient from 'gel';
-
-    const baseClient = createClient();
-
-    // returns a new Client instance, that shares the underlying
-    // network connection with `baseClient` , but sends the configured
-    // globals along with all queries run through it:
-    const clientWithGlobals = baseClient.withGlobals({
-      current_user_id: '2141a5b4-5634-4ccc-b835-437863534c51',
-    });
-
-    const result = await clientWithGlobals.query(
-      `select global current_user_id;`
-    );
+    set global current_user_id :=
+      <uuid>'2141a5b4-5634-4ccc-b835-437863534c51';
 
   .. code-tab:: python
 
@@ -92,6 +80,23 @@ behavior and principles are the same across all libraries.
     result = client.query("""
         select global current_user_id;
     """)
+
+  .. code-tab:: typescript
+
+    import createClient from 'gel';
+
+    const baseClient = createClient();
+
+    // returns a new Client instance, that shares the underlying
+    // network connection with `baseClient` , but sends the configured
+    // globals along with all queries run through it:
+    const clientWithGlobals = baseClient.withGlobals({
+      current_user_id: '2141a5b4-5634-4ccc-b835-437863534c51',
+    });
+
+    const result = await clientWithGlobals.query(
+      `select global current_user_id;`
+    );
 
   .. code-tab:: go
 
@@ -149,11 +154,6 @@ behavior and principles are the same across all libraries.
         .await
         .expect("Returning value");
     println!("Result: {val}");
-
-  .. code-tab:: edgeql
-
-    set global current_user_id :=
-      <uuid>'2141a5b4-5634-4ccc-b835-437863534c51';
 
 
 Cardinality
