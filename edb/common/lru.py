@@ -23,7 +23,7 @@ import collections.abc
 import functools
 
 
-from typing import TypeVar, Callable
+from typing import Callable
 
 
 class LRUMapping(collections.abc.MutableMapping):
@@ -81,9 +81,6 @@ class LRUMapping(collections.abc.MutableMapping):
         return iter(self._dict)
 
 
-Tf = TypeVar('Tf', bound=Callable)
-
-
 class _NoPickle:
     def __init__(self, obj):
         self.obj = obj
@@ -98,7 +95,7 @@ class _NoPickle:
         self.obj = None
 
 
-def lru_method_cache(size: int | None=128) -> Callable[[Tf], Tf]:
+def lru_method_cache[Tf: Callable](size: int | None=128) -> Callable[[Tf], Tf]:
     """A version of lru_cache for methods that shouldn't leak memory.
 
     Basically the idea is that we generate a per-object lru-cached
@@ -125,5 +122,5 @@ def lru_method_cache(size: int | None=128) -> Callable[[Tf], Tf]:
     return transformer
 
 
-def method_cache(f: Tf) -> Tf:
+def method_cache[Tf: Callable](f: Tf) -> Tf:
     return lru_method_cache(None)(f)

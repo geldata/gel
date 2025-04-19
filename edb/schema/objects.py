@@ -265,7 +265,7 @@ class ComparisonContext:
 
 
 # derived from ProtoField for validation
-class Field(struct.ProtoField, Generic[T]):
+class Field[T](struct.ProtoField):
 
     __slots__ = ('name', 'sname', 'type', 'coerce',
                  'compcoef', 'inheritable', 'simpledelta',
@@ -2274,10 +2274,9 @@ class MultiPropSet(
     pass
 
 
-class ObjectCollection(
+class ObjectCollection[Object_T: "Object"](
     ObjectContainer,
     parametric.SingleParametricType[Object_T],
-    Generic[Object_T],
 ):
     __slots__ = ('_ids',)
     is_object_collection = True
@@ -2531,7 +2530,7 @@ class ObjectCollection(
         )
 
 
-class ObjectCollectionShell(Shell, Generic[Object_T]):
+class ObjectCollectionShell[Object_T: "Object"](Shell):
 
     def __init__(
         self,
@@ -2925,9 +2924,8 @@ class ObjectDict(
         )
 
 
-class ObjectDictShell(
+class ObjectDictShell[Key_T, Object_T: "Object"](
     ObjectCollectionShell[Object_T],
-    Generic[Key_T, Object_T],
 ):
 
     items: Mapping[Any, ObjectShell[Object_T]]
@@ -3462,7 +3460,7 @@ def _serialize_to_markup(o: Object, *, ctx: markup.Context) -> markup.Markup:
     )
 
 
-def _merge_lineage(
+def _merge_lineage[InheritingObjectT: 'InheritingObject'](
     lineage: Iterable[list[InheritingObjectT]],
     subject_name: str,
 ) -> list[InheritingObjectT]:
@@ -3490,7 +3488,7 @@ def _merge_lineage(
                 del line[0]
 
 
-def _compute_lineage(
+def _compute_lineage[InheritingObjectT: 'InheritingObject'](
     schema: s_schema.Schema,
     obj: InheritingObjectT,
     subject_name: str,
@@ -3505,7 +3503,7 @@ def _compute_lineage(
     return _merge_lineage(lineage, subject_name)
 
 
-def compute_lineage(
+def compute_lineage[InheritingObjectT: 'InheritingObject'](
     schema: s_schema.Schema,
     bases: Iterable[InheritingObjectT],
     subject_name: str,
@@ -3524,7 +3522,7 @@ def compute_lineage(
         raise
 
 
-def compute_ancestors(
+def compute_ancestors[InheritingObjectT: 'InheritingObject'](
     schema: s_schema.Schema,
     obj: InheritingObjectT,
 ) -> list[InheritingObjectT]:

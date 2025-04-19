@@ -20,10 +20,8 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Generic,
     Optional,
     Protocol,
-    TypeVar,
     Iterable,
     Iterator,
     Mapping,
@@ -52,12 +50,7 @@ class CycleError(Exception):
         self.path = path
 
 
-K = TypeVar('K')
-V = TypeVar('V')
-T = TypeVar('T')
-
-
-class DepGraphEntry(Generic[K, V, T]):
+class DepGraphEntry[K, V, T]:
 
     #: The graph node
     item: V
@@ -95,7 +88,7 @@ class DepGraphEntry(Generic[K, V, T]):
         self.weak_deps = weak_deps
 
 
-def sort_ex(
+def sort_ex[K, V, T](
     graph: Mapping[K, DepGraphEntry[K, V, T]],
     *,
     allow_unresolved: bool = False,
@@ -200,7 +193,7 @@ def sort_ex(
     return ((key, graph[key]) for key in order)
 
 
-def sort(
+def sort[K, V, T](
     graph: Mapping[K, DepGraphEntry[K, V, T]],
     *,
     allow_unresolved: bool = False,
@@ -211,7 +204,7 @@ def sort(
 
 if TYPE_CHECKING:
 
-    class MergeFunction(Protocol[V]):
+    class MergeFunction[V](Protocol):
 
         def __call__(
             self,
@@ -222,7 +215,7 @@ if TYPE_CHECKING:
             ...
 
 
-def normalize(
+def normalize[K, V, T](
     graph: Mapping[K, DepGraphEntry[K, V, T]],
     merger: MergeFunction[V],
     **merger_kwargs: Any,

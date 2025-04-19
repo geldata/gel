@@ -27,7 +27,7 @@ to the caller.
 """
 
 from __future__ import annotations
-from typing import Optional, Protocol, Callable, Any, TypeVar
+from typing import Optional, Protocol, Callable, Any
 
 import asyncio
 import ssl as ssl_module
@@ -407,9 +407,6 @@ def _set_tcp_keepalive(transport):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, TCP_KEEPCNT)
 
 
-P = TypeVar('P', bound=asyncio.Protocol)
-
-
 def complete_connection_callback(
     host, port, source_description, state, protocol_factory, pg_state
 ) -> Callable[[asyncio.BaseTransport], tuple[PGRawConn, asyncio.Protocol]]:
@@ -436,7 +433,7 @@ def complete_connection_callback(
     return complete_connection
 
 
-async def create_postgres_connection(
+async def create_postgres_connection[P: asyncio.Protocol](
     dsn: str | ConnectionParams,
     protocol_factory: Callable[[], P],
     *,

@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, TypeVar, TYPE_CHECKING, TypeGuard
+from typing import Any, TYPE_CHECKING, TypeGuard
 
 import enum
 import platform
@@ -36,10 +36,7 @@ if TYPE_CHECKING:
     from . import spec
 
 
-T_type = TypeVar('T_type', bound=type)
-
-
-def _issubclass(
+def _issubclass[T_type: type](
     typ: type | statypes.CompositeTypeSpec, parent: T_type
 ) -> TypeGuard[T_type]:
     return isinstance(typ, type) and issubclass(typ, parent)
