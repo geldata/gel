@@ -338,13 +338,6 @@ def compile_Tuple(expr: qlast.Tuple, *, ctx: context.ContextLevel) -> irast.Set:
 @dispatch.compile.register(qlast.Array)
 def compile_Array(expr: qlast.Array, *, ctx: context.ContextLevel) -> irast.Set:
     elements = [dispatch.compile(e, ctx=ctx) for e in expr.elements]
-    # check that none of the elements are themselves arrays
-    for el, expr_el in zip(elements, expr.elements):
-        if isinstance(setgen.get_set_type(el, ctx=ctx), s_abc.Array):
-            raise errors.QueryError(
-                f'nested arrays are not supported',
-                span=expr_el.span)
-
     return setgen.new_array_set(elements, ctx=ctx, span=expr.span)
 
 
@@ -1054,7 +1047,9 @@ def _infer_slice_type(
 def compile_Indirection(
     expr: qlast.Indirection, *, ctx: context.ContextLevel
 ) -> irast.Set:
-    node: irast.Set | irast.Expr = dispatch.compile(expr.arg, ctx=ctx)
+    node: irast.Set | irast.IndexIndirection | irast.SliceIndirection = (
+        dispatch.compile(expr.arg, ctx=ctx)
+    )
     for indirection_el in expr.indirection:
         if isinstance(indirection_el, qlast.Index):
             idx = dispatch.compile(indirection_el.index, ctx=ctx)
@@ -1064,7 +1059,11 @@ def compile_Indirection(
             )
 
             node = irast.IndexIndirection(
-                expr=node, index=idx, typeref=typeref, span=expr.span
+                expr=node,
+                index=idx,
+                input_typeref=node.typeref,
+                typeref=typeref,
+                span=expr.span,
             )
         elif isinstance(indirection_el, qlast.Slice):
             start: Optional[irast.Base]

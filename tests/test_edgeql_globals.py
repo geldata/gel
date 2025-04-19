@@ -74,6 +74,13 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             create global arrayTuple2 -> array<tuple<str, array<int64>>>;
             create global arrayTuple3 ->
               array<tuple<tuple<str, bool>, array<int64>>>;
+            create global compositeAA -> array<array<int64>>;
+
+            create global computedArrayArray := [[1, 2], [3, 4]];
+            create global computedArrayArrayTuple := [
+                [(1, 'A'), (2, 'B')],
+                [(3, 'C'), (4, 'D')],
+            ];
         '''
     ]
 
@@ -462,6 +469,35 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
                 ''',
             )
 
+    async def test_edgeql_globals_16(self):
+        await self.assert_query_result(
+            r'''select global GlobalArrayOfArrayOfScalar''',
+            [[[1, 2, 3], [4, 5, 6]]],
+        )
+
+    async def test_edgeql_globals_17(self):
+        await self.assert_query_result(
+            r"""
+                select array_agg((
+                    for card_group in array_unpack(global GlobalCardsByCost)
+                        select array_agg((
+                            for card in array_unpack(card_group)
+                                select card.name
+                        ))
+                ))
+            """,
+            [
+                [
+                    tb.bag([]),
+                    tb.bag(['Imp', 'Dwarf', 'Sprite']),
+                    tb.bag(['Bog monster', 'Giant eagle']),
+                    tb.bag(['Giant turtle', 'Golem']),
+                    tb.bag(['Djinn']),
+                    tb.bag(['Dragon']),
+                ],
+            ],
+        )
+
     async def test_edgeql_globals_client_01(self):
         con = edgedb.create_async_client(
             **self.get_connect_args(database=self.con.dbname)
@@ -558,7 +594,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             await self.con.execute("select global cur_user")
         self.con._protocol.last_state = None
 
-    async def test_edgeql_globals_composite(self):
+    async def test_edgeql_globals_composite_01(self):
         # Test various composite global variables.
 
         # HACK: Using with_globals on testbase.Connection doesn't
@@ -577,6 +613,14 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
                 arrayTuple=[(10, 20), (30, 40)],
                 arrayTuple2=[('a', [1]), ('b', [3, 4])],
                 arrayTuple3=[(('a', True), [1]), (('b', False), [3, 4])],
+                compositeAA=[[1, 2], [3, 4]],
+                #compositeAAA=[[[1, 2], [3, 4]], [[5, 6], [7, 8]]],
+                #compositeAAT=[[(1, 'A'), (2, 'B')], [(3, 'C'), (4, 'D')]],
+                #compositeTAA=([[1, 2], [3, 4]], [['A', 'B'], ['C', 'D']]),
+                #compositeTTAA=(
+                #    ([[1, 2], [3, 4]], [['A', 'B'], ['C', 'D']]),
+                #    ([[True, False], [False, True]]),
+                #),
             )
             scon = con.with_globals(**globs)
             chunks = [f'{name} := global {name}' for name in globs]
@@ -585,6 +629,16 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             self.assertEqual(dres, globs)
         finally:
             await con.aclose()
+
+    async def test_edgeql_globals_composite_02(self):
+        await self.assert_query_result(
+            r'''select global computedArrayArray''',
+            [[[1, 2], [3, 4]]]
+        )
+        await self.assert_query_result(
+            r'''select global computedArrayArrayTuple''',
+            [[[(1, 'A'), (2, 'B')], [(3, 'C'), (4, 'D')]]]
+        )
 
     async def test_edgeql_globals_schema_types_01(self):
         # Non-computed globals don't add a schema type
