@@ -67,9 +67,9 @@ cdef list[ParamConversion] get_param_conversions(
 )
 
 cdef dict[int, bytes] get_args_data_for_indexes(
-    bytes args,
+    bytes bind_args,
+    list[bytes] extra_blobs,
     list[int] target_indexes,
-    args_needs_recoding: bool,
 )
 
 cdef class ConvertedArg:

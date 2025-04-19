@@ -683,3 +683,36 @@ class TestServerParamConversions(tb.QueryTestCase):
                 {'n': 2, 'val': "456"},
             ],
         )
+
+    async def test_server_param_conversions_script_07(self):
+        # Script with many query and normalized args all mixed together
+        await self.con.execute(
+            '''
+            select (
+                "AAA",
+                "BBBB",
+                (insert Result { n := 1, val := simple_to_str(<int64>$1) }),
+                (insert Result { n := 2, val := simple_to_str(456) }),
+                "CCCCC",
+            );
+            select (
+                "DDDDDD",
+                (insert Result { n := 3, val := simple_to_str(<int64>$0) }),
+                "EEEEEEE",
+                "FFFFFFFF",
+                (insert Result { n := 4, val := simple_to_str(101112) }),
+            );
+            ''',
+            789,
+            123,
+        )
+
+        await self.assert_query_result(
+            'select Result { n, val } order by .n',
+            [
+                {'n': 1, 'val': "123"},
+                {'n': 2, 'val': "456"},
+                {'n': 3, 'val': "789"},
+                {'n': 4, 'val': "101112"},
+            ],
+        )
