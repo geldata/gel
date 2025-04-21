@@ -475,6 +475,7 @@ async def run_server(
             cors_always_allowed_origins=args.cors_always_allowed_origins,
             disable_dynamic_system_config=args.disable_dynamic_system_config,
             compiler_pool_size=args.compiler_pool_size,
+            compiler_worker_branch_limit=args.compiler_worker_branch_limit,
             compiler_pool_mode=srvargs.CompilerPoolMode.MultiTenant,
             compiler_pool_addr=args.compiler_pool_addr,
             compiler_pool_tenant_cache_size=(

@@ -253,6 +253,7 @@ class Worker(BaseWorker):
 class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
 
     _loop: asyncio.AbstractEventLoop
+    _worker_branch_limit: int
     _backend_runtime_params: pgparams.BackendRuntimeParams
     _std_schema: s_schema.FlatSchema
     _refl_schema: s_schema.FlatSchema
@@ -263,9 +264,11 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
         self,
         *,
         loop: asyncio.AbstractEventLoop,
+        worker_branch_limit: int,
         **kwargs: Any,
     ) -> None:
         self._loop = loop
+        self._worker_branch_limit = worker_branch_limit
         self._init(kwargs)
 
     def _init(self, kwargs: dict[str, Any]) -> None:
@@ -1972,6 +1975,7 @@ async def create_compiler_pool(
     *,
     runstate_dir: str,
     pool_size: int,
+    worker_branch_limit: int,
     backend_runtime_params: pgparams.BackendRuntimeParams,
     std_schema: s_schema.FlatSchema,
     refl_schema: s_schema.FlatSchema,
@@ -1984,6 +1988,7 @@ async def create_compiler_pool(
     pool = pool_class(
         loop=loop,
         pool_size=pool_size,
+        worker_branch_limit=worker_branch_limit,
         runstate_dir=runstate_dir,
         backend_runtime_params=backend_runtime_params,
         std_schema=std_schema,

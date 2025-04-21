@@ -672,6 +672,7 @@ async def server_main(
             loop=loop,
             runstate_dir=runstate_dir,
             pool_size=pool_size,
+            worker_branch_limit=0,  # compiler server doesn't use this limit
             cache_size=client_schema_cache_size,
             secret=secret.encode(),
         )
