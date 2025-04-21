@@ -8,7 +8,7 @@ use gel_protocol::codec;
 use gel_protocol::model::{BigInt, Decimal};
 use pyo3::exceptions::{PyAssertionError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple};
+use pyo3::types::{PyBytes, PyDict, PyFloat, PyInt, PyList, PyString};
 
 use crate::errors::SyntaxError;
 use crate::normalize::{normalize as _normalize, Error, PackedEntry, Variable};
@@ -74,21 +74,20 @@ impl Entry {
 impl Entry {
     fn get_variables(&self, py: Python) -> PyResult<PyObject> {
         let vars = PyDict::new(py);
-        for (param_name, _, _, value) in VariableNameIter::new(self) {
-            vars.set_item(param_name, TokenizerValue(value))?;
+        let first = match self.first_extra {
+            Some(first) => first,
+            None => return Ok(vars.into()),
+        };
+        for (idx, var) in self.entry_pack.variables.iter().flatten().enumerate() {
+            let s = if self.extra_named {
+                format!("__edb_arg_{}", first + idx)
+            } else {
+                (first + idx).to_string()
+            };
+            vars.set_item(s, TokenizerValue(&var.value))?;
         }
 
         Ok(vars.into())
-    }
-
-    // This function returns a dictionary mapping normalized parameter names to their blob and var indexes.
-    fn get_extra_variable_indexes(&self, py: Python) -> PyResult<PyObject> {
-        let indexes = PyDict::new(py);
-        for (param_name, blob_index, var_index, _) in VariableNameIter::new(self) {
-            indexes.set_item(param_name, PyTuple::new(py, [blob_index, var_index])?)?;
-        }
-
-        Ok(indexes.into())
     }
 
     fn pack(&self, py: Python) -> PyResult<PyObject> {
@@ -96,69 +95,6 @@ impl Entry {
         bincode::serialize_into(&mut buf, &self.entry_pack)
             .map_err(|e| PyValueError::new_err(format!("Failed to pack: {e}")))?;
         Ok(PyBytes::new(py, buf.as_slice()).into())
-    }
-}
-
-struct VariableNameIter<'a> {
-    entry_pack: &'a PackedEntry,
-    first_extra: Option<usize>,
-    extra_named: bool,
-    name_index: usize,
-    blob_index: usize,
-    var_index: usize,
-}
-
-impl<'a> VariableNameIter<'a> {
-    pub fn new(entry: &'a Entry) -> Self {
-        VariableNameIter {
-            entry_pack: &entry.entry_pack,
-            first_extra: entry.first_extra,
-            extra_named: entry.extra_named,
-            name_index: 0,
-            blob_index: 0,
-            var_index: 0,
-        }
-    }
-}
-
-impl<'a> Iterator for VariableNameIter<'a> {
-    type Item = (String, usize, usize, &'a Value);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Check termination
-        let first = self.first_extra?;
-        if self.blob_index >= self.entry_pack.variables.len() {
-            return None;
-        }
-        if self.var_index >= self.entry_pack.variables[self.blob_index].len() {
-            return None;
-        }
-
-        // Get result
-        let blob_vars = self.entry_pack.variables.get(self.blob_index)?;
-
-        let name = if self.extra_named {
-            format!("__edb_arg_{}", first + self.name_index)
-        } else {
-            (first + self.name_index).to_string()
-        };
-
-        let result = (
-            name,
-            self.blob_index,
-            self.var_index,
-            &blob_vars[self.var_index].value,
-        );
-
-        // Advance indexes
-        self.var_index += 1;
-        if self.var_index >= blob_vars.len() {
-            self.var_index = 0;
-            self.blob_index += 1;
-        }
-        self.name_index += 1;
-
-        Some(result)
     }
 }
 
