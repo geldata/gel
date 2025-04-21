@@ -1376,3 +1376,44 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
         await self.con.execute('''
             drop type T
         ''')
+
+    async def test_edgeql_policies_set_global_01(self):
+        # Verify that selecting a type with overlapping children and
+        # access policies in at least one child works
+
+        await self.con.execute('''
+            create global cur: uuid;
+            create type T {
+              create access policy ins allow insert;
+              create access policy cur allow all using (.id ?= global cur);
+            };
+        ''')
+
+        val = await self.con.query_single('''
+            insert T
+        ''')
+
+        # We shouldn't see it with access policies on
+        await self.con.execute('''
+            set global cur := (select T limit 1).id;
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select global cur
+            ''',
+            []
+        )
+
+        # Disable access policies and we should get it
+        await self.con.execute('''
+            configure session set apply_access_policies := false;
+            set global cur := (select T limit 1).id;
+            configure session reset apply_access_policies;
+        ''')
+        await self.assert_query_result(
+            r'''
+            select global cur
+            ''',
+            [val.id]
+        )

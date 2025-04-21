@@ -30,6 +30,7 @@ from typing import (
 )
 
 import copy
+import uuid
 
 from edb import errors
 
@@ -277,6 +278,7 @@ def fini_expression(
         ir.expr.globals = list(ctx.env.query_globals.values())
         ir.expr.params = params
         ir.expr.schema = ctx.env.schema
+        ir.expr.type_rewrites = _get_type_rewrites(ctx)
 
         if ctx.env.server_param_conversion_calls:
             func_name, func_span = ctx.env.server_param_conversion_calls[0]
@@ -352,10 +354,7 @@ def fini_expression(
             }
         ),
         schema_ref_exprs=ctx.env.schema_ref_exprs,
-        type_rewrites={
-            (typ.id, not skip_subtypes): s
-            for (typ, skip_subtypes), s in ctx.env.type_rewrites.items()
-            if isinstance(s, irast.Set)},
+        type_rewrites=_get_type_rewrites(ctx),
         dml_exprs=ctx.env.dml_exprs,
         singletons=ctx.env.singletons,
         triggers=ir_triggers,
@@ -363,6 +362,16 @@ def fini_expression(
         unsafe_isolation_dangers=tuple(ctx.env.unsafe_isolation_dangers),
     )
     return result
+
+
+def _get_type_rewrites(ctx: context.ContextLevel) -> dict[
+    tuple[uuid.UUID, bool], irast.Set
+]:
+    return {
+        (typ.id, not skip_subtypes): s
+        for (typ, skip_subtypes), s in ctx.env.type_rewrites.items()
+        if isinstance(s, irast.Set)
+    }
 
 
 def collect_params(ctx: context.ContextLevel) -> list[irast.Param]:

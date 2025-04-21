@@ -1350,6 +1350,7 @@ class ConfigCommand(Command, Expr):
     requires_restart: bool
     backend_setting: typing.Optional[str]
     is_system_config: bool
+    type_rewrites: typing.Optional[dict[tuple[uuid.UUID, bool], Set]] = None
     globals: typing.Optional[list[Global]] = None
     scope_tree: typing.Optional[ScopeTreeNode] = None
 

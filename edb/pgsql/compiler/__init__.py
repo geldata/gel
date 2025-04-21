@@ -118,6 +118,8 @@ def compile_ir_to_sql_tree(
             query_params = list(ir_expr.params)
             if ir_expr.globals:
                 query_globals = list(ir_expr.globals)
+            if ir_expr.type_rewrites:
+                type_rewrites = ir_expr.type_rewrites
         else:
             scope_tree = irast.new_scope_tree()
 
