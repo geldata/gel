@@ -689,72 +689,40 @@ cdef list[ParamConversion] get_param_conversions(
     bytes bind_args,
     list[bytes] extra_blobs,
 ):
-    # Get encoded data from bind args
+    # Get encoded data from bind args and extra blobs
     bind_args_datas: dict[int, bytes] = get_args_data_for_indexes(
         bind_args,
+        extra_blobs,
         [
-            param_conversion.bind_args_index
+            param_conversion.script_param_index
             for param_conversion in server_param_conversions
-            if param_conversion.bind_args_index is not None
+            if param_conversion.script_param_index is not None
         ],
-        True,
     )
 
-    # Get encoded data from extra blobs
-    extra_blob_target_indexes: dict[int, list[int]] = {}
-    for param_conversion in server_param_conversions:
-        if param_conversion.extra_blob_arg_indexes is not None:
-            blob_index, arg_index = param_conversion.extra_blob_arg_indexes
-            if blob_index not in extra_blob_target_indexes:
-                extra_blob_target_indexes[blob_index] = []
-            extra_blob_target_indexes[blob_index].append(arg_index)
-
-    extra_blob_arg_datas: dict[tuple[int, int], bytes] = {}
-    for blob_index, target_indexes in extra_blob_target_indexes.items():
-        for arg_index, data in get_args_data_for_indexes(
-            extra_blobs[blob_index], target_indexes, False
-        ).items():
-            extra_blob_arg_datas[(blob_index, arg_index)] = data
-
-    # Finally, construct the ParamConversions
+    # Construct the ParamConversions
     result: list[ParamConversion] = []
     for param_conversion in server_param_conversions:
         assert isinstance(param_conversion, dbstate.ServerParamConversion)
         param_name = param_conversion.param_name
 
         if (
-            param_conversion.bind_args_index is not None
-            and param_conversion.extra_blob_arg_indexes is not None
-        ):
-            raise RuntimeError(
-                f"Parameter '{param_name}' has both "
-                f"a normalized arg and a query arg value"
-            )
-        elif (
-            param_conversion.bind_args_index is not None
+            param_conversion.script_param_index is not None
             and param_conversion.constant_value is not None
         ):
             raise RuntimeError(
                 f"Parameter '{param_name}' has both "
                 f"a constant and a query arg value"
             )
-        elif (
-            param_conversion.extra_blob_arg_indexes is not None
-            and param_conversion.constant_value is not None
-        ):
-            raise RuntimeError(
-                f"Parameter '{param_name}' has both "
-                f"a normalized arg and a constant value"
-            )
 
-        elif param_conversion.bind_args_index is not None:
+        elif param_conversion.script_param_index is not None:
             # using data from the bind args
             result.append(ParamConversion(
                 param_name=param_name,
                 conversion_name=param_conversion.conversion_name,
                 additional_info=param_conversion.additional_info,
                 encoded_data=bind_args_datas[
-                    param_conversion.bind_args_index
+                    param_conversion.script_param_index
                 ],
                 constant_value=None,
             ))
@@ -769,18 +737,6 @@ cdef list[ParamConversion] get_param_conversions(
                 constant_value=param_conversion.constant_value,
             ))
 
-        elif param_conversion.extra_blob_arg_indexes is not None:
-            # using data from extra blobs
-            result.append(ParamConversion(
-                param_name=param_name,
-                conversion_name=param_conversion.conversion_name,
-                additional_info=param_conversion.additional_info,
-                encoded_data=extra_blob_arg_datas[
-                    param_conversion.extra_blob_arg_indexes
-                ],
-                constant_value=None,
-            ))
-
         else:
             raise RuntimeError(
                 f"Parameter '{param_name}' has no value"
@@ -790,15 +746,14 @@ cdef list[ParamConversion] get_param_conversions(
 
 
 cdef dict[int, bytes] get_args_data_for_indexes(
-    bytes args,
+    bytes bind_args,
+    list[bytes] extra_blobs,
     list[int] target_indexes,
-    args_needs_recoding: bool,
 ):
-    """Extract bytes from the args by reading the length of each variable and
-    skipping forward by that amount.
+    """Extract bytes from the bind args and extra blobs by reading the length of
+    each variable and skipping forward by that amount.
 
-    If args_needs_recoding, the args is prefixed by the argument count in int32.
-    Additionally, each argument is prefixed by a reserved int32.
+    When reaching the end of a blob, continue reading data from the next blob.
     """
 
     cdef:
@@ -806,19 +761,36 @@ cdef dict[int, bytes] get_args_data_for_indexes(
         ssize_t in_len
         const char *data_str
 
-    assert cpython.PyBytes_CheckExact(args)
-    frb_init(
-        &in_buf,
-        cpython.PyBytes_AS_STRING(args),
-        cpython.Py_SIZE(args)
-    )
+    all_blobs = [bind_args, *extra_blobs]
+    curr_blob_index = 0
+    # The first blob is the bind_args, which is has additional data which should
+    # be skipped when extracting the arg data.
+    args_needs_recoding = True
 
-    if args_needs_recoding:
-        # Skip prefix argument count
-        if frb_get_len(&in_buf) == 0:
-            pass
-        else:
-            frb_read(&in_buf, 4)
+    def setup_blob_buffer():
+        nonlocal curr_blob_index
+        nonlocal args_needs_recoding
+
+        if curr_blob_index >= len(all_blobs):
+            raise RuntimeError('insufficient args data')
+
+        blob = all_blobs[curr_blob_index]
+        assert cpython.PyBytes_CheckExact(blob)
+        frb_init(
+            &in_buf,
+            cpython.PyBytes_AS_STRING(blob),
+            cpython.Py_SIZE(blob)
+        )
+        args_needs_recoding = curr_blob_index == 0
+
+        if args_needs_recoding:
+            # Skip prefixed argument count
+            if frb_get_len(&in_buf) == 0:
+                pass
+            else:
+                frb_read(&in_buf, 4)
+
+    setup_blob_buffer()
 
     curr_arg_index = 0
     target_indexes.sort()
@@ -827,9 +799,16 @@ cdef dict[int, bytes] get_args_data_for_indexes(
     for target_index in target_indexes:
         # Read up to the end of the target variable
         for arg_index in range(curr_arg_index, target_index + 1):
+            if frb_get_len(&in_buf) == 0:
+                # We've reached the end of the previous blob.
+                # Set up the next one and keep scanning.
+                curr_blob_index += 1
+                setup_blob_buffer()
+
             if args_needs_recoding:
                 # Skip reserved
                 frb_read(&in_buf, 4)  # reserved
+
             in_len = hton.unpack_int32(frb_read(&in_buf, 4))
             data_str = frb_read(&in_buf, in_len)
 

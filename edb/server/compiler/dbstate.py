@@ -106,15 +106,7 @@ class ServerParamConversion:
     additional_info: tuple[str, ...]
 
     # If the parameter is a query parameter, track its bind_args index.
-    bind_args_index: Optional[int] = None
-
-    # If the parameter was originally a literal which was normalized,
-    # store the location in the extra blobs to find its encoded data.
-    #
-    # The location is stored as a tuple of:
-    # - blob index
-    # - arg index
-    extra_blob_arg_indexes: Optional[tuple[int, int]] = None
+    script_param_index: Optional[int] = None
 
     # If the parameter is a constant value, pass to directly to the server.
     constant_value: Optional[Any] = None
