@@ -71,6 +71,7 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
 
     for token in input {
         // println!("token {:?}", token);
+
         while let Some(mut parser) = parsers.pop() {
             let res = parser.act(ctx, token);
 
@@ -91,9 +92,13 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
                 };
 
                 // option 1: inject a token
-                if parser.error_cost <= ERROR_COST_INJECT_MAX {
+                if parser.error_cost <= ERROR_COST_INJECT_MAX && !parser.has_custom_error {
                     let possible_actions = &ctx.spec.actions[parser.stack_top.state];
                     for token_kind in possible_actions.keys() {
+                        if parser.can_act(ctx, token_kind).is_none() {
+                            continue;
+                        }
+
                         let mut inject = parser.clone();
 
                         let injection = new_token_for_injection(*token_kind, ctx);
@@ -154,29 +159,24 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
         if new_parsers.len() > 1 {
             new_parsers.sort_by_key(Parser::adjusted_cost);
 
-            let recovered = new_parsers.iter().position(Parser::has_recovered);
+            if new_parsers[0].has_custom_error {
+                // if we have a custom error, just keep that
 
-            if let Some(recovered) = recovered {
-                // make sure not to discard custom errors
-                let any_custom_error = new_parsers.iter().any(|p| p.has_custom_error);
-                if !any_custom_error || new_parsers[recovered].has_custom_error {
-                    // recover a parser and discard the rest
-                    let mut recovered = new_parsers.swap_remove(recovered);
-                    recovered.error_cost = 0;
-                    recovered.has_custom_error = false;
-
-                    new_parsers.clear();
-                    new_parsers.push(recovered);
-                }
-            }
-
-            // prune: pick only 1 best parsers that has cost > ERROR_COST_INJECT_MAX
-            if new_parsers[0].error_cost > ERROR_COST_INJECT_MAX {
                 new_parsers.drain(1..);
-            }
+            } else if new_parsers[0].has_recovered() {
+                // recover parsers whose "adjusted error cost" reached 0 and discard the rest
 
-            // prune: pick only X best parsers
-            if new_parsers.len() > PARSER_COUNT_MAX {
+                new_parsers.retain(|p| p.has_recovered());
+                for p in &mut new_parsers {
+                    p.error_cost = 0;
+                }
+            } else if new_parsers[0].error_cost > ERROR_COST_INJECT_MAX {
+                // prune: pick only 1 best parsers that has cost > ERROR_COST_INJECT_MAX
+
+                new_parsers.drain(1..);
+            } else if new_parsers.len() > PARSER_COUNT_MAX {
+                // prune: pick only X best parsers
+
                 new_parsers.drain(PARSER_COUNT_MAX..);
             }
         }
@@ -184,6 +184,18 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
         assert!(parsers.is_empty());
         std::mem::swap(&mut parsers, &mut new_parsers);
         prev_span = Some(token.span);
+
+        // for (index, parser) in parsers.iter().enumerate() {
+        //     print!(
+        //         "p{index} {:06} {:5}:",
+        //         parser.error_cost, parser.can_recover
+        //     );
+        //     for e in &parser.errors {
+        //         print!(" {}", e.message);
+        //     }
+        //     println!("");
+        // }
+        // println!("");
     }
 
     // there will always be a parser left,
@@ -629,7 +641,7 @@ fn injection_cost(kind: &Kind) -> u16 {
         // Manual keyword tweaks to encourage some error messages and discourage others.
         Keyword(keywords::Keyword(
             "delete" | "update" | "migration" | "role" | "global" | "administer" | "future"
-            | "database",
+            | "database", //  | "if" | "group",
         )) => 100,
         Keyword(keywords::Keyword("insert" | "module" | "extension" | "branch")) => 20,
         Keyword(keywords::Keyword("select" | "property" | "type")) => 10,
