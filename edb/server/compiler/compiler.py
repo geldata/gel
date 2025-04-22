@@ -1592,9 +1592,11 @@ def _get_compile_options(
     ctx: CompileContext,
     *,
     is_explain: bool = False,
+    no_implicit_fields: bool = False,
 ) -> qlcompiler.CompilerOptions:
-    can_have_implicit_fields = (
-        ctx.output_format is enums.OutputFormat.BINARY)
+    can_have_implicit_fields = not no_implicit_fields and (
+        ctx.output_format is enums.OutputFormat.BINARY
+    )
 
     return qlcompiler.CompilerOptions(
         modaliases=ctx.state.current_tx().get_modaliases(),
@@ -1610,6 +1612,7 @@ def _get_compile_options(
         json_parameters=ctx.json_parameters,
         implicit_limit=ctx.implicit_limit,
         bootstrap_mode=ctx.bootstrap_mode,
+        dump_restore_mode=ctx.dump_restore_mode,
         apply_query_rewrites=(
             not ctx.bootstrap_mode
             and not ctx.schema_reflection_mode
@@ -2387,7 +2390,6 @@ def _compile_ql_config_op(
     current_tx = ctx.state.current_tx()
     schema = current_tx.get_schema(ctx.compiler_state.std_schema)
 
-    modaliases = current_tx.get_modaliases()
     session_config = current_tx.get_session_config()
     database_config = current_tx.get_database_config()
 
@@ -2401,14 +2403,13 @@ def _compile_ql_config_op(
         raise errors.QueryError(
             'CONFIGURE INSTANCE cannot be executed in a transaction block')
 
+    options = _get_compile_options(ctx, no_implicit_fields=True)
+    options.in_server_config_op = True
+
     ir = qlcompiler.compile_ast_to_ir(
         ql,
         schema=schema,
-        options=qlcompiler.CompilerOptions(
-            modaliases=modaliases,
-            in_server_config_op=True,
-            dump_restore_mode=ctx.dump_restore_mode,
-        ),
+        options=options,
     )
 
     globals = None
