@@ -257,7 +257,7 @@ class MultiSchemaPool(
             global_schema_pickle,
             system_config_pickled,
         ) = init_args_pickled
-        dbs, backend_runtime_params = pickle.loads(client_args_pickled)
+        backend_runtime_params, = pickle.loads(client_args_pickled)
         if self._inited.is_set():
             logger.debug("New client %d connected.", client_id)
             assert self._catalog_version is not None
@@ -280,44 +280,49 @@ class MultiSchemaPool(
                 client_id,
             )
         self._clients[client_id] = ClientSchema(
-            immutables.Map(
-                (
-                    dbname,
-                    PickledState(
-                        state.user_schema_pickle,
-                        pickle.dumps(state.reflection_cache, -1),
-                        pickle.dumps(state.database_config, -1),
-                    ),
-                )
-                for dbname, state in dbs.items()
-            ),
-            global_schema_pickle,
-            system_config_pickled,
-            (),
+            dbs=immutables.Map(),
+            global_schema=global_schema_pickle,
+            instance_config=system_config_pickled,
+            dropped_dbs=(),
         )
 
     def _sync(
         self,
         client_id: int,
         dbname: str,
+        evicted_dbs: list[str],
         user_schema: Optional[bytes],
         reflection_cache: Optional[bytes],
         global_schema: Optional[bytes],
         database_config: Optional[bytes],
         system_config: Optional[bytes],
     ) -> bool:
+        """Sync the client state in the compiler server.
+
+        The client state is carried over with the compile(), compile_sql(),
+        compile_notebook(), compile_graphql() calls.
+
+        Returns True if the client state changed, False otherwise.
+        """
         # EdgeDB instance syncs the schema with the compiler server
         client = self._clients[client_id]
         client_updates: dict[str, Any] = {}
-        db = client.dbs.get(dbname)
+        dbs = client.dbs.mutate()
+        dbs_changed = False
+        if evicted_dbs:
+            for name in evicted_dbs:
+                if dbs.pop(name, None) is not None:
+                    dbs_changed = True
+
+        db = dbs.get(dbname)
         if db is None:
             assert user_schema is not None
             assert reflection_cache is not None
             assert database_config is not None
-            client_updates["dbs"] = client.dbs.set(
-                dbname,
-                PickledState(user_schema, reflection_cache, database_config),
+            dbs[dbname] = PickledState(
+                user_schema, reflection_cache, database_config
             )
+            dbs_changed = True
         else:
             updates = {}
 
@@ -330,13 +335,17 @@ class MultiSchemaPool(
 
             if updates:
                 db = db._replace(**updates)
-                client_updates["dbs"] = client.dbs.set(dbname, db)
+                dbs[dbname] = db
+                dbs_changed = True
 
         if global_schema is not None:
             client_updates["global_schema"] = global_schema
 
         if system_config is not None:
             client_updates["instance_config"] = system_config
+
+        if dbs_changed:
+            client_updates["dbs"] = dbs.finish()
 
         if client_updates:
             self._clients[client_id] = client._replace(**client_updates)
@@ -361,7 +370,7 @@ class MultiSchemaPool(
         msg: memoryview,
     ) -> Any:
         try:
-            updated = self._sync(client_id, *args[:6])
+            updated = self._sync(client_id, *args[:7])
         except Exception as ex:
             raise state_mod.FailedStateSync(
                 f"failed to sync compiler server state: "
@@ -389,7 +398,7 @@ class MultiSchemaPool(
                 if updated:
                     # re-pickle the request if user schema changed
                     msg_arg = None
-                    extra_args = (method_name, args[0], *args[6:])
+                    extra_args = (method_name, args[0], *args[7:])
                 else:
                     msg_arg = bytes(msg)
             invalidation = worker.flush_invalidation()

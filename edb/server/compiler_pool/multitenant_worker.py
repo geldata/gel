@@ -347,7 +347,7 @@ def call_for_client(client_id, pickled_schema, invalidation, msg, *args):
         assert args == ()
         methname, args = pickle.loads(msg)
         dbname = args[0]
-        args = args[6:]
+        args = args[7:]
 
     if methname == "compile":
         meth = compile
