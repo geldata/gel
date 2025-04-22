@@ -282,9 +282,7 @@ class Tenant(ha_base.ClusterProtocol):
             )
         else:
             result = await compiler.compile_structured_config(
-                objects,
-                "magic",  # source
-                True,  # allow_nested
+                objects, source="magic", allow_nested=True
             )
         email_providers = result["cfg::Config"]["email_providers"]
         self._sidechannel_email_configs = list(email_providers.value)

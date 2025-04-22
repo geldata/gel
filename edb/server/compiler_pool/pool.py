@@ -18,7 +18,18 @@
 
 
 from __future__ import annotations
-from typing import Any, NamedTuple
+from typing import (
+    Any,
+    Callable,
+    cast,
+    Generic,
+    Hashable,
+    Mapping,
+    NamedTuple,
+    Optional,
+    TypeVar,
+    TYPE_CHECKING,
+)
 
 import asyncio
 import collections
@@ -41,7 +52,10 @@ from edb.common import lru
 
 from edb.pgsql import params as pgparams
 
+from edb.schema import reflection as s_refl
+from edb.schema import schema as s_schema
 from edb.server import args as srvargs
+from edb.server import config
 from edb.server import dbview
 from edb.server import defines
 from edb.server import metrics
@@ -49,6 +63,39 @@ from edb.server import metrics
 from . import amsg
 from . import queue
 from . import state
+
+if TYPE_CHECKING:
+    from edb import errors
+    from edb import graphql
+    from edb.server.compiler import compiler
+    from edb.server.compiler import config as config_compiler
+    from edb.server.compiler import dbstate
+    from edb.server.compiler import sertypes
+
+SyncStateCallback = Callable[[], None]
+Config = immutables.Map[str, config.SettingValue]
+InitArgs = tuple[
+    immutables.Map[str, state.PickledDatabaseState],
+    pgparams.BackendRuntimeParams,
+    s_schema.FlatSchema,
+    s_schema.FlatSchema,
+    s_refl.SchemaClassLayout,
+    bytes,
+    Config,
+]
+MultiTenantInitArgs = tuple[
+    pgparams.BackendRuntimeParams,
+    s_schema.FlatSchema,
+    s_schema.FlatSchema,
+    s_refl.SchemaClassLayout,
+]
+RemoteInitArgsPickle = tuple[bytes, bytes, bytes, bytes]
+InitArgs_T = TypeVar("InitArgs_T")
+InitArgsPickle_T = TypeVar("InitArgsPickle_T")
+PreArgs = tuple[Any, ...]
+BaseWorker_T = TypeVar("BaseWorker_T", bound="BaseWorker")
+Worker_T = TypeVar("Worker_T", bound="Worker")
+AbstractPool_T = TypeVar("AbstractPool_T", bound="AbstractPool")
 
 
 PROCESS_INITIAL_RESPONSE_TIMEOUT: float = 60.0
@@ -69,25 +116,35 @@ _ENV['PYTHONPATH'] = ':'.join(sys.path)
 
 
 @functools.lru_cache()
-def _pickle_memoized(schema):
-    return pickle.dumps(schema, -1)
+def _pickle_memoized(obj: Any) -> bytes:
+    return pickle.dumps(obj, -1)
 
 
 class BaseWorker:
 
     _dbs: immutables.Map[str, state.PickledDatabaseState]
+    _backend_runtime_params: pgparams.BackendRuntimeParams
+    _std_schema: s_schema.FlatSchema
+    _refl_schema: s_schema.FlatSchema
+    _schema_class_layout: s_refl.SchemaClassLayout
     _global_schema_pickle: bytes
+    _system_config: Config
+    _last_pickled_state: Optional[bytes]
+
+    _con: Optional[amsg.HubConnection]
+    _last_used: float
+    _closed: bool
 
     def __init__(
         self,
         dbs: immutables.Map[str, state.PickledDatabaseState],
         backend_runtime_params: pgparams.BackendRuntimeParams,
-        std_schema,
-        refl_schema,
-        schema_class_layout,
-        global_schema_pickle,
-        system_config,
-    ):
+        std_schema: s_schema.FlatSchema,
+        refl_schema: s_schema.FlatSchema,
+        schema_class_layout: s_refl.SchemaClassLayout,
+        global_schema_pickle: bytes,
+        system_config: Config,
+    ) -> None:
         self._dbs = dbs
         self._backend_runtime_params = backend_runtime_params
         self._std_schema = std_schema
@@ -101,8 +158,14 @@ class BaseWorker:
         self._last_used = time.monotonic()
         self._closed = False
 
-    async def call(self, method_name, *args, sync_state=None):
+    async def call(
+        self,
+        method_name: str,
+        *args: Any,
+        sync_state: Optional[SyncStateCallback] = None,
+    ) -> Any:
         assert not self._closed
+        assert self._con is not None
 
         if self._con.is_closed():
             raise RuntimeError(
@@ -111,16 +174,16 @@ class BaseWorker:
 
         data = await self._request(method_name, args)
 
-        status, *data = pickle.loads(data)
+        status, *result = pickle.loads(data)
 
         self._last_used = time.monotonic()
 
         if status == 0:
             if sync_state is not None:
                 sync_state()
-            return data[0]
+            return result[0]
         elif status == 1:
-            exc, tb = data
+            exc, tb = result
             if (sync_state is not None and
                     not isinstance(exc, state.FailedStateSync)):
                 sync_state()
@@ -129,24 +192,39 @@ class BaseWorker:
         else:
             exc = RuntimeError(
                 'could not serialize result in worker subprocess')
-            exc.__formatted_error__ = data[0]
+            exc.__formatted_error__ = result[0]
             raise exc
 
-    async def _request(self, method_name, args):
+    async def _request(
+        self,
+        method_name: str,
+        args: tuple[Any, ...],
+    ) -> memoryview:
+        assert self._con is not None
         msg = pickle.dumps((method_name, args))
         return await self._con.request(msg)
 
 
 class Worker(BaseWorker):
-    def __init__(self, manager, server, pid, *args):
+
+    _pid: int
+    _manager: BaseLocalPool
+    _server: amsg.Server
+
+    def __init__(
+        self,
+        manager: BaseLocalPool,
+        server: amsg.Server,
+        pid: int,
+        *args: Any,
+    ) -> None:
         super().__init__(*args)
 
         self._pid = pid
-        self._last_pickled_state = None
         self._manager = manager
         self._server = server
 
-    async def _attach(self, init_args_pickled: bytes):
+    async def _attach(self, init_args_pickled: bytes) -> None:
         self._manager._stats_spawned += 1
 
         self._con = self._server.get_by_pid(self._pid)
@@ -156,10 +234,10 @@ class Worker(BaseWorker):
             init_args_pickled,
         )
 
-    def get_pid(self):
+    def get_pid(self) -> int:
         return self._pid
 
-    def close(self):
+    def close(self) -> None:
         if self._closed:
             return
         self._closed = True
@@ -172,12 +250,23 @@ class Worker(BaseWorker):
             pass
 
 
-class AbstractPool:
-    _dbindex: dbview.DatabaseIndex | None = None
+class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
 
-    def __init__(self, *, loop, **kwargs):
+    _loop: asyncio.AbstractEventLoop
+    _backend_runtime_params: pgparams.BackendRuntimeParams
+    _std_schema: s_schema.FlatSchema
+    _refl_schema: s_schema.FlatSchema
+    _schema_class_layout: s_refl.SchemaClassLayout
+    _dbindex: Optional[dbview.DatabaseIndex] = None
+
+    def __init__(
+        self,
+        *,
+        loop: asyncio.AbstractEventLoop,
+        **kwargs: Any,
+    ) -> None:
         self._loop = loop
-        self._init_args = self._init(kwargs)
+        self._init(kwargs)
 
     def _init(self, kwargs: dict[str, Any]) -> None:
         self._backend_runtime_params = kwargs["backend_runtime_params"]
@@ -186,13 +275,27 @@ class AbstractPool:
         self._schema_class_layout = kwargs["schema_class_layout"]
         self._dbindex = kwargs.get("dbindex")
 
-    def _get_init_args(self):
+    def _get_init_args(self) -> tuple[InitArgs_T, InitArgsPickle_T]:
         assert self._dbindex is not None
-        return self._make_init_args(*self._dbindex.get_cached_compiler_args())
+        return self._make_cached_init_args(
+            *self._dbindex.get_cached_compiler_args()
+        )
 
-    @lru.lru_method_cache(1)
-    def _make_init_args(self, dbs, global_schema_pickle, system_config):
-        init_args = (
+    def _make_cached_init_args(
+        self,
+        dbs: immutables.Map[str, state.PickledDatabaseState],
+        global_schema_pickle: bytes,
+        system_config: Config,
+    ) -> tuple[InitArgs_T, InitArgsPickle_T]:
+        raise NotImplementedError
+
+    def _make_init_args(
+        self,
+        dbs: immutables.Map[str, state.PickledDatabaseState],
+        global_schema_pickle: bytes,
+        system_config: Config,
+    ) -> InitArgs:
+        return (
             dbs,
             self._backend_runtime_params,
             self._std_schema,
@@ -201,39 +304,37 @@ class AbstractPool:
             global_schema_pickle,
             system_config,
         )
-        pickled_args = pickle.dumps(init_args, -1)
-        return init_args, pickled_args
 
-    async def start(self):
+    async def start(self) -> None:
         raise NotImplementedError
 
-    async def stop(self):
+    async def stop(self) -> None:
         raise NotImplementedError
 
-    def get_template_pid(self):
+    def get_template_pid(self) -> Optional[int]:
         return None
 
     async def _compute_compile_preargs(
         self,
         method_name: str,
-        worker: BaseWorker,
-        dbname,
-        user_schema_pickle,
-        global_schema_pickle,
-        reflection_cache,
-        database_config,
-        system_config,
-    ):
+        worker: BaseWorker_T,
+        dbname: str,
+        user_schema_pickle: bytes,
+        global_schema_pickle: bytes,
+        reflection_cache: state.ReflectionCache,
+        database_config: Config,
+        system_config: Config,
+    ) -> tuple[PreArgs, Optional[SyncStateCallback]]:
 
         def sync_worker_state_cb(
             *,
-            worker: BaseWorker,
-            dbname,
-            user_schema_pickle=None,
-            global_schema_pickle=None,
-            reflection_cache=None,
-            database_config=None,
-            system_config=None,
+            worker: BaseWorker_T,
+            dbname: str,
+            user_schema_pickle: Optional[bytes] = None,
+            global_schema_pickle: Optional[bytes] = None,
+            reflection_cache: Optional[state.ReflectionCache] = None,
+            database_config: Optional[Config] = None,
+            system_config: Optional[Config] = None,
         ):
             worker_db = worker._dbs.get(dbname)
             if worker_db is None:
@@ -282,8 +383,8 @@ class AbstractPool:
                     worker._system_config = system_config
 
         worker_db = worker._dbs.get(dbname)
-        preargs = [method_name, dbname]
-        to_update = {}
+        preargs: list[Any] = [method_name, dbname]
+        to_update: dict[str, Any] = {}
 
         if worker_db is None:
             preargs.extend([
@@ -344,24 +445,33 @@ class AbstractPool:
         return tuple(preargs), callback
 
     async def _acquire_worker(
-        self, *, condition=None, weighter=None, **compiler_args
-    ):
+        self,
+        *,
+        condition: Optional[queue.AcquireCondition[BaseWorker_T]] = None,
+        weighter: Optional[queue.Weighter[BaseWorker_T]] = None,
+        **compiler_args: Any,
+    ) -> BaseWorker_T:
         raise NotImplementedError
 
-    def _release_worker(self, worker, *, put_in_front: bool = True):
+    def _release_worker(
+        self,
+        worker: BaseWorker_T,
+        *,
+        put_in_front: bool = True,
+    ) -> None:
         raise NotImplementedError
 
     async def compile(
         self,
-        dbname,
-        user_schema_pickle,
-        global_schema_pickle,
-        reflection_cache,
-        database_config,
-        system_config,
-        *compile_args,
-        **compiler_args,
-    ):
+        dbname: str,
+        user_schema_pickle: bytes,
+        global_schema_pickle: bytes,
+        reflection_cache: state.ReflectionCache,
+        database_config: Config,
+        system_config: Config,
+        *compile_args: Any,
+        **compiler_args: Any,
+    ) -> tuple[dbstate.QueryUnitGroup, bytes, int]:
         worker = await self._acquire_worker(**compiler_args)
         try:
             preargs, sync_state = await self._compute_compile_preargs(
@@ -391,14 +501,14 @@ class AbstractPool:
 
     async def compile_in_tx(
         self,
-        dbname,
-        user_schema_pickle,
-        txid,
-        pickled_state,
-        state_id,
-        *compile_args,
-        **compiler_args,
-    ):
+        dbname: str,
+        user_schema_pickle: bytes,
+        txid: int,
+        pickled_state: bytes,
+        state_id: int,
+        *compile_args: Any,
+        **compiler_args: Any,
+    ) -> tuple[dbstate.QueryUnitGroup, bytes, int]:
         # When we compile a query, the compiler returns a tuple:
         # a QueryUnit and the state the compiler is in if it's in a
         # transaction.  The state contains the information about all savepoints
@@ -425,27 +535,29 @@ class AbstractPool:
             compiler_args=compiler_args,
         )
 
+        dbname_arg = None
+        user_schema_pickle_arg = None
         if worker._last_pickled_state is pickled_state:
             # Since we know that this particular worker already has the
             # state, we don't want to waste resources transferring the
             # state over the network. So we replace the state with a marker,
             # that the compiler process will recognize.
             pickled_state = state.REUSE_LAST_STATE_MARKER
-            dbname = user_schema_pickle = None
         else:
             worker_db = worker._dbs.get(dbname)
-            if worker_db is None:
-                dbname = None
-            elif worker_db.user_schema_pickle is user_schema_pickle:
-                user_schema_pickle = None
+            if (
+                worker_db is not None
+                and worker_db.user_schema_pickle is user_schema_pickle
+            ):
+                dbname_arg = dbname
             else:
-                dbname = None
+                user_schema_pickle_arg = user_schema_pickle
 
         try:
             units, new_pickled_state = await worker.call(
                 'compile_in_tx',
-                dbname,
-                user_schema_pickle,
+                dbname_arg,
+                user_schema_pickle_arg,
                 pickled_state,
                 txid,
                 *compile_args
@@ -462,15 +574,20 @@ class AbstractPool:
 
     async def compile_notebook(
         self,
-        dbname,
-        user_schema_pickle,
-        global_schema_pickle,
-        reflection_cache,
-        database_config,
-        system_config,
-        *compile_args,
-        **compiler_args,
-    ):
+        dbname: str,
+        user_schema_pickle: bytes,
+        global_schema_pickle: bytes,
+        reflection_cache: state.ReflectionCache,
+        database_config: Config,
+        system_config: Config,
+        *compile_args: Any,
+        **compiler_args: Any,
+    ) -> list[
+        tuple[
+            bool,
+            dbstate.QueryUnit | tuple[str, str, dict[int, str]]
+        ]
+    ]:
         worker = await self._acquire_worker(**compiler_args)
         try:
             preargs, sync_state = await self._compute_compile_preargs(
@@ -495,15 +612,15 @@ class AbstractPool:
 
     async def compile_graphql(
         self,
-        dbname,
-        user_schema_pickle,
-        global_schema_pickle,
-        reflection_cache,
-        database_config,
-        system_config,
-        *compile_args,
-        **compiler_args,
-    ):
+        dbname: str,
+        user_schema_pickle: bytes,
+        global_schema_pickle: bytes,
+        reflection_cache: state.ReflectionCache,
+        database_config: Config,
+        system_config: Config,
+        *compile_args: Any,
+        **compiler_args: Any,
+    ) -> graphql.TranspiledOperation:
         worker = await self._acquire_worker(**compiler_args)
         try:
             preargs, sync_state = await self._compute_compile_preargs(
@@ -528,15 +645,15 @@ class AbstractPool:
 
     async def compile_sql(
         self,
-        dbname,
-        user_schema_pickle,
-        global_schema_pickle,
-        reflection_cache,
-        database_config,
-        system_config,
-        *compile_args,
-        **compiler_args,
-    ):
+        dbname: str,
+        user_schema_pickle: bytes,
+        global_schema_pickle: bytes,
+        reflection_cache: state.ReflectionCache,
+        database_config: Config,
+        system_config: Config,
+        *compile_args: Any,
+        **compiler_args: Any,
+    ) -> list[dbstate.SQLQueryUnit]:
         worker = await self._acquire_worker(**compiler_args)
         try:
             preargs, sync_state = await self._compute_compile_preargs(
@@ -560,7 +677,7 @@ class AbstractPool:
 
     # We use a helper function instead of just fully generating the
     # functions in order to make the backtraces a little better.
-    async def _simple_call(self, name, *args, **kwargs):
+    async def _simple_call(self, name: str, *args: Any, **kwargs: Any) -> Any:
         worker = await self._acquire_worker()
         try:
             return await worker.call(
@@ -572,47 +689,132 @@ class AbstractPool:
         finally:
             self._release_worker(worker)
 
-    async def interpret_backend_error(self, *args, **kwargs):
+    async def interpret_backend_error(
+        self,
+        user_schema: bytes,
+        global_schema: bytes,
+        error_fields: dict[str, str],
+        from_graphql: bool,
+    ) -> errors.EdgeDBError:
         return await self._simple_call(
-            'interpret_backend_error', *args, **kwargs)
+            'interpret_backend_error',
+            user_schema,
+            global_schema,
+            error_fields,
+            from_graphql,
+        )
 
-    async def parse_global_schema(self, *args, **kwargs):
+    async def parse_global_schema(self, global_schema_json: bytes) -> bytes:
         return await self._simple_call(
-            'parse_global_schema', *args, **kwargs)
+            'parse_global_schema', global_schema_json
+        )
 
-    async def parse_user_schema_db_config(self, *args, **kwargs):
+    async def parse_user_schema_db_config(
+        self,
+        user_schema_json: bytes,
+        db_config_json: bytes,
+        global_schema_pickle: bytes,
+    ) -> dbstate.ParsedDatabase:
         return await self._simple_call(
-            'parse_user_schema_db_config', *args, **kwargs)
+            'parse_user_schema_db_config',
+            user_schema_json,
+            db_config_json,
+            global_schema_pickle,
+        )
 
-    async def make_state_serializer(self, *args, **kwargs):
+    async def make_state_serializer(
+        self,
+        protocol_version: defines.ProtocolVersion,
+        user_schema_pickle: bytes,
+        global_schema_pickle: bytes,
+    ) -> sertypes.StateSerializer:
         return await self._simple_call(
-            'make_state_serializer', *args, **kwargs)
+            'make_state_serializer',
+            protocol_version,
+            user_schema_pickle,
+            global_schema_pickle,
+        )
 
-    async def make_compilation_config_serializer(self, *args, **kwargs):
+    async def make_compilation_config_serializer(
+        self
+    ) -> sertypes.CompilationConfigSerializer:
+        return await self._simple_call('make_compilation_config_serializer')
+
+    async def describe_database_dump(
+        self,
+        user_schema_json: bytes,
+        global_schema_json: bytes,
+        db_config_json: bytes,
+        protocol_version: defines.ProtocolVersion,
+        with_secrets: bool,
+    ) -> compiler.DumpDescriptor:
         return await self._simple_call(
-            'make_compilation_config_serializer', *args, **kwargs)
+            'describe_database_dump',
+            user_schema_json,
+            global_schema_json,
+            db_config_json,
+            protocol_version,
+            with_secrets,
+        )
 
-    async def describe_database_dump(self, *args, **kwargs):
+    async def describe_database_restore(
+        self,
+        user_schema_pickle: bytes,
+        global_schema_pickle: bytes,
+        dump_server_ver_str: str,
+        dump_catalog_version: Optional[int],
+        schema_ddl: bytes,
+        schema_ids: list[tuple[str, str, bytes]],
+        blocks: list[tuple[bytes, bytes]],  # type_id, typespec
+        protocol_version: defines.ProtocolVersion,
+    ) -> compiler.RestoreDescriptor:
         return await self._simple_call(
-            'describe_database_dump', *args, **kwargs)
+            'describe_database_restore',
+            user_schema_pickle,
+            global_schema_pickle,
+            dump_server_ver_str,
+            dump_catalog_version,
+            schema_ddl,
+            schema_ids,
+            blocks,
+            protocol_version,
+        )
 
-    async def describe_database_restore(self, *args, **kwargs):
+    async def analyze_explain_output(
+        self,
+        query_asts_pickled: bytes,
+        data: list[list[bytes]],
+    ) -> bytes:
         return await self._simple_call(
-            'describe_database_restore', *args, **kwargs)
+            'analyze_explain_output', query_asts_pickled, data
+        )
 
-    async def analyze_explain_output(self, *args, **kwargs):
+    async def validate_schema_equivalence(
+        self,
+        schema_a: bytes,
+        schema_b: bytes,
+        global_schema: bytes,
+        conn_state_pickle: Optional[bytes],
+    ) -> None:
         return await self._simple_call(
-            'analyze_explain_output', *args, **kwargs)
+            'validate_schema_equivalence',
+            schema_a,
+            schema_b,
+            global_schema,
+            conn_state_pickle,
+        )
 
-    async def validate_schema_equivalence(self, *args, **kwargs):
+    async def compile_structured_config(
+        self,
+        objects: Mapping[str, config_compiler.ConfigObject],
+        source: str | None = None,
+        allow_nested: bool = False,
+    ) -> dict[str, Config]:
         return await self._simple_call(
-            'validate_schema_equivalence', *args, **kwargs)
+            'compile_structured_config', objects, source, allow_nested
+        )
 
-    async def compile_structured_config(self, *args, **kwargs):
-        return await self._simple_call(
-            'compile_structured_config', *args, **kwargs)
-
-    def get_debug_info(self):
+    def get_debug_info(self) -> dict[str, Any]:
         return {}
 
     def get_size_hint(self) -> int:
@@ -620,26 +822,35 @@ class AbstractPool:
 
 
 class BaseLocalPool(
-    AbstractPool, amsg.ServerProtocol, asyncio.SubprocessProtocol
+    AbstractPool[Worker_T, InitArgs_T, bytes],
+    Generic[Worker_T, InitArgs_T],
+    amsg.ServerProtocol,
+    asyncio.SubprocessProtocol,
 ):
 
-    _worker_class = Worker
-    _worker_mod = "worker"
-    _workers_queue: queue.WorkerQueue[Worker]
-    _workers: dict[int, Worker]
+    _worker_class: type[Worker_T]
+    _worker_mod: str = "worker"
+    _workers_queue: queue.WorkerQueue[Worker_T]
+    _workers: dict[int, Worker_T]
+
+    _poolsock_name: str
+    _pool_size: int
+    _server: Optional[amsg.Server]
+    _ready_evt: asyncio.Event
+    _running: Optional[bool]
+    _stats_spawned: int
+    _stats_killed: int
 
     def __init__(
         self,
         *,
-        runstate_dir,
-        pool_size,
-        **kwargs,
-    ):
+        runstate_dir: str,
+        pool_size: int,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
 
-        self._runstate_dir = runstate_dir
-
-        self._poolsock_name = os.path.join(self._runstate_dir, 'ipc')
+        self._poolsock_name = os.path.join(runstate_dir, 'ipc')
         assert len(self._poolsock_name) <= (
             defines.MAX_RUNSTATE_DIR_PATH
             + defines.MAX_UNIX_SOCKET_PATH_LENGTH
@@ -658,12 +869,13 @@ class BaseLocalPool(
         self._stats_spawned = 0
         self._stats_killed = 0
 
-    def is_running(self):
+    def is_running(self) -> bool:
         return bool(self._running)
 
-    async def _attach_worker(self, pid: int):
+    async def _attach_worker(self, pid: int) -> Optional[Worker_T]:
         if not self._running:
-            return
+            return None
+        assert self._server is not None
         logger.debug("Sending init args to worker with PID %s.", pid)
         init_args, init_args_pickled = self._get_init_args()
         worker = self._worker_class(  # type: ignore
@@ -692,24 +904,25 @@ class BaseLocalPool(
 
         return worker
 
-    def _worker_attached(self):
+    def _worker_attached(self) -> None:
         pass
 
-    def worker_connected(self, pid, version):
+    def worker_connected(self, pid: int, version: int) -> None:
         logger.debug("Worker with PID %s connected.", pid)
         self._loop.create_task(self._attach_worker(pid))
         metrics.compiler_process_spawns.inc()
         metrics.current_compiler_processes.inc()
 
-    def worker_disconnected(self, pid):
+    def worker_disconnected(self, pid: int) -> None:
         logger.debug("Worker with PID %s disconnected.", pid)
         self._workers.pop(pid, None)
         metrics.current_compiler_processes.dec()
 
-    async def start(self):
+    async def start(self) -> None:
         if self._running is not None:
             raise RuntimeError(
                 'the compiler pool has already been started once')
+        assert self._server is not None
 
         self._workers_queue = queue.WorkerQueue(self._loop)
 
@@ -720,13 +933,15 @@ class BaseLocalPool(
 
         await self._wait_ready()
 
-    async def _wait_ready(self):
+    async def _wait_ready(self) -> None:
         await asyncio.wait_for(
             self._ready_evt.wait(),
             PROCESS_INITIAL_RESPONSE_TIMEOUT
         )
 
-    async def _create_compiler_process(self, numproc=None, version=0):
+    async def _create_compiler_process(
+        self, numproc: Optional[int] = None, version: int = 0
+    ) -> asyncio.SubprocessTransport:
         # Create a new compiler process. When numproc is None, a single
         # standalone compiler worker process is started; if numproc is an int,
         # a compiler template process will be created, which will then fork
@@ -760,14 +975,15 @@ class BaseLocalPool(
         )
         return transport
 
-    async def _start(self):
+    async def _start(self) -> None:
         raise NotImplementedError
 
-    async def stop(self):
+    async def stop(self) -> None:
         if not self._running:
             return
         self._running = False
 
+        assert self._server is not None
         await self._server.stop()
         self._server = None
 
@@ -776,10 +992,12 @@ class BaseLocalPool(
 
         await self._stop()
 
-    async def _stop(self):
+    async def _stop(self) -> None:
         raise NotImplementedError
 
-    def _report_worker(self, worker: Worker, *, action: str = "spawn"):
+    def _report_worker(
+        self, worker: Worker_T, *, action: str = "spawn"
+    ) -> None:
         action = action.capitalize()
         if not action.endswith("e"):
             action += "e"
@@ -795,8 +1013,12 @@ class BaseLocalPool(
         )
 
     async def _acquire_worker(
-        self, *, condition=None, weighter=None, **compiler_args
-    ):
+        self,
+        *,
+        condition: Optional[queue.AcquireCondition[Worker_T]] = None,
+        weighter: Optional[queue.Weighter[Worker_T]] = None,
+        **compiler_args: Any,
+    ) -> Worker_T:
         while (
             worker := await self._workers_queue.acquire(
                 condition=condition, weighter=weighter
@@ -806,31 +1028,49 @@ class BaseLocalPool(
             pass
         return worker
 
-    def _release_worker(self, worker, *, put_in_front: bool = True):
+    def _release_worker(
+        self,
+        worker: Worker_T,
+        *,
+        put_in_front: bool = True,
+    ) -> None:
         # Skip disconnected workers
         if worker.get_pid() in self._workers:
             self._workers_queue.release(worker, put_in_front=put_in_front)
 
-    def get_debug_info(self):
+    def get_debug_info(self) -> dict[str, Any]:
         return dict(
             worker_pids=list(self._workers.keys()),
             template_pid=self.get_template_pid(),
         )
 
 
-@srvargs.CompilerPoolMode.Fixed.assign_implementation
-class FixedPool(BaseLocalPool):
-    def __init__(self, **kwargs):
+class FixedPoolImpl(
+    BaseLocalPool[Worker_T, InitArgs_T],
+    Generic[Worker_T, InitArgs_T],
+):
+
+    _template_transport: Optional[asyncio.SubprocessTransport]
+    _template_proc_scheduled: bool
+    _template_proc_version: int
+
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._template_transport = None
         self._template_proc_scheduled = False
         self._template_proc_version = 0
 
-    def _worker_attached(self):
+    def _worker_attached(self) -> None:
+        if not self._running:
+            return
+        assert self._server is not None
         if len(self._workers) > self._pool_size:
             self._server.kill_outdated_worker(self._template_proc_version)
 
-    def worker_connected(self, pid, version):
+    def worker_connected(self, pid: int, version: int) -> None:
+        if not self._running:
+            return
+        assert self._server is not None
         if version < self._template_proc_version:
             logger.debug(
                 "Outdated worker with PID %s connected; discard now.", pid
@@ -840,23 +1080,23 @@ class FixedPool(BaseLocalPool):
         else:
             super().worker_connected(pid, version)
 
-    def process_exited(self):
+    def process_exited(self) -> None:
         # Template process exited
         self._template_transport = None
         if self._running:
             logger.error("Template compiler process exited; recreating now.")
             self._schedule_template_proc(0)
 
-    def get_template_pid(self):
+    def get_template_pid(self) -> Optional[int]:
         if self._template_transport is None:
             return None
         else:
             return self._template_transport.get_pid()
 
-    async def _start(self):
+    async def _start(self) -> None:
         await self._create_template_proc(retry=False)
 
-    async def _create_template_proc(self, retry=True):
+    async def _create_template_proc(self, retry: bool = True) -> None:
         self._template_proc_scheduled = False
         if not self._running:
             return
@@ -881,7 +1121,7 @@ class FixedPool(BaseLocalPool):
             else:
                 raise
 
-    def _schedule_template_proc(self, sleep):
+    def _schedule_template_proc(self, sleep: float) -> None:
         if self._template_proc_scheduled:
             return
         self._template_proc_scheduled = True
@@ -889,20 +1129,47 @@ class FixedPool(BaseLocalPool):
             sleep, self._loop.create_task, self._create_template_proc()
         )
 
-    async def _stop(self):
+    async def _stop(self) -> None:
         trans, self._template_transport = self._template_transport, None
         if trans is not None:
             trans.terminate()
-            await trans._wait()
+            await trans._wait()  # type: ignore
             trans.close()
 
     def get_size_hint(self) -> int:
         return self._pool_size
 
 
+@srvargs.CompilerPoolMode.Fixed.assign_implementation
+class FixedPool(FixedPoolImpl[Worker, InitArgs]):
+
+    _worker_class = Worker
+
+    @lru.lru_method_cache(1)
+    def _make_cached_init_args(
+        self,
+        dbs: immutables.Map[str, state.PickledDatabaseState],
+        global_schema_pickle: bytes,
+        system_config: Config,
+    ) -> tuple[InitArgs, bytes]:
+        init_args = self._make_init_args(
+            dbs, global_schema_pickle, system_config
+        )
+        pickled_args = pickle.dumps(init_args, -1)
+        return init_args, pickled_args
+
+
 @srvargs.CompilerPoolMode.OnDemand.assign_implementation
-class SimpleAdaptivePool(BaseLocalPool):
-    def __init__(self, *, pool_size, **kwargs):
+class SimpleAdaptivePool(BaseLocalPool[Worker, InitArgs]):
+
+    _worker_class = Worker
+    _worker_transports: dict[int, asyncio.SubprocessTransport]
+    _expected_num_workers: int
+    _scale_down_handle: Optional[asyncio.Handle]
+    _max_num_workers: int
+    _cleanups: dict[int, asyncio.Future]
+
+    def __init__(self, *, pool_size: int, **kwargs: Any) -> None:
         super().__init__(pool_size=1, **kwargs)
         self._worker_transports = {}
         self._expected_num_workers = 0
@@ -910,23 +1177,40 @@ class SimpleAdaptivePool(BaseLocalPool):
         self._max_num_workers = pool_size
         self._cleanups = {}
 
-    async def _start(self):
+    @lru.lru_method_cache(1)
+    def _make_cached_init_args(
+        self,
+        dbs: immutables.Map[str, state.PickledDatabaseState],
+        global_schema_pickle: bytes,
+        system_config: Config,
+    ) -> tuple[InitArgs, bytes]:
+        init_args = self._make_init_args(
+            dbs, global_schema_pickle, system_config
+        )
+        pickled_args = pickle.dumps(init_args, -1)
+        return init_args, pickled_args
+
+    async def _start(self) -> None:
         async with asyncio.TaskGroup() as g:
             for _i in range(self._pool_size):
                 g.create_task(self._create_worker())
 
-    async def _stop(self):
+    async def _stop(self) -> None:
         self._expected_num_workers = 0
         transports, self._worker_transports = self._worker_transports, {}
         for transport in transports.values():
-            await transport._wait()
+            await transport._wait()  # type: ignore
             transport.close()
         for cleanup in list(self._cleanups.values()):
             await cleanup
 
     async def _acquire_worker(
-        self, *, condition=None, weighter=None, **compiler_args
-    ):
+        self,
+        *,
+        condition: Optional[queue.AcquireCondition[Worker]] = None,
+        weighter: Optional[queue.Weighter[Worker]] = None,
+        **compiler_args: Any,
+    ) -> Worker:
         scale_up_handle = None
         if (
             self._running
@@ -951,7 +1235,12 @@ class SimpleAdaptivePool(BaseLocalPool):
             if scale_up_handle is not None:
                 scale_up_handle.cancel()
 
-    def _release_worker(self, worker, *, put_in_front: bool = True):
+    def _release_worker(
+        self,
+        worker: Worker,
+        *,
+        put_in_front: bool = True,
+    ) -> None:
         if self._scale_down_handle is not None:
             self._scale_down_handle.cancel()
             self._scale_down_handle = None
@@ -966,11 +1255,15 @@ class SimpleAdaptivePool(BaseLocalPool):
                 self._scale_down,
             )
 
-    async def _wait_on_dying(self, pid, trans):
-        await trans._wait()
+    async def _wait_on_dying(
+        self,
+        pid: int,
+        trans: asyncio.SubprocessTransport,
+    ) -> None:
+        await trans._wait()  # type: ignore
         self._cleanups.pop(pid)
 
-    def worker_disconnected(self, pid):
+    def worker_disconnected(self, pid: int) -> None:
         num_workers_before = len(self._workers)
         super().worker_disconnected(pid)
         trans = self._worker_transports.pop(pid, None)
@@ -998,19 +1291,19 @@ class SimpleAdaptivePool(BaseLocalPool):
             # start a new one again if necessary.
             self._expected_num_workers = len(self._workers)
 
-    def process_exited(self):
+    def process_exited(self) -> None:
         if self._running:
             for pid, transport in list(self._worker_transports.items()):
                 if transport.is_closing():
                     self._worker_transports.pop(pid, None)
 
-    async def _create_worker(self):
+    async def _create_worker(self) -> None:
         # Creates a single compiler worker process.
         transport = await self._create_compiler_process()
         self._worker_transports[transport.get_pid()] = transport
         self._expected_num_workers += 1
 
-    def _maybe_scale_up(self):
+    def _maybe_scale_up(self) -> None:
         if not self._running:
             return
         logger.info(
@@ -1020,7 +1313,7 @@ class SimpleAdaptivePool(BaseLocalPool):
         )
         self._loop.create_task(self._create_worker())
 
-    def _scale_down(self):
+    def _scale_down(self) -> None:
         self._scale_down_handle = None
         if not self._running or len(self._workers) <= self._pool_size:
             return
@@ -1039,26 +1332,52 @@ class SimpleAdaptivePool(BaseLocalPool):
 
 
 class RemoteWorker(BaseWorker):
-    def __init__(self, con, secret, *args):
+    _con: amsg.HubConnection
+    _secret: bytes
+
+    def __init__(
+        self,
+        con: amsg.HubConnection,
+        secret: bytes,
+        *args: Any,
+    ) -> None:
         super().__init__(*args)
         self._con = con
         self._secret = secret
 
-    def close(self):
+    def close(self) -> None:
         if self._closed:
             return
         self._closed = True
         self._con.abort()
 
-    async def _request(self, method_name, args):
+    async def _request(
+        self,
+        method_name: str,
+        args: tuple[Any, ...],
+    ) -> memoryview:
         msg = pickle.dumps((method_name, args))
         digest = hmac.digest(self._secret, msg, "sha256")
         return await self._con.request(digest + msg)
 
 
 @srvargs.CompilerPoolMode.Remote.assign_implementation
-class RemotePool(AbstractPool):
-    def __init__(self, *, address, pool_size, **kwargs):
+class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
+
+    _pool_addr: tuple[str, int]
+    _worker: Optional[asyncio.Future[RemoteWorker]]
+    _sync_lock: asyncio.Lock
+    _semaphore: asyncio.BoundedSemaphore
+    _pool_size: int
+    _secret: bytes
+
+    def __init__(
+        self,
+        *,
+        address: tuple[str, int],
+        pool_size: int,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         self._pool_addr = address
         self._worker = None
@@ -1073,16 +1392,17 @@ class RemotePool(AbstractPool):
             )
         self._secret = secret.encode()
 
-    async def start(self, retry=False):
+    async def start(self, *, retry: bool = False) -> None:
         if self._worker is None:
             self._worker = self._loop.create_future()
         try:
+            def on_pid(*args: Any) -> None:
+                self._loop.create_task(self._connection_made(retry, *args))
+
             await self._loop.create_connection(
                 lambda: amsg.HubProtocol(
                     loop=self._loop,
-                    on_pid=lambda *args: self._loop.create_task(
-                        self._connection_made(retry, *args)
-                    ),
+                    on_pid=on_pid,
                     on_connection_lost=self._connection_lost,
                 ),
                 *self._pool_addr,
@@ -1098,20 +1418,21 @@ class RemotePool(AbstractPool):
             if not retry:
                 await self._worker
 
-    async def stop(self):
+    async def stop(self) -> None:
         if self._worker is not None:
             worker, self._worker = self._worker, None
             if worker.done():
                 (await worker).close()
 
     @lru.lru_method_cache(1)
-    def _make_init_args(self, dbs, global_schema_pickle, system_config):
-        init_args = (
+    def _make_cached_init_args(
+        self,
+        dbs: immutables.Map[str, state.PickledDatabaseState],
+        global_schema_pickle: bytes,
+        system_config: Config,
+    ) -> tuple[InitArgs, RemoteInitArgsPickle]:
+        init_args = self._make_init_args(
             dbs,
-            self._backend_runtime_params,
-            self._std_schema,
-            self._refl_schema,
-            self._schema_class_layout,
             global_schema_pickle,
             system_config,
         )
@@ -1126,7 +1447,14 @@ class RemotePool(AbstractPool):
             pickle.dumps(system_config, -1),
         )
 
-    async def _connection_made(self, retry, protocol, transport, _pid, version):
+    async def _connection_made(
+        self,
+        retry: bool,
+        protocol: amsg.HubProtocol,
+        transport: asyncio.Transport,
+        _pid: int,
+        version: int,
+    ) -> None:
         if self._worker is None:
             return
         try:
@@ -1158,32 +1486,36 @@ class RemotePool(AbstractPool):
             if self._worker is not None:
                 self._worker.set_result(worker)
 
-    def _connection_lost(self, _pid):
+    def _connection_lost(self, _pid: Optional[int]) -> None:
         if self._worker is not None:
             self._worker = self._loop.create_future()
             self._loop.create_task(self.start(retry=True))
 
-    async def _acquire_worker(
-        self, *, condition=None, cmp=None, **compiler_args
-    ):
+    async def _acquire_worker(self, **compiler_args: Any) -> RemoteWorker:
         await self._semaphore.acquire()
+        assert self._worker is not None
         return await self._worker
 
-    def _release_worker(self, worker, *, put_in_front: bool = True):
+    def _release_worker(
+        self,
+        worker: RemoteWorker,
+        *,
+        put_in_front: bool = True,
+    ) -> None:
         if self._sync_lock.locked():
             self._sync_lock.release()
         self._semaphore.release()
 
     async def compile_in_tx(
         self,
-        dbname,
-        user_schema_pickle,
-        txid,
-        pickled_state,
-        state_id,
-        *compile_args,
-        **compiler_args,
-    ):
+        dbname: str,
+        user_schema_pickle: bytes,
+        txid: int,
+        pickled_state: bytes,
+        state_id: int,
+        *compile_args: Any,
+        **compiler_args: Any,
+    ) -> tuple[dbstate.QueryUnitGroup, bytes, int]:
         worker = await self._acquire_worker()
         try:
             return await worker.call(
@@ -1210,7 +1542,9 @@ class RemotePool(AbstractPool):
         finally:
             self._release_worker(worker)
 
-    async def _compute_compile_preargs(self, *args):
+    async def _compute_compile_preargs(
+        self, *args: Any
+    ) -> tuple[PreArgs, Optional[SyncStateCallback]]:
         preargs, callback = await super()._compute_compile_preargs(*args)
         if callback:
             del preargs, callback
@@ -1220,7 +1554,7 @@ class RemotePool(AbstractPool):
                 self._sync_lock.release()
         return preargs, callback
 
-    def get_debug_info(self):
+    def get_debug_info(self) -> dict[str, Any]:
         return dict(
             address="{}:{}".format(*self._pool_addr),
             size=self._semaphore._bound_value,  # type: ignore
@@ -1236,38 +1570,39 @@ class TenantSchema:
     client_id: int
     dbs: immutables.Map[str, state.PickledDatabaseState]
     global_schema_pickle: bytes
-    system_config: Any
+    system_config: Config
 
 
 class PickledState(NamedTuple):
-    user_schema: bytes | None
-    reflection_cache: bytes | None
-    database_config: bytes | None
+    user_schema: Optional[bytes]
+    reflection_cache: Optional[bytes]
+    database_config: Optional[bytes]
 
 
 class PickledSchema(NamedTuple):
-    dbs: immutables.Map[str, PickledState] | None = None
-    global_schema: bytes | None = None
-    instance_config: bytes | None = None
+    dbs: Optional[immutables.Map[str, PickledState]] = None
+    global_schema: Optional[bytes] = None
+    instance_config: Optional[bytes] = None
     dropped_dbs: tuple = ()
 
 
 class MultiTenantWorker(Worker):
-    current_client_id: int | None
+    _manager: MultiTenantPool
+    current_client_id: Optional[int]
     _cache: collections.OrderedDict[int, TenantSchema]
     _invalidated_clients: list[int]
     _last_used_by_client: dict[int, float]
 
     def __init__(
         self,
-        manager,
-        server,
-        pid,
-        backend_runtime_params,
-        std_schema,
-        refl_schema,
-        schema_class_layout,
-    ):
+        manager: MultiTenantPool,
+        server: amsg.Server,
+        pid: int,
+        backend_runtime_params: pgparams.BackendRuntimeParams,
+        std_schema: s_schema.FlatSchema,
+        refl_schema: s_schema.FlatSchema,
+        schema_class_layout: s_refl.SchemaClassLayout,
+    ) -> None:
         super().__init__(
             manager,
             server,
@@ -1285,7 +1620,7 @@ class MultiTenantWorker(Worker):
         self._invalidated_clients = []
         self._last_used_by_client = {}
 
-    def get_tenant_schema(self, client_id: int) -> TenantSchema | None:
+    def get_tenant_schema(self, client_id: int) -> Optional[TenantSchema]:
         return self._cache.get(client_id)
 
     def set_tenant_schema(
@@ -1321,12 +1656,11 @@ class MultiTenantWorker(Worker):
 
 
 @srvargs.CompilerPoolMode.MultiTenant.assign_implementation
-class MultiTenantPool(FixedPool):
-    _worker_class = MultiTenantWorker  # type: ignore
+class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
+    _worker_class = MultiTenantWorker
     _worker_mod = "multitenant_worker"
-    _workers: dict[int, MultiTenantWorker]  # type: ignore
 
-    def __init__(self, *, cache_size, **kwargs):
+    def __init__(self, *, cache_size: int, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._cache_size = cache_size
 
@@ -1334,12 +1668,12 @@ class MultiTenantPool(FixedPool):
     def cache_size(self) -> int:
         return self._cache_size
 
-    def drop_tenant(self, client_id: int):
+    def drop_tenant(self, client_id: int) -> None:
         for worker in self._workers.values():
             worker.invalidate(client_id)
 
     @lru.method_cache
-    def _get_init_args(self):
+    def _get_init_args(self) -> tuple[MultiTenantInitArgs, bytes]:
         init_args = (
             self._backend_runtime_params,
             self._std_schema,
@@ -1348,7 +1682,11 @@ class MultiTenantPool(FixedPool):
         )
         return init_args, pickle.dumps(init_args, -1)
 
-    def _weighter(self, client_id: int, worker: MultiTenantWorker):
+    def _weighter(
+        self,
+        client_id: int,
+        worker: MultiTenantWorker,
+    ) -> queue.Comparable:
         tenant_schema = worker.get_tenant_schema(client_id)
         return (
             bool(tenant_schema),
@@ -1358,8 +1696,12 @@ class MultiTenantPool(FixedPool):
         )
 
     async def _acquire_worker(
-        self, *, condition=None, weighter=None, **compiler_args
-    ):
+        self,
+        *,
+        condition: Optional[queue.AcquireCondition[MultiTenantWorker]] = None,
+        weighter: Optional[queue.Weighter[MultiTenantWorker]] = None,
+        **compiler_args: Any
+    ) -> MultiTenantWorker:
         client_id = compiler_args.get("client_id")
         if weighter is None and client_id is not None:
             weighter = functools.partial(self._weighter, client_id)
@@ -1369,34 +1711,39 @@ class MultiTenantPool(FixedPool):
         rv.current_client_id = client_id
         return rv
 
-    def _release_worker(self, worker, *, put_in_front: bool = True):
+    def _release_worker(
+        self,
+        worker: MultiTenantWorker,
+        *,
+        put_in_front: bool = True,
+    ) -> None:
         worker.current_client_id = None
         super()._release_worker(worker, put_in_front=put_in_front)
 
     async def _compute_compile_preargs(
         self,
         method_name: str,
-        worker: BaseWorker,
-        dbname,
-        user_schema_pickle,
-        global_schema_pickle,
-        reflection_cache,
-        database_config,
-        system_config,
-    ):
+        worker: MultiTenantWorker,
+        dbname: str,
+        user_schema_pickle: bytes,
+        global_schema_pickle: bytes,
+        reflection_cache: state.ReflectionCache,
+        database_config: Config,
+        system_config: Config,
+    ) -> tuple[PreArgs, Optional[SyncStateCallback]]:
         assert isinstance(worker, MultiTenantWorker)
 
         def sync_worker_state_cb(
             *,
             worker: MultiTenantWorker,
-            client_id,
-            dbname,
-            user_schema_pickle=None,
-            global_schema_pickle=None,
-            reflection_cache=None,
-            database_config=None,
-            instance_config=None,
-        ):
+            client_id: int,
+            dbname: str,
+            user_schema_pickle: Optional[bytes] = None,
+            global_schema_pickle: Optional[bytes] = None,
+            reflection_cache: Optional[state.ReflectionCache] = None,
+            database_config: Optional[Config] = None,
+            instance_config: Optional[Config] = None,
+        ) -> None:
             tenant_schema = worker.get_tenant_schema(client_id)
             if tenant_schema is None:
                 assert user_schema_pickle is not None
@@ -1462,6 +1809,7 @@ class MultiTenantPool(FixedPool):
         client_id = worker.current_client_id
         assert client_id is not None
         tenant_schema = worker.get_tenant_schema(client_id)
+        to_update: dict[str, Hashable]
         if tenant_schema is None:
             # make room for the new client in this worker
             worker.maybe_invalidate_last()
@@ -1505,16 +1853,19 @@ class MultiTenantPool(FixedPool):
             }
             if any(f in pickled for f in PickledState._fields):
                 db_state = PickledState(
-                    **{f: pickled.pop(f, None) for f in PickledState._fields}
+                    **{
+                        f: pickled.pop(f, None)
+                        for f in PickledState._fields
+                    }  # type: ignore
                 )
                 pickled["dbs"] = immutables.Map([(dbname, db_state)])
-            pickled_schema = PickledSchema(**pickled)
+            pickled_schema = PickledSchema(**pickled)  # type: ignore
             callback = functools.partial(
                 sync_worker_state_cb,
                 worker=worker,
                 client_id=client_id,
                 dbname=dbname,
-                **to_update,
+                **to_update,  # type: ignore
             )
         else:
             pickled_schema = None
@@ -1532,21 +1883,21 @@ class MultiTenantPool(FixedPool):
 
     async def compile_in_tx(
         self,
-        dbname,
-        user_schema_pickle,
-        txid,
-        pickled_state,
-        state_id,
-        *compile_args,
-        **compiler_args,
-    ):
-        client_id = compiler_args.get("client_id")
+        dbname: str,
+        user_schema_pickle: bytes,
+        txid: int,
+        pickled_state: bytes,
+        state_id: int,
+        *compile_args: Any,
+        **compiler_args: Any,
+    ) -> tuple[dbstate.QueryUnitGroup, bytes, int]:
+        client_id: int = compiler_args["client_id"]
 
         # Prefer a worker we used last time in the transaction (condition), or
         # (weighter) one with the user schema at tx start so that we can pass
         # over only the pickled state. Then prefer the least-recently used one
         # if many workers passed any check in the weighter, or the most vacant.
-        def weighter(w: MultiTenantWorker):
+        def weighter(w: MultiTenantWorker) -> queue.Comparable:
             if ts := w.get_tenant_schema(client_id):
                 if db := ts.dbs.get(dbname):
                     return (
@@ -1561,36 +1912,38 @@ class MultiTenantPool(FixedPool):
 
         worker = await self._acquire_worker(
             condition=lambda w: (w._last_pickled_state is pickled_state),
-            weighter=weighter,
+            weighter=cast(queue.Weighter, weighter),
             **compiler_args,
         )
 
         # Avoid sending information that we know the worker already have.
+        dbname_arg = None
+        client_id_arg = None
+        user_schema_pickle_arg = None
+
         if worker._last_pickled_state is pickled_state:
             pickled_state = state.REUSE_LAST_STATE_MARKER
-            dbname = client_id = user_schema_pickle = None
         else:
-            assert isinstance(worker, MultiTenantWorker)
-            assert client_id is not None
             tenant_schema = worker.get_tenant_schema(client_id)
             if tenant_schema is None:
                 # Just pass state + root user schema if this is a new client in
                 # the worker; we don't want to initialize the client as we
                 # don't have enough information to do so.
-                dbname = client_id = None
+                user_schema_pickle_arg = user_schema_pickle
             else:
                 worker_db = tenant_schema.dbs.get(dbname)
                 if worker_db is None:
                     # The worker has the client but not the database
-                    dbname = client_id = None
+                    user_schema_pickle_arg = user_schema_pickle
                 elif worker_db.user_schema_pickle is user_schema_pickle:
                     # Avoid sending the root user schema because the worker has
                     # it - just send client_id + dbname to reference it, as
                     # well as the state of course.
-                    user_schema_pickle = None
+                    dbname_arg = dbname
+                    client_id_arg = client_id
                 else:
                     # The worker has a different root user schema
-                    dbname = client_id = None
+                    user_schema_pickle_arg = worker_db.user_schema_pickle
 
         try:
             units, new_pickled_state = await worker.call(
@@ -1601,9 +1954,9 @@ class MultiTenantPool(FixedPool):
                 # tenant mode, we already have the pickled state, so "state_id"
                 # is not used. Just prepend a fake ID to comply to the API.
                 0,  # state_id
-                client_id,
-                dbname,
-                user_schema_pickle,
+                client_id_arg,
+                dbname_arg,
+                user_schema_pickle_arg,
                 pickled_state,
                 txid,
                 *compile_args
@@ -1620,12 +1973,12 @@ async def create_compiler_pool(
     runstate_dir: str,
     pool_size: int,
     backend_runtime_params: pgparams.BackendRuntimeParams,
-    std_schema,
-    refl_schema,
-    schema_class_layout,
-    pool_class=FixedPool,
-    **kwargs,
-) -> AbstractPool:
+    std_schema: s_schema.FlatSchema,
+    refl_schema: s_schema.FlatSchema,
+    schema_class_layout: s_refl.SchemaClassLayout,
+    pool_class: type[AbstractPool_T],
+    **kwargs: Any,
+) -> AbstractPool_T:
     assert issubclass(pool_class, AbstractPool)
     loop = asyncio.get_running_loop()
     pool = pool_class(

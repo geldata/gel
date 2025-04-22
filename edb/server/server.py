@@ -1063,12 +1063,13 @@ class BaseServer:
             self._request_stats_logger()
         )
 
-        self._compiler_pool = await compiler_pool.create_compiler_pool(
+        pool = await compiler_pool.create_compiler_pool(
             **self._get_compiler_args()
         )
         self.compilation_config_serializer = (
-            await self._compiler_pool.make_compilation_config_serializer()
+            await pool.make_compilation_config_serializer()
         )
+        self._compiler_pool = pool
 
         await self._before_start_servers()
         self._servers, actual_port, listen_addrs = await self._start_servers(
@@ -1737,12 +1738,13 @@ class Server(BaseServer):
         """Run the script specified in *startup_script* and exit immediately"""
         if self._startup_script is None:
             raise AssertionError('startup script is not defined')
-        self._compiler_pool = await compiler_pool.create_compiler_pool(
+        pool = await compiler_pool.create_compiler_pool(
             **self._get_compiler_args()
         )
         self.compilation_config_serializer = (
-            await self._compiler_pool.make_compilation_config_serializer()
+            await pool.make_compilation_config_serializer()
         )
+        self._compiler_pool = pool
         try:
             await binary.run_script(
                 server=self,

@@ -1377,7 +1377,7 @@ class Compiler:
         schema_a: bytes,
         schema_b: bytes,
         global_schema: bytes,
-        conn_state_pickle: Any,
+        conn_state_pickle: Optional[bytes],
     ) -> None:
         if conn_state_pickle:
             conn_state = pickle.loads(conn_state_pickle)

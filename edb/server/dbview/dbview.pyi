@@ -39,6 +39,7 @@ from edb.server import server
 from edb.server import tenant
 from edb.server.compiler import dbstate
 from edb.server.compiler import sertypes
+from edb.server.compiler_pool import state
 
 Config: TypeAlias = Mapping[str, config.SettingValue]
 
@@ -223,7 +224,11 @@ class DatabaseIndex:
 
     def get_cached_compiler_args(
         self,
-    ) -> tuple[immutables.Map, bytes, Config]:
+    ) -> tuple[
+        immutables.Map[str, state.PickledDatabaseState],
+        bytes,
+        immutables.Map[str, config.SettingValue],
+    ]:
         ...
 
     def lookup_config(self, name: str) -> Any:
