@@ -75,7 +75,6 @@ if TYPE_CHECKING:
 SyncStateCallback = Callable[[], None]
 Config = immutables.Map[str, config.SettingValue]
 InitArgs = tuple[
-    immutables.Map[str, state.PickledDatabaseState],
     pgparams.BackendRuntimeParams,
     s_schema.FlatSchema,
     s_schema.FlatSchema,
@@ -122,7 +121,7 @@ def _pickle_memoized(obj: Any) -> bytes:
 
 class BaseWorker:
 
-    _dbs: immutables.Map[str, state.PickledDatabaseState]
+    _dbs: collections.OrderedDict[str, state.PickledDatabaseState]
     _backend_runtime_params: pgparams.BackendRuntimeParams
     _std_schema: s_schema.FlatSchema
     _refl_schema: s_schema.FlatSchema
@@ -137,7 +136,6 @@ class BaseWorker:
 
     def __init__(
         self,
-        dbs: immutables.Map[str, state.PickledDatabaseState],
         backend_runtime_params: pgparams.BackendRuntimeParams,
         std_schema: s_schema.FlatSchema,
         refl_schema: s_schema.FlatSchema,
@@ -145,7 +143,7 @@ class BaseWorker:
         global_schema_pickle: bytes,
         system_config: Config,
     ) -> None:
-        self._dbs = dbs
+        self._dbs = collections.OrderedDict()
         self._backend_runtime_params = backend_runtime_params
         self._std_schema = std_schema
         self._refl_schema = refl_schema
@@ -157,6 +155,22 @@ class BaseWorker:
         self._con = None
         self._last_used = time.monotonic()
         self._closed = False
+
+    def get_db(self, name: str) -> Optional[state.PickledDatabaseState]:
+        rv = self._dbs.get(name)
+        if rv is not None:
+            self._dbs.move_to_end(name, last=False)
+        return rv
+
+    def set_db(self, name: str, db: state.PickledDatabaseState) -> None:
+        self._dbs[name] = db
+        self._dbs.move_to_end(name, last=False)
+
+    def prepare_evict_db(self, keep: int) -> list[str]:
+        return list(self._dbs.keys())[keep:]
+
+    def evict_db(self, name: str) -> None:
+        self._dbs.pop(name, None)
 
     async def call(
         self,
@@ -286,7 +300,6 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
 
     def _make_cached_init_args(
         self,
-        dbs: immutables.Map[str, state.PickledDatabaseState],
         global_schema_pickle: bytes,
         system_config: Config,
     ) -> tuple[InitArgs_T, InitArgsPickle_T]:
@@ -294,12 +307,10 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
 
     def _make_init_args(
         self,
-        dbs: immutables.Map[str, state.PickledDatabaseState],
         global_schema_pickle: bytes,
         system_config: Config,
     ) -> InitArgs:
         return (
-            dbs,
             self._backend_runtime_params,
             self._std_schema,
             self._refl_schema,
@@ -338,8 +349,13 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
             reflection_cache: Optional[state.ReflectionCache] = None,
             database_config: Optional[Config] = None,
             system_config: Optional[Config] = None,
+            evicted_dbs: Optional[list[str]] = None,
         ):
-            worker_db = worker._dbs.get(dbname)
+            if evicted_dbs is not None:
+                for name in evicted_dbs:
+                    worker.evict_db(name)
+
+            worker_db = worker.get_db(dbname)
             if worker_db is None:
                 assert user_schema_pickle is not None
                 assert reflection_cache is not None
@@ -347,7 +363,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
                 assert database_config is not None
                 assert system_config is not None
 
-                worker._dbs = worker._dbs.set(
+                worker.set_db(
                     dbname,
                     state.PickledDatabaseState(
                         user_schema_pickle=user_schema_pickle,
@@ -363,7 +379,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
                     or reflection_cache is not None
                     or database_config is not None
                 ):
-                    worker._dbs = worker._dbs.set(
+                    worker.set_db(
                         dbname,
                         state.PickledDatabaseState(
                             user_schema_pickle=(
@@ -385,12 +401,16 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
                 if system_config is not None:
                     worker._system_config = system_config
 
-        worker_db = worker._dbs.get(dbname)
+        worker_db = worker.get_db(dbname)
         preargs: list[Any] = [method_name, dbname]
         to_update: dict[str, Any] = {}
 
         if worker_db is None:
+            evicted_dbs = worker.prepare_evict_db(
+                self._worker_branch_limit - 1
+            )
             preargs.extend([
+                evicted_dbs,
                 user_schema_pickle,
                 _pickle_memoized(reflection_cache),
                 global_schema_pickle,
@@ -398,6 +418,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
                 _pickle_memoized(system_config),
             ])
             to_update = {
+                'evicted_dbs': evicted_dbs,
                 'user_schema_pickle': user_schema_pickle,
                 'reflection_cache': reflection_cache,
                 'global_schema_pickle': global_schema_pickle,
@@ -405,6 +426,8 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
                 'system_config': system_config,
             }
         else:
+            preargs.append([])  # evicted_dbs
+
             if worker_db.user_schema_pickle is not user_schema_pickle:
                 preargs.append(user_schema_pickle)
                 to_update['user_schema_pickle'] = user_schema_pickle
@@ -547,7 +570,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
             # that the compiler process will recognize.
             pickled_state = state.REUSE_LAST_STATE_MARKER
         else:
-            worker_db = worker._dbs.get(dbname)
+            worker_db = worker.get_db(dbname)
             if (
                 worker_db is not None
                 and worker_db.user_schema_pickle is user_schema_pickle
@@ -1151,12 +1174,11 @@ class FixedPool(FixedPoolImpl[Worker, InitArgs]):
     @lru.lru_method_cache(1)
     def _make_cached_init_args(
         self,
-        dbs: immutables.Map[str, state.PickledDatabaseState],
         global_schema_pickle: bytes,
         system_config: Config,
     ) -> tuple[InitArgs, bytes]:
         init_args = self._make_init_args(
-            dbs, global_schema_pickle, system_config
+            global_schema_pickle, system_config
         )
         pickled_args = pickle.dumps(init_args, -1)
         return init_args, pickled_args
@@ -1183,12 +1205,11 @@ class SimpleAdaptivePool(BaseLocalPool[Worker, InitArgs]):
     @lru.lru_method_cache(1)
     def _make_cached_init_args(
         self,
-        dbs: immutables.Map[str, state.PickledDatabaseState],
         global_schema_pickle: bytes,
         system_config: Config,
     ) -> tuple[InitArgs, bytes]:
         init_args = self._make_init_args(
-            dbs, global_schema_pickle, system_config
+            global_schema_pickle, system_config
         )
         pickled_args = pickle.dumps(init_args, -1)
         return init_args, pickled_args
@@ -1430,19 +1451,17 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
     @lru.lru_method_cache(1)
     def _make_cached_init_args(
         self,
-        dbs: immutables.Map[str, state.PickledDatabaseState],
         global_schema_pickle: bytes,
         system_config: Config,
     ) -> tuple[InitArgs, RemoteInitArgsPickle]:
         init_args = self._make_init_args(
-            dbs,
             global_schema_pickle,
             system_config,
         )
         std_args = (
             self._std_schema, self._refl_schema, self._schema_class_layout
         )
-        client_args = (dbs, self._backend_runtime_params)
+        client_args = (self._backend_runtime_params,)
         return init_args, (
             pickle.dumps(std_args, -1),
             pickle.dumps(client_args, -1),
@@ -1610,7 +1629,6 @@ class MultiTenantWorker(Worker):
             manager,
             server,
             pid,
-            None,
             backend_runtime_params,
             std_schema,
             refl_schema,

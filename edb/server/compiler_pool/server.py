@@ -135,7 +135,6 @@ class Worker(pool_mod.Worker):
             manager,
             server,
             pid,
-            None,
             backend_runtime_params,
             std_schema,
             refl_schema,

@@ -53,7 +53,6 @@ def __init_worker__(
     init_args_pickled: bytes,
 ) -> None:
     global INITED
-    global DBS
     global BACKEND_RUNTIME_PARAMS
     global COMPILER
     global STD_SCHEMA
@@ -61,7 +60,6 @@ def __init_worker__(
     global INSTANCE_CONFIG
 
     (
-        dbs,
         backend_runtime_params,
         std_schema,
         refl_schema,
@@ -71,24 +69,6 @@ def __init_worker__(
     ) = pickle.loads(init_args_pickled)
 
     INITED = True
-    DBS = immutables.Map(
-        [
-            (
-                dbname,
-                state.DatabaseState(
-                    name=dbname,
-                    user_schema=(
-                        None  # type: ignore
-                        if db.user_schema_pickle is None
-                        else pickle.loads(db.user_schema_pickle)
-                    ),
-                    reflection_cache=db.reflection_cache,
-                    database_config=db.database_config,
-                ),
-            )
-            for dbname, db in dbs.items()
-        ]
-    )
     BACKEND_RUNTIME_PARAMS = backend_runtime_params
     STD_SCHEMA = std_schema
     GLOBAL_SCHEMA = pickle.loads(global_schema_pickle)
@@ -105,6 +85,7 @@ def __init_worker__(
 
 def __sync__(
     dbname: str,
+    evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
     global_schema: Optional[bytes],
@@ -116,6 +97,12 @@ def __sync__(
     global INSTANCE_CONFIG
 
     try:
+        if evicted_dbs:
+            dbs = DBS.mutate()
+            for name in evicted_dbs:
+                dbs.pop(name, None)
+            DBS = dbs.finish()
+
         db = DBS.get(dbname)
         if db is None:
             assert user_schema is not None
@@ -160,6 +147,7 @@ def __sync__(
 
 def compile(
     dbname: str,
+    evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
     global_schema: Optional[bytes],
@@ -170,6 +158,7 @@ def compile(
 ):
     db = __sync__(
         dbname,
+        evicted_dbs,
         user_schema,
         reflection_cache,
         global_schema,
@@ -235,6 +224,7 @@ def compile_in_tx(
 
 def compile_notebook(
     dbname: str,
+    evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
     global_schema: Optional[bytes],
@@ -245,6 +235,7 @@ def compile_notebook(
 ):
     db = __sync__(
         dbname,
+        evicted_dbs,
         user_schema,
         reflection_cache,
         global_schema,
@@ -265,6 +256,7 @@ def compile_notebook(
 
 def compile_graphql(
     dbname: str,
+    evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
     global_schema: Optional[bytes],
@@ -275,6 +267,7 @@ def compile_graphql(
 ) -> tuple[compiler.QueryUnitGroup, graphql.TranspiledOperation]:
     db = __sync__(
         dbname,
+        evicted_dbs,
         user_schema,
         reflection_cache,
         global_schema,
@@ -327,6 +320,7 @@ def compile_graphql(
 
 def compile_sql(
     dbname: str,
+    evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
     global_schema: Optional[bytes],
@@ -337,6 +331,7 @@ def compile_sql(
 ):
     db = __sync__(
         dbname,
+        evicted_dbs,
         user_schema,
         reflection_cache,
         global_schema,
