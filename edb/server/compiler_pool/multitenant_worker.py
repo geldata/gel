@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, NamedTuple, Sequence
+from typing import Any, Callable, Optional, NamedTuple, Sequence
 
 import pickle
 
@@ -396,7 +396,8 @@ def call_for_client(
     return meth(client_id, dbname, *compile_args)
 
 
-def get_handler(methname: str):
+def get_handler(methname: str) -> Callable[..., Any]:
+    meth: Callable[..., Any]
     methname = methname.removeprefix("v2_")
     if methname == "__init_worker__":
         meth = __init_worker__

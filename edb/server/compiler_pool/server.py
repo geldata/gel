@@ -259,6 +259,7 @@ class MultiSchemaPool(
             global_schema_pickle,
             system_config_pickled,
         ) = init_args_pickled
+        dbs_arg: immutables.Map[str, PickledState]
         if is_v2:
             backend_runtime_params, = pickle.loads(client_args_pickled)
             dbs_arg = immutables.Map()
