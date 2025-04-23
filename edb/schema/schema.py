@@ -36,7 +36,6 @@ from typing import (
 
 import abc
 import collections
-import functools
 import itertools
 
 import immutables as immu
@@ -2167,7 +2166,7 @@ class ChainedSchema(Schema):
         return migration
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def _get_functions(
     schema: FlatSchema,
     name: sn.Name,
@@ -2181,7 +2180,7 @@ def _get_functions(
     )
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def _get_operators(
     schema: FlatSchema,
     name: sn.Name,
@@ -2195,7 +2194,7 @@ def _get_operators(
         )
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def _get_last_migration(
     schema: FlatSchema,
 ) -> Optional[s_migrations.Migration]:
