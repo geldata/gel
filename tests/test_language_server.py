@@ -171,6 +171,15 @@ class LspRunner:
         )
         self.recv()  # Init response
 
+    def print_logs(self):
+        # Prints log messages sent by the server since last call.
+        # Useful for debugging.
+        print('-- logs --')
+        while len(self.logs) > 0:
+            log = self.logs.pop(0)
+            print(log)
+        print('----------\n\n\n\n')
+
 
 @unittest.skipIf(ls_main is None, "edgedb-ls dependencies are missing")
 class TestLanguageServer(unittest.TestCase):
@@ -531,16 +540,19 @@ class TestLanguageServer(unittest.TestCase):
                         "isIncomplete": False,
                         "items": [
                             {"kind": 14, "label": "and"},
+                            {"kind": 14, "label": "except"},
                             {"kind": 14, "label": "filter"},
                             {"kind": 14, "label": "if"},
                             {"kind": 14, "label": "ilike"},
                             {"kind": 14, "label": "in"},
+                            {"kind": 14, "label": "intersect"},
                             {"kind": 14, "label": "is"},
                             {"kind": 14, "label": "like"},
                             {"kind": 14, "label": "limit"},
                             {"kind": 14, "label": "not"},
                             {"kind": 14, "label": "offset"},
                             {"kind": 14, "label": "or"},
+                            {"kind": 14, "label": "union"},
                             {"kind": 14, "label": "order by"},
                         ],
                     },
@@ -709,5 +721,232 @@ class TestLanguageServer(unittest.TestCase):
                     },
                 },
             )
+        finally:
+            runner.finish()
+
+    def test_language_server_09(self):
+        # completion might not suggest some unreserved keywords (i.e. property)
+        runner = LspRunner()
+        try:
+            runner.add_file(
+                "gel.toml",
+                "",
+            )
+            runner.add_file(
+                "dbschema/default.gel",
+                """
+                module default {
+                    type Hello {
+                    }
+                    type World {
+                    }
+                    alias World2 := (select World filter true);
+                }
+                """,
+            )
+            runner.send_init()
+
+            runner.send(
+                {
+                    "id": 2,
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": "file://myquery.edgeql",
+                            "languageId": "edgeql",
+                            "version": 1,
+                            "text": """
+                                with my_var := (select 1)
+                                select
+                            """,
+                        }
+                    },
+                }
+            )
+            runner.recv(timeout_sec=1)  # textDocument/publishDiagnostics
+
+            # request completion
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "textDocument/completion",
+                    "params": {
+                        "textDocument": {"uri": "file://myquery.edgeql"},
+                        "position": {
+                            "line": 2,
+                            "character": 39,  # after select
+                        },
+                    },
+                }
+            )
+            self.assertEqual(
+                # timeout 50, because it compiles schema
+                runner.recv(timeout_sec=50),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "result": {
+                        "isIncomplete": False,
+                        "items": [
+                            {'kind': 6, 'label': 'my_var'},
+                            {'kind': 6, 'label': 'Hello'},
+                            {'kind': 6, 'label': 'World'},
+                            {'kind': 6, 'label': 'World2'},
+                            {'kind': 14, 'label': 'detached'},
+                            {'kind': 14, 'label': 'distinct'},
+                            {'kind': 14, 'label': 'exists'},
+                            {'kind': 14, 'label': 'global'},
+                            {'kind': 14, 'label': 'if'},
+                            {'kind': 14, 'label': 'introspect'},
+                            {'kind': 14, 'label': 'not'},
+                        ],
+                    },
+                },
+            )
+
+            runner.send(
+                {
+                    "id": 4,
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": "file://myquery.edgeql",
+                            "languageId": "edgeql",
+                            "version": 1,
+                            "text": """
+                                delete
+                            """,
+                        }
+                    },
+                }
+            )
+            runner.recv(timeout_sec=1)  # textDocument/publishDiagnostics
+            # request completion
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "textDocument/completion",
+                    "params": {
+                        "textDocument": {"uri": "file://myquery.edgeql"},
+                        "position": {
+                            "line": 1,
+                            "character": 39,  # after delete
+                        },
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=5),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "result": {
+                        "isIncomplete": False,
+                        "items": [
+                            {'kind': 6, 'label': 'Hello'},
+                            {'kind': 6, 'label': 'World'},
+                            {'kind': 6, 'label': 'World2'},
+                            {'kind': 14, 'label': 'detached'},
+                            {'kind': 14, 'label': 'distinct'},
+                            {'kind': 14, 'label': 'exists'},
+                            {'kind': 14, 'label': 'global'},
+                            {'kind': 14, 'label': 'if'},
+                            {'kind': 14, 'label': 'introspect'},
+                            {'kind': 14, 'label': 'not'},
+                        ],
+                    },
+                },
+            )
+        finally:
+            runner.finish()
+
+    def test_language_server_10(self):
+        # empty document
+        runner = LspRunner()
+        try:
+            runner.add_file("gel.toml", "")
+            runner.send_init()
+
+            runner.send(
+                {
+                    "id": 2,
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": "file://myquery.edgeql",
+                            "languageId": "edgeql",
+                            "version": 1,
+                            "text": "",
+                        }
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": "file://myquery.edgeql",
+                        "version": 1,
+                        "diagnostics": [],
+                    },
+                },
+            )
+
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "textDocument/completion",
+                    "params": {
+                        "textDocument": {"uri": "file://myquery.edgeql"},
+                        "position": {"line": 1, "character": 1},
+                    },
+                }
+            )
+            res = runner.recv(timeout_sec=50)
+            self.assertEqual(
+                res,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "result": {
+                        "isIncomplete": False,
+                        "items": [
+                            {'kind': 14, 'label': 'abort'},
+                            {'kind': 14, 'label': 'administer'},
+                            {'kind': 14, 'label': 'alter'},
+                            {'kind': 14, 'label': 'analyze'},
+                            {'kind': 14, 'label': 'commit'},
+                            {'kind': 14, 'label': 'configure'},
+                            {'kind': 14, 'label': 'create'},
+                            {'kind': 14, 'label': 'declare'},
+                            {'kind': 14, 'label': 'delete'},
+                            {'kind': 14, 'label': 'describe'},
+                            {'kind': 14, 'label': 'drop'},
+                            {'kind': 14, 'label': 'for'},
+                            {'kind': 14, 'label': 'group'},
+                            {'kind': 14, 'label': 'if'},
+                            {'kind': 14, 'label': 'insert'},
+                            {'kind': 14, 'label': 'populate'},
+                            {'kind': 14, 'label': 'release'},
+                            {'kind': 14, 'label': 'reset'},
+                            {'kind': 14, 'label': 'rollback'},
+                            {'kind': 14, 'label': 'select'},
+                            {'kind': 14, 'label': 'set'},
+                            {'kind': 14, 'label': 'start'},
+                            {'kind': 14, 'label': 'update'},
+                            {'kind': 14, 'label': 'with'},
+                        ],
+                    },
+                },
+            )
+
         finally:
             runner.finish()

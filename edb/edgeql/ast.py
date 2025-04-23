@@ -207,6 +207,12 @@ class SpecialAnchor(Anchor):
     pass
 
 
+class Cursor(Expr):
+    '''A special node that halts compilation and returns all names visible in
+       the current scope. Used for LSP completions.
+    '''
+
+
 class DetachedExpr(Expr):  # DETACHED Expr
     expr: Expr
     preserve_path_prefix: bool = False

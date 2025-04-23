@@ -391,6 +391,13 @@ QUERIES = [
     '''sdl# comment
     ''',
     '''
-       FOR x in foo.bar + bar UNION x;
-    '''
+    SELECT
+    ''',
+    '''sdl
+    module y {
+        type X {
+            property z:
+        }
+    }
+    ''',
 ]

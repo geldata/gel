@@ -25,11 +25,10 @@ import click
 
 from edb import buildmeta
 from edb.edgeql import parser as qlparser
-from edb.edgeql import tokenizer as qltokenizer
 
-from . import parsing as ls_parsing
 from . import server as ls_server
 from . import definition as ls_definition
+from . import completion as ls_completion
 
 
 @click.command()
@@ -69,9 +68,8 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
         lsp_types.INITIALIZE,
     )
     def init(_params: lsp_types.InitializeParams):
-        ls.show_message_log('Starting')
         qlparser.preload_spec()
-        ls.show_message_log('Started')
+        ls.show_message_log('gel-ls ready for requests')
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DID_OPEN)
     def text_document_did_open(params: lsp_types.DidOpenTextDocumentParams):
@@ -92,13 +90,6 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
         lsp_types.CompletionOptions(trigger_characters=[',']),
     )
     def completion(params: lsp_types.CompletionParams):
-        document = ls.workspace.get_text_document(params.text_document.uri)
-
-        target = qltokenizer.line_col_to_source_point(
-            document.source, params.position.line, params.position.character
-        )
-
-        items = ls_parsing.get_suggestions(document, target.offset, ls)
-        return lsp_types.CompletionList(is_incomplete=False, items=items)
+        return ls_completion.get_completion(ls, params)
 
     return ls

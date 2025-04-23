@@ -45,10 +45,13 @@ def read_manifest(project_dir: Path) -> tuple[Manifest, Path]:
         path = project_dir / 'gel.toml'
         with open(path, 'rb') as f:
             manifest_dict = tomllib.load(f)
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         path = project_dir / 'edgedb.toml'
-        with open(path, 'rb') as f:
-            manifest_dict = tomllib.load(f)
+        try:
+            with open(path, 'rb') as f:
+                manifest_dict = tomllib.load(f)
+        except FileNotFoundError:
+            raise e
 
     return (_load_manifest(manifest_dict), path)
 

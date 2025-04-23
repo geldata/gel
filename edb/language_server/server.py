@@ -102,7 +102,7 @@ def document_updated(ls: GelLanguageServer, doc_uri: str):
             if diag := ql_ast_res.err:
                 ls.publish_diagnostics(document.uri, diag, document.version)
                 return
-            assert ql_ast_res.ok
+            assert ql_ast_res.ok is not None
             ql_ast = ql_ast_res.ok
 
             if isinstance(ql_ast, list):
