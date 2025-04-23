@@ -1383,7 +1383,7 @@ class RemoteWorker(BaseWorker):
         method_name: str,
         args: tuple[Any, ...],
     ) -> memoryview:
-        msg = pickle.dumps((method_name, args))
+        msg = pickle.dumps(("v2_" + method_name, args))
         digest = hmac.digest(self._secret, msg, "sha256")
         return await self._con.request(digest + msg)
 

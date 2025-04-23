@@ -830,8 +830,8 @@ server_options = typeutils.chain_decorators([
         envvar="GEL_SERVER_COMPILER_WORKER_BRANCH_LIMIT",
         cls=EnvvarResolver,
         help='The maximum NUM of branches each compiler worker could cache up '
-             'to, default is 5.  If the worker serves multiple tenants as in '
-             '--compiler-pool-mode=fixed_multi_tenant or remote, each tenant '
+             'to, default is 5.  If the worker serves multiple tenants (as in '
+             '--compiler-pool-mode=fixed_multi_tenant or remote), this tenant '
              'on that worker will be able to cache up to NUM branches.'
     ),
     click.option(
