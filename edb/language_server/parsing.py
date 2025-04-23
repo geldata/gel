@@ -16,8 +16,6 @@
 # limitations under the License.
 #
 
-from typing import Any
-
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
 from lsprotocol import types as lsp_types
@@ -34,7 +32,7 @@ from . import utils as ls_utils
 
 
 def parse(
-    doc: TextDocument, ls: LanguageServer
+    doc: TextDocument,
 ) -> Result[list[qlast.Base] | qlast.Schema, list[lsp_types.Diagnostic]]:
     sdl = is_schema_file(doc.filename) if doc.filename else False
 
@@ -93,8 +91,8 @@ def parse(
     return Result(ok=ast)
 
 
-def parse_and_suggest(
-    doc: TextDocument, position: lsp_types.Position, ls: LanguageServer
+def get_suggestions(
+    doc: TextDocument, target: int, ls: LanguageServer
 ) -> list[lsp_types.CompletionItem]:
     sdl = is_schema_file(doc.path)
 
@@ -108,12 +106,9 @@ def parse_and_suggest(
     source: tokenizer.Source = source_res.ok
 
     # limit tokens to things preceding cursor position
-    target = tokenizer.line_col_to_source_point(
-        doc.source, position.line, position.character
-    )
     cut_index = len(source.tokens())
     for index, tok in enumerate(source.tokens()):
-        if not tok.span_end() <= target.offset:
+        if not tok.span_end() <= target:
             cut_index = index
             break
     tokens = source.tokens()[0:cut_index]
@@ -146,17 +141,3 @@ def _tokenize(
                 )
             ]
         )
-
-
-def _position_in_span(pos: lsp_types.Position, span: tuple[Any, Any]):
-    start, end = span
-
-    if pos.line < start.line - 1:
-        return False
-    if pos.line > end.line - 1:
-        return False
-    if pos.line == start.line - 1 and pos.character < start.column - 1:
-        return False
-    if pos.line == end.line - 1 and pos.character > end.column - 1:
-        return False
-    return True
