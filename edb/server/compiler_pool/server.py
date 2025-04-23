@@ -288,6 +288,7 @@ class MultiSchemaPool(
 
     def _sync(
         self,
+        *,
         client_id: int,
         dbname: str,
         evicted_dbs: list[str],
@@ -364,13 +365,30 @@ class MultiSchemaPool(
 
     async def _call_for_client(
         self,
+        *,
         client_id: int,
         method_name: str,
+        dbname: str,
+        evicted_dbs: list[str],
+        user_schema: Optional[bytes],
+        reflection_cache: Optional[bytes],
+        global_schema: Optional[bytes],
+        database_config: Optional[bytes],
+        system_config: Optional[bytes],
         args: tuple[Any, ...],
         msg: memoryview,
     ) -> Any:
         try:
-            updated = self._sync(client_id, *args[:7])
+            updated = self._sync(
+                client_id=client_id,
+                dbname=dbname,
+                evicted_dbs=evicted_dbs,
+                user_schema=user_schema,
+                reflection_cache=reflection_cache,
+                global_schema=global_schema,
+                database_config=database_config,
+                system_config=system_config,
+            )
         except Exception as ex:
             raise state_mod.FailedStateSync(
                 f"failed to sync compiler server state: "
@@ -383,7 +401,7 @@ class MultiSchemaPool(
             client_schema = self._clients[client_id]
             diff: Optional[ClientSchema] = client_schema
             cache = worker.get_client_schema(client_id)
-            extra_args = ()
+            extra_args: tuple[Any, ...] = ()
             if cache is client_schema:
                 # client schema is already in sync, don't send again
                 diff = None
@@ -398,7 +416,7 @@ class MultiSchemaPool(
                 if updated:
                     # re-pickle the request if user schema changed
                     msg_arg = None
-                    extra_args = (method_name, args[0], *args[7:])
+                    extra_args = (method_name, dbname, args)
                 else:
                     msg_arg = bytes(msg)
             invalidation = worker.flush_invalidation()
@@ -507,8 +525,28 @@ class MultiSchemaPool(
                 "compile_graphql",
                 "compile_sql",
             }:
+                (
+                    dbname,
+                    evicted_dbs,
+                    user_schema,
+                    reflection_cache,
+                    global_schema,
+                    database_config,
+                    system_config,
+                    *args,
+                ) = args
                 pickled = await self._call_for_client(
-                    client_id, method_name, args, msg
+                    client_id=client_id,
+                    method_name=method_name,
+                    dbname=dbname,
+                    evicted_dbs=evicted_dbs,
+                    user_schema=user_schema,
+                    reflection_cache=reflection_cache,
+                    global_schema=global_schema,
+                    database_config=database_config,
+                    system_config=system_config,
+                    args=args,
+                    msg=msg,
                 )
             elif method_name == "compile_in_tx":
                 pickled = await self.compile_in_tx_(*args, msg=bytes(msg))
