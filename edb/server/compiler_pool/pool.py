@@ -387,11 +387,14 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
                                 or worker_db.user_schema_pickle
                             ),
                             reflection_cache=(
-                                reflection_cache
-                                or worker_db.reflection_cache
+                                worker_db.reflection_cache
+                                if reflection_cache is None
+                                else reflection_cache
                             ),
                             database_config=(
-                                database_config or worker_db.database_config
+                                worker_db.database_config
+                                if database_config is None
+                                else database_config
                             ),
                         ),
                     )
