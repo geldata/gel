@@ -3512,116 +3512,154 @@ class TestExpressions(tb.QueryTestCase):
         # Nested array of array and tuple
 
         # tuple<array<array<int64>>, array<array<array<int64>>>>
-        await self.assert_query_result(
-            '''
-            select (
-                [[1, 1], [1, 2]],
-                [[[2, 1, 1], [2, 1, 2]], [[2, 2, 1]]],
+        async def _check() -> None:
+            await self.assert_query_result(
+                '''
+                select (
+                    [[1, 1], [1, 2]],
+                    [[[2, 1, 1], [2, 1, 2]], [[2, 2, 1]]],
+                )
+                ''',
+                [(
+                    [[1, 1], [1, 2]],
+                    [[[2, 1, 1], [2, 1, 2]], [[2, 2, 1]]],
+                )],
             )
-            ''',
-            [(
-                [[1, 1], [1, 2]],
-                [[[2, 1, 1], [2, 1, 2]], [[2, 2, 1]]],
-            )],
-        )
 
-        await self.assert_query_result(
-            '''
-            select (
-                [[1, 1], [1, 2]],
-                [[[2, 1, 1], [2, 1, 2]], [[2, 2, 1]]],
-            ).0
-            ''',
-            [[[1, 1], [1, 2]]],
-        )
-        await self.assert_query_result(
-            '''
-            select (
-                [[1, 1], [1, 2]],
-                [[[2, 1, 1], [2, 1, 2]], [[2, 2, 1]]],
-            ).1[0][0]
-            ''',
-            [[2, 1, 1]],
-        )
+            await self.assert_query_result(
+                '''
+                select (
+                    [[1, 1], [1, 2]],
+                    [[[2, 1, 1], [2, 1, 2]], [[2, 2, 1]]],
+                ).0
+                ''',
+                [[[1, 1], [1, 2]]],
+            )
+            await self.assert_query_result(
+                '''
+                select (
+                    [[1, 1], [1, 2]],
+                    [[[2, 1, 1], [2, 1, 2]], [[2, 2, 1]]],
+                ).1[0][0]
+                ''',
+                [[2, 1, 1]],
+            )
+
+        await _check()
+
+        # Check that everything works if the wrapped arrays exist in schema
+        await self.con.execute(f"""
+            create global foo -> tuple<array<int64>>;
+            create global bar -> tuple<array<tuple<array<int64>>>>;
+        """)
+
+        await _check()
 
     async def test_edgeql_expr_array_12(self):
         # array<array<tuple<int64>>>
-        await self.assert_query_result(
-            '''
-            select [
-                [(1, 'A'), (1, 'B')],
-                [(2, 'C'), (2, 'D')],
-                [(3, 'E'), (3, 'F'), (3, 'G')],
-            ]
-            ''',
-            [[
-                [(1, 'A'), (1, 'B')],
-                [(2, 'C'), (2, 'D')],
-                [(3, 'E'), (3, 'F'), (3, 'G')],
-            ]],
-        )
 
-        await self.assert_query_result(
-            '''
-            select [
-                [(1, 'A'), (1, 'B')],
-                [(2, 'C'), (2, 'D')],
-                [(3, 'E'), (3, 'F'), (3, 'G')],
-            ][2][1]
-            ''',
-            [(3, 'F')],
-        )
+        async def _check() -> None:
+            await self.assert_query_result(
+                '''
+                select [
+                    [(1, 'A'), (1, 'B')],
+                    [(2, 'C'), (2, 'D')],
+                    [(3, 'E'), (3, 'F'), (3, 'G')],
+                ]
+                ''',
+                [[
+                    [(1, 'A'), (1, 'B')],
+                    [(2, 'C'), (2, 'D')],
+                    [(3, 'E'), (3, 'F'), (3, 'G')],
+                ]],
+            )
+
+            await self.assert_query_result(
+                '''
+                select [
+                    [(1, 'A'), (1, 'B')],
+                    [(2, 'C'), (2, 'D')],
+                    [(3, 'E'), (3, 'F'), (3, 'G')],
+                ][2][1]
+                ''',
+                [(3, 'F')],
+            )
+
+        await _check()
+
+        # Check that everything works if the wrapped arrays exist in schema
+        await self.con.execute(f"""
+            create global foo -> tuple<array<tuple<int64>>>;
+        """)
+
+        await _check()
 
     async def test_edgeql_expr_array_13(self):
-        # array<array<tuple<array<array>>>>
-        await self.assert_query_result(
-            '''
-            select [
-                [
-                    (
-                        [[1, 1, 1, 1], [1, 1, 1, 2]],
-                        [['A', 'A', 'B', 'A'], ['A', 'A', 'B', 'B']],
-                    ),
-                    (
-                        [[1, 2, 1, 1], [1, 2, 1, 2]],
-                        [['A', 'B', 'B', 'A'], ['A', 'B', 'B', 'B']],
-                    ),
-                ],
-                [
-                    (
-                        [[2, 1, 1, 1], [2, 1, 1, 2]],
-                        [['B', 'A', 'B', 'A'], ['B', 'A', 'B', 'B']],
-                    ),
-                    (
-                        [[2, 2, 1, 1], [2, 2, 1, 2]],
-                        [['B', 'B', 'B', 'A'], ['B', 'B', 'B', 'B']],
-                    ),
-                ],
-            ]
-            ''',
-            [[
-                [
-                    (
-                        [[1, 1, 1, 1], [1, 1, 1, 2]],
-                        [['A', 'A', 'B', 'A'], ['A', 'A', 'B', 'B']],
-                    ),
-                    (
-                        [[1, 2, 1, 1], [1, 2, 1, 2]],
-                        [['A', 'B', 'B', 'A'], ['A', 'B', 'B', 'B']],
-                    ),
-                ],
-                [
-                    (
-                        [[2, 1, 1, 1], [2, 1, 1, 2]],
-                        [['B', 'A', 'B', 'A'], ['B', 'A', 'B', 'B']],
-                    ),
-                    (
-                        [[2, 2, 1, 1], [2, 2, 1, 2]],
-                        [['B', 'B', 'B', 'A'], ['B', 'B', 'B', 'B']],
-                    ),
-                ],
-            ]],
-        )
+        # array<array<tuple<array<array<int>>,array<array<str>>>>>
+
+        async def _check() -> None:
+            await self.assert_query_result(
+                '''
+                select [
+                    [
+                        (
+                            [[1, 1, 1, 1], [1, 1, 1, 2]],
+                            [['A', 'A', 'B', 'A'], ['A', 'A', 'B', 'B']],
+                        ),
+                        (
+                            [[1, 2, 1, 1], [1, 2, 1, 2]],
+                            [['A', 'B', 'B', 'A'], ['A', 'B', 'B', 'B']],
+                        ),
+                    ],
+                    [
+                        (
+                            [[2, 1, 1, 1], [2, 1, 1, 2]],
+                            [['B', 'A', 'B', 'A'], ['B', 'A', 'B', 'B']],
+                        ),
+                        (
+                            [[2, 2, 1, 1], [2, 2, 1, 2]],
+                            [['B', 'B', 'B', 'A'], ['B', 'B', 'B', 'B']],
+                        ),
+                    ],
+                ]
+                ''',
+                [[
+                    [
+                        (
+                            [[1, 1, 1, 1], [1, 1, 1, 2]],
+                            [['A', 'A', 'B', 'A'], ['A', 'A', 'B', 'B']],
+                        ),
+                        (
+                            [[1, 2, 1, 1], [1, 2, 1, 2]],
+                            [['A', 'B', 'B', 'A'], ['A', 'B', 'B', 'B']],
+                        ),
+                    ],
+                    [
+                        (
+                            [[2, 1, 1, 1], [2, 1, 1, 2]],
+                            [['B', 'A', 'B', 'A'], ['B', 'A', 'B', 'B']],
+                        ),
+                        (
+                            [[2, 2, 1, 1], [2, 2, 1, 2]],
+                            [['B', 'B', 'B', 'A'], ['B', 'B', 'B', 'B']],
+                        ),
+                    ],
+                ]],
+            )
+
+        await _check()
+
+        # Check that everything works if the wrapped arrays exist in schema
+        await self.con.execute(f"""
+            create global foo -> tuple<array<int64>>;
+            create global bar -> tuple<array<str>>;
+            create global baz -> tuple<array<tuple<
+                array<tuple<array<int64>>>,
+                array<tuple<array<str>>>,
+            >>>;
+        """)
+
+        await _check()
 
     async def test_edgeql_expr_array_14(self):
         await self.assert_query_result(
