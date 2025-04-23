@@ -68,9 +68,9 @@ _ENV = os.environ.copy()
 _ENV['PYTHONPATH'] = ':'.join(sys.path)
 
 
-@functools.lru_cache()
-def _pickle_memoized(schema):
-    return pickle.dumps(schema, -1)
+@functools.lru_cache(maxsize=4)
+def _pickle_memoized(obj: Any) -> bytes:
+    return pickle.dumps(obj, -1)
 
 
 class BaseWorker:
