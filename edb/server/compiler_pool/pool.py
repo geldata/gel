@@ -1590,9 +1590,25 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
 @dataclasses.dataclass
 class TenantSchema:
     client_id: int
-    dbs: immutables.Map[str, state.PickledDatabaseState]
+    dbs: collections.OrderedDict[str, state.PickledDatabaseState]
     global_schema_pickle: bytes
     system_config: Config
+
+    def get_db(self, name: str) -> Optional[state.PickledDatabaseState]:
+        rv = self.dbs.get(name)
+        if rv is not None:
+            self.dbs.move_to_end(name, last=False)
+        return rv
+
+    def set_db(self, name: str, db: state.PickledDatabaseState) -> None:
+        self.dbs[name] = db
+        self.dbs.move_to_end(name, last=False)
+
+    def prepare_evict_db(self, keep: int) -> list[str]:
+        return list(self.dbs.keys())[keep:]
+
+    def evict_db(self, name: str) -> None:
+        self.dbs.pop(name, None)
 
 
 class PickledState(NamedTuple):
@@ -1759,6 +1775,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
             worker: MultiTenantWorker,
             client_id: int,
             dbname: str,
+            evicted_dbs: list[str],
             user_schema_pickle: Optional[bytes] = None,
             global_schema_pickle: Optional[bytes] = None,
             reflection_cache: Optional[state.ReflectionCache] = None,
@@ -1775,23 +1792,30 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
 
                 tenant_schema = TenantSchema(
                     client_id,
-                    immutables.Map([(dbname, state.PickledDatabaseState(
-                        user_schema_pickle,
-                        reflection_cache,
-                        database_config,
-                    ))]),
+                    collections.OrderedDict(
+                        {
+                            dbname: state.PickledDatabaseState(
+                                user_schema_pickle,
+                                reflection_cache,
+                                database_config,
+                            ),
+                        }
+                    ),
                     global_schema_pickle,
                     instance_config,
                 )
                 worker.set_tenant_schema(client_id, tenant_schema)
             else:
-                worker_db = tenant_schema.dbs.get(dbname)
+                for name in evicted_dbs:
+                    tenant_schema.evict_db(name)
+
+                worker_db = tenant_schema.get_db(dbname)
                 if worker_db is None:
                     assert user_schema_pickle is not None
                     assert reflection_cache is not None
                     assert database_config is not None
 
-                    tenant_schema.dbs = tenant_schema.dbs.set(
+                    tenant_schema.set_db(
                         dbname,
                         state.PickledDatabaseState(
                             user_schema_pickle=user_schema_pickle,
@@ -1805,7 +1829,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                     or reflection_cache is not None
                     or database_config is not None
                 ):
-                    tenant_schema.dbs = tenant_schema.dbs.set(
+                    tenant_schema.set_db(
                         dbname,
                         state.PickledDatabaseState(
                             user_schema_pickle=(
@@ -1831,6 +1855,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
         assert client_id is not None
         tenant_schema = worker.get_tenant_schema(client_id)
         to_update: dict[str, Hashable]
+        evicted_dbs = []
         if tenant_schema is None:
             # make room for the new client in this worker
             worker.maybe_invalidate_last()
@@ -1842,8 +1867,11 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                 "instance_config": system_config,
             }
         else:
-            worker_db = tenant_schema.dbs.get(dbname)
+            worker_db = tenant_schema.get_db(dbname)
             if worker_db is None:
+                evicted_dbs = tenant_schema.prepare_evict_db(
+                    self._worker_branch_limit - 1
+                )
                 to_update = {
                     "user_schema_pickle": user_schema_pickle,
                     "reflection_cache": reflection_cache,
@@ -1880,12 +1908,15 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                     }  # type: ignore
                 )
                 pickled["dbs"] = immutables.Map([(dbname, db_state)])
-            pickled_schema = PickledSchema(**pickled)  # type: ignore
+            pickled_schema = PickledSchema(
+                dropped_dbs=tuple(evicted_dbs), **pickled  # type: ignore
+            )
             callback = functools.partial(
                 sync_worker_state_cb,
                 worker=worker,
                 client_id=client_id,
                 dbname=dbname,
+                evicted_dbs=evicted_dbs,
                 **to_update,  # type: ignore
             )
         else:
