@@ -416,7 +416,7 @@ class MultiSchemaPool(
                 if updated:
                     # re-pickle the request if user schema changed
                     msg_arg = None
-                    extra_args = (method_name, dbname, args)
+                    extra_args = (method_name, dbname, *args)
                 else:
                     msg_arg = bytes(msg)
             invalidation = worker.flush_invalidation()
