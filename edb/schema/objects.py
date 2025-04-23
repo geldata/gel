@@ -48,7 +48,6 @@ import collections
 import collections.abc
 import copy
 import enum
-import functools
 import re
 import uuid
 
@@ -57,6 +56,7 @@ from edb.edgeql import qltypes
 from edb.common.typeutils import not_none
 
 from edb.common import checked
+from edb.common import lru
 from edb.common import markup
 from edb.common import ordered
 from edb.common import parametric
@@ -1071,7 +1071,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         return type(self).__name__, self.id
 
     @staticmethod
-    @functools.lru_cache(maxsize=10240)
+    @lru.per_job_lru_cache(maxsize=10240)
     def raw_schema_restore(
         sclass_name: str,
         obj_id: uuid.UUID,
@@ -2363,7 +2363,7 @@ class ObjectCollection(
         return (clsname, typeargs, ids, tuple(attrs.items()))
 
     @staticmethod
-    @functools.lru_cache(maxsize=10240)
+    @lru.per_job_lru_cache(maxsize=10240)
     def schema_restore(
         data: Tuple[
             str,
