@@ -115,7 +115,7 @@ _ENV = os.environ.copy()
 _ENV['PYTHONPATH'] = ':'.join(sys.path)
 
 
-@functools.lru_cache()
+@functools.lru_cache(maxsize=4)
 def _pickle_memoized(obj: Any) -> bytes:
     return pickle.dumps(obj, -1)
 

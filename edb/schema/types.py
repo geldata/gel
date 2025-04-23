@@ -1358,6 +1358,7 @@ class Array(
             if other.is_polymorphic(schema):
                 return False
             right = other.get_base_for_cast(schema)
+            assert isinstance(right, Type)
             return s_casts.is_assignment_castable(schema, self, right)
 
         return self.get_element_type(schema).assignment_castable_to(
@@ -1376,6 +1377,7 @@ class Array(
             if other.is_polymorphic(schema):
                 return False
             right = other.get_base_for_cast(schema)
+            assert isinstance(right, Type)
             return s_casts.is_assignment_castable(schema, self, right)
 
         return self.get_element_type(schema).castable_to(

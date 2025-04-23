@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import Any, Optional, Mapping
 
-import functools
 
 from edb import graphql
 
@@ -29,7 +28,6 @@ from edb.schema import schema as s_schema
 from graphql.language import lexer as gql_lexer
 
 
-@functools.lru_cache()
 def _get_gqlcore(
     std_schema: s_schema.FlatSchema,
     user_schema: s_schema.FlatSchema,
