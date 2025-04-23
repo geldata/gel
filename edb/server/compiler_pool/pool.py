@@ -1951,6 +1951,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
         # if many workers passed any check in the weighter, or the most vacant.
         def weighter(w: MultiTenantWorker) -> queue.Comparable:
             if ts := w.get_tenant_schema(client_id):
+                # Don't use ts.get_db() here to avoid confusing the LRU queue
                 if db := ts.dbs.get(dbname):
                     return (
                         True,
@@ -1983,6 +1984,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                 # don't have enough information to do so.
                 user_schema_pickle_arg = user_schema_pickle
             else:
+                # Don't use ts.get_db() here to avoid confusing the LRU queue
                 worker_db = tenant_schema.dbs.get(dbname)
                 if worker_db is None:
                     # The worker has the client but not the database
@@ -1993,6 +1995,8 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                     # well as the state of course.
                     dbname_arg = dbname
                     client_id_arg = client_id
+                    # Touch dbname to bump it in the LRU queue
+                    tenant_schema.get_db(dbname)
                 else:
                     # The worker has a different root user schema
                     user_schema_pickle_arg = worker_db.user_schema_pickle
