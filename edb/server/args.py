@@ -861,7 +861,7 @@ server_options = typeutils.chain_decorators([
         "--compiler-pool-tenant-cache-size",
         hidden=True,
         type=int,
-        default=100,
+        default=20,
         envvar="GEL_SERVER_COMPILER_POOL_TENANT_CACHE_SIZE",
         cls=EnvvarResolver,
         help="Maximum number of tenants for which each compiler worker can "
@@ -1169,10 +1169,11 @@ compiler_options = typeutils.chain_decorators([
     click.option(
         "--client-schema-cache-size",
         type=int,
-        default=100,
-        help="Number of client schemas each worker could cache at most. The "
-             "compiler server is not affected by this setting, it keeps a "
-             "pickled copy of the client schema of all active clients."
+        default=20,
+        help="Maximum number of clients for which each worker can cache their "
+             "schemas, The compiler server is not affected by this setting, "
+             "it keeps pickled copies of schemas from all active clients "
+             "(each capped by --compiler-worker-branch-limit of the client)."
     ),
     click.option(
         '-I', '--listen-addresses', type=str, multiple=True,
