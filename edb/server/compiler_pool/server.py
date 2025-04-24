@@ -588,7 +588,9 @@ class MultiSchemaPool(
                 pickled = await self._request(method_name, bytes(msg))
         except Exception as ex:
             worker_proc.prepare_exception(ex)
-            if debug.flags.server:
+            if debug.flags.server and not isinstance(
+                ex, state_mod.StateNotFound
+            ):
                 markup.dump(ex)
             data = (1, ex, traceback.format_exc())
             try:

@@ -72,7 +72,7 @@ if TYPE_CHECKING:
     from edb.server.compiler import dbstate
     from edb.server.compiler import sertypes
 
-SyncStateCallback = Callable[[], None]
+SyncStateCallback = SyncFinalizer = Callable[[], None]
 Config = immutables.Map[str, config.SettingValue]
 InitArgs = tuple[
     pgparams.BackendRuntimeParams,
@@ -338,7 +338,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
         reflection_cache: state.ReflectionCache,
         database_config: Config,
         system_config: Config,
-    ) -> tuple[PreArgs, Optional[SyncStateCallback]]:
+    ) -> tuple[PreArgs, Optional[SyncStateCallback], SyncFinalizer]:
 
         def sync_worker_state_cb(
             *,
@@ -471,7 +471,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
         else:
             callback = None
 
-        return tuple(preargs), callback
+        return tuple(preargs), callback, lambda: None
 
     async def _acquire_worker(
         self,
@@ -501,9 +501,10 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
         *compile_args: Any,
         **compiler_args: Any,
     ) -> tuple[dbstate.QueryUnitGroup, bytes, int]:
+        fini = lambda: None
         worker = await self._acquire_worker(**compiler_args)
         try:
-            preargs, sync_state = await self._compute_compile_preargs(
+            preargs, sync_state, fini = await self._compute_compile_preargs(
                 "compile",
                 worker,
                 dbname,
@@ -526,6 +527,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
                 return result
 
         finally:
+            fini()
             self._release_worker(worker)
 
     async def compile_in_tx(
@@ -617,9 +619,10 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
             dbstate.QueryUnit | tuple[str, str, dict[int, str]]
         ]
     ]:
+        fini = lambda: None
         worker = await self._acquire_worker(**compiler_args)
         try:
-            preargs, sync_state = await self._compute_compile_preargs(
+            preargs, sync_state, fini = await self._compute_compile_preargs(
                 "compile_notebook",
                 worker,
                 dbname,
@@ -637,6 +640,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
             )
 
         finally:
+            fini()
             self._release_worker(worker)
 
     async def compile_graphql(
@@ -650,9 +654,10 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
         *compile_args: Any,
         **compiler_args: Any,
     ) -> graphql.TranspiledOperation:
+        fini = lambda: None
         worker = await self._acquire_worker(**compiler_args)
         try:
-            preargs, sync_state = await self._compute_compile_preargs(
+            preargs, sync_state, fini = await self._compute_compile_preargs(
                 "compile_graphql",
                 worker,
                 dbname,
@@ -670,6 +675,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
             )
 
         finally:
+            fini()
             self._release_worker(worker)
 
     async def compile_sql(
@@ -683,9 +689,10 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
         *compile_args: Any,
         **compiler_args: Any,
     ) -> list[dbstate.SQLQueryUnit]:
+        fini = lambda: None
         worker = await self._acquire_worker(**compiler_args)
         try:
-            preargs, sync_state = await self._compute_compile_preargs(
+            preargs, sync_state, fini = await self._compute_compile_preargs(
                 "compile_sql",
                 worker,
                 dbname,
@@ -702,6 +709,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
                 sync_state=sync_state
             )
         finally:
+            fini()
             self._release_worker(worker)
 
     # We use a helper function instead of just fully generating the
@@ -1527,8 +1535,6 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
         *,
         put_in_front: bool = True,
     ) -> None:
-        if self._sync_lock.locked():
-            self._sync_lock.release()
         self._semaphore.release()
 
     async def compile_in_tx(
@@ -1569,15 +1575,46 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
 
     async def _compute_compile_preargs(
         self, *args: Any
-    ) -> tuple[PreArgs, Optional[SyncStateCallback]]:
-        preargs, callback = await super()._compute_compile_preargs(*args)
-        if callback:
+    ) -> tuple[PreArgs, Optional[SyncStateCallback], SyncFinalizer]:
+        # State sync with the compiler server is serialized with _sync_lock,
+        # also blocking any other compile requests that may sync state, so as
+        # to avoid inconsistency. Meanwhile, we'd like to avoid locking when
+        # sync is not needed (callback is None), so we have 2 fast paths here:
+        #
+        #   1. When _sync_lock is not held AND sync is not needed here, or
+        #   2. after acquiring _sync_lock, we found that sync is not needed.
+        #
+        # In such cases, we avoid locking or release the lock immediately, so
+        # that concurrent compile requests can proceed in parallel.
+        preargs: PreArgs = ()
+        callback: Optional[SyncStateCallback] = lambda: None
+        fini = lambda: None
+
+        if not self._sync_lock.locked():
+            # Case 1: check if we need to sync state.
+            (
+                preargs, callback, fini
+            ) = await super()._compute_compile_preargs(*args)
+
+        if callback is not None:
+            # Check again with the lock acquired
             del preargs, callback
             await self._sync_lock.acquire()
-            preargs, callback = await super()._compute_compile_preargs(*args)
-            if not callback:
+            (
+                preargs, callback, fini
+            ) = await super()._compute_compile_preargs(*args)
+            if callback:
+                # State sync is only considered done when we received a
+                # successful response from the compiler server, when we
+                # update the local state in the worker in the `callback`
+                # function. We should usually release the lock after the
+                # `callback`, but we must also release it if anything
+                # failed along the way.
+                fini = lambda: self._sync_lock.release()
+            else:
+                # Case 2: no state sync needed, release the lock immediately.
                 self._sync_lock.release()
-        return preargs, callback
+        return preargs, callback, fini
 
     def get_debug_info(self) -> dict[str, Any]:
         return dict(
@@ -1770,7 +1807,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
         reflection_cache: state.ReflectionCache,
         database_config: Config,
         system_config: Config,
-    ) -> tuple[PreArgs, Optional[SyncStateCallback]]:
+    ) -> tuple[PreArgs, Optional[SyncStateCallback], SyncFinalizer]:
         assert isinstance(worker, MultiTenantWorker)
 
         def sync_worker_state_cb(
@@ -1934,7 +1971,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
             None,  # forwarded msg is only used in remote compiler server
             method_name,
             dbname,
-        ), callback
+        ), callback, lambda: None
 
     async def compile_in_tx(
         self,
