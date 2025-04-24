@@ -1198,7 +1198,7 @@ class FlatSchema(Schema):
                 type=s_oper.Operator,
             )
 
-    @lru.lru_method_cache()
+    @lru.per_job_lru_cache()
     def _get_casts(
         self,
         stype: s_types.Type,
@@ -1254,7 +1254,7 @@ class FlatSchema(Schema):
         return self._get_referrers(
             scls, scls_type=scls_type, field_name=field_name)
 
-    @lru.lru_method_cache()
+    @lru.per_job_lru_cache()
     def _get_referrers(
         self,
         scls: so.Object,
@@ -1292,7 +1292,7 @@ class FlatSchema(Schema):
 
             return frozenset(referrers)  # type: ignore
 
-    @lru.lru_method_cache()
+    @lru.per_job_lru_cache()
     def get_referrers_ex(
         self,
         scls: so.Object,
