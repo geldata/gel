@@ -98,37 +98,6 @@ class _NoPickle:
         self.obj = None
 
 
-def lru_method_cache(maxsize: int | None=128) -> Callable[[Tf], Tf]:
-    """A version of lru_cache for methods that shouldn't leak memory.
-
-    Basically the idea is that we generate a per-object lru-cached
-    partially applied method.
-
-    Since pickling an lru_cache of a lambda or a functools.partial
-    doesn't work, we wrap it in a _NoPickle object that doesn't pickle
-    its contents.
-    """
-    def transformer(f: Tf) -> Tf:
-        key = f'__{f.__name__}_cached'
-
-        def func(self, *args, **kwargs):
-            _m = getattr(self, key, None)
-            if not _m:
-                _m = _NoPickle(
-                    functools.lru_cache(maxsize)(functools.partial(f, self))
-                )
-                setattr(self, key, _m)
-            return _m.obj(*args, **kwargs)
-
-        return func  # type: ignore
-
-    return transformer
-
-
-def method_cache(f: Tf) -> Tf:
-    return lru_method_cache(None)(f)
-
-
 _LRU_CACHES: list[functools._lru_cache_wrapper] = []
 
 

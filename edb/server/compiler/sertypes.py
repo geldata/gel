@@ -1901,7 +1901,7 @@ class StateSerializer(InputShapeSerializer):
 
 
 class CompilationConfigSerializer(InputShapeSerializer):
-    @lru.lru_method_cache(64)
+    @lru.per_job_lru_cache(64)
     def encode_configs(
         self, *configs: immutables.Map[str, config.SettingValue] | None
     ) -> bytes:

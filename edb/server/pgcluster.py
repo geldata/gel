@@ -925,7 +925,7 @@ class RemoteCluster(BaseCluster):
         if self._ha_backend is not None:
             self._ha_backend.stop_watching()
 
-    @lru.method_cache
+    @lru.per_job_lru_cache()
     def get_client_id(self) -> int:
         tenant_id = self._instance_params.tenant_id
         if self._ha_backend is not None:

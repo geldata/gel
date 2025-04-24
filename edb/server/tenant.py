@@ -355,7 +355,7 @@ class Tenant(ha_base.ClusterProtocol):
     def get_pgaddr(self) -> pgconnparams.ConnectionParams:
         return self._cluster.get_pgaddr()
 
-    @lru.method_cache
+    @lru.per_job_lru_cache()
     def get_backend_runtime_params(self) -> pgparams.BackendRuntimeParams:
         return self._cluster.get_runtime_params()
 

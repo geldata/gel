@@ -205,7 +205,7 @@ class MultiSchemaPool(pool_mod.FixedPool):
         # this is deferred to _init_server()
         pass
 
-    @lru.method_cache
+    @lru.per_job_lru_cache()
     def _get_init_args(self):
         init_args = (
             self._backend_runtime_params,
