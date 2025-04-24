@@ -2040,7 +2040,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                     tenant_schema.get_db(dbname)
                 else:
                     # The worker has a different root user schema
-                    user_schema_pickle_arg = worker_db.user_schema_pickle
+                    user_schema_pickle_arg = user_schema_pickle
 
         try:
             units, new_pickled_state = await worker.call(

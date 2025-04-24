@@ -473,9 +473,9 @@ class MultiSchemaPool(
     async def compile_in_tx_(
         self,
         state_id: int,
-        client_id: int,
-        dbname: str,
-        user_schema_pickle: bytes,
+        client_id: Optional[int],
+        dbname: Optional[str],
+        user_schema_pickle: Optional[bytes],
         pickled_state: bytes,
         txid: int,
         *compile_args: Any,
