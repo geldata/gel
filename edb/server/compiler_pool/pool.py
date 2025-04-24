@@ -72,7 +72,8 @@ if TYPE_CHECKING:
     from edb.server.compiler import dbstate
     from edb.server.compiler import sertypes
 
-SyncStateCallback = SyncFinalizer = Callable[[], None]
+SyncStateCallback = Callable[[], None]
+SyncFinalizer = Callable[[], None]
 Config = immutables.Map[str, config.SettingValue]
 InitArgs = tuple[
     pgparams.BackendRuntimeParams,
