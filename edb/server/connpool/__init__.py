@@ -15,6 +15,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from .pool2 import Pool
-
-__all__ = ('Pool')
+from .pool2 import Pool as Pool

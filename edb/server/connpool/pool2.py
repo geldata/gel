@@ -202,7 +202,8 @@ class Pool(typing.Generic[C]):
             else:
                 # Perform a pseudo-release to ensure that the connection is
                 # returned to the pool.
-                logger.warn(f"Acquire cancelled for {msg[1]}, releasing fresh connection")
+                logger.warn(f"Acquire cancelled for {msg[1]}, releasing"
+                            "fresh connection")
                 if self._pool:
                     self._pool._release(msg[1])
         elif msg[0] == 1:
@@ -220,7 +221,8 @@ class Pool(typing.Generic[C]):
                 if f := self._acquires.pop(msg[1], None):
                     f.set_exception(error)
                 else:
-                    logger.warn(f"Failed acquire cancelled for {msg[1]}, swallowing error {error}")
+                    logger.warn(f"Failed acquire cancelled for {msg[1]},"
+                                f"swallowing error {error}")
                     pass
         elif msg[0] == 6:
             # Pickled metrics
@@ -324,7 +326,8 @@ class Pool(typing.Generic[C]):
                     raise
                 # 53300 - TOO MANY CONNECTIONS, retry after a short delay
                 if getattr(e, 'fields', {}).get('C') == '53300':
-                    logger.warn(f"Too many connections, retrying {dbname} ({self._cur_capacity} active)")
+                    logger.warn(f"Too many connections, retrying {dbname}"
+                                f"({self._cur_capacity} active)")
                     await asyncio.sleep(i + 1)
                     continue
                 logger.exception(
