@@ -143,6 +143,7 @@ class BaseServer:
         compiler_pool_addr,
         nethosts,
         netport,
+        compiler_worker_max_rss: Optional[int] = None,
         listen_sockets: tuple[socket.socket, ...] = (),
         testmode: bool = False,
         daemonized: bool = False,
@@ -187,6 +188,7 @@ class BaseServer:
         self._compiler_worker_branch_limit = compiler_worker_branch_limit
         self._compiler_pool_mode = compiler_pool_mode
         self._compiler_pool_addr = compiler_pool_addr
+        self._compiler_worker_max_rss = compiler_worker_max_rss
         self._system_compile_cache = lru.LRUMapping(
             maxsize=defines._MAX_QUERIES_CACHE
         )
@@ -580,6 +582,9 @@ class BaseServer:
         )
         if self._compiler_pool_mode == srvargs.CompilerPoolMode.Remote:
             args['address'] = self._compiler_pool_addr
+        else:
+            if self._compiler_worker_max_rss is not None:
+                args['worker_max_rss'] = self._compiler_worker_max_rss
         return args
 
     async def _destroy_compiler_pool(self):

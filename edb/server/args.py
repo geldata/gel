@@ -247,6 +247,8 @@ class ServerConfig(NamedTuple):
     compiler_pool_mode: CompilerPoolMode
     compiler_pool_addr: str
     compiler_pool_tenant_cache_size: int
+    compiler_worker_max_rss: Optional[int]
+
     echo_runtime_info: bool
     emit_server_status: str
     temp_dir: bool
@@ -1037,6 +1039,12 @@ _server_options = [
         help='Specifies when to reload the config files. See the docstring of '
              'ReloadTrigger for more information.',
     ),
+    click.option(
+        '--compiler-worker-max-rss',
+        type=int,
+        help='Maximum allowed RSS (in KiB) per compiler worker process. Any '
+             'worker exceeding this limit will be terminated and recreated.',
+    ),
 ]
 
 
@@ -1083,6 +1091,12 @@ _compiler_options = [
     click.option(
         '--metrics-port', type=PortType(),
         help=f'Port to listen on for metrics HTTP API.',
+    ),
+    click.option(
+        '--worker-max-rss',
+        type=int,
+        help='Maximum allowed RSS (in KiB) per worker process. Any worker '
+             'exceeding this limit will be terminated and recreated.',
     ),
 ]
 
@@ -1324,6 +1338,10 @@ def parse_args(**kwargs: Any):
             kwargs['compiler_pool_addr'] = (
                 "localhost", defines.EDGEDB_REMOTE_COMPILER_PORT
             )
+        if kwargs['compiler_worker_max_rss'] is not None:
+            abort('cannot set --compiler-worker-max-rss when using '
+                  '--compiler-pool-mode=remote')
+
     elif kwargs['compiler_pool_addr'] is not None:
         abort('--compiler-pool-addr is only meaningful '
               'under --compiler-pool-mode=remote')
