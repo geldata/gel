@@ -419,7 +419,7 @@ def merge_iterator(
     select: pgast.SelectStmt,
     *,
     ctx: context.CompilerContextLevel
-) -> None:
+) -> Optional[pgast.PathRangeVar]:
     merge_iterator_scope(iterator, select, ctx=ctx)
 
     if iterator:
@@ -447,6 +447,11 @@ def merge_iterator(
             pathctx.put_path_rvar(
                 select, other_path, iterator_rvar, aspect=aspect
             )
+
+        return iterator_rvar
+
+    else:
+        return None
 
 
 def fini_dml_stmt(
