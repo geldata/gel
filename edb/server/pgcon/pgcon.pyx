@@ -2126,7 +2126,10 @@ cdef class PGConnection:
                 elif event == 'query-cache-changes':
                     dbname = event_payload['dbname']
                     keys = event_payload.get('keys')
-                    self.tenant.on_remote_query_cache_change(dbname, keys=keys)
+                    to_invalidate = event_payload.get('to_invalidate')
+                    self.tenant.on_remote_query_cache_change(
+                        dbname, keys=keys, to_invalidate=to_invalidate
+                    )
                 else:
                     raise AssertionError(f'unexpected system event: {event!r}')
 

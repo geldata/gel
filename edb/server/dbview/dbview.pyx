@@ -553,6 +553,16 @@ cdef class Database:
                 "skipped %d incompatible cache items", -warning_count
             )
 
+    def invalidate_cache_entries(self, to_invalidate):
+        # TODO: this, better, in constant time
+        to_del = []
+        for obj in self._eql_to_compiled:
+            if obj.get_cache_key() in to_invalidate:
+                to_del.append(obj)
+
+        for obj in to_del:
+            del self._eql_to_compiled[obj]
+
     def clear_query_cache(self):
         self._eql_to_compiled.clear()
 

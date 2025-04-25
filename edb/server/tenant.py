@@ -2076,6 +2076,24 @@ class Tenant(ha_base.ClusterProtocol):
         keys: Iterable[uuid.UUID],
     ) -> None:
         try:
+            # XXX: TODO: This only partially works. It is still
+            # fundamentally racy, since there is no guarantee that
+            # other frontends have processed the invalidations before
+            # the eviction happens.
+            #
+            # I think we will need to retry queries that fail because
+            # their cached function has been invalidated (and
+            # propagate that error to clients with the RETRY bit set,
+            # so that transactions are retried).
+            #
+            # And once we are doing that we probably want to debounce
+            # the eviction notifications also.
+            await self.signal_sysevent(
+                "query-cache-changes",
+                dbname=dbname,
+                to_invalidate=[str(k) for k in keys],
+            )
+
             async with self._with_intro_pgcon(dbname) as conn:
                 if not conn:
                     return
@@ -2085,11 +2103,6 @@ class Tenant(ha_base.ClusterProtocol):
                         args=(key.bytes,),
                         use_prep_stmt=True,
                     )
-
-            # XXX: TODO: We don't need to signal here in the
-            # non-function version, but in the function caching
-            # situation this will be fraught.
-            # await self.signal_sysevent("query-cache-changes", dbname=dbname)
 
         except Exception:
             logger.exception("error in evict_query_cache():")
@@ -2101,8 +2114,17 @@ class Tenant(ha_base.ClusterProtocol):
         self,
         dbname: str,
         keys: Optional[list[str]],
+        to_invalidate: Optional[list[str]],
     ) -> None:
         if not self.is_db_ready(dbname):
+            return
+
+        if to_invalidate:
+            if db := self.maybe_get_db(dbname=dbname):
+                # print("invalidating", to_invalidate)
+                db.invalidate_cache_entries(
+                    [uuid.UUID(s) for s in to_invalidate]
+                )
             return
 
         async def task():
