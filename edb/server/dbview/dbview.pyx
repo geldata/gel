@@ -630,7 +630,6 @@ cdef class DatabaseConnectionView:
         self._in_tx_modaliases = None
         self._in_tx_savepoints = []
         self._in_tx_capabilities = 0
-        self._in_tx_with_ddl = False
         self._in_tx_with_sysconfig = False
         self._in_tx_with_dbconfig = False
         self._in_tx_with_set = False
@@ -1014,15 +1013,17 @@ cdef class DatabaseConnectionView:
     cdef cache_compiled_query(self, object key, object query_unit_group):
         assert query_unit_group.cacheable
 
-        if self._tx_error or self._in_tx_with_ddl:
+        if self._tx_error or self._in_tx_capabilities & DDL_CAPABILITIES:
             return
 
         self._db._cache_compiled_query(key, query_unit_group)
 
     cdef lookup_compiled_query(self, object key):
-        if (self._tx_error or
-                not self._query_cache_enabled or
-                self._in_tx_with_ddl):
+        if (
+            self._tx_error
+            or not self._query_cache_enabled
+            or self._in_tx_capabilities & DDL_CAPABILITIES
+        ):
             return None
 
         return self._db._eql_to_compiled.get(key, None)
@@ -1061,8 +1062,6 @@ cdef class DatabaseConnectionView:
 
     cdef _apply_in_tx(self, query_unit):
         self._in_tx_capabilities |= query_unit.capabilities
-        if query_unit.has_ddl:
-            self._in_tx_with_ddl = True
         if query_unit.system_config:
             self._in_tx_with_sysconfig = True
         if query_unit.database_config:
@@ -1468,7 +1467,7 @@ cdef class DatabaseConnectionView:
         ):
             # Recompile all cached queries if:
             #  * Issued a DDL or committing a tx with DDL (recompilation
-            #    before in-tx DDL needs to fix _in_tx_with_ddl caching 1st)
+            #    before in-tx DDL needs to fix _in_tx_capabilities caching 1st)
             #  * Config.auto_rebuild_query_cache is turned on
             #
             # Ideally we should compute the proper user_schema, database_config

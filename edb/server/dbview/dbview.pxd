@@ -173,7 +173,6 @@ cdef class DatabaseConnectionView:
         object _in_tx_new_types
         int _in_tx_dbver
         bint _in_tx
-        bint _in_tx_with_ddl
         uint64_t _in_tx_capabilities
         bint _in_tx_with_sysconfig
         bint _in_tx_with_dbconfig
