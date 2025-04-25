@@ -633,13 +633,7 @@ def try_bind_call_args(
 
     return_polymorphism = ft.Polymorphism.NotUsed
     if return_type.is_polymorphic(schema):
-        return_polymorphism = (
-            ft.Polymorphism.Simple
-            if not return_type.is_collection() else
-            ft.Polymorphism.Array
-            if return_type.is_array() else
-            ft.Polymorphism.Collection
-        )
+        return_polymorphism = ft.Polymorphism.from_schema_type(return_type)
 
         if resolved_poly_base_type is not None:
             ctx.env.schema, return_type = return_type.to_nonpolymorphic(
@@ -654,13 +648,7 @@ def try_bind_call_args(
             if barg.param_type.is_polymorphic(schema):
                 ctx.env.schema, ptype = barg.param_type.to_nonpolymorphic(
                     ctx.env.schema, resolved_poly_base_type)
-                polymorphism = (
-                    ft.Polymorphism.Simple
-                    if not barg.param_type.is_collection() else
-                    ft.Polymorphism.Array
-                    if barg.param_type.is_array() else
-                    ft.Polymorphism.Collection
-                )
+                polymorphism = ft.Polymorphism.from_schema_type(barg.param_type)
                 bound_param_args[i] = BoundArg(
                     barg.param,
                     ptype,

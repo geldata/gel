@@ -28,6 +28,8 @@ from edb.common import enum as s_enum
 if TYPE_CHECKING:
     T = TypeVar("T", covariant=True)
 
+    from edb.schema import types as s_types
+
 
 class ParameterKind(s_enum.StrEnum):
     VariadicParam = 'VariadicParam'
@@ -62,6 +64,16 @@ class Polymorphism(s_enum.StrEnum):
     Simple = 'Simple'
     Array = 'Array'
     Collection = 'Collection'
+
+    @staticmethod
+    def from_schema_type(type: s_types.Type) -> Polymorphism:
+        return (
+            Polymorphism.Simple
+            if not type.is_collection() else
+            Polymorphism.Array
+            if type.is_array() else
+            Polymorphism.Collection
+        )
 
 
 class OperatorKind(s_enum.StrEnum):
