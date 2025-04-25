@@ -35,6 +35,7 @@ import sys
 import time
 
 import immutables
+import psutil
 
 from edb.common import debug
 from edb.common import lru
@@ -158,6 +159,7 @@ class Worker(BaseWorker):
         super().__init__(*args)
 
         self._pid = pid
+        self._proc = psutil.Process(pid)
         self._last_pickled_state = None
         self._manager = manager
         self._server = server
@@ -174,6 +176,9 @@ class Worker(BaseWorker):
 
     def get_pid(self):
         return self._pid
+
+    def get_rss(self) -> int:
+        return self._proc.memory_info().rss // 1024
 
     def close(self):
         if self._closed:
@@ -669,12 +674,14 @@ class BaseLocalPool(
     _worker_mod = "worker"
     _workers_queue: queue.WorkerQueue[Worker]
     _workers: Dict[int, Worker]
+    _worker_max_rss: Optional[int]
 
     def __init__(
         self,
         *,
         runstate_dir,
         pool_size,
+        worker_max_rss=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -690,6 +697,7 @@ class BaseLocalPool(
 
         assert pool_size >= 1
         self._pool_size = pool_size
+        self._worker_max_rss = worker_max_rss
         self._workers = {}
 
         self._server = amsg.Server(self._poolsock_name, self._loop, self)
@@ -851,6 +859,12 @@ class BaseLocalPool(
     def _release_worker(self, worker, *, put_in_front: bool = True):
         # Skip disconnected workers
         if worker.get_pid() in self._workers:
+            if self._worker_max_rss is not None:
+                if worker.get_rss() > self._worker_max_rss:
+                    if debug.flags.server:
+                        print(f"HIT MEMORY LIMIT, KILLING {worker.get_pid()}")
+                    worker.close()
+                    return
             self._workers_queue.release(worker, put_in_front=put_in_front)
 
     def get_debug_info(self):
