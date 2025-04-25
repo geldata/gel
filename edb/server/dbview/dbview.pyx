@@ -75,6 +75,9 @@ cdef int VER_COUNTER = 0
 cdef DICTDEFAULT = (None, None)
 cdef object logger = logging.getLogger('edb.server')
 
+cdef uint64_t DML_CAPABILITIES = compiler.Capability.MODIFICATIONS
+cdef uint64_t DDL_CAPABILITIES = compiler.Capability.DDL
+
 # Mapping from oids of PostgreSQL types into corresponding EdgeQL type.
 # Needed only for pg types that do not exist in EdgeQL, such as pg_catalog.name
 cdef TYPES_SQL_ONLY = immutables.Map({
@@ -203,6 +206,8 @@ cdef class Database:
         self._cache_notify_queue = asyncio.Queue()
         self._cache_notify_task = asyncio.create_task(
             self.monitor(self.cache_notifier, 'cache_notifier'))
+
+        self.dml_queries_executed = 0
 
     @property
     def server(self):
@@ -624,6 +629,7 @@ cdef class DatabaseConnectionView:
         self._in_tx_db_config = None
         self._in_tx_modaliases = None
         self._in_tx_savepoints = []
+        self._in_tx_capabilities = 0
         self._in_tx_with_ddl = False
         self._in_tx_with_sysconfig = False
         self._in_tx_with_dbconfig = False
@@ -1054,6 +1060,7 @@ cdef class DatabaseConnectionView:
         self._in_tx_seq = self._db.tx_seq_begin_tx()
 
     cdef _apply_in_tx(self, query_unit):
+        self._in_tx_capabilities |= query_unit.capabilities
         if query_unit.has_ddl:
             self._in_tx_with_ddl = True
         if query_unit.system_config:
@@ -1090,6 +1097,8 @@ cdef class DatabaseConnectionView:
         side_effects = 0
 
         if not self._in_tx:
+            if query_unit.capabilities & DML_CAPABILITIES:
+                self._db.dml_queries_executed += 1
             if new_types:
                 self._db._update_backend_ids(new_types)
             if query_unit.user_schema is not None:
@@ -1133,6 +1142,8 @@ cdef class DatabaseConnectionView:
             self._modaliases = self._in_tx_modaliases
             self._globals = self._in_tx_globals
 
+            if self._in_tx_capabilities & DML_CAPABILITIES:
+                self._db.dml_queries_executed += 1
             if self._in_tx_new_types:
                 self._db._update_backend_ids(self._in_tx_new_types)
             if query_unit.user_schema is not None:

@@ -45,11 +45,23 @@ NET_HTTP_REQUEST_TTL = statypes.Duration(
 )  # 1 hour
 
 
-async def _http_task(tenant: edbtenant.Tenant, http_client) -> None:
+@dataclasses.dataclass
+class TenantState:
+    # For each database, we track the last (db.dml_queries_executed,
+    # db.dbver) that we saw. We track dbver so that we can detect
+    # a database being dropped and recreated.
+    database_counts: dict[str, tuple[int, int]]
+    http_client: typing.Any
+
+
+async def _http_task(tenant: edbtenant.Tenant, state: TenantState) -> None:
     http_max_connections = tenant._server.config_lookup(
         'http_max_connections', tenant.get_sys_config()
     )
+    http_client = state.http_client
     http_client._update_limit(http_max_connections)
+    seen_counts = {}
+
     try:
         # TODO: I think this TaskGroup approach might not be the right
         # approach here. It is fragile to failures and means that slow
@@ -63,6 +75,21 @@ async def _http_task(tenant: edbtenant.Tenant, http_client) -> None:
                     # Don't run the net_worker if the database is not
                     # connectable, e.g. being dropped
                     continue
+                cur_seen = state.database_counts.get(db.name, (-1, -1))
+
+                # We only do the polling for net requests on branches
+                # that have seen DML since our last execute.
+                #
+                # TODO: It would be even better if we only ran when
+                # there were queries that actually touched
+                # ScheduledRequest, but I'm still musing over how to
+                # thread the data around in a way that isn't just a
+                # total hack.
+                if cur_seen == (db.dml_queries_executed, db.dbver):
+                    seen_counts[db.name] = cur_seen
+                    continue
+
+                new_key = db.dml_queries_executed + 1, db.dbver
                 try:
                     json_bytes = await execute.parse_execute_json(
                         db,
@@ -91,6 +118,7 @@ async def _http_task(tenant: edbtenant.Tenant, http_client) -> None:
                         tx_isolation=defines.TxIsolationLevel.RepeatableRead,
                         query_tag='gel/net',
                     )
+                    seen_counts[db.name] = new_key
                 except Exception as ex:
                     # If the query fails (because the database branch
                     # has been racily deleted, maybe), ignore an keep
@@ -116,9 +144,14 @@ async def _http_task(tenant: edbtenant.Tenant, http_client) -> None:
             exc_info=ex,
         )
 
+    state.database_counts = seen_counts
+
 
 def create_http(tenant: edbtenant.Tenant):
-    return tenant.get_http_client(originator="std::net")
+    return TenantState(
+        http_client=tenant.get_http_client(originator="std::net"),
+        database_counts={},
+    )
 
 
 async def http(server: edbserver.BaseServer) -> None:
