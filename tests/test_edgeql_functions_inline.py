@@ -7865,6 +7865,39 @@ class TestEdgeQLFunctionsInline(tb.QueryTestCase):
             ],
         )
 
+    async def test_edgeql_functions_inline_insert_nested_scopes_01(self):
+        # Set funcs/ops such as ?? compile their arguments in a new scope.
+        #
+        # If such funcs/ops are used in a volatile binding in a dml function,
+        # a non-volatile bindings which is compiled from the volatile binding
+        # will not have direct access to the args iterator rvar. Instead,
+        # they need access via the args' scope stmt.
+        #
+        # Test that this works as expected.
+        await self.con.execute('''
+            create type Foo { create property num: int64 };
+
+            create function foo(num: int64) -> Foo
+            {
+                using (
+                    with
+                        a := (num),
+                        b := ((insert Foo { num := 0 }).num ?? a)
+                    insert Foo { num := num }
+                );
+            };
+        ''')
+
+        await self.assert_query_result(
+            'select foo(1) { num }',
+            [{'num': 1}],
+        )
+        await self.assert_query_result(
+            'select Foo.num',
+            [0, 1],
+            sort=True,
+        )
+
     async def test_edgeql_functions_inline_update_basic_01(self):
         await self.con.execute('''
             create type Bar {
