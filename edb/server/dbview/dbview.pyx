@@ -554,14 +554,9 @@ cdef class Database:
             )
 
     def invalidate_cache_entries(self, to_invalidate):
-        # TODO: this, better, in constant time
-        to_del = []
-        for obj in self._eql_to_compiled:
-            if obj.get_cache_key() in to_invalidate:
-                to_del.append(obj)
-
-        for obj in to_del:
-            del self._eql_to_compiled[obj]
+        for key in to_invalidate:
+            handle = rpc.CompilationRequestIdHandle(key)
+            self._eql_to_compiled.pop(handle, None)
 
     def clear_query_cache(self):
         self._eql_to_compiled.clear()
