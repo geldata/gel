@@ -3564,7 +3564,9 @@ def _compile_inlined_call_args(
 
         # Merge the new iterator
         ctx.path_scope = ctx.path_scope.new_child()
-        dml.merge_iterator(arg_iterator, ctx.rel, ctx=ctx)
+        arg_rvar = not_none(
+            dml.merge_iterator(arg_iterator, ctx.rel, ctx=ctx)
+        )
         clauses.setup_iterator_volatility(arg_iterator, ctx=ctx)
 
         ctx.enclosing_cte_iterator = arg_iterator
@@ -3585,17 +3587,20 @@ def _compile_inlined_call_args(
                 arg_path_id,
                 ctx=ctx,
             )
-            if arg_scope_stmt := relctx.maybe_get_scope_stmt(
-                arg_path_id, ctx=ctx
-            ):
-                # The rvar is joined to ctx.rel, but other sets may
-                # look for it in the scope statement. Make sure it's
-                # available.
-                pathctx.put_path_value_rvar(
-                    arg_scope_stmt,
-                    arg_path_id,
-                    arg_rvar,
-                )
+
+    for ir_arg in expr.args.values():
+        arg_path_id = ir_arg.expr.path_id
+        if arg_scope_stmt := relctx.maybe_get_scope_stmt(
+            arg_path_id, ctx=ctx
+        ):
+            # The args are joined to ctx.rel, but other sets may
+            # look for it in the scope statement. Make sure it's
+            # available.
+            pathctx.put_path_value_rvar(
+                arg_scope_stmt,
+                arg_path_id,
+                arg_rvar,
+            )
 
 
 def process_set_as_func_enumerate(
