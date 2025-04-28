@@ -45,7 +45,6 @@ from edb.server import compiler, defines, config, metrics, pgcon
 from edb.server.compiler import dbstate, enums, sertypes
 from edb.server.protocol import execute
 from edb.pgsql import dbops
-from edb.server.compiler_pool import state as compiler_state_mod
 from edb.server.pgcon import errors as pgerror
 
 from edb.server.protocol import ai_ext
@@ -2046,18 +2045,8 @@ cdef class DatabaseIndex:
 
     def get_cached_compiler_args(self):
         if self._cached_compiler_args is None:
-            dbs = immutables.Map()
-            for db in self._dbs.values():
-                dbs = dbs.set(
-                    db.name,
-                    compiler_state_mod.PickledDatabaseState(
-                        user_schema_pickle=db.user_schema_pickle,
-                        reflection_cache=db.reflection_cache,
-                        database_config=db.db_config,
-                    )
-                )
             self._cached_compiler_args = (
-                dbs, self._global_schema_pickle, self._comp_sys_config
+                self._global_schema_pickle, self._comp_sys_config
             )
         return self._cached_compiler_args
 
