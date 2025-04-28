@@ -553,6 +553,9 @@ cdef class Database:
                 "skipped %d incompatible cache items", -warning_count
             )
 
+    def invalidate_cache_entry_object(self, obj):
+        self._eql_to_compiled.pop(obj, None)
+
     def invalidate_cache_entries(self, to_invalidate):
         for key in to_invalidate:
             handle = rpc.CompilationRequestIdHandle(key)
