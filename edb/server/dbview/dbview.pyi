@@ -223,7 +223,10 @@ class DatabaseIndex:
 
     def get_cached_compiler_args(
         self,
-    ) -> tuple[immutables.Map, bytes, Config]:
+    ) -> tuple[
+        bytes,
+        immutables.Map[str, config.SettingValue],
+    ]:
         ...
 
     def lookup_config(self, name: str) -> Any:

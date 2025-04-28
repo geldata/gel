@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, NamedTuple
+from typing import Any, Callable, Optional, NamedTuple, Sequence
 
 import pickle
 
@@ -337,17 +337,52 @@ def compile_sql(
     )
 
 
-def call_for_client(client_id, pickled_schema, invalidation, msg, *args):
+def call_for_client(
+    client_id: int,
+    pickled_schema: Optional[bytes],
+    invalidation: Sequence[int],
+    client_version: int,
+    msg: Optional[bytes],
+    *args: Any,
+) -> Any:
     __sync__(client_id, pickled_schema, invalidation)
     if msg is None:
-        methname = args[0]
-        dbname = args[1]
-        args = args[2:]
+        methname, dbname, *compile_args = args
     else:
         assert args == ()
         methname, args = pickle.loads(msg)
-        dbname = args[0]
-        args = args[6:]
+        match client_version:
+            case 1:
+                # compatible with pre-#8621 clients
+                (
+                    dbname,
+
+                    user_schema,
+                    reflection_cache,
+                    global_schema,
+                    database_config,
+                    system_config,
+
+                    *compile_args,
+                ) = args
+
+            case _:
+                (
+                    dbname,
+
+                    # These are pass-thru arguments from Gel server, they are
+                    # already utilized in the compiler server and forwarded to
+                    # us through "pickled_schema" argument, so we don't need
+                    # them here
+                    evicted_dbs,
+                    user_schema,
+                    reflection_cache,
+                    global_schema,
+                    database_config,
+                    system_config,
+
+                    *compile_args,
+                ) = args
 
     if methname == "compile":
         meth = compile
@@ -358,11 +393,14 @@ def call_for_client(client_id, pickled_schema, invalidation, msg, *args):
     elif methname == "compile_sql":
         meth = compile_sql
     else:
-        meth = getattr(COMPILER, methname)
-    return meth(client_id, dbname, *args)
+        raise NotImplementedError(
+            f"call_for_client() is not implemented for {methname!r} method. "
+        )
+    return meth(client_id, dbname, *compile_args)
 
 
-def get_handler(methname):
+def get_handler(methname: str) -> Callable[..., Any]:
+    meth: Callable[..., Any]
     if methname == "__init_worker__":
         meth = __init_worker__
     else:

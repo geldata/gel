@@ -231,6 +231,7 @@ async def _run_server(
             runstate_dir=runstate_dir,
             internal_runstate_dir=internal_runstate_dir,
             compiler_pool_size=args.compiler_pool_size,
+            compiler_worker_branch_limit=args.compiler_worker_branch_limit,
             compiler_pool_mode=args.compiler_pool_mode,
             compiler_pool_addr=args.compiler_pool_addr,
             nethosts=args.bind_addresses,
