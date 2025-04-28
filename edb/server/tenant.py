@@ -2076,23 +2076,18 @@ class Tenant(ha_base.ClusterProtocol):
         keys: Iterable[uuid.UUID],
     ) -> None:
         try:
-            # XXX: TODO: This only partially works. It is still
-            # fundamentally racy, since there is no guarantee that
-            # other frontends have processed the invalidations before
-            # the eviction happens.
-            #
-            # I think we will need to retry queries that fail because
-            # their cached function has been invalidated (and
-            # propagate that error to clients with the RETRY bit set,
-            # so that transactions are retried).
-            #
-            # And once we are doing that we probably want to debounce
-            # the eviction notifications also.
-            await self.signal_sysevent(
-                "query-cache-changes",
-                dbname=dbname,
-                to_invalidate=[str(k) for k in keys],
-            )
+            # Send eviction messages to other potential frontends. Cap
+            # at 100 keys per message because of max message sizes.
+            # Note that this is a "best effort" kind of thing: it is
+            # fundamentally racy and other frontends will still need
+            # to retry on cache errors.
+            MAX = 100
+            for i in range(0, len(keys), MAX):
+                await self.signal_sysevent(
+                    "query-cache-changes",
+                    dbname=dbname,
+                    to_invalidate=[str(k) for k in keys[i:i+MAX]],
+                )
 
             async with self._with_intro_pgcon(dbname) as conn:
                 if not conn:
