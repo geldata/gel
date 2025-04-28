@@ -138,6 +138,7 @@ class BaseServer:
         runstate_dir,
         internal_runstate_dir,
         compiler_pool_size,
+        compiler_worker_branch_limit,
         compiler_pool_mode: srvargs.CompilerPoolMode,
         compiler_pool_addr,
         nethosts,
@@ -183,6 +184,7 @@ class BaseServer:
         self._internal_runstate_dir = internal_runstate_dir
         self._compiler_pool = None
         self._compiler_pool_size = compiler_pool_size
+        self._compiler_worker_branch_limit = compiler_worker_branch_limit
         self._compiler_pool_mode = compiler_pool_mode
         self._compiler_pool_addr = compiler_pool_addr
         self._system_compile_cache = lru.LRUMapping(
@@ -568,6 +570,7 @@ class BaseServer:
 
         args = dict(
             pool_size=self._compiler_pool_size,
+            worker_branch_limit=self._compiler_worker_branch_limit,
             pool_class=self._compiler_pool_mode.pool_class,
             runstate_dir=self._internal_runstate_dir,
             backend_runtime_params=runtime_params,

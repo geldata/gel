@@ -124,7 +124,6 @@ class Worker(pool_mod.Worker):
             manager,
             server,
             pid,
-            None,
             backend_runtime_params,
             std_schema,
             refl_schema,
@@ -192,6 +191,7 @@ class MultiSchemaPool(pool_mod.FixedPool):
     _worker_mod = "multitenant_worker"
     _workers: typing.Dict[int, Worker]  # type: ignore
     _clients: typing.Dict[int, ClientSchema]
+    _client_versions: typing.Dict[int, int]
 
     def __init__(self, cache_size, *, secret, **kwargs):
         super().__init__(**kwargs)
@@ -199,6 +199,7 @@ class MultiSchemaPool(pool_mod.FixedPool):
         self._inited = asyncio.Event()
         self._cache_size = cache_size
         self._clients = {}
+        self._client_versions = {}
         self._secret = secret
 
     def _init(self, kwargs: dict[str, typing.Any]) -> None:
@@ -237,7 +238,28 @@ class MultiSchemaPool(pool_mod.FixedPool):
             global_schema_pickle,
             system_config_pickled,
         ) = init_args_pickled
-        dbs, backend_runtime_params = pickle.loads(client_args_pickled)
+        client_args = pickle.loads(client_args_pickled)
+        dbs_arg: immutables.Map[str, PickledState]
+        if len(client_args) == 1:
+            # This is a new v2 client
+            backend_runtime_params, = client_args
+            dbs_arg = immutables.Map()
+            client_version = 2
+        else:
+            # be compatible with pre-#8621 clients
+            dbs, backend_runtime_params = client_args
+            dbs_arg = immutables.Map(
+                (
+                    dbname,
+                    PickledState(
+                        state.user_schema_pickle,
+                        pickle.dumps(state.reflection_cache, -1),
+                        pickle.dumps(state.database_config, -1),
+                    ),
+                )
+                for dbname, state in dbs.items()
+            )
+            client_version = 1
         if self._inited.is_set():
             logger.debug("New client %d connected.", client_id)
             assert self._catalog_version is not None
@@ -260,44 +282,51 @@ class MultiSchemaPool(pool_mod.FixedPool):
                 client_id,
             )
         self._clients[client_id] = ClientSchema(
-            immutables.Map(
-                (
-                    dbname,
-                    PickledState(
-                        state.user_schema_pickle,
-                        pickle.dumps(state.reflection_cache, -1),
-                        pickle.dumps(state.database_config, -1),
-                    ),
-                )
-                for dbname, state in dbs.items()
-            ),
-            global_schema_pickle,
-            system_config_pickled,
-            (),
+            dbs=dbs_arg,
+            global_schema=global_schema_pickle,
+            instance_config=system_config_pickled,
+            dropped_dbs=(),
         )
+        self._client_versions[client_id] = client_version
 
     def _sync(
         self,
+        *,
         client_id: int,
         dbname: str,
+        evicted_dbs: list[str],
         user_schema: typing.Optional[bytes],
         reflection_cache: typing.Optional[bytes],
         global_schema: typing.Optional[bytes],
         database_config: typing.Optional[bytes],
         system_config: typing.Optional[bytes],
     ):
+        """Sync the client state in the compiler server.
+
+        The client state is carried over with the compile(), compile_sql(),
+        compile_notebook(), compile_graphql() calls.
+
+        Returns True if the client state changed, False otherwise.
+        """
         # EdgeDB instance syncs the schema with the compiler server
         client = self._clients[client_id]
         client_updates: typing.Dict[str, typing.Any] = {}
-        db = client.dbs.get(dbname)
+        dbs = client.dbs.mutate()
+        dbs_changed = False
+        if evicted_dbs:
+            for name in evicted_dbs:
+                if dbs.pop(name, None) is not None:
+                    dbs_changed = True
+
+        db = dbs.get(dbname)
         if db is None:
             assert user_schema is not None
             assert reflection_cache is not None
             assert database_config is not None
-            client_updates["dbs"] = client.dbs.set(
-                dbname,
-                PickledState(user_schema, reflection_cache, database_config),
+            dbs[dbname] = PickledState(
+                user_schema, reflection_cache, database_config
             )
+            dbs_changed = True
         else:
             updates = {}
 
@@ -310,13 +339,17 @@ class MultiSchemaPool(pool_mod.FixedPool):
 
             if updates:
                 db = db._replace(**updates)
-                client_updates["dbs"] = client.dbs.set(dbname, db)
+                dbs[dbname] = db
+                dbs_changed = True
 
         if global_schema is not None:
             client_updates["global_schema"] = global_schema
 
         if system_config is not None:
             client_updates["instance_config"] = system_config
+
+        if dbs_changed:
+            client_updates["dbs"] = dbs.finish()
 
         if client_updates:
             self._clients[client_id] = client._replace(**client_updates)
@@ -335,13 +368,30 @@ class MultiSchemaPool(pool_mod.FixedPool):
 
     async def _call_for_client(
         self,
+        *,
         client_id,
         method_name,
+        dbname,
+        evicted_dbs,
+        user_schema,
+        reflection_cache,
+        global_schema,
+        database_config,
+        system_config,
         args,
         msg,
     ):
         try:
-            updated = self._sync(client_id, *args[:6])
+            updated = self._sync(
+                client_id=client_id,
+                dbname=dbname,
+                evicted_dbs=evicted_dbs,
+                user_schema=user_schema,
+                reflection_cache=reflection_cache,
+                global_schema=global_schema,
+                database_config=database_config,
+                system_config=system_config,
+            )
         except Exception as ex:
             raise state_mod.FailedStateSync(
                 f"failed to sync compiler server state: "
@@ -367,7 +417,7 @@ class MultiSchemaPool(pool_mod.FixedPool):
                 if updated:
                     # re-pickle the request if user schema changed
                     msg = None
-                    extra_args = (method_name, args[0], *args[6:])
+                    extra_args = (method_name, dbname, *args)
             if msg:
                 msg = bytes(msg)
             invalidation = worker.flush_invalidation()
@@ -376,6 +426,7 @@ class MultiSchemaPool(pool_mod.FixedPool):
                 client_id,
                 diff,
                 invalidation,
+                self._client_versions[client_id],
                 msg,
                 *extra_args,
             )
@@ -470,8 +521,44 @@ class MultiSchemaPool(pool_mod.FixedPool):
                 "compile_graphql",
                 "compile_sql",
             }:
+                match self._client_versions.get(client_id):
+                    case 1:
+                        # compatible with pre-#8621 clients
+                        evicted_dbs = []
+                        (
+                            dbname,
+                            user_schema,
+                            reflection_cache,
+                            global_schema,
+                            database_config,
+                            system_config,
+                            *args,
+                        ) = args
+
+                    case _:
+                        (
+                            dbname,
+                            evicted_dbs,
+                            user_schema,
+                            reflection_cache,
+                            global_schema,
+                            database_config,
+                            system_config,
+                            *args,
+                        ) = args
+
                 pickled = await self._call_for_client(
-                    client_id, method_name, args, msg
+                    client_id=client_id,
+                    method_name=method_name,
+                    dbname=dbname,
+                    evicted_dbs=evicted_dbs,
+                    user_schema=user_schema,
+                    reflection_cache=reflection_cache,
+                    global_schema=global_schema,
+                    database_config=database_config,
+                    system_config=system_config,
+                    args=args,
+                    msg=msg,
                 )
             elif method_name == "compile_in_tx":
                 pickled = await self.compile_in_tx(*args, msg=msg)
@@ -479,7 +566,9 @@ class MultiSchemaPool(pool_mod.FixedPool):
                 pickled = await self._request(method_name, msg)
         except Exception as ex:
             worker_proc.prepare_exception(ex)
-            if debug.flags.server:
+            if debug.flags.server and not isinstance(
+                ex, state_mod.StateNotFound
+            ):
                 markup.dump(ex)
             data = (1, ex, traceback.format_exc())
             try:
@@ -493,6 +582,7 @@ class MultiSchemaPool(pool_mod.FixedPool):
     def client_disconnected(self, client_id):
         logger.debug("Client %d disconnected, invalidating cache.", client_id)
         self._clients.pop(client_id, None)
+        self._client_versions.pop(client_id, None)
         for worker in self._workers.values():
             worker.invalidate(client_id)
 
@@ -622,6 +712,7 @@ async def server_main(
             loop=loop,
             runstate_dir=runstate_dir,
             pool_size=pool_size,
+            worker_branch_limit=0,  # compiler server doesn't use this limit
             cache_size=client_schema_cache_size,
             secret=secret.encode(),
         )
