@@ -254,6 +254,7 @@ class ServerConfig(NamedTuple):
     extensions_dir: tuple[pathlib.Path, ...]
     max_backend_connections: Optional[int]
     compiler_pool_size: int
+    compiler_worker_branch_limit: int
     compiler_pool_mode: CompilerPoolMode
     compiler_pool_addr: str
     compiler_pool_tenant_cache_size: int
@@ -811,10 +812,28 @@ server_options = typeutils.chain_decorators([
              f'minus the NUM of --reserved-pg-connections.',
         callback=_validate_max_backend_connections),
     click.option(
-        '--compiler-pool-size', type=int,
+        '--compiler-pool-size', type=int, metavar='NUM',
         envvar="GEL_SERVER_COMPILER_POOL_SIZE",
         cls=EnvvarResolver,
-        callback=_validate_compiler_pool_size),
+        callback=_validate_compiler_pool_size,
+        help='Size of the compiler pool.  When --compiler-pool-mode=fixed or '
+             'fixed_multi_tenant, it is the NUM of compiler worker processes, '
+             f"defaults to {compute_default_compiler_pool_size()} (you'll see "
+             '1 extra template process); for on_demand, it is the maximum NUM '
+             'of workers the pool could scale up to, with the same default; '
+             'for remote, it is the maximum NUM of concurrent requests to the '
+             'remote compiler server, defaults to 2.'
+    ),
+    click.option(
+        '--compiler-worker-branch-limit', type=int, metavar='NUM',
+        default=5,
+        envvar="GEL_SERVER_COMPILER_WORKER_BRANCH_LIMIT",
+        cls=EnvvarResolver,
+        help='The maximum NUM of branches each compiler worker could cache up '
+             'to, default is 5.  If the worker serves multiple tenants (as in '
+             '--compiler-pool-mode=fixed_multi_tenant or remote), this tenant '
+             'on that worker will be able to cache up to NUM branches.'
+    ),
     click.option(
         '--compiler-pool-mode',
         type=CompilerPoolModeChoice(),
@@ -842,7 +861,7 @@ server_options = typeutils.chain_decorators([
         "--compiler-pool-tenant-cache-size",
         hidden=True,
         type=int,
-        default=100,
+        default=20,
         envvar="GEL_SERVER_COMPILER_POOL_TENANT_CACHE_SIZE",
         cls=EnvvarResolver,
         help="Maximum number of tenants for which each compiler worker can "
@@ -1149,10 +1168,11 @@ compiler_options = typeutils.chain_decorators([
     click.option(
         "--client-schema-cache-size",
         type=int,
-        default=100,
-        help="Number of client schemas each worker could cache at most. The "
-             "compiler server is not affected by this setting, it keeps a "
-             "pickled copy of the client schema of all active clients."
+        default=20,
+        help="Maximum number of clients for which each worker can cache their "
+             "schemas, The compiler server is not affected by this setting, "
+             "it keeps pickled copies of schemas from all active clients "
+             "(each capped by --compiler-worker-branch-limit of the client)."
     ),
     click.option(
         '-I', '--listen-addresses', type=str, multiple=True,

@@ -545,6 +545,7 @@ class TestCompilerPool(tbs.TestCase):
             pool_ = await pool.create_compiler_pool(
                 runstate_dir=td,
                 pool_size=2,
+                worker_branch_limit=5,
                 backend_runtime_params=pg_params.get_default_runtime_params(),
                 std_schema=self._std_schema,
                 refl_schema=self._refl_schema,
