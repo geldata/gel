@@ -104,6 +104,7 @@ KILL_TIMEOUT: float = 10.0
 ADAPTIVE_SCALE_UP_WAIT_TIME: float = 3.0
 ADAPTIVE_SCALE_DOWN_WAIT_TIME: float = 60.0
 WORKER_PKG: str = __name__.rpartition('.')[0] + '.'
+CALL_FOR_CLIENT_VERSION = 2
 
 
 logger = logging.getLogger("edb.server")
@@ -1461,7 +1462,7 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
                 "is not set"
             )
         self._secret = secret.encode()
-        self._server_version = 2
+        self._server_version = CALL_FOR_CLIENT_VERSION
 
     async def start(self, *, retry: bool = False) -> None:
         if self._worker is None:
@@ -2048,6 +2049,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
             client_id,
             pickled_schema,
             worker.get_invalidation(),
+            CALL_FOR_CLIENT_VERSION,
             None,  # forwarded msg is only used in remote compiler server
             method_name,
             dbname,
