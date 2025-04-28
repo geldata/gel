@@ -51,6 +51,7 @@ class Database:
     db_config: Config
     extensions: set[str]
     user_config_spec: config.Spec
+    dml_queries_executed: int
 
     @property
     def server(self) -> server.Server:

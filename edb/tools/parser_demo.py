@@ -391,6 +391,6 @@ QUERIES = [
     '''sdl# comment
     ''',
     '''
-       CREATE BRANCH hello;
+       FOR x in foo.bar + bar UNION x;
     '''
 ]

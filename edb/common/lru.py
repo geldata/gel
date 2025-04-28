@@ -99,7 +99,7 @@ class _NoPickle:
         self.obj = None
 
 
-def lru_method_cache(size: int | None=128) -> Callable[[Tf], Tf]:
+def lru_method_cache(maxsize: int | None=128) -> Callable[[Tf], Tf]:
     """A version of lru_cache for methods that shouldn't leak memory.
 
     Basically the idea is that we generate a per-object lru-cached
@@ -117,7 +117,7 @@ def lru_method_cache(size: int | None=128) -> Callable[[Tf], Tf]:
             _m = getattr(self, key, None)
             if not _m:
                 _m = _NoPickle(
-                    functools.lru_cache(size)(functools.partial(f, self))
+                    functools.lru_cache(maxsize)(functools.partial(f, self))
                 )
                 setattr(self, key, _m)
             return _m.obj(*args, **kwargs)
@@ -137,3 +137,25 @@ def clear_method_cache(method: Tf) -> None:
     _m: Optional[_NoPickle] = getattr(method.__self__, key, None)
     if _m is not None:
         _m.obj.cache_clear()
+
+
+_LRU_CACHES: list[functools._lru_cache_wrapper] = []
+
+
+def per_job_lru_cache(maxsize: int | None=128) -> Callable[[Tf], Tf]:
+    """A version of lru_cache that can be cleared en masse.
+
+    All the caches will be tracked and calling clear_lru_caches()
+    will clear them all.
+    """
+    def transformer(f: Tf) -> Tf:
+        wrapped = functools.lru_cache(maxsize)(f)
+        _LRU_CACHES.append(wrapped)
+        return wrapped  # type: ignore
+
+    return transformer
+
+
+def clear_lru_caches():
+    for cache in _LRU_CACHES:
+        cache.cache_clear()

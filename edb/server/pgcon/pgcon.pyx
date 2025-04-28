@@ -571,6 +571,7 @@ cdef class PGConnection:
 
         if state is not None and start == 0:
             self._build_apply_state_req(state, out)
+            # N.B: Condition here needs to match that in wait_for_state_resp
             if needs_commit_state or self.state_reset_needs_commit:
                 self.write_sync(out)
 
@@ -685,7 +686,8 @@ cdef class PGConnection:
     async def wait_for_state_resp(
         self, bytes state, bint state_sync, bint needs_commit_state
     ):
-        if state_sync:
+        # N.B: Condition here needs to match that in send_query_unit_group
+        if state_sync or self.state_reset_needs_commit:
             try:
                 await self._parse_apply_state_resp(2 if state is None else 3)
             finally:
@@ -2007,6 +2009,12 @@ cdef class PGConnection:
 
         cdef:
             char mtype = self.buffer.get_message_type()
+
+        # Process a sync, or else the state machine might hang
+        # forever... but still fail!
+        if mtype == b'Z':
+            self.parse_sync_message()
+
         raise RuntimeError(
             f'unexpected message type {chr(mtype)!r}')
 
@@ -2185,7 +2193,7 @@ cdef class PGConnection:
             self.xact_status = PQTRANS_UNKNOWN
 
         if self.debug:
-            self.debug_print('SYNC MSG', self.xact_status)
+            self.debug_print('SYNC MSG', self.xact_status, chr(status))
 
         self.buffer.finish_message()
         return status

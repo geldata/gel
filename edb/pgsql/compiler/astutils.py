@@ -129,6 +129,96 @@ def tuple_getattr(
     return set_expr
 
 
+def array_get_inner_array(
+    wrapped_array: pgast.BaseExpr,
+    array_typeref: irast.TypeRef,
+) -> pgast.BaseExpr:
+    """Unwrap and get the inner array of a formerly nested array.
+
+    Since array<array<...>> is implemented as array<tuple<array<...>>>, when
+    an element is accessed, it needs to be unwrapped.
+
+    Essentially, this function takes tuple<array<...>> and returns array<...>
+
+    Postgres does not support arbitrarily accessing fields out of unnamed
+    composites and so we need to do an extra unnest(array[]) to be able to
+    specify the name and type our resulting array.
+
+    For example, the query: `select [[1]][0];` will produce the following SQL:
+
+    SELECT
+            "expr-6~2"."array_value~4" AS "array_serialized~1"
+        FROM
+            LATERAL
+            (SELECT
+                    "expr-5~2"."array_value~3" AS "array_value~4"
+                FROM
+                    LATERAL
+                    (SELECT
+                            (SELECT
+                                    "0"
+                                FROM
+                                    -- EXTRA unnest(array[])
+                                    unnest(ARRAY[
+                                        -- INDEX INDIRECTION
+                                        edgedb_v7_2f26206480._index(
+                                            "expr-3~2"."array_value~2",
+                                            ($2)::int8,
+                                            'ERROR MESSAGE'
+                                        )
+                                    ]) AS ("0" int8[])
+                            ) AS "array_value~3"
+                        FROM
+                            LATERAL
+                            -- INITAL ARRAY [[1]]
+                            (SELECT
+                                    ARRAY[ROW("expr-2~2"."array_value~1")]
+                                    AS "array_value~2"
+                                FROM
+                                    LATERAL
+                                    (SELECT
+                                            ARRAY[($1)::int8]
+                                            AS "array_value~1"
+                                    ) AS "expr-2~2"
+                            ) AS "expr-3~2"
+                    ) AS "expr-5~2"
+            ) AS "expr-6~2"
+        WHERE
+            ("expr-6~2"."array_value~4" IS NOT NULL)
+        LIMIT
+        (SELECT
+                (101)::int8 AS "expr~7_value~1"
+        )
+    """
+    return pgast.SelectStmt(
+        target_list=[
+            pgast.ResTarget(val=pgast.ColumnRef(name=['0'])),
+        ],
+        from_clause=[
+            pgast.RangeFunction(
+                functions=[
+                    pgast.FuncCall(
+                        name=('unnest',),
+                        args=[
+                            pgast.ArrayExpr(
+                                elements=[wrapped_array],
+                            )
+                        ],
+                        coldeflist=[
+                            pgast.ColumnDef(
+                                name='0',
+                                typename=pgast.TypeName(
+                                    name=pg_types.pg_type_from_ir_typeref(array_typeref)
+                                )
+                            )
+                        ]
+                    )
+                ]
+            )
+        ]
+    )
+
+
 def is_null_const(expr: pgast.BaseExpr) -> bool:
     if isinstance(expr, pgast.TypeCast):
         expr = expr.arg

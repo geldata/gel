@@ -245,6 +245,9 @@ line-length = 80
 indent-width = 4
 exclude = ["postgres", ".github", "edb/server/pgproto"]
 
+[tool.ruff.format]
+quote-style = "preserve"
+
 [tool.ruff.lint]
 preview = true
 select = ["E", "F", "W", "B", "UP006", "UP007"]

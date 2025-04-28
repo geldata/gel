@@ -19,12 +19,12 @@
 
 from __future__ import annotations
 
-import functools
 import dataclasses
 import uuid
 from typing import Literal, Optional, cast, overload
 
 from edb.common.typeutils import not_none
+from edb.common import lru
 
 from edb.ir import ast as irast
 from edb.ir import typeutils as irtyputils
@@ -382,6 +382,8 @@ def pg_type_from_ir_typeref(
                 or (irtyputils.is_abstract(ir_typeref.subtypes[0])
                     and irtyputils.is_scalar(ir_typeref.subtypes[0]))):
             return ('anyarray',)
+        elif irtyputils.is_array(ir_typeref.subtypes[0]):
+            return ('record[]',)
         else:
             tp = pg_type_from_ir_typeref(
                 ir_typeref.subtypes[0],
@@ -534,7 +536,7 @@ def _pointer_storable_in_pointer(
     )
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def get_pointer_storage_info(
     pointer: s_pointers.Pointer,
     *,
@@ -665,7 +667,7 @@ def get_ptrref_storage_info(
     )
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def _get_ptrref_storage_info(
     ptrref: irast.BasePointerRef,
     *,
