@@ -1547,7 +1547,7 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
                     # called with exactly `__init_server__` with no prefix.
                     if self._server_version > 1:
                         self._server_version -= 1
-                        lru.clear_cache(self._make_cached_init_args)
+                        lru.clear_method_cache(self._make_cached_init_args)
                         logger.info(
                             f"falling back to compiler server protocol "
                             f"version {self._server_version}"

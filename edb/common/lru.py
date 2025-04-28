@@ -131,7 +131,7 @@ def method_cache(f: Tf) -> Tf:
     return lru_method_cache(None)(f)
 
 
-def clear_cache(method: Tf) -> None:
+def clear_method_cache(method: Tf) -> None:
     assert isinstance(method, MethodType)
     key = f'__{method.__func__.__name__}_cached'
     _m: Optional[_NoPickle] = getattr(method.__self__, key, None)
