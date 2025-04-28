@@ -23,7 +23,8 @@ import collections.abc
 import functools
 
 
-from typing import TypeVar, Callable
+from typing import TypeVar, Callable, Optional
+from types import MethodType
 
 
 class LRUMapping(collections.abc.MutableMapping):
@@ -111,6 +112,7 @@ def lru_method_cache(size: int | None=128) -> Callable[[Tf], Tf]:
     def transformer(f: Tf) -> Tf:
         key = f'__{f.__name__}_cached'
 
+        @functools.wraps(f)
         def func(self, *args, **kwargs):
             _m = getattr(self, key, None)
             if not _m:
@@ -127,3 +129,11 @@ def lru_method_cache(size: int | None=128) -> Callable[[Tf], Tf]:
 
 def method_cache(f: Tf) -> Tf:
     return lru_method_cache(None)(f)
+
+
+def clear_cache(method: Tf) -> None:
+    assert isinstance(method, MethodType)
+    key = f'__{method.__func__.__name__}_cached'
+    _m: Optional[_NoPickle] = getattr(method.__self__, key, None)
+    if _m is not None:
+        _m.obj.cache_clear()
