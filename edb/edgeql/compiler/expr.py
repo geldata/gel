@@ -19,6 +19,7 @@
 
 """EdgeQL non-statement expression compilation functions."""
 
+
 from __future__ import annotations
 
 from typing import Callable, Optional, Sequence, cast
@@ -64,6 +65,7 @@ from . import func  # NOQA
 def compile__Optional(
     expr: qlast.OptionalExpr, *, ctx: context.ContextLevel
 ) -> irast.Set:
+
     result = dispatch.compile(expr.expr, ctx=ctx)
 
     pathctx.register_set_in_scope(result, optional=True, ctx=ctx)
@@ -94,20 +96,32 @@ def compile_Path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
 
 def _balance(
     elements: Sequence[qlast.Expr],
-    ctor: Callable[[qlast.Expr, qlast.Expr, Optional[qlast.Span]], qlast.Expr],
+    ctor: Callable[
+        [qlast.Expr, qlast.Expr, Optional[qlast.Span]],
+        qlast.Expr
+    ],
     span: Optional[qlast.Span],
 ) -> qlast.Expr:
     mid = len(elements) // 2
     ls, rs = elements[:mid], elements[mid:]
     ls_span = rs_span = None
     if len(ls) > 1 and ls[0].span and ls[-1].span:
-        ls_span = edb_span.merge_spans([ls[0].span, ls[-1].span])
+        ls_span = edb_span.merge_spans([
+            ls[0].span, ls[-1].span
+        ])
     if len(rs) > 1 and rs[0].span and rs[-1].span:
-        rs_span = edb_span.merge_spans([rs[0].span, rs[-1].span])
+        rs_span = edb_span.merge_spans([
+            rs[0].span, rs[-1].span])
 
     return ctor(
-        (_balance(ls, ctor, ls_span) if len(ls) > 1 else ls[0]),
-        (_balance(rs, ctor, rs_span) if len(rs) > 1 else rs[0]),
+        (
+            _balance(ls, ctor, ls_span)
+            if len(ls) > 1 else ls[0]
+        ),
+        (
+            _balance(rs, ctor, rs_span)
+            if len(rs) > 1 else rs[0]
+        ),
         span,
     )
 
@@ -128,7 +142,7 @@ def compile_BinOp(expr: qlast.BinOp, *, ctx: context.ContextLevel) -> irast.Set:
                 lambda l, r, s: qlast.BinOp(
                     left=l, right=r, op=expr.op, rebalanced=True, span=s
                 ),
-                expr.span,
+                expr.span
             )
             return dispatch.compile(balanced, ctx=ctx)
 
@@ -157,7 +171,9 @@ def compile_StrInterp(
         maintype=qlast.ObjectRef(module='__std__', name='str')
     )
     for fragment in expr.interpolations:
-        strs.append(qlast.TypeCast(expr=fragment.expr, type=str_type))
+        strs.append(qlast.TypeCast(
+            expr=fragment.expr, type=str_type
+        ))
         strs.append(qlast.Constant.string(fragment.suffix))
 
     call = qlast.FunctionCall(
@@ -206,14 +222,10 @@ def compile_Set(expr: qlast.Set, *, ctx: context.ContextLevel) -> irast.Set:
             bigunion = _balance(
                 elements,
                 lambda l, r, s: qlast.BinOp(
-                    left=l,
-                    op='UNION',
-                    right=r,
-                    rebalanced=True,
-                    set_constructor=True,
-                    span=s,
+                    left=l, op='UNION', right=r,
+                    rebalanced=True, set_constructor=True, span=s
                 ),
-                expr.span,
+                expr.span
             )
             res = dispatch.compile(bigunion, ctx=ctx)
             if cres := try_constant_set(res):
@@ -289,14 +301,15 @@ def compile_BytesConstant(
 def compile_NamedTuple(
     expr: qlast.NamedTuple, *, ctx: context.ContextLevel
 ) -> irast.Set:
+
     names = set()
     elements = []
     for el in expr.elements:
         name = el.name.name
         if name in names:
             raise errors.QueryError(
-                f"named tuple has duplicate field '{name}'", span=el.span
-            )
+                f"named tuple has duplicate field '{name}'",
+                span=el.span)
         names.add(name)
 
         element = irast.TupleElement(
@@ -310,6 +323,7 @@ def compile_NamedTuple(
 
 @dispatch.compile.register(qlast.Tuple)
 def compile_Tuple(expr: qlast.Tuple, *, ctx: context.ContextLevel) -> irast.Set:
+
     elements = []
     for i, el in enumerate(expr.elements):
         element = irast.TupleElement(
@@ -328,8 +342,8 @@ def compile_Array(expr: qlast.Array, *, ctx: context.ContextLevel) -> irast.Set:
     for el, expr_el in zip(elements, expr.elements):
         if isinstance(setgen.get_set_type(el, ctx=ctx), s_abc.Array):
             raise errors.QueryError(
-                f'nested arrays are not supported', span=expr_el.span
-            )
+                f'nested arrays are not supported',
+                span=expr_el.span)
 
     return setgen.new_array_set(elements, ctx=ctx, span=expr.span)
 
@@ -354,13 +368,10 @@ def _move_fenced_anchor(ir: irast.Set, *, ctx: context.ContextLevel) -> None:
     """
     match ir.expr:
         case irast.SelectStmt(result=irast.SetE(path_scope_id=int(id))):
-            node = next(
-                iter(
-                    x
-                    for x in ctx.path_scope.root.descendants
-                    if x.unique_id == id
-                )
-            )
+            node = next(iter(
+                x for x in ctx.path_scope.root.descendants
+                if x.unique_id == id
+            ))
             target = ctx.path_scope.find_descendant(ir.path_id)
             assert target and target.parent
             node.remove()
@@ -395,19 +406,16 @@ def _compile_dml_coalesce(
         subctx.path_scope.factoring_allowlist.update(ctx.iterator_path_ids)
 
         ir = func.compile_operator(
-            expr, op_name=expr.op, qlargs=[expr.left, expr.right], ctx=subctx
-        )
+            expr, op_name=expr.op, qlargs=[expr.left, expr.right], ctx=subctx)
 
         # Extract the IR parts from the ??
         # Note that lhs_ir will be unfenced while rhs_ir
         # will have been compiled under fences.
         match ir.expr:
-            case irast.OperatorCall(
-                args={
-                    0: irast.CallArg(expr=lhs_ir),
-                    1: irast.CallArg(expr=rhs_ir),
-                }
-            ):
+            case irast.OperatorCall(args={
+                0: irast.CallArg(expr=lhs_ir),
+                1: irast.CallArg(expr=rhs_ir),
+            }):
                 pass
             case _:
                 raise AssertionError('malformed DML ??')
@@ -476,23 +484,18 @@ def _compile_dml_ifelse(
         subctx.path_scope.factoring_allowlist.update(ctx.iterator_path_ids)
 
         ir = func.compile_operator(
-            expr,
-            op_name='std::IF',
-            qlargs=[expr.if_expr, expr.condition, expr.else_expr],
-            ctx=subctx,
-        )
+            expr, op_name='std::IF',
+            qlargs=[expr.if_expr, expr.condition, expr.else_expr], ctx=subctx)
 
         # Extract the IR parts from the IF/THEN/ELSE
         # Note that cond_ir will be unfenced while if_ir and else_ir
         # will have been compiled under fences.
         match ir.expr:
-            case irast.OperatorCall(
-                args={
-                    0: irast.CallArg(expr=if_ir),
-                    1: irast.CallArg(expr=cond_ir),
-                    2: irast.CallArg(expr=else_ir),
-                }
-            ):
+            case irast.OperatorCall(args={
+                0: irast.CallArg(expr=if_ir),
+                1: irast.CallArg(expr=cond_ir),
+                2: irast.CallArg(expr=else_ir),
+            }):
                 pass
             case _:
                 raise AssertionError('malformed DML IF/ELSE')
@@ -531,8 +534,7 @@ def _compile_dml_ifelse(
         # If we are warning on factoring, double wrap it.
         if ctx.warn_factoring:
             cond_ir = setgen.ensure_set(
-                setgen.ensure_stmt(cond_ir, ctx=ctx), ctx=ctx
-            )
+                setgen.ensure_stmt(cond_ir, ctx=ctx), ctx=ctx)
         full = qlast.ForQuery(
             iterator_alias=alias,
             iterator=subctx.create_anchor(cond_ir, 'b'),
@@ -556,17 +558,16 @@ def _compile_dml_ifelse(
 def compile_IfElse(
     expr: qlast.IfElse, *, ctx: context.ContextLevel
 ) -> irast.Set:
-    if astutils.contains_dml(expr.if_expr, ctx=ctx) or astutils.contains_dml(
-        expr.else_expr, ctx=ctx
+
+    if (
+        astutils.contains_dml(expr.if_expr, ctx=ctx)
+        or astutils.contains_dml(expr.else_expr, ctx=ctx)
     ):
         return _compile_dml_ifelse(expr, ctx=ctx)
 
     res = func.compile_operator(
-        expr,
-        op_name='std::IF',
-        qlargs=[expr.if_expr, expr.condition, expr.else_expr],
-        ctx=ctx,
-    )
+        expr, op_name='std::IF',
+        qlargs=[expr.if_expr, expr.condition, expr.else_expr], ctx=ctx)
 
     return res
 
@@ -575,9 +576,9 @@ def compile_IfElse(
 def compile_UnaryOp(
     expr: qlast.UnaryOp, *, ctx: context.ContextLevel
 ) -> irast.Set:
+
     return func.compile_operator(
-        expr, op_name=expr.op, qlargs=[expr.operand], ctx=ctx
-    )
+        expr, op_name=expr.op, qlargs=[expr.operand], ctx=ctx)
 
 
 @dispatch.compile.register(qlast.GlobalExpr)
@@ -585,17 +586,13 @@ def compile_GlobalExpr(
     expr: qlast.GlobalExpr, *, ctx: context.ContextLevel
 ) -> irast.Set:
     glob = ctx.env.get_schema_object_and_track(
-        s_utils.ast_ref_to_name(expr.name),
-        expr.name,
-        modaliases=ctx.modaliases,
-        type=s_globals.Global,
-    )
+        s_utils.ast_ref_to_name(expr.name), expr.name,
+        modaliases=ctx.modaliases, type=s_globals.Global)
     assert isinstance(glob, s_globals.Global)
 
     if glob.is_computable(ctx.env.schema):
         obj_ref = s_utils.name_to_ast_ref(
-            glob.get_target(ctx.env.schema).get_name(ctx.env.schema)
-        )
+            glob.get_target(ctx.env.schema).get_name(ctx.env.schema))
         # Wrap the reference in a subquery so that it does not get
         # factored out or go directly into the scope tree.
         qry = qlast.SelectQuery(result=qlast.Path(steps=[obj_ref]))
@@ -643,16 +640,14 @@ def compile_GlobalExpr(
             return dispatch.compile(default.parse(), ctx=ctx)
         else:
             return setgen.new_empty_set(
-                stype=glob.get_target(ctx.env.schema), ctx=ctx
-            )
+                stype=glob.get_target(ctx.env.schema), ctx=ctx)
 
     objctx = ctx.env.options.schema_object_context
     if objctx in (s_constr.Constraint, s_indexes.Index):
         typname = objctx.get_schema_class_displayname()
         raise errors.SchemaDefinitionError(
             f'global variables cannot be referenced from {typname}',
-            span=expr.span,
-        )
+            span=expr.span)
 
     param_set: qlast.Expr | irast.Set
     present_set: qlast.Expr | irast.Set | None
@@ -663,8 +658,7 @@ def compile_GlobalExpr(
         param_set, present_set = setgen.get_global_param_sets(glob, ctx=ctx)
     else:
         param_set, present_set = setgen.get_func_global_param_sets(
-            glob, ctx=ctx
-        )
+            glob, ctx=ctx)
 
     if default and not present_set:
         # If we have a default value and the global is required,
@@ -674,11 +668,8 @@ def compile_GlobalExpr(
             subctx.anchors = subctx.anchors.copy()
             main_param = subctx.maybe_create_anchor(param_set, 'glob')
             param_set = func.compile_operator(
-                expr,
-                op_name='std::??',
-                qlargs=[main_param, default.parse()],
-                ctx=subctx,
-            )
+                expr, op_name='std::??',
+                qlargs=[main_param, default.parse()], ctx=subctx)
     elif default and present_set:
         # ... but if {} is a valid value for the global, we need to
         # stick in an extra parameter to indicate whether to use
@@ -690,11 +681,8 @@ def compile_GlobalExpr(
             present_param = subctx.maybe_create_anchor(present_set, 'present')
 
             param_set = func.compile_operator(
-                expr,
-                op_name='std::IF',
-                qlargs=[main_param, present_param, default.parse()],
-                ctx=subctx,
-            )
+                expr, op_name='std::IF',
+                qlargs=[main_param, present_param, default.parse()], ctx=subctx)
     elif not isinstance(param_set, irast.Set):
         param_set = dispatch.compile(param_set, ctx=ctx)
 
@@ -720,7 +708,7 @@ def compile_TypeCast(
                 schema=ctx.env.schema,
                 suggestion_limit=1,
                 item_type=s_func.Function,
-                hint_text='did you mean to call',
+                hint_text='did you mean to call'
             )
         raise
 
@@ -729,19 +717,17 @@ def compile_TypeCast(
     if isinstance(expr.expr, qlast.Parameter):
         if (
             # generic types not explicitly allowed
-            not ctx.env.options.allow_generic_type_output
-            and
+            not ctx.env.options.allow_generic_type_output and
             # not compiling a function which hadles its own generic types
-            ctx.env.options.func_name is None
-            and target_stype.is_polymorphic(ctx.env.schema)
+            ctx.env.options.func_name is None and
+            target_stype.is_polymorphic(ctx.env.schema)
         ):
             raise errors.QueryError(
                 f'parameter cannot be a generic type '
                 f'{target_stype.get_displayname(ctx.env.schema)!r}',
                 hint="Please ensure you don't use generic "
-                '"any" types or abstract scalars.',
-                span=expr.span,
-            )
+                     '"any" types or abstract scalars.',
+                span=expr.span)
 
         pt = typegen.ql_typeexpr_to_type(expr.type, ctx=ctx)
 
@@ -753,8 +739,7 @@ def compile_TypeCast(
                 required = True
             else:
                 raise NotImplementedError(
-                    f"cardinality modifier {expr.cardinality_mod}"
-                )
+                    f"cardinality modifier {expr.cardinality_mod}")
         else:
             required = True
 
@@ -763,8 +748,7 @@ def compile_TypeCast(
                 raise errors.QueryError(
                     'queries compiled to accept JSON parameters do not '
                     'accept positional parameters',
-                    span=expr.expr.span,
-                )
+                    span=expr.expr.span)
 
             typeref = typegen.type_to_typeref(
                 ctx.env.get_schema_type_and_track(sn.QualName('std', 'json')),
@@ -799,23 +783,20 @@ def compile_TypeCast(
         if ex_param := ctx.env.script_params.get(param_name):
             # N.B. Accessing the schema_type from the param is unreliable
             ctx.env.schema, param_first_type = irtyputils.ir_typeref_to_type(
-                ctx.env.schema, ex_param.ir_type
-            )
+                ctx.env.schema, ex_param.ir_type)
             if param_first_type != pt:
                 raise errors.QueryError(
                     f'parameter type '
                     f'{pt.get_displayname(ctx.env.schema)} '
                     f'does not match original type '
                     f'{param_first_type.get_displayname(ctx.env.schema)}',
-                    span=expr.expr.span,
-                )
+                    span=expr.expr.span)
 
         if param_name not in ctx.env.query_parameters:
             sub_params = None
             if ex_param and ex_param.sub_params:
                 sub_params = tuple_args.finish_sub_params(
-                    ex_param.sub_params, ctx=ctx
-                )
+                    ex_param.sub_params, ctx=ctx)
 
             ctx.env.query_parameters[param_name] = irast.Param(
                 name=param_name,
@@ -842,12 +823,13 @@ def compile_TypeCast(
         use_message_context = False
         if target_stype.is_collection() and subctx.collection_cast_info is None:
             subctx.collection_cast_info = context.CollectionCastInfo(
-                from_type=orig_stype, to_type=target_stype, path_elements=[]
+                from_type=orig_stype,
+                to_type=target_stype,
+                path_elements=[]
             )
 
             use_message_context = (
-                orig_stype.is_array()
-                and target_stype.is_array()
+                orig_stype.is_array() and target_stype.is_array()
                 or (
                     orig_stype.is_tuple(ctx.env.schema)
                     and target_stype.is_tuple(ctx.env.schema)
@@ -865,9 +847,13 @@ def compile_TypeCast(
 
         except errors.QueryError as e:
             if (
-                message_context := casts.cast_message_context(subctx)
-            ) and use_message_context:
-                e.args = (message_context + e.args[0],) + e.args[1:]
+                (message_context := casts.cast_message_context(subctx))
+                and use_message_context
+            ):
+                e.args = (
+                    (message_context + e.args[0],)
+                    + e.args[1:]
+                )
             raise e
 
     return stmt.maybe_add_view(res, ctx=ctx)
@@ -876,28 +862,36 @@ def compile_TypeCast(
 def _infer_type_introspection(
     typeref: irast.TypeRef,
     env: context.Environment,
-    span: Optional[parsing.Span] = None,
+    span: Optional[parsing.Span]=None,
 ) -> s_types.Type:
     if irtyputils.is_scalar(typeref):
-        return cast(s_objtypes.ObjectType, env.schema.get('schema::ScalarType'))
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::ScalarType'))
     elif irtyputils.is_object(typeref):
-        return cast(s_objtypes.ObjectType, env.schema.get('schema::ObjectType'))
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::ObjectType'))
     elif irtyputils.is_array(typeref):
-        return cast(s_objtypes.ObjectType, env.schema.get('schema::Array'))
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::Array'))
     elif irtyputils.is_tuple(typeref):
-        return cast(s_objtypes.ObjectType, env.schema.get('schema::Tuple'))
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::Tuple'))
     elif irtyputils.is_range(typeref):
-        return cast(s_objtypes.ObjectType, env.schema.get('schema::Range'))
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::Range'))
     elif irtyputils.is_multirange(typeref):
-        return cast(s_objtypes.ObjectType, env.schema.get('schema::MultiRange'))
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::MultiRange'))
     else:
-        raise errors.QueryError('unexpected type in INTROSPECT', span=span)
+        raise errors.QueryError(
+            'unexpected type in INTROSPECT', span=span)
 
 
 @dispatch.compile.register(qlast.Introspect)
 def compile_Introspect(
     expr: qlast.Introspect, *, ctx: context.ContextLevel
 ) -> irast.Set:
+
     typeref = typegen.ql_typeexpr_to_ir_typeref(expr.type, ctx=ctx)
     if typeref.material_type and not irtyputils.is_object(typeref):
         typeref = typeref.material_type
@@ -912,16 +906,16 @@ def compile_Introspect(
 
     if irtyputils.is_view(typeref):
         raise errors.QueryError(
-            f'cannot introspect transient type variant', span=expr.type.span
-        )
+            f'cannot introspect transient type variant',
+            span=expr.type.span)
     if irtyputils.is_collection(typeref):
         raise errors.QueryError(
-            f'cannot introspect collection types', span=expr.type.span
-        )
+            f'cannot introspect collection types',
+            span=expr.type.span)
     if irtyputils.is_generic(typeref):
         raise errors.QueryError(
-            f'cannot introspect generic types', span=expr.type.span
-        )
+            f'cannot introspect generic types',
+            span=expr.type.span)
 
     result_typeref = typegen.type_to_typeref(
         _infer_type_introspection(typeref, ctx.env, expr.span), env=ctx.env
@@ -936,8 +930,7 @@ def compile_Introspect(
 def _infer_index_type(
     expr: irast.Set | irast.Expr,
     index: irast.Set,
-    *,
-    ctx: context.ContextLevel,
+    *, ctx: context.ContextLevel,
 ) -> s_types.Type:
     env = ctx.env
     node_type = setgen.get_expr_type(expr, ctx=ctx)
@@ -951,72 +944,64 @@ def _infer_index_type(
     result: s_types.Type
 
     if node_type.issubclass(env.schema, str_t):
+
         if not index_type.implicitly_castable_to(int_t, env.schema):
             raise errors.QueryError(
                 f'cannot index string by '
                 f'{index_type.get_displayname(env.schema)}, '
                 f'{int_t.get_displayname(env.schema)} was expected',
-                span=index.span,
-            )
+                span=index.span)
 
         result = str_t
 
     elif node_type.issubclass(env.schema, bytes_t):
+
         if not index_type.implicitly_castable_to(int_t, env.schema):
             raise errors.QueryError(
                 f'cannot index bytes by '
                 f'{index_type.get_displayname(env.schema)}, '
                 f'{int_t.get_displayname(env.schema)} was expected',
-                span=index.span,
-            )
+                span=index.span)
 
         result = bytes_t
 
     elif node_type.issubclass(env.schema, json_t):
-        if not (
-            index_type.implicitly_castable_to(int_t, env.schema)
-            or index_type.implicitly_castable_to(str_t, env.schema)
-        ):
+
+        if not (index_type.implicitly_castable_to(int_t, env.schema) or
+                index_type.implicitly_castable_to(str_t, env.schema)):
+
             raise errors.QueryError(
                 f'cannot index json by '
                 f'{index_type.get_displayname(env.schema)}, '
                 f'{int_t.get_displayname(env.schema)} or '
                 f'{str_t.get_displayname(env.schema)} was expected',
-                span=index.span,
-            )
+                span=index.span)
 
         result = json_t
 
     elif isinstance(node_type, s_types.Array):
+
         if not index_type.implicitly_castable_to(int_t, env.schema):
             raise errors.QueryError(
                 f'cannot index array by '
                 f'{index_type.get_displayname(env.schema)}, '
                 f'{int_t.get_displayname(env.schema)} was expected',
-                span=index.span,
-            )
+                span=index.span)
 
         result = node_type.get_subtypes(env.schema)[0]
 
-    elif (
-        node_type.is_any(env.schema)
-        or (
-            node_type.is_scalar()
-            and str(node_type.get_name(env.schema)) == 'std::anyscalar'
-        )
-        and (
-            index_type.implicitly_castable_to(int_t, env.schema)
-            or index_type.implicitly_castable_to(str_t, env.schema)
-        )
-    ):
+    elif (node_type.is_any(env.schema) or
+            (node_type.is_scalar() and
+                str(node_type.get_name(env.schema)) == 'std::anyscalar') and
+            (index_type.implicitly_castable_to(int_t, env.schema) or
+                index_type.implicitly_castable_to(str_t, env.schema))):
         result = s_pseudo.PseudoType.get(env.schema, 'anytype')
 
     else:
         raise errors.QueryError(
             f'index indirection cannot be applied to '
             f'{node_type.get_verbosename(env.schema)}',
-            span=expr.span,
-        )
+            span=expr.span)
 
     return result
 
@@ -1025,8 +1010,7 @@ def _infer_slice_type(
     expr: irast.Set,
     start: Optional[irast.Set],
     stop: Optional[irast.Set],
-    *,
-    ctx: context.ContextLevel,
+    *, ctx: context.ContextLevel,
 ) -> s_types.Type:
     env = ctx.env
     node_type = setgen.get_set_type(expr, ctx=ctx)
@@ -1050,8 +1034,7 @@ def _infer_slice_type(
         # the base type is not valid
         raise errors.QueryError(
             f'{node_type.get_verbosename(env.schema)} cannot be sliced',
-            span=expr.span,
-        )
+            span=expr.span)
 
     for index in [start, stop]:
         if index is not None:
@@ -1062,8 +1045,7 @@ def _infer_slice_type(
                     f'cannot slice {base_name} by '
                     f'{index_type.get_displayname(env.schema)}, '
                     f'{int_t.get_displayname(env.schema)} was expected',
-                    span=index.span,
-                )
+                    span=index.span)
 
     return node_type
 
@@ -1103,14 +1085,11 @@ def compile_Indirection(
                 _infer_slice_type(node_set, start, stop, ctx=ctx), env=ctx.env
             )
             node = irast.SliceIndirection(
-                expr=node_set,
-                start=start,
-                stop=stop,
-                typeref=typeref,
+                expr=node_set, start=start, stop=stop, typeref=typeref,
             )
         else:
             raise ValueError(
-                'unexpected indirection node: {!r}'.format(indirection_el)
+                'unexpected indirection node: ' '{!r}'.format(indirection_el)
             )
 
     return setgen.ensure_set(node, ctx=ctx)
@@ -1132,24 +1111,20 @@ def compile_type_check_op(
         pathctx.register_set_in_scope(left, ctx=ctx)
 
         left = setgen.ptr_step_set(
-            left,
-            expr=None,
-            source=ltype,
-            ptr_name='__type__',
-            span=expr.span,
-            ctx=ctx,
+            left, expr=None, source=ltype, ptr_name='__type__',
+            span=expr.span, ctx=ctx
         )
         result = None
     else:
-        if ltype.is_collection() and cast(
-            s_types.Collection, ltype
-        ).contains_object(ctx.env.schema):
+        if (ltype.is_collection()
+                and cast(s_types.Collection, ltype).contains_object(
+                    ctx.env.schema)):
             raise errors.QueryError(
                 f'type checks on non-primitive collections are not supported'
             )
 
-        ctx.env.schema, test_type = irtyputils.ir_typeref_to_type(
-            ctx.env.schema, typeref
+        ctx.env.schema, test_type = (
+            irtyputils.ir_typeref_to_type(ctx.env.schema, typeref)
         )
         result = ltype.issubclass(ctx.env.schema, test_type)
 
@@ -1159,12 +1134,8 @@ def compile_type_check_op(
     )
 
     return irast.TypeCheckOp(
-        left=left,
-        right=typeref,
-        op=expr.op,
-        result=result,
-        typeref=output_typeref,
-    )
+        left=left, right=typeref, op=expr.op, result=result,
+        typeref=output_typeref)
 
 
 def flatten_set(expr: qlast.Set) -> list[qlast.Expr]:
