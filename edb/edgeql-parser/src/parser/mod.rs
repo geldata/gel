@@ -220,7 +220,7 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
 }
 
 /// Parses tokens and then inspects the state of the parser to suggest possible
-/// next keywords.
+/// next keywords and a boolean indicating if next token can be an identifier.
 /// This is done by looking at available actions in current state.
 /// An important detail is that not all of these actions are valid.
 /// They might trigger a chain of reductions that ends in a state that
