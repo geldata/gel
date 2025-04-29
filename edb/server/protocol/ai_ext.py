@@ -2386,9 +2386,9 @@ async def _handle_rag_request(
         model_name=model,
     )
 
-    provider = _get_provider_config(db, provider_name)
+    chat_provider = _get_provider_config(db, provider_name)
 
-    vector_query = await _generate_embeddings_for_type(
+    vector_provider, vector_query = await _generate_embeddings_for_type(
         db,
         http_client,
         ctx_query,
@@ -2397,9 +2397,7 @@ async def _handle_rag_request(
 
     ctx_query = f"""
         WITH
-            __query := <array<float32>>(
-                to_json(<str>$input)["data"][0]["embedding"]
-            ),
+            __query := <array<float32>>std::to_json(<str>$input),
             search := ext::ai::search(({ctx_query}), __query),
         SELECT
             ext::ai::to_context(search.object)
@@ -2411,7 +2409,9 @@ async def _handle_rag_request(
     if ctx_variables is None:
         ctx_variables = {}
 
-    ctx_variables["input"] = vector_query.decode("utf-8")
+    ctx_variables["input"] = str(
+        vector_provider.get_embeddings_from_result(vector_query)[0]
+    )
     ctx_variables["limit"] = ctx_max_obj_count
 
     context = await _edgeql_query_json(
@@ -2485,7 +2485,7 @@ async def _handle_rag_request(
         protocol=protocol,
         request=request,
         response=response,
-        provider=provider,
+        provider=chat_provider,
         http_client=http_client,
         model_name=model,
         messages=messages,
@@ -2732,7 +2732,7 @@ async def _generate_embeddings_for_type(
     http_client: http.HttpClient,
     type_query: str,
     content: str,
-) -> bytes:
+) -> tuple[ProviderConfig, bytes]:
     type_desc = await execute.describe(
         db,
         f"SELECT ({type_query})",
@@ -2758,7 +2758,7 @@ async def generate_embeddings_for_text(
     http_client: http.HttpClient,
     type_id: str | uuid.UUID,
     content: str,
-) -> bytes:
+) -> tuple[ProviderConfig, bytes]:
 
     index = await get_ai_index_for_type(db, type_id)
     provider = _get_provider_config(db=db, provider_name=index.provider)
@@ -2779,7 +2779,7 @@ async def generate_embeddings_for_text(
     )
     if isinstance(result.data, rs.Error):
         raise AIProviderError(result.data.message)
-    return result.data.embeddings
+    return provider, result.data.embeddings
 
 
 @dataclass(frozen=True, kw_only=True)
