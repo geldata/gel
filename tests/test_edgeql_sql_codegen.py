@@ -103,6 +103,13 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
             "optional wrapper generated when it shouldn't be needed"
         )
 
+    SCHEMA_pol = '''
+        global name -> str;
+        type PolOwned extending default::Owned {
+            access policy x allow all using (.owner.name ?= global name);
+        }
+    '''
+
     def test_codegen_elide_optional_wrapper_01(self):
         self.no_optional_test('''
             select Issue { te := .time_estimate ?? -1 }
@@ -126,6 +133,22 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
     def test_codegen_elide_optional_wrapper_05(self):
         self.no_optional_test('''
             select Owned { z := .owner.name ?= <optional str>$0 }
+        ''')
+
+    def test_codegen_elide_optional_wrapper_06(self):
+        self.no_optional_test('''
+            select Owned filter {.owner.name ?= <optional str>$0}
+        ''')
+
+    def test_codegen_elide_optional_wrapper_07(self):
+        self.no_optional_test('''
+            select Owned { z := .owner.name ?= <optional str>$0 }
+            filter {.z}
+        ''')
+
+    def test_codegen_elide_optional_wrapper_08(self):
+        self.no_optional_test('''
+            select pol::PolOwned
         ''')
 
     def test_codegen_order_by_not_subquery_01(self):
