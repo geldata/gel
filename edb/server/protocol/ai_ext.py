@@ -1422,7 +1422,7 @@ async def _start_chat(
     user: Optional[str],
     tools: Optional[list[dict[str, Any]]],
 ) -> None:
-    if provider.api_style == "OpenAI":
+    if provider.api_style == ApiStyle.OpenAI:
         await _start_openai_chat(
             protocol=protocol,
             request=request,
@@ -1442,7 +1442,7 @@ async def _start_chat(
             user=user,
             tools=tools,
         )
-    elif provider.api_style == "Anthropic":
+    elif provider.api_style == ApiStyle.Anthropic:
         await _start_anthropic_chat(
             protocol=protocol,
             request=request,
@@ -1457,6 +1457,21 @@ async def _start_chat(
             top_k=top_k,
             tools=tools,
             max_tokens=max_tokens,
+        )
+    elif provider.api_style == ApiStyle.Ollama:
+        await _start_ollama_chat(
+            protocol=protocol,
+            request=request,
+            response=response,
+            provider=provider,
+            http_client=http_client,
+            model_name=model_name,
+            messages=messages,
+            stream=stream,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            tools=tools,
         )
     else:
         raise RuntimeError(
@@ -2115,6 +2130,259 @@ async def _start_anthropic_chat(
             },
             "tool_calls": tool_calls_formatted,
         }
+
+        response.body = json.dumps(
+            body
+        ).encode("utf-8")
+
+
+async def _start_ollama_chat(
+    *,
+    protocol: protocol.HttpProtocol,
+    request: protocol.HttpRequest,
+    response: protocol.HttpResponse,
+    provider: ProviderConfig,
+    http_client: http.HttpClient,
+    model_name: str,
+    messages: list[dict[str, Any]],
+    stream: bool,
+    temperature: Optional[float],
+    top_p: Optional[float],
+    top_k: Optional[int],
+    tools: Optional[list[dict[str, Any]]],
+) -> None:
+
+    # The default API doesn't produce a SSE stream. Use the experimental
+    # OpenAI-like API if we need a stream.
+    base_url = provider.api_url
+    if stream:
+        base_url = '/'.join(
+            base_url.split('/')[:-1] + ['v1']
+        )
+
+    client = http_client.with_context(
+        headers={},
+        base_url=base_url,
+    )
+
+    params = {
+        "model": model_name,
+        "messages": messages,
+        "options": {
+            **({"temperature": temperature} if temperature is not None else {}),
+            **({"top_p": top_p} if top_p is not None else {}),
+            **({"top_k": top_k} if top_k is not None else {}),
+        },
+        **({"tools": tools} if tools is not None else {}),
+    }
+
+    if stream:
+        async with aconnect_sse(
+            client,
+            method="POST",
+            url="/chat/completions",
+            json={
+                **params,
+                "stream": True,
+            }
+        ) as event_source:
+            # we need tool_index and finish_reason to correctly
+            # send 'content_block_stop' chunk for tool call messages
+            tool_index = 0
+            finish_reason = "unknown"
+
+            started = False
+
+            async for sse in event_source:
+                if not response.sent:
+                    response.status = http.HTTPStatus.OK
+                    response.content_type = b'text/event-stream'
+                    response.close_connection = False
+                    response.custom_headers["Cache-Control"] = "no-cache"
+                    protocol.write(request, response)
+
+                if sse.event != "message":
+                    continue
+
+                if sse.data == "[DONE]":
+                    # mistral doesn't send finish_reason for tool calls
+                    if finish_reason == "unknown":
+                        event = (
+                            b'event: content_block_stop\n'
+                            + b'data: {"type": "content_block_stop",'
+                            + b'"index": ' + str(tool_index).encode() + b'}\n\n'
+                        )
+                        protocol.write_raw(event)
+                    event = (
+                        b'event: message_stop\n'
+                        + b'data: {"type": "message_stop"}\n\n'
+                    )
+                    protocol.write_raw(event)
+                    break
+
+                message = sse.json()
+                if message.get("object") == "chat.completion.chunk":
+                    data = message.get("choices")[0]
+                    delta = data.get("delta")
+                    role = delta.get("role")
+                    tool_calls = delta.get("tool_calls")
+
+                    # Unlike OpenAI, Ollama includes the role in every event.
+                    # Just create a new start event.
+                    if not started:
+                        event_data = json.dumps({
+                            "type": "message_start",
+                            "message": {
+                                "id": message["id"],
+                                "role": role,
+                                "model": message["model"],
+                                "usage": message.get("usage")
+                            },
+                        }).encode("utf-8")
+                        event = (
+                            b'event: message_start\n'
+                            + b'data: ' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+
+                        event_data = json.dumps({
+                            "type": "content_block_start",
+                            "index": 0,
+                            "content_block": {
+                                "type": "text",
+                                "text": ""
+                            }
+                        }).encode("utf-8")
+                        event = (
+                            b'event: content_block_start\n'
+                            + b'data: ' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+                        started = True
+
+                    if tool_calls:
+                        for index, tool_call in enumerate(tool_calls):
+                            currentIndex = tool_call.get("index") or index
+                            if tool_call.get("type") == "function" or \
+                            "id" in tool_call:
+                                if currentIndex > 0:
+                                    tool_index = currentIndex
+                                    # send the stop chunk for the previous tool
+                                    event = (
+                                        b'event: content_block_stop\n'
+                                        + b'data: { \
+                                        "type": "content_block_stop",'
+                                        + b'"index": '
+                                        + str(currentIndex).encode()
+                                        + b'}\n\n'
+                                    )
+                                    protocol.write_raw(event)
+
+                                event_data = json.dumps({
+                                    "type": "content_block_start",
+                                    "index": currentIndex + 1,
+                                    "content_block": {
+                                        "id": tool_call.get("id"),
+                                        "type": "tool_use",
+                                        "name": tool_call["function"]["name"],
+                                        "args":
+                                        tool_call["function"]["arguments"],
+                                    },
+                                }).encode("utf-8")
+
+                                event = (
+                                    b'event: content_block_start\n'
+                                    + b'data:' + event_data + b'\n\n'
+                                )
+                                protocol.write_raw(event)
+                            else:
+                                event_data = json.dumps({
+                                        "type": "content_block_delta",
+                                        "index": currentIndex + 1,
+                                        "delta": {
+                                            "type": "tool_call_delta",
+                                            "args":
+                                             tool_call["function"]["arguments"],
+                                        },
+                                    }).encode("utf-8")
+                                event = (
+                                    b'event: content_block_delta\n'
+                                    + b'data:' + event_data + b'\n\n'
+                                )
+                                protocol.write_raw(event)
+                    elif finish_reason := data.get("finish_reason"):
+                        index = (
+                            tool_index + 1
+                            if finish_reason == "tool_calls"
+                            else 0
+                        )
+                        event = (
+                            b'event: content_block_stop\n'
+                            + b'data: {"type": "content_block_stop",'
+                            + b'"index": ' + str(index).encode() + b'}\n\n'
+                        )
+                        protocol.write_raw(event)
+
+                        event_data = json.dumps({
+                            "type": "message_delta",
+                            "delta": {
+                                "stop_reason": finish_reason,
+                            },
+                            "usage": message.get("usage")
+                        }).encode("utf-8")
+                        event = (
+                            b'event: message_delta\n'
+                            + b'data: ' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+
+                    else:
+                        event_data = json.dumps({
+                            "type": "content_block_delta",
+                            "index": 0,
+                             "delta": {
+                                "type": "text_delta",
+                                "text": delta.get("content"),
+                            },
+                            "logprobs": data.get("logprobs"),
+                        }).encode("utf-8")
+
+                        event = (
+                            b'event: content_block_delta\n'
+                            + b'data:' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+
+            protocol.close()
+    else:
+        result = await client.post(
+            "/chat",
+            json={
+                **params,
+                "stream": False
+            }
+        )
+        if result.status_code >= 400:
+            raise AIProviderError(
+                f"API call to generate chat completions failed with status "
+                f"{result.status_code}: {result.text}"
+            )
+
+        response.status = http.HTTPStatus.OK
+        response.content_type = b'application/json'
+
+        result_data = result.json()
+        body = {
+            "model": result_data["model"],
+            "text": result_data["message"]["content"],
+            "finish_reason": result_data["done_reason"],
+            "usage": {
+                "prompt_tokens": result_data["prompt_eval_count"],
+                "completion_tokens": result_data["eval_count"]
+            },
+        }
+
+        # Ollama has no documented tools response
 
         response.body = json.dumps(
             body
