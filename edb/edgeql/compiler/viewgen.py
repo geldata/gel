@@ -2327,6 +2327,9 @@ def _get_shape_configuration_inner(
         stype is not None
         and has_implicit_tid(stype, is_mutation=is_mutation, ctx=ctx)
     ):
+        # HACK: Make sure set is here first, to avoid potential
+        # warn_old_scoping warnings.
+        pathctx.register_set_in_scope(ir_set, ctx=ctx)
         assert isinstance(stype, s_objtypes.ObjectType)
         _inline_type_computable(
             ir_set, stype, '__tid__', 'id', ctx=ctx, shape_ptrs=shape_ptrs)
@@ -2335,6 +2338,9 @@ def _get_shape_configuration_inner(
         stype is not None
         and has_implicit_tname(stype, is_mutation=is_mutation, ctx=ctx)
     ):
+        # HACK: Make sure set is here first, to avoid potential
+        # warn_old_scoping warnings.
+        pathctx.register_set_in_scope(ir_set, ctx=ctx)
         assert isinstance(stype, s_objtypes.ObjectType)
         _inline_type_computable(
             ir_set, stype, '__tname__', 'name', ctx=ctx, shape_ptrs=shape_ptrs)
