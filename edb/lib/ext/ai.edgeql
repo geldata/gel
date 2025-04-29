@@ -24,7 +24,7 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
     create module ext::ai;
 
     create scalar type ext::ai::ProviderAPIStyle
-        extending enum<OpenAI, Anthropic>;
+        extending enum<OpenAI, Anthropic, Ollama>;
 
     create abstract type ext::ai::ProviderConfig extending cfg::ConfigObject {
         create required property name: std::str {
@@ -134,6 +134,31 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         alter property api_style {
             set protected := true;
             set default := ext::ai::ProviderAPIStyle.Anthropic;
+        };
+    };
+
+    create type ext::ai::OllamaProviderConfig extending ext::ai::ProviderConfig {
+        alter property name {
+            set protected := true;
+            set default := 'builtin::ollama';
+        };
+
+        alter property display_name {
+            set protected := true;
+            set default := 'Ollama';
+        };
+
+        alter property api_url {
+            set default := 'http://localhost:11434/api'
+        };
+
+        alter property secret {
+            set default := ''
+        };
+
+        alter property api_style {
+            set protected := true;
+            set default := ext::ai::ProviderAPIStyle.Ollama;
         };
     };
 
@@ -525,6 +550,37 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::model_provider := "builtin::anthropic";
         alter annotation
             ext::ai::text_gen_model_context_window := "200000";
+    };
+
+    # Ollama embedding models
+    create abstract type ext::ai::OllamaNomicEmbedTextModel
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "nomic-embed-text";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "768";
+    };
+
+    create abstract type ext::ai::OllamaBgeM3Model
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "bge-m3";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "1024";
     };
 
     create scalar type ext::ai::DistanceFunction

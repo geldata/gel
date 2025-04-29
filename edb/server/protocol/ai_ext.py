@@ -110,6 +110,7 @@ class BadRequestError(AIExtError):
 class ApiStyle(s_enum.StrEnum):
     OpenAI = 'OpenAI'
     Anthropic = 'Anthropic'
+    Ollama = 'Ollama'
 
 
 class Tokenizer(abc.ABC):
@@ -210,6 +211,35 @@ class MistralTokenizer(Tokenizer):
         return cast(str, self.tokenizer.decode(tokens))
 
 
+class OllamaTokenizer(Tokenizer):
+
+    """
+    Simply counts the number of characters.
+    A tokenizer API is in progress, but unlikely to be released soon.
+    """
+
+    _instances: dict[str, OllamaTokenizer] = {}
+
+    @classmethod
+    def for_model(cls, model_name: str) -> OllamaTokenizer:
+        if model_name in cls._instances:
+            return cls._instances[model_name]
+
+        tokenizer = OllamaTokenizer()
+        cls._instances[model_name] = tokenizer
+
+        return tokenizer
+
+    def encode(self, text: str) -> list[int]:
+        return [ord(c) for c in text]
+
+    def encode_padding(self) -> int:
+        return 0
+
+    def decode(self, tokens: list[int]) -> str:
+        return ''.join(chr(c) for c in tokens)
+
+
 class TestTokenizer(Tokenizer):
 
     _instances: dict[str, TestTokenizer] = {}
@@ -243,6 +273,8 @@ def get_model_tokenizer(
         return OpenAITokenizer.for_model(model_name)
     elif provider_name == 'builtin::mistral':
         return MistralTokenizer.for_model(model_name)
+    if provider_name == 'builtin::ollama':
+        return OllamaTokenizer.for_model(model_name)
     elif provider_name == 'custom::test':
         return TestTokenizer.for_model(model_name)
     else:
@@ -257,6 +289,29 @@ class ProviderConfig:
     client_id: str
     secret: str
     api_style: ApiStyle
+
+    def get_embeddings_from_result(
+        self, embeddings_result: bytes
+    ) -> list[list[float]]:
+        """Decode and extract the embeddings from an embeddings request."""
+
+        decoded_result = json.loads(
+            embeddings_result.decode("utf-8")
+        )
+
+        if self.api_style == ApiStyle.Ollama:
+            return cast(
+                list[list[float]],
+                decoded_result["embeddings"],
+            )
+        else:
+            return cast(
+                list[list[float]],
+                [
+                    entry_result["embedding"]
+                    for entry_result in decoded_result["data"]
+                ],
+            )
 
 
 def start_extension(
@@ -667,6 +722,7 @@ class EmbeddingsRequest(rs.Request[EmbeddingsData]):
 
 class EmbeddingsResult(rs.Result[EmbeddingsData]):
 
+    provider_cfg: ProviderConfig
     pgconn: Optional[Any] = None
     pending_entries: Optional[list[PendingEmbedding]] = None
 
@@ -690,6 +746,7 @@ class EmbeddingsResult(rs.Result[EmbeddingsData]):
             ids = [item.id for item in items]
             await _update_embeddings_in_db(
                 self.pgconn,
+                self.provider_cfg,
                 rel,
                 attr,
                 ids,
@@ -1083,6 +1140,7 @@ def _batch_embeddings_inputs(
 
 async def _update_embeddings_in_db(
     pgconn: pgcon.PGConnection,
+    provider_cfg: ProviderConfig,
     rel: str,
     attr: str,
     ids: list[uuid.UUID],
@@ -1097,7 +1155,7 @@ async def _update_embeddings_in_db(
             UPDATE {rel} AS target
             SET
                 {attr} = (
-                    (embeddings.data ->> 'embedding')::edgedb.vector)
+                    (embeddings.data)::text::edgedb.vector)
             FROM
                 (
                     SELECT
@@ -1107,7 +1165,7 @@ async def _update_embeddings_in_db(
                         (SELECT
                             data
                         FROM
-                            json_array_elements(($1::json) -> 'data') AS data
+                            json_array_elements($1::json) AS data
                         OFFSET
                             $3::text::int
                         ) AS j
@@ -1122,7 +1180,7 @@ async def _update_embeddings_in_db(
         SELECT count(*)::text FROM upd
         """.encode(),
         args=(
-            embeddings,
+            str(provider_cfg.get_embeddings_from_result(embeddings)).encode(),
             id_array.encode(),
             str(offset).encode(),
         ),
@@ -1149,14 +1207,21 @@ async def _generate_embeddings(
     )
 
     if provider.api_style == ApiStyle.OpenAI:
-        return await _generate_openai_embeddings(
+        result = await _generate_openai_embeddings(
             provider, model_name, inputs, shortening, user, http_client
+        )
+    elif provider.api_style == ApiStyle.Ollama:
+        result = await _generate_ollama_embeddings(
+            provider, model_name, inputs, shortening, http_client
         )
     else:
         raise RuntimeError(
             f"unsupported model provider API style: {provider.api_style}, "
             f"provider: {provider.name}"
         )
+
+    result.provider_cfg = provider
+    return result
 
 
 async def _generate_openai_embeddings(
@@ -1273,6 +1338,65 @@ def _read_openai_limits(
         'tokens': rs.Limits(
             total=token_limit,
             remaining=token_remaining,
+        ),
+    }
+
+
+async def _generate_ollama_embeddings(
+    provider: ProviderConfig,
+    model_name: str,
+    inputs: list[str],
+    shortening: Optional[int],
+    http_client: http.HttpClient,
+) -> EmbeddingsResult:
+
+    headers: dict[str, str] = {}
+    client = http_client.with_context(
+        headers=headers,
+        base_url=provider.api_url,
+    )
+
+    params: dict[str, Any] = {
+        "model": model_name,
+        "input": inputs,
+    }
+    if shortening is not None:
+        params["dimensions"] = shortening
+
+    result = await client.post(
+        "/embed",
+        json=params,
+    )
+
+    error = None
+    if result.status_code >= 400:
+        error = rs.Error(
+            message=(
+                f"API call to generate embeddings failed with status "
+                f"{result.status_code}: {result.text}"
+            ),
+            retry=(
+                # If the request fails with 429 - too many requests, it can be
+                # retried
+                result.status_code == 429
+            ),
+        )
+
+    return EmbeddingsResult(
+        data=(error if error else EmbeddingsData(result.bytes())),
+        limits=_ollama_limits(),
+    )
+
+
+def _ollama_limits() -> dict[str, rs.Limits]:
+    return {
+        'requests': rs.Limits(
+            total='unlimited',
+            remaining=None,
+        ),
+        'tokens': rs.Limits(
+            total='unlimited',
+            remaining=None,
         ),
     }
 
@@ -2841,12 +2965,12 @@ async def generate_embeddings_for_texts(
             )
             if isinstance(embeddings_result.data, rs.Error):
                 raise AIProviderError(embeddings_result.data.message)
-            decoded_result = json.loads(
-                embeddings_result.data.embeddings.decode("utf-8")
+            result_entries = provider_config.get_embeddings_from_result(
+                embeddings_result.data.embeddings
             )
-            for entry_index, entry_result in enumerate(decoded_result["data"]):
+            for entry_index, result_entry in enumerate(result_entries):
                 input_index = batched_input_indexes[entry_index]
-                embeddings[input_index] = entry_result["embedding"]
+                embeddings[input_index] = result_entry
 
     assert all(e is not None for e in embeddings)
 
