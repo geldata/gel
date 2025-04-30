@@ -120,7 +120,8 @@ Create a database client
 
         // Create Drizzle instance
         export const db = drizzle({
-          client: gelClient, schema: {
+          client: gelClient,
+          schema: {
             ...schema,
             ...relations
           },
@@ -136,6 +137,8 @@ Create a database client
 
 Perform database operations with Drizzle
 ========================================
+
+For more detailed information on querying and other operations, refer to the `Drizzle documentation <https://orm.drizzle.team/docs/rqb>`_. Below are some examples of common database operations you can perform with Drizzle.
 
 .. edb:split-section::
 
@@ -165,20 +168,45 @@ Perform database operations with Drizzle
 
     .. code-block:: typescript
 
-        // Insert a new book
-        const newBook = await db.insert(book).values({
-          title: 'The Great Gatsby',
-          author: 'F. Scott Fitzgerald',
-          year: 1925,
-          genre: 'Novel',
-        }).returning();
+      // Insert a new book
+      const newBook = await db.insert(book).values({
+        title: 'The Great Gatsby',
+        author: 'F. Scott Fitzgerald',
+        year: 1925,
+        genre: 'Novel',
+      }).returning();
 
-        // Insert a note for a book
-        const newNote = await db.insert(note).values({
-          text: 'A classic novel about the American Dream',
-          book_id: bookId,
-        }).returning();
+      // Insert a note for a book
+      const newNote = await db.insert(note).values({
+        text: 'A classic novel about the American Dream',
+        book_id: newBook.bookId,
+      }).returning();
 
+    **Bulk inserting data:**
+
+    .. code-block:: typescript
+
+      // Insert multiple books at once
+      const newBooks = await db.insert(book).values([
+        {
+          title: '1984',
+          author: 'George Orwell',
+          year: 1949,
+          genre: 'Dystopian',
+        },
+        {
+          title: 'To Kill a Mockingbird',
+          author: 'Harper Lee',
+          year: 1960,
+          genre: 'Fiction',
+        },
+        {
+          title: 'Pride and Prejudice',
+          author: 'Jane Austen',
+          year: 1813,
+          genre: 'Romance',
+        },
+      ]).returning();
 
 .. edb:split-section::
 
