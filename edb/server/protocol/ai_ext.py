@@ -2837,9 +2837,38 @@ async def _handle_embeddings_request(
     if isinstance(result.data, rs.Error):
         raise AIProviderError(result.data.message)
 
+    result_data: bytes
+    if provider.api_style == ApiStyle.Ollama:
+        # Ollama produces embeddings differently.
+        # Repackage it to look like OpenAI.
+        decoded_result = json.loads(
+            result.data.embeddings.decode("utf-8")
+        )
+        embeddings = cast(list[list[float]], decoded_result["embeddings"])
+        prompt_eval_count = cast(int, decoded_result['prompt_eval_count'])
+        result_data = json.dumps({
+            "object": "list",
+            "data": [
+                {
+                    "object": "embedding",
+                    "index": index,
+                    "embedding": embedding
+                }
+                for index, embedding in enumerate(embeddings)
+            ],
+            "model": model_name,
+            "usage": {
+                "prompt_tokens": prompt_eval_count,
+                "total_tokens": prompt_eval_count
+            }
+        }).encode()
+
+    else:
+        result_data = result.data.embeddings
+
     response.status = http.HTTPStatus.OK
     response.content_type = b'application/json'
-    response.body = result.data.embeddings
+    response.body = result_data
 
 
 async def _edgeql_query_json(
