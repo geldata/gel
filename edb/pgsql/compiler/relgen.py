@@ -295,24 +295,20 @@ def _process_toplevel_query(
     *,
     ctx: context.CompilerContextLevel,
 ) -> pgast.PathRangeVar:
+    # TODO: Can we get rid of the need for this special handling of
+    # the toplevel? What is it good for anyway?
+    # I think it might just be suppressing what would be one extra
+    # level of select wrapping?
 
     relctx.init_toplevel_query(ir_set, ctx=ctx)
     rvars = _get_expr_set_rvar(ir_set.expr, ir_set, ctx=ctx)
-    if isinstance(ir_set.expr, irast.EmptySet):
-        # In cases where the top-level expression is an empty set
-        # as opposed to a Set wrapping some expression or path, make
-        # sure the generated empty rel gets selected in the toplevel
-        # SelectStmt.
-        result_rvar = _include_rvars(rvars, scope_stmt=ctx.rel, ctx=ctx)
-        for aspect in rvars.main.aspects:
-            pathctx.put_path_rvar_if_not_exists(
-                ctx.rel,
-                ir_set.path_id,
-                result_rvar,
-                aspect=aspect,
-            )
-    else:
-        result_rvar = rvars.main.rvar
+    result_rvar = rvars.main.rvar
+    # Usually the result_rvar is wrapping ctx.rel, which is the final
+    # top-level query. (And thus the result_rvar is actually bogus and
+    # will never be used!) But if not, we need to include it, or we'll
+    # have an empty query.
+    if result_rvar.query is not ctx.rel:
+        _include_rvars(rvars, scope_stmt=ctx.rel, ctx=ctx)
 
     return result_rvar
 
