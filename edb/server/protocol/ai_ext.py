@@ -110,6 +110,7 @@ class BadRequestError(AIExtError):
 class ApiStyle(s_enum.StrEnum):
     OpenAI = 'OpenAI'
     Anthropic = 'Anthropic'
+    Ollama = 'Ollama'
 
 
 class Tokenizer(abc.ABC):
@@ -210,6 +211,35 @@ class MistralTokenizer(Tokenizer):
         return cast(str, self.tokenizer.decode(tokens))
 
 
+class OllamaTokenizer(Tokenizer):
+
+    """
+    Simply counts the number of characters.
+    A tokenizer API is in progress, but unlikely to be released soon.
+    """
+
+    _instances: dict[str, OllamaTokenizer] = {}
+
+    @classmethod
+    def for_model(cls, model_name: str) -> OllamaTokenizer:
+        if model_name in cls._instances:
+            return cls._instances[model_name]
+
+        tokenizer = OllamaTokenizer()
+        cls._instances[model_name] = tokenizer
+
+        return tokenizer
+
+    def encode(self, text: str) -> list[int]:
+        return [ord(c) for c in text]
+
+    def encode_padding(self) -> int:
+        return 0
+
+    def decode(self, tokens: list[int]) -> str:
+        return ''.join(chr(c) for c in tokens)
+
+
 class TestTokenizer(Tokenizer):
 
     _instances: dict[str, TestTokenizer] = {}
@@ -243,6 +273,8 @@ def get_model_tokenizer(
         return OpenAITokenizer.for_model(model_name)
     elif provider_name == 'builtin::mistral':
         return MistralTokenizer.for_model(model_name)
+    if provider_name == 'builtin::ollama':
+        return OllamaTokenizer.for_model(model_name)
     elif provider_name == 'custom::test':
         return TestTokenizer.for_model(model_name)
     else:
@@ -257,6 +289,29 @@ class ProviderConfig:
     client_id: str
     secret: str
     api_style: ApiStyle
+
+    def get_embeddings_from_result(
+        self, embeddings_result: bytes
+    ) -> list[list[float]]:
+        """Decode and extract the embeddings from an embeddings request."""
+
+        decoded_result = json.loads(
+            embeddings_result.decode("utf-8")
+        )
+
+        if self.api_style == ApiStyle.Ollama:
+            return cast(
+                list[list[float]],
+                decoded_result["embeddings"],
+            )
+        else:
+            return cast(
+                list[list[float]],
+                [
+                    entry_result["embedding"]
+                    for entry_result in decoded_result["data"]
+                ],
+            )
 
 
 def start_extension(
@@ -667,6 +722,7 @@ class EmbeddingsRequest(rs.Request[EmbeddingsData]):
 
 class EmbeddingsResult(rs.Result[EmbeddingsData]):
 
+    provider_cfg: ProviderConfig
     pgconn: Optional[Any] = None
     pending_entries: Optional[list[PendingEmbedding]] = None
 
@@ -690,6 +746,7 @@ class EmbeddingsResult(rs.Result[EmbeddingsData]):
             ids = [item.id for item in items]
             await _update_embeddings_in_db(
                 self.pgconn,
+                self.provider_cfg,
                 rel,
                 attr,
                 ids,
@@ -1083,6 +1140,7 @@ def _batch_embeddings_inputs(
 
 async def _update_embeddings_in_db(
     pgconn: pgcon.PGConnection,
+    provider_cfg: ProviderConfig,
     rel: str,
     attr: str,
     ids: list[uuid.UUID],
@@ -1097,7 +1155,7 @@ async def _update_embeddings_in_db(
             UPDATE {rel} AS target
             SET
                 {attr} = (
-                    (embeddings.data ->> 'embedding')::edgedb.vector)
+                    (embeddings.data)::text::edgedb.vector)
             FROM
                 (
                     SELECT
@@ -1107,7 +1165,7 @@ async def _update_embeddings_in_db(
                         (SELECT
                             data
                         FROM
-                            json_array_elements(($1::json) -> 'data') AS data
+                            json_array_elements($1::json) AS data
                         OFFSET
                             $3::text::int
                         ) AS j
@@ -1122,7 +1180,7 @@ async def _update_embeddings_in_db(
         SELECT count(*)::text FROM upd
         """.encode(),
         args=(
-            embeddings,
+            str(provider_cfg.get_embeddings_from_result(embeddings)).encode(),
             id_array.encode(),
             str(offset).encode(),
         ),
@@ -1149,14 +1207,21 @@ async def _generate_embeddings(
     )
 
     if provider.api_style == ApiStyle.OpenAI:
-        return await _generate_openai_embeddings(
+        result = await _generate_openai_embeddings(
             provider, model_name, inputs, shortening, user, http_client
+        )
+    elif provider.api_style == ApiStyle.Ollama:
+        result = await _generate_ollama_embeddings(
+            provider, model_name, inputs, shortening, http_client
         )
     else:
         raise RuntimeError(
             f"unsupported model provider API style: {provider.api_style}, "
             f"provider: {provider.name}"
         )
+
+    result.provider_cfg = provider
+    return result
 
 
 async def _generate_openai_embeddings(
@@ -1277,6 +1342,65 @@ def _read_openai_limits(
     }
 
 
+async def _generate_ollama_embeddings(
+    provider: ProviderConfig,
+    model_name: str,
+    inputs: list[str],
+    shortening: Optional[int],
+    http_client: http.HttpClient,
+) -> EmbeddingsResult:
+
+    headers: dict[str, str] = {}
+    client = http_client.with_context(
+        headers=headers,
+        base_url=provider.api_url,
+    )
+
+    params: dict[str, Any] = {
+        "model": model_name,
+        "input": inputs,
+    }
+    if shortening is not None:
+        params["dimensions"] = shortening
+
+    result = await client.post(
+        "/embed",
+        json=params,
+    )
+
+    error = None
+    if result.status_code >= 400:
+        error = rs.Error(
+            message=(
+                f"API call to generate embeddings failed with status "
+                f"{result.status_code}: {result.text}"
+            ),
+            retry=(
+                # If the request fails with 429 - too many requests, it can be
+                # retried
+                result.status_code == 429
+            ),
+        )
+
+    return EmbeddingsResult(
+        data=(error if error else EmbeddingsData(result.bytes())),
+        limits=_ollama_limits(),
+    )
+
+
+def _ollama_limits() -> dict[str, rs.Limits]:
+    return {
+        'requests': rs.Limits(
+            total='unlimited',
+            remaining=None,
+        ),
+        'tokens': rs.Limits(
+            total='unlimited',
+            remaining=None,
+        ),
+    }
+
+
 async def _start_chat(
     *,
     protocol: protocol.HttpProtocol,
@@ -1298,7 +1422,7 @@ async def _start_chat(
     user: Optional[str],
     tools: Optional[list[dict[str, Any]]],
 ) -> None:
-    if provider.api_style == "OpenAI":
+    if provider.api_style == ApiStyle.OpenAI:
         await _start_openai_chat(
             protocol=protocol,
             request=request,
@@ -1318,7 +1442,7 @@ async def _start_chat(
             user=user,
             tools=tools,
         )
-    elif provider.api_style == "Anthropic":
+    elif provider.api_style == ApiStyle.Anthropic:
         await _start_anthropic_chat(
             protocol=protocol,
             request=request,
@@ -1333,6 +1457,21 @@ async def _start_chat(
             top_k=top_k,
             tools=tools,
             max_tokens=max_tokens,
+        )
+    elif provider.api_style == ApiStyle.Ollama:
+        await _start_ollama_chat(
+            protocol=protocol,
+            request=request,
+            response=response,
+            provider=provider,
+            http_client=http_client,
+            model_name=model_name,
+            messages=messages,
+            stream=stream,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            tools=tools,
         )
     else:
         raise RuntimeError(
@@ -1997,6 +2136,259 @@ async def _start_anthropic_chat(
         ).encode("utf-8")
 
 
+async def _start_ollama_chat(
+    *,
+    protocol: protocol.HttpProtocol,
+    request: protocol.HttpRequest,
+    response: protocol.HttpResponse,
+    provider: ProviderConfig,
+    http_client: http.HttpClient,
+    model_name: str,
+    messages: list[dict[str, Any]],
+    stream: bool,
+    temperature: Optional[float],
+    top_p: Optional[float],
+    top_k: Optional[int],
+    tools: Optional[list[dict[str, Any]]],
+) -> None:
+
+    # The default API doesn't produce a SSE stream. Use the experimental
+    # OpenAI-like API if we need a stream.
+    base_url = provider.api_url
+    if stream:
+        base_url = '/'.join(
+            base_url.split('/')[:-1] + ['v1']
+        )
+
+    client = http_client.with_context(
+        headers={},
+        base_url=base_url,
+    )
+
+    params = {
+        "model": model_name,
+        "messages": messages,
+        "options": {
+            **({"temperature": temperature} if temperature is not None else {}),
+            **({"top_p": top_p} if top_p is not None else {}),
+            **({"top_k": top_k} if top_k is not None else {}),
+        },
+        **({"tools": tools} if tools is not None else {}),
+    }
+
+    if stream:
+        async with aconnect_sse(
+            client,
+            method="POST",
+            url="/chat/completions",
+            json={
+                **params,
+                "stream": True,
+            }
+        ) as event_source:
+            # we need tool_index and finish_reason to correctly
+            # send 'content_block_stop' chunk for tool call messages
+            tool_index = 0
+            finish_reason = "unknown"
+
+            started = False
+
+            async for sse in event_source:
+                if not response.sent:
+                    response.status = http.HTTPStatus.OK
+                    response.content_type = b'text/event-stream'
+                    response.close_connection = False
+                    response.custom_headers["Cache-Control"] = "no-cache"
+                    protocol.write(request, response)
+
+                if sse.event != "message":
+                    continue
+
+                if sse.data == "[DONE]":
+                    # mistral doesn't send finish_reason for tool calls
+                    if finish_reason == "unknown":
+                        event = (
+                            b'event: content_block_stop\n'
+                            + b'data: {"type": "content_block_stop",'
+                            + b'"index": ' + str(tool_index).encode() + b'}\n\n'
+                        )
+                        protocol.write_raw(event)
+                    event = (
+                        b'event: message_stop\n'
+                        + b'data: {"type": "message_stop"}\n\n'
+                    )
+                    protocol.write_raw(event)
+                    break
+
+                message = sse.json()
+                if message.get("object") == "chat.completion.chunk":
+                    data = message.get("choices")[0]
+                    delta = data.get("delta")
+                    role = delta.get("role")
+                    tool_calls = delta.get("tool_calls")
+
+                    # Unlike OpenAI, Ollama includes the role in every event.
+                    # Just create a new start event.
+                    if not started:
+                        event_data = json.dumps({
+                            "type": "message_start",
+                            "message": {
+                                "id": message["id"],
+                                "role": role,
+                                "model": message["model"],
+                                "usage": message.get("usage")
+                            },
+                        }).encode("utf-8")
+                        event = (
+                            b'event: message_start\n'
+                            + b'data: ' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+
+                        event_data = json.dumps({
+                            "type": "content_block_start",
+                            "index": 0,
+                            "content_block": {
+                                "type": "text",
+                                "text": ""
+                            }
+                        }).encode("utf-8")
+                        event = (
+                            b'event: content_block_start\n'
+                            + b'data: ' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+                        started = True
+
+                    if tool_calls:
+                        for index, tool_call in enumerate(tool_calls):
+                            currentIndex = tool_call.get("index") or index
+                            if tool_call.get("type") == "function" or \
+                            "id" in tool_call:
+                                if currentIndex > 0:
+                                    tool_index = currentIndex
+                                    # send the stop chunk for the previous tool
+                                    event = (
+                                        b'event: content_block_stop\n'
+                                        + b'data: { \
+                                        "type": "content_block_stop",'
+                                        + b'"index": '
+                                        + str(currentIndex).encode()
+                                        + b'}\n\n'
+                                    )
+                                    protocol.write_raw(event)
+
+                                event_data = json.dumps({
+                                    "type": "content_block_start",
+                                    "index": currentIndex + 1,
+                                    "content_block": {
+                                        "id": tool_call.get("id"),
+                                        "type": "tool_use",
+                                        "name": tool_call["function"]["name"],
+                                        "args":
+                                        tool_call["function"]["arguments"],
+                                    },
+                                }).encode("utf-8")
+
+                                event = (
+                                    b'event: content_block_start\n'
+                                    + b'data:' + event_data + b'\n\n'
+                                )
+                                protocol.write_raw(event)
+                            else:
+                                event_data = json.dumps({
+                                        "type": "content_block_delta",
+                                        "index": currentIndex + 1,
+                                        "delta": {
+                                            "type": "tool_call_delta",
+                                            "args":
+                                             tool_call["function"]["arguments"],
+                                        },
+                                    }).encode("utf-8")
+                                event = (
+                                    b'event: content_block_delta\n'
+                                    + b'data:' + event_data + b'\n\n'
+                                )
+                                protocol.write_raw(event)
+                    elif finish_reason := data.get("finish_reason"):
+                        index = (
+                            tool_index + 1
+                            if finish_reason == "tool_calls"
+                            else 0
+                        )
+                        event = (
+                            b'event: content_block_stop\n'
+                            + b'data: {"type": "content_block_stop",'
+                            + b'"index": ' + str(index).encode() + b'}\n\n'
+                        )
+                        protocol.write_raw(event)
+
+                        event_data = json.dumps({
+                            "type": "message_delta",
+                            "delta": {
+                                "stop_reason": finish_reason,
+                            },
+                            "usage": message.get("usage")
+                        }).encode("utf-8")
+                        event = (
+                            b'event: message_delta\n'
+                            + b'data: ' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+
+                    else:
+                        event_data = json.dumps({
+                            "type": "content_block_delta",
+                            "index": 0,
+                             "delta": {
+                                "type": "text_delta",
+                                "text": delta.get("content"),
+                            },
+                            "logprobs": data.get("logprobs"),
+                        }).encode("utf-8")
+
+                        event = (
+                            b'event: content_block_delta\n'
+                            + b'data:' + event_data + b'\n\n'
+                        )
+                        protocol.write_raw(event)
+
+            protocol.close()
+    else:
+        result = await client.post(
+            "/chat",
+            json={
+                **params,
+                "stream": False
+            }
+        )
+        if result.status_code >= 400:
+            raise AIProviderError(
+                f"API call to generate chat completions failed with status "
+                f"{result.status_code}: {result.text}"
+            )
+
+        response.status = http.HTTPStatus.OK
+        response.content_type = b'application/json'
+
+        result_data = result.json()
+        body = {
+            "model": result_data["model"],
+            "text": result_data["message"]["content"],
+            "finish_reason": result_data["done_reason"],
+            "usage": {
+                "prompt_tokens": result_data["prompt_eval_count"],
+                "completion_tokens": result_data["eval_count"]
+            },
+        }
+
+        # Ollama has no documented tools response
+
+        response.body = json.dumps(
+            body
+        ).encode("utf-8")
+
+
 #
 # HTTP API
 #
@@ -2262,9 +2654,9 @@ async def _handle_rag_request(
         model_name=model,
     )
 
-    provider = _get_provider_config(db, provider_name)
+    chat_provider = _get_provider_config(db, provider_name)
 
-    vector_query = await _generate_embeddings_for_type(
+    vector_provider, vector_query = await _generate_embeddings_for_type(
         db,
         http_client,
         ctx_query,
@@ -2273,9 +2665,7 @@ async def _handle_rag_request(
 
     ctx_query = f"""
         WITH
-            __query := <array<float32>>(
-                to_json(<str>$input)["data"][0]["embedding"]
-            ),
+            __query := <array<float32>>std::to_json(<str>$input),
             search := ext::ai::search(({ctx_query}), __query),
         SELECT
             ext::ai::to_context(search.object)
@@ -2287,7 +2677,9 @@ async def _handle_rag_request(
     if ctx_variables is None:
         ctx_variables = {}
 
-    ctx_variables["input"] = vector_query.decode("utf-8")
+    ctx_variables["input"] = str(
+        vector_provider.get_embeddings_from_result(vector_query)[0]
+    )
     ctx_variables["limit"] = ctx_max_obj_count
 
     context = await _edgeql_query_json(
@@ -2361,7 +2753,7 @@ async def _handle_rag_request(
         protocol=protocol,
         request=request,
         response=response,
-        provider=provider,
+        provider=chat_provider,
         http_client=http_client,
         model_name=model,
         messages=messages,
@@ -2445,9 +2837,38 @@ async def _handle_embeddings_request(
     if isinstance(result.data, rs.Error):
         raise AIProviderError(result.data.message)
 
+    result_data: bytes
+    if provider.api_style == ApiStyle.Ollama:
+        # Ollama produces embeddings differently.
+        # Repackage it to look like OpenAI.
+        decoded_result = json.loads(
+            result.data.embeddings.decode("utf-8")
+        )
+        embeddings = cast(list[list[float]], decoded_result["embeddings"])
+        prompt_eval_count = cast(int, decoded_result['prompt_eval_count'])
+        result_data = json.dumps({
+            "object": "list",
+            "data": [
+                {
+                    "object": "embedding",
+                    "index": index,
+                    "embedding": embedding
+                }
+                for index, embedding in enumerate(embeddings)
+            ],
+            "model": model_name,
+            "usage": {
+                "prompt_tokens": prompt_eval_count,
+                "total_tokens": prompt_eval_count
+            }
+        }).encode()
+
+    else:
+        result_data = result.data.embeddings
+
     response.status = http.HTTPStatus.OK
     response.content_type = b'application/json'
-    response.body = result.data.embeddings
+    response.body = result_data
 
 
 async def _edgeql_query_json(
@@ -2608,7 +3029,7 @@ async def _generate_embeddings_for_type(
     http_client: http.HttpClient,
     type_query: str,
     content: str,
-) -> bytes:
+) -> tuple[ProviderConfig, bytes]:
     type_desc = await execute.describe(
         db,
         f"SELECT ({type_query})",
@@ -2634,7 +3055,7 @@ async def generate_embeddings_for_text(
     http_client: http.HttpClient,
     type_id: str | uuid.UUID,
     content: str,
-) -> bytes:
+) -> tuple[ProviderConfig, bytes]:
 
     index = await get_ai_index_for_type(db, type_id)
     provider = _get_provider_config(db=db, provider_name=index.provider)
@@ -2655,7 +3076,7 @@ async def generate_embeddings_for_text(
     )
     if isinstance(result.data, rs.Error):
         raise AIProviderError(result.data.message)
-    return result.data.embeddings
+    return provider, result.data.embeddings
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -2841,12 +3262,12 @@ async def generate_embeddings_for_texts(
             )
             if isinstance(embeddings_result.data, rs.Error):
                 raise AIProviderError(embeddings_result.data.message)
-            decoded_result = json.loads(
-                embeddings_result.data.embeddings.decode("utf-8")
+            result_entries = provider_config.get_embeddings_from_result(
+                embeddings_result.data.embeddings
             )
-            for entry_index, entry_result in enumerate(decoded_result["data"]):
+            for entry_index, result_entry in enumerate(result_entries):
                 input_index = batched_input_indexes[entry_index]
-                embeddings[input_index] = entry_result["embedding"]
+                embeddings[input_index] = result_entry
 
     assert all(e is not None for e in embeddings)
 
