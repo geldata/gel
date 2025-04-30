@@ -228,12 +228,30 @@ def get_rewrite_filter(
         )
         filter_expr = astutils.extend_binop(filter_expr, deny_expr)
 
+    # We compile the expression again so we can do an IR based
+    # analysis on it below.
+    with ctx.new() as dctx:
+        # HACK: to prevent filter_ir from being warning fenced
+        dctx.allow_factoring()
+        dctx.expr_exposed = context.Exposure.UNEXPOSED
+        filter_ir = dispatch.compile(filter_expr, ctx=dctx)
+    filter_expr = ctx.create_anchor(filter_ir)
+
     # This is a bad hack, but add an always false condition that
     # postgres does not *know* is always false. This prevents postgres
     # from bogusly optimizing away the entire type CTE if it can prove
     # it empty (which could then result in assert_exists on links to
     # the type not always firing).
-    if mode == qltypes.AccessKind.Select:
+    #
+    # As an optimization, we try to only do it when the object might
+    # not be referenced.
+    if (
+        mode == qltypes.AccessKind.Select
+        and not (
+            ctx.partial_path_prefix
+            and _always_references_set(filter_ir, ctx.partial_path_prefix)
+        )
+    ):
         bogus_check = qlast.BinOp(
             op='?=',
             left=qlast.Path(partial=True, steps=[qlast.Ptr(name='id')]),
@@ -246,6 +264,100 @@ def get_rewrite_filter(
         filter_expr = astutils.extend_binop(filter_expr, bogus_check, op='OR')
 
     return filter_expr
+
+
+def _always_references_set(
+    ir: irast.Set | irast.Expr,
+    ref: irast.Set,
+    inverted: bool=False,
+) -> bool:
+    """Return whether *ir* "always references" *ref*
+
+    The idea here is to check whether *ir* references *ref* in a way
+    that ensures that postgres will actually look at *ref* when
+    executing.
+
+    Fortunately postgres doesn't seem to do anything too crazy here(??),
+    so we mostly just have to understand how it works with boolean
+    operators, IF, and coalesce.
+    But we also need to be able to propagate it through other operations.
+
+    We need *ref* to be referenced in *every* conjunct of an AND.
+    We need it referenced by *at least one* disjunct of an OR.
+    But because of DeMorgan's law (which postgres understands),
+    OR sometimes needs to be treated like AND.
+
+    We track the invertedness and invert the AND and OR behavior when
+    underneath a NOT, kind of for fun.
+    """
+    if isinstance(ir, irast.Set):
+        if ir is ref:
+            return True
+        ir = ir.expr
+
+    match ir:
+        case irast.SelectStmt(result=result):
+            return _always_references_set(result, ref, inverted)
+
+        case irast.OperatorCall(
+            func_shortname=s_name.QualName('std', 'OR'), args=args
+        ):
+            check = all if inverted else any
+            return check(
+                _always_references_set(x.expr, ref, inverted)
+                for x in args.values()
+            )
+
+        case irast.OperatorCall(
+            func_shortname=s_name.QualName('std', 'AND'), args=args
+        ):
+            check = any if inverted else all
+            return check(
+                _always_references_set(x.expr, ref, inverted)
+                for x in args.values()
+            )
+
+        case irast.OperatorCall(
+            func_shortname=s_name.QualName('std', 'NOT'), args={0: arg}
+        ):
+            return _always_references_set(arg.expr, ref, not inverted)
+
+        case irast.OperatorCall(
+            func_shortname=s_name.QualName('std', '??'), args={0: lhs, 1: _},
+        ):
+            # LHS always evaluated; RHS might not be
+            return _always_references_set(lhs.expr, ref, inverted)
+
+        case irast.OperatorCall(
+            func_shortname=s_name.QualName('std', 'IF'),
+            args={0: t, 1: c, 2: f},
+        ):
+            return (
+                _always_references_set(c.expr, ref, inverted)
+                or (
+                    _always_references_set(t.expr, ref, inverted)
+                    and _always_references_set(f.expr, ref, inverted)
+                )
+            )
+
+        # Any other call, we use 'any' semantics.
+        case irast.Call(args=args):
+            return any(
+                _always_references_set(x.expr, ref, inverted)
+                for x in args.values()
+            )
+
+        case irast.Pointer(expr=expr) as p:
+            if expr is not None:
+                return _always_references_set(expr, ref, inverted)
+            else:
+                return _always_references_set(p.source, ref, inverted)
+
+        case irast.TypeCast(expr=expr):
+            return _always_references_set(expr, ref, inverted)
+
+        case _:
+            return False
 
 
 def try_type_rewrite(
