@@ -151,6 +151,16 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
             select pol::PolOwned
         ''')
 
+    def test_codegen_access_policy_uuid(self):
+        sql = self._compile('''
+            select pol::PolOwned
+        ''')
+        count = sql.count('IS NOT DISTINCT FROM')
+        self.assertEqual(
+            count, 1,
+            ".id ?= <uuid>{} not elided"
+        )
+
     def test_codegen_order_by_not_subquery_01(self):
         sql = self._compile_to_tree('''
             select User order by .name
