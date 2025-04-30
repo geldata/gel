@@ -144,7 +144,7 @@ Sets
         ... select A filter A in B;
         {2, 4}
 
-    If your "needle" is optional, the result will be an empty set, which you will need to handle in your conditional logic, typically with the :eql:op:`coalesce` operator:
+    If your left operand is an empty set, the result will be an empty set, which you will need to handle in your conditional logic, typically with the :eql:op:`coalesce` operator:
 
     .. code-block:: edgeql-repl
 
