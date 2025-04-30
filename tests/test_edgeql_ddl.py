@@ -5259,6 +5259,13 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             drop type Z;
         """)
 
+    async def test_edgeql_ddl_function_43(self):
+        await self.con.execute("""
+            create future warn_old_scoping;
+            create type T;
+            create function all_objects() -> SET OF T USING (T);
+        """)
+
     async def test_edgeql_ddl_function_inh_01(self):
         await self.con.execute("""
             create abstract type T;
