@@ -933,14 +933,73 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             ''',
             [],
         )
+
+        # This first query used to give an access policy violation,
+        # and now gives a MissingRequiredError.  This is because owner
+        # is treated as ONE and thus we do some optimization that are
+        # unsound and cause the policy to not fail.
+        #
+        # (This could also happen before also, though, if it was used
+        # in a way that wasn't getting optional wrapped also)
+        #
+        # But this *can only happen* when it is going to fail
+        # anyway, and not by constraint collision.
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            "",
+        ):
+            await self.con.execute('''
+                insert Issue {
+                    name := '',
+                    body := '',
+                    number := '4',
+                    status := {},
+                    owner := {},
+                };
+            ''')
         async with self.assertRaisesRegexTx(
             edgedb.InvalidValueError,
             "access policy violation on insert",
         ):
             await self.con.execute('''
                 insert Issue {
-                    name := '', body := '', status := {}, number := '',
-                    owner := {}};
+                    name := '',
+                    body := '',
+                    number := '4',
+                    status := (select Status limit 1),
+                    owner := (select User limit 1),
+                };
+            ''')
+
+    async def test_edgeql_policies_multi_missing_01(self):
+        await self.con.execute('''
+            create type T {
+                create required property name -> str {
+                    create constraint exclusive;
+                };
+                create required multi property x -> int64;
+                create access policy ok allow all;
+                create access policy foo_1 deny all using (
+                    (select .x limit 1) ?!= 0
+                )
+             };
+        ''')
+
+        await self.con.execute('''
+            insert T {
+                name := "x",
+                x := {0},
+            };
+        ''')
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            "",
+        ):
+            await self.con.execute('''
+                insert T {
+                    name := "x",
+                    x := {},
+                };
             ''')
 
     async def test_edgeql_policies_volatile_01(self):
