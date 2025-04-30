@@ -7948,6 +7948,48 @@ class TestInsert(tb.DDLTestCase):
             [{'l2': 0, 'subordinates': [{'name': 'hi', '@comment': 'a'}]}],
         )
 
+    async def test_edgeql_insert_read_only_tx_01(self):
+        con = (
+            edgedb.create_async_client(
+                **self.get_connect_args(database=self.con.dbname)
+            ).with_transaction_options(
+                edgedb.TransactionOptions(readonly=True)
+            )
+        )
+        try:
+            with self.assertRaisesRegex(
+                edgedb.TransactionError,
+                r'Modifications not allowed in a read-only transaction'
+            ):
+                async for tx in con.transaction():
+                    async with tx:
+                        await tx.execute("insert Subordinate { name := 'hi' }")
+        finally:
+            await con.aclose()
+
+    async def test_edgeql_insert_read_only_tx_02(self):
+        # Check that the error is raised if the query is cached.
+
+        await self.con.execute("insert Subordinate { name := 'hi' }")
+
+        con = (
+            edgedb.create_async_client(
+                **self.get_connect_args(database=self.con.dbname)
+            ).with_transaction_options(
+                edgedb.TransactionOptions(readonly=True)
+            )
+        )
+        try:
+            with self.assertRaisesRegex(
+                edgedb.TransactionError,
+                r'Modifications not allowed in a read-only transaction'
+            ):
+                async for tx in con.transaction():
+                    async with tx:
+                        await tx.execute("insert Subordinate { name := 'hi' }")
+        finally:
+            await con.aclose()
+
 
 class TestRepeatableReadInsert(tb.QueryTestCase):
     '''The scope of the tests is testing various modes of Object creation.'''

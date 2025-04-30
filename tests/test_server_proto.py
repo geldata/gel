@@ -1568,8 +1568,9 @@ class TestServerProto(tb.QueryTestCase):
             ''')
 
             with self.assertRaisesRegex(
-                    edgedb.TransactionError,
-                    'read-only transaction'):
+                edgedb.TransactionError,
+                'Modifications not allowed in a read-only transaction'
+            ):
 
                 await self.con.query('''
                     INSERT Tmp {
@@ -2344,7 +2345,9 @@ class TestServerProto(tb.QueryTestCase):
             await self.assert_tx_isolation_and_default(
                 'RepeatableRead', default='Serializable'
             )
-            await self.assert_read_only_and_default('read-only transaction')
+            await self.assert_read_only_and_default(
+                'Modifications not allowed in a read-only transaction'
+            )
         finally:
             await self.con.query(f'''
                 ROLLBACK;

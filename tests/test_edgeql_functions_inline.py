@@ -11576,3 +11576,34 @@ class TestEdgeQLFunctionsInline(tb.QueryTestCase):
             'select Bar.a',
             [3],
         )
+
+
+class TestEdgeQLFunctionsInlineTransaction(tb.QueryTestCase):
+
+    SETUP = [
+        '''
+        create type Bar;
+        create function foo() -> Bar {
+            using ((insert Bar));
+        };
+        '''
+    ]
+
+    async def test_edgeql_functions_inline_transaction_dml_01(self):
+        con = (
+            edgedb.create_async_client(
+                **self.get_connect_args(database=self.con.dbname)
+            ).with_transaction_options(
+                edgedb.TransactionOptions(readonly=True)
+            )
+        )
+        try:
+            with self.assertRaisesRegex(
+                edgedb.TransactionError,
+                r'Modifications not allowed in a read-only transaction'
+            ):
+                async for tx in con.transaction():
+                    async with tx:
+                        await tx.execute("select foo()")
+        finally:
+            await con.aclose()
