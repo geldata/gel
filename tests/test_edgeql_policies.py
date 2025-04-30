@@ -22,7 +22,7 @@ import os.path
 import edgedb
 
 from edb.testbase import server as tb
-# from edb.tools import test
+from edb.tools import test
 
 
 class TestEdgeQLPolicies(tb.DDLTestCase):
@@ -34,6 +34,10 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
                           'issues.esdl')
 
     SETUP = [
+        '''
+            drop function all_objects();  # BUG!
+            create future warn_old_scoping;
+        ''',
         os.path.join(os.path.dirname(__file__), 'schemas',
                      'issues_setup.edgeql'),
         '''
@@ -1418,7 +1422,7 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
                 allow all using (
                   count((
                     WITH X := {1, 2}
-                    SELECT (X, (FOR x in {X} UNION (SELECT x)))
+                    SELECT ((FOR x in {X} UNION (SELECT x)))
                   )) = 2);
             };
             insert X;
@@ -1449,6 +1453,8 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
     async def test_edgeql_policies_complex_01(self):
         await self.migrate(
             """
+            using future warn_old_scoping;
+            module default {
             abstract type Auditable {
                 access policy auditable_default
                     allow all ;
@@ -1489,7 +1495,9 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
                     constraint std::exclusive;
                 };
             };
-            """
+            };
+            """,
+            module=None,
         )
         await self.con.execute(
             '''
@@ -1619,6 +1627,10 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
 
     async def test_edgeql_policies_global_01(self):
         # GH issue #6404
+        # HACK: HACK.
+        await self.con.execute('''
+            drop future warn_old_scoping;
+        ''')
 
         clan_and_global = '''
             type Clan {
@@ -1668,7 +1680,8 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             r'''
             select { s := S, foo := global foo };
             ''',
-            [{"s": [], "foo": None}]
+            [{"s": [], "foo": None}],
+            always_typenames=True,
         )
 
     async def test_edgeql_policies_diamond_01(self):
@@ -1737,3 +1750,7 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             ''',
             [val.id]
         )
+
+    @test.skip("There is a bug in migrating to empty with warn_old_scoping")
+    async def test_edgeql_policies_migrate_empty(self):
+        await self.migrate('')
