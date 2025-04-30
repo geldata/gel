@@ -25,7 +25,7 @@ from edb.testbase import server as tb
 from edb.tools import test
 
 
-class TestEdgeQLPolicies(tb.QueryTestCase):
+class TestEdgeQLPolicies(tb.DDLTestCase):
     '''Tests for policies.'''
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
@@ -342,6 +342,265 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             await self.con.query('''
                 select Ptr { tgt }
             ''')
+
+    async def test_edgeql_policies_05c(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (not global filter_owned and .b);
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05d(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (all({not global filter_owned, .b}));
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05e(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (
+                      exists (select .b filter not global filter_owned)
+                    );
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05f(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                # demorgan's law
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (not (global filter_owned or not .b));
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05g(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+                CREATE PROPERTY fo := (not global filter_owned);
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (.fo);
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05h(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (not global filter_owned ?? .b);
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05i(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (
+                      if true then not global filter_owned else .b);
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05j(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (assert_single(
+                      not global filter_owned and .b));
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05k(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (<bool><str>(
+                      not global filter_owned and .b));
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            print(await self.con.query('''
+                select Ptr { tgt }
+            '''))
 
     async def test_edgeql_policies_06(self):
         await self.con.execute('''
