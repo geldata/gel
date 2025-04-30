@@ -648,7 +648,8 @@ def _infer_set_inner(
     # but it can't actually be zero, clear the optionality to avoid
     # subpar codegen.
     if (
-        (node := scope_tree.find_child(ir.path_id)) is not None
+        new_scope.parent
+        and (node := new_scope.parent.find_child(ir.path_id)) is not None
         and node.optional
         and not card.can_be_zero()
     ):
