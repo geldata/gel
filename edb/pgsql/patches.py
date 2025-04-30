@@ -183,8 +183,8 @@ update ext::ai::ChatPrompt filter .name = 'builtin::rag-default' set {
 '''),  # For #8553
     # 6.6
     ('edgeql+schema', ''),  # For #8554
-    ('ext-pkg', 'ai'),  # For #8521
-    ('edgeql+user_ext|ai', '''
+    ('ext-pkg', 'ai'),  # For #8521, #8646
+    ('edgeql+user_ext+config|ai', '''
     create function ext::ai::search(
         object: anyobject,
         query: str,
@@ -202,6 +202,88 @@ update ext::ai::ChatPrompt filter .name = 'builtin::rag-default' set {
         set server_param_conversions :=
             '{"query": ["ai_text_embedding", "object"]}';
         using sql expression;
+    };
+
+    alter scalar type ext::ai::ProviderAPIStyle
+        extending enum<OpenAI, Anthropic, Ollama>;
+
+    create type ext::ai::OllamaProviderConfig
+      extending ext::ai::ProviderConfig {
+        alter property name {
+            set protected := true;
+            set default := 'builtin::ollama';
+        };
+
+        alter property display_name {
+            set protected := true;
+            set default := 'Ollama';
+        };
+
+        alter property api_url {
+            set default := 'http://localhost:11434/api'
+        };
+
+        alter property secret {
+            set default := ''
+        };
+
+        alter property api_style {
+            set protected := true;
+            set default := ext::ai::ProviderAPIStyle.Ollama;
+        };
+    };
+
+    # Ollama embedding models
+    create abstract type ext::ai::OllamaLlama_3_2_Model
+        extending ext::ai::TextGenerationModel
+    {
+        alter annotation
+            ext::ai::model_name := "llama3.2";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::text_gen_model_context_window := "131072";
+    };
+
+    create abstract type ext::ai::OllamaLlama_3_3_Model
+        extending ext::ai::TextGenerationModel
+    {
+        alter annotation
+            ext::ai::model_name := "llama3.3";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::text_gen_model_context_window := "131072";
+    };
+
+    create abstract type ext::ai::OllamaNomicEmbedTextModel
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "nomic-embed-text";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "768";
+    };
+
+    create abstract type ext::ai::OllamaBgeM3Model
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "bge-m3";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "1024";
     };
 '''),
 ]
