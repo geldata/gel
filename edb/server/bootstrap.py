@@ -70,6 +70,7 @@ from edb.schema import schema as s_schema
 from edb.schema import std as s_std
 from edb.schema import types as s_types
 from edb.schema import utils as s_utils
+from edb.schema import version as s_ver
 
 from edb.server import args as edbargs
 from edb.server import config
@@ -941,6 +942,13 @@ def prepare_patch(
                 stdmode=False,
                 testmode=True,
             )
+            # Prune any AlterSchemaVersion commands, because they
+            # won't work, since we defer all the
+            # compile_schema_storage_in_delta calls to the end.
+            for sub in delta_command.get_subcommands(
+                type=s_ver.AlterSchemaVersion
+            ):
+                delta_command.discard(sub)
             cschema, plan, tplan = _process_delta_params(
                 delta_command, cschema, backend_params)
             std_plans.append(delta_command)
