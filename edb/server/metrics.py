@@ -41,6 +41,44 @@ current_compiler_processes = registry.new_gauge(
     'Current number of active compiler processes.'
 )
 
+compiler_process_memory = registry.new_labeled_gauge(
+    'compiler_process_memory',
+    'Current memory usage of compiler processes in KiB.',
+    labels=('pid',),
+)
+
+compiler_process_schema_size = registry.new_labeled_gauge(
+    'compiler_process_schema_size',
+    'Current size of compiler process schema cache in KiB.',
+    labels=('pid', 'client'),
+)
+
+compiler_process_branches = registry.new_labeled_gauge(
+    'compiler_process_branches',
+    'Total number of branches cached in each compiler process.',
+    labels=('pid', 'client'),
+)
+
+compiler_process_branch_actions = registry.new_labeled_counter(
+    'compiler_process_branch_actions_total',
+    'Number of different branch actions happened in each '
+    'compiler process.',
+    labels=('pid', 'client', 'action'),
+)
+
+compiler_process_client_actions = registry.new_labeled_counter(
+    'compiler_process_client_actions_total',
+    'Number of different client actions happened in each '
+    'compiler process.',
+    labels=('pid', 'action'),
+)
+
+compiler_pool_wait_time = registry.new_histogram(
+    'compiler_pool_wait_time',
+    'Time it takes to acquire a compiler process.',
+    unit=prom.Unit.SECONDS,
+)
+
 current_branches = registry.new_labeled_gauge(
     'branches_current',
     'Current number of branches.',

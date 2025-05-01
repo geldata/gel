@@ -1726,6 +1726,7 @@ cdef class PgConnection(frontend.FrontendConnection):
                 self.dbname,
                 self.username,
                 client_id=self.tenant.client_id,
+                client_name=self.tenant.get_instance_name(),
             )
         finally:
             metrics.query_compilation_duration.observe(
