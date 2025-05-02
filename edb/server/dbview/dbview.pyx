@@ -202,6 +202,8 @@ cdef class Database:
         self._cache_queue = asyncio.Queue()
         self._cache_worker_task = asyncio.create_task(
             self.monitor(self.cache_worker, 'cache_worker'))
+        # Queue of (key: str, is_add: bool) pairs. is_add signals
+        # whether it is an addition or deletion.
         self._cache_notify_queue = asyncio.Queue()
         self._cache_notify_task = asyncio.create_task(
             self.monitor(self.cache_notifier, 'cache_notifier'))
@@ -252,6 +254,10 @@ cdef class Database:
                 unit_group.cache_state = CacheState.Evicted
             if keys:
                 await self.tenant.evict_query_cache(self.name, keys)
+                for key in keys:
+                    self._cache_notify_queue.put_nowait(
+                        (str(key), False)
+                    )
 
             # Now, populate the cache
             # Empty the queue, for batching reasons.
@@ -287,7 +293,9 @@ cdef class Database:
                     self._func_cache_gt_tx_seq[query_req] = units
                 else:
                     units[0].maybe_use_func_cache()
-                self._cache_notify_queue.put_nowait(str(units[0].cache_key))
+                self._cache_notify_queue.put_nowait(
+                    (str(units[0].cache_key), True)
+                )
 
     cdef inline uint64_t tx_seq_begin_tx(self):
         self._tx_seq += 1
@@ -330,7 +338,8 @@ cdef class Database:
             lambda keys: self.tenant.signal_sysevent(
                 'query-cache-changes',
                 dbname=self.name,
-                keys=keys,
+                to_add=[k for k, b in keys if b],
+                to_invalidate=[k for k, b in keys if not b],
             ),
             max_wait=1.0,
             delay_amt=0.2,
@@ -551,6 +560,14 @@ cdef class Database:
             logger.warning(
                 "skipped %d incompatible cache items", -warning_count
             )
+
+    def invalidate_cache_entry_object(self, obj):
+        self._eql_to_compiled.pop(obj, None)
+
+    def invalidate_cache_entries(self, to_invalidate):
+        for key in to_invalidate:
+            handle = rpc.CompilationRequestIdHandle(key)
+            self._eql_to_compiled.pop(handle, None)
 
     def clear_query_cache(self):
         self._eql_to_compiled.clear()

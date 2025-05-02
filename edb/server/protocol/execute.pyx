@@ -165,7 +165,7 @@ async def describe(
     allow_capabilities: compiler.Capability = compiler.Capability.MODIFICATIONS,
     query_tag: str | None = None,
 ) -> sertypes.TypeDesc:
-    compiled, dbv = await _parse(
+    _, compiled, dbv = await _parse(
         db,
         query,
         query_cache_enabled=query_cache_enabled,
@@ -195,7 +195,10 @@ async def _parse(
     use_metrics: bool = True,
     cached_globally: bool = False,
     query_cache_enabled: Optional[bool] = None,
-) -> tuple[dbview.CompiledQuery, dbview.DatabaseConnectionView]:
+) -> tuple[
+    rpc.CompilationRequest,
+    dbview.CompiledQuery,
+    dbview.DatabaseConnectionView]:
     if query_cache_enabled is None:
         query_cache_enabled = not (
             debug.flags.disable_qcache or debug.flags.edgeql_compile)
@@ -228,7 +231,7 @@ async def _parse(
         allow_capabilities=allow_capabilities,
     )
 
-    return compiled, dbv
+    return query_req, compiled, dbv
 
 
 # TODO: can we merge execute and execute_script?
@@ -241,6 +244,7 @@ async def execute(
     fe_conn: frontend.AbstractFrontendConnection = None,
     use_prep_stmt: bint = False,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
+    query_req: Optional[rpc.CompilationRequest] = None,
 ):
     cdef:
         bytes state = None, orig_state = None
@@ -403,11 +407,25 @@ async def execute(
                 query_unit.user_schema = new_user_schema
 
     except Exception as ex:
-        # If we made schema changes, include the new schema in the
-        # exception so that it can be used when interpreting.
-        if query_unit.user_schema:
-            if isinstance(ex, pgerror.BackendError):
+        if isinstance(ex, pgerror.BackendError):
+            # If we made schema changes, include the new schema in the
+            # exception so that it can be used when interpreting.
+            if query_unit.user_schema:
                 ex._user_schema = query_unit.user_schema
+
+            # If we get an undefined function error, this is probably
+            # because of a pgfunc cache invalidation race condition,
+            # where another frontend dropped the function but we
+            # haven't processed the message yet. We are going to
+            # trigger a client retry (via errormech), but we also want
+            # to invalidate the cache entry, in cache we haven't
+            # processed the message by the retry.
+            if (
+                query_req
+                and ex.code_is(pgerror.ERROR_UNDEFINED_FUNCTION)
+            ):
+                dbv._db.invalidate_cache_entry_object(query_req)
+
         if query_unit.source_map:
             ex._from_sql = True
 
@@ -615,6 +633,7 @@ async def execute_script(
     compiled: dbview.CompiledQuery,
     bind_args: bytes,
     *,
+    query_req: Optional[rpc.CompilationRequest] = None,
     fe_conn: Optional[frontend.AbstractFrontendConnection],
 ):
     cdef:
@@ -649,7 +668,7 @@ async def execute_script(
             # state restoring
             state = None
         async with conn.parse_execute_script_context():
-            
+
             converted_args: Optional[dict[int, list[args_ser.ConvertedArg]]] = None
             if unit_group.server_param_conversions:
                 converted_args = await _convert_parameters(
@@ -784,10 +803,23 @@ async def execute_script(
     except Exception as e:
         dbv.on_error()
 
-        # Include the new schema in the exception so that it can be
-        # used when interpreting.
         if isinstance(e, pgerror.BackendError):
+            # Include the new schema in the exception so that it can be
+            # used when interpreting.
             e._user_schema = dbv.get_user_schema_pickle()
+
+            # If we get an undefined function error, this is probably
+            # because of a pgfunc cache invalidation race condition,
+            # where another frontend dropped the function but we
+            # haven't processed the message yet. We are going to
+            # trigger a client retry (via errormech), but we also want
+            # to invalidate the cache entry, in cache we haven't
+            # processed the message by the retry.
+            if (
+                query_req
+                and e.code_is(pgerror.ERROR_UNDEFINED_FUNCTION)
+            ):
+                dbv._db.invalidate_cache_entry_object(query_req)
 
         if query_unit and query_unit.source_map:
             e._from_sql = True
@@ -962,7 +994,7 @@ async def parse_execute_json(
     # or anything from std schema, for example:
     #     YES:  select ext::auth::UIConfig { ... }
     #     NO:   select default::User { ... }
-    compiled, dbv = await _parse(
+    query_req, compiled, dbv = await _parse(
         db,
         query,
         input_format=compiler.InputFormat.JSON,
@@ -985,6 +1017,7 @@ async def parse_execute_json(
                 variables=variables,
                 globals_=globals_,
                 tx_isolation=tx_isolation,
+                query_req=query_req,
             )
         finally:
             tenant.remove_dbview(dbv)
@@ -1000,6 +1033,7 @@ async def execute_json(
     fe_conn: Optional[frontend.AbstractFrontendConnection] = None,
     use_prep_stmt: bint = False,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
+    query_req: Optional[rpc.CompilationRequest] = None,
 ) -> bytes:
     dbv.set_globals(immutables.Map({
         "__::__edb_json_globals__": config.SettingValue(
@@ -1033,6 +1067,7 @@ async def execute_json(
             compiled,
             bind_args,
             fe_conn=fe_conn,
+            query_req=query_req,
         )
     else:
         if tx_isolation is not None:
@@ -1056,6 +1091,7 @@ async def execute_json(
             bind_args,
             fe_conn=fe_conn,
             tx_isolation=tx_isolation,
+            query_req=query_req,
         )
 
     if fe_conn is None:

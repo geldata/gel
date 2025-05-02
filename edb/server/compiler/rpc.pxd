@@ -60,3 +60,9 @@ cdef class CompilationRequest:
         object cache_key
 
     cdef _serialize(self)
+
+
+@cython.final
+cdef class CompilationRequestIdHandle:
+    cdef:
+        object cache_key

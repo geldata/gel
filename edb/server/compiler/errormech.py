@@ -136,6 +136,8 @@ pgtype_re = re.compile(
 enum_re = re.compile(
     r'(?P<p>enum) (?P<v>edgedb([\w-]+)."(?P<id>[\w-]+)_domain")')
 
+cache_function_re = re.compile(
+    r'^function edgedb_.*\.__qh_.* does not exist$')
 
 type_in_access_policy_re = re.compile(r'(\w+|`.+?`)::(\w+|`.+?`)')
 
@@ -447,6 +449,20 @@ def _static_interpret_schema_errors(
             return errors.InvalidValueError(err_details.message, hint=hint)
 
     return SchemaRequired
+
+
+@static_interpret_by_code.register(pgerrors.ERROR_UNDEFINED_FUNCTION)
+def _static_interpret_undefined_function(
+    _code: str,
+    err_details: ErrorDetails,
+    from_graphql: bool = False,
+):
+    if cache_function_re.match(err_details.message):
+        return errors.QueryCacheInvalidationError(
+            'Cache invalidation caused query failure; retry the query'
+        )
+
+    return errors.InternalServerError(err_details.message)
 
 
 @static_interpret_by_code.register(pgerrors.ERROR_INVALID_PARAMETER_VALUE)
