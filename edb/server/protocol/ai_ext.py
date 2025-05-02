@@ -2160,21 +2160,84 @@ async def _start_ollama_chat(
             base_url.split('/')[:-1] + ['v1']
         )
 
+    # Generate params differently for stream and non-stream modes since they
+    # use different APIs.
+    options = {
+        **({"temperature": temperature} if temperature is not None else {}),
+        **({"top_p": top_p} if top_p is not None else {}),
+        **({"top_k": top_k} if top_k is not None else {}),
+    }
+
+    if stream:
+        params = {
+            "model": model_name,
+            "messages": messages,
+            "options": options,
+        }
+
+        # Only include tools in streaming params if no tool messages are
+        # provided.
+        if tools is not None and not any(
+            message["role"] == "tool"
+            for message in messages
+        ):
+            params["tools"] = tools
+
+    else:
+        converted_messages = []
+        for message in messages:
+            if message["role"] == "user":
+                # Ollama can't handle content block messages.
+                # Unpack them into separate messages.
+                if isinstance(message["content"], str):
+                    converted_messages.append(message)
+                else:
+                    # array of content blocks
+                    for block in message["content"]:
+                        if block["type"] != "text":
+                            raise TypeError(
+                                f"Unsupported content type: '{block["type"]}'. "
+                                f"For non-text content, use streamed mode."
+                            )
+                        converted_messages.append({
+                            "role": message["role"],
+                            "content": block["text"],
+                        })
+
+            elif message["role"] == "assistant":
+                # Gel http API packs arguments into a string, but ollama
+                # requires plain json.
+                converted_messages.append({
+                    "role": message["role"],
+                    "content": message["content"],
+                    "tool_calls": [
+                        {
+                            "id": tool_call["id"],
+                            "function": {
+                                "name": tool_call["function"]["name"],
+                                "arguments": json.loads(
+                                    tool_call["function"]["arguments"]
+                                ),
+                            }
+                        }
+                        for tool_call in message["tool_calls"]
+                    ]
+                })
+
+            else:
+                converted_messages.append(message)
+
+        params = {
+            "model": model_name,
+            "messages": converted_messages,
+            "options": options,
+            **({"tools": tools} if tools is not None else {}),
+        }
+
     client = http_client.with_context(
         headers={},
         base_url=base_url,
     )
-
-    params = {
-        "model": model_name,
-        "messages": messages,
-        "options": {
-            **({"temperature": temperature} if temperature is not None else {}),
-            **({"top_p": top_p} if top_p is not None else {}),
-            **({"top_k": top_k} if top_k is not None else {}),
-        },
-        **({"tools": tools} if tools is not None else {}),
-    }
 
     if stream:
         async with aconnect_sse(
@@ -2189,7 +2252,7 @@ async def _start_ollama_chat(
             # we need tool_index and finish_reason to correctly
             # send 'content_block_stop' chunk for tool call messages
             tool_index = 0
-            finish_reason = "unknown"
+            finish_reason: Optional[str] = "unknown"
 
             started = False
 
@@ -2222,8 +2285,9 @@ async def _start_ollama_chat(
 
                 message = sse.json()
                 if message.get("object") == "chat.completion.chunk":
-                    data = message.get("choices")[0]
-                    delta = data.get("delta")
+                    choices = message.get("choices")
+                    data = choices[0] if choices else {}
+                    delta = data.get("delta") or {}
                     role = delta.get("role")
                     tool_calls = delta.get("tool_calls")
 
@@ -2372,6 +2436,22 @@ async def _start_ollama_chat(
         response.content_type = b'application/json'
 
         result_data = result.json()
+
+        tool_calls = result_data["message"].get("tool_calls")
+        tool_calls_formatted = [
+            {
+                # Ollama does not provide tool call ids for non-stream.
+                # Use enumerate to generate a placeholder.
+                "id": f"call_{tool_call_id}",
+                # Ollama doesn't provide the tool call type but it should
+                # always be 'function'.
+                "type": "function",
+                "name": tool_call["function"]["name"],
+                "args": tool_call["function"]["arguments"],
+            }
+            for tool_call_id, tool_call in enumerate(tool_calls or [])
+        ]
+
         body = {
             "model": result_data["model"],
             "text": result_data["message"]["content"],
@@ -2380,6 +2460,7 @@ async def _start_ollama_chat(
                 "prompt_tokens": result_data["prompt_eval_count"],
                 "completion_tokens": result_data["eval_count"]
             },
+            "tool_calls": tool_calls_formatted,
         }
 
         # Ollama has no documented tools response
