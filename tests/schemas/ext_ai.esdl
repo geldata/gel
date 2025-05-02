@@ -34,10 +34,17 @@ type Astronomy {
         on (.content);
 };
 
-type Stuff extending Astronomy {
+type OnExpression extending Astronomy {
     content2: str;
     deferred index ext::ai::index(embedding_model := 'text-embedding-test')
         on ({.content} ++ {.content2});
+};
+
+type OnComputed extending Astronomy {
+    content2: str;
+    combined := .content ++ .content2;
+    deferred index ext::ai::index(embedding_model := 'text-embedding-test')
+        on (.combined);
 };
 
 type Truncated {

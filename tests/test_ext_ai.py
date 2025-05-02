@@ -131,6 +131,7 @@ class TestExtAI(tb.BaseHttpExtensionTest):
         )
 
     async def test_ext_ai_indexing_01(self):
+        # Index on non-computed pointer
         try:
             await self.con.execute(
                 """
@@ -194,11 +195,12 @@ class TestExtAI(tb.BaseHttpExtensionTest):
             ''')
 
     async def test_ext_ai_indexing_02(self):
+        # Index on expression
         try:
             qry = '''
                 with
                     result := ext::ai::search(
-                        Stuff, <array<float32>>$qv)
+                        OnExpression, <array<float32>>$qv)
                 select
                     result.object {
                         content,
@@ -213,11 +215,11 @@ class TestExtAI(tb.BaseHttpExtensionTest):
 
             await self.assert_query_result(
                 """
-                insert Stuff {
+                insert OnExpression {
                     content := 'Skies on Mars',
                     content2 := ' are red',
                 };
-                insert Stuff {
+                insert OnExpression {
                     content := 'Skies on Earth',
                     content2 := ' are blue',
                 };
@@ -228,7 +230,7 @@ class TestExtAI(tb.BaseHttpExtensionTest):
 
             await self.assert_query_result(
                 '''
-                select _ := ext::ai::to_context((select Stuff))
+                select _ := ext::ai::to_context((select OnExpression))
                 order by _
                 ''',
                 [
@@ -272,7 +274,7 @@ class TestExtAI(tb.BaseHttpExtensionTest):
                 async with tr:
                     await self.assert_query_result(
                         """
-                        update Stuff filter .content like '%Earth'
+                        update OnExpression filter .content like '%Earth'
                         set { content2 := ' are often grey' };
                         """ + qry,
                         [
@@ -287,10 +289,109 @@ class TestExtAI(tb.BaseHttpExtensionTest):
 
         finally:
             await self.con.execute('''
-                delete Stuff;
+                delete OnExpression;
             ''')
 
     async def test_ext_ai_indexing_03(self):
+        # Index on computed pointer
+        try:
+            qry = '''
+                with
+                    result := ext::ai::search(
+                        OnComputed, <array<float32>>$qv)
+                select
+                    result.object {
+                        content,
+                        content2,
+                        distance := result.distance,
+                    }
+                order by
+                    result.distance asc empty last
+                    then result.object.content;
+            '''
+            qv = [1 for i in range(10)]
+
+            await self.assert_query_result(
+                """
+                insert OnComputed {
+                    content := 'Skies on Mars',
+                    content2 := ' are red',
+                };
+                insert OnComputed {
+                    content := 'Skies on Earth',
+                    content2 := ' are blue',
+                };
+                """ + qry,
+                [],
+                variables=dict(qv=qv),
+            )
+
+            await self.assert_query_result(
+                '''
+                select _ := ext::ai::to_context((select OnComputed))
+                order by _
+                ''',
+                [
+                    'Skies on Earth are blue',
+                    'Skies on Mars are red',
+                ],
+            )
+
+            async for tr in self.try_until_succeeds(
+                ignore=(AssertionError,),
+                timeout=30.0,
+            ):
+                async with tr:
+                    await self.assert_query_result(
+                        qry,
+                        [
+                            {
+                                'content': 'Skies on Earth',
+                                'content2': ' are blue',
+                                'distance': 0.3675444679663241,
+                            },
+                            {
+                                'content': 'Skies on Mars',
+                                'content2': ' are red',
+                                'distance': 0.4284523933505918,
+                            },
+                        ],
+                        variables=dict(qv=qv),
+                    )
+
+            # updating an object should make it disappear from results.
+            # (the read is done in the same tx, so there is no possible
+            # race where the worker picks it up before the read)
+            async for tr in self.try_until_succeeds(
+                ignore=(
+                    edgedb.TransactionConflictError,
+                    edgedb.TransactionSerializationError,
+                ),
+                timeout=30.0,
+            ):
+                async with tr:
+                    await self.assert_query_result(
+                        """
+                        update OnComputed filter .content like '%Earth'
+                        set { content2 := ' are often grey' };
+                        """ + qry,
+                        [
+                            {
+                                'content': 'Skies on Mars',
+                                'content2': ' are red',
+                                'distance': 0.4284523933505918,
+                            },
+                        ],
+                        variables=dict(qv=qv),
+                    )
+
+        finally:
+            await self.con.execute('''
+                delete OnComputed;
+            ''')
+
+    async def test_ext_ai_indexing_04(self):
+        # Inherited index
         try:
             await self.con.execute(
                 """
@@ -378,26 +479,27 @@ class TestExtAI(tb.BaseHttpExtensionTest):
         if not look(json.loads(plan)):
             raise AssertionError(f'query did not use ext::ai::index index')
 
-    async def test_ext_ai_indexing_04(self):
+    async def test_ext_ai_indexing_05(self):
+        # Index use
         qv = [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0, 9.0, -10.0]
 
         await self._assert_index_use(
             f'''
             with vector := <array<float32>>$0
-            select ext::ai::search(Stuff, vector) limit 5;
+            select ext::ai::search(OnExpression, vector) limit 5;
             ''',
             qv,
         )
         await self._assert_index_use(
             f'''
             with vector := <array<float32>>$0
-            select ext::ai::search(Stuff, vector).object limit 5;
+            select ext::ai::search(OnExpression, vector).object limit 5;
             ''',
             qv,
         )
         await self._assert_index_use(
             f'''
-            select ext::ai::search(Stuff, <array<float32>>$0) limit 5;
+            select ext::ai::search(OnExpression, <array<float32>>$0) limit 5;
             ''',
             qv,
         )
@@ -405,31 +507,35 @@ class TestExtAI(tb.BaseHttpExtensionTest):
         await self._assert_index_use(
             f'''
             with vector := <array<float32>><json>$0
-            select ext::ai::search(Stuff, vector) limit 5;
+            select ext::ai::search(OnExpression, vector) limit 5;
             ''',
             json.dumps(qv),
         )
         await self._assert_index_use(
             f'''
-            select ext::ai::search(Stuff, <array<float32>><json>$0) limit 5;
+            select ext::ai::search(OnExpression, <array<float32>><json>$0)
+            limit 5;
             ''',
             json.dumps(qv),
         )
 
-    async def test_ext_ai_indexing_05(self):
+    async def test_ext_ai_indexing_06(self):
+        # Index on mixed inherited types
         try:
             await self.con.execute(
                 """
                 insert Astronomy {
                     content := 'Skies on Venus are orange'
                 };
-                insert Astronomy {
-                    content := 'Skies on Mars are red'
+                insert OnExpression {
+                    content := 'Skies on Mars',
+                    content2 := ' are red',
                 };
-                insert Astronomy {
-                    content := 'Skies on Pluto are black and starry'
+                insert OnComputed {
+                    content := 'Skies on Pluto',
+                    content2 := ' are black and starry',
                 };
-                insert Astronomy {
+                insert Star {
                     content := 'Skies on Earth are blue'
                 };
                 """,
@@ -457,7 +563,7 @@ class TestExtAI(tb.BaseHttpExtensionTest):
                         [
                             {
                                 'content': (
-                                    'Skies on Pluto are black and starry'
+                                    'Skies on Pluto'
                                 ),
                                 'distance': 0.3545027756320972,
                             },
@@ -466,7 +572,7 @@ class TestExtAI(tb.BaseHttpExtensionTest):
                                 'distance': 0.3675444679663241,
                             },
                             {
-                                'content': 'Skies on Mars are red',
+                                'content': 'Skies on Mars',
                                 'distance': 0.4284523933505918,
                             },
                             {
