@@ -2103,7 +2103,6 @@ class Tenant(ha_base.ClusterProtocol):
 
         if to_invalidate:
             if db := self.maybe_get_db(dbname=dbname):
-                # print("invalidating", to_invalidate)
                 db.invalidate_cache_entries(
                     [uuid.UUID(s) for s in to_invalidate]
                 )
