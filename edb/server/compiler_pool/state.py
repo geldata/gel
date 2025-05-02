@@ -48,7 +48,7 @@ class PickledDatabaseState(typing.NamedTuple):
             len(self.user_schema_pickle) +
             len(self.reflection_cache) * 128 +
             len(self.database_config) * 128
-        ) // 1024
+        )
 
 
 class FailedStateSync(Exception):

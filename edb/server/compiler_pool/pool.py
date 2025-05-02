@@ -298,7 +298,7 @@ class Worker(BaseWorker):
         return self._pid
 
     def get_rss(self) -> int:
-        return self._proc.memory_info().rss // 1024
+        return self._proc.memory_info().rss
 
     def maybe_close_for_high_rss(self, max_rss: int) -> bool:
         if time.monotonic() > self._allow_high_rss_until:

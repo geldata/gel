@@ -86,7 +86,7 @@ class PickledState(NamedTuple):
             rv += len(self.reflection_cache)
         if self.database_config is not None:
             rv += len(self.database_config)
-        return rv // 1024
+        return rv
 
 
 class ClientSchema(NamedTuple):

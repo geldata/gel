@@ -47,14 +47,14 @@ current_compiler_processes = registry.new_gauge(
 )
 
 compiler_process_memory = registry.new_labeled_gauge(
-    'compiler_process_memory',
-    'Current memory usage of compiler processes in KiB.',
+    'compiler_process_memory_bytes',
+    'Current memory usage of compiler processes in bytes.',
     labels=('pid',),
 )
 
 compiler_process_schema_size = registry.new_labeled_gauge(
-    'compiler_process_schema_size',
-    'Current size of compiler process schema cache in KiB.',
+    'compiler_process_schema_size_bytes',
+    'Current size of compiler process schema cache in bytes.',
     labels=('pid', 'client'),
 )
 

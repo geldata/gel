@@ -1159,7 +1159,7 @@ server_options = typeutils.chain_decorators([
     click.option(
         '--compiler-worker-max-rss',
         type=int,
-        help='Maximum allowed RSS (in KiB) per compiler worker process. Any '
+        help='Maximum allowed RSS (in bytes) per compiler worker process. Any '
              'worker exceeding this limit will be terminated and recreated. '
              'Each worker is free from this limit in its first 20-30 hours '
              'after spawn to avoid infinite restarts or a thundering herd.',
@@ -1208,7 +1208,7 @@ compiler_options = typeutils.chain_decorators([
     click.option(
         '--worker-max-rss',
         type=int,
-        help='Maximum allowed RSS (in KiB) per worker process. Any worker '
+        help='Maximum allowed RSS (in bytes) per worker process. Any worker '
              'exceeding this limit will be terminated and recreated. '
              'Each worker is free from this limit in its first 20-30 hours '
              'after spawn to avoid infinite restarts or a thundering herd.',
