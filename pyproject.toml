@@ -168,7 +168,7 @@ module = [
     "edb.repl.*",
     "edb.schema.*",
     "edb.schema.reflection.*",
-    "edb.server.cluster",
+    "edb.testbase.cluster",
     "edb.server.compiler.*",
     "edb.server.config",
     "edb.server.connpool.*",

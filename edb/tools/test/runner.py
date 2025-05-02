@@ -63,7 +63,7 @@ from . import styles
 from . import results
 
 if TYPE_CHECKING:
-    import edb.server.cluster as edb_cluster
+    import edb.testbase.cluster as edb_cluster
 
 result: Optional[unittest.result.TestResult] = None
 coverage_run: Optional[Any] = None

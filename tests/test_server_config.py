@@ -47,7 +47,7 @@ from edb.ir import statypes
 
 
 from edb.server import args
-from edb.server import cluster
+from edb.testbase import cluster
 from edb.server import config
 from edb.server.config import ops
 from edb.server.config import spec

@@ -48,7 +48,7 @@ from edb import protocol
 from edb.common import devmode
 from edb.protocol import protocol as edb_protocol  # type: ignore
 from edb.server import args, pgcluster
-from edb.server import cluster as edbcluster
+from edb.testbase import cluster as edbcluster
 from edb.testbase import server as tb
 
 

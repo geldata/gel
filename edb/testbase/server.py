@@ -62,7 +62,7 @@ import edgedb
 
 from edb.edgeql import quote as qlquote
 from edb.server import args as edgedb_args
-from edb.server import cluster as edgedb_cluster
+from edb.testbase import cluster as edgedb_cluster
 from edb.server import pgcluster
 from edb.server import defines as edgedb_defines
 from edb.server import auth
