@@ -36,6 +36,11 @@ compiler_process_spawns = registry.new_counter(
     'Total number of compiler processes spawned.'
 )
 
+compiler_process_kills = registry.new_counter(
+    'compiler_process_kills_total',
+    'Total number of compiler processes killed.',
+)
+
 current_compiler_processes = registry.new_gauge(
     'compiler_processes_current',
     'Current number of active compiler processes.'

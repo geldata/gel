@@ -40,6 +40,7 @@ import logging
 import os
 import os.path
 import pickle
+import random
 import signal
 import subprocess
 import sys
@@ -108,6 +109,7 @@ ADAPTIVE_SCALE_DOWN_WAIT_TIME: float = 60.0
 WORKER_PKG: str = __name__.rpartition('.')[0] + '.'
 CALL_FOR_CLIENT_VERSION = 2
 DEFAULT_CLIENT: str = 'default'
+HIGH_RSS_GRACE_PERIOD: tuple[int, int] = (20 * 3600, 30 * 3600)
 
 
 logger = logging.getLogger("edb.server")
@@ -231,6 +233,7 @@ class Worker(BaseWorker):
     _proc: psutil.Process
     _manager: BaseLocalPool
     _server: amsg.Server
+    _allow_high_rss_until: float
 
     def __init__(
         self,
@@ -245,6 +248,8 @@ class Worker(BaseWorker):
         self._proc = psutil.Process(pid)
         self._manager = manager
         self._server = server
+        grace_period = random.SystemRandom().randint(*HIGH_RSS_GRACE_PERIOD)
+        self._allow_high_rss_until = time.monotonic() + grace_period
 
     async def _attach(self, init_args_pickled: bytes) -> None:
         self._manager._stats_spawned += 1
@@ -295,10 +300,23 @@ class Worker(BaseWorker):
     def get_rss(self) -> int:
         return self._proc.memory_info().rss // 1024
 
+    def maybe_close_for_high_rss(self, max_rss: int) -> bool:
+        if time.monotonic() > self._allow_high_rss_until:
+            rss = self.get_rss()
+            if rss > max_rss:
+                if debug.flags.server:
+                    print(f"HIT MEMORY LIMIT ({rss} > {max_rss}), "
+                          f"KILLING {self._pid}")
+                self.close()
+                return True
+
+        return False
+
     def close(self) -> None:
         if self._closed:
             return
         self._closed = True
+        metrics.compiler_process_kills.inc()
         self._manager._stats_killed += 1
         self._manager._workers.pop(self._pid, None)
         self._manager._report_worker(self, action="kill")
@@ -1164,10 +1182,7 @@ class BaseLocalPool(
         # Skip disconnected workers
         if worker.get_pid() in self._workers:
             if self._worker_max_rss is not None:
-                if worker.get_rss() > self._worker_max_rss:
-                    if debug.flags.server:
-                        print(f"HIT MEMORY LIMIT, KILLING {worker.get_pid()}")
-                    worker.close()
+                if worker.maybe_close_for_high_rss(self._worker_max_rss):
                     return
             self._workers_queue.release(worker, put_in_front=put_in_front)
 
