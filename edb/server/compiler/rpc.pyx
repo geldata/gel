@@ -314,9 +314,10 @@ cdef class CompilationRequestIdHandle:
         return hash(self.cache_key)
 
     def __eq__(self, rhs) -> bool:
-        if isinstance(rhs, CompilationRequestIdHandle):
+        ty = type(rhs)
+        if ty is CompilationRequestIdHandle:
             return self.cache_key == rhs.cache_key
-        elif isinstance(rhs, CompilationRequest):
+        elif ty is CompilationRequest:
             return self.cache_key == rhs.get_cache_key()
         else:
             return NotImplemented
