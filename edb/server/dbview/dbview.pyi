@@ -104,6 +104,9 @@ class Database:
     def hydrate_cache(self, query_cache: list[tuple[bytes, ...]]) -> None:
         ...
 
+    def invalidate_cache_entries(self, to_invalidate: list[uuid.UUID]) -> None:
+        ...
+
     def clear_query_cache(self) -> None:
         ...
 

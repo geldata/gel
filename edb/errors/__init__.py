@@ -85,6 +85,7 @@ __all__ = base.__all__ + (  # type: ignore
     'TransactionConflictError',
     'TransactionSerializationError',
     'TransactionDeadlockError',
+    'QueryCacheInvalidationError',
     'WatchError',
     'ConfigurationError',
     'AccessError',
@@ -405,6 +406,10 @@ class TransactionSerializationError(TransactionConflictError):
 
 class TransactionDeadlockError(TransactionConflictError):
     _code = 0x_05_03_01_02
+
+
+class QueryCacheInvalidationError(TransactionConflictError):
+    _code = 0x_05_03_01_03
 
 
 class WatchError(ExecutionError):

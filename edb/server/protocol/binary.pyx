@@ -444,7 +444,13 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         self.buffer.finish_message()
         return client_final
 
-    async def _execute_script(self, compiled: object, bind_args: bytes):
+    async def _execute_script(
+        self,
+        compiled: object,
+        bind_args: bytes,
+        *,
+        query_req: Optional[rpc.CompilationRequest] = None,
+    ):
         cdef:
             pgcon.PGConnection conn
             dbview.DatabaseConnectionView dbv
@@ -460,6 +466,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 compiled,
                 bind_args,
                 fe_conn=self,
+                query_req=query_req,
             )
 
     def _tokenize(
@@ -773,6 +780,8 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         compiled: dbview.CompiledQuery,
         bind_args: bytes,
         use_prep_stmt: bint,
+        *,
+        query_req: Optional[rpc.CompilationRequest] = None,
     ):
         cdef:
             dbview.DatabaseConnectionView dbv
@@ -787,6 +796,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 bind_args,
                 fe_conn=self,
                 use_prep_stmt=use_prep_stmt,
+                query_req=query_req,
             )
 
         query_unit = compiled.query_unit_group[0]
@@ -1031,13 +1041,13 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             assert len(query_unit_group) == 1
             await self._execute_rollback(compiled)
         elif len(query_unit_group) > 1 or force_script:
-            await self._execute_script(compiled, args)
+            await self._execute_script(compiled, args, query_req=query_req)
         else:
             use_prep = (
                 len(query_unit_group) == 1
                 and bool(query_unit_group[0].sql_hash)
             )
-            await self._execute(compiled, args, use_prep)
+            await self._execute(compiled, args, use_prep, query_req=query_req)
 
         if self._cancelled:
             raise ConnectionAbortedError
