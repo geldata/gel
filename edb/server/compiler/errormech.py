@@ -87,10 +87,13 @@ branch_errors = {
     pgerrors.ERROR_DUPLICATE_DATABASE: errors.DuplicateDatabaseDefinitionError,
 }
 
-directly_mappable = {
+directly_mappable: dict[str, type | tuple[type, str]] = {
     pgerrors.ERROR_DIVISION_BY_ZERO: errors.DivisionByZeroError,
     pgerrors.ERROR_INTERVAL_FIELD_OVERFLOW: errors.NumericOutOfRangeError,
-    pgerrors.ERROR_READ_ONLY_SQL_TRANSACTION: errors.TransactionError,
+    pgerrors.ERROR_READ_ONLY_SQL_TRANSACTION: (
+        errors.TransactionError,
+        "Modifications not allowed in a read-only transaction"
+    ),
     pgerrors.ERROR_SERIALIZATION_FAILURE: errors.TransactionSerializationError,
     pgerrors.ERROR_DEADLOCK_DETECTED: errors.TransactionDeadlockError,
     pgerrors.ERROR_OBJECT_IN_USE: errors.ExecutionError,
@@ -318,12 +321,17 @@ def _static_interpret_directly_mappable(
     err_details: ErrorDetails,
     from_graphql: bool = False,
 ):
-    errcls = directly_mappable[code]
+    mapped = directly_mappable[code]
+    if isinstance(mapped, type):
+        errcls = mapped
+        err_message = err_details.message
+    else:
+        errcls, err_message = mapped
 
     if from_graphql:
-        msg = gql_replace_type_names_in_text(err_details.message)
+        msg = gql_replace_type_names_in_text(err_message)
     else:
-        msg = err_details.message
+        msg = err_message
 
     return errcls(msg)
 
