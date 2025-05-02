@@ -304,9 +304,11 @@ class Worker(BaseWorker):
         if time.monotonic() > self._allow_high_rss_until:
             rss = self.get_rss()
             if rss > max_rss:
-                if debug.flags.server:
-                    print(f"HIT MEMORY LIMIT ({rss} > {max_rss}), "
-                          f"KILLING {self._pid}")
+                logger.info(
+                    'worker process with PID %d exceeds high RSS limit '
+                    '(%d > %d), killing now',
+                    self._pid, rss, max_rss,
+                )
                 self.close()
                 return True
 
