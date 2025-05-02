@@ -328,7 +328,8 @@ class BaseCluster:
         return subprocess.call(
             [
                 "edgedb",
-                "--host",
+                "query",
+                "--unix-path",
                 str(os.path.abspath(self._runstate_dir)),
                 "--port",
                 str(self._effective_port),
@@ -339,7 +340,6 @@ class BaseCluster:
                 edgedb_defines.EDGEDB_SUPERUSER_DB,
                 "--wait-until-available",
                 wait_until_available,
-                "-c",
                 query,
             ],
             stdout=subprocess.DEVNULL,
