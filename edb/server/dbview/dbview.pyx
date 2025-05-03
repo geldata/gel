@@ -1156,6 +1156,7 @@ cdef class DatabaseConnectionView:
                             query_req.serialize(),
                             "<unknown>",
                             client_id=self.tenant.client_id,
+                            client_name=self.tenant.get_instance_name(),
                         )
                 except Exception:
                     # ignore cache entry that cannot be recompiled
@@ -1412,6 +1413,7 @@ cdef class DatabaseConnectionView:
                     query_req.source.text(),
                     self.in_tx_error(),
                     client_id=self.tenant.client_id,
+                    client_name=self.tenant.get_instance_name(),
                 )
             else:
                 result = await compiler_pool.compile(
@@ -1424,6 +1426,7 @@ cdef class DatabaseConnectionView:
                     query_req.serialize(),
                     query_req.source.text(),
                     client_id=self.tenant.client_id,
+                    client_name=self.tenant.get_instance_name(),
                 )
         finally:
             metrics.edgeql_query_compilation_duration.observe(
