@@ -257,6 +257,7 @@ async def compile(
             operation_name,
             variables,
             client_id=tenant.client_id,
+            client_name=tenant.get_instance_name(),
         )
     finally:
         metrics.query_compilation_duration.observe(
