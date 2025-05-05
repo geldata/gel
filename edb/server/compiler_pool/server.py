@@ -219,16 +219,19 @@ class MultiSchemaPool(
         self,
         client_id: int,
         client_name: str,
+        compiler_protocol: int,
         catalog_version: int,
         init_args_pickled: pool_mod.RemoteInitArgsPickle,
     ) -> None:
+        if compiler_protocol > pool_mod.CURRENT_COMPILER_PROTOCOL:
+            raise state_mod.IncompatibleClient("compiler_protocol")
+
         (
             std_args_pickled,
             client_args_pickled,
             global_schema_pickle,
             system_config_pickled,
         ) = init_args_pickled
-        dbs_arg: immutables.Map[str, PickledState]
         backend_runtime_params, = pickle.loads(client_args_pickled)
         if self._inited.is_set():
             logger.debug("New client %d connected.", client_id)

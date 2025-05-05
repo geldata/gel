@@ -110,6 +110,7 @@ WORKER_PKG: str = __name__.rpartition('.')[0] + '.'
 CALL_FOR_CLIENT_VERSION = 2
 DEFAULT_CLIENT: str = 'default'
 HIGH_RSS_GRACE_PERIOD: tuple[int, int] = (20 * 3600, 30 * 3600)
+CURRENT_COMPILER_PROTOCOL = 2
 
 
 logger = logging.getLogger("edb.server")
@@ -1607,6 +1608,7 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
     ) -> None:
         if self._worker is None:
             return
+        compiler_protocol = CURRENT_COMPILER_PROTOCOL
         try:
             init_args, init_args_pickled = self._get_init_args()
             worker = RemoteWorker(
@@ -1616,6 +1618,7 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
             )
             await worker.call(
                 '__init_server__',
+                compiler_protocol,
                 defines.EDGEDB_CATALOG_VERSION,
                 init_args_pickled,
             )
