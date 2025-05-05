@@ -70,6 +70,7 @@ from edb.schema import schema as s_schema
 from edb.schema import std as s_std
 from edb.schema import types as s_types
 from edb.schema import utils as s_utils
+from edb.schema import version as s_ver
 
 from edb.server import args as edbargs
 from edb.server import config
@@ -879,7 +880,9 @@ def prepare_patch(
         assert '+user_ext' not in kind
 
         for ddl_cmd in edgeql.parse_block(patch):
-            assert isinstance(ddl_cmd, qlast.DDLCommand)
+            if not isinstance(ddl_cmd, qlast.DDLCommand):
+                assert isinstance(ddl_cmd, qlast.Query)
+                ddl_cmd = qlast.DDLQuery(query=ddl_cmd)
             # First apply it to the regular schema, just so we can update
             # stdschema
             delta_command = s_ddl.delta_from_ddl(
@@ -930,13 +933,22 @@ def prepare_patch(
         )
 
         for ddl_cmd in edgeql.parse_block(patch):
-            assert isinstance(ddl_cmd, qlast.DDLCommand)
+            if not isinstance(ddl_cmd, qlast.DDLCommand):
+                assert isinstance(ddl_cmd, qlast.Query)
+                ddl_cmd = qlast.DDLQuery(query=ddl_cmd)
 
             delta_command = s_ddl.delta_from_ddl(
                 ddl_cmd, modaliases={}, schema=cschema,
                 stdmode=False,
                 testmode=True,
             )
+            # Prune any AlterSchemaVersion commands, because they
+            # won't work, since we defer all the
+            # compile_schema_storage_in_delta calls to the end.
+            for sub in delta_command.get_subcommands(
+                type=s_ver.AlterSchemaVersion
+            ):
+                delta_command.discard(sub)
             cschema, plan, tplan = _process_delta_params(
                 delta_command, cschema, backend_params)
             std_plans.append(delta_command)
@@ -1169,10 +1181,14 @@ async def create_branch(
 ) -> None:
     """Create a new database (branch) based on an existing one."""
 
-    # Dump the edgedbpub schema that holds user data and any extensions.
+    # Dump the edgedbpub schema that holds user data and any
+    # extensions.  Also dump edgedbext, which can unfortunately
+    # include some tables/views for the AI extension.  (And some
+    # extensions, which get created with IF NOT EXISTS, so that is
+    # fine.)
     schema_dump = await cluster.dump_database(
         src_dbname,
-        include_schemas=('edgedbpub',),
+        include_schemas=('edgedbpub', 'edgedbext'),
         include_extensions=('*',),
         schema_only=True,
     )

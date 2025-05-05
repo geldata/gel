@@ -3734,6 +3734,83 @@ class TestSchema(tb.BaseSchemaLoadTest):
             "abs' does not exist",
         )
 
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_01(self):
+        """
+        global foo: array<array<int64>>;
+        """
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_02(self):
+        """
+        type Foo;
+        global foo: array<array<Foo>>;
+        """
+
+    def test_schema_array_of_array_03(self):
+        """
+        global foo := [[1]];
+        """
+
+    def test_schema_array_of_array_04(self):
+        """
+        alias foo := [[1]];
+        """
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_05(self):
+        """
+        type Foo {
+            foo: array<array<int64>>;
+        }
+        """
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_06(self):
+        """
+        type Foo {
+            foo: array<array<Foo>>;
+        }
+        """
+
+    def test_schema_array_of_array_07(self):
+        """
+        type Foo {
+            foo := [[1]];
+        };
+        """
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_08(self):
+        """
+        function foo(x: array<array<int64>>) -> int64 using (1);
+        """
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_09(self):
+        """
+        type Foo;
+        function foo(x: array<array<Foo>>) -> int64 using (1);
+        """
+
 
 class TestGetMigration(tb.BaseSchemaLoadTest):
     """Test migration deparse consistency.

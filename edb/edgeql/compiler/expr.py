@@ -338,13 +338,6 @@ def compile_Tuple(expr: qlast.Tuple, *, ctx: context.ContextLevel) -> irast.Set:
 @dispatch.compile.register(qlast.Array)
 def compile_Array(expr: qlast.Array, *, ctx: context.ContextLevel) -> irast.Set:
     elements = [dispatch.compile(e, ctx=ctx) for e in expr.elements]
-    # check that none of the elements are themselves arrays
-    for el, expr_el in zip(elements, expr.elements):
-        if isinstance(setgen.get_set_type(el, ctx=ctx), s_abc.Array):
-            raise errors.QueryError(
-                f'nested arrays are not supported',
-                span=expr_el.span)
-
     return setgen.new_array_set(elements, ctx=ctx, span=expr.span)
 
 
@@ -1189,3 +1182,39 @@ def try_constant_set(expr: irast.Base) -> Optional[irast.ConstantSet]:
         )
     else:
         return None
+
+
+class IdentCompletionException(BaseException):
+    """An exception that is raised to halt the compilation and return a list of
+    suggested idents to be used at the location of qlast.Cursor node.
+    """
+
+    def __init__(self, suggestions: list[str]):
+        self.suggestions = suggestions
+
+
+@dispatch.compile.register(qlast.Cursor)
+def compile_Cursor(
+    expr: qlast.Cursor, *, ctx: context.ContextLevel
+) -> irast.Set:
+    suggestions = []
+
+    # with bindings
+    name: sn.Name
+    for name in ctx.aliased_views.keys():
+        suggestions.append(name.name)
+
+    # names in current module
+    if cur_mod := ctx.modaliases.get(None):
+        obj_types = ctx.env.schema.get_objects(
+            included_modules=[sn.UnqualName(cur_mod)],
+            type=s_objtypes.ObjectType,
+        )
+        obj_type_names = [
+            obj_type.get_name(ctx.env.schema).name
+            for obj_type in obj_types
+        ]
+        obj_type_names.sort()
+        suggestions.extend(obj_type_names)
+
+    raise IdentCompletionException(suggestions)

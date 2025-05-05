@@ -1338,7 +1338,13 @@ class Function(
     # If the value is a list, the additional items act as parameters to the
     # conversion.
     server_param_conversions = so.SchemaField(
-        str, default=None, compcoef=0.0
+        str, default=None, compcoef=0.0,
+        # HACK: We don't actually allow users to set this in DDL, but
+        # we want to do it in one of our test suite schemas, and
+        # unless we set allow_ddl_set, it won't get DESCRIBEd
+        # correctly, which breaks patch and upgrade testing.
+        # So we do this check explicitly.
+        allow_ddl_set=True,
     )
 
     def has_inlined_defaults(self, schema: s_schema.Schema) -> bool:
@@ -1548,6 +1554,18 @@ class FunctionCommand(
             return 'nativecode'
         else:
             return super().get_ast_attr_for_field(field, astnode)
+
+    def validate_object(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+    ) -> None:
+        if not context.stdmode and not context.testmode:
+            if self.scls.get_server_param_conversions(schema):
+                raise errors.InvalidFunctionDefinitionError(
+                    f'setting server_param_conversions is not supported in '
+                    f'user-defined functions',
+                    span=self.span)
 
     def compile_expr_field(
         self,

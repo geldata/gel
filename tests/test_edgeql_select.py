@@ -789,6 +789,30 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             ],
         )
 
+    async def test_edgeql_select_computable_36(self):
+        # array of array of scalar computed property
+        await self.con.execute('''
+            ALTER TYPE Issue {
+                CREATE PROPERTY array_of_array {
+                    using ([[1]])
+                };
+            };
+        ''')
+        await self.assert_query_result(
+            """
+            SELECT Issue {
+                number, array_of_array,
+            }
+            FILTER .number = '3'
+            """,
+            [
+                {
+                    'number': '3',
+                    'array_of_array': [[1]]
+                },
+            ],
+        )
+
     async def test_edgeql_select_match_01(self):
         await self.assert_query_result(
             r"""
@@ -8473,6 +8497,38 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 select { foo := 1 } order by
                         (DELETE User filter .name = 't1')
             ''')
+
+    async def test_edgeql_select_params_array_of_array_01(self):
+        await self.assert_query_result(
+            r'''
+            SELECT <array<array<int64>>>$0
+            ''',
+            [[[1, 2], [3, 4]]],
+            variables=([[1, 2], [3, 4]],),
+        )
+        await self.assert_query_result(
+            r'''
+            SELECT <array<array<int64>>>$foo
+            ''',
+            [[[1, 2], [3, 4]]],
+            variables={'foo': [[1, 2], [3, 4]]},
+        )
+
+        await self.assert_query_result(
+            r'''
+            SELECT <tuple<array<array<int64>>, array<array<str>>>>$foo
+            ''',
+            [([[1, 2], [3, 4]], [['A', 'B'], ['C', 'D']])],
+            variables={'foo': ([[1, 2], [3, 4]], [['A', 'B'], ['C', 'D']])},
+        )
+
+        await self.assert_query_result(
+            r'''
+            SELECT <array<array<tuple<int64, str>>>>$foo
+            ''',
+            [[[(1, 'A'), (1, 'B')], [(2, 'A'), (2, 'B')]]],
+            variables={'foo': [[(1, 'A'), (1, 'B')], [(2, 'A'), (2, 'B')]]},
+        )
 
     async def test_edgeql_select_params_01(self):
         with self.assertRaisesRegex(edgedb.QueryError, "missing a type cast"):

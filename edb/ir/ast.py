@@ -778,6 +778,9 @@ class ServerParamConversion:
     conversion_name: str
     additional_info: tuple[str, ...]
 
+    # If the parameter is a query parameter, track its script params index.
+    script_param_index: typing.Optional[int] = None
+
     # If the parameter is a constant value, pass to directly to the server.
     constant_value: typing.Optional[typing.Any] = None
 
@@ -806,6 +809,7 @@ class Statement(Command):
     singletons: list[PathId]
     triggers: tuple[tuple[Trigger, ...], ...]
     warnings: tuple[errors.EdgeDBError, ...]
+    unsafe_isolation_dangers: tuple[errors.UnsafeIsolationLevelError, ...]
 
 
 class TypeIntrospection(ImmutableExpr):
@@ -947,6 +951,7 @@ class CallArg(ImmutableBase):
     multiplicity: qltypes.Multiplicity = qltypes.Multiplicity.UNKNOWN
     is_default: bool = False
     param_typemod: qltypes.TypeModifier
+    polymorphism: qltypes.Polymorphism = qltypes.Polymorphism.NotUsed
 
 
 class Call(ImmutableExpr):
@@ -997,6 +1002,11 @@ class Call(ImmutableExpr):
 
     # If this is a set of call but is allowed in singleton expressions.
     is_singleton_set_of: typing.Optional[bool] = None
+
+    # The polymorphism of the return type
+    # This is used to identify cases where polymorphism needs to be handled in
+    # a specialized way (eg. arrays of arrays).
+    return_polymorphism: qltypes.Polymorphism = qltypes.Polymorphism.NotUsed
 
 
 class FunctionCall(Call):
@@ -1279,7 +1289,7 @@ class OnConflictClause(Base):
     select_ir: Set
     always_check: bool
     else_ir: typing.Optional[Set]
-    update_query_set: typing.Optional[Set] = None
+    check_anchor: typing.Optional[PathId] = None
     else_fail: typing.Optional[MutatingStmt] = None
 
 
@@ -1315,8 +1325,6 @@ class UpdateStmt(MutatingStmt, FilteredStmt):
         assert self._material_type
         return self._material_type
 
-    sql_mode_link_only: bool = False
-
 
 class DeleteStmt(MutatingStmt, FilteredStmt):
     _material_type: TypeRef | None = None
@@ -1346,6 +1354,7 @@ class ConfigCommand(Command, Expr):
     requires_restart: bool
     backend_setting: typing.Optional[str]
     is_system_config: bool
+    type_rewrites: typing.Optional[dict[tuple[uuid.UUID, bool], Set]] = None
     globals: typing.Optional[list[Global]] = None
     scope_tree: typing.Optional[ScopeTreeNode] = None
 

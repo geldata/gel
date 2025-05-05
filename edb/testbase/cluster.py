@@ -34,12 +34,11 @@ from edb import buildmeta
 from edb.common import devmode
 from edb.edgeql import quote
 
+from edb.server import auth
 from edb.server import args as edgedb_args
 from edb.server import defines as edgedb_defines
+from edb.server import pgcluster
 from edb.server import pgconnparams
-from edb.server import auth
-
-from . import pgcluster
 
 
 if TYPE_CHECKING:

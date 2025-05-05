@@ -87,10 +87,13 @@ branch_errors = {
     pgerrors.ERROR_DUPLICATE_DATABASE: errors.DuplicateDatabaseDefinitionError,
 }
 
-directly_mappable = {
+directly_mappable: dict[str, type | tuple[type, str]] = {
     pgerrors.ERROR_DIVISION_BY_ZERO: errors.DivisionByZeroError,
     pgerrors.ERROR_INTERVAL_FIELD_OVERFLOW: errors.NumericOutOfRangeError,
-    pgerrors.ERROR_READ_ONLY_SQL_TRANSACTION: errors.TransactionError,
+    pgerrors.ERROR_READ_ONLY_SQL_TRANSACTION: (
+        errors.TransactionError,
+        "Modifications not allowed in a read-only transaction"
+    ),
     pgerrors.ERROR_SERIALIZATION_FAILURE: errors.TransactionSerializationError,
     pgerrors.ERROR_DEADLOCK_DETECTED: errors.TransactionDeadlockError,
     pgerrors.ERROR_OBJECT_IN_USE: errors.ExecutionError,
@@ -136,6 +139,8 @@ pgtype_re = re.compile(
 enum_re = re.compile(
     r'(?P<p>enum) (?P<v>edgedb([\w-]+)."(?P<id>[\w-]+)_domain")')
 
+cache_function_re = re.compile(
+    r'^function edgedb_.*\.__qh_.* does not exist$')
 
 type_in_access_policy_re = re.compile(r'(\w+|`.+?`)::(\w+|`.+?`)')
 
@@ -318,12 +323,17 @@ def _static_interpret_directly_mappable(
     err_details: ErrorDetails,
     from_graphql: bool = False,
 ):
-    errcls = directly_mappable[code]
+    mapped = directly_mappable[code]
+    if isinstance(mapped, type):
+        errcls = mapped
+        err_message = err_details.message
+    else:
+        errcls, err_message = mapped
 
     if from_graphql:
-        msg = gql_replace_type_names_in_text(err_details.message)
+        msg = gql_replace_type_names_in_text(err_message)
     else:
-        msg = err_details.message
+        msg = err_message
 
     return errcls(msg)
 
@@ -447,6 +457,20 @@ def _static_interpret_schema_errors(
             return errors.InvalidValueError(err_details.message, hint=hint)
 
     return SchemaRequired
+
+
+@static_interpret_by_code.register(pgerrors.ERROR_UNDEFINED_FUNCTION)
+def _static_interpret_undefined_function(
+    _code: str,
+    err_details: ErrorDetails,
+    from_graphql: bool = False,
+):
+    if cache_function_re.match(err_details.message):
+        return errors.QueryCacheInvalidationError(
+            'Cache invalidation caused query failure; retry the query'
+        )
+
+    return errors.InternalServerError(err_details.message)
 
 
 @static_interpret_by_code.register(pgerrors.ERROR_INVALID_PARAMETER_VALUE)

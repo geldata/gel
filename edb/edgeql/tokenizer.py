@@ -74,8 +74,8 @@ class Source:
     def extra_counts(self) -> Sequence[int]:
         return ()
 
-    def extra_blobs(self) -> Sequence[bytes]:
-        return ()
+    def extra_blobs(self) -> list[bytes]:
+        return []
 
     def extra_formatted_as_text(self) -> bool:
         return False
@@ -133,7 +133,7 @@ class NormalizedSource(Source):
     def extra_counts(self) -> Sequence[int]:
         return self._extra_counts
 
-    def extra_blobs(self) -> Sequence[bytes]:
+    def extra_blobs(self) -> list[bytes]:
         return self._extra_blobs
 
     @staticmethod

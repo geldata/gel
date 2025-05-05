@@ -69,7 +69,7 @@ trait RawToOwned {
     fn raw_to_owned(&self) -> Self::Owned;
 }
 
-impl<'a, T: ?Sized> RawToOwned for Cow<'a, T>
+impl<T: ?Sized> RawToOwned for Cow<'_, T>
 where
     T: ToOwned + 'static,
     Cow<'static, T>: From<<T as ToOwned>::Owned>,
@@ -227,7 +227,7 @@ macro_rules! define_params {
     };
 }
 
-impl<'a> RawConnectionParameters<'a> {
+impl RawConnectionParameters<'_> {
     pub fn hosts(&self) -> Result<Vec<Host>, ParseError> {
         Self::merge_hosts_and_ports(
             self.host.as_deref().unwrap_or_default(),
@@ -406,7 +406,7 @@ impl serde::Serialize for SslVersion {
     }
 }
 
-impl<'a> TryFrom<Cow<'a, str>> for SslVersion {
+impl TryFrom<Cow<'_, str>> for SslVersion {
     type Error = ParseError;
     fn try_from(value: Cow<str>) -> Result<SslVersion, Self::Error> {
         Ok(match value.to_lowercase().as_ref() {

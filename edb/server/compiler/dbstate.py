@@ -89,6 +89,9 @@ class BaseQuery:
     warnings: tuple[errors.EdgeDBError, ...] = dataclasses.field(
         kw_only=True, default=()
     )
+    unsafe_isolation_dangers: tuple[errors.UnsafeIsolationLevelError, ...] = (
+        dataclasses.field(kw_only=True, default=())
+    )
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -102,13 +105,11 @@ class ServerParamConversion:
     conversion_name: str
     additional_info: tuple[str, ...]
 
-    # Explicitly store the value if it is a literal which was turned into a
-    # parameter during normalization.
-    #
-    # Normalized constants are passed to the backend as a blob of bytes.
-    # Since no encode/decode information is associated with this blob, the
-    # value to be converted needs to be passed in separately.
-    source_value: Optional[Any] = None
+    # If the parameter is a query parameter, track its bind_args index.
+    script_param_index: Optional[int] = None
+
+    # If the parameter is a constant value, pass to directly to the server.
+    constant_value: Optional[Any] = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -178,6 +179,8 @@ class TxControlQuery(BaseQuery):
     cacheable: bool
 
     modaliases: Optional[immutables.Map[Optional[str], str]]
+
+    isolation_level: Optional[qltypes.TransactionIsolationLevel] = None
 
     user_schema: Optional[s_schema.Schema] = None
     global_schema: Optional[s_schema.Schema] = None
@@ -255,6 +258,9 @@ class QueryUnit:
     # starts a new transaction.
     tx_id: Optional[int] = None
 
+    # If this is the start of the transaction, the isolation level of it.
+    tx_isolation_level: Optional[qltypes.TransactionIsolationLevel] = None
+
     # True if this unit is single 'COMMIT' command.
     # 'COMMIT' is always compiled to a separate QueryUnit.
     tx_commit: bool = False
@@ -316,6 +322,7 @@ class QueryUnit:
     server_param_conversions: Optional[list[ServerParamConversion]] = None
 
     warnings: tuple[errors.EdgeDBError, ...] = ()
+    unsafe_isolation_dangers: tuple[errors.UnsafeIsolationLevelError, ...] = ()
 
     # Set only when this unit contains a CONFIGURE INSTANCE command.
     system_config: bool = False
@@ -430,6 +437,9 @@ class QueryUnitGroup:
     unit_converted_param_indexes: Optional[dict[int, list[int]]] = None
 
     warnings: Optional[list[errors.EdgeDBError]] = None
+    unsafe_isolation_dangers: (
+        Optional[list[errors.UnsafeIsolationLevelError]]
+    ) = None
 
     # Cacheable QueryUnit is serialized in the compiler, so that the I/O server
     # doesn't need to serialize it again for persistence.
@@ -522,6 +532,11 @@ class QueryUnitGroup:
             if self.warnings is None:
                 self.warnings = []
             self.warnings.extend(query_unit.warnings)
+        if query_unit.unsafe_isolation_dangers is not None:
+            if self.unsafe_isolation_dangers is None:
+                self.unsafe_isolation_dangers = []
+            self.unsafe_isolation_dangers.extend(
+                query_unit.unsafe_isolation_dangers)
 
         if not serialize or query_unit.cache_sql is None:
             self._units.append(query_unit)
@@ -861,7 +876,16 @@ class TransactionState(NamedTuple):
 
 
 class Transaction:
+
+    # Fields that affects the state key are listed here. The key is used
+    # to determine if we can reuse a previously-pickled state, so remember
+    # to update get_state_key() below when adding new fields affecting the
+    # state key.  See also edb/server/compiler_pool/worker.py
+    _id: int
     _savepoints: dict[int, TransactionState]
+    _current: TransactionState
+
+    # backref to the owning state object
     _constate: CompilerConnectionState
 
     def __init__(
@@ -901,6 +925,13 @@ class Transaction:
 
         self._state0 = self._current
         self._savepoints = {}
+
+    def get_state_key(self) -> tuple[int, tuple[int, ...], TransactionState]:
+        return (
+            self._id,
+            tuple(self._savepoints.keys()),
+            self._current,  # TransactionState is immutable
+        )
 
     @property
     def id(self) -> int:
@@ -1092,7 +1123,14 @@ CStateStateType = tuple[dict[int, TransactionState], Transaction, int]
 class CompilerConnectionState:
     __slots__ = ("_savepoints_log", "_current_tx", "_tx_count", "_user_schema")
 
+    # Fields that affects the state key are listed here. The key is used
+    # to determine if we can reuse a previously-pickled state, so remember
+    # to update get_state_key() below when adding new fields affecting the
+    # state key.  See also edb/server/compiler_pool/worker.py
+    _tx_count: int
     _savepoints_log: dict[int, TransactionState]
+    _current_tx: Transaction
+
     _user_schema: Optional[s_schema.FlatSchema]
 
     def __init__(
@@ -1119,6 +1157,16 @@ class CompilerConnectionState:
             cached_reflection=cached_reflection,
         )
         self._savepoints_log = {}
+
+    def get_state_key(self) -> tuple[tuple[int, ...], int, tuple[Any, ...]]:
+        # This would be much more efficient if CompilerConnectionState
+        # and TransactionState objects were immutable. But they are not,
+        # so we have
+        return (
+            tuple(self._savepoints_log.keys()),
+            self._tx_count,
+            self._current_tx.get_state_key(),
+        )
 
     def __getstate__(self) -> CStateStateType:
         return self._savepoints_log, self._current_tx, self._tx_count

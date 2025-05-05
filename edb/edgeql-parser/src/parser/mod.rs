@@ -1,12 +1,15 @@
+mod cst;
 mod custom_errors;
+mod spec;
+
+pub use cst::{CSTNode, Production, Terminal};
+pub use spec::{Action, Reduce, Spec, SpecSerializable};
 
 use append_only_vec::AppendOnlyVec;
-use indexmap::IndexMap;
 
-use crate::helpers::quote_name;
 use crate::keywords::{self, Keyword};
 use crate::position::Span;
-use crate::tokenizer::{Error, Kind, Token, Value};
+use crate::tokenizer::{Error, Kind, Value};
 
 pub struct Context<'s> {
     spec: &'s Spec,
@@ -68,6 +71,7 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
 
     for token in input {
         // println!("token {:?}", token);
+
         while let Some(mut parser) = parsers.pop() {
             let res = parser.act(ctx, token);
 
@@ -88,12 +92,17 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
                 };
 
                 // option 1: inject a token
-                if parser.error_cost <= ERROR_COST_INJECT_MAX {
+                if parser.error_cost <= ERROR_COST_INJECT_MAX && !parser.has_custom_error {
                     let possible_actions = &ctx.spec.actions[parser.stack_top.state];
                     for token_kind in possible_actions.keys() {
+                        if parser.can_act(ctx, token_kind).is_none() {
+                            continue;
+                        }
+
                         let mut inject = parser.clone();
 
-                        let injection = new_token_for_injection(*token_kind, ctx);
+                        let injection =
+                            new_token_for_injection(*token_kind, &prev_span, token.span, ctx);
 
                         let cost = injection_cost(token_kind);
                         let error = Error::new(format!("Missing {injection}")).with_span(gap_span);
@@ -151,29 +160,24 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
         if new_parsers.len() > 1 {
             new_parsers.sort_by_key(Parser::adjusted_cost);
 
-            let recovered = new_parsers.iter().position(Parser::has_recovered);
+            if new_parsers[0].has_custom_error {
+                // if we have a custom error, just keep that
 
-            if let Some(recovered) = recovered {
-                // make sure not to discard custom errors
-                let any_custom_error = new_parsers.iter().any(|p| p.has_custom_error);
-                if !any_custom_error || new_parsers[recovered].has_custom_error {
-                    // recover a parser and discard the rest
-                    let mut recovered = new_parsers.swap_remove(recovered);
-                    recovered.error_cost = 0;
-                    recovered.has_custom_error = false;
-
-                    new_parsers.clear();
-                    new_parsers.push(recovered);
-                }
-            }
-
-            // prune: pick only 1 best parsers that has cost > ERROR_COST_INJECT_MAX
-            if new_parsers[0].error_cost > ERROR_COST_INJECT_MAX {
                 new_parsers.drain(1..);
-            }
+            } else if new_parsers[0].has_recovered() {
+                // recover parsers whose "adjusted error cost" reached 0 and discard the rest
 
-            // prune: pick only X best parsers
-            if new_parsers.len() > PARSER_COUNT_MAX {
+                new_parsers.retain(|p| p.has_recovered());
+                for p in &mut new_parsers {
+                    p.error_cost = 0;
+                }
+            } else if new_parsers[0].error_cost > ERROR_COST_INJECT_MAX {
+                // prune: pick only 1 best parsers that has cost > ERROR_COST_INJECT_MAX
+
+                new_parsers.drain(1..);
+            } else if new_parsers.len() > PARSER_COUNT_MAX {
+                // prune: pick only X best parsers
+
                 new_parsers.drain(PARSER_COUNT_MAX..);
             }
         }
@@ -181,6 +185,18 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
         assert!(parsers.is_empty());
         std::mem::swap(&mut parsers, &mut new_parsers);
         prev_span = Some(token.span);
+
+        // for (index, parser) in parsers.iter().enumerate() {
+        //     print!(
+        //         "p{index} {:06} {:5}:",
+        //         parser.error_cost, parser.can_recover
+        //     );
+        //     for e in &parser.errors {
+        //         print!(" {}", e.message);
+        //     }
+        //     println!("");
+        // }
+        // println!("");
     }
 
     // there will always be a parser left,
@@ -203,10 +219,72 @@ pub fn parse<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Option<CSTNode<'a>
     (node, errors)
 }
 
+/// Parses tokens and then inspects the state of the parser to suggest possible
+/// next keywords and a boolean indicating if next token can be an identifier.
+/// This is done by looking at available actions in current state.
+/// An important detail is that not all of these actions are valid.
+/// They might trigger a chain of reductions that ends in a state that
+/// does not accept the suggested token.
+pub fn suggest_next_keyword<'a>(input: &'a [Terminal], ctx: &'a Context) -> (Vec<Keyword>, bool) {
+    // init
+    let stack_top = ctx.arena.alloc(StackNode {
+        parent: None,
+        state: 0,
+        value: CSTNode::Empty,
+    });
+    let mut parser = Parser {
+        stack_top,
+        error_cost: 0,
+        node_count: 0,
+        can_recover: true,
+        errors: Vec::new(),
+        has_custom_error: false,
+    };
+
+    // parse tokens
+    for token in input.iter() {
+        if matches!(token.kind, Kind::EOI) {
+            break;
+        }
+
+        let res = parser.act(ctx, token);
+
+        if res.is_err() {
+            return (vec![], false);
+        }
+    }
+
+    // extract possible next actions
+    let actions = &ctx.spec.actions[parser.stack_top.state];
+
+    let can_be_ident =
+        actions.contains_key(&Kind::Ident) && parser.can_act(ctx, &Kind::Ident).is_some();
+
+    let keywords = actions
+        .keys()
+        // suggest only keywords
+        .filter_map(|kind| {
+            if let Kind::Keyword(keyword) = kind {
+                Some(*keyword)
+            } else {
+                None
+            }
+        })
+        // never suggest dunder or bools, they should be suggested semantically
+        .filter(|k| !k.is_dunder() && !k.is_bool())
+        // if next token can be ident, hide all unreserved keywords
+        .filter(|k| !(can_be_ident && k.is_unreserved()))
+        // filter only valid actions
+        .filter(|k| parser.can_act(ctx, &Kind::Keyword(*k)).is_some())
+        .collect();
+
+    (keywords, can_be_ident)
+}
+
 fn starts_with_unexpected_error(a: &Parser) -> bool {
     a.errors
         .first()
-        .map_or(true, |x| x.message.starts_with(UNEXPECTED))
+        .is_none_or(|x| x.message.starts_with(UNEXPECTED))
 }
 
 impl Context<'_> {
@@ -226,11 +304,16 @@ impl Context<'_> {
     }
 }
 
-fn new_token_for_injection<'a>(kind: Kind, ctx: &'a Context) -> &'a Terminal {
+fn new_token_for_injection<'a>(
+    kind: Kind,
+    prev_span: &Option<Span>,
+    next_span: Span,
+    ctx: &'a Context,
+) -> &'a Terminal {
     let (text, value) = match kind {
         Kind::Keyword(Keyword(kw)) => (kind.text(), Some(Value::String(kw.to_string()))),
         Kind::Ident => {
-            let ident = "`ident_placeholder`";
+            let ident = "ident_placeholder";
             (Some(ident), Some(Value::String(ident.into())))
         }
         _ => (kind.text(), None),
@@ -240,68 +323,12 @@ fn new_token_for_injection<'a>(kind: Kind, ctx: &'a Context) -> &'a Terminal {
         kind,
         text: text.unwrap_or_default().to_string(),
         value,
-        span: Span::default(),
+        span: Span {
+            start: prev_span.map_or(0, |x| x.end),
+            end: next_span.start,
+        },
         is_placeholder: true,
     })
-}
-
-pub struct Spec {
-    pub actions: Vec<IndexMap<Kind, Action>>,
-    pub goto: Vec<IndexMap<String, usize>>,
-    pub start: String,
-    pub inlines: IndexMap<usize, u8>,
-    pub production_names: Vec<(String, String)>,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Action {
-    Shift(usize),
-    Reduce(Reduce),
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Reduce {
-    /// Index of the production in the associated production array
-    pub production_id: usize,
-
-    pub non_term: String,
-
-    /// Number of arguments
-    pub cnt: usize,
-}
-
-/// A node of the CST tree.
-///
-/// Warning: allocated in the bumpalo arena, which does not Drop.
-/// Any types that do allocation with global allocator (such as String or Vec),
-/// must manually drop. This is why Terminal has a special vec arena that does
-/// Drop.
-#[derive(Debug, Clone, Copy, Default)]
-pub enum CSTNode<'a> {
-    #[default]
-    Empty,
-    Terminal(&'a Terminal),
-    Production(Production<'a>),
-}
-#[derive(Clone, Debug)]
-pub struct Terminal {
-    pub kind: Kind,
-    pub text: String,
-    pub value: Option<Value>,
-    pub span: Span,
-    is_placeholder: bool,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Production<'a> {
-    pub id: usize,
-    pub args: &'a [CSTNode<'a>],
-
-    /// When a production is inlined, its id is saved into the new production
-    /// This is needed when matching CST nodes by production id.
-    pub inlined_ids: Option<&'a [usize]>,
 }
 
 struct StackNode<'p> {
@@ -450,6 +477,48 @@ impl<'s> Parser<'s> {
         Some(final_node.value)
     }
 
+    /// Lightweight version of act that checks if a token *could* be applied.
+    /// Returns next state.
+    fn can_act(&self, ctx: &'s Context, token: &Kind) -> Option<usize> {
+        let mut state = self.stack_top.state;
+
+        let mut node = &self.stack_top;
+
+        // count of "ghost" stack nodes, which should have been pushed to the stack,
+        // but haven't because we don't actually need them there, only need to know
+        // how many of them there are
+        let mut ghosts = 0;
+
+        loop {
+            // find next action
+            let action = ctx.spec.actions[state].get(token)?;
+
+            match action {
+                Action::Shift(next) => {
+                    return Some(*next);
+                }
+                Action::Reduce(reduce) => {
+                    // simulate reduce stack pops
+                    // (cancel out any ghost nodes if there is any)
+                    let cancel_out = usize::min(ghosts, reduce.cnt);
+                    ghosts -= cancel_out;
+                    for _ in 0..(reduce.cnt - cancel_out) {
+                        node = node.parent.as_ref().unwrap();
+                    }
+
+                    // get state of current stack top
+                    // Stack top is node.state, unless we have ghosts. In that case, the
+                    // state of node we would have pushed is stored in `state`.
+                    let stack_state = if ghosts > 0 { state } else { node.state };
+
+                    state = *ctx.spec.goto[stack_state].get(&reduce.non_term)?;
+
+                    ghosts += 1;
+                }
+            }
+        }
+    }
+
     #[cfg(never)]
     fn print_stack(&self, ctx: &'s Context) {
         let prefix = "STACK: ";
@@ -588,7 +657,7 @@ fn injection_cost(kind: &Kind) -> u16 {
         // Manual keyword tweaks to encourage some error messages and discourage others.
         Keyword(keywords::Keyword(
             "delete" | "update" | "migration" | "role" | "global" | "administer" | "future"
-            | "database",
+            | "database", //  | "if" | "group",
         )) => 100,
         Keyword(keywords::Keyword("insert" | "module" | "extension" | "branch")) => 20,
         Keyword(keywords::Keyword("select" | "property" | "type")) => 10,
@@ -610,160 +679,5 @@ fn injection_cost(kind: &Kind) -> u16 {
         Assign | Arrow => 5,
 
         _ => 100, // forbidden
-    }
-}
-
-impl std::fmt::Display for Terminal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if (self.is_placeholder && self.kind == Kind::Ident) || self.text.is_empty() {
-            if let Some(user_friendly) = self.kind.user_friendly_text() {
-                return write!(f, "{}", user_friendly);
-            }
-        }
-
-        match self.kind {
-            Kind::Ident => write!(f, "'{}'", &quote_name(&self.text)),
-            Kind::Keyword(Keyword(kw)) => write!(f, "keyword '{}'", kw.to_ascii_uppercase()),
-            _ => write!(f, "'{}'", self.text),
-        }
-    }
-}
-
-impl Terminal {
-    pub fn from_token(token: Token) -> Self {
-        Terminal {
-            kind: token.kind,
-            text: token.text.into(),
-            value: token.value,
-            span: token.span,
-            is_placeholder: false,
-        }
-    }
-
-    #[cfg(feature = "serde")]
-    pub fn from_start_name(start_name: &str) -> Self {
-        Terminal {
-            kind: get_token_kind(start_name),
-            text: "".to_string(),
-            value: None,
-            span: Default::default(),
-            is_placeholder: false,
-        }
-    }
-}
-
-#[cfg(feature = "serde")]
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct SpecSerializable {
-    pub actions: Vec<Vec<(String, Action)>>,
-    pub goto: Vec<Vec<(String, usize)>>,
-    pub start: String,
-    pub inlines: Vec<(usize, u8)>,
-    pub production_names: Vec<(String, String)>,
-}
-
-#[cfg(feature = "serde")]
-impl From<SpecSerializable> for Spec {
-    fn from(v: SpecSerializable) -> Spec {
-        let actions = v
-            .actions
-            .into_iter()
-            .map(|x| x.into_iter().map(|(k, a)| (get_token_kind(&k), a)))
-            .map(IndexMap::from_iter)
-            .collect();
-        let goto = v.goto.into_iter().map(IndexMap::from_iter).collect();
-        let inlines = IndexMap::from_iter(v.inlines);
-
-        Spec {
-            actions,
-            goto,
-            start: v.start,
-            inlines,
-            production_names: v.production_names,
-        }
-    }
-}
-
-#[cfg(feature = "serde")]
-fn get_token_kind(token_name: &str) -> Kind {
-    use Kind::*;
-
-    match token_name {
-        "+" => Add,
-        "&" => Ampersand,
-        "@" => At,
-        ".<" => BackwardLink,
-        "}" => CloseBrace,
-        "]" => CloseBracket,
-        ")" => CloseParen,
-        "??" => Coalesce,
-        ":" => Colon,
-        "," => Comma,
-        "++" => Concat,
-        "/" => Div,
-        "." => Dot,
-        "**" => DoubleSplat,
-        "=" => Eq,
-        "//" => FloorDiv,
-        "%" => Modulo,
-        "*" => Mul,
-        "::" => Namespace,
-        "{" => OpenBrace,
-        "[" => OpenBracket,
-        "(" => OpenParen,
-        "|" => Pipe,
-        "^" => Pow,
-        ";" => Semicolon,
-        "-" => Sub,
-
-        "?!=" => DistinctFrom,
-        ">=" => GreaterEq,
-        "<=" => LessEq,
-        "?=" => NotDistinctFrom,
-        "!=" => NotEq,
-        "<" => Less,
-        ">" => Greater,
-
-        "IDENT" => Ident,
-        "EOI" | "<$>" => EOI,
-        "<e>" => Epsilon,
-
-        "BCONST" => BinStr,
-        "FCONST" => FloatConst,
-        "ICONST" => IntConst,
-        "NFCONST" => DecimalConst,
-        "NICONST" => BigIntConst,
-        "SCONST" => Str,
-
-        "STARTBLOCK" => StartBlock,
-        "STARTEXTENSION" => StartExtension,
-        "STARTFRAGMENT" => StartFragment,
-        "STARTMIGRATION" => StartMigration,
-        "STARTSDLDOCUMENT" => StartSDLDocument,
-
-        "+=" => AddAssign,
-        "->" => Arrow,
-        ":=" => Assign,
-        "-=" => SubAssign,
-
-        "PARAMETER" => Parameter,
-        "PARAMETERANDTYPE" => ParameterAndType,
-        "SUBSTITUTION" => Substitution,
-
-        "STRINTERPSTART" => StrInterpStart,
-        "STRINTERPCONT" => StrInterpCont,
-        "STRINTERPEND" => StrInterpEnd,
-
-        _ => {
-            let mut token_name = token_name.to_lowercase();
-
-            if let Some(rem) = token_name.strip_prefix("dunder") {
-                token_name = format!("__{rem}__");
-            }
-
-            let kw = crate::keywords::lookup_all(&token_name)
-                .unwrap_or_else(|| panic!("unknown keyword {token_name}"));
-            Keyword(kw)
-        }
     }
 }

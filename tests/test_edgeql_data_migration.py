@@ -179,10 +179,10 @@ class EdgeQLDataMigrationTestCase(tb.DDLTestCase):
         migration,
         *,
         populate: bool = False,
-        module: str = 'test',
+        module: str | None = 'test',
         explicit_modules: bool = False,
     ):
-        if explicit_modules:
+        if explicit_modules or module is None:
             migration_text = migration
         else:
             migration_text = f'''
@@ -205,7 +205,7 @@ class EdgeQLDataMigrationTestCase(tb.DDLTestCase):
         migration,
         *,
         populate: bool = False,
-        module: str = 'test',
+        module: str | None = 'test',
         explicit_modules: bool = False,
         user_input: Optional[Iterable[str]] = None,
     ):
@@ -12966,8 +12966,14 @@ class EdgeQLAIMigrationTestCase(EdgeQLDataMigrationTestCase):
 class EdgeQLMigrationRewriteTestCase(EdgeQLDataMigrationTestCase):
     DEFAULT_MODULE = 'default'
 
-    async def migrate(self, *args, module: str = 'default', **kwargs):
-        await super().migrate(*args, module=module, **kwargs)
+    async def migrate(
+        self,
+        migration: str,
+        *,
+        module: str | None = 'default',
+        **kwargs,
+    ):
+        await super().migrate(migration, module=module, **kwargs)
 
     async def get_migrations(self):
         res = await self.con.query(

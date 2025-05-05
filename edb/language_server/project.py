@@ -1,3 +1,21 @@
+#
+# This source file is part of the EdgeDB open source project.
+#
+# Copyright 2008-present MagicStack Inc. and the EdgeDB authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 from typing import cast, Any
 from pathlib import Path
 import dataclasses
@@ -27,10 +45,13 @@ def read_manifest(project_dir: Path) -> tuple[Manifest, Path]:
         path = project_dir / 'gel.toml'
         with open(path, 'rb') as f:
             manifest_dict = tomllib.load(f)
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         path = project_dir / 'edgedb.toml'
-        with open(path, 'rb') as f:
-            manifest_dict = tomllib.load(f)
+        try:
+            with open(path, 'rb') as f:
+                manifest_dict = tomllib.load(f)
+        except FileNotFoundError:
+            raise e
 
     return (_load_manifest(manifest_dict), path)
 

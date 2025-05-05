@@ -380,9 +380,8 @@ def commands_block(parent, *commands, opt=True, production_tpl=ProductionTpl):
 
 class NestedQLBlockStmt(Nonterm):
 
-    @parsing.inline(0)
     def reduce_Stmt(self, *kids):
-        pass
+        self.val = qlast.DDLQuery(query=kids[0].val)
 
     @parsing.inline(0)
     def reduce_OptWithDDLStmt(self, *kids):

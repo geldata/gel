@@ -239,6 +239,15 @@ impl Keyword {
     pub fn is_reserved(&self) -> bool {
         FUTURE_RESERVED_KEYWORDS.contains(self.0) || CURRENT_RESERVED_KEYWORDS.contains(self.0)
     }
+    pub fn is_unreserved(&self) -> bool {
+        UNRESERVED_KEYWORDS.contains(self.0) || PARTIAL_RESERVED_KEYWORDS.contains(self.0)
+    }
+    pub fn is_dunder(&self) -> bool {
+        self.0.starts_with("__") && self.0.ends_with("__")
+    }
+    pub fn is_bool(&self) -> bool {
+        self.0 == "true" || self.0 == "false"
+    }
 }
 
 impl From<Keyword> for &'static str {

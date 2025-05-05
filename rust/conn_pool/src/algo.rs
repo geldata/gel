@@ -579,7 +579,7 @@ pub struct AlgoState<'a, V: VisitPoolAlgoData> {
     pub constraints: &'a PoolConstraints,
 }
 
-impl<'a, V: VisitPoolAlgoData> AlgoState<'a, V> {
+impl<V: VisitPoolAlgoData> AlgoState<'_, V> {
     /// Recalculate the quota targets for each block within the pool/
     fn recalculate_shares(&self, update_demand: bool) {
         // First, compute the overall request load and number of backend targets

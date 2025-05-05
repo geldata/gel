@@ -9,12 +9,12 @@ fn main() {
     eprintln!("DSN: {dsn}\n----\n{:#?}\n", params);
     params
         .password
-        .resolve(&home, &params.hosts, &params.database, &params.user)
+        .resolve(Some(&home), &params.hosts, &params.database, &params.user)
         .unwrap();
     eprintln!(
         "Resolved password:\n------------------\n{:#?}\n",
         params.password
     );
-    params.ssl.resolve(&home).unwrap();
+    params.ssl.resolve(Some(&home)).unwrap();
     eprintln!("Resolved SSL:\n-------------\n{:#?}\n", ());
 }

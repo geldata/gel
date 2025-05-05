@@ -665,3 +665,22 @@ class TestDelete(tb.QueryTestCase):
                         (DELETE DeleteTest filter .name = 't1')
                 limit 1
             ''')
+
+    async def test_edgeql_delete_read_only_tx_01(self):
+        con = (
+            edgedb.create_async_client(
+                **self.get_connect_args(database=self.con.dbname)
+            ).with_transaction_options(
+                edgedb.TransactionOptions(readonly=True)
+            )
+        )
+        try:
+            with self.assertRaisesRegex(
+                edgedb.TransactionError,
+                r'Modifications not allowed in a read-only transaction'
+            ):
+                async for tx in con.transaction():
+                    async with tx:
+                        await tx.execute("delete DeleteTest")
+        finally:
+            await con.aclose()

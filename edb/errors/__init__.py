@@ -23,6 +23,7 @@ __all__ = base.__all__ + (  # type: ignore
     'CapabilityError',
     'UnsupportedCapabilityError',
     'DisabledCapabilityError',
+    'UnsafeIsolationLevelError',
     'QueryError',
     'InvalidSyntaxError',
     'EdgeQLSyntaxError',
@@ -84,6 +85,7 @@ __all__ = base.__all__ + (  # type: ignore
     'TransactionConflictError',
     'TransactionSerializationError',
     'TransactionDeadlockError',
+    'QueryCacheInvalidationError',
     'WatchError',
     'ConfigurationError',
     'AccessError',
@@ -156,6 +158,10 @@ class UnsupportedCapabilityError(CapabilityError):
 
 class DisabledCapabilityError(CapabilityError):
     _code = 0x_03_04_02_00
+
+
+class UnsafeIsolationLevelError(CapabilityError):
+    _code = 0x_03_04_03_00
 
 
 class QueryError(EdgeDBError):
@@ -400,6 +406,10 @@ class TransactionSerializationError(TransactionConflictError):
 
 class TransactionDeadlockError(TransactionConflictError):
     _code = 0x_05_03_01_02
+
+
+class QueryCacheInvalidationError(TransactionConflictError):
+    _code = 0x_05_03_01_03
 
 
 class WatchError(ExecutionError):

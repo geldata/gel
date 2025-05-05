@@ -171,6 +171,8 @@ class ScalarType(
             return False
         left = self.get_base_for_cast(schema)
         right = other.get_base_for_cast(schema)
+        assert isinstance(left, s_types.Type)
+        assert isinstance(right, s_types.Type)
         return s_casts.is_assignment_castable(schema, left, right)
 
     def implicitly_castable_to(

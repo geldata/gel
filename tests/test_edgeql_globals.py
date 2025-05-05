@@ -462,6 +462,35 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
                 ''',
             )
 
+    async def test_edgeql_globals_16(self):
+        await self.assert_query_result(
+            r'''select global GlobalArrayOfArrayOfScalar''',
+            [[[1, 2, 3], [4, 5, 6]]],
+        )
+
+    async def test_edgeql_globals_17(self):
+        await self.assert_query_result(
+            r"""
+                select array_agg((
+                    for card_group in array_unpack(global GlobalCardsByCost)
+                        select array_agg((
+                            for card in array_unpack(card_group)
+                                select card.name
+                        ))
+                ))
+            """,
+            [
+                [
+                    tb.bag([]),
+                    tb.bag(['Imp', 'Dwarf', 'Sprite']),
+                    tb.bag(['Bog monster', 'Giant eagle']),
+                    tb.bag(['Giant turtle', 'Golem']),
+                    tb.bag(['Djinn']),
+                    tb.bag(['Dragon']),
+                ],
+            ],
+        )
+
     async def test_edgeql_globals_client_01(self):
         con = edgedb.create_async_client(
             **self.get_connect_args(database=self.con.dbname)

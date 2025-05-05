@@ -155,9 +155,15 @@ class PGConnectionProtocol(asyncio.Protocol):
         self.state = state
         self.pg_state = pg_state
         self.ready_future: asyncio.Future = asyncio.Future()
+        self.ready_future.add_done_callback(self._cleanup)
         self._complete_callback = complete_callback
         self._host = hostname
         self._transport: Optional[asyncio.Transport] = None
+
+    def _cleanup(self, _fut: asyncio.Future) -> None:
+        # IMPORTANT: break Python/Rust ref cycle
+        self.state.update = None
+        self.state = None
 
     def data_received(self, data: bytes):
         if self.ready_future.done():
@@ -448,7 +454,7 @@ async def create_postgres_connection(
     connect_timeout = dsn.connect_timeout
     try:
         state = pgrust.PyConnectionState(
-            dsn._params, "postgres", str(get_pg_home_directory())
+            dsn._params, "postgres", get_pg_home_directory()
         )
     except Exception as e:
         raise ValueError(e)

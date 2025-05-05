@@ -710,3 +710,87 @@ Bug fixes
 
 * Fixed computed ptr with group by incorrectly inferring multiplicity
   (:eql:gh:`#8485`, regression from :eql:gh:`#8464` in 6.3)
+
+6.5
+===
+
+Major changes
+-------------
+
+
+* Allow DML in REPEATABLE READ transactions, but only when it is safe
+  to do.  Performing DML in REPEATABLE READ transactions is safe as
+  long as the query does not affect exclusive constraints that are
+  shared between multiple types (through inheritance).
+  (:eql:gh:`#8561`)
+
+
+Features
+--------
+
+* Update bundled PostgreSQL to version 17.4
+  (:eql:gh:`#8543`)
+
+* Send a LogMessage to the client about query cache recompilation
+  (:eql:gh:`#8540`, :eql:gh:`#8552`)
+
+* Support ON CONFLICT over SQL adapter
+  (:eql:gh:`#8560`, :eql:gh:`#8587`, :eql:gh:`#8595`)
+
+
+Fixes
+-----
+
+* Fix SQL introspection on old PostgreSQL versions
+  (:eql:gh:`#8501`)
+
+* Make HTTP requests delay the auto shutdown
+  (:eql:gh:`#8506`)
+
+* Prevent server auto shutdown during building AI index
+  (:eql:gh:`#8507`)
+
+* pg_ext: fix ``to_regclass()``, ``::regclass`` and ``pg_settings``
+  (:eql:gh:`#8511`)
+
+* pg_ext: information_schema.columns.ordinal_position should be int
+  (:eql:gh:`#8550`)
+
+* Add replication to pg_hba and wal summarization
+  (:eql:gh:`#8556`)
+
+* Fix UPDATE and DELETE on types that use inheritance over SQL adapter
+  (:eql:gh:`#8562`)
+
+* Abort tenant initialization with incompatible backend
+  (:eql:gh:`#8569`)
+
+* Fix computed link properties over SQL adapter
+  (:eql:gh:`#8158`)
+
+* Fix backlinks in computeds over SQL adapter
+  (:eql:gh:`#8570`)
+
+* Fix access policies SELECT issue with diamond-pattern inheritance
+  (:eql:gh:`#8572`)
+
+* Fix dropping types in some situations where the type is used in a function
+  (:eql:gh:`#8574`)
+
+* Fix AI ext openai streaming
+  (:eql:gh:`#8553`)
+
+* Fix removal of path factoring breaking ai embedding views.
+  (:eql:gh:`#8576`)
+
+* Fix a cross-type conflict bug that can occur with rewrites
+  (:eql:gh:`#8584`)
+
+* Optimize compilation in transactions
+  (:eql:gh:`#8082`)
+
+* Fix memory leak in pgrust-pgcon
+  (:eql:gh:`#8590`)
+
+* Fix CREATE ... BRANCH FROM ... when source uses ai extension
+  (:eql:gh:`#8594`)

@@ -138,6 +138,33 @@ Query behavior
 
     ``'{ "type": "UnknownParameterError" }'``
 
+Transaction behavior
+--------------------
+
+.. api-index:: default_transaction_isolation, default_transaction_access_mode, default_transaction_deferrable
+
+.. versionadded:: 6.0
+
+These settings will affect both explicit transactions as well as the implicit transactions that each query runs in.
+
+:eql:synopsis:`default_transaction_isolation -> sys::TransactionIsolation`
+  Controls the default isolation level of each new transaction, including implicit transactions. Defaults to ``sys::TransactionIsolation.Serializable``.
+
+  * ``sys::TransactionIsolation.RepeatableRead``
+  * ``sys::TransactionIsolation.Serializable`` (default)
+
+:eql:synopsis:`default_transaction_access_mode -> sys::TransactionAccessMode`
+  Controls the default read-only status of each new transaction, including implicit transactions. Defaults to ``sys::TransactionAccessMode.ReadWrite``.
+
+  * ``sys::TransactionAccessMode.ReadOnly``
+  * ``sys::TransactionAccessMode.ReadWrite`` (default)
+
+:eql:synopsis:`default_transaction_deferrable -> sys::TransactionDeferrability`
+  Controls the default deferrable status of each new transaction. It currently has no effect on read-write transactions. Defaults to ``sys::TransactionDeferrability.NotDeferrable``.
+
+  * ``sys::TransactionDeferrability.Deferrable``
+  * ``sys::TransactionDeferrability.NotDeferrable`` (default)
+
 .. _ref_std_cfg_client_connections:
 
 Client connections

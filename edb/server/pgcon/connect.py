@@ -22,6 +22,7 @@ import logging
 import textwrap
 
 from edb.pgsql.common import quote_ident as pg_qi
+from edb.pgsql.common import versioned_schema
 from edb.pgsql import params as pg_params
 from edb.server import pgcon
 
@@ -102,6 +103,7 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
     else:
         pg_is_in_recovery = ''
 
+    edgedb_schema = versioned_schema('edgedb')
     return textwrap.dedent(f'''
         {pg_is_in_recovery}
 
@@ -112,7 +114,8 @@ def _build_init_con_script(*, check_pg_is_in_recovery: bool) -> bytes:
         CREATE CONSTRAINT TRIGGER _edgecon_state_local_reset
         AFTER INSERT ON _edgecon_state
         DEFERRABLE INITIALLY DEFERRED
-        FOR EACH ROW EXECUTE FUNCTION edgedb._clear_fe_local_sql_settings();
+        FOR EACH ROW
+        EXECUTE FUNCTION {edgedb_schema}._clear_fe_local_sql_settings();
 
         PREPARE _clear_state AS
             WITH x1 AS (

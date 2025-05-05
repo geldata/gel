@@ -162,11 +162,30 @@ def translate_type(
                 typs.append(irtypeutils.type_to_typeref(
                     nschema, array_styp, cache=None))
 
-            return irast.ParamArray(
-                typeref=typ,
-                idx=start,
-                typ=trans(typ.subtypes[0], in_array=True, depth=depth + 1),
-            )
+            if irtypeutils.is_array(typ.subtypes[0]):
+                # Treat nested arrays as if they are arrays of tuples of arrays
+                nschema, inner_array_styp = irtypeutils.ir_typeref_to_type(
+                    schema, typ.subtypes[0]
+                )
+                nschema, wrapper_tuple_styp = s_types.Tuple.from_subtypes(
+                    schema, {'f1': inner_array_styp}
+                )
+                wrapper_tuple_typ = irtypeutils.type_to_typeref(
+                    nschema, wrapper_tuple_styp, cache=None
+                )
+                return irast.ParamArray(
+                    typeref=typ,
+                    idx=start,
+                    typ=trans(
+                        wrapper_tuple_typ, in_array=True, depth=depth + 1
+                    ),
+                )
+            else:
+                return irast.ParamArray(
+                    typeref=typ,
+                    idx=start,
+                    typ=trans(typ.subtypes[0], in_array=True, depth=depth + 1),
+                )
 
         elif irtypeutils.is_tuple(typ):
             return irast.ParamTuple(
@@ -371,11 +390,15 @@ def create_sub_params(
     """Create sub parameters for a new param, if needed.
 
     We need to do this if there is a tuple in the type.
+
+    We do this for nested arrays as well since array<array<...> is handled
+    as array<tuple<array>>.
     """
     if not (
         (
             pt.is_tuple(ctx.env.schema)
             or pt.is_anytuple(ctx.env.schema)
+            or pt.contains_array_of_array(ctx.env.schema)
             or pt.contains_array_of_tuples(ctx.env.schema)
         )
         and not ctx.env.options.func_params

@@ -391,6 +391,13 @@ QUERIES = [
     '''sdl# comment
     ''',
     '''
-       CREATE BRANCH hello;
-    '''
+    SELECT
+    ''',
+    '''sdl
+    module y {
+        type X {
+            property z:
+        }
+    }
+    ''',
 ]

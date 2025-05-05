@@ -13,6 +13,7 @@ Auth
     oauth
     magic_link
     webauthn
+    webhooks
 
 :edb-alt-title: Using Gel Auth
 
@@ -81,7 +82,7 @@ auth_signing_key
 
 The extension uses JSON Web Tokens (JWTs) internally for many operations.
 ``auth_signing_key`` is the value that is used as a symmetric key for signing
-the JWTs. At the moment, the JWTs are not considered “public” API, so there is
+the JWTs. At the moment, the JWTs are not considered "public" API, so there is
 no need to save this value for your own application use. It is exposed mainly
 to allow rotation.
 
@@ -100,7 +101,7 @@ token_time_to_live
 ------------------
 
 This value controls the expiration time on the authentication token's
-JSON Web Token. This is effectively the “session” time.
+JSON Web Token. This is effectively the "session" time.
 
 To configure via query or script:
 
@@ -162,107 +163,12 @@ To configure via query or script:
     };
 
 
-Configuring webhooks
-====================
+Webhooks
+========
 
-The auth extension supports sending webhooks for a variety of auth events. You
-can use these webhooks to, for instance, send a fully customized email for
-email verification, or password reset instead of our built-in email
-verification and password reset emails. You could also use them to trigger
-analytics events, start an email drip campaign, create an audit log, or
-trigger other side effects in your application.
+The auth extension supports sending webhooks for a variety of auth events. You can use these webhooks to, for instance, send a fully customized email for email verification, or password reset instead of our built-in email verification and password reset emails. You could also use them to trigger analytics events, start an email drip campaign, create an audit log, or trigger other side effects in your application.
 
-.. note::
-
-  We send webhooks with no durability or reliability guarantees, so you should
-  always provide a mechanism for retrying delivery of any critical events,
-  such as email verification and password reset. We detail how to resend these
-  events in the relevant sections on the various authentication flows.
-
-
-Here are the webhooks that are currently supported:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - Event
-     - Payload
-   * - ``IdentityCreated``
-     - | - ``event_type``: ``"IdentityCreated"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: ID of created identity (``str``)
-   * - ``IdentityAuthenticated``
-     - | - ``event_type``: ``"IdentityAuthenticated"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: ID of authenticated identity (``str``)
-   * - ``EmailFactorCreated``
-     - | - ``event_type``: ``"EmailFactorCreated"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: Associated identity ID (``str``)
-       | - ``email_factor_id``: ID of created email factor (``str``)
-   * - ``EmailVerified``
-     - | - ``event_type``: ``"EmailVerified"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: Associated identity ID (``str``)
-       | - ``email_factor_id``: ID of verified email factor (``str``)
-   * - ``EmailVerificationRequested``
-     - | - ``event_type``: ``"EmailVerificationRequested"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: Associated identity ID (``str``)
-       | - ``email_factor_id``: ID of email factor to verify (``str``)
-       | - ``verification_token``: Token for verification (``str``)
-   * - ``PasswordResetRequested``
-     - | - ``event_type``: ``"PasswordResetRequested"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: Associated identity ID (``str``)
-       | - ``email_factor_id``: ID of email factor (``str``)
-       | - ``reset_token``: Token for password reset (``str``)
-   * - ``MagicLinkRequested``
-     - | - ``event_type``: ``"MagicLinkRequested"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: Associated identity ID (``str``)
-       | - ``email_factor_id``: ID of email factor (``str``)
-       | - ``magic_link_token``: Token for magic link (``str``)
-       | - ``magic_link_url``: Complete URL for magic link (``str``)
-
-You can configure webhooks with the UI or via query.
-
-.. code-block:: edgeql
-
-    CONFIGURE CURRENT BRANCH INSERT
-    ext::auth::WebhookConfig {
-        url := 'https://example.com/auth/webhook',
-        events := {
-            ext::auth::WebhookEvent.EmailVerificationRequested,
-            ext::auth::WebhookEvent.PasswordResetRequested,
-        }
-    };
-
-.. note::
-
-  URLs must be unique across all webhooks configured for each branch. If you want
-  to send multiple events to the same URL, you can do so by adding multiple
-  ``ext::auth::WebhookEvent`` values to the ``events`` set.
-
-Troubleshooting webhooks
-------------------------
-
-If you are having trouble receiving webhooks, you might need to look for any responses from the requests that are being scheduled by the :ref:`std::net::http <ref_std_net>` module. You can list all of the :eql:type:`net::http::ScheduledRequest` objects, and any returned responses with the following query:
-
-.. code-block:: edgeql
-
-    select net::http::ScheduledRequest {
-        **,
-        response: { ** }
-    }
+See the :ref:`webhooks documentation <ref_auth_webhooks>` for more details on how to configure and use webhooks.
 
 Configuring SMTP
 ================

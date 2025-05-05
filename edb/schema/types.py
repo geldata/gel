@@ -288,6 +288,9 @@ class Type(
     def is_sequence(self, schema: s_schema.Schema) -> bool:
         return False
 
+    def is_array_of_arrays(self, schema: s_schema.Schema) -> bool:
+        return False
+
     def is_array_of_tuples(self, schema: s_schema.Schema) -> bool:
         return False
 
@@ -321,6 +324,10 @@ class Type(
 
     def find_array(self, schema: s_schema.Schema) -> Optional[Type]:
         return self.find_predicate(lambda x: x.is_array(), schema)
+
+    def contains_array_of_array(self, schema: s_schema.Schema) -> bool:
+        return self.contains_predicate(
+            lambda x: x.is_array_of_arrays(schema), schema)
 
     def contains_array_of_tuples(self, schema: s_schema.Schema) -> bool:
         return self.contains_predicate(
@@ -1294,6 +1301,9 @@ class Array(
             self.get_element_type(schema).get_name(schema),
         )
 
+    def is_array_of_arrays(self, schema: s_schema.Schema) -> bool:
+        return self.get_element_type(schema).is_array()
+
     def is_array_of_tuples(self, schema: s_schema.Schema) -> bool:
         return self.get_element_type(schema).is_tuple(schema)
 
@@ -1358,6 +1368,7 @@ class Array(
             if other.is_polymorphic(schema):
                 return False
             right = other.get_base_for_cast(schema)
+            assert isinstance(right, Type)
             return s_casts.is_assignment_castable(schema, self, right)
 
         return self.get_element_type(schema).assignment_castable_to(
@@ -1376,6 +1387,7 @@ class Array(
             if other.is_polymorphic(schema):
                 return False
             right = other.get_base_for_cast(schema)
+            assert isinstance(right, Type)
             return s_casts.is_assignment_castable(schema, self, right)
 
         return self.get_element_type(schema).castable_to(
@@ -1451,10 +1463,6 @@ class Array(
             raise errors.SchemaError(
                 f'unexpected number of subtypes, expecting 1: {subtypes!r}')
         stype = subtypes[0]
-
-        if isinstance(stype, Array):
-            raise errors.UnsupportedFeatureError(
-                f'nested arrays are not supported')
 
         # One-dimensional unbounded array.
         dimensions = [-1]

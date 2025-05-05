@@ -1,6 +1,11 @@
 // See https://nextjs.org/docs/app/api-reference/config/next-config-js/redirects
 module.exports = [
   {
+    source: "/changelog/:path*",
+    destination: "/resources/changelog/:path*",
+    permanent: false,
+  },
+  {
     source: "/guides/cheatsheet/:path*",
     destination: "/resources/cheatsheets/:path*",
     permanent: true,
@@ -43,6 +48,37 @@ module.exports = [
   {
     source: "/reference/clients/rust/:path*",
     destination: "https://docs.rs/gel-tokio",
+    permanent: false,
+  },
+  {
+    source: "/reference/libraries/dotnet/:path*",
+    destination: "https://github.com/geldata/gel-net",
+    permanent: false,
+  },
+  {
+    source: "/reference/libraries/elixir/:path*",
+    destination: "https://hexdocs.pm/gel",
+    permanent: false,
+  },
+  {
+    source: "/reference/libraries/java/:path*",
+    destination: "https://github.com/geldata/gel-java",
+    permanent: false,
+  },
+  // Use the further redirects to get to the correct point in the consolidated docs
+  {
+    source: "/reference/libraries/js/:path*",
+    destination: "/reference/clients/js/:path*",
+    permanent: false,
+  },
+  {
+    source: "/reference/libraries/python/:path*",
+    destination: "/reference/clients/python/:path*",
+    permanent: false,
+  },
+  {
+    source: "/reference/libraries/:path*",
+    destination: "/reference/using",
     permanent: false,
   },
   {
@@ -167,7 +203,7 @@ module.exports = [
   },
   {
     source: "/reference/reference/environment",
-    destination: "/reference/running/environment",
+    destination: "/reference/running/configuration#environment-variables",
     permanent: false,
   },
   {
@@ -217,6 +253,11 @@ module.exports = [
   },
   {
     source: "/reference/cli/:path*",
+    destination: "/reference/using/cli/:path*",
+    permanent: false,
+  },
+  {
+    source: "/cli/:path*",
     destination: "/reference/using/cli/:path*",
     permanent: false,
   },

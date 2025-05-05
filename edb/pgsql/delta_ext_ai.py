@@ -197,23 +197,54 @@ def _compile_ai_embeddings_source_view_expr(
     # Compile a view returning a set of (id, text-to-embed) tuples
     # roughly as the following pseudo-QL
     #
-    # SELECT (
-    #   Object.id,
-    #   eval(get_index_expr(Object, 'ext::ai::index')),
+    # FOR obj in Object UNION (
+    #   SELECT (
+    #     obj.id,
+    #     eval(get_index_expr(obj, 'ext::ai::index')),
+    #   )
+    #   WHERE
+    #     eval(get_index_except_expr(obj, 'ext::ai::index')) IS NOT TRUE
+    #     AND obj.embedding_column IS NULL
     # )
-    # WHERE
-    #   eval(get_index_except_expr(Object, 'ext::ai::index')) IS NOT TRUE
-    #   AND Object.embedding_column IS NULL
     index_sexpr: Optional[s_expr.Expression] = index.get_expr(schema)
     assert index_sexpr
-    ql = qlast.SelectQuery(
+
+    ql_iter_alias = "__ext_ai_index_iter__"
+    ql_index_sexpr_name = "__ext_ai_index_sexpr__"
+    ql = qlast.ForQuery(
+        iterator_alias=ql_iter_alias,
+        iterator=qlast.Shape(
+            expr=qlast.Path(
+                steps=[qlast.IRAnchor(name='__subject__')],
+            ),
+            elements=[
+                qlast.ShapeElement(
+                    expr=qlast.Path(
+                        steps=[qlast.Ptr(name="id")],
+                    ),
+                ),
+                qlast.ShapeElement(
+                    expr=qlast.Path(
+                        steps=[qlast.Ptr(name=ql_index_sexpr_name)],
+                    ),
+                    compexpr=index_sexpr.parse(),
+                ),
+            ]
+        ),
         result=qlast.Tuple(
             elements=[
                 qlast.Path(
-                    steps=[qlast.Ptr(name="id")],
-                    partial=True,
+                    steps=[
+                        qlast.ObjectRef(name=ql_iter_alias),
+                        qlast.Ptr(name="id"),
+                    ],
                 ),
-                index_sexpr.parse(),
+                qlast.Path(
+                    steps=[
+                        qlast.ObjectRef(name=ql_iter_alias),
+                        qlast.Ptr(name=ql_index_sexpr_name),
+                    ],
+                ),
             ],
         ),
     )

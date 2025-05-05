@@ -48,7 +48,7 @@ cdef recode_bind_args_for_script(
     dbview.DatabaseConnectionView dbv,
     dbview.CompiledQuery compiled,
     bytes bind_args,
-    list converted_args,
+    object converted_args,
     ssize_t start,
     ssize_t end,
 ):
@@ -95,13 +95,8 @@ cdef recode_bind_args_for_script(
 
         _inject_globals(dbv, query_unit, bind_data)
 
-        if (
-            unit_group.server_param_conversions
-            and i in unit_group.unit_converted_param_indexes
-        ):
-            # Inject any converted params for this unit
-            for converted_params_index in unit_group.unit_converted_param_indexes[i]:
-                arg = converted_args[converted_params_index]
+        if converted_args and i in converted_args:
+            for arg in converted_args[i]:
                 assert isinstance(arg, ConvertedArg)
                 arg.encode(bind_data)
 
@@ -636,14 +631,14 @@ cdef class ParamConversion:
         param_name,
         conversion_name,
         additional_info,
-        data,
-        source_value,
+        encoded_data,
+        constant_value,
     ):
         self.param_name = param_name
         self.conversion_name = conversion_name
         self.additional_info = additional_info
-        self.data = data
-        self.source_value = source_value
+        self.encoded_data = encoded_data
+        self.constant_value = constant_value
 
     def get_param_name(self):
         return self.param_name
@@ -654,91 +649,175 @@ cdef class ParamConversion:
     def get_additional_info(self):
         return self.additional_info
 
-    def get_data(self):
-        return self.data
+    def get_encoded_data(self):
+        return self.encoded_data
 
-    def get_source_value(self):
-        return self.source_value
+    def get_constant_value(self):
+        return self.constant_value
+
+    def param_as_int(self) -> int:
+        return self._decode_int() if self.constant_value is None else self.constant_value
+
+    def param_as_str(self) -> str:
+        return self._decode_str() if self.constant_value is None else self.constant_value
+
+    def param_as_array_of_str(self) -> list[str]:
+        return self._decode_array_of_str() if self.constant_value is None else self.constant_value
+
+    def _decode_int(self) -> int:
+        return int.from_bytes(self.encoded_data)
+
+    def _decode_str(self) -> str:
+        return self.encoded_data.decode("utf-8")
+
+    def _decode_array_of_str(self) -> list[str]:
+        # See gel-python for more details on array encoding
+        texts = []
+        text_count = int.from_bytes(self.encoded_data[12:16])
+        data = self.encoded_data[20:]
+        for _ in range(text_count):
+            text_length = int.from_bytes(data[:4])
+            data = data[4:]
+            texts.append(data[:(text_length)].decode("utf-8"))
+            data = data[text_length:]
+        return texts
 
 
 cdef list[ParamConversion] get_param_conversions(
     dbview.DatabaseConnectionView dbv,
     list server_param_conversions,
-    list in_type_args,
     bytes bind_args,
+    list[bytes] extra_blobs,
 ):
-    cdef:
-        FRBuffer in_buf
-        ssize_t in_len
-        const char *data_str
-
-    assert cpython.PyBytes_CheckExact(bind_args)
-    frb_init(
-        &in_buf,
-        cpython.PyBytes_AS_STRING(bind_args),
-        cpython.Py_SIZE(bind_args)
+    # Get encoded data from bind args and extra blobs
+    bind_args_datas: dict[int, bytes] = get_args_data_for_indexes(
+        bind_args,
+        extra_blobs,
+        [
+            param_conversion.script_param_index
+            for param_conversion in server_param_conversions
+            if param_conversion.script_param_index is not None
+        ],
     )
 
-    if frb_get_len(&in_buf) == 0:
-        pass
-    else:
-        hton.unpack_int32(frb_read(&in_buf, 4))
-
-    # First check which parameters' data we need to get
-    param_names = set(
-        param_conversion.param_name
-        for param_conversion in server_param_conversions
-    )
-
-    # Next extract bytes from the bind_args
-    param_datas: dict[str, bytes] = {}
-    if in_type_args is not None:
-        for param in in_type_args:
-            assert isinstance(param, dbstate.Param)
-            frb_read(&in_buf, 4)  # reserved
-            in_len = hton.unpack_int32(frb_read(&in_buf, 4))
-            data_str = frb_read(&in_buf, in_len)
-
-            if param.name in param_names:
-                data = cpython.PyBytes_FromStringAndSize(data_str, in_len)
-                param_datas[param.name] = data
-
-    if frb_get_len(&in_buf):
-        raise errors.InputDataError('unexpected trailing data in buffer')
-
-    # Finally, pack it with the resulting ParamConversion
+    # Construct the ParamConversions
     result: list[ParamConversion] = []
     for param_conversion in server_param_conversions:
         assert isinstance(param_conversion, dbstate.ServerParamConversion)
         param_name = param_conversion.param_name
 
-        if param_name in param_datas:
-            if param_conversion.source_value is not None:
-                raise RuntimeError(
-                    f"Parameter '{param_name}' has both a source and a bind args value"
-                )
+        if (
+            param_conversion.script_param_index is not None
+            and param_conversion.constant_value is not None
+        ):
+            raise RuntimeError(
+                f"Parameter '{param_name}' has both "
+                f"a constant and a query arg value"
+            )
 
+        elif param_conversion.script_param_index is not None:
+            # using data from the bind args
             result.append(ParamConversion(
                 param_name=param_name,
                 conversion_name=param_conversion.conversion_name,
                 additional_info=param_conversion.additional_info,
-                data=param_datas[param_name],
-                source_value=None,
+                encoded_data=bind_args_datas[
+                    param_conversion.script_param_index
+                ],
+                constant_value=None,
             ))
 
-        elif param_conversion.source_value:
+        elif param_conversion.constant_value is not None:
+            # using a constant from the query
             result.append(ParamConversion(
                 param_name=param_name,
                 conversion_name=param_conversion.conversion_name,
                 additional_info=param_conversion.additional_info,
-                data=None,
-                source_value=param_conversion.source_value,
+                encoded_data=None,
+                constant_value=param_conversion.constant_value,
             ))
 
         else:
             raise RuntimeError(
-                f"Parameter '{param_name}' has no source or bind args value"
+                f"Parameter '{param_name}' has no value"
             )
+
+    return result
+
+
+cdef dict[int, bytes] get_args_data_for_indexes(
+    bytes bind_args,
+    list[bytes] extra_blobs,
+    list[int] target_indexes,
+):
+    """Extract bytes from the bind args and extra blobs by reading the length of
+    each variable and skipping forward by that amount.
+
+    When reaching the end of a blob, continue reading data from the next blob.
+    """
+
+    cdef:
+        FRBuffer in_buf
+        ssize_t in_len
+        const char *data_str
+
+    all_blobs = [bind_args, *extra_blobs]
+    curr_blob_index = 0
+    # The first blob is the bind_args, which is has additional data which should
+    # be skipped when extracting the arg data.
+    args_needs_recoding = True
+
+    def setup_blob_buffer():
+        nonlocal curr_blob_index
+        nonlocal args_needs_recoding
+
+        if curr_blob_index >= len(all_blobs):
+            raise RuntimeError('insufficient args data')
+
+        blob = all_blobs[curr_blob_index]
+        assert cpython.PyBytes_CheckExact(blob)
+        frb_init(
+            &in_buf,
+            cpython.PyBytes_AS_STRING(blob),
+            cpython.Py_SIZE(blob)
+        )
+        args_needs_recoding = curr_blob_index == 0
+
+        if args_needs_recoding:
+            # Skip prefixed argument count
+            if frb_get_len(&in_buf) == 0:
+                pass
+            else:
+                frb_read(&in_buf, 4)
+
+    setup_blob_buffer()
+
+    curr_arg_index = 0
+    target_indexes.sort()
+
+    result: dict[int, bytes] = {}
+    for target_index in target_indexes:
+        # Read up to the end of the target variable
+        for arg_index in range(curr_arg_index, target_index + 1):
+            if frb_get_len(&in_buf) == 0:
+                # We've reached the end of the previous blob.
+                # Set up the next one and keep scanning.
+                curr_blob_index += 1
+                setup_blob_buffer()
+
+            if args_needs_recoding:
+                # Skip reserved
+                frb_read(&in_buf, 4)  # reserved
+
+            in_len = hton.unpack_int32(frb_read(&in_buf, 4))
+            data_str = frb_read(&in_buf, in_len)
+
+            if arg_index == target_index:
+                # Store the target variable data
+                data = cpython.PyBytes_FromStringAndSize(data_str, in_len)
+                result[target_index] = data
+
+        curr_arg_index = target_index + 1
 
     return result
 

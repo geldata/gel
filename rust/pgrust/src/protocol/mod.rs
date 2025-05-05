@@ -88,8 +88,8 @@ mod tests {
         // Insert a random byte at a random position
         for i in 0..run_count {
             let mut buf = S::to_vec(&s);
-            let random_byte: u8 = rand::thread_rng().gen();
-            let random_position = rand::thread_rng().gen_range(0..=buf.len());
+            let random_byte: u8 = rand::rng().random();
+            let random_position = rand::rng().random_range(0..=buf.len());
             buf.insert(random_position, random_byte);
             eprintln!(
                 "Test {}: Inserted byte 0x{:02X} at position {} in buffer of length {}",
@@ -104,8 +104,8 @@ mod tests {
         // Corrupt random parts of the buffer. This is non-deterministic.
         for i in 0..run_count {
             let mut buf = S::to_vec(&s);
-            let rand: [u8; 4] = rand::thread_rng().gen();
-            let n = rand::thread_rng().gen_range(0..buf.len() - 4);
+            let rand: [u8; 4] = rand::rng().random();
+            let n = rand::rng().random_range(0..buf.len() - 4);
             let range = n..n + 4;
             eprintln!(
                 "Test {}: Corrupting buffer of length {} at range {:?} with bytes {:?}",
@@ -121,14 +121,14 @@ mod tests {
         // Corrupt 1..4 random bytes at random positions
         for i in 0..run_count {
             let mut buf = S::to_vec(&s);
-            let num_bytes_to_corrupt = rand::thread_rng().gen_range(1..=4);
+            let num_bytes_to_corrupt = rand::rng().random_range(1..=4);
             let mut positions = Vec::new();
 
             for _ in 0..num_bytes_to_corrupt {
-                let random_position = rand::thread_rng().gen_range(0..buf.len());
+                let random_position = rand::rng().random_range(0..buf.len());
                 if !positions.contains(&random_position) {
                     positions.push(random_position);
-                    let random_byte: u8 = rand::thread_rng().gen();
+                    let random_byte: u8 = rand::rng().random();
                     buf[random_position] = random_byte;
                 }
             }
@@ -145,7 +145,7 @@ mod tests {
 
         // Attempt to parse randomly generated structs. This is non-deterministic.
         for i in 0..run_count {
-            let buf: [u8; 16] = rand::thread_rng().gen();
+            let buf: [u8; 16] = rand::rng().random();
             eprintln!(
                 "Test {}: Attempting to parse random buffer: {:02X?}",
                 i + 1,

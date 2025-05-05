@@ -1377,7 +1377,7 @@ class Compiler:
         schema_a: bytes,
         schema_b: bytes,
         global_schema: bytes,
-        conn_state_pickle: Any,
+        conn_state_pickle: Optional[bytes],
     ) -> None:
         if conn_state_pickle:
             conn_state = pickle.loads(conn_state_pickle)
@@ -1592,9 +1592,11 @@ def _get_compile_options(
     ctx: CompileContext,
     *,
     is_explain: bool = False,
+    no_implicit_fields: bool = False,
 ) -> qlcompiler.CompilerOptions:
-    can_have_implicit_fields = (
-        ctx.output_format is enums.OutputFormat.BINARY)
+    can_have_implicit_fields = not no_implicit_fields and (
+        ctx.output_format is enums.OutputFormat.BINARY
+    )
 
     return qlcompiler.CompilerOptions(
         modaliases=ctx.state.current_tx().get_modaliases(),
@@ -1610,6 +1612,7 @@ def _get_compile_options(
         json_parameters=ctx.json_parameters,
         implicit_limit=ctx.implicit_limit,
         bootstrap_mode=ctx.bootstrap_mode,
+        dump_restore_mode=ctx.dump_restore_mode,
         apply_query_rewrites=(
             not ctx.bootstrap_mode
             and not ctx.schema_reflection_mode
@@ -1850,7 +1853,7 @@ def _compile_ql_query(
         output_format=_convert_format(ctx.output_format),
         backend_runtime_params=ctx.backend_runtime_params,
         is_explain=options.is_explain,
-        detach_params=(use_persistent_cache
+        cache_as_function=(use_persistent_cache
                        and cache_mode is config.QueryCacheMode.PgFunc),
         versioned_stdlib=True,
     )
@@ -1874,10 +1877,13 @@ def _compile_ql_query(
         (mstate := current_tx.get_migration_state())
         and not migration_block_query
     ):
-        mstate = mstate._replace(
-            accepted_cmds=mstate.accepted_cmds + (ql,),
-        )
-        current_tx.update_migration_state(mstate)
+        if isinstance(ql, qlast.Query):
+            mstate = mstate._replace(
+                accepted_cmds=(
+                    mstate.accepted_cmds + (qlast.DDLQuery(query=ql),)
+                )
+            )
+            current_tx.update_migration_state(mstate)
 
         return dbstate.NullQuery()
 
@@ -1922,21 +1928,21 @@ def _compile_ql_query(
         list[dbstate.ServerParamConversion]
     ] = None
     if isinstance(ir, irast.Statement) and ir.server_param_conversions:
-        source_variables = (
-            ctx.source.variables() if ctx.source else {}
-        )
+        # The irast.ServerParamConversion we get from the ql compiler contains
+        # either a script_param_index or a constant value.
+        #
+        # A script_param_index can refer to either an actual query param or a
+        # constant that was normalized out of a query.
+        #
+        # A constant value is used as is by the server.
+
         server_param_conversions = [
             dbstate.ServerParamConversion(
                 param_name=p.param_name,
                 conversion_name=p.conversion_name,
                 additional_info=p.additional_info,
-                source_value=(
-                    p.constant_value
-                    if p.constant_value is not None else
-                    source_variables[p.param_name]
-                    if p.param_name in source_variables else
-                    None
-                )
+                script_param_index=p.script_param_index,
+                constant_value=p.constant_value
             )
             for p in ir.server_param_conversions
         ]
@@ -1989,6 +1995,7 @@ def _compile_ql_query(
         has_dml=bool(ir.dml_exprs),
         query_asts=query_asts,
         warnings=ir.warnings,
+        unsafe_isolation_dangers=ir.unsafe_isolation_dangers,
     )
 
 
@@ -2045,7 +2052,7 @@ def _build_cache_function(
     fname = (pg_common.versioned_schema("edgedb"), f"__qh_{key}")
     func = pg_dbops.Function(
         name=fname,
-        args=[(None, arg) for arg in sql_res.detached_params or []],
+        args=[(None, arg) for arg in sql_res.cached_params or []],
         returns=return_type,
         set_returning=set_returning,
         text=pg_codegen.generate_source(sql_ast),
@@ -2072,7 +2079,7 @@ def _build_cache_function(
                 arg=pgast.ParamRef(number=i),
                 type_name=pgast.TypeName(name=arg),
             )
-            for i, arg in enumerate(sql_res.detached_params or [], 1)
+            for i, arg in enumerate(sql_res.cached_params or [], 1)
         ],
         coldeflist=[],
     )
@@ -2149,6 +2156,7 @@ def _compile_ql_transaction(
     final_global_schema: Optional[s_schema.Schema] = None
     sp_name = None
     sp_id = None
+    iso = None
 
     if ctx.expect_rollback and not isinstance(
         ql, (qlast.RollbackTransaction, qlast.RollbackToSavepoint)
@@ -2174,25 +2182,10 @@ def _compile_ql_transaction(
         # Compute the effective access mode
         access = ql.access
         if access is None:
-            if default_iso is qltypes.TransactionIsolationLevel.SERIALIZABLE:
-                access_mode: statypes.TransactionAccessMode = _get_config_val(
-                    ctx, "default_transaction_access_mode"
-                )
-                access = access_mode.to_qltypes()
-            else:
-                access = qltypes.TransactionAccessMode.READ_ONLY
-
-        # Guard against unsupported isolation + access combinations
-        if (
-            iso is not qltypes.TransactionIsolationLevel.SERIALIZABLE
-            and access is not qltypes.TransactionAccessMode.READ_ONLY
-        ):
-            raise errors.TransactionError(
-                f"{iso.value} transaction isolation level is only "
-                "supported in read-only transactions",
-                span=ql.span,
-                hint=f"specify READ ONLY access mode",
+            access_mode: statypes.TransactionAccessMode = _get_config_val(
+                ctx, "default_transaction_access_mode"
             )
+            access = access_mode.to_qltypes()
 
         sqls = f'START TRANSACTION ISOLATION LEVEL {iso.value} {access.value}'
         if ql.deferrable is not None:
@@ -2268,6 +2261,7 @@ def _compile_ql_transaction(
         global_schema=final_global_schema,
         sp_name=sp_name,
         sp_id=sp_id,
+        isolation_level=iso,
         feature_used_metrics=(
             ddl.produce_feature_used_metrics(
                 ctx.compiler_state, final_user_schema
@@ -2420,7 +2414,6 @@ def _compile_ql_config_op(
     current_tx = ctx.state.current_tx()
     schema = current_tx.get_schema(ctx.compiler_state.std_schema)
 
-    modaliases = current_tx.get_modaliases()
     session_config = current_tx.get_session_config()
     database_config = current_tx.get_database_config()
 
@@ -2434,14 +2427,13 @@ def _compile_ql_config_op(
         raise errors.QueryError(
             'CONFIGURE INSTANCE cannot be executed in a transaction block')
 
+    options = _get_compile_options(ctx, no_implicit_fields=True)
+    options.in_server_config_op = True
+
     ir = qlcompiler.compile_ast_to_ir(
         ql,
         schema=schema,
-        options=qlcompiler.CompilerOptions(
-            modaliases=modaliases,
-            in_server_config_op=True,
-            dump_restore_mode=ctx.dump_restore_mode,
-        ),
+        options=options,
     )
 
     globals = None
@@ -2987,6 +2979,7 @@ def _make_query_unit(
         cache_key=ctx.cache_key,
         user_schema_version=schema_version,
         warnings=comp.warnings,
+        unsafe_isolation_dangers=comp.unsafe_isolation_dangers,
     )
 
     if not comp.is_transactional:
@@ -3077,6 +3070,7 @@ def _make_query_unit(
             )
         unit.sql = comp.sql
         unit.cacheable = comp.cacheable
+        unit.tx_isolation_level = comp.isolation_level
 
         if not ctx.dump_restore_mode:
             if comp.user_schema is not None:
@@ -3209,6 +3203,9 @@ def _make_query_unit(
 
     if unit.warnings:
         for warning in unit.warnings:
+            warning.__traceback__ = None
+    if unit.unsafe_isolation_dangers:
+        for warning in unit.unsafe_isolation_dangers:
             warning.__traceback__ = None
 
     return unit, final_user_schema

@@ -40,6 +40,13 @@ Add the Gel package repository.
        $(grep "VERSION_CODENAME=" /etc/os-release | cut -d= -f2) main \
        | sudo tee /etc/apt/sources.list.d/gel.list
 
+.. note::
+
+   For non-LTS releases of Debian/Ubuntu (e.g. Ubuntu Oracular), one can install
+   package for latest LTS release, because they are usually forward compatible.
+   To do this, replace the ``$(grep ...)`` with the name of latest LTS release
+   (e.g. ``noble``).
+
 Install the Gel package.
 
 .. code-block:: bash

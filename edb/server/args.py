@@ -254,9 +254,12 @@ class ServerConfig(NamedTuple):
     extensions_dir: tuple[pathlib.Path, ...]
     max_backend_connections: Optional[int]
     compiler_pool_size: int
+    compiler_worker_branch_limit: int
     compiler_pool_mode: CompilerPoolMode
-    compiler_pool_addr: str
+    compiler_pool_addr: tuple[str, int]
     compiler_pool_tenant_cache_size: int
+    compiler_worker_max_rss: Optional[int]
+
     echo_runtime_info: bool
     emit_server_status: str
     temp_dir: bool
@@ -811,10 +814,28 @@ server_options = typeutils.chain_decorators([
              f'minus the NUM of --reserved-pg-connections.',
         callback=_validate_max_backend_connections),
     click.option(
-        '--compiler-pool-size', type=int,
+        '--compiler-pool-size', type=int, metavar='NUM',
         envvar="GEL_SERVER_COMPILER_POOL_SIZE",
         cls=EnvvarResolver,
-        callback=_validate_compiler_pool_size),
+        callback=_validate_compiler_pool_size,
+        help='Size of the compiler pool.  When --compiler-pool-mode=fixed or '
+             'fixed_multi_tenant, it is the NUM of compiler worker processes, '
+             f"defaults to {compute_default_compiler_pool_size()} (you'll see "
+             '1 extra template process); for on_demand, it is the maximum NUM '
+             'of workers the pool could scale up to, with the same default; '
+             'for remote, it is the maximum NUM of concurrent requests to the '
+             'remote compiler server, defaults to 2.'
+    ),
+    click.option(
+        '--compiler-worker-branch-limit', type=int, metavar='NUM',
+        default=5,
+        envvar="GEL_SERVER_COMPILER_WORKER_BRANCH_LIMIT",
+        cls=EnvvarResolver,
+        help='The maximum NUM of branches each compiler worker could cache up '
+             'to, default is 5.  If the worker serves multiple tenants (as in '
+             '--compiler-pool-mode=fixed_multi_tenant or remote), this tenant '
+             'on that worker will be able to cache up to NUM branches.'
+    ),
     click.option(
         '--compiler-pool-mode',
         type=CompilerPoolModeChoice(),
@@ -842,7 +863,7 @@ server_options = typeutils.chain_decorators([
         "--compiler-pool-tenant-cache-size",
         hidden=True,
         type=int,
-        default=100,
+        default=20,
         envvar="GEL_SERVER_COMPILER_POOL_TENANT_CACHE_SIZE",
         cls=EnvvarResolver,
         help="Maximum number of tenants for which each compiler worker can "
@@ -1135,6 +1156,14 @@ server_options = typeutils.chain_decorators([
         help='Path to a TOML file to configure the server.',
         hidden=True,
     ),
+    click.option(
+        '--compiler-worker-max-rss',
+        type=int,
+        help='Maximum allowed RSS (in bytes) per compiler worker process. Any '
+             'worker exceeding this limit will be terminated and recreated. '
+             'Each worker is free from this limit in its first 20-30 hours '
+             'after spawn to avoid infinite restarts or a thundering herd.',
+    ),
 ])
 
 
@@ -1150,10 +1179,11 @@ compiler_options = typeutils.chain_decorators([
     click.option(
         "--client-schema-cache-size",
         type=int,
-        default=100,
-        help="Number of client schemas each worker could cache at most. The "
-             "compiler server is not affected by this setting, it keeps a "
-             "pickled copy of the client schema of all active clients."
+        default=20,
+        help="Maximum number of clients for which each worker can cache their "
+             "schemas, The compiler server is not affected by this setting, "
+             "it keeps pickled copies of schemas from all active clients "
+             "(each capped by --compiler-worker-branch-limit of the client)."
     ),
     click.option(
         '-I', '--listen-addresses', type=str, multiple=True,
@@ -1174,6 +1204,14 @@ compiler_options = typeutils.chain_decorators([
     click.option(
         '--metrics-port', type=PortType(),
         help=f'Port to listen on for metrics HTTP API.',
+    ),
+    click.option(
+        '--worker-max-rss',
+        type=int,
+        help='Maximum allowed RSS (in bytes) per worker process. Any worker '
+             'exceeding this limit will be terminated and recreated. '
+             'Each worker is free from this limit in its first 20-30 hours '
+             'after spawn to avoid infinite restarts or a thundering herd.',
     ),
 ])
 
@@ -1409,6 +1447,10 @@ def parse_args(**kwargs: Any):
             kwargs['compiler_pool_addr'] = (
                 "localhost", defines.EDGEDB_REMOTE_COMPILER_PORT
             )
+        if kwargs['compiler_worker_max_rss'] is not None:
+            abort('cannot set --compiler-worker-max-rss when using '
+                  '--compiler-pool-mode=remote')
+
     elif kwargs['compiler_pool_addr'] is not None:
         abort('--compiler-pool-addr is only meaningful '
               'under --compiler-pool-mode=remote')

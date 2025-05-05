@@ -282,9 +282,7 @@ class Tenant(ha_base.ClusterProtocol):
             )
         else:
             result = await compiler.compile_structured_config(
-                objects,
-                "magic",  # source
-                True,  # allow_nested
+                objects, source="magic", allow_nested=True
             )
         email_providers = result["cfg::Config"]["email_providers"]
         self._sidechannel_email_configs = list(email_providers.value)
@@ -431,9 +429,55 @@ class Tenant(ha_base.ClusterProtocol):
         self._sys_pgcon_ready_evt = asyncio.Event()
         self._sys_pgcon_reconnect_evt = asyncio.Event()
 
-    async def init(self) -> None:
+    async def get_patch_count(self, conn: pgcon.PGConnection) -> int:
+        """Get the number of applied patches."""
+        num_patches = await instdata.get_instdata(
+            conn, 'num_patches', 'json')
+        res: int = json.loads(num_patches) if num_patches else 0
+        return res
+
+    async def _check_metaschema_compatibility(
+        self, con: pgcon.PGConnection
+    ) -> None:
+        from edb.pgsql import patches as pg_patches
+
+        # Check catalog version
+        result = await instdata.get_instdata(
+            con, 'instancedata', 'json', versioned=False
+        )
+        catver = json.loads(result).get('catver')
+        if catver != defines.EDGEDB_CATALOG_VERSION:
+            raise errors.ConfigurationError(
+                'database instance incompatible with this version of Gel',
+                details=(
+                    f'The database instance was initialized with '
+                    f'Gel format version {catver}, but this version '
+                    f'of the server expects format version '
+                    f'{defines.EDGEDB_CATALOG_VERSION}.'
+                ),
+                hint=(
+                    'You need to either recreate the instance and upgrade '
+                    'using dump/restore, or do an inplace upgrade.'
+                )
+            )
+
+        # Check patch count
+        num_patches = await self.get_patch_count(con)
+        if num_patches < len(pg_patches.PATCHES):
+            raise errors.ConfigurationError(
+                'database instance incompatible with this version of Gel',
+                details=f"expected {len(pg_patches.PATCHES)} patches, "
+                        f"but only {num_patches} applied",
+                hint="if you are adding an old backend to a multi-tenant "
+                     "server, firstly run a new single-tenant server on "
+                     "that backend to apply the patches.",
+            )
+
+    async def init(self, compat_check: bool = False) -> None:
         logger.debug("starting database introspection")
         async with self.use_sys_pgcon() as syscon:
+            if compat_check:
+                await self._check_metaschema_compatibility(syscon)
             result = await instdata.get_instdata(
                 syscon, 'instancedata', 'json')
             self._instance_data = immutables.Map(json.loads(result))
@@ -2042,11 +2086,6 @@ class Tenant(ha_base.ClusterProtocol):
                         use_prep_stmt=True,
                     )
 
-            # XXX: TODO: We don't need to signal here in the
-            # non-function version, but in the function caching
-            # situation this will be fraught.
-            # await self.signal_sysevent("query-cache-changes", dbname=dbname)
-
         except Exception:
             logger.exception("error in evict_query_cache():")
             metrics.background_errors.inc(
@@ -2056,17 +2095,26 @@ class Tenant(ha_base.ClusterProtocol):
     def on_remote_query_cache_change(
         self,
         dbname: str,
-        keys: Optional[list[str]],
+        to_add: Optional[list[str]],
+        to_invalidate: Optional[list[str]],
     ) -> None:
         if not self.is_db_ready(dbname):
             return
+
+        if to_invalidate:
+            if db := self.maybe_get_db(dbname=dbname):
+                db.invalidate_cache_entries(
+                    [uuid.UUID(s) for s in to_invalidate]
+                )
 
         async def task():
             try:
                 async with self._with_intro_pgcon(dbname) as conn:
                     if not conn:
                         return
-                    query_cache = await self._load_query_cache(conn, keys=keys)
+                    query_cache = await self._load_query_cache(
+                        conn, keys=to_add
+                    )
 
                 if query_cache and (db := self.maybe_get_db(dbname=dbname)):
                     db.hydrate_cache(query_cache)
@@ -2078,7 +2126,10 @@ class Tenant(ha_base.ClusterProtocol):
                 )
                 raise
 
-        self.create_task(task(), interruptable=True)
+        # If neither to_add nor to_invalidate are specified, then we do
+        # a full introspection.
+        if to_add or not to_invalidate:
+            self.create_task(task(), interruptable=True)
 
     def get_debug_info(self) -> dict[str, Any]:
         from . import smtp

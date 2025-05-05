@@ -62,7 +62,7 @@ import edgedb
 
 from edb.edgeql import quote as qlquote
 from edb.server import args as edgedb_args
-from edb.server import cluster as edgedb_cluster
+from edb.testbase import cluster as edgedb_cluster
 from edb.server import pgcluster
 from edb.server import defines as edgedb_defines
 from edb.server import auth
@@ -1162,6 +1162,7 @@ class ConnectedTestCase(ClusterTestCase):
         exp_result_binary=...,
         *,
         always_typenames=False,
+        always_typeids=False,
         msg=None,
         sort=None,
         implicit_limit=0,
@@ -1209,7 +1210,7 @@ class ConnectedTestCase(ClusterTestCase):
             exp_result_binary = exp_result_json
 
         typenames = random.choice([True, False]) or always_typenames
-        typeids = random.choice([True, False])
+        typeids = random.choice([True, False]) or always_typeids
 
         try:
             res = await self.con._fetchall(
@@ -1567,17 +1568,20 @@ class DatabaseTestCase(ConnectedTestCase):
 
         return script.strip(' \n') if has_nontrivial_script else ''
 
-    async def migrate(self, migration, *, module: str = 'default'):
-        async with self.con.transaction():
-            await self.con.execute(f"""
-                START MIGRATION TO {{
-                    module {module} {{
-                        {migration}
-                    }}
-                }};
-                POPULATE MIGRATION;
-                COMMIT MIGRATION;
-            """)
+    async def migrate(self, migration, *, module: Optional[str] = 'default'):
+        if module:
+            migration = f"""
+                module {module} {{
+                    {migration}
+                }}
+            """
+        await self.con.execute(f"""
+            START MIGRATION TO {{
+                {migration}
+            }};
+            POPULATE MIGRATION;
+            COMMIT MIGRATION;
+        """)
 
 
 class Error:

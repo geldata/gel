@@ -41,6 +41,8 @@ if TYPE_CHECKING:
 
     class Name:
 
+        __match_args__ = ('name',)
+
         name: str
 
         @classmethod
@@ -75,6 +77,8 @@ if TYPE_CHECKING:
             ...
 
     class QualName(Name):
+
+        __match_args__ = ('module', 'name')
 
         module: str
         name: str

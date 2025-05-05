@@ -786,7 +786,7 @@ def _infer_on_conflict_clause(
     scope_tree: irast.ScopeTreeNode,
     ctx: inf_ctx.InfCtx,
 ) -> None:
-    for part in [ir.select_ir, ir.else_ir, ir.update_query_set]:
+    for part in [ir.select_ir, ir.else_ir]:
         if part:
             infer_multiplicity(part, scope_tree=scope_tree, ctx=ctx)
 

@@ -719,16 +719,20 @@ mod tests {
     }
 
     mod fixed_only_value {
-        crate::protocol!(struct FixedOnlyValue {
+        crate::protocol!(
+            struct FixedOnlyValue {
             a: u8 = 1,
-        });
+        }
+        );
     }
 
     mod mixed {
-        crate::protocol!(struct Mixed {
+        crate::protocol!(
+            struct Mixed {
             a: u8 = 1,
             s: ZTString,
-        });
+        }
+        );
     }
 
     mod docs {

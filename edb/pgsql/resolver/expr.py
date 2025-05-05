@@ -244,11 +244,18 @@ def resolve_column_kind(
             compiled = expr.compiled(ctx.schema, options=options, context=None)
 
             subject_rel = pgast.Relation(name=table.reference_as)
-            subject_rel.path_outputs = {
-                (source_id, pgce.PathAspect.IDENTITY): pgast.ColumnRef(
-                    name=('source',)
-                )
-            }
+            if isinstance(source, s_types.Type):
+                subject_rel.path_outputs = {
+                    (source_id, pgce.PathAspect.IDENTITY): pgast.ColumnRef(
+                        name=('id',)
+                    )
+                }
+            else:
+                subject_rel.path_outputs = {
+                    (source_id, pgce.PathAspect.IDENTITY): pgast.ColumnRef(
+                        name=('source',)
+                    )
+                }
             subject_rel_var = pgast.RelRangeVar(
                 alias=pgast.Alias(aliasname=table.reference_as),
                 relation=subject_rel,

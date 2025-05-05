@@ -98,6 +98,7 @@ cdef class Database:
         readonly object backend_oid_to_id
         readonly object extensions
         readonly object _feature_used_metrics
+        readonly int dml_queries_executed
 
     cdef _invalidate_caches(self)
     cdef _cache_compiled_query(self, key, compiled)
@@ -172,12 +173,13 @@ cdef class DatabaseConnectionView:
         object _in_tx_new_types
         int _in_tx_dbver
         bint _in_tx
-        bint _in_tx_with_ddl
+        uint64_t _in_tx_capabilities
         bint _in_tx_with_sysconfig
         bint _in_tx_with_dbconfig
         bint _in_tx_with_set
         bint _tx_error
         uint64_t _in_tx_seq
+        object _in_tx_isolation_level
 
         uint64_t _capability_mask
 
@@ -256,4 +258,5 @@ cdef class DatabaseConnectionView:
         allowed_capabilities,
         error_constructor,
         reason,
+        unsafe_isolation_dangers,
     )

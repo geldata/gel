@@ -549,6 +549,14 @@ jobs:
       run: |
         env HOMEBREW_NO_AUTO_UPDATE=1 brew install libmagic
 
+    - name: Install an alias
+      # This is probably not strictly needed, but sentencepiece build script reports
+      # errors without it.
+      if: true
+      run: |
+        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc
+        chmod +x /usr/local/bin/nproc
+
     - name: Build
       env:
         PACKAGE: edgedbpkg.edgedb:Gel
@@ -562,6 +570,7 @@ jobs:
         EXTRA_OPTIMIZATIONS: "true"
         METAPKG_GIT_CACHE: disabled
         BUILD_GENERIC: true
+        CMAKE_POLICY_VERSION_MINIMUM: '3.5'
       run: |
         edgedb-pkg/integration/macos/build.sh
 
@@ -620,6 +629,14 @@ jobs:
       run: |
         env HOMEBREW_NO_AUTO_UPDATE=1 brew install libmagic
 
+    - name: Install an alias
+      # This is probably not strictly needed, but sentencepiece build script reports
+      # errors without it.
+      if: true
+      run: |
+        printf '#!/bin/sh\n\nexec sysctl -n hw.logicalcpu' > /usr/local/bin/nproc
+        chmod +x /usr/local/bin/nproc
+
     - name: Build
       env:
         PACKAGE: edgedbpkg.edgedb:Gel
@@ -633,6 +650,7 @@ jobs:
         EXTRA_OPTIMIZATIONS: "true"
         METAPKG_GIT_CACHE: disabled
         BUILD_GENERIC: true
+        CMAKE_POLICY_VERSION_MINIMUM: '3.5'
       run: |
         edgedb-pkg/integration/macos/build.sh
 

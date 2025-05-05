@@ -444,7 +444,13 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         self.buffer.finish_message()
         return client_final
 
-    async def _execute_script(self, compiled: object, bind_args: bytes):
+    async def _execute_script(
+        self,
+        compiled: object,
+        bind_args: bytes,
+        *,
+        query_req: Optional[rpc.CompilationRequest] = None,
+    ):
         cdef:
             pgcon.PGConnection conn
             dbview.DatabaseConnectionView dbv
@@ -460,6 +466,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 compiled,
                 bind_args,
                 fe_conn=self,
+                query_req=query_req,
             )
 
     def _tokenize(
@@ -675,18 +682,30 @@ cdef class EdgeConnection(frontend.FrontendConnection):
     ):
         cdef:
             WriteBuffer msg
+            int16_t ann_count
 
         msg = WriteBuffer.new_message(b'T')
+        ann_count = 0
+        if query.query_unit_group.warnings:
+            ann_count += 1
+        if query.query_unit_group.unsafe_isolation_dangers:
+            ann_count += 1
+
+        msg.write_int16(ann_count)
 
         if query.query_unit_group.warnings:
             warnings = json.dumps(
                 [w.to_json() for w in query.query_unit_group.warnings]
             ).encode('utf-8')
-            msg.write_int16(1)
             msg.write_len_prefixed_bytes(b'warnings')
             msg.write_len_prefixed_bytes(warnings)
-        else:
-            msg.write_int16(0)  # no annotations
+        if query.query_unit_group.unsafe_isolation_dangers:
+            dangers = json.dumps([
+                w.to_json() for
+                w in query.query_unit_group.unsafe_isolation_dangers
+            ]).encode('utf-8')
+            msg.write_len_prefixed_bytes(b'unsafe_isolation_dangers')
+            msg.write_len_prefixed_bytes(dangers)
 
         msg.write_int64(<int64_t><uint64_t>query.query_unit_group.capabilities)
         msg.write_byte(self.render_cardinality(query.query_unit_group))
@@ -761,6 +780,8 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         compiled: dbview.CompiledQuery,
         bind_args: bytes,
         use_prep_stmt: bint,
+        *,
+        query_req: Optional[rpc.CompilationRequest] = None,
     ):
         cdef:
             dbview.DatabaseConnectionView dbv
@@ -775,6 +796,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 bind_args,
                 fe_conn=self,
                 use_prep_stmt=use_prep_stmt,
+                query_req=query_req,
             )
 
         query_unit = compiled.query_unit_group[0]
@@ -989,6 +1011,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             allow_capabilities,
             errors.DisabledCapabilityError,
             "disabled by the client",
+            unsafe_isolation_dangers=query_unit_group.unsafe_isolation_dangers,
         )
 
         if query_unit_group.in_type_id != in_tid:
@@ -1018,13 +1041,13 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             assert len(query_unit_group) == 1
             await self._execute_rollback(compiled)
         elif len(query_unit_group) > 1 or force_script:
-            await self._execute_script(compiled, args)
+            await self._execute_script(compiled, args, query_req=query_req)
         else:
             use_prep = (
                 len(query_unit_group) == 1
                 and bool(query_unit_group[0].sql_hash)
             )
-            await self._execute(compiled, args, use_prep)
+            await self._execute(compiled, args, use_prep, query_req=query_req)
 
         if self._cancelled:
             raise ConnectionAbortedError

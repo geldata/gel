@@ -207,6 +207,12 @@ class SpecialAnchor(Anchor):
     pass
 
 
+class Cursor(Expr):
+    '''A special node that halts compilation and returns all names visible in
+       the current scope. Used for LSP completions.
+    '''
+
+
 class DetachedExpr(Expr):  # DETACHED Expr
     expr: Expr
     preserve_path_prefix: bool = False
@@ -599,8 +605,6 @@ class UpdateQuery(Query):
 
     where: typing.Optional[Expr] = None
 
-    sql_mode_link_only: bool = False
-
 
 class DeleteQuery(Query):
     subject: Expr
@@ -687,6 +691,11 @@ class DDLOperation(DDL):
 
 class DDLCommand(DDLOperation, Command):
     __abstract_node__ = True
+
+
+class DDLQuery(DDLCommand):
+    '''A query wrapped in DDL. Appears in migrations.'''
+    query: Query
 
 
 class NonTransactionalDDLCommand(DDLCommand):

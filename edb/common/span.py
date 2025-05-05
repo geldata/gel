@@ -44,7 +44,7 @@ from edb.common import markup
 from edb.common import typeutils
 
 
-NEW_LINE = re.compile(br'\r\n?|\n')
+NEW_LINE = re.compile(rb'\r\n?|\n')
 
 
 class Span(markup.MarkupExceptionContext):
@@ -323,6 +323,9 @@ class SpanFinder(ast.NodeVisitor):
         self.found_node = None
 
     def generic_visit(self, node, *, combine_results=None) -> Any:
+        if self.found_node is not None:
+            return
+
         has_span = False
         if node_span := getattr(node, 'span', None):
             has_span = True

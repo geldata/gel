@@ -20,9 +20,8 @@
 from __future__ import annotations
 from typing import Any, Optional, Mapping, cast
 
-import functools
-
 from edb import errors
+from edb.common import lru
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
@@ -68,7 +67,7 @@ def _is_reachable(
         )
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def get_implicit_cast_distance(
     schema: s_schema.Schema,
     source: s_types.Type,
@@ -89,7 +88,7 @@ def is_implicitly_castable(
     return get_implicit_cast_distance(schema, source, target) >= 0
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def find_common_castable_type(
     schema: s_schema.Schema,
     source: s_types.Type,
@@ -123,7 +122,7 @@ def find_common_castable_type(
                 return target
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def is_assignment_castable(
     schema: s_schema.Schema,
     source: s_types.Type,
@@ -145,7 +144,7 @@ def is_assignment_castable(
     return False
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def is_castable(
     schema: s_schema.Schema,
     source: s_types.Type,

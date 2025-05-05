@@ -760,6 +760,7 @@ cdef class HttpProtocol:
             ):
                 return
 
+            self.server.get_compiler_pool().refresh_metrics()
             # Quoting the Open Metrics spec:
             #    Implementers MUST expose metrics in the OpenMetrics
             #    text format in response to a simple HTTP GET request

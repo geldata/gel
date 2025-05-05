@@ -165,7 +165,7 @@ async def describe(
     allow_capabilities: compiler.Capability = compiler.Capability.MODIFICATIONS,
     query_tag: str | None = None,
 ) -> sertypes.TypeDesc:
-    compiled, dbv = await _parse(
+    _, compiled, dbv = await _parse(
         db,
         query,
         query_cache_enabled=query_cache_enabled,
@@ -195,7 +195,10 @@ async def _parse(
     use_metrics: bool = True,
     cached_globally: bool = False,
     query_cache_enabled: Optional[bool] = None,
-) -> tuple[dbview.CompiledQuery, dbview.DatabaseConnectionView]:
+) -> tuple[
+    rpc.CompilationRequest,
+    dbview.CompiledQuery,
+    dbview.DatabaseConnectionView]:
     if query_cache_enabled is None:
         query_cache_enabled = not (
             debug.flags.disable_qcache or debug.flags.edgeql_compile)
@@ -228,7 +231,7 @@ async def _parse(
         allow_capabilities=allow_capabilities,
     )
 
-    return compiled, dbv
+    return query_req, compiled, dbv
 
 
 # TODO: can we merge execute and execute_script?
@@ -241,6 +244,7 @@ async def execute(
     fe_conn: frontend.AbstractFrontendConnection = None,
     use_prep_stmt: bint = False,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
+    query_req: Optional[rpc.CompilationRequest] = None,
 ):
     cdef:
         bytes state = None, orig_state = None
@@ -298,12 +302,12 @@ async def execute(
                 else:
                     converted_args: Optional[list[args_ser.ConvertedArg]] = None
                     if query_unit.server_param_conversions:
-                        converted_args = await _convert_parameters(
+                        converted_args = (await _convert_parameters(
                             dbv,
+                            compiled,
                             query_unit.server_param_conversions,
-                            query_unit.in_type_args,
                             bind_args,
-                        )
+                        )).get(0, None)
 
                     data_types = []
                     bound_args_buf = args_ser.recode_bind_args(
@@ -403,11 +407,25 @@ async def execute(
                 query_unit.user_schema = new_user_schema
 
     except Exception as ex:
-        # If we made schema changes, include the new schema in the
-        # exception so that it can be used when interpreting.
-        if query_unit.user_schema:
-            if isinstance(ex, pgerror.BackendError):
+        if isinstance(ex, pgerror.BackendError):
+            # If we made schema changes, include the new schema in the
+            # exception so that it can be used when interpreting.
+            if query_unit.user_schema:
                 ex._user_schema = query_unit.user_schema
+
+            # If we get an undefined function error, this is probably
+            # because of a pgfunc cache invalidation race condition,
+            # where another frontend dropped the function but we
+            # haven't processed the message yet. We are going to
+            # trigger a client retry (via errormech), but we also want
+            # to invalidate the cache entry, in cache we haven't
+            # processed the message by the retry.
+            if (
+                query_req
+                and ex.code_is(pgerror.ERROR_UNDEFINED_FUNCTION)
+            ):
+                dbv._db.invalidate_cache_entry_object(query_req)
+
         if query_unit.source_map:
             ex._from_sql = True
 
@@ -451,125 +469,162 @@ async def execute(
 
 async def _convert_parameters(
     dbv: dbview.DatabaseConnectionView,
+    compiled: dbview.CompiledQuery,
     server_param_conversions: list[dbstate.ServerParamConversion],
-    in_type_args: Optional[list[dbstate.Param]],
     bind_args: bytes,
-) -> Optional[list[args_ser.ConvertedArg]]:
+) -> dict[int, list[args_ser.ConvertedArg]]:
     """
     If there are server param conversions, compute them now so that they are
     injected into the recoded bind args later.
     """
 
-    # We receive the encoded param data from the bind_args
-    # and decode it manually.
-    def decode_int(data: bytes) -> int:
-        return int.from_bytes(data)
-
-    def decode_str(data: bytes) -> str:
-        return data.decode("utf-8")
-
-    def decode_array_of_str(data: bytes) -> list[str]:
-        # See gel-python for more details on array encoding
-        texts = []
-        text_count = int.from_bytes(data[12:16])
-        data = data[20:]
-        for _ in range(text_count):
-            text_length = int.from_bytes(data[:4])
-            data = data[4:]
-            texts.append(data[:(text_length)].decode("utf-8"))
-            data = data[text_length:]
-        return texts
-
     param_conversions: list[args_ser.ParamConversion] = (
         args_ser.get_param_conversions(
-            dbv, server_param_conversions, in_type_args, bind_args,
+            dbv,
+            server_param_conversions,
+            bind_args,
+            compiled.extra_blobs,
         )
     )
 
-    converted_args = []
-    for conversion in param_conversions:
-        conversion_name: str = conversion.get_conversion_name()
-        additional_info: tuple[str, ...] = (
-            conversion.get_additional_info()
+    # Cache converted args which may be used in multiple units
+    converted_args_cache: list[Optional[args_ser.ConvertedArg]] = (
+        [None] * len(param_conversions)
+    )
+
+    unit_group = compiled.query_unit_group
+
+    # First check for conversions which should be done in batches
+    ai_text_embedding_conversion_indexes: list[int] = []
+    ai_text_embedding_conversions: list[args_ser.ParamConversion] = []
+    for unit_index, converted_params_indexes in (
+        unit_group.unit_converted_param_indexes.items()
+    ):
+        for conversion_index in converted_params_indexes:
+            conversion = param_conversions[conversion_index]
+
+            conversion_name: str = conversion.get_conversion_name()
+
+            if conversion_name == 'ai_text_embedding':
+                ai_text_embedding_conversion_indexes.append(conversion_index)
+                ai_text_embedding_conversions.append(conversion)
+
+    # Compute batched conversions and store them in cache
+    if ai_text_embedding_conversions:
+        converted_args = (
+            await _batch_convert_ai_text_embedding(
+                dbv, ai_text_embedding_conversions
+            )
         )
-
-        if (
-            conversion_name == 'cast_int64_to_str'
-            or conversion_name == 'cast_int64_to_str_volatile'
+        for conversion_index, converted_arg in zip(
+            ai_text_embedding_conversion_indexes,
+            converted_args,
         ):
-            decoded_param_data = (
-                decode_int(conversion.get_data())
-                if conversion.get_source_value() is None
-                else conversion.get_source_value()
-            )
-            converted_args.append(
-                args_ser.ConvertedArgStr.new(
-                    str(decoded_param_data)
-                )
+            converted_args_cache[conversion_index] = converted_arg
+
+    # Do the remaining conversions
+    converted_args: dict[int, list[args_ser.ConvertedArg]] = {}
+    for unit_index, converted_params_indexes in (
+        unit_group.unit_converted_param_indexes.items()
+    ):
+        unit_converted_args: list[args_ser.ParamConversion] = []
+
+        for conversion_index in converted_params_indexes:
+            # Check for a cached conversion arg
+            if converted_arg := converted_args_cache[conversion_index]:
+                unit_converted_args.append(converted_arg)
+                continue
+
+            # Do the conversion
+            converted_arg = await _convert_parameter(
+                param_conversions[conversion_index]
             )
 
-        elif conversion_name == 'cast_int64_to_float64':
-            decoded_param_data = (
-                decode_int(conversion.get_data())
-                if conversion.get_source_value() is None
-                else conversion.get_source_value()
-            )
-            converted_args.append(
-                args_ser.ConvertedArgFloat64.new(
-                    float(decoded_param_data)
-                )
-            )
+            unit_converted_args.append(converted_arg)
+            converted_args_cache[conversion_index] = converted_arg
 
-        elif conversion_name == 'join_str_array':
-            decoded_param_data = (
-                decode_array_of_str(
-                    conversion.get_data()
-                )
-                if conversion.get_source_value() is None
-                else conversion.get_source_value()
-            )
-
-            separator = additional_info[0]
-            converted_args.append(
-                args_ser.ConvertedArgStr.new(
-                    separator.join(decoded_param_data)
-                )
-            )
-
-        elif conversion_name == 'ai_text_embedding':
-            decoded_param_data = (
-                decode_str(conversion.get_data())
-                if conversion.get_source_value() is None
-                else conversion.get_source_value()
-            )
-
-            object_type_id = additional_info[0]
-
-            tenant = dbv.tenant
-            db = tenant.maybe_get_db(dbname=dbv.dbname)
-            assert db is not None
-            embeddings_result = await ai_ext.generate_embeddings_for_text(
-                db,
-                tenant.get_http_client(originator="ai/index"),
-                object_type_id,
-                decoded_param_data,
-            )
-            embeddings = json.loads(
-                embeddings_result.decode("utf-8")
-            )["data"][0]["embedding"]
-
-            converted_args.append(
-                args_ser.ConvertedArgListFloat32.new(
-                    embeddings
-                )
-            )
-
-        else:
-            raise errors.QueryError(
-                f'unknown param conversion: {conversion_name}'
-            )
+        if unit_converted_args:
+            converted_args[unit_index] = unit_converted_args
 
     return converted_args
+
+
+async def _convert_parameter(
+    conversion: args_ser.ParamConversion,
+) -> args_ser.ConvertedArg:
+
+    conversion_name = conversion.get_conversion_name()
+
+    # We receive the encoded param data from the bind_args or extra blobs
+    # and decode it manually.
+    if (
+        conversion_name == 'cast_int64_to_str'
+        or conversion_name == 'cast_int64_to_str_volatile'
+    ):
+        decoded_param_data = conversion.param_as_int()
+        return args_ser.ConvertedArgStr.new(
+            str(decoded_param_data)
+        )
+
+    elif conversion_name == 'cast_int64_to_float64':
+        decoded_param_data = conversion.param_as_int()
+
+        return args_ser.ConvertedArgFloat64.new(
+            float(decoded_param_data)
+        )
+
+    elif conversion_name == 'join_str_array':
+        decoded_param_data = conversion.param_as_array_of_str()
+
+        separator = conversion.get_additional_info()[0]
+        return args_ser.ConvertedArgStr.new(
+            separator.join(decoded_param_data)
+        )
+
+    elif conversion_name == 'ai_text_embedding':
+        raise RuntimeError(f'conversion should be batched: {conversion_name}')
+
+    else:
+        raise errors.QueryError(
+            f'unknown param conversion: {conversion_name}'
+        )
+
+
+async def _batch_convert_ai_text_embedding(
+    dbv: dbview.DatabaseConnectionView,
+    conversions: list[args_ser.ParamConversion],
+) -> list[args_ser.ConvertedArg]:
+    embeddings_inputs: list[tuple[str, str]] = [
+        (
+            conversion_data.get_additional_info()[0],
+            conversion_data.param_as_str(),
+        )
+        for conversion_data in conversions
+    ]
+
+    tenant = dbv.tenant
+    db = tenant.maybe_get_db(dbname=dbv.dbname)
+    assert db is not None
+
+    embeddings_result = await ai_ext.generate_embeddings_for_texts(
+        db,
+        tenant.get_http_client(originator="ai/index"),
+        embeddings_inputs,
+    )
+    if embeddings_result.too_long:
+        long_input = embeddings_inputs[embeddings_result.too_long[0]][1][:100]
+        raise errors.QueryError(
+            f'Search text exceeds maximum input token length: {long_input}...'
+        )
+    if not embeddings_result.success:
+        raise RuntimeError('failed to get embeddings')
+
+    return [
+        args_ser.ConvertedArgListFloat32.new(
+            embeddings
+        )
+        for embeddings in embeddings_result.success
+    ]
 
 
 async def execute_script(
@@ -578,6 +633,7 @@ async def execute_script(
     compiled: dbview.CompiledQuery,
     bind_args: bytes,
     *,
+    query_req: Optional[rpc.CompilationRequest] = None,
     fe_conn: Optional[frontend.AbstractFrontendConnection],
 ):
     cdef:
@@ -612,13 +668,13 @@ async def execute_script(
             # state restoring
             state = None
         async with conn.parse_execute_script_context():
-            
-            converted_args: Optional[list[args_ser.ConvertedArg]] = None
+
+            converted_args: Optional[dict[int, list[args_ser.ConvertedArg]]] = None
             if unit_group.server_param_conversions:
                 converted_args = await _convert_parameters(
                     dbv,
+                    compiled,
                     unit_group.server_param_conversions,
-                    unit_group.in_type_args,
                     bind_args,
                 )
 
@@ -654,7 +710,13 @@ async def execute_script(
                     sync = sent == len(unit_group) and not no_sync
 
                     bind_array = args_ser.recode_bind_args_for_script(
-                        dbv, compiled, bind_args, converted_args, idx, sent)
+                        dbv,
+                        compiled,
+                        bind_args,
+                        converted_args,
+                        idx,
+                        sent,
+                    )
 
                     dbver = dbv.dbver
                     conn.send_query_unit_group(
@@ -741,10 +803,23 @@ async def execute_script(
     except Exception as e:
         dbv.on_error()
 
-        # Include the new schema in the exception so that it can be
-        # used when interpreting.
         if isinstance(e, pgerror.BackendError):
+            # Include the new schema in the exception so that it can be
+            # used when interpreting.
             e._user_schema = dbv.get_user_schema_pickle()
+
+            # If we get an undefined function error, this is probably
+            # because of a pgfunc cache invalidation race condition,
+            # where another frontend dropped the function but we
+            # haven't processed the message yet. We are going to
+            # trigger a client retry (via errormech), but we also want
+            # to invalidate the cache entry, in cache we haven't
+            # processed the message by the retry.
+            if (
+                query_req
+                and e.code_is(pgerror.ERROR_UNDEFINED_FUNCTION)
+            ):
+                dbv._db.invalidate_cache_entry_object(query_req)
 
         if query_unit and query_unit.source_map:
             e._from_sql = True
@@ -919,7 +994,7 @@ async def parse_execute_json(
     # or anything from std schema, for example:
     #     YES:  select ext::auth::UIConfig { ... }
     #     NO:   select default::User { ... }
-    compiled, dbv = await _parse(
+    query_req, compiled, dbv = await _parse(
         db,
         query,
         input_format=compiler.InputFormat.JSON,
@@ -942,6 +1017,7 @@ async def parse_execute_json(
                 variables=variables,
                 globals_=globals_,
                 tx_isolation=tx_isolation,
+                query_req=query_req,
             )
         finally:
             tenant.remove_dbview(dbv)
@@ -957,6 +1033,7 @@ async def execute_json(
     fe_conn: Optional[frontend.AbstractFrontendConnection] = None,
     use_prep_stmt: bint = False,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
+    query_req: Optional[rpc.CompilationRequest] = None,
 ) -> bytes:
     dbv.set_globals(immutables.Map({
         "__::__edb_json_globals__": config.SettingValue(
@@ -990,6 +1067,7 @@ async def execute_json(
             compiled,
             bind_args,
             fe_conn=fe_conn,
+            query_req=query_req,
         )
     else:
         if tx_isolation is not None:
@@ -1013,6 +1091,7 @@ async def execute_json(
             bind_args,
             fe_conn=fe_conn,
             tx_isolation=tx_isolation,
+            query_req=query_req,
         )
 
     if fe_conn is None:

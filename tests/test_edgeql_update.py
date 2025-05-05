@@ -4007,3 +4007,24 @@ class TestUpdate(tb.QueryTestCase):
                 },
             ],
         )
+
+    async def test_edgeql_update_read_only_tx_01(self):
+        con = (
+            edgedb.create_async_client(
+                **self.get_connect_args(database=self.con.dbname)
+            ).with_transaction_options(
+                edgedb.TransactionOptions(readonly=True)
+            )
+        )
+        try:
+            with self.assertRaisesRegex(
+                edgedb.TransactionError,
+                r'Modifications not allowed in a read-only transaction'
+            ):
+                async for tx in con.transaction():
+                    async with tx:
+                        await tx.execute(
+                            "update UpdateTest set { comment := 'hi' }"
+                        )
+        finally:
+            await con.aclose()

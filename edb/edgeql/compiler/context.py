@@ -144,6 +144,9 @@ class ServerParamConversion:
 
     volatility: qltypes.Volatility
 
+    # If the parameter is a query parameter, track its script params index.
+    script_param_index: Optional[int] = None
+
     # If the parameter is a constant value, pass to directly to the server.
     constant_value: Optional[Any] = None
 
@@ -308,6 +311,9 @@ class Environment:
     warnings: list[errors.EdgeDBError]
     """List of warnings to emit"""
 
+    unsafe_isolation_dangers: list[errors.UnsafeIsolationLevelError]
+    """List of repeatable read DML dangers"""
+
     def __init__(
         self,
         *,
@@ -358,6 +364,7 @@ class Environment:
         self.path_scope_map = {}
         self.dml_rewrites = {}
         self.warnings = []
+        self.unsafe_isolation_dangers = []
 
     def add_schema_ref(
         self, sobj: s_obj.Object, expr: Optional[qlast.Base]
@@ -836,6 +843,11 @@ class ContextLevel(compiler.ContextLevel):
     def log_warning(self, warning: errors.EdgeDBError) -> None:
         self.env.warnings.append(warning)
 
+    def log_repeatable_read_danger(
+        self, d: errors.UnsafeIsolationLevelError
+    ) -> None:
+        self.env.unsafe_isolation_dangers.append(d)
+
     def allow_factoring(self) -> None:
         self.no_factoring = self.warn_factoring = False
 
@@ -843,9 +855,10 @@ class ContextLevel(compiler.ContextLevel):
         self.no_factoring = s_futures.future_enabled(
             self.env.schema, 'simple_scoping'
         )
-        self.warn_factoring = s_futures.future_enabled(
-            self.env.schema, 'warn_old_scoping'
-        )
+        # When compiling schema things, we don't want to cause warnings
+        # The warnings will be emitted when updating the schema,
+        # and interact poorly with compilation.
+        self.warn_factoring = False
 
 
 class CompilerContext(compiler.CompilerContext[ContextLevel]):

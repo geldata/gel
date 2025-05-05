@@ -179,7 +179,7 @@ struct QueryFlow<'a> {
     pub query: &'a str,
 }
 
-impl<'a> Flow for ParseFlow<'a> {
+impl Flow for ParseFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
         let param_types = bytemuck::cast_slice(self.param_types);
         builder::Parse {
@@ -191,7 +191,7 @@ impl<'a> Flow for ParseFlow<'a> {
     }
 }
 
-impl<'a> Flow for BindFlow<'a> {
+impl Flow for BindFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
         let mut format_codes = Vec::with_capacity(self.params.len());
         let mut values = Vec::with_capacity(self.params.len());
@@ -226,7 +226,7 @@ impl<'a> Flow for BindFlow<'a> {
     }
 }
 
-impl<'a> Flow for ExecuteFlow<'a> {
+impl Flow for ExecuteFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
         let max_rows = match self.max_rows {
             MaxRows::Unlimited => 0,
@@ -240,7 +240,7 @@ impl<'a> Flow for ExecuteFlow<'a> {
     }
 }
 
-impl<'a> Flow for DescribePortalFlow<'a> {
+impl Flow for DescribePortalFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
         builder::Describe {
             name: self.name.0,
@@ -250,7 +250,7 @@ impl<'a> Flow for DescribePortalFlow<'a> {
     }
 }
 
-impl<'a> Flow for DescribeStatementFlow<'a> {
+impl Flow for DescribeStatementFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
         builder::Describe {
             name: self.name.0,
@@ -260,7 +260,7 @@ impl<'a> Flow for DescribeStatementFlow<'a> {
     }
 }
 
-impl<'a> Flow for ClosePortalFlow<'a> {
+impl Flow for ClosePortalFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
         builder::Close {
             name: self.name.0,
@@ -270,7 +270,7 @@ impl<'a> Flow for ClosePortalFlow<'a> {
     }
 }
 
-impl<'a> Flow for CloseStatementFlow<'a> {
+impl Flow for CloseStatementFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
         builder::Close {
             name: self.name.0,
@@ -280,7 +280,7 @@ impl<'a> Flow for CloseStatementFlow<'a> {
     }
 }
 
-impl<'a> Flow for QueryFlow<'a> {
+impl Flow for QueryFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
         builder::Query { query: self.query }.to_vec()
     }

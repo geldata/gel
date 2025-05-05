@@ -27,10 +27,22 @@ W = typing.TypeVar('W')
 W2 = typing.TypeVar('W2', contravariant=True)
 
 
-class _AcquireCondition(typing.Protocol[W2]):
+class AcquireCondition(typing.Protocol[W2]):
 
     def __call__(self, worker: W2) -> bool:
-        pass
+        ...
+
+
+class Comparable(typing.Protocol):
+
+    def __gt__(self, other: typing.Self) -> bool:
+        ...
+
+
+class Weighter(typing.Protocol[W2]):
+
+    def __call__(self, worker: W2) -> Comparable:
+        ...
 
 
 class WorkerQueue(typing.Generic[W]):
@@ -51,8 +63,8 @@ class WorkerQueue(typing.Generic[W]):
     async def acquire(
         self,
         *,
-        condition: typing.Optional[_AcquireCondition[W]]=None,
-        weighter=None,
+        condition: typing.Optional[AcquireCondition[W]] = None,
+        weighter: typing.Optional[Weighter[W]] = None,
     ) -> W:
         # There can be a race between a waiter scheduled for to wake up
         # and a worker being stolen (due to quota being enforced,

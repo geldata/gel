@@ -1646,7 +1646,7 @@ class Query(Command):
     These are found in migrations.
     """
 
-    astnode = qlast.Query
+    astnode = qlast.DDLQuery
 
     expr = struct.Field(s_expr.Expression)
 
@@ -1657,10 +1657,11 @@ class Query(Command):
         astnode: qlast.DDLOperation,
         context: CommandContext,
     ) -> Command:
+        assert isinstance(astnode, qlast.DDLQuery)
         return cls(
             span=astnode.span,
             expr=s_expr.Expression.from_ast(
-                astnode,  # type: ignore
+                astnode.query,
                 schema=schema,
                 modaliases=context.modaliases,
                 localnames=context.localnames,

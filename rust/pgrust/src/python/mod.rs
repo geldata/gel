@@ -192,7 +192,13 @@ impl PyConnectionParams {
         }
     }
 
-    pub fn resolve(&self, py: Python, username: String, home_dir: String) -> PyResult<Self> {
+    #[pyo3(signature = (username, home_dir))]
+    pub fn resolve(
+        &self,
+        py: Python,
+        username: String,
+        home_dir: Option<String>,
+    ) -> PyResult<Self> {
         let os = py.import("os")?;
         let environ = os.getattr("environ")?;
 
@@ -203,7 +209,7 @@ impl PyConnectionParams {
         let mut params = ConnectionParameters::try_from(params)
             .map_err(|err| PyException::new_err(err.to_string()))?;
         if let Some(warning) = params.password.resolve(
-            Path::new(&home_dir),
+            home_dir.as_deref().map(Path::new),
             &params.hosts,
             &params.database,
             &params.user,
@@ -214,7 +220,7 @@ impl PyConnectionParams {
 
         params
             .ssl
-            .resolve(Path::new(&home_dir))
+            .resolve(home_dir.as_deref().map(Path::new))
             .map_err(|err| PyException::new_err(err.to_string()))?;
         Ok(Self {
             inner: params.into(),
@@ -273,11 +279,12 @@ struct PyConnectionState {
 #[pymethods]
 impl PyConnectionState {
     #[new]
+    #[pyo3(signature = (dsn, username, home_dir))]
     fn new(
         py: Python,
         dsn: &PyConnectionParams,
         username: String,
-        home_dir: String,
+        home_dir: Option<String>,
     ) -> PyResult<Self> {
         let os = py.import("os")?;
         let environ = os.getattr("environ")?;
@@ -289,7 +296,7 @@ impl PyConnectionState {
         let mut params = ConnectionParameters::try_from(params)
             .map_err(|err| PyException::new_err(err.to_string()))?;
         if let Some(warning) = params.password.resolve(
-            Path::new(&home_dir),
+            home_dir.as_deref().map(Path::new),
             &params.hosts,
             &params.database,
             &params.user,
@@ -300,7 +307,7 @@ impl PyConnectionState {
 
         params
             .ssl
-            .resolve(Path::new(&home_dir))
+            .resolve(home_dir.as_deref().map(Path::new))
             .map_err(|err| PyException::new_err(err.to_string()))?;
         let credentials = Credentials {
             username: params.user.clone(),
