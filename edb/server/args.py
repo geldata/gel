@@ -433,7 +433,7 @@ def _validate_compiler_pool_size(ctx, param, value):
     return value
 
 
-def _validate_host_port(ctx, param, value):
+def _validate_compiler_pool_host_port(ctx, param, value):
     if value is None:
         return None
     address = value.split(":", 1)
@@ -852,7 +852,7 @@ server_options = typeutils.chain_decorators([
     click.option(
         '--compiler-pool-addr',
         hidden=True,
-        callback=_validate_host_port,
+        callback=_validate_compiler_pool_host_port,
         envvar="GEL_SERVER_COMPILER_POOL_ADDR",
         cls=EnvvarResolver,
         help=f'Specify the host[:port] of the compiler pool to connect to, '
@@ -1159,6 +1159,8 @@ server_options = typeutils.chain_decorators([
     click.option(
         '--compiler-worker-max-rss',
         type=int,
+        envvar="GEL_SERVER_COMPILER_WORKER_MAX_RSS",
+        cls=EnvvarResolver,
         help='Maximum allowed RSS (in bytes) per compiler worker process. Any '
              'worker exceeding this limit will be terminated and recreated. '
              'Each worker is free from this limit in its first 20-30 hours '
@@ -1171,6 +1173,8 @@ compiler_options = typeutils.chain_decorators([
     click.option(
         "--pool-size",
         type=int,
+        envvar="GEL_COMPILER_POOL_SIZE",
+        cls=EnvvarResolver,
         callback=_validate_compiler_pool_size,
         default=compute_default_compiler_pool_size(),
         help=f"Number of compiler worker processes. Defaults to "
@@ -1179,6 +1183,8 @@ compiler_options = typeutils.chain_decorators([
     click.option(
         "--client-schema-cache-size",
         type=int,
+        envvar="GEL_COMPILER_POOL_TENANT_CACHE_SIZE",
+        cls=EnvvarResolver,
         default=20,
         help="Maximum number of clients for which each worker can cache their "
              "schemas, The compiler server is not affected by this setting, "
@@ -1187,27 +1193,35 @@ compiler_options = typeutils.chain_decorators([
     ),
     click.option(
         '-I', '--listen-addresses', type=str, multiple=True,
+        envvar="GEL_COMPILER_BIND_ADDRESS", cls=EnvvarResolver,
         default=('localhost',),
         help='IP addresses to listen on, specify multiple times for more than '
              'one address to listen on. Default: localhost',
     ),
     click.option(
         '-P', '--listen-port', type=PortType(),
+        envvar="GEL_COMPILER_SERVER_PORT", cls=EnvvarResolver,
         help=f'Port to listen on. '
              f'Default: {defines.EDGEDB_REMOTE_COMPILER_PORT}',
     ),
     click.option(
         '--runstate-dir', type=PathPath(), default=None,
+        envvar="GEL_COMPILER_RUNSTATE_DIR",
+        cls=EnvvarResolver,
         help="Directory to store UNIX domain socket file for IPC, a temporary "
              "directory will be used if not specified.",
     ),
     click.option(
         '--metrics-port', type=PortType(),
+        envvar="GEL_COMPILER_METRICS_PORT",
+        cls=EnvvarResolver,
         help=f'Port to listen on for metrics HTTP API.',
     ),
     click.option(
         '--worker-max-rss',
         type=int,
+        envvar="GEL_COMPILER_WORKER_MAX_RSS",
+        cls=EnvvarResolver,
         help='Maximum allowed RSS (in bytes) per worker process. Any worker '
              'exceeding this limit will be terminated and recreated. '
              'Each worker is free from this limit in its first 20-30 hours '

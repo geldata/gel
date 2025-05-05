@@ -40,6 +40,7 @@ from edb.common import markup
 from edb.server import metrics
 from edb.server import args as srvargs
 from edb.server import defines
+from edb.server import logsetup
 
 from . import amsg
 from . import pool as pool_mod
@@ -777,6 +778,7 @@ async def server_main(
     metrics_port: Optional[int],
     worker_max_rss: Optional[int],
 ):
+    logsetup.setup_logging('i', 'stderr')
     if listen_port is None:
         listen_port = defines.EDGEDB_REMOTE_COMPILER_PORT
     if runstate_dir is None:
