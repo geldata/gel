@@ -343,6 +343,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
     _refl_schema: s_schema.FlatSchema
     _schema_class_layout: s_refl.SchemaClassLayout
     _dbindex: Optional[dbview.DatabaseIndex] = None
+    _last_active_time: float
 
     def __init__(
         self,
@@ -946,7 +947,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
     def refresh_metrics(self) -> None:
         pass
 
-    def _maybe_update_last_active_time(self):
+    def _maybe_update_last_active_time(self) -> None:
         if sys.exc_info()[0] is None:
             self._last_active_time = time.monotonic()
 
