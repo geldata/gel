@@ -179,7 +179,6 @@ class MultiSchemaPool(
     _catalog_version: Optional[int]
     _inited: asyncio.Event
     _clients: dict[int, ClientSchema]
-    _client_versions: dict[int, int]
     _client_names: dict[int, str]
     _secret: bytes
 
@@ -189,7 +188,6 @@ class MultiSchemaPool(
         self._inited = asyncio.Event()
         self._cache_size = cache_size
         self._clients = {}
-        self._client_versions = {}
         self._client_names = {}
         self._secret = secret
 
@@ -223,6 +221,8 @@ class MultiSchemaPool(
         client_name: str,
         catalog_version: int,
         init_args_pickled: pool_mod.RemoteInitArgsPickle,
+        *,
+        is_v2: bool,
     ) -> None:
         (
             std_args_pickled,
@@ -230,16 +230,12 @@ class MultiSchemaPool(
             global_schema_pickle,
             system_config_pickled,
         ) = init_args_pickled
-        client_args = pickle.loads(client_args_pickled)
         dbs_arg: immutables.Map[str, PickledState]
-        if len(client_args) == 1:
-            # This is a new v2 client
-            backend_runtime_params, = client_args
+        if is_v2:
+            backend_runtime_params, = pickle.loads(client_args_pickled)
             dbs_arg = immutables.Map()
-            client_version = 2
         else:
-            # be compatible with pre-#8621 clients
-            dbs, backend_runtime_params = client_args
+            dbs, backend_runtime_params = pickle.loads(client_args_pickled)
             dbs_arg = immutables.Map(
                 (
                     dbname,
@@ -251,7 +247,6 @@ class MultiSchemaPool(
                 )
                 for dbname, state in dbs.items()
             )
-            client_version = 1
         if self._inited.is_set():
             logger.debug("New client %d connected.", client_id)
             assert self._catalog_version is not None
@@ -279,7 +274,6 @@ class MultiSchemaPool(
             instance_config=system_config_pickled,
             dropped_dbs=(),
         )
-        self._client_versions[client_id] = client_version
         self._client_names[client_id] = client_name
 
     def _sync(
@@ -471,7 +465,6 @@ class MultiSchemaPool(
                 client_id,
                 diff,
                 invalidation,
-                self._client_versions[client_id],
                 msg_arg,
                 *extra_args,
             )
@@ -561,10 +554,13 @@ class MultiSchemaPool(
                 raise AssertionError("message signature verification failed")
 
             method_name, args = pickle.loads(msg)
+            is_v2 = (
+                method_name != (method_name := method_name.removeprefix("v2_"))
+            )
             if method_name != "__init_server__":
                 await self._ready_evt.wait()
             if method_name == "__init_server__":
-                await self._init_server(client_id, protocol.client_name, *args)
+                await self._init_server(client_id, protocol.client_name, *args, is_v2=is_v2)
                 pickled = pickle.dumps((0, None), -1)
             elif method_name in {
                 "compile",
@@ -572,32 +568,29 @@ class MultiSchemaPool(
                 "compile_graphql",
                 "compile_sql",
             }:
-                match self._client_versions.get(client_id):
-                    case 1:
-                        # compatible with pre-#8621 clients
-                        evicted_dbs = []
-                        (
-                            dbname,
-                            user_schema,
-                            reflection_cache,
-                            global_schema,
-                            database_config,
-                            system_config,
-                            *args,
-                        ) = args
-
-                    case _:
-                        (
-                            dbname,
-                            evicted_dbs,
-                            user_schema,
-                            reflection_cache,
-                            global_schema,
-                            database_config,
-                            system_config,
-                            *args,
-                        ) = args
-
+                if is_v2:
+                    (
+                        dbname,
+                        evicted_dbs,
+                        user_schema,
+                        reflection_cache,
+                        global_schema,
+                        database_config,
+                        system_config,
+                        *args,
+                    ) = args
+                else:
+                    # compatible with pre-#8621 clients
+                    evicted_dbs = []
+                    (
+                        dbname,
+                        user_schema,
+                        reflection_cache,
+                        global_schema,
+                        database_config,
+                        system_config,
+                        *args,
+                    ) = args
                 pickled = await self._call_for_client(
                     client_id=client_id,
                     method_name=method_name,
@@ -633,7 +626,6 @@ class MultiSchemaPool(
     def client_disconnected(self, client_id: int) -> None:
         logger.debug("Client %d disconnected, invalidating cache.", client_id)
         self._clients.pop(client_id, None)
-        self._client_versions.pop(client_id, None)
         self._client_names.pop(client_id, None)
         for worker in self._workers.values():
             worker.invalidate(client_id)
