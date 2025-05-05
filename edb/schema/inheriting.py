@@ -959,6 +959,9 @@ class AlterInheritingObjectOrFragment(
         scls: so.InheritingObject,
         props: tuple[str, ...],
     ) -> None:
+        if _has_implicit_propagation(context):
+            return
+
         descendant_names = [
             d.get_name(schema) for d in scls.ordered_descendants(schema)
         ]
@@ -979,6 +982,7 @@ class AlterInheritingObjectOrFragment(
                 d_alter_cmd.add(self.clone(d_alter_cmd.classname))
 
             with ctx_stack():
+                d_alter_cmd.set_annotation('implicit_propagation', True)
                 assert isinstance(d_alter_cmd, InheritingObjectCommand)
                 schema = d_alter_cmd.inherit_fields(
                     schema, context, d_bases, fields=props, apply=False
@@ -1184,12 +1188,16 @@ class RebaseInheritingObject(
 
         if not context.canonical:
             schema = self._recompute_inheritance(schema, context)
-            if context.enable_recursion:
+            if (
+                context.enable_recursion
+                and not _has_implicit_propagation(context)
+            ):
                 for descendant in self.scls.ordered_descendants(schema):
                     d_root_cmd, d_alter_cmd, ctx_stack = (
                         descendant.init_delta_branch(
                             schema, context, sd.AlterObject))
                     assert isinstance(d_alter_cmd, InheritingObjectCommand)
+                    d_alter_cmd.set_annotation('implicit_propagation', True)
                     with ctx_stack():
                         d_alter_cmd._fixup_inheritance_refdicts(
                             schema, context)
@@ -1370,3 +1378,13 @@ def _needs_refdict(refdict: so.RefDict, context: sd.CommandContext) -> bool:
         inheritance_refdicts is None
         or refdict.attr in inheritance_refdicts
     ) and (context.inheritance_merge is None or context.inheritance_merge)
+
+
+def _has_implicit_propagation(context: sd.CommandContext) -> bool:
+    for ctx in reversed(context.stack):
+        if (
+            isinstance(ctx.op, sd.ObjectCommand)
+            and ctx.op.get_annotation('implicit_propagation')
+        ):
+            return True
+    return False

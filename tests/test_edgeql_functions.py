@@ -31,7 +31,7 @@ from edb.testbase import server as tb
 from edb.tools import test
 
 
-class TestEdgeQLFunctions(tb.QueryTestCase):
+class TestEdgeQLFunctions(tb.DDLTestCase):
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')

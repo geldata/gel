@@ -7654,6 +7654,31 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
             };
         """])
 
+    def test_schema_migrations_equivalence_linkprops_15(self):
+        self._assert_migration_equivalence([r"""
+            abstract link link_with_value {
+                single property value := 'lol';
+                index on (__subject__@value);
+            }
+            type Tgt;
+            type Foo {
+                link l1 extending link_with_value -> Tgt;
+            };
+            type Bar extending Foo;
+            type Baz extending Bar;
+        """, r"""
+            abstract link link_with_value {
+                single property value := 12;
+                index on (__subject__@value);
+            }
+            type Tgt;
+            type Foo {
+                link l1 extending link_with_value -> Tgt;
+            };
+            type Bar extending Foo;
+            type Baz extending Bar;
+        """])
+
     def test_schema_migrations_equivalence_annotation_01(self):
         self._assert_migration_equivalence([r"""
             type Base;
@@ -8061,7 +8086,7 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
         """, r"""
         """])
 
-    def test_schema_migrations_equivalence_constraint_05(self):
+    def test_schema_migrations_equivalence_constraint_05a(self):
         self._assert_migration_equivalence([r"""
             abstract constraint not_bad {
                 using (__subject__ != "bad" and __subject__ != "terrible")
@@ -8077,6 +8102,33 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
             abstract constraint not_bad {
                 using (__subject__ != "bad" and __subject__ != "awful")
             }
+
+            type Foo {
+                property x -> str {
+                    constraint not_bad;
+                }
+            }
+            type Bar extending Foo;
+        """])
+
+    def test_schema_migrations_equivalence_constraint_05b(self):
+        self._assert_migration_equivalence([r"""
+            abstract constraint not_bad_1 {
+                using (__subject__ != "bad" and __subject__ != "terrible")
+            }
+            abstract constraint not_bad extending not_bad_1;
+
+            type Foo {
+                property x -> str {
+                    constraint not_bad;
+                }
+            }
+            type Bar extending Foo;
+        """, r"""
+            abstract constraint not_bad_1 {
+                using (__subject__ != "bad" and __subject__ != "terrible")
+            }
+            abstract constraint not_bad extending not_bad_1;
 
             type Foo {
                 property x -> str {
