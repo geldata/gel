@@ -221,8 +221,6 @@ class MultiSchemaPool(
         client_name: str,
         catalog_version: int,
         init_args_pickled: pool_mod.RemoteInitArgsPickle,
-        *,
-        is_v2: bool,
     ) -> None:
         (
             std_args_pickled,
@@ -231,22 +229,7 @@ class MultiSchemaPool(
             system_config_pickled,
         ) = init_args_pickled
         dbs_arg: immutables.Map[str, PickledState]
-        if is_v2:
-            backend_runtime_params, = pickle.loads(client_args_pickled)
-            dbs_arg = immutables.Map()
-        else:
-            dbs, backend_runtime_params = pickle.loads(client_args_pickled)
-            dbs_arg = immutables.Map(
-                (
-                    dbname,
-                    PickledState(
-                        state.user_schema_pickle,
-                        pickle.dumps(state.reflection_cache, -1),
-                        pickle.dumps(state.database_config, -1),
-                    ),
-                )
-                for dbname, state in dbs.items()
-            )
+        backend_runtime_params, = pickle.loads(client_args_pickled)
         if self._inited.is_set():
             logger.debug("New client %d connected.", client_id)
             assert self._catalog_version is not None
@@ -269,7 +252,7 @@ class MultiSchemaPool(
                 client_id,
             )
         self._clients[client_id] = ClientSchema(
-            dbs=dbs_arg,
+            dbs=immutables.Map(),
             global_schema=global_schema_pickle,
             instance_config=system_config_pickled,
             dropped_dbs=(),
@@ -554,13 +537,10 @@ class MultiSchemaPool(
                 raise AssertionError("message signature verification failed")
 
             method_name, args = pickle.loads(msg)
-            is_v2 = (
-                method_name != (method_name := method_name.removeprefix("v2_"))
-            )
             if method_name != "__init_server__":
                 await self._ready_evt.wait()
             if method_name == "__init_server__":
-                await self._init_server(client_id, protocol.client_name, *args, is_v2=is_v2)
+                await self._init_server(client_id, protocol.client_name, *args)
                 pickled = pickle.dumps((0, None), -1)
             elif method_name in {
                 "compile",
@@ -568,29 +548,16 @@ class MultiSchemaPool(
                 "compile_graphql",
                 "compile_sql",
             }:
-                if is_v2:
-                    (
-                        dbname,
-                        evicted_dbs,
-                        user_schema,
-                        reflection_cache,
-                        global_schema,
-                        database_config,
-                        system_config,
-                        *args,
-                    ) = args
-                else:
-                    # compatible with pre-#8621 clients
-                    evicted_dbs = []
-                    (
-                        dbname,
-                        user_schema,
-                        reflection_cache,
-                        global_schema,
-                        database_config,
-                        system_config,
-                        *args,
-                    ) = args
+                (
+                    dbname,
+                    evicted_dbs,
+                    user_schema,
+                    reflection_cache,
+                    global_schema,
+                    database_config,
+                    system_config,
+                    *args,
+                ) = args
                 pickled = await self._call_for_client(
                     client_id=client_id,
                     method_name=method_name,
