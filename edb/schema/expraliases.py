@@ -542,13 +542,33 @@ def _create_alias_types(
             # need to be created in the schema
             continue
 
+        # Schema views in derive an alias subtype for their expressions, which
+        # are stored in the schema with `from_alias` set to True. Aliases will
+        # also store any new types from their expressions into the schema.
+        #
+        # This is not an issue for most derived types since they are used only
+        # in their alias expression.
+        #
+        # However, collections which are not expr aliases that are created in
+        # an alias expression may be used in other places and should be
+        # not be created as `from_alias` or other alias/global associated
+        # fields.
+        if (
+            not isinstance(ty, s_types.Collection)
+            or isinstance(ty, s_types.CollectionExprAlias)
+        ):
+            new_schema = ty.update(
+                new_schema,
+                dict(
+                    alias_is_persistent=True,
+                    expr_type=s_types.ExprType.Select,
+                    from_alias=True,
+                    from_global=is_global,
+                ),
+            )
         new_schema = ty.update(
             new_schema,
             dict(
-                alias_is_persistent=True,
-                expr_type=s_types.ExprType.Select,
-                from_alias=True,
-                from_global=is_global,
                 internal=False,
                 builtin=False,
             ),
