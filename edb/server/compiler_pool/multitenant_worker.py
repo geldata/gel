@@ -374,12 +374,12 @@ def call_for_client(
                     # already utilized in the compiler server and forwarded to
                     # us through "pickled_schema" argument, so we don't need
                     # them here
-                    evicted_dbs,
-                    user_schema,
-                    reflection_cache,
-                    global_schema,
-                    database_config,
-                    system_config,
+                    evicted_dbs,  # noqa: F841
+                    user_schema,  # noqa: F841
+                    reflection_cache,  # noqa: F841
+                    global_schema,  # noqa: F841
+                    database_config,  # noqa: F841
+                    system_config,  # noqa: F841
 
                     *compile_args,
                 ) = args
