@@ -104,7 +104,9 @@ def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
     where = dispatch.resolve_opt(stmt.where_clause, ctx=ctx)
 
     # COPY will always be top-level, so we must extract CTEs
-    query.ctes = list(ctx.ctes_buffer)
+    if not query.ctes:
+        query.ctes = list()
+    query.ctes.extend(ctx.ctes_buffer)
     ctx.ctes_buffer.clear()
 
     return pgast.CopyStmt(
