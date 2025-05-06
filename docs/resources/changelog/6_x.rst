@@ -717,7 +717,6 @@ Bug fixes
 Major changes
 -------------
 
-
 * Allow DML in REPEATABLE READ transactions, but only when it is safe
   to do.  Performing DML in REPEATABLE READ transactions is safe as
   long as the query does not affect exclusive constraints that are
@@ -794,3 +793,80 @@ Fixes
 
 * Fix CREATE ... BRANCH FROM ... when source uses ai extension
   (:eql:gh:`#8594`)
+
+
+6.6
+===
+
+Features
+--------
+
+* Add text search to ai extension. ``ext::ai::search()`` may now be
+  called with string search parameters, instead of only arrays of
+  floats.  The string must be a constant or a query parameter. The AI
+  provider will be queried to convert the string to a an embedding
+  vector.
+  (:eql:gh:`#8521`)
+
+* Add Ollama support.
+  (:eql:gh:`#8646`)
+
+Fixes
+-----
+
+* Fix wrong values for multi links in triggers and some other places
+  (:eql:gh:`#8615`)
+
+* Fix ``SET GLOBAL`` when right hand side needs to use access policies
+  (:eql:gh:`#8619`)
+
+* Fix proto hang running script after setting ``default_transaction_*``
+  (:eql:gh:`#8623`)
+
+* Avoid hanging onto Schema objects with lru_caches
+  (:eql:gh:`#8628`)
+
+* Enable queries with server param conversions to be cached.
+  (:eql:gh:`#8598`)
+
+* Fix ISE when with binding in dml function contains a set function/operator
+  (:eql:gh:`#8634`)
+
+* Only run the net worker query when DML has happened on the branch
+  (:eql:gh:`#8637`)
+
+* Fix our optimization for skipping optional checks based on card inference
+  (:eql:gh:`#8647`)
+
+* Try to optimize away a per-object check in access policies
+  (:eql:gh:`#8650`)
+
+* Fix access policies warnings when ``future warn_old_scoping`` exists
+  (:eql:gh:`#8643`)
+
+* Fix some object-returning functions when using ``future warn_old_scoping``
+  (:eql:gh:`#8653`)
+
+* server: add cached branch limit to the compiler pool
+  (:eql:gh:`#8621`)
+
+* server: add ``--compiler-worker-max-rss``
+  (:eql:gh:`#8627`)
+
+* server: add more compiler pool metrics
+  (:eql:gh:`#8655`)
+
+* compiler server: add envvar to click options
+  (:eql:gh:`#8666`)
+
+* Start invalidating evicted cache entries on other frontends
+  (:eql:gh:`#8638`)
+
+* Fix error when using computed pointer in ai index.
+  (:eql:gh:`#8663`)
+
+* Fix a bug in COPY with inheritance over SQL adapter
+  (:eql:gh:`#8668`)
+
+* Fix exponential time (in inheritance depth) migrations when altering things
+  (:eql:gh:`#8671`)
