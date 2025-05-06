@@ -36,6 +36,7 @@ import immutables
 from edb.common import debug
 from edb.common import lru
 from edb.common import markup
+from edb.server import logsetup
 
 from .. import metrics
 from .. import args as srvargs
@@ -731,6 +732,7 @@ async def server_main(
     metrics_port,
     worker_max_rss,
 ):
+    logsetup.setup_logging('i', 'stderr')
     if listen_port is None:
         listen_port = defines.EDGEDB_REMOTE_COMPILER_PORT
     if runstate_dir is None:
