@@ -502,7 +502,11 @@ def _get_dep_cols(
     dep_cols = []
     assert index_expr.refs is not None
     for obj in index_expr.refs.objects(schema):
-        if isinstance(obj, s_props.Property):
+        if (
+            isinstance(obj, s_props.Property)
+            # Exclude computed pointers, they don't actually have columns
+            and obj.get_expr(schema) is None
+        ):
             ptrinfo = types.get_pointer_storage_info(obj, schema=schema)
             dep_cols.append(ptrinfo.column_name)
 
