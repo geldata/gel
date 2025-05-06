@@ -243,9 +243,12 @@ class ServerConfig(NamedTuple):
     runstate_dir: pathlib.Path
     max_backend_connections: Optional[int]
     compiler_pool_size: int
+    compiler_worker_branch_limit: int
     compiler_pool_mode: CompilerPoolMode
     compiler_pool_addr: str
     compiler_pool_tenant_cache_size: int
+    compiler_worker_max_rss: Optional[int]
+
     echo_runtime_info: bool
     emit_server_status: str
     temp_dir: bool
@@ -415,7 +418,7 @@ def _validate_compiler_pool_size(ctx, param, value):
     return value
 
 
-def _validate_host_port(ctx, param, value):
+def _validate_compiler_pool_host_port(ctx, param, value):
     if value is None:
         return None
     address = value.split(":", 1)
@@ -740,9 +743,26 @@ _server_options = [
              f'minus the NUM of --reserved-pg-connections.',
         callback=_validate_max_backend_connections),
     click.option(
-        '--compiler-pool-size', type=int,
+        '--compiler-pool-size', type=int, metavar='NUM',
         envvar="EDGEDB_SERVER_COMPILER_POOL_SIZE",
-        callback=_validate_compiler_pool_size),
+        callback=_validate_compiler_pool_size,
+        help='Size of the compiler pool.  When --compiler-pool-mode=fixed or '
+             'fixed_multi_tenant, it is the NUM of compiler worker processes, '
+             f"defaults to {compute_default_compiler_pool_size()} (you'll see "
+             '1 extra template process); for on_demand, it is the maximum NUM '
+             'of workers the pool could scale up to, with the same default; '
+             'for remote, it is the maximum NUM of concurrent requests to the '
+             'remote compiler server, defaults to 2.'
+    ),
+    click.option(
+        '--compiler-worker-branch-limit', type=int, metavar='NUM',
+        default=5,
+        envvar="EDGEDB_SERVER_COMPILER_WORKER_BRANCH_LIMIT",
+        help='The maximum NUM of branches each compiler worker could cache up '
+             'to, default is 5.  If the worker serves multiple tenants (as in '
+             '--compiler-pool-mode=fixed_multi_tenant or remote), this tenant '
+             'on that worker will be able to cache up to NUM branches.'
+    ),
     click.option(
         '--compiler-pool-mode',
         type=CompilerPoolModeChoice(),
@@ -758,7 +778,7 @@ _server_options = [
     click.option(
         '--compiler-pool-addr',
         hidden=True,
-        callback=_validate_host_port,
+        callback=_validate_compiler_pool_host_port,
         envvar="EDGEDB_SERVER_COMPILER_POOL_ADDR",
         help=f'Specify the host[:port] of the compiler pool to connect to, '
              f'only used if --compiler-pool-mode=remote. Default host is '
@@ -768,7 +788,7 @@ _server_options = [
         "--compiler-pool-tenant-cache-size",
         hidden=True,
         type=int,
-        default=100,
+        default=20,
         envvar="EDGEDB_SERVER_COMPILER_POOL_TENANT_CACHE_SIZE",
         help="Maximum number of tenants for which each compiler worker can "
              "cache their schemas, "
@@ -1019,6 +1039,16 @@ _server_options = [
         help='Specifies when to reload the config files. See the docstring of '
              'ReloadTrigger for more information.',
     ),
+    click.option(
+        '--compiler-worker-max-rss',
+        type=int,
+        envvar="EDGEDB_SERVER_COMPILER_WORKER_MAX_RSS",
+        cls=EnvvarResolver,
+        help='Maximum allowed RSS (in bytes) per compiler worker process. Any '
+             'worker exceeding this limit will be terminated and recreated. '
+             'Each worker is free from this limit in its first 20-30 hours '
+             'after spawn to avoid infinite restarts or a thundering herd.',
+    ),
 ]
 
 
@@ -1032,6 +1062,8 @@ _compiler_options = [
     click.option(
         "--pool-size",
         type=int,
+        envvar="EDGEDB_COMPILER_POOL_SIZE",
+        cls=EnvvarResolver,
         callback=_validate_compiler_pool_size,
         default=compute_default_compiler_pool_size(),
         help=f"Number of compiler worker processes. Defaults to "
@@ -1040,30 +1072,49 @@ _compiler_options = [
     click.option(
         "--client-schema-cache-size",
         type=int,
-        default=100,
-        help="Number of client schemas each worker could cache at most. The "
-             "compiler server is not affected by this setting, it keeps a "
-             "pickled copy of the client schema of all active clients."
+        envvar="EDGEDB_COMPILER_POOL_TENANT_CACHE_SIZE",
+        cls=EnvvarResolver,
+        default=20,
+        help="Maximum number of clients for which each worker can cache their "
+             "schemas, The compiler server is not affected by this setting, "
+             "it keeps pickled copies of schemas from all active clients "
+             "(each capped by --compiler-worker-branch-limit of the client)."
     ),
     click.option(
         '-I', '--listen-addresses', type=str, multiple=True,
+        envvar="EDGEDB_COMPILER_BIND_ADDRESS", cls=EnvvarResolver,
         default=('localhost',),
         help='IP addresses to listen on, specify multiple times for more than '
              'one address to listen on. Default: localhost',
     ),
     click.option(
         '-P', '--listen-port', type=PortType(),
+        envvar="EDGEDB_COMPILER_SERVER_PORT", cls=EnvvarResolver,
         help=f'Port to listen on. '
              f'Default: {defines.EDGEDB_REMOTE_COMPILER_PORT}',
     ),
     click.option(
         '--runstate-dir', type=PathPath(), default=None,
+        envvar="EDGEDB_COMPILER_RUNSTATE_DIR",
+        cls=EnvvarResolver,
         help="Directory to store UNIX domain socket file for IPC, a temporary "
              "directory will be used if not specified.",
     ),
     click.option(
         '--metrics-port', type=PortType(),
+        envvar="EDGEDB_COMPILER_METRICS_PORT",
+        cls=EnvvarResolver,
         help=f'Port to listen on for metrics HTTP API.',
+    ),
+    click.option(
+        '--worker-max-rss',
+        type=int,
+        envvar="EDGEDB_COMPILER_WORKER_MAX_RSS",
+        cls=EnvvarResolver,
+        help='Maximum allowed RSS (in bytes) per worker process. Any worker '
+             'exceeding this limit will be terminated and recreated. '
+             'Each worker is free from this limit in its first 20-30 hours '
+             'after spawn to avoid infinite restarts or a thundering herd.',
     ),
 ]
 
@@ -1305,6 +1356,10 @@ def parse_args(**kwargs: Any):
             kwargs['compiler_pool_addr'] = (
                 "localhost", defines.EDGEDB_REMOTE_COMPILER_PORT
             )
+        if kwargs['compiler_worker_max_rss'] is not None:
+            abort('cannot set --compiler-worker-max-rss when using '
+                  '--compiler-pool-mode=remote')
+
     elif kwargs['compiler_pool_addr'] is not None:
         abort('--compiler-pool-addr is only meaningful '
               'under --compiler-pool-mode=remote')

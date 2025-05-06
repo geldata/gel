@@ -20,6 +20,10 @@
 from __future__ import annotations
 
 import collections.abc
+import functools
+
+
+from typing import TypeVar, Callable
 
 
 class LRUMapping(collections.abc.MutableMapping):
@@ -75,3 +79,42 @@ class LRUMapping(collections.abc.MutableMapping):
 
     def __iter__(self):
         return iter(self._dict)
+
+
+Tf = TypeVar('Tf', bound=Callable)
+
+
+class _NoPickle:
+    def __init__(self, obj):
+        self.obj = obj
+
+    def __bool__(self):
+        return bool(self.obj)
+
+    def __getstate__(self):
+        return ()
+
+    def __setstate__(self, _d):
+        self.obj = None
+
+
+_LRU_CACHES: list[functools._lru_cache_wrapper] = []
+
+
+def per_job_lru_cache(maxsize: int | None=128) -> Callable[[Tf], Tf]:
+    """A version of lru_cache that can be cleared en masse.
+
+    All the caches will be tracked and calling clear_lru_caches()
+    will clear them all.
+    """
+    def transformer(f: Tf) -> Tf:
+        wrapped = functools.lru_cache(maxsize)(f)
+        _LRU_CACHES.append(wrapped)
+        return wrapped  # type: ignore
+
+    return transformer
+
+
+def clear_lru_caches():
+    for cache in _LRU_CACHES:
+        cache.cache_clear()
