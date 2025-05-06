@@ -107,7 +107,6 @@ KILL_TIMEOUT: float = 10.0
 ADAPTIVE_SCALE_UP_WAIT_TIME: float = 3.0
 ADAPTIVE_SCALE_DOWN_WAIT_TIME: float = 60.0
 WORKER_PKG: str = __name__.rpartition('.')[0] + '.'
-CALL_FOR_CLIENT_VERSION = 2
 DEFAULT_CLIENT: str = 'default'
 HIGH_RSS_GRACE_PERIOD: tuple[int, int] = (20 * 3600, 30 * 3600)
 CURRENT_COMPILER_PROTOCOL = 2
@@ -2194,7 +2193,6 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
             client_id,
             pickled_schema,
             worker.get_invalidation(),
-            CALL_FOR_CLIENT_VERSION,
             None,  # forwarded msg is only used in remote compiler server
             method_name,
             dbname,
