@@ -170,6 +170,7 @@ async def execute(db, tenant, queries: list):
         CURRENT_PROTOCOL,
         50,  # implicit limit
         client_id=tenant.client_id,
+        client_name=tenant.get_instance_name(),
     )
     result = []
     bind_data = None

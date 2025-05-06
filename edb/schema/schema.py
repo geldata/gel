@@ -43,7 +43,6 @@ from typing import (
 
 import abc
 import collections
-import functools
 import itertools
 
 import immutables as immu
@@ -51,6 +50,7 @@ import immutables as immu
 from edb import errors
 from edb.common import adapter
 from edb.common import english
+from edb.common import lru
 
 from . import casts as s_casts
 from . import functions as s_func
@@ -1218,7 +1218,7 @@ class FlatSchema(Schema):
                 type=s_oper.Operator,
             )
 
-    @functools.lru_cache()
+    @lru.per_job_lru_cache()
     def _get_casts(
         self,
         stype: s_types.Type,
@@ -1274,7 +1274,7 @@ class FlatSchema(Schema):
         return self._get_referrers(
             scls, scls_type=scls_type, field_name=field_name)
 
-    @functools.lru_cache()
+    @lru.per_job_lru_cache()
     def _get_referrers(
         self,
         scls: so.Object,
@@ -1312,8 +1312,8 @@ class FlatSchema(Schema):
 
             return frozenset(referrers)  # type: ignore
 
-    @functools.lru_cache()
-    def get_referrers_ex(  # type: ignore
+    @lru.per_job_lru_cache()
+    def get_referrers_ex(
         self,
         scls: so.Object,
         *,
@@ -2185,7 +2185,7 @@ class ChainedSchema(Schema):
         return migration
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def _get_functions(
     schema: FlatSchema,
     name: sn.Name,
@@ -2199,7 +2199,7 @@ def _get_functions(
     )
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def _get_operators(
     schema: FlatSchema,
     name: sn.Name,
@@ -2213,7 +2213,7 @@ def _get_operators(
         )
 
 
-@functools.lru_cache()
+@lru.per_job_lru_cache()
 def _get_last_migration(
     schema: FlatSchema,
 ) -> Optional[s_migrations.Migration]:

@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Dict, NamedTuple
+from typing import Any, Dict, Generic, NamedTuple, Optional, TypeVar
 
 import asyncio
 import collections
@@ -29,14 +29,17 @@ import logging
 import os
 import os.path
 import pickle
+import random
 import signal
 import subprocess
 import sys
 import time
 
 import immutables
+import psutil
 
 from edb.common import debug
+from edb.common import lru
 
 from edb.pgsql import params as pgparams
 
@@ -49,12 +52,16 @@ from . import amsg
 from . import queue
 from . import state
 
+TenantStore_T = TypeVar("TenantStore_T")
 
 PROCESS_INITIAL_RESPONSE_TIMEOUT: float = 60.0
 KILL_TIMEOUT: float = 10.0
 ADAPTIVE_SCALE_UP_WAIT_TIME: float = 3.0
 ADAPTIVE_SCALE_DOWN_WAIT_TIME: float = 60.0
 WORKER_PKG: str = __name__.rpartition('.')[0] + '.'
+CALL_FOR_CLIENT_VERSION = 2
+DEFAULT_CLIENT: str = 'default'
+HIGH_RSS_GRACE_PERIOD: tuple[int, int] = (20 * 3600, 30 * 3600)
 
 
 logger = logging.getLogger("edb.server")
@@ -67,19 +74,18 @@ _ENV = os.environ.copy()
 _ENV['PYTHONPATH'] = ':'.join(sys.path)
 
 
-@functools.lru_cache()
-def _pickle_memoized(schema):
-    return pickle.dumps(schema, -1)
+@functools.lru_cache(maxsize=4)
+def _pickle_memoized(obj: Any) -> bytes:
+    return pickle.dumps(obj, -1)
 
 
 class BaseWorker:
 
-    _dbs: immutables.Map[str, state.PickledDatabaseState]
+    _dbs: collections.OrderedDict[str, state.PickledDatabaseState]
     _global_schema_pickle: bytes
 
     def __init__(
         self,
-        dbs: immutables.Map[str, state.PickledDatabaseState],
         backend_runtime_params: pgparams.BackendRuntimeParams,
         std_schema,
         refl_schema,
@@ -87,7 +93,7 @@ class BaseWorker:
         global_schema_pickle,
         system_config,
     ):
-        self._dbs = dbs
+        self._dbs = collections.OrderedDict()
         self._backend_runtime_params = backend_runtime_params
         self._std_schema = std_schema
         self._refl_schema = refl_schema
@@ -99,6 +105,22 @@ class BaseWorker:
         self._con = None
         self._last_used = time.monotonic()
         self._closed = False
+
+    def get_db(self, name: str) -> Optional[state.PickledDatabaseState]:
+        rv = self._dbs.get(name)
+        if rv is not None:
+            self._dbs.move_to_end(name, last=False)
+        return rv
+
+    def set_db(self, name: str, db: state.PickledDatabaseState) -> None:
+        self._dbs[name] = db
+        self._dbs.move_to_end(name, last=False)
+
+    def prepare_evict_db(self, keep: int) -> list[str]:
+        return list(self._dbs.keys())[keep:]
+
+    def evict_db(self, name: str) -> Optional[state.PickledDatabaseState]:
+        return self._dbs.pop(name, None)
 
     async def call(self, method_name, *args, sync_state=None):
         assert not self._closed
@@ -141,9 +163,12 @@ class Worker(BaseWorker):
         super().__init__(*args)
 
         self._pid = pid
+        self._proc = psutil.Process(pid)
         self._last_pickled_state = None
         self._manager = manager
         self._server = server
+        grace_period = random.SystemRandom().randint(*HIGH_RSS_GRACE_PERIOD)
+        self._allow_high_rss_until = time.monotonic() + grace_period
 
     async def _attach(self, init_args_pickled: bytes):
         self._manager._stats_spawned += 1
@@ -155,13 +180,64 @@ class Worker(BaseWorker):
             init_args_pickled,
         )
 
+    def set_db(self, name: str, db: state.PickledDatabaseState) -> None:
+        pid = str(self._pid)
+        old_size: Optional[int] = None
+        if (old_db := self._dbs.get(name)) is not None:
+            old_size = old_db.get_estimated_size()
+        super().set_db(name, db)
+        metrics.compiler_process_schema_size.inc(
+            db.get_estimated_size() - (old_size or 0), pid, DEFAULT_CLIENT
+        )
+        if old_size is None:
+            action = 'cache-add'
+            metrics.compiler_process_branches.set(
+                len(self._dbs), pid, DEFAULT_CLIENT
+            )
+        else:
+            action = 'cache-update'
+        metrics.compiler_process_branch_actions.inc(
+            1, pid, DEFAULT_CLIENT, action
+        )
+
+    def evict_db(self, name: str) -> Optional[state.PickledDatabaseState]:
+        pid = str(self._pid)
+        db = self._dbs.get(name)
+        super().evict_db(name)
+        if db is not None:
+            metrics.compiler_process_schema_size.dec(
+                db.get_estimated_size(), pid, DEFAULT_CLIENT
+            )
+            metrics.compiler_process_branch_actions.inc(
+                1, pid, DEFAULT_CLIENT, 'cache-evict'
+            )
+        return db
+
     def get_pid(self):
         return self._pid
+
+    def get_rss(self) -> int:
+        return self._proc.memory_info().rss
+
+    def maybe_close_for_high_rss(self, max_rss: int) -> bool:
+        if time.monotonic() > self._allow_high_rss_until:
+            rss = self.get_rss()
+            if rss > max_rss:
+                logger.info(
+                    'worker process with PID %d exceeds high RSS limit '
+                    '(%d > %d), killing now',
+                    self._pid, rss, max_rss,
+                )
+                self.close()
+                return True
+
+        return False
 
     def close(self):
         if self._closed:
             return
         self._closed = True
+        metrics.compiler_process_kills.inc()
         self._manager._stats_killed += 1
         self._manager._workers.pop(self._pid, None)
         self._manager._report_worker(self, action="kill")
@@ -172,11 +248,13 @@ class Worker(BaseWorker):
 
 
 class AbstractPool:
-    _dbindex: dbview.DatabaseIndex | None = None
+    _dbindex: Optional[dbview.DatabaseIndex] = None
+    _worker_branch_limit: int
 
-    def __init__(self, *, loop, **kwargs):
+    def __init__(self, *, loop, worker_branch_limit: int, **kwargs):
         self._loop = loop
-        self._init_args = self._init(kwargs)
+        self._worker_branch_limit = worker_branch_limit
+        self._init(kwargs)
 
     def _init(self, kwargs: dict[str, Any]) -> None:
         self._backend_runtime_params = kwargs["backend_runtime_params"]
@@ -187,12 +265,15 @@ class AbstractPool:
 
     def _get_init_args(self):
         assert self._dbindex is not None
-        return self._make_init_args(*self._dbindex.get_cached_compiler_args())
+        return self._make_cached_init_args(
+            *self._dbindex.get_cached_compiler_args()
+        )
 
-    @functools.lru_cache(1)
-    def _make_init_args(self, dbs, global_schema_pickle, system_config):
-        init_args = (
-            dbs,
+    def _make_cached_init_args(self, global_schema_pickle, system_config):
+        raise NotImplementedError
+
+    def _make_init_args(self, global_schema_pickle, system_config):
+        return (
             self._backend_runtime_params,
             self._std_schema,
             self._refl_schema,
@@ -200,8 +281,6 @@ class AbstractPool:
             global_schema_pickle,
             system_config,
         )
-        pickled_args = pickle.dumps(init_args, -1)
-        return init_args, pickled_args
 
     async def start(self):
         raise NotImplementedError
@@ -233,8 +312,13 @@ class AbstractPool:
             reflection_cache=None,
             database_config=None,
             system_config=None,
+            evicted_dbs: Optional[list[str]] = None,
         ):
-            worker_db = worker._dbs.get(dbname)
+            if evicted_dbs is not None:
+                for name in evicted_dbs:
+                    worker.evict_db(name)
+
+            worker_db = worker.get_db(dbname)
             if worker_db is None:
                 assert user_schema_pickle is not None
                 assert reflection_cache is not None
@@ -242,7 +326,7 @@ class AbstractPool:
                 assert database_config is not None
                 assert system_config is not None
 
-                worker._dbs = worker._dbs.set(
+                worker.set_db(
                     dbname,
                     state.PickledDatabaseState(
                         user_schema_pickle=user_schema_pickle,
@@ -258,7 +342,7 @@ class AbstractPool:
                     or reflection_cache is not None
                     or database_config is not None
                 ):
-                    worker._dbs = worker._dbs.set(
+                    worker.set_db(
                         dbname,
                         state.PickledDatabaseState(
                             user_schema_pickle=(
@@ -266,11 +350,14 @@ class AbstractPool:
                                 or worker_db.user_schema_pickle
                             ),
                             reflection_cache=(
-                                reflection_cache
-                                or worker_db.reflection_cache
+                                worker_db.reflection_cache
+                                if reflection_cache is None
+                                else reflection_cache
                             ),
                             database_config=(
-                                database_config or worker_db.database_config
+                                worker_db.database_config
+                                if database_config is None
+                                else database_config
                             ),
                         ),
                     )
@@ -280,12 +367,18 @@ class AbstractPool:
                 if system_config is not None:
                     worker._system_config = system_config
 
-        worker_db = worker._dbs.get(dbname)
+        worker_db = worker.get_db(dbname)
         preargs = [method_name, dbname]
         to_update = {}
+        branch_cache_hit = True
 
         if worker_db is None:
+            branch_cache_hit = False
+            evicted_dbs = worker.prepare_evict_db(
+                self._worker_branch_limit - 1
+            )
             preargs.extend([
+                evicted_dbs,
                 user_schema_pickle,
                 _pickle_memoized(reflection_cache),
                 global_schema_pickle,
@@ -293,6 +386,7 @@ class AbstractPool:
                 _pickle_memoized(system_config),
             ])
             to_update = {
+                'evicted_dbs': evicted_dbs,
                 'user_schema_pickle': user_schema_pickle,
                 'reflection_cache': reflection_cache,
                 'global_schema_pickle': global_schema_pickle,
@@ -300,13 +394,17 @@ class AbstractPool:
                 'system_config': system_config,
             }
         else:
+            preargs.append([])  # evicted_dbs
+
             if worker_db.user_schema_pickle is not user_schema_pickle:
+                branch_cache_hit = False
                 preargs.append(user_schema_pickle)
                 to_update['user_schema_pickle'] = user_schema_pickle
             else:
                 preargs.append(None)
 
             if worker_db.reflection_cache is not reflection_cache:
+                branch_cache_hit = False
                 preargs.append(_pickle_memoized(reflection_cache))
                 to_update['reflection_cache'] = reflection_cache
             else:
@@ -319,6 +417,7 @@ class AbstractPool:
                 preargs.append(None)
 
             if worker_db.database_config is not database_config:
+                branch_cache_hit = False
                 preargs.append(_pickle_memoized(database_config))
                 to_update['database_config'] = database_config
             else:
@@ -330,6 +429,8 @@ class AbstractPool:
             else:
                 preargs.append(None)
 
+        self._report_branch_request(worker, branch_cache_hit)
+
         if to_update:
             callback = functools.partial(
                 sync_worker_state_cb,
@@ -340,7 +441,10 @@ class AbstractPool:
         else:
             callback = None
 
-        return tuple(preargs), callback
+        return tuple(preargs), callback, lambda: None
+
+    def _report_branch_request(self, worker, cache_hit, client=DEFAULT_CLIENT):
+        pass
 
     async def _acquire_worker(
         self, *, condition=None, weighter=None, **compiler_args
@@ -361,9 +465,10 @@ class AbstractPool:
         *compile_args,
         **compiler_args,
     ):
+        fini = lambda: None
         worker = await self._acquire_worker(**compiler_args)
         try:
-            preargs, sync_state = await self._compute_compile_preargs(
+            preargs, sync_state, fini = await self._compute_compile_preargs(
                 "compile",
                 worker,
                 dbname,
@@ -386,6 +491,7 @@ class AbstractPool:
                 return result
 
         finally:
+            fini()
             self._release_worker(worker)
 
     async def compile_in_tx(
@@ -432,7 +538,7 @@ class AbstractPool:
             pickled_state = state.REUSE_LAST_STATE_MARKER
             dbname = user_schema_pickle = None
         else:
-            worker_db = worker._dbs.get(dbname)
+            worker_db = worker.get_db(dbname)
             if worker_db is None:
                 dbname = None
             elif worker_db.user_schema_pickle is user_schema_pickle:
@@ -470,9 +576,10 @@ class AbstractPool:
         *compile_args,
         **compiler_args,
     ):
+        fini = lambda: None
         worker = await self._acquire_worker(**compiler_args)
         try:
-            preargs, sync_state = await self._compute_compile_preargs(
+            preargs, sync_state, fini = await self._compute_compile_preargs(
                 "compile_notebook",
                 worker,
                 dbname,
@@ -490,6 +597,7 @@ class AbstractPool:
             )
 
         finally:
+            fini()
             self._release_worker(worker)
 
     async def compile_graphql(
@@ -503,9 +611,10 @@ class AbstractPool:
         *compile_args,
         **compiler_args,
     ):
+        fini = lambda: None
         worker = await self._acquire_worker(**compiler_args)
         try:
-            preargs, sync_state = await self._compute_compile_preargs(
+            preargs, sync_state, fini = await self._compute_compile_preargs(
                 "compile_graphql",
                 worker,
                 dbname,
@@ -523,6 +632,7 @@ class AbstractPool:
             )
 
         finally:
+            fini()
             self._release_worker(worker)
 
     async def compile_sql(
@@ -536,9 +646,10 @@ class AbstractPool:
         *compile_args,
         **compiler_args,
     ):
+        fini = lambda: None
         worker = await self._acquire_worker(**compiler_args)
         try:
-            preargs, sync_state = await self._compute_compile_preargs(
+            preargs, sync_state, fini = await self._compute_compile_preargs(
                 "compile_sql",
                 worker,
                 dbname,
@@ -555,6 +666,7 @@ class AbstractPool:
                 sync_state=sync_state
             )
         finally:
+            fini()
             self._release_worker(worker)
 
     # We use a helper function instead of just fully generating the
@@ -617,6 +729,9 @@ class AbstractPool:
     def get_size_hint(self) -> int:
         raise NotImplementedError
 
+    def refresh_metrics(self) -> None:
+        pass
+
 
 class BaseLocalPool(
     AbstractPool, amsg.ServerProtocol, asyncio.SubprocessProtocol
@@ -626,12 +741,14 @@ class BaseLocalPool(
     _worker_mod = "worker"
     _workers_queue: queue.WorkerQueue[Worker]
     _workers: Dict[int, Worker]
+    _worker_max_rss: Optional[int]
 
     def __init__(
         self,
         *,
         runstate_dir,
         pool_size,
+        worker_max_rss=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -647,6 +764,7 @@ class BaseLocalPool(
 
         assert pool_size >= 1
         self._pool_size = pool_size
+        self._worker_max_rss = worker_max_rss
         self._workers = {}
 
         self._server = amsg.Server(self._poolsock_name, self._loop, self)
@@ -656,6 +774,16 @@ class BaseLocalPool(
 
         self._stats_spawned = 0
         self._stats_killed = 0
+
+    def _report_branch_request(self, worker, cache_hit, client=DEFAULT_CLIENT):
+        pid = str(worker.get_pid())
+        metrics.compiler_process_branch_actions.inc(
+            1, pid, client, 'request'
+        )
+        if cache_hit:
+            metrics.compiler_process_branch_actions.inc(
+                1, pid, client, 'cache-hit'
+            )
 
     def is_running(self):
         return bool(self._running)
@@ -704,6 +832,17 @@ class BaseLocalPool(
         logger.debug("Worker with PID %s disconnected.", pid)
         self._workers.pop(pid, None)
         metrics.current_compiler_processes.dec()
+
+        expect = str(pid)
+
+        def pid_filter(pid_str: str, *remaining_tags) -> bool:
+            return pid_str == expect
+
+        metrics.compiler_process_memory.clear(pid_filter)
+        metrics.compiler_process_schema_size.clear(pid_filter)
+        metrics.compiler_process_branches.clear(pid_filter)
+        metrics.compiler_process_branch_actions.clear(pid_filter)
+        metrics.compiler_process_client_actions.clear(pid_filter)
 
     async def start(self):
         if self._running is not None:
@@ -796,6 +935,7 @@ class BaseLocalPool(
     async def _acquire_worker(
         self, *, condition=None, weighter=None, **compiler_args
     ):
+        start_time = time.monotonic()
         while (
             worker := await self._workers_queue.acquire(
                 condition=condition, weighter=weighter
@@ -803,11 +943,15 @@ class BaseLocalPool(
         ).get_pid() not in self._workers:
             # The worker was disconnected; skip to the next one.
             pass
+        metrics.compiler_pool_wait_time.observe(time.monotonic() - start_time)
         return worker
 
     def _release_worker(self, worker, *, put_in_front: bool = True):
         # Skip disconnected workers
         if worker.get_pid() in self._workers:
+            if self._worker_max_rss is not None:
+                if worker.maybe_close_for_high_rss(self._worker_max_rss):
+                    return
             self._workers_queue.release(worker, put_in_front=put_in_front)
 
     def get_debug_info(self):
@@ -815,6 +959,10 @@ class BaseLocalPool(
             worker_pids=list(self._workers.keys()),
             template_pid=self.get_template_pid(),
         )
+
+    def refresh_metrics(self) -> None:
+        for w in self._workers.values():
+            metrics.compiler_process_memory.set(w.get_rss(), str(w.get_pid()))
 
 
 @srvargs.CompilerPoolMode.Fixed.assign_implementation
@@ -898,6 +1046,14 @@ class FixedPool(BaseLocalPool):
     def get_size_hint(self) -> int:
         return self._pool_size
 
+    @lru.per_job_lru_cache(2)
+    def _make_cached_init_args(self, global_schema_pickle, system_config):
+        init_args = self._make_init_args(
+            global_schema_pickle, system_config
+        )
+        pickled_args = pickle.dumps(init_args, -1)
+        return init_args, pickled_args
+
 
 @srvargs.CompilerPoolMode.OnDemand.assign_implementation
 class SimpleAdaptivePool(BaseLocalPool):
@@ -908,6 +1064,14 @@ class SimpleAdaptivePool(BaseLocalPool):
         self._scale_down_handle = None
         self._max_num_workers = pool_size
         self._cleanups = {}
+
+    @lru.per_job_lru_cache(2)
+    def _make_cached_init_args(self, global_schema_pickle, system_config):
+        init_args = self._make_init_args(
+            global_schema_pickle, system_config
+        )
+        pickled_args = pickle.dumps(init_args, -1)
+        return init_args, pickled_args
 
     async def _start(self):
         async with asyncio.TaskGroup() as g:
@@ -1038,10 +1202,11 @@ class SimpleAdaptivePool(BaseLocalPool):
 
 
 class RemoteWorker(BaseWorker):
-    def __init__(self, con, secret, *args):
+    def __init__(self, con, secret, *args, server_version: int):
         super().__init__(*args)
         self._con = con
         self._secret = secret
+        self._server_version = server_version
 
     def close(self):
         if self._closed:
@@ -1053,6 +1218,21 @@ class RemoteWorker(BaseWorker):
         msg = pickle.dumps((method_name, args))
         digest = hmac.digest(self._secret, msg, "sha256")
         return await self._con.request(digest + msg)
+
+    def prepare_evict_db(self, keep: int) -> list[str]:
+        match self._server_version:
+            case 1:
+                return []
+            case _:
+                return super().prepare_evict_db(keep)
+
+    def evict_db(self, name: str) -> None:
+        match self._server_version:
+            case 1:
+                # shouldn't happen, but just in case
+                raise RuntimeError("evict_db is not supported by this server")
+            case _:
+                super().evict_db(name)
 
 
 @srvargs.CompilerPoolMode.Remote.assign_implementation
@@ -1071,6 +1251,7 @@ class RemotePool(AbstractPool):
                 "is not set"
             )
         self._secret = secret.encode()
+        self._server_version = CALL_FOR_CLIENT_VERSION
 
     async def start(self, retry=False):
         if self._worker is None:
@@ -1103,21 +1284,23 @@ class RemotePool(AbstractPool):
             if worker.done():
                 (await worker).close()
 
-    @functools.lru_cache(1)
-    def _make_init_args(self, dbs, global_schema_pickle, system_config):
-        init_args = (
-            dbs,
-            self._backend_runtime_params,
-            self._std_schema,
-            self._refl_schema,
-            self._schema_class_layout,
+    @lru.per_job_lru_cache(2)
+    def _make_cached_init_args(self, global_schema_pickle, system_config):
+        init_args = self._make_init_args(
             global_schema_pickle,
             system_config,
         )
         std_args = (
             self._std_schema, self._refl_schema, self._schema_class_layout
         )
-        client_args = (dbs, self._backend_runtime_params)
+        client_args: tuple[Any, ...]
+        match self._server_version:
+            case 1:
+                # compatible with pre-#8621 servers
+                client_args = (immutables.Map(), self._backend_runtime_params)
+            case _:
+                client_args = (self._backend_runtime_params,)
+
         return init_args, (
             pickle.dumps(std_args, -1),
             pickle.dumps(client_args, -1),
@@ -1128,18 +1311,47 @@ class RemotePool(AbstractPool):
     async def _connection_made(self, retry, protocol, transport, _pid, version):
         if self._worker is None:
             return
+        # Note: `version` is worker not `self._server_version`; `version` is
+        # `_template_proc_version` in FixedPool and is not used here.
+        con = amsg.HubConnection(transport, protocol, self._loop, version)
         try:
-            init_args, init_args_pickled = self._get_init_args()
-            worker = RemoteWorker(
-                amsg.HubConnection(transport, protocol, self._loop, version),
-                self._secret,
-                *init_args,
-            )
-            await worker.call(
-                '__init_server__',
-                defines.EDGEDB_CATALOG_VERSION,
-                init_args_pickled,
-            )
+            while True:
+                init_args, init_args_pickled = self._get_init_args()
+                worker = RemoteWorker(
+                    con,
+                    self._secret,
+                    *init_args,
+                    server_version=self._server_version,
+                )
+
+                try:
+                    await worker.call(
+                        '__init_server__',
+                        defines.EDGEDB_CATALOG_VERSION,
+                        init_args_pickled,
+                    )
+                except ValueError:
+                    # Here we depend on a ValueError in v1 server trying to
+                    # unpack `client_args` into `(dbs, backend_runtime_params)`
+                    # while we attempt to send only `(backend_runtime_params,)`
+                    # (both supported in v2 server) first, in order to detect
+                    # the server version. We cannot use the method_name prefix
+                    # hack for detection because v1 server will hang until it's
+                    # called with exactly `__init_server__` with no prefix.
+                    if self._server_version > 1:
+                        self._server_version -= 1
+                        lru.clear_lru_caches()
+                        logger.info(
+                            f"falling back to compiler server protocol "
+                            f"version {self._server_version}"
+                        )
+                    else:
+                        raise state.IncompatibleClient(
+                            "the compiler server's version is incompatible"
+                        )
+                else:
+                    break
+
         except state.IncompatibleClient as ex:
             transport.abort()
             if self._worker is not None:
@@ -1165,12 +1377,13 @@ class RemotePool(AbstractPool):
     async def _acquire_worker(
         self, *, condition=None, cmp=None, **compiler_args
     ):
+        start_time = time.monotonic()
         await self._semaphore.acquire()
-        return await self._worker
+        rv = await self._worker
+        metrics.compiler_pool_wait_time.observe(time.monotonic() - start_time)
+        return rv
 
     def _release_worker(self, worker, *, put_in_front: bool = True):
-        if self._sync_lock.locked():
-            self._sync_lock.release()
         self._semaphore.release()
 
     async def compile_in_tx(
@@ -1210,20 +1423,59 @@ class RemotePool(AbstractPool):
             self._release_worker(worker)
 
     async def _compute_compile_preargs(self, *args):
-        preargs, callback = await super()._compute_compile_preargs(*args)
-        if callback:
+        # State sync with the compiler server is serialized with _sync_lock,
+        # also blocking any other compile requests that may sync state, so as
+        # to avoid inconsistency. Meanwhile, we'd like to avoid locking when
+        # sync is not needed (callback is None), so we have 2 fast paths here:
+        #
+        #   1. When _sync_lock is not held AND sync is not needed here, or
+        #   2. after acquiring _sync_lock, we found that sync is not needed.
+        #
+        # In such cases, we avoid locking or release the lock immediately, so
+        # that concurrent compile requests can proceed in parallel.
+        preargs = ()
+        callback = lambda: None
+        fini = lambda: None
+
+        if not self._sync_lock.locked():
+            # Case 1: check if we need to sync state.
+            (
+                preargs, callback, fini
+            ) = await super()._compute_compile_preargs(*args)
+
+        if callback is not None:
+            # Check again with the lock acquired
             del preargs, callback
             await self._sync_lock.acquire()
-            preargs, callback = await super()._compute_compile_preargs(*args)
-            if not callback:
+            (
+                preargs, callback, fini
+            ) = await super()._compute_compile_preargs(*args)
+            if callback:
+                # State sync is only considered done when we received a
+                # successful response from the compiler server, when we
+                # update the local state in the worker in the `callback`
+                # function. We should usually release the lock after the
+                # `callback`, but we must also release it if anything
+                # failed along the way.
+                fini = lambda: self._sync_lock.release()
+            else:
+                # Case 2: no state sync needed, release the lock immediately.
                 self._sync_lock.release()
-        return preargs, callback
+
+        if self._server_version == 1:
+            # Old server doesn't support the `evicted_dbs` param
+            method_name, dbname, evicted_dbs, *rem = preargs
+            assert evicted_dbs == []
+            preargs = (method_name, dbname, *rem)
+
+        return preargs, callback, fini
 
     def get_debug_info(self):
         return dict(
             address="{}:{}".format(*self._pool_addr),
             size=self._semaphore._bound_value,  # type: ignore
             free=self._semaphore._value,  # type: ignore
+            server_version=self._server_version,
         )
 
     def get_size_hint(self) -> int:
@@ -1233,9 +1485,28 @@ class RemotePool(AbstractPool):
 @dataclasses.dataclass
 class TenantSchema:
     client_id: int
-    dbs: immutables.Map[str, state.PickledDatabaseState]
+    dbs: collections.OrderedDict[str, state.PickledDatabaseState]
     global_schema_pickle: bytes
     system_config: Any
+
+    def get_db(self, name: str) -> Optional[state.PickledDatabaseState]:
+        rv = self.dbs.get(name)
+        if rv is not None:
+            self.dbs.move_to_end(name, last=False)
+        return rv
+
+    def set_db(self, name: str, db: state.PickledDatabaseState) -> None:
+        self.dbs[name] = db
+        self.dbs.move_to_end(name, last=False)
+
+    def prepare_evict_db(self, keep: int) -> list[str]:
+        return list(self.dbs.keys())[keep:]
+
+    def evict_db(self, name: str) -> None:
+        self.dbs.pop(name, None)
+
+    def get_estimated_size(self) -> int:
+        return sum(db.get_estimated_size() for db in self.dbs.values())
 
 
 class PickledState(NamedTuple):
@@ -1251,11 +1522,12 @@ class PickledSchema(NamedTuple):
     dropped_dbs: tuple = ()
 
 
-class MultiTenantWorker(Worker):
-    current_client_id: int | None
-    _cache: collections.OrderedDict[int, TenantSchema]
+class BaseMultiTenantWorker(Worker, Generic[TenantStore_T]):
+
+    _cache: collections.OrderedDict[int, TenantStore_T]
     _invalidated_clients: list[int]
     _last_used_by_client: dict[int, float]
+    _client_names: dict[int, str]
 
     def __init__(
         self,
@@ -1271,7 +1543,6 @@ class MultiTenantWorker(Worker):
             manager,
             server,
             pid,
-            None,
             backend_runtime_params,
             std_schema,
             refl_schema,
@@ -1279,16 +1550,25 @@ class MultiTenantWorker(Worker):
             None,
             None,
         )
-        self.current_client_id = None
         self._cache = collections.OrderedDict()
         self._invalidated_clients = []
         self._last_used_by_client = {}
+        self._client_names = {}
+        self._init()
 
-    def get_tenant_schema(self, client_id: int) -> TenantSchema | None:
-        return self._cache.get(client_id)
+    def _init(self) -> None:
+        pass
+
+    def get_tenant_schema(
+        self, client_id: int, *, touch: bool = True
+    ) -> Optional[TenantStore_T]:
+        rv = self._cache.get(client_id)
+        if rv is not None and touch:
+            self._cache.move_to_end(client_id, last=False)
+        return rv
 
     def set_tenant_schema(
-        self, client_id: int, tenant_schema: TenantSchema
+        self, client_id: int, tenant_schema: TenantStore_T
     ) -> None:
         self._cache[client_id] = tenant_schema
         self._cache.move_to_end(client_id, last=False)
@@ -1297,8 +1577,52 @@ class MultiTenantWorker(Worker):
     def cache_size(self) -> int:
         return len(self._cache) - len(self._invalidated_clients)
 
-    def last_used(self, client_id) -> float:
+    def last_used(self, client_id: int) -> float:
         return self._last_used_by_client.get(client_id, 0)
+
+    def flush_invalidation(self) -> list[int]:
+        evicted = 0
+        pid_str = str(self.get_pid())
+        evicted_names = set()
+
+        client_ids, self._invalidated_clients = self._invalidated_clients, []
+        for client_id in client_ids:
+            if self._cache.pop(client_id, None) is not None:
+                evicted += 1
+            self._last_used_by_client.pop(client_id, None)
+
+            client_name = self._client_names.pop(client_id, None)
+            if client_name is not None:
+                evicted_names.add(client_name)
+
+        if evicted:
+            metrics.compiler_process_client_actions.inc(
+                evicted, pid_str, 'cache-evict'
+            )
+        if evicted_names:
+            def tag_filter(pid: str, client: str, *remaining_tags) -> bool:
+                return pid == pid_str and client in evicted_names
+
+            metrics.compiler_process_schema_size.clear(tag_filter)
+            metrics.compiler_process_branches.clear(tag_filter)
+            metrics.compiler_process_branch_actions.clear(tag_filter)
+
+        return client_ids
+
+    def set_client_name(self, client_id: int, name: Optional[str]) -> None:
+        if client_id not in self._client_names:
+            self._client_names[client_id] = name or f'unknown-{client_id}'
+
+    def get_client_name(self, client_id: int) -> str:
+        return self._client_names.get(client_id) or f'unknown-{client_id}'
+
+
+class MultiTenantWorker(BaseMultiTenantWorker[TenantSchema]):
+
+    current_client_id: Optional[int]
+
+    def _init(self) -> None:
+        self.current_client_id = None
 
     def invalidate(self, client_id: int) -> None:
         if client_id in self._cache:
@@ -1311,12 +1635,6 @@ class MultiTenantWorker(Worker):
 
     def get_invalidation(self) -> list[int]:
         return self._invalidated_clients[:]
-
-    def flush_invalidation(self) -> None:
-        client_ids, self._invalidated_clients = self._invalidated_clients, []
-        for client_id in client_ids:
-            self._cache.pop(client_id, None)
-            self._last_used_by_client.pop(client_id, None)
 
 
 @srvargs.CompilerPoolMode.MultiTenant.assign_implementation
@@ -1337,7 +1655,7 @@ class MultiTenantPool(FixedPool):
         for worker in self._workers.values():
             worker.invalidate(client_id)
 
-    @functools.cache
+    @lru.per_job_lru_cache()
     def _get_init_args(self):
         init_args = (
             self._backend_runtime_params,
@@ -1348,7 +1666,7 @@ class MultiTenantPool(FixedPool):
         return init_args, pickle.dumps(init_args, -1)
 
     def _weighter(self, client_id: int, worker: MultiTenantWorker):
-        tenant_schema = worker.get_tenant_schema(client_id)
+        tenant_schema = worker.get_tenant_schema(client_id, touch=False)
         return (
             bool(tenant_schema),
             worker.last_used(client_id)
@@ -1366,6 +1684,8 @@ class MultiTenantPool(FixedPool):
             condition=condition, weighter=weighter, **compiler_args
         )
         rv.current_client_id = client_id
+        if client_id is not None:
+            rv.set_client_name(client_id, compiler_args.get("client_name"))
         return rv
 
     def _release_worker(self, worker, *, put_in_front: bool = True):
@@ -1389,13 +1709,16 @@ class MultiTenantPool(FixedPool):
             *,
             worker: MultiTenantWorker,
             client_id,
+            client_name,
             dbname,
+            evicted_dbs: list[str],
             user_schema_pickle=None,
             global_schema_pickle=None,
             reflection_cache=None,
             database_config=None,
             instance_config=None,
         ):
+            pid = str(worker.get_pid())
             tenant_schema = worker.get_tenant_schema(client_id)
             if tenant_schema is None:
                 assert user_schema_pickle is not None
@@ -1403,26 +1726,46 @@ class MultiTenantPool(FixedPool):
                 assert global_schema_pickle is not None
                 assert database_config is not None
                 assert instance_config is not None
+                assert len(evicted_dbs) == 0
 
                 tenant_schema = TenantSchema(
                     client_id,
-                    immutables.Map([(dbname, state.PickledDatabaseState(
-                        user_schema_pickle,
-                        reflection_cache,
-                        database_config,
-                    ))]),
+                    collections.OrderedDict(
+                        {
+                            dbname: state.PickledDatabaseState(
+                                user_schema_pickle,
+                                reflection_cache,
+                                database_config,
+                            ),
+                        }
+                    ),
                     global_schema_pickle,
                     instance_config,
                 )
                 worker.set_tenant_schema(client_id, tenant_schema)
+
+                metrics.compiler_process_branch_actions.inc(
+                    1, pid, client_name, 'cache-add'
+                )
+                metrics.compiler_process_client_actions.inc(
+                    1, pid, 'cache-add'
+                )
+
             else:
-                worker_db = tenant_schema.dbs.get(dbname)
+                for name in evicted_dbs:
+                    tenant_schema.evict_db(name)
+                if evicted_dbs:
+                    metrics.compiler_process_branch_actions.inc(
+                        len(evicted_dbs), pid, client_name, 'cache-evict'
+                    )
+
+                worker_db = tenant_schema.get_db(dbname)
                 if worker_db is None:
                     assert user_schema_pickle is not None
                     assert reflection_cache is not None
                     assert database_config is not None
 
-                    tenant_schema.dbs = tenant_schema.dbs.set(
+                    tenant_schema.set_db(
                         dbname,
                         state.PickledDatabaseState(
                             user_schema_pickle=user_schema_pickle,
@@ -1430,13 +1773,19 @@ class MultiTenantPool(FixedPool):
                             database_config=database_config,
                         ),
                     )
+                    metrics.compiler_process_branch_actions.inc(
+                        1, pid, client_name, 'cache-add'
+                    )
+                    metrics.compiler_process_client_actions.inc(
+                        1, pid, 'cache-update'
+                    )
 
                 elif (
                     user_schema_pickle is not None
                     or reflection_cache is not None
                     or database_config is not None
                 ):
-                    tenant_schema.dbs = tenant_schema.dbs.set(
+                    tenant_schema.set_db(
                         dbname,
                         state.PickledDatabaseState(
                             user_schema_pickle=(
@@ -1451,17 +1800,35 @@ class MultiTenantPool(FixedPool):
                             ),
                         )
                     )
+                    metrics.compiler_process_branch_actions.inc(
+                        1, pid, client_name, 'cache-update'
+                    )
+                    metrics.compiler_process_client_actions.inc(
+                        1, pid, 'cache-update'
+                    )
 
                 if global_schema_pickle is not None:
                     tenant_schema.global_schema_pickle = global_schema_pickle
                 if instance_config is not None:
                     tenant_schema.system_config = instance_config
+
             worker.flush_invalidation()
+
+            metrics.compiler_process_schema_size.set(
+                tenant_schema.get_estimated_size(), pid, client_name
+            )
+            metrics.compiler_process_branches.set(
+                len(tenant_schema.dbs), pid, client_name
+            )
 
         client_id = worker.current_client_id
         assert client_id is not None
-        tenant_schema = worker.get_tenant_schema(client_id)
+        client_name = worker.get_client_name(client_id)
+        tenant_schema = worker.get_tenant_schema(client_id, touch=False)
+        evicted_dbs = []
+        branch_cache_hit = True
         if tenant_schema is None:
+            branch_cache_hit = False
             # make room for the new client in this worker
             worker.maybe_invalidate_last()
             to_update = {
@@ -1472,8 +1839,12 @@ class MultiTenantPool(FixedPool):
                 "instance_config": system_config,
             }
         else:
-            worker_db = tenant_schema.dbs.get(dbname)
+            worker_db = tenant_schema.get_db(dbname)
             if worker_db is None:
+                branch_cache_hit = False
+                evicted_dbs = tenant_schema.prepare_evict_db(
+                    self._worker_branch_limit - 1
+                )
                 to_update = {
                     "user_schema_pickle": user_schema_pickle,
                     "reflection_cache": reflection_cache,
@@ -1482,10 +1853,13 @@ class MultiTenantPool(FixedPool):
             else:
                 to_update = {}
                 if worker_db.user_schema_pickle is not user_schema_pickle:
+                    branch_cache_hit = False
                     to_update["user_schema_pickle"] = user_schema_pickle
                 if worker_db.reflection_cache is not reflection_cache:
+                    branch_cache_hit = False
                     to_update["reflection_cache"] = reflection_cache
                 if worker_db.database_config is not database_config:
+                    branch_cache_hit = False
                     to_update["database_config"] = database_config
             if (
                 tenant_schema.global_schema_pickle
@@ -1494,6 +1868,8 @@ class MultiTenantPool(FixedPool):
                 to_update["global_schema_pickle"] = global_schema_pickle
             if tenant_schema.system_config is not system_config:
                 to_update["instance_config"] = system_config
+
+        self._report_branch_request(worker, branch_cache_hit, client_name)
 
         if to_update:
             pickled = {
@@ -1507,27 +1883,35 @@ class MultiTenantPool(FixedPool):
                     **{f: pickled.pop(f, None) for f in PickledState._fields}
                 )
                 pickled["dbs"] = immutables.Map([(dbname, db_state)])
-            pickled_schema = PickledSchema(**pickled)
+            pickled_schema = PickledSchema(
+                dropped_dbs=tuple(evicted_dbs), **pickled  # type: ignore
+            )
             callback = functools.partial(
                 sync_worker_state_cb,
                 worker=worker,
                 client_id=client_id,
+                client_name=client_name,
                 dbname=dbname,
+                evicted_dbs=evicted_dbs,
                 **to_update,
             )
         else:
             pickled_schema = None
             callback = None
+            metrics.compiler_process_client_actions.inc(
+                1, str(worker.get_pid()), 'cache-hit'
+            )
 
         return (
             "call_for_client",
             client_id,
             pickled_schema,
             worker.get_invalidation(),
+            CALL_FOR_CLIENT_VERSION,
             None,  # forwarded msg is only used in remote compiler server
             method_name,
             dbname,
-        ), callback
+        ), callback, lambda: None
 
     async def compile_in_tx(
         self,
@@ -1546,7 +1930,8 @@ class MultiTenantPool(FixedPool):
         # over only the pickled state. Then prefer the least-recently used one
         # if many workers passed any check in the weighter, or the most vacant.
         def weighter(w: MultiTenantWorker):
-            if ts := w.get_tenant_schema(client_id):
+            if ts := w.get_tenant_schema(client_id, touch=False):
+                # Don't use ts.get_db() here to avoid confusing the LRU queue
                 if db := ts.dbs.get(dbname):
                     return (
                         True,
@@ -1578,6 +1963,7 @@ class MultiTenantPool(FixedPool):
                 # don't have enough information to do so.
                 dbname = client_id = None
             else:
+                # Don't use ts.get_db() here to avoid confusing the LRU queue
                 worker_db = tenant_schema.dbs.get(dbname)
                 if worker_db is None:
                     # The worker has the client but not the database
@@ -1587,6 +1973,8 @@ class MultiTenantPool(FixedPool):
                     # it - just send client_id + dbname to reference it, as
                     # well as the state of course.
                     user_schema_pickle = None
+                    # Touch dbname to bump it in the LRU queue
+                    tenant_schema.get_db(dbname)
                 else:
                     # The worker has a different root user schema
                     dbname = client_id = None
@@ -1618,6 +2006,7 @@ async def create_compiler_pool(
     *,
     runstate_dir: str,
     pool_size: int,
+    worker_branch_limit: int,
     backend_runtime_params: pgparams.BackendRuntimeParams,
     std_schema,
     refl_schema,
@@ -1630,6 +2019,7 @@ async def create_compiler_pool(
     pool = pool_class(
         loop=loop,
         pool_size=pool_size,
+        worker_branch_limit=worker_branch_limit,
         runstate_dir=runstate_dir,
         backend_runtime_params=backend_runtime_params,
         std_schema=std_schema,
