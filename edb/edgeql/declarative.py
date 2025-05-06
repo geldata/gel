@@ -596,6 +596,15 @@ def trace_layout_CreateProperty(
     _trace_item_layout(node, ctx=ctx)
 
 
+@trace_layout.register
+def trace_layout_CreateConstraint(
+    node: qlast.CreateConstraint,
+    *,
+    ctx: LayoutTraceContext,
+) -> None:
+    _trace_item_layout(node, ctx=ctx)
+
+
 def _trace_item_layout(
     node: qlast.CreateObject,
     *,

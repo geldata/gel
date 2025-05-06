@@ -853,12 +853,8 @@ class ReferencedInheritingObjectCommand(
         scls: ReferencedInheritingObject,
         cb: Callable[[sd.ObjectCommand[so.Object], sn.Name], None]
     ) -> None:
-        for ctx in reversed(context.stack):
-            if (
-                isinstance(ctx.op, sd.ObjectCommand)
-                and ctx.op.get_annotation('implicit_propagation')
-            ):
-                return
+        if inheriting._has_implicit_propagation(context):
+            return
 
         referrer_ctx = self.get_referrer_context(context)
         if referrer_ctx:
