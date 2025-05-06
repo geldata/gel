@@ -166,7 +166,6 @@ class MultiSchemaPool(pool_mod.FixedPool):
     _worker_mod = "multitenant_worker"
     _workers: dict[int, Worker]  # type: ignore
     _clients: dict[int, ClientSchema]
-    _client_versions: dict[int, int]
     _client_names: dict[int, str]
 
     def __init__(self, cache_size, *, secret, **kwargs):
@@ -175,7 +174,6 @@ class MultiSchemaPool(pool_mod.FixedPool):
         self._inited = asyncio.Event()
         self._cache_size = cache_size
         self._clients = {}
-        self._client_versions = {}
         self._client_names = {}
         self._secret = secret
 
@@ -207,37 +205,20 @@ class MultiSchemaPool(pool_mod.FixedPool):
         self,
         client_id: int,
         client_name: str,
+        compiler_protocol: int,
         catalog_version: int,
         init_args_pickled: tuple[bytes, bytes, bytes, bytes],
     ):
+        if compiler_protocol > pool_mod.CURRENT_COMPILER_PROTOCOL:
+            raise state_mod.IncompatibleClient("compiler_protocol")
+
         (
             std_args_pickled,
             client_args_pickled,
             global_schema_pickle,
             system_config_pickled,
         ) = init_args_pickled
-        client_args = pickle.loads(client_args_pickled)
-        dbs_arg: immutables.Map[str, PickledState]
-        if len(client_args) == 1:
-            # This is a new v2 client
-            backend_runtime_params, = client_args
-            dbs_arg = immutables.Map()
-            client_version = 2
-        else:
-            # be compatible with pre-#8621 clients
-            dbs, backend_runtime_params = client_args
-            dbs_arg = immutables.Map(
-                (
-                    dbname,
-                    PickledState(
-                        state.user_schema_pickle,
-                        pickle.dumps(state.reflection_cache, -1),
-                        pickle.dumps(state.database_config, -1),
-                    ),
-                )
-                for dbname, state in dbs.items()
-            )
-            client_version = 1
+        backend_runtime_params, = pickle.loads(client_args_pickled)
         if self._inited.is_set():
             logger.debug("New client %d connected.", client_id)
             assert self._catalog_version is not None
@@ -260,12 +241,11 @@ class MultiSchemaPool(pool_mod.FixedPool):
                 client_id,
             )
         self._clients[client_id] = ClientSchema(
-            dbs=dbs_arg,
+            dbs=immutables.Map(),
             global_schema=global_schema_pickle,
             instance_config=system_config_pickled,
             dropped_dbs=(),
         )
-        self._client_versions[client_id] = client_version
         self._client_names[client_id] = client_name
 
     def _sync(
@@ -455,7 +435,6 @@ class MultiSchemaPool(pool_mod.FixedPool):
                 client_id,
                 diff,
                 invalidation,
-                self._client_versions[client_id],
                 msg,
                 *extra_args,
             )
@@ -550,32 +529,16 @@ class MultiSchemaPool(pool_mod.FixedPool):
                 "compile_graphql",
                 "compile_sql",
             }:
-                match self._client_versions.get(client_id):
-                    case 1:
-                        # compatible with pre-#8621 clients
-                        evicted_dbs = []
-                        (
-                            dbname,
-                            user_schema,
-                            reflection_cache,
-                            global_schema,
-                            database_config,
-                            system_config,
-                            *args,
-                        ) = args
-
-                    case _:
-                        (
-                            dbname,
-                            evicted_dbs,
-                            user_schema,
-                            reflection_cache,
-                            global_schema,
-                            database_config,
-                            system_config,
-                            *args,
-                        ) = args
-
+                (
+                    dbname,
+                    evicted_dbs,
+                    user_schema,
+                    reflection_cache,
+                    global_schema,
+                    database_config,
+                    system_config,
+                    *args,
+                ) = args
                 pickled = await self._call_for_client(
                     client_id=client_id,
                     method_name=method_name,
@@ -611,7 +574,6 @@ class MultiSchemaPool(pool_mod.FixedPool):
     def client_disconnected(self, client_id):
         logger.debug("Client %d disconnected, invalidating cache.", client_id)
         self._clients.pop(client_id, None)
-        self._client_versions.pop(client_id, None)
         self._client_names.pop(client_id, None)
         for worker in self._workers.values():
             worker.invalidate(client_id)
