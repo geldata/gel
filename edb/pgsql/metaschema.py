@@ -1772,7 +1772,8 @@ class ExtractJSONScalarFunction(trampoline.VersionedFunction):
                 ('detail', ('text',), "''"),
             ],
             returns=('text',),
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2054,7 +2055,8 @@ class ArrayIndexWithBoundsFunction(trampoline.VersionedFunction):
             returns=('anyelement',),
             # Min volatility of exception helpers and pg_typeof is 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2083,7 +2085,8 @@ class ArraySliceFunction(trampoline.VersionedFunction):
                 ("stop", ("bigint",)),
             ],
             returns=("anyarray",),
-            volatility="immutable",
+            volatility="stable",
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2121,7 +2124,8 @@ class StringIndexWithBoundsFunction(trampoline.VersionedFunction):
             returns=('text',),
             # Min volatility of exception helpers and pg_typeof is 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2158,7 +2162,8 @@ class BytesIndexWithBoundsFunction(trampoline.VersionedFunction):
             returns=('bytea',),
             # Min volatility of exception helpers and pg_typeof is 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2270,7 +2275,7 @@ class StringSliceFunction(trampoline.VersionedFunction):
                 ('stop', ('bigint',)),
             ],
             returns=('text',),
-            volatility='immutable',
+            volatility='stable',
             text=self.text)
 
 
@@ -2289,7 +2294,7 @@ class BytesSliceFunction(trampoline.VersionedFunction):
                 ('stop', ('bigint',)),
             ],
             returns=('bytea',),
-            volatility='immutable',
+            volatility='stable',
             text=self.text)
 
 
@@ -2347,7 +2352,8 @@ class JSONIndexByTextFunction(trampoline.VersionedFunction):
             returns=('jsonb',),
             # Min volatility of exception helpers 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             strict=True,
             text=self.text,
         )
@@ -2413,7 +2419,8 @@ class JSONIndexByIntFunction(trampoline.VersionedFunction):
             returns=('jsonb',),
             # Min volatility of exception helpers and pg_typeof is 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             strict=True,
             text=self.text,
         )
@@ -2465,7 +2472,8 @@ class JSONSliceFunction(trampoline.VersionedFunction):
             returns=("jsonb",),
             # Min volatility of to_jsonb is 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility="immutable",
+            volatility="stable",
+            wrapper_volatility='immutable',
             text=self.text,
         )
 

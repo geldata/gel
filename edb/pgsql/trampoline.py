@@ -36,6 +36,8 @@ namespaced. Standard library schema object tables aren't yet.
 from __future__ import annotations
 from typing import (
     TYPE_CHECKING,
+    Optional,
+    Sequence,
 )
 
 import abc
@@ -62,12 +64,43 @@ def fixup_query(query: str) -> str:
 
 
 class VersionedFunction(dbops.Function):
-    if not TYPE_CHECKING:
-        def __init__(self, *args, **kwargs):
+    if TYPE_CHECKING:
+        # What the volatility of the trampoline wrapper should be.
+        # This is sometimes immutable even when the underlying is
+        # stable, for functions that must be immutable so they can go
+        # into indexes/constraints but might do something technically
+        # stable (like raise an error).
+        #
+        # This allows the real function to be inlined while allowing
+        # the wrapper to get used in indexes/constraints.
+        wrapper_volatility: Optional[str]
+
+        def __init__(
+            self,
+            name: tuple[str, ...],
+            *,
+            args: Optional[Sequence[dbops.FunctionArg]] = None,
+            returns: str | tuple[str, ...],
+            text: str,
+            volatility: str = "volatile",
+            language: str = "sql",
+            has_variadic: Optional[bool] = None,
+            strict: bool = False,
+            parallel_safe: bool = False,
+            set_returning: bool = False,
+
+            wrapper_volatility: Optional[str] = None,
+        ):
+            pass
+
+    else:
+        def __init__(self, *args, wrapper_volatility=None, **kwargs):
             super().__init__(*args, **kwargs)
             self.name = (
                 common.maybe_versioned_schema(self.name[0]), *self.name[1:])
             self.text = fixup_query(self.text)
+
+            self.wrapper_volatility = wrapper_volatility
 
             if self.args:
                 nargs = []
@@ -156,6 +189,8 @@ def make_trampoline(func: dbops.Function) -> TrampolineFunction:
     new_func.text = f'select {q(*func.name)}({", ".join(args)})'
     new_func.language = 'sql'
     new_func.strict = False
+    if isinstance(func, VersionedFunction) and func.wrapper_volatility:
+        new_func.volatility = func.wrapper_volatility
     return TrampolineFunction(new_func.name, new_func)
 
 
