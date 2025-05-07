@@ -64,6 +64,10 @@ class Alias(
         so.ObjectSet[s_types.Type],
         default=so.DEFAULT_CONSTRUCTOR,
     )
+    existing_types = so.SchemaField(
+        so.ObjectSet[s_types.Type],
+        default=so.DEFAULT_CONSTRUCTOR,
+    )
 
 
 class AliasCommandContext(
@@ -218,6 +222,7 @@ class AliasLikeCommand(
         s_types.TypeShell[s_types.Type],
         s_expr.Expression,
         set[so.ObjectShell[s_types.Type]],
+        set[so.ObjectShell[s_types.Type]],
     ]:
         pschema = schema
 
@@ -242,7 +247,7 @@ class AliasLikeCommand(
 
         is_global = (self.get_schema_metaclass().
                      get_schema_class_displayname() == 'global')
-        cmd, type_shell, created_types = _create_alias_types(
+        cmd, type_shell, created_types, existing_types = _create_alias_types(
             expr=expr,
             classname=classname,
             schema=schema,
@@ -252,7 +257,7 @@ class AliasLikeCommand(
         if drop_old_types_cmd:
             cmd.prepend(drop_old_types_cmd)
 
-        return cmd, type_shell, expr, created_types
+        return cmd, type_shell, expr, created_types, existing_types
 
 
 class AliasCommand(
@@ -323,18 +328,21 @@ class CreateAliasLike(
                 vn = other_obj.get_verbosename(schema, with_parent=True)
                 raise errors.SchemaError(f'{vn} already exists')
 
-            type_cmd, type_shell, expr, created_types = self._handle_alias_op(
-                expr=self.get_attribute_value('expr'),
-                classname=alias_name,
-                schema=schema,
-                context=context,
-                span=self.get_attribute_span('expr'),
+            type_cmd, type_shell, expr, created_types, existing_types = (
+                    self._handle_alias_op(
+                    expr=self.get_attribute_value('expr'),
+                    classname=alias_name,
+                    schema=schema,
+                    context=context,
+                    span=self.get_attribute_span('expr'),
+                )
             )
             self.add_prerequisite(type_cmd)
             self.set_attribute_value('expr', expr)
             self.set_attribute_value(
                 self.TYPE_FIELD_NAME, type_shell, computed=True)
             self.set_attribute_value('created_types', created_types)
+            self.set_attribute_value('existing_types', existing_types)
 
         return super()._create_begin(schema, context)
 
@@ -396,13 +404,15 @@ class AlterAliasLike(
             is_computable = self._is_computable(self.scls, schema)
             if expr:
                 alias_name = self._get_alias_name(self.classname)
-                type_cmd, type_shell, expr, created_tys = self._handle_alias_op(
-                    expr=expr,
-                    classname=alias_name,
-                    schema=schema,
-                    context=context,
-                    is_alter=is_computable,
-                    span=self.get_attribute_span('expr'),
+                type_cmd, type_shell, expr, created_tys, existing_types = (
+                        self._handle_alias_op(
+                        expr=expr,
+                        classname=alias_name,
+                        schema=schema,
+                        context=context,
+                        is_alter=is_computable,
+                        span=self.get_attribute_span('expr'),
+                    )
                 )
 
                 self.add_prerequisite(type_cmd)
@@ -412,6 +422,7 @@ class AlterAliasLike(
                     self.TYPE_FIELD_NAME, type_shell, computed=True)
 
                 self.set_attribute_value('created_types', created_tys)
+                self.set_attribute_value('existing_types', existing_types)
 
                 # Clear out the type field in the schema *now*,
                 # before we call the parent _alter_begin, which will
@@ -516,6 +527,7 @@ def _create_alias_types(
     sd.Command,
     s_types.TypeShell[s_types.Type],
     set[so.ObjectShell[s_types.Type]],
+    set[so.ObjectShell[s_types.Type]],
 ]:
     from . import ordering as s_ordering
     from edb.ir import utils as irutils
@@ -526,14 +538,23 @@ def _create_alias_types(
     derived_delta = sd.DeltaRoot()
 
     created_type_shells: set[so.ObjectShell[s_types.Type]] = set()
+    existing_type_shells: set[so.ObjectShell[s_types.Type]] = set()
 
     for ty_id in irutils.collect_schema_types(ir.expr):
-        if schema.has_object(ty_id):
-            # this is not a new type, skip
-            continue
         ty = new_schema.get_by_id(ty_id, type=s_types.Type)
-
         name = ty.get_name(new_schema)
+
+        if schema.has_object(ty_id):
+            # This is not a new type.
+            # Track non-alias types separately to add to an alias or global's
+            # `existing_types`. This adds a "use" and ensures that they are
+            # preserved as other types are added/removed from the schema.
+            if not ty.get_from_alias(schema):
+                existing_type_shells.add(
+                    so.ObjectShell(name=name, schemaclass=type(ty))
+                )
+            continue
+
         if (
             not isinstance(ty, s_types.Collection)
             and not _has_alias_name_prefix(classname, name)
@@ -606,7 +627,7 @@ def _create_alias_types(
         schemaclass=type_cmd.get_schema_metaclass(),
         span=span,
     )
-    return result, type_shell, created_type_shells
+    return result, type_shell, created_type_shells, existing_type_shells
 
 
 def _has_alias_name_prefix(
