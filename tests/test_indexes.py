@@ -430,3 +430,43 @@ class TestIndexes(tb.DDLTestCase):
             };
             """
         )
+
+    async def test_index_12a(self):
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Non-computed links are automatically indexed\."
+        ):
+            await self.con.execute(r"""
+                create type Foo;
+                create type Bar {
+                    create link val -> Foo;
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_12b(self):
+        # Index on computed link ok
+        with self.assertNoLogs():
+            await self.con.execute(r"""
+                create type Foo;
+                create type Bar {
+                    create link _val -> Foo;
+                    create link val := ._val;
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_13(self):
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"An exclusive constraint already exists\."
+        ):
+            await self.con.execute(r"""
+                create type Bar {
+                    create property val -> str;
+                    create constraint exclusive on (.val);
+                    create index on (.val);
+                };
+            """)
