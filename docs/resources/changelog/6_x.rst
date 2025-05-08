@@ -265,7 +265,7 @@ automatically generate some documentation files used in the project. But the
 mechanism is flexible enough to be used for automating a variety of project
 tasks.
 
-See `our RFC 1028 for more detials on the changes
+See `our RFC 1028 for more details on the changes
 <https://github.com/edgedb/rfcs/blob/master/text/1028-cli-hooks.rst>`_.
 
 File Watchers
@@ -286,16 +286,16 @@ executing these queries in a type-safe way:
     files = ["queries/*.edgeql"]
     script = "npx @edgedb/generate queries"
 
-Multiple ``[[watch]]`` entires can be added to the |gel.toml| file, so that
+Multiple ``[[watch]]`` entries can be added to the |gel.toml| file, so that
 you can fine-tune how your project responds to important file changes.
 
-This changes how ``watch`` command funcitons. By default, ``gel watch`` will
+This changes how ``watch`` command functions. By default, ``gel watch`` will
 start the watch process and monitor files specified in |gel.toml|. In order to
 access the old functionality of ``edgedb watch`` (which was monitoring schema
 file changes and automatically applying them to the database) you now need to
 run ``gel watch --migrate``.
 
-See `our RFC 1028 for more detials on the changes
+See `our RFC 1028 for more details on the changes
 <https://github.com/edgedb/rfcs/blob/master/text/1028-cli-hooks.rst>`_.
 
 
@@ -586,7 +586,7 @@ Bug fixes
 * Fix an schema issue with deleting collections.
   (:eql:gh:`#7957`)
 
-* Automatically create array types for all scalars to avoid introspeciton
+* Automatically create array types for all scalars to avoid introspection
   issues.
   (:eql:gh:`#7970`)
 
@@ -776,7 +776,7 @@ Fixes
 * Fix dropping types in some situations where the type is used in a function
   (:eql:gh:`#8574`)
 
-* Fix AI ext openai streaming
+* Fix AI ext OpenAI streaming
   (:eql:gh:`#8553`)
 
 * Fix removal of path factoring breaking ai embedding views.
@@ -796,6 +796,20 @@ Fixes
 
 
 6.6
+===
+
+Due to an error in our release infrastructure, 6.6 was inadvertently
+released from our master branch (commit
+7db665af18d22d90d5ec682159353552c67ce1c5).
+
+It has been removed from our package servers, and was never available
+in our cloud.
+
+If you have a 6.6 instance, you will need to perform a dump and
+restore to upgrade to 6.7. We apologize for the inconvenience.
+
+
+6.7
 ===
 
 Features
