@@ -590,3 +590,21 @@ class AlterTableUpdateConstraintTrigger(AlterTableConstraintBase):
         self.drop_constraint_trigger_and_fuction(self._constraint)
         self.create_constraint_trigger_and_fuction(self._constraint)
         super().generate(block)
+
+
+class AlterTableUpdateConstraintTriggerFixup(AlterTableConstraintBase):
+    def __repr__(self):
+        return '<{}.{} {!r}>'.format(
+            self.__class__.__module__, self.__class__.__name__,
+            self._constraint)
+
+    def generate(self, block):
+        # Pre 6.8 versions of gel created needless disabled triggers
+        # in some cases. This path (invoked by administer
+        # remove_pointless_triggers()) deletes them.
+        if (
+            self._constraint.requires_triggers()
+            and self._constraint.can_disable_triggers()
+        ):
+            self.drop_constraint_trigger_and_fuction(self._constraint)
+        super().generate(block)
