@@ -1188,6 +1188,7 @@ class TestServerConfig(tb.QueryTestCase):
             (srv_ver.major, srv_ver.minor, str(srv_ver.stage),
              srv_ver.stage_no,)
         )
+        self.assertEqual(ver.major, buildmeta.EDGEDB_MAJOR_VERSION)
 
     async def test_server_proto_configure_invalid_duration(self):
         with self.assertRaisesRegex(
