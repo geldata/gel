@@ -75,7 +75,7 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
     def text_document_did_open(params: lsp_types.DidOpenTextDocumentParams):
         ls_server.document_updated(ls, params.text_document.uri)
 
-    @ls.feature(lsp_types.TEXT_DOCUMENT_DID_CHANGE)
+    @ls.feature(lsp_types.TEXT_DOCUMENT_DID_SAVE)
     def text_document_did_change(params: lsp_types.DidChangeTextDocumentParams):
         ls_server.document_updated(ls, params.text_document.uri)
 

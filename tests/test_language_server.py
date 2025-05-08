@@ -212,7 +212,7 @@ class TestLanguageServer(unittest.TestCase):
                         "textDocumentSync": {
                             "openClose": True,
                             "change": 2,
-                            "save": False,
+                            "save": True,
                         },
                         "completionProvider": {"triggerCharacters": [","]},
                         "definitionProvider": True,
@@ -943,6 +943,99 @@ class TestLanguageServer(unittest.TestCase):
                             {'kind': 14, 'label': 'start'},
                             {'kind': 14, 'label': 'update'},
                             {'kind': 14, 'label': 'with'},
+                        ],
+                    },
+                },
+            )
+
+        finally:
+            runner.finish()
+
+    def test_language_server_11(self):
+        # Test diagnostics are only published on save after change.
+        runner = LspRunner()
+        try:
+            runner.send_init()
+
+            # 1. Open an empty file
+            file_uri = runner.get_uri("invalid_save_test.edgeql")
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": file_uri,
+                            "languageId": "edgeql",
+                            "version": 1,
+                            "text": "",
+                        }
+                    },
+                }
+            )
+            # Expect empty diagnostics on open of an empty (valid) file
+            self.assertEqual(
+                runner.recv(),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": file_uri,
+                        "version": 1,
+                        "diagnostics": [],
+                    },
+                },
+            )
+
+            # 2. Change the file to invalid syntax
+            invalid_text = """select Hello world }"""
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didChange",
+                    "params": {
+                        "textDocument": {
+                            "uri": file_uri,
+                            "version": 2,
+                        },
+                        "contentChanges": [{"text": invalid_text}],
+                    },
+                }
+            )
+            # Expect no diagnostics on change (testing the new behavior)
+            # Use a very short timeout as we expect no response
+            with self.assertRaises(TimeoutError):
+                runner.recv(timeout_sec=0.1)
+
+            # 3. Save the file
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didSave",
+                    "params": {
+                        "textDocument": {
+                            "uri": file_uri,
+                        }
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": file_uri,
+                        "version": 2,
+                        "diagnostics": [
+                            {
+                                "message": "Missing '{'",
+                                "range": {
+                                    "start": {"character": 12, "line": 0},
+                                    "end": {"character": 13, "line": 0},
+                                },
+                                "severity": 1,
+                            }
                         ],
                     },
                 },
