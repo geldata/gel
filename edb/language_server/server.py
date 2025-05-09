@@ -52,6 +52,8 @@ class State:
 
     schema: s_schema.Schema | None = None
 
+    schema_diagnostics: ls_utils.DiagnosticsSet | None = None
+
     std_schema: s_schema.Schema | None = None
 
 
@@ -75,48 +77,52 @@ def send_internal_error(ls: GelLanguageServer, e: BaseException):
     ls.show_message_log(f'Internal error: {text}')
 
 
-def document_updated(ls: GelLanguageServer, doc_uri: str):
+def document_updated(ls: GelLanguageServer, doc_uri: str, *, compile: bool):
     # each call to this function should yield in exactly one publish_diagnostics
     # for this document
 
     from . import schema as ls_schema
 
     document = ls.workspace.get_text_document(doc_uri)
-    diagnostic_set: ls_utils.DiagnosticsSet
+
+    diagnostic_set = ls_utils.DiagnosticsSet()
+    diagnostic_set.extend(document, [])  # make sure we publish for document
 
     try:
         if is_schema_file(doc_uri):
             # schema file
 
-            diagnostics = ls_schema.store_schema_doc(ls, document)
+            # parse
+            diags = ls_schema.store_schema_doc(ls, document)
+            diagnostic_set.extend(document, diags)
+            diagnostic_set.merge(ls_schema._parse_schema(ls))
 
-            # recompile schema
-            ls.state.schema = None
-            _schema, diagnostic_set, err_msg = ls_schema.get_schema(ls)
-            diagnostic_set.extend(document, diagnostics)
+            # compile
+            if compile:
+                ls.state.schema = None
+                _schema, _, err_msg = ls_schema.get_schema(ls)
+                if err_msg:
+                    ls.show_message(f'Error: {err_msg}')
 
-            if err_msg:
-                ls.show_message(f'Error: {err_msg}')
+            # add schema diagnostics from last compilation
+            if ls.state.schema_diagnostics:
+                diagnostic_set.merge(ls.state.schema_diagnostics)
 
         elif is_edgeql_file(doc_uri):
             # query file
-            ql_ast_res = ls_parsing.parse(document)
-            if diag := ql_ast_res.err:
-                ls.publish_diagnostics(document.uri, diag, document.version)
-                return
-            assert ql_ast_res.ok is not None
-            ql_ast = ql_ast_res.ok
 
-            if isinstance(ql_ast, list):
-                diagnostic_set, _ = compile(ls, document, ql_ast)
-            else:
-                # SDL in query files?
-                diagnostic_set = ls_utils.DiagnosticsSet()
+            # parse
+            ast_res = ls_parsing.parse(document)
+            if ast_res.err:
+                diagnostic_set.extend(document, ast_res.err)
+
+            # compile
+            if compile and isinstance(ast_res.ok, list):
+                diag, _ = compile_ql(ls, document, ast_res.ok)
+                diagnostic_set.merge(diag)
         else:
             ls.show_message_log(f'Unknown file type: {doc_uri}')
-            diagnostic_set = ls_utils.DiagnosticsSet()
 
-        diagnostic_set.extend(document, [])  # make sure we publish for document
         for doc, diags in diagnostic_set.by_doc.items():
             ls.publish_diagnostics(doc.uri, diags, doc.version)
     except BaseException as e:
@@ -124,7 +130,7 @@ def document_updated(ls: GelLanguageServer, doc_uri: str):
         ls.publish_diagnostics(document.uri, [], document.version)
 
 
-def compile(
+def compile_ql(
     ls: GelLanguageServer,
     doc: pygls.workspace.TextDocument,
     stmts: list[qlast.Base],

@@ -323,18 +323,6 @@ class TestLanguageServer(unittest.TestCase):
                     "jsonrpc": "2.0",
                     "method": "textDocument/publishDiagnostics",
                     "params": {
-                        "uri": runner.get_uri("dbschema/default.gel"),
-                        "diagnostics": [],
-                    },
-                },
-            )
-
-            self.assertEqual(
-                runner.recv(timeout_sec=5),
-                {
-                    "jsonrpc": "2.0",
-                    "method": "textDocument/publishDiagnostics",
-                    "params": {
                         "diagnostics": [
                             {
                                 "message": (
@@ -353,6 +341,117 @@ class TestLanguageServer(unittest.TestCase):
                     },
                 },
             )
+            self.assertEqual(
+                runner.recv(timeout_sec=5),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": runner.get_uri("dbschema/default.gel"),
+                        "diagnostics": [],
+                    },
+                },
+            )
+
+        finally:
+            runner.finish()
+
+    def test_language_server_diagnostics_04(self):
+        # Test that on didChange we only parse and we compile on didSave
+        runner = LspRunner()
+        try:
+            runner.add_file("gel.toml", "")
+            runner.add_file("dbschema/default.gel", "")
+            runner.send_init()
+
+            # 1. Open an empty file
+            file_uri = runner.get_uri("invalid_save_test.edgeql")
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": file_uri,
+                            "languageId": "edgeql",
+                            "version": 1,
+                            "text": "",
+                        }
+                    },
+                }
+            )
+            # Expect empty diagnostics on open of an empty (valid) file
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": file_uri,
+                        "version": 1,
+                        "diagnostics": [],
+                    },
+                },
+            )
+
+            # 2. Syntactically correct, but semantically invalid
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didChange",
+                    "params": {
+                        "textDocument": {"uri": file_uri, "version": 2},
+                        "contentChanges": [{"text": """select '3' + 2"""}],
+                    },
+                }
+            )
+            # Expect empty diagnostics, since we only parsed
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": file_uri,
+                        "version": 2,
+                        "diagnostics": [],
+                    },
+                },
+            )
+
+            # 3. Save the file
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didSave",
+                    "params": {"textDocument": {"uri": file_uri}},
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=50),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": file_uri,
+                        "version": 2,
+                        "diagnostics": [
+                            {
+                                "message": (
+                                    "operator '+' cannot be applied to operands"
+                                    " of type 'std::str' and 'std::int64'"
+                                ),
+                                "range": {
+                                    "start": {"character": 7, "line": 0},
+                                    "end": {"character": 14, "line": 0},
+                                },
+                                "severity": 1,
+                            }
+                        ],
+                    },
+                },
+            )
+
         finally:
             runner.finish()
 
@@ -397,20 +496,20 @@ class TestLanguageServer(unittest.TestCase):
                     "jsonrpc": "2.0",
                     "method": "textDocument/publishDiagnostics",
                     "params": {
-                        "uri": runner.get_uri("dbschema/default.gel"),
                         "diagnostics": [],
+                        "uri": "file://myquery.edgeql",
+                        "version": 1,
                     },
                 },
             )
             self.assertEqual(
-                runner.recv(timeout_sec=5),
+                runner.recv(timeout_sec=1),
                 {
                     "jsonrpc": "2.0",
                     "method": "textDocument/publishDiagnostics",
                     "params": {
+                        "uri": runner.get_uri("dbschema/default.gel"),
                         "diagnostics": [],
-                        "uri": "file://myquery.edgeql",
-                        "version": 1,
                     },
                 },
             )
@@ -1104,99 +1203,6 @@ class TestLanguageServer(unittest.TestCase):
                             {'kind': 14, 'label': 'start'},
                             {'kind': 14, 'label': 'update'},
                             {'kind': 14, 'label': 'with'},
-                        ],
-                    },
-                },
-            )
-
-        finally:
-            runner.finish()
-
-    def test_language_server_11(self):
-        # Test diagnostics are only published on save after change.
-        runner = LspRunner()
-        try:
-            runner.send_init()
-
-            # 1. Open an empty file
-            file_uri = runner.get_uri("invalid_save_test.edgeql")
-            runner.send(
-                {
-                    "jsonrpc": "2.0",
-                    "method": "textDocument/didOpen",
-                    "params": {
-                        "textDocument": {
-                            "uri": file_uri,
-                            "languageId": "edgeql",
-                            "version": 1,
-                            "text": "",
-                        }
-                    },
-                }
-            )
-            # Expect empty diagnostics on open of an empty (valid) file
-            self.assertEqual(
-                runner.recv(),
-                {
-                    "jsonrpc": "2.0",
-                    "method": "textDocument/publishDiagnostics",
-                    "params": {
-                        "uri": file_uri,
-                        "version": 1,
-                        "diagnostics": [],
-                    },
-                },
-            )
-
-            # 2. Change the file to invalid syntax
-            invalid_text = """select Hello world }"""
-            runner.send(
-                {
-                    "jsonrpc": "2.0",
-                    "method": "textDocument/didChange",
-                    "params": {
-                        "textDocument": {
-                            "uri": file_uri,
-                            "version": 2,
-                        },
-                        "contentChanges": [{"text": invalid_text}],
-                    },
-                }
-            )
-            # Expect no diagnostics on change (testing the new behavior)
-            # Use a very short timeout as we expect no response
-            with self.assertRaises(TimeoutError):
-                runner.recv(timeout_sec=0.1)
-
-            # 3. Save the file
-            runner.send(
-                {
-                    "jsonrpc": "2.0",
-                    "method": "textDocument/didSave",
-                    "params": {
-                        "textDocument": {
-                            "uri": file_uri,
-                        }
-                    },
-                }
-            )
-            self.assertEqual(
-                runner.recv(),
-                {
-                    "jsonrpc": "2.0",
-                    "method": "textDocument/publishDiagnostics",
-                    "params": {
-                        "uri": file_uri,
-                        "version": 2,
-                        "diagnostics": [
-                            {
-                                "message": "Missing '{'",
-                                "range": {
-                                    "start": {"character": 12, "line": 0},
-                                    "end": {"character": 13, "line": 0},
-                                },
-                                "severity": 1,
-                            }
                         ],
                     },
                 },

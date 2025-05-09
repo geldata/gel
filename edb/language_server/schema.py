@@ -167,7 +167,7 @@ def _determine_schema_dir(
         # no manifest: don't infer any schema dir
         return None, err_msg
 
-    if manifest.project:
+    if manifest.project and manifest.project.schema_dir:
         schema_dir = project_dir / manifest.project.schema_dir
     else:
         schema_dir = project_dir / "dbschema"
@@ -246,9 +246,10 @@ def _compile_schema(
             do = ls.state.schema_docs[0]
 
         # convert error
-        diagnostics.by_doc[do].append(ls_utils.error_to_lsp(error))
+        diagnostics.append(do, ls_utils.error_to_lsp(error))
 
     ls.state.schema = schema
+    ls.state.schema_diagnostics = diagnostics
     return (schema, diagnostics)
 
 
