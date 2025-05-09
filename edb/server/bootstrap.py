@@ -956,6 +956,10 @@ def prepare_patch(
             plan.generate(subblock)
             tplan.generate(subblock)
 
+        if '+remove_pointless_triggers' in kind:
+            from edb.server.compiler import ddl
+            ddl.remove_pointless_triggers(cschema).generate(subblock)
+
         if '+config' in kind:
             views = metaschema.get_config_views(cschema, existing_view_columns)
             views.generate(subblock)
