@@ -120,6 +120,41 @@ class SchemaConstraintTableConstraint(ConstraintCommon, dbops.TableConstraint):
         self._table_type = table_type
         self._except_data = except_data
 
+    def is_non_row_and_identical(
+        self, other: SchemaConstraintTableConstraint
+    ) -> bool:
+        """Constraints which only contain references to columns and have no
+        expressions or except clause are considered trivial. Such constraints
+        can be checked for equivalence without actually generating their code.
+
+        This function should by updated if `constraint_code` changes.
+        """
+        return (
+            # Constraint is on the same subject
+            self._subject_name == other._subject_name
+            # Row scope constraints treated differently, see `constraint_code`
+            and self._scope != 'row'
+            and other._scope != 'row'
+            # Expr data is identical
+            and len(self._exprdata) == len(other._exprdata)
+            and all(
+                exprdata.is_trivial == other_exprdata.is_trivial
+                and (
+                    list(exprdata.exprdata.plain_chunks)
+                    == list(other_exprdata.exprdata.plain_chunks)
+                )
+                and (
+                    list(exprdata.exprdata.plain_chunks)
+                    == list(other_exprdata.exprdata.plain_chunks)
+                )
+                for exprdata, other_exprdata in zip(
+                    self._exprdata, other._exprdata
+                )
+            )
+            # Except data is identical
+            and self._except_data == self._except_data
+        )
+
     def constraint_code(self, block: dbops.PLBlock) -> str | list[str]:
         if self._scope == 'row':
             if len(self._exprdata) == 1:
@@ -146,6 +181,7 @@ class SchemaConstraintTableConstraint(ConstraintCommon, dbops.TableConstraint):
                     # A constraint that contains one or more
                     # references to columns, and no expressions.
                     #
+                    # Update `is_non_row_and_identical` if this ever changes!
                     expr = ', '.join(exprdata.exprdata.plain_chunks)
                     expr = 'UNIQUE ({})'.format(expr)
                 else:
@@ -537,9 +573,16 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
             self.drop_constraint(old_constraint)
 
         elif not new_constraint.delegated:
-            # Some other modification, drop/create
-            self.drop_constraint(old_constraint)
-            self.create_constraint(new_constraint)
+            # Some other modification
+            if old_constraint.is_non_row_and_identical(new_constraint):
+                # If the constraint itself is a non-row constraint and
+                # unchanged, delete any triggers just in case.
+                self.drop_constraint_trigger_and_fuction(old_constraint)
+
+            else:
+                # If the constraint is actually different, drop and create.
+                self.drop_constraint(old_constraint)
+                self.create_constraint(new_constraint)
 
     def drop_constraint(self, constraint: SchemaConstraintTableConstraint):
         self.drop_constraint_trigger_and_fuction(constraint)
