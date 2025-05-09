@@ -1802,6 +1802,54 @@ class GetSchemaObjectNameFunction(trampoline.VersionedFunction):
         )
 
 
+# We create this version first (since it is used by the stdlib), and
+# then replace it with the real version later.
+class ApproximateCountDummy(trampoline.VersionedFunction):
+    text = '''
+        SELECT 0
+    '''
+
+    def __init__(self) -> None:
+        super().__init__(
+            name=('edgedb', 'approximate_count'),
+            args=[
+                ('ignore_subtypes', ('bool',)),
+                ('type', ('uuid',)),
+                ('type_type', ('uuid',), "NULL"),
+            ],
+            returns=('bigint',),
+            volatility='stable',
+            text=self.text,
+        )
+
+
+class ApproximateCount(trampoline.VersionedFunction):
+    text = '''
+        SELECT coalesce(sum(reltuples::bigint), 0) AS estimate
+        FROM pg_class pc
+        WHERE pc.relname IN (
+          SELECT oa.source::text
+          FROM edgedb_VER."_SchemaObjectType__ancestors" oa
+          WHERE oa.target = type AND not ignore_subtypes
+          UNION
+          select type::text
+        ) AND pc.reltuples >= 0;
+    '''
+
+    def __init__(self) -> None:
+        super().__init__(
+            name=('edgedb', 'approximate_count'),
+            args=[
+                ('ignore_subtypes', ('bool',)),
+                ('type', ('uuid',)),
+                ('type_type', ('uuid',), "NULL"),
+            ],
+            returns=('bigint',),
+            volatility='stable',
+            text=self.text,
+        )
+
+
 class IssubclassFunction(trampoline.VersionedFunction):
     text = '''
         SELECT
@@ -5312,6 +5360,7 @@ def get_bootstrap_commands(
         dbops.CreateFunction(FTSToRegconfig()),
         dbops.CreateFunction(PadBase64StringFunction()),
         dbops.CreateFunction(ResetQueryStatsFunction(False)),
+        dbops.CreateFunction(ApproximateCountDummy()),
     ]
 
     non_trampolined = [
@@ -8709,6 +8758,7 @@ async def generate_support_functions(
         dbops.CreateFunction(IssubclassFunction()),
         dbops.CreateFunction(IssubclassFunction2()),
         dbops.CreateFunction(GetSchemaObjectNameFunction()),
+        dbops.CreateFunction(ApproximateCount(), or_replace=True),
     ]
     commands.add_commands(cmds)
 
