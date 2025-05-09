@@ -31,7 +31,7 @@ class TestConstraintsSchema(tb.QueryTestCase):
                           'constraints.esdl')
 
     SETUP = '''
-    administer remove_pointless_triggers();
+    administer _remove_pointless_triggers();
     '''
 
     async def _run_link_tests(self, cases, objtype, link, *,

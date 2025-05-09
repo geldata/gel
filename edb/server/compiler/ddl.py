@@ -1419,15 +1419,8 @@ def administer_repair_schema(
 
 def remove_pointless_triggers(
     ctx: compiler.CompileContext,
-    ql: qlast.AdministerStmt,
-) -> dbstate.BaseQuery:
+) -> bytes:
     from edb.pgsql import schemamech
-
-    if ql.expr.args or ql.expr.kwargs:
-        raise errors.QueryError(
-            'remove_pointless_triggers() does not take arguments',
-            span=ql.expr.span,
-        )
 
     current_tx = ctx.state.current_tx()
     schema = current_tx.get_schema(ctx.compiler_state.std_schema)
@@ -1450,14 +1443,39 @@ def remove_pointless_triggers(
             subject, constraint, schema, None
         )
 
-        # bconstr.update_trigger_ops().generate(block)
+        # Q: we could also use update_trigger_ops, which would
+        # generate more useless code but avoid the need for an extra
+        # code path?
         bconstr.fixup_trigger_ops().generate(block)
 
     src = block.to_string()
-    # debug.dump_code(src, lexer='sql')
+
+    if debug.flags.delta_execute_ddl or debug.flags.delta_execute:
+        debug.header('remove_pointless_triggers')
+        debug.dump_code(src, lexer='sql')
+
+    return src.encode('utf-8')
+
+
+def administer_remove_pointless_triggers(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    if ql.expr.args or ql.expr.kwargs:
+        raise errors.QueryError(
+            '_remove_pointless_triggers() does not take arguments',
+            span=ql.expr.span,
+        )
+    if not ctx.is_testmode():
+        raise errors.QueryError(
+            '_remove_pointless_triggers() is for testmode only',
+            span=ql.expr.span,
+        )
+
+    src = remove_pointless_triggers(ctx)
 
     return dbstate.DDLQuery(
-        sql=src.encode('utf-8'),
+        sql=src,
         user_schema=ctx.state.current_tx().get_user_schema(),
         feature_used_metrics=None,
     )
