@@ -394,6 +394,7 @@ impl<'s> Parser<'s> {
 
         let value = CSTNode::Production(Production {
             id: reduce.production_id,
+            span: get_span_of_nodes(args),
             args,
             inlined_ids: None,
         });
@@ -409,7 +410,6 @@ impl<'s> Parser<'s> {
                 let inlined_id = production.id;
                 // inline rule found
                 let args = production.args;
-                let span = get_span_of_nodes(args);
 
                 value = args[*inline_position as usize];
 
@@ -418,8 +418,6 @@ impl<'s> Parser<'s> {
                     new_prod.inlined_ids =
                         Some(ctx.alloc_slice_and_push(&new_prod.inlined_ids, inlined_id));
                 }
-
-                extend_span(&mut value, span, ctx);
             } else {
                 // place back
                 value = CSTNode::Production(production);
@@ -607,38 +605,19 @@ impl<'a> StackNode<'a> {
     }
 }
 
-fn get_span_of_nodes(args: &[CSTNode]) -> Option<Span> {
-    let start = args.iter().find_map(|x| match x {
+/// Returns the span of syntactically ordered nodes. Panic on empty nodes.
+fn get_span_of_nodes(nodes: &[CSTNode]) -> Option<Span> {
+    let start = nodes.iter().find_map(|x| match x {
         CSTNode::Terminal(t) => Some(t.span.start),
-        CSTNode::Production(p) => get_span_of_nodes(p.args).map(|x| x.start),
-        _ => None,
+        CSTNode::Production(p) => Some(p.span?.start),
+        CSTNode::Empty => panic!(),
     })?;
-    let end = args.iter().rev().find_map(|x| match x {
+    let end = nodes.iter().rev().find_map(|x| match x {
         CSTNode::Terminal(t) => Some(t.span.end),
-        CSTNode::Production(p) => get_span_of_nodes(p.args).map(|x| x.end),
-        _ => None,
+        CSTNode::Production(p) => Some(p.span?.end),
+        CSTNode::Empty => panic!(),
     })?;
     Some(Span { start, end })
-}
-
-fn extend_span<'a>(value: &mut CSTNode<'a>, span: Option<Span>, ctx: &'a Context) {
-    let Some(span) = span else {
-        return;
-    };
-
-    let CSTNode::Terminal(terminal) = value else {
-        return;
-    };
-
-    let mut new_term = terminal.clone();
-
-    if span.start < new_term.span.start {
-        new_term.span.start = span.start;
-    }
-    if span.end > new_term.span.end {
-        new_term.span.end = span.end;
-    }
-    *terminal = ctx.alloc_terminal(new_term);
 }
 
 const PARSER_COUNT_MAX: usize = 10;

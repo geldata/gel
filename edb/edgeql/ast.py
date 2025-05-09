@@ -278,12 +278,14 @@ class Constant(BaseConstant):
     value: str
 
     @classmethod
-    def string(cls, value: str) -> Constant:
-        return Constant(kind=ConstantKind.STRING, value=value)
+    def string(cls, value: str, span: Span | None = None) -> Constant:
+        return Constant(kind=ConstantKind.STRING, value=value, span=span)
 
     @classmethod
-    def boolean(cls, b: bool) -> Constant:
-        return Constant(kind=ConstantKind.BOOLEAN, value=str(b).lower())
+    def boolean(cls, b: bool, span: Span | None = None) -> Constant:
+        return Constant(
+            kind=ConstantKind.BOOLEAN, value=str(b).lower(), span=span
+        )
 
     @classmethod
     def integer(cls, i: int) -> Constant:
