@@ -1418,12 +1418,9 @@ def administer_repair_schema(
 
 
 def remove_pointless_triggers(
-    ctx: compiler.CompileContext,
+    schema: s_schema.Schema,
 ) -> pg_dbops.CommandGroup:
     from edb.pgsql import schemamech
-
-    current_tx = ctx.state.current_tx()
-    schema = current_tx.get_schema(ctx.compiler_state.std_schema)
 
     constraints = schema.get_objects(
         exclude_stdlib=True,
@@ -1466,8 +1463,11 @@ def administer_remove_pointless_triggers(
             span=ql.expr.span,
         )
 
+    current_tx = ctx.state.current_tx()
+    schema = current_tx.get_schema(ctx.compiler_state.std_schema)
+
     block = pg_dbops.PLTopBlock()
-    remove_pointless_triggers(ctx).generate(block)
+    remove_pointless_triggers(schema).generate(block)
     src = block.to_string()
 
     if debug.flags.delta_execute_ddl or debug.flags.delta_execute:
