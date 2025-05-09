@@ -99,6 +99,7 @@ def inline(argument_index: int):
 
 
 class Nonterm(parsing.Nonterm):
+    span: Span
 
     def __init_subclass__(cls, *, is_internal=False, **kwargs):
         """Add docstrings to class and reduce functions
@@ -125,7 +126,6 @@ class Nonterm(parsing.Nonterm):
         for name, attr in cls.__dict__.items():
             if (name.startswith('reduce_') and
                     isinstance(attr, types.FunctionType)):
-                inline_index = getattr(attr, 'inline_index', None)
 
                 if attr.__doc__ is None:
                     tokens = name.split('_')
@@ -138,14 +138,11 @@ class Nonterm(parsing.Nonterm):
                     if prec is not None:
                         doc += ' [{}]'.format(prec)
 
+                    inline_index = getattr(attr, 'inline_index', None)
                     attr = lambda self, *args, meth=attr: meth(self, *args)
                     attr.__doc__ = doc
-
-                a = span.wrap_function_to_infer_spans(attr)
-
-                a.__doc__ = attr.__doc__
-                a.inline_index = inline_index
-                setattr(cls, name, a)
+                    attr.inline_index = inline_index
+                    setattr(cls, name, attr)
 
 
 class ListNonterm(Nonterm, is_internal=True):

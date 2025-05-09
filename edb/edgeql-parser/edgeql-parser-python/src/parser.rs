@@ -69,6 +69,10 @@ pub struct Production {
     id: usize,
     #[pyo3(get)]
     args: PyObject,
+    #[pyo3(get)]
+    start: Option<u64>,
+    #[pyo3(get)]
+    end: Option<u64>,
 }
 
 #[pyclass]
@@ -195,6 +199,8 @@ impl<'py> IntoPyObject<'py> for ParserCSTNode<'_> {
                     Production {
                         id: prod.id,
                         args: PyList::new(py, prod.args.iter().map(ParserCSTNode))?.into(),
+                        start: prod.span.map(|s| s.start),
+                        end: prod.span.map(|s| s.end),
                     },
                 )?),
                 terminal: None,

@@ -203,44 +203,6 @@ def merge_spans(spans: Iterable[Span]) -> Span | None:
     )
 
 
-def infer_span_from_children(node, span: Span):
-    if hasattr(node, 'span'):
-        SpanPropagator.run(node, default=span)
-        node.span = span
-
-
-def wrap_function_to_infer_spans(func):
-    """Provide automatic span for Nonterm production rules."""
-
-    def wrapper(*args, **kwargs):
-        result = func(*args, **kwargs)
-        obj, *args = args
-
-        if len(args) == 1:
-            # apparently it's a production rule that just returns its
-            # only arg, so don't need to change the context
-            #
-            arg = args[0]
-            if getattr(arg, 'val', None) is obj.val:
-                if hasattr(arg, 'span'):
-                    obj.span = arg.span
-                if hasattr(obj.val, 'span'):
-                    obj.val.span = obj.span
-                return result
-
-        # Avoid mangling existing span
-        if getattr(obj, 'span', None) is None:
-            obj.span = get_span(*args)
-
-        # we have the span for the nonterminal, but now we need to
-        # enforce span in the obj.val, recursively, in case it was
-        # a complex production with nested AST nodes
-        infer_span_from_children(obj.val, obj.span)
-        return result
-
-    return wrapper
-
-
 class SpanPropagator(ast.NodeVisitor):
     """Propagate span from children to root.
 
@@ -298,7 +260,13 @@ class SpanPropagator(ast.NodeVisitor):
 class SpanValidator(ast.NodeVisitor):
     def generic_visit(self, node):
         if getattr(node, 'span', None) is None:
-            raise RuntimeError('node {} has no span'.format(node))
+            from edb.edgeql import ast as qlast
+
+            # some nodes are allowed to not have span, because they are not
+            # always produced by the parser (i.e. ShapeOperation is created as
+            # a default value in the ast node)
+            if not isinstance(node, (qlast.ShapeOperation, qlast.Options)):
+                raise RuntimeError('node {} has no span'.format(node))
         super().generic_visit(node)
 
 

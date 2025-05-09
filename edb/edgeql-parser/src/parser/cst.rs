@@ -29,6 +29,7 @@ pub struct Terminal {
 pub struct Production<'a> {
     pub id: usize,
     pub args: &'a [CSTNode<'a>],
+    pub span: Option<Span>,
 
     /// When a production is inlined, its id is saved into the new production
     /// This is needed when matching CST nodes by production id.

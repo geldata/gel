@@ -236,7 +236,25 @@ def _cst_to_ast(
             production_id = node.id
             non_term_type, method = productions[production_id]
             sym = non_term_type()
+
+            # init the span onto the Nonterm object, so it can be accessed by
+            # production methods to construct nodes
+            if node.start is not None and node.end is not None:
+                sym.span = parsing.Span(
+                    filename=filename,
+                    buffer=source.text(),
+                    start=node.start,
+                    end=node.end,
+                )
+            else:
+                sym.span = None
+
             method(sym, *args)
+
+            # a helper to set the span of each constructed node, so we don't
+            # have to manually set the span things assigned to nonterm.val
+            if sym.span and isinstance(sym.val, qlast.Base):
+                sym.val.span = sym.span
 
             # push into result stack
             result.append(sym)

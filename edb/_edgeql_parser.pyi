@@ -59,6 +59,8 @@ class CSTNode:
 class Production:
     id: int
     args: list[CSTNode]
+    start: int | None
+    end: int | None
 
 class Terminal:
     text: str
