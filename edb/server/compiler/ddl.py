@@ -1419,7 +1419,7 @@ def administer_repair_schema(
 
 def remove_pointless_triggers(
     ctx: compiler.CompileContext,
-) -> bytes:
+) -> pg_dbops.CommandGroup:
     from edb.pgsql import schemamech
 
     current_tx = ctx.state.current_tx()
@@ -1430,7 +1430,7 @@ def remove_pointless_triggers(
         type=s_constraints.Constraint,
     )
 
-    block = pg_dbops.PLTopBlock()
+    cmds = pg_dbops.CommandGroup()
 
     for constraint in constraints:
         if not pg_delta.ConstraintCommand.constraint_is_effective(
@@ -1446,15 +1446,9 @@ def remove_pointless_triggers(
         # Q: we could also use update_trigger_ops, which would
         # generate more useless code but avoid the need for an extra
         # code path?
-        bconstr.fixup_trigger_ops().generate(block)
+        cmds.add_command(bconstr.fixup_trigger_ops())
 
-    src = block.to_string()
-
-    if debug.flags.delta_execute_ddl or debug.flags.delta_execute:
-        debug.header('remove_pointless_triggers')
-        debug.dump_code(src, lexer='sql')
-
-    return src.encode('utf-8')
+    return cmds
 
 
 def administer_remove_pointless_triggers(
@@ -1472,10 +1466,16 @@ def administer_remove_pointless_triggers(
             span=ql.expr.span,
         )
 
-    src = remove_pointless_triggers(ctx)
+    block = pg_dbops.PLTopBlock()
+    remove_pointless_triggers(ctx).generate(block)
+    src = block.to_string()
+
+    if debug.flags.delta_execute_ddl or debug.flags.delta_execute:
+        debug.header('remove_pointless_triggers')
+        debug.dump_code(src, lexer='sql')
 
     return dbstate.DDLQuery(
-        sql=src,
+        sql=src.encode('utf-8'),
         user_schema=ctx.state.current_tx().get_user_schema(),
         feature_used_metrics=None,
     )
