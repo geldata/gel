@@ -382,7 +382,7 @@ class TestLanguageServer(unittest.TestCase):
             )
             # Expect empty diagnostics on open of an empty (valid) file
             self.assertEqual(
-                runner.recv(),
+                runner.recv(timeout_sec=1),
                 {
                     "jsonrpc": "2.0",
                     "method": "textDocument/publishDiagnostics",
@@ -407,7 +407,7 @@ class TestLanguageServer(unittest.TestCase):
             )
             # Expect empty diagnostics, since we only parsed
             self.assertEqual(
-                runner.recv(),
+                runner.recv(timeout_sec=1),
                 {
                     "jsonrpc": "2.0",
                     "method": "textDocument/publishDiagnostics",
@@ -428,7 +428,7 @@ class TestLanguageServer(unittest.TestCase):
                 }
             )
             self.assertEqual(
-                runner.recv(),
+                runner.recv(timeout_sec=50),
                 {
                     "jsonrpc": "2.0",
                     "method": "textDocument/publishDiagnostics",
