@@ -286,4 +286,6 @@ update ext::ai::ChatPrompt filter .name = 'builtin::rag-default' set {
             ext::ai::embedding_model_max_output_dimensions := "1024";
     };
 '''),
+    # 6.8
+    ('edgeql+user+remove_pointless_triggers', ''),
 ]
