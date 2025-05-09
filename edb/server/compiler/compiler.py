@@ -1754,6 +1754,8 @@ def _compile_ql_administer(
         return ddl.administer_vacuum(ctx, ql)
     elif ql.expr.func == 'prepare_upgrade':
         return ddl.administer_prepare_upgrade(ctx, ql)
+    elif ql.expr.func == '_remove_pointless_triggers':
+        return ddl.administer_remove_pointless_triggers(ctx, ql)
     else:
         raise errors.QueryError(
             'Unknown ADMINISTER function',
