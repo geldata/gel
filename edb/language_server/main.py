@@ -73,11 +73,15 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DID_OPEN)
     def text_document_did_open(params: lsp_types.DidOpenTextDocumentParams):
-        ls_server.document_updated(ls, params.text_document.uri)
+        ls_server.document_updated(ls, params.text_document.uri, compile=True)
+
+    @ls.feature(lsp_types.TEXT_DOCUMENT_DID_CHANGE)
+    def text_document_did_change(params: lsp_types.DidChangeTextDocumentParams):
+        ls_server.document_updated(ls, params.text_document.uri, compile=False)
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DID_SAVE)
     def text_document_did_save(params: lsp_types.DidChangeTextDocumentParams):
-        ls_server.document_updated(ls, params.text_document.uri)
+        ls_server.document_updated(ls, params.text_document.uri, compile=True)
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DEFINITION)
     def text_document_definition(

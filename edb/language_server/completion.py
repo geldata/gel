@@ -73,7 +73,7 @@ def _get_completion_in_ql(
     # compile the stmt that now contains the qlast.Cursor,
     # which should halt compilation, when it gets to the cursor
     try:
-        diagnostics, _ir_stmts = ls_server.compile(ls, document, [ql_stmt])
+        diagnostics, _ir_stmts = ls_server.compile_ql(ls, document, [ql_stmt])
     except qlcompiler.expr.IdentCompletionException as e:
         return [
             lsp_types.CompletionItem(

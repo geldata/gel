@@ -82,7 +82,7 @@ def _get_definition_in_ql(
 ) -> lsp_types.Location | None:
     # compile the whole doc
     # TODO: search ql ast before compiling all stmts
-    _, ir_stmts = ls_server.compile(ls, document, ql_ast)
+    _, ir_stmts = ls_server.compile_ql(ls, document, ql_ast)
 
     # find the ir node at the position
     node_path = None
