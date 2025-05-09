@@ -38,10 +38,12 @@ from edb.edgeql import compiler as qlcompiler
 from edb.edgeql import qltypes
 
 from . import annos as s_anno
+from . import constraints as s_constraints
 from . import delta as sd
 from . import expr as s_expr
 from . import functions as s_func
 from . import inheriting
+from . import links as s_links
 from . import name as sn
 from . import pointers as s_pointers
 from . import objects as so
@@ -1252,6 +1254,80 @@ class CreateIndex(
             )
         )
 
+        # Check for redundant indexes.
+        expr = self.get_resolved_attribute_value(
+            'expr',
+            schema=schema,
+            context=context,
+        )
+
+        # Redundancy if the index is simply a non-computed link.
+        if (
+            (expr_parsed := expr.parse())
+            # Check if the index expr is simply a pointer, eg. (.xyz)
+            and isinstance(expr_parsed, qlast.Path)
+            and len(expr_parsed.steps) == 1
+            and isinstance(expr_parsed.steps[0], qlast.Ptr)
+            and (expr_pointer := expr_parsed.steps[0])
+            # Check if the pointer is a non-computed link
+            and any(
+                (
+                    isinstance(subject_pointer, s_links.Link)
+                    and not subject_pointer.get_computable(schema)
+                    and (
+                        subject_pointer.get_local_name(schema)
+                        == sn.UnqualName(expr_pointer.name)
+                    )
+                )
+                for subject_pointer in (
+                    subject.get_pointers(schema).objects(schema)
+                )
+            )
+        ):
+            delta_root = context.top().op
+            if isinstance(delta_root, sd.DeltaRoot):
+                delta_root.warnings.append(
+                    errors.SchemaDefinitionError(
+                        f"Redundant index on ({expr.text}). "
+                        f"Non-computed links are automatically indexed.",
+                        span=self.span,
+                    )
+                )
+
+        # Redundancy if there is an exclusive constraint with the same
+        # subject expr as this index.
+        if any(
+            (
+                (constraint_subjectexpr := constraint.get_subjectexpr(schema))
+                # Check if a constraint has the same subject expr and inherits
+                # from std::exclusive
+                and constraint_subjectexpr.text == expr.text
+                and any(
+                    (
+                        constraint_ancestor.get_name(schema)
+                        == sn.QualName('std', 'exclusive')
+                    )
+                    for constraint_ancestor in (
+                        constraint.get_ancestors(schema).objects(schema)
+                    )
+                )
+            )
+            for constraint in schema.get_referrers(
+                subject,
+                scls_type=s_constraints.Constraint,
+                field_name="subject",
+            )
+        ):
+            delta_root = context.top().op
+            if isinstance(delta_root, sd.DeltaRoot):
+                delta_root.warnings.append(
+                    errors.SchemaDefinitionError(
+                        f"Redundant index on ({expr.text}). "
+                        f"An exclusive constraint already exists.",
+                        span=self.span,
+                    )
+                )
+
         # HACK: the old concrete indexes all have names in form __::idx, but
         # this should be the actual name provided. Also the index without name
         # defaults to '__::idx'.
@@ -1320,11 +1396,6 @@ class CreateIndex(
 
             # Make sure that the concrete index expression type matches the
             # abstract index type.
-            expr = self.get_resolved_attribute_value(
-                'expr',
-                schema=schema,
-                context=context,
-            )
             options = qlcompiler.CompilerOptions(
                 anchors={'__subject__': subject},
                 path_prefix_anchor='__subject__',
