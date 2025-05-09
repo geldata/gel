@@ -104,6 +104,12 @@ TenantStore_T = TypeVar("TenantStore_T")
 
 PROCESS_INITIAL_RESPONSE_TIMEOUT: float = 60.0
 KILL_TIMEOUT: float = 10.0
+HEALTH_CHECK_MIN_INTERVAL: float = float(
+    os.getenv("GEL_COMPILER_HEALTH_CHECK_MIN_INTERVAL", 10)
+)
+HEALTH_CHECK_TIMEOUT: float = float(
+    os.getenv("GEL_COMPILER_HEALTH_CHECK_TIMEOUT", 10)
+)
 ADAPTIVE_SCALE_UP_WAIT_TIME: float = 3.0
 ADAPTIVE_SCALE_DOWN_WAIT_TIME: float = 60.0
 WORKER_PKG: str = __name__.rpartition('.')[0] + '.'
@@ -337,6 +343,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
     _refl_schema: s_schema.FlatSchema
     _schema_class_layout: s_refl.SchemaClassLayout
     _dbindex: Optional[dbview.DatabaseIndex] = None
+    _last_active_time: float
 
     def __init__(
         self,
@@ -355,6 +362,7 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
         self._refl_schema = kwargs["refl_schema"]
         self._schema_class_layout = kwargs["schema_class_layout"]
         self._dbindex = kwargs.get("dbindex")
+        self._last_active_time = 0
 
     def _get_init_args(self) -> tuple[InitArgs_T, InitArgsPickle_T]:
         assert self._dbindex is not None
@@ -939,6 +947,26 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
     def refresh_metrics(self) -> None:
         pass
 
+    def _maybe_update_last_active_time(self) -> None:
+        if sys.exc_info()[0] is None:
+            self._last_active_time = time.monotonic()
+
+    async def health_check(self) -> bool:
+        elapsed = time.monotonic() - self._last_active_time
+        if elapsed > HEALTH_CHECK_MIN_INTERVAL:
+            try:
+                async with asyncio.timeout(HEALTH_CHECK_TIMEOUT):
+                    await self.make_compilation_config_serializer()
+            except TimeoutError:
+                logger.error("health check timed out")
+                return False
+            except Exception:
+                logger.exception("health check failed")
+                return False
+            else:
+                self._maybe_update_last_active_time()
+        return True
+
 
 class BaseLocalPool(
     AbstractPool[Worker_T, InitArgs_T, bytes],
@@ -1165,15 +1193,25 @@ class BaseLocalPool(
         **compiler_args: Any,
     ) -> Worker_T:
         start_time = time.monotonic()
-        while (
-            worker := await self._workers_queue.acquire(
-                condition=condition, weighter=weighter
+        try:
+            while (
+                worker := await self._workers_queue.acquire(
+                    condition=condition, weighter=weighter
+                )
+            ).get_pid() not in self._workers:
+                # The worker was disconnected; skip to the next one.
+                pass
+        except TimeoutError:
+            metrics.compiler_pool_queue_errors.inc(1.0, "timeout")
+            raise
+        except Exception:
+            metrics.compiler_pool_queue_errors.inc(1.0, "ise")
+            raise
+        else:
+            metrics.compiler_pool_wait_time.observe(
+                time.monotonic() - start_time
             )
-        ).get_pid() not in self._workers:
-            # The worker was disconnected; skip to the next one.
-            pass
-        metrics.compiler_pool_wait_time.observe(time.monotonic() - start_time)
-        return worker
+            return worker
 
     def _release_worker(
         self,
@@ -1187,6 +1225,7 @@ class BaseLocalPool(
                 if worker.maybe_close_for_high_rss(self._worker_max_rss):
                     return
             self._workers_queue.release(worker, put_in_front=put_in_front)
+        self._maybe_update_last_active_time()
 
     def get_debug_info(self) -> dict[str, Any]:
         return dict(
@@ -1197,6 +1236,15 @@ class BaseLocalPool(
     def refresh_metrics(self) -> None:
         for w in self._workers.values():
             metrics.compiler_process_memory.set(w.get_rss(), str(w.get_pid()))
+
+    async def health_check(self) -> bool:
+        if not (
+            self._running
+            and self._ready_evt.is_set()
+            and len(self._workers) > 0
+        ):
+            return False
+        return await super().health_check()
 
 
 class FixedPoolImpl(
@@ -1645,11 +1693,21 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
 
     async def _acquire_worker(self, **compiler_args: Any) -> RemoteWorker:
         start_time = time.monotonic()
-        await self._semaphore.acquire()
-        assert self._worker is not None
-        rv = await self._worker
-        metrics.compiler_pool_wait_time.observe(time.monotonic() - start_time)
-        return rv
+        try:
+            await self._semaphore.acquire()
+            assert self._worker is not None
+            rv = await self._worker
+        except TimeoutError:
+            metrics.compiler_pool_queue_errors.inc(1.0, "timeout")
+            raise
+        except Exception:
+            metrics.compiler_pool_queue_errors.inc(1.0, "ise")
+            raise
+        else:
+            metrics.compiler_pool_wait_time.observe(
+                time.monotonic() - start_time
+            )
+            return rv
 
     def _release_worker(
         self,
@@ -1658,6 +1716,7 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
         put_in_front: bool = True,
     ) -> None:
         self._semaphore.release()
+        self._maybe_update_last_active_time()
 
     async def compile_in_tx(
         self,
@@ -1747,6 +1806,11 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
 
     def get_size_hint(self) -> int:
         return self._pool_size
+
+    async def health_check(self) -> bool:
+        if self._worker is None or not self._worker.done():
+            return False
+        return await super().health_check()
 
 
 @dataclasses.dataclass
