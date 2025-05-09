@@ -30,6 +30,10 @@ class TestConstraintsSchema(tb.QueryTestCase):
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'constraints.esdl')
 
+    SETUP = '''
+    administer _remove_pointless_triggers();
+    '''
+
     async def _run_link_tests(self, cases, objtype, link, *,
                               values_as_str=True):
         qry = f"""
