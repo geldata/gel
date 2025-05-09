@@ -273,25 +273,27 @@ class SpanValidator(ast.NodeVisitor):
 # Finds the node in AST by position within the source.
 # It returns the first node whose span contains the target offset in a
 # post-order traversal of the AST.
-def find_by_source_position(
-    node: ast.AST, target_offset: int
-) -> ast.AST | None:
+# To be exact, it returns a path from that node to the tree root.
+# Or None if not found. Path is never empty.
+def find_by_source_position[T: ast.AST](
+    node: T, target_offset: int
+) -> list[T] | None:
     finder = SpanFinder(target_offset)
     finder.visit(node)
-    return finder.found_node
+    return finder.found_path
 
 
 class SpanFinder(ast.NodeVisitor):
     target_offset: int
-    found_node: Any | None
+    found_path: list[Any] | None
 
     def __init__(self, target_offset: int):
         super().__init__()
         self.target_offset = target_offset
-        self.found_node = None
+        self.found_path = None
 
     def generic_visit(self, node, *, combine_results=None) -> Any:
-        if self.found_node is not None:
+        if self.found_path is not None:
             return
 
         has_span = False
@@ -301,8 +303,11 @@ class SpanFinder(ast.NodeVisitor):
                 return
 
         super().generic_visit(node)
-        if self.found_node is None and has_span:
-            self.found_node = node
+        if self.found_path is None:
+            if has_span:
+                self.found_path = [node]
+        else:
+            self.found_path.append(node)
 
 
 def span_contains(span: Span, target_offset: int) -> bool:

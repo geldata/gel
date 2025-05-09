@@ -580,7 +580,7 @@ impl<'s> Parser<'s> {
     /// Error cost, subtracted by a function of successfully parsed nodes.
     fn adjusted_cost(&self) -> u16 {
         let x = self.node_count.saturating_sub(3);
-        self.error_cost.saturating_sub(x * x)
+        self.error_cost.saturating_sub(x.saturating_mul(x))
     }
 
     fn has_recovered(&self) -> bool {

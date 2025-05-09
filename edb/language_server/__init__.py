@@ -17,7 +17,7 @@
 #
 
 import dataclasses
-from typing import Generic, Optional, TypeVar
+from typing import Generic, Optional, TypeVar, Any
 
 
 T = TypeVar('T', covariant=True)
@@ -36,3 +36,11 @@ def is_schema_file(path: str) -> bool:
 
 def is_edgeql_file(path: str) -> bool:
     return path.endswith('.edgeql')
+
+
+def dump_to_str(node: Any) -> str:
+    import io
+    from edb.common import markup
+    buf = io.StringIO()
+    markup.dump(node, file=buf)
+    return buf.getvalue()
