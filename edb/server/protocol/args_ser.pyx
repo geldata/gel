@@ -406,6 +406,10 @@ cdef recode_array(
                 data = frb_read(&sub_buf, in_len)
                 out_buf.write_cstr(data, in_len)
             else:
+                # Nested arrays (eg. array<array<...>>) are handled
+                # as array<tuple<array<...>>>. However, this doesn't need to be
+                # handled here since this is already incorporated in the
+                # tuple_info during _make_global_rep
                 _recode_global(dbv, &sub_buf, out_buf, in_len, tuple_info)
         if frb_get_len(&sub_buf):
             raise errors.InputDataError('unexpected trailing data in buffer')

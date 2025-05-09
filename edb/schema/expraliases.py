@@ -527,41 +527,59 @@ def _create_alias_types(
 
     created_type_shells: set[so.ObjectShell[s_types.Type]] = set()
 
-    for ty_id in irutils.collect_schema_types(ir.expr):
-        if schema.has_object(ty_id):
-            # this is not a new type, skip
-            continue
-        ty = new_schema.get_by_id(ty_id, type=s_types.Type)
+    new_types: list[s_types.Type] = [
+        new_schema.get_by_id(ty_id, type=s_types.Type)
+        for ty_id in irutils.collect_schema_types(ir.expr)
+        if not schema.has_object(ty_id)
+    ]
 
-        name = ty.get_name(new_schema)
-        if (
-            not isinstance(ty, s_types.Collection)
-            and not _has_alias_name_prefix(classname, name)
-        ):
-            # not all created types are visible from the root, so they don't
-            # need to be created in the schema
-            continue
+    while new_types:
+        additional_types: list[s_types.Type] = []
 
-        new_schema = ty.update(
-            new_schema,
-            dict(
-                alias_is_persistent=True,
-                expr_type=s_types.ExprType.Select,
-                from_alias=True,
-                from_global=is_global,
-                internal=False,
-                builtin=False,
-            ),
-        )
-        if isinstance(ty, s_types.Collection):
-            new_schema = ty.set_field_value(new_schema, 'is_persistent', True)
+        for ty in new_types:
+            name = ty.get_name(new_schema)
+            if (
+                not isinstance(ty, s_types.Collection)
+                and not _has_alias_name_prefix(classname, name)
+            ):
+                # not all created types are visible from the root, so they don't
+                # need to be created in the schema
+                continue
 
-        derived_delta.add(
-            ty.as_create_delta(
-                schema=new_schema, context=so.ComparisonContext()
+            new_schema = ty.update(
+                new_schema,
+                dict(
+                    alias_is_persistent=True,
+                    expr_type=s_types.ExprType.Select,
+                    from_alias=True,
+                    from_global=is_global,
+                    internal=False,
+                    builtin=False,
+                ),
             )
-        )
-        created_type_shells.add(so.ObjectShell(name=name, schemaclass=type(ty)))
+            if isinstance(ty, s_types.Collection):
+                new_schema = ty.set_field_value(
+                    new_schema, 'is_persistent', True
+                )
+
+                # Since the type shells here are not created by create_shell,
+                # ensure the padded nested arrays are created for alias types.
+                additional_types.extend(ty.get_padded_types(new_schema))
+
+            derived_delta.add(
+                ty.as_create_delta(
+                    schema=new_schema, context=so.ComparisonContext()
+                )
+            )
+            created_type_shells.add(
+                so.ObjectShell(name=name, schemaclass=type(ty))
+            )
+
+        new_types = [
+            ty
+            for ty in set(additional_types)
+            if not schema.has_object(ty.get_id(new_schema))
+        ]
 
     derived_delta = s_ordering.linearize_delta(
         derived_delta, old_schema=schema, new_schema=new_schema
