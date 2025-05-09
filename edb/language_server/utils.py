@@ -50,6 +50,10 @@ class DiagnosticsSet:
             self.by_doc[doc] = []
         self.by_doc[doc].extend(diagnostics)
 
+    def merge(self, other: 'DiagnosticsSet'):
+        for doc, diags in other.by_doc.items():
+            self.extend(doc, diags)
+
     def has_any(self) -> bool:
         for diags in self.by_doc.values():
             if len(diags) != 0:
