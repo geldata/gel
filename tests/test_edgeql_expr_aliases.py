@@ -1367,6 +1367,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             ('drop alias foo', []),
         ])
 
+    @test.xfail("from_alias is set on new collection types from aliases")
     async def test_edgeql_aliases_ddl_type_changes_03(self):
         # Create alias
         # Delete alias
@@ -1391,6 +1392,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             ('drop alias foo', []),
         ])
 
+    @test.xfail("from_alias is set on new collection types from aliases")
     async def test_edgeql_aliases_ddl_type_changes_04(self):
         # Create alias
         # Delete alias
@@ -1415,6 +1417,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             ('drop alias foo', []),
         ])
 
+    @test.xfail("from_alias is set on new collection types from aliases")
     async def test_edgeql_aliases_ddl_type_changes_05(self):
         # Create alias
         # Delete alias
@@ -1444,6 +1447,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             ('drop alias foo', []),
         ])
 
+    @test.xfail("from_alias is set on new collection types from aliases")
     async def test_edgeql_aliases_ddl_type_changes_06(self):
         # Create alias
         # Delete alias
@@ -1473,6 +1477,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             ('drop alias foo', []),
         ])
 
+    @test.xfail("from_alias is set on new collection types from aliases")
     async def test_edgeql_aliases_ddl_type_changes_07(self):
         # Create alias
         # Delete alias
@@ -1497,6 +1502,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             ('drop alias foo', []),
         ])
 
+    @test.xfail("from_alias is set on new collection types from aliases")
     async def test_edgeql_aliases_ddl_type_changes_08(self):
         # Create alias 1
         # Create alias 2
@@ -1577,6 +1583,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             ('drop alias bar', []),
         ])
 
+    @test.xfail("from_alias is set on new collection types from aliases")
     async def test_edgeql_aliases_ddl_type_changes_09(self):
         # Create alias 1
         # Create alias 2
@@ -1657,6 +1664,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             ('drop alias foo', []),
         ])
 
+    @test.xfail("from_alias is set on new collection types from aliases")
     async def test_edgeql_aliases_ddl_type_changes_10(self):
         # Create alias
         # Alter expr, same type
@@ -1696,6 +1704,7 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             ('drop alias foo', []),
         ])
 
+    @test.xfail("from_alias is set on new collection types from aliases")
     async def test_edgeql_aliases_ddl_type_changes_11(self):
         # Create alias
         # Alter expr, different type

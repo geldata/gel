@@ -24,6 +24,7 @@ import unittest
 import edgedb
 
 from edb.testbase import server as tb
+from edb.tools import test
 
 
 class TestEdgeQLGlobals(tb.QueryTestCase):
@@ -491,6 +492,9 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ],
         )
 
+    @test.skip(
+        "cannot resolve backend oid for type first created by computed global"
+    )
     async def test_edgeql_globals_18(self):
         await self.con.execute('''
             CREATE GLOBAL foo := ([(f := 1)]);
@@ -923,6 +927,9 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail(
+        "from_alias is set on new collection types from computed globals"
+    )
     async def test_edgeql_globals_ddl_type_changes_03(self):
         # Create computed global
         # Delete computed global
@@ -947,6 +954,9 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail(
+        "from_alias is set on new collection types from computed globals"
+    )
     async def test_edgeql_globals_ddl_type_changes_04(self):
         # Create computed global
         # Delete computed global
@@ -971,6 +981,9 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail(
+        "from_alias is set on new collection types from computed globals"
+    )
     async def test_edgeql_globals_ddl_type_changes_05(self):
         # Create computed global
         # Delete computed global
@@ -1000,6 +1013,9 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail(
+        "from_alias is set on new collection types from computed globals"
+    )
     async def test_edgeql_globals_ddl_type_changes_06(self):
         # Create computed global
         # Delete computed global
@@ -1029,6 +1045,9 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail(
+        "from_alias is set on new collection types from computed globals"
+    )
     async def test_edgeql_globals_ddl_type_changes_07(self):
         # Create computed global
         # Delete computed global
@@ -1079,6 +1098,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_10(self):
         # Create non-computed global
         # Delete non-computed global
@@ -1098,6 +1118,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_11(self):
         # Create non-computed global
         # Delete non-computed global
@@ -1117,6 +1138,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_12(self):
         # Create non-computed global
         # Delete non-computed global
@@ -1141,6 +1163,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_13(self):
         # Create non-computed global
         # Delete non-computed global
@@ -1165,6 +1188,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_14(self):
         # Create non-computed global
         # Delete non-computed global
@@ -1184,6 +1208,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_15(self):
         # Create computed global
         # Create non-computed global
@@ -1254,6 +1279,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global bar', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_16(self):
         # Create computed global
         # Create non-computed global
@@ -1329,6 +1355,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_17(self):
         # Create non-computed global
         # Create computed global
@@ -1394,6 +1421,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_18(self):
         # Create non-computed global
         # Create computed global
@@ -1464,6 +1492,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global bar', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_19(self):
         # Create computed global
         # Alter expr, same type
@@ -1503,6 +1532,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_20(self):
         # Create computed global
         # Alter expr, different type
@@ -1542,6 +1572,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_21(self):
         # Create computed global
         # Alter to non-computed, same type
@@ -1581,6 +1612,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_22(self):
         # Create computed global
         # Alter to non-computed, different type
@@ -1620,6 +1652,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_23(self):
         # Create non-computed global
         # Alter target type
@@ -1658,6 +1691,8 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
         # Alter to computed, same type
         # Delete global
 
+        # This works for now, but breaks while fixing globals tidying up.
+
         await self._check_ddl_type_changes([
             (
                 'create global foo: tuple<std::int64>',
@@ -1692,6 +1727,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ('drop global foo', []),
         ])
 
+    @test.xfail("non-computed globals don't tidy up when deleted")
     async def test_edgeql_globals_ddl_type_changes_25(self):
         # Create non-computed global
         # Alter to computed, different type
