@@ -1528,6 +1528,8 @@ class FunctionCommand(MetaCommand):
             param_type = param.get_type(schema)
             pg_at = self.get_pgtype(cobj, param_type, schema)
             args.append(f'NULL::{qt(pg_at)}')
+            if isinstance(param_type, s_objtypes.ObjectType):
+                args.append(f'NULL::uuid')
 
         return f'{q(*name)}({", ".join(args)})'
 

@@ -11,6 +11,9 @@ System
 .. list-table::
     :class: funcoptable
 
+    * - :eql:func:`sys::approximate_count`
+      - :eql:func-desc:`sys::approximate_count`
+
     * - :eql:func:`sys::get_version`
       - :eql:func-desc:`sys::get_version`
 
@@ -31,6 +34,43 @@ System
 
     * - :eql:func:`sys::reset_query_stats`
       - :eql:func-desc:`sys::reset_query_stats`
+
+
+----------
+
+
+.. eql:function:: sys::approximate_count( \
+                      type: schema::ObjectType, \
+                      NAMED ONLY ignore_subtypes: std::bool=false, \
+                  ) -> int64
+
+    Return an approximate count of the number of objects belonging to
+    a given type.
+
+    The ``type`` argument is a ``schema::ObjectType`` representing the
+    type to query.  It can be most easily obtained with the
+    :eql:op:`introspect` operator.
+
+    By default, the count includes all subtypes of the provided type as well.
+    If ``ignore_subtypes`` is true, then it includes only the type itself.
+
+    The value is based on postgres statistics, and may not be accurate.
+
+    .. code-block:: edgeql-repl
+
+        db> select sys::approximate_count(introspect schema::Type);
+        {278}
+        db> select sys::approximate_count(introspect schema::Type, ignore_subtypes:=True);
+        {0}
+        db> select schema::ObjectType {
+        ... name,
+        ... cnt := sys::approximate_count(schema::ObjectType, ignore_subtypes:=True),
+        ... };
+        {
+           schema::ObjectType {name: 'default::Issue', cnt: 4},
+           schema::ObjectType {name: 'default::User', cnt: 2},
+           ...
+        }
 
 
 ----------
