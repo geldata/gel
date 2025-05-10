@@ -605,7 +605,7 @@ Authenticate a user using an existing WebAuthn credential. This typically follow
         .. code-block:: json
 
           {
-            "code": "...",
+            "code": "..."
           }
 
     *   The returned ``code`` can be exchanged for a session token at the ``POST /token`` endpoint.
