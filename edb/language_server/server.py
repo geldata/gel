@@ -48,6 +48,8 @@ class State:
         default_factory=lambda: []
     )
 
+    schema_sdl: qlast.Schema | None = None
+
     schema: s_schema.Schema | None = None
 
     std_schema: s_schema.Schema | None = None
@@ -86,7 +88,7 @@ def document_updated(ls: GelLanguageServer, doc_uri: str):
         if is_schema_file(doc_uri):
             # schema file
 
-            diagnostics = ls_schema.update_schema_doc(ls, document)
+            diagnostics = ls_schema.store_schema_doc(ls, document)
 
             # recompile schema
             ls.state.schema = None
@@ -113,7 +115,6 @@ def document_updated(ls: GelLanguageServer, doc_uri: str):
         else:
             ls.show_message_log(f'Unknown file type: {doc_uri}')
             diagnostic_set = ls_utils.DiagnosticsSet()
-            # doc_uri in ('gel.toml')
 
         diagnostic_set.extend(document, [])  # make sure we publish for document
         for doc, diags in diagnostic_set.by_doc.items():

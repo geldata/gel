@@ -50,6 +50,12 @@ class DiagnosticsSet:
             self.by_doc[doc] = []
         self.by_doc[doc].extend(diagnostics)
 
+    def has_any(self) -> bool:
+        for diags in self.by_doc.values():
+            if len(diags) != 0:
+                return True
+        return False
+
 
 # Convert a Span to LSP Range
 def span_to_lsp(

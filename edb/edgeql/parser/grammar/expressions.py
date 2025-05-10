@@ -2047,13 +2047,14 @@ class DottedIdents(
 
 
 class DotName(Nonterm):
+    val: str
+
     def reduce_DottedIdents(self, *kids):
         self.val = '.'.join(part for part in kids[0].val)
 
 
-class ModuleName(
-        ListNonterm, element=DotName, separator=tokens.T_DOUBLECOLON):
-    pass
+class ModuleName(ListNonterm, element=DotName, separator=tokens.T_DOUBLECOLON):
+    val: list[str]
 
 
 class ColonedIdents(

@@ -185,7 +185,7 @@ class LspRunner:
 class TestLanguageServer(unittest.TestCase):
     maxDiff = None
 
-    def test_language_server_01(self):
+    def test_language_server_init_01(self):
         runner = LspRunner()
 
         runner.send(
@@ -235,7 +235,7 @@ class TestLanguageServer(unittest.TestCase):
 
         runner.finish()
 
-    def test_language_server_02(self):
+    def test_language_server_diagnostics_01(self):
         # syntax error
         runner = LspRunner()
         try:
@@ -281,7 +281,7 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_03(self):
+    def test_language_server_diagnostics_03(self):
         # name error
         runner = LspRunner()
         try:
@@ -356,8 +356,8 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_04(self):
-        # get definition
+    def test_language_server_definition_01(self):
+        # get definition in edgeql
         runner = LspRunner()
         try:
             runner.add_file(
@@ -452,7 +452,168 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_05(self):
+    def test_language_server_definition_02(self):
+        # get definition in schema
+        runner = LspRunner()
+        try:
+            runner.add_file("gel.toml", "")
+            default_gel = """
+                type my_mod::Hello {
+                    property world: str;
+                }
+                module my_mod {
+                    type World extending Hello {
+                        required link foo: my_mod::nested::Foo;
+                    };
+                    module nested {
+                        type Foo;
+                    }
+                }
+            """
+            runner.add_file("dbschema/default.gel", default_gel)
+            runner.send_init()
+
+            runner.send(
+                {
+                    "id": 2,
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": runner.get_uri("dbschema/default.gel"),
+                            "languageId": "edgeql",
+                            "version": 1,
+                            "text": default_gel,
+                        }
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=50),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": runner.get_uri("dbschema/default.gel"),
+                        "diagnostics": [],
+                        "version": 1,
+                    },
+                },
+            )
+
+            # definition of "type my_mod::Hello"
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "textDocument/definition",
+                    "params": {
+                        "textDocument": {
+                            "uri": runner.get_uri("dbschema/default.gel")
+                        },
+                        "position": {"line": 1, "character": 26},
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "result": {
+                        "uri": runner.get_uri("dbschema/default.gel"),
+                        "range": {
+                            "start": {"line": 1, "character": 16},
+                            "end": {"line": 3, "character": 17},
+                        },
+                    },
+                },
+            )
+
+            # definition of "extending Hello"
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "method": "textDocument/definition",
+                    "params": {
+                        "textDocument": {
+                            "uri": runner.get_uri("dbschema/default.gel")
+                        },
+                        "position": {"line": 5, "character": 41},
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "result": {
+                        "uri": runner.get_uri("dbschema/default.gel"),
+                        "range": {
+                            "start": {"line": 1, "character": 16},
+                            "end": {"line": 3, "character": 17},
+                        },
+                    },
+                },
+            )
+
+            # definition of "foo"
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "textDocument/definition",
+                    "params": {
+                        "textDocument": {
+                            "uri": runner.get_uri("dbschema/default.gel")
+                        },
+                        "position": {"line": 6, "character": 41},
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "result": [],
+                },
+            )
+
+            # definition of "my_mod::nested::Foo"
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 6,
+                    "method": "textDocument/definition",
+                    "params": {
+                        "textDocument": {
+                            "uri": runner.get_uri("dbschema/default.gel")
+                        },
+                        "position": {"line": 6, "character": 62},
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 6,
+                    "result": {
+                        "uri": runner.get_uri("dbschema/default.gel"),
+                        "range": {
+                            "start": {"line": 9, "character": 24},
+                            "end": {"line": 9, "character": 32},
+                        },
+                    },
+                },
+            )
+        finally:
+            runner.finish()
+
+    def test_language_server_completion_01(self):
         # completion
         runner = LspRunner()
         try:
@@ -504,7 +665,7 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_06(self):
+    def test_language_server_completion_02(self):
         # completion
         runner = LspRunner()
         try:
@@ -561,7 +722,7 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_07(self):
+    def test_language_server_completion_07(self):
         # completion might suggest give all reserved keywords
         runner = LspRunner()
         try:
@@ -677,7 +838,7 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_08(self):
+    def test_language_server_completion_08(self):
         # completion might not suggest some unreserved keywords (i.e. property)
         runner = LspRunner()
         try:
@@ -724,7 +885,7 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_09(self):
+    def test_language_server_completion_09(self):
         # completion might not suggest some unreserved keywords (i.e. property)
         runner = LspRunner()
         try:
@@ -864,7 +1025,7 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_10(self):
+    def test_language_server_completion_10(self):
         # empty document
         runner = LspRunner()
         try:
