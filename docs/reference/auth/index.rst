@@ -8,6 +8,7 @@ Auth
     :hidden:
     :maxdepth: 3
 
+    http
     built_in_ui
     email_password
     oauth
