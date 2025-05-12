@@ -152,7 +152,7 @@ class SchemaConstraintTableConstraint(ConstraintCommon, dbops.TableConstraint):
                 )
             )
             # Except data is identical
-            and self._except_data == self._except_data
+            and self._except_data == other._except_data
         )
 
     def constraint_code(self, block: dbops.PLBlock) -> str | list[str]:
