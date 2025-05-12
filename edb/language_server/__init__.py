@@ -41,6 +41,15 @@ def is_edgeql_file(path: str) -> bool:
 def dump_to_str(node: Any) -> str:
     import io
     from edb.common import markup
+
     buf = io.StringIO()
     markup.dump(node, file=buf)
     return buf.getvalue()
+
+
+def dump_to_local_file(path: str, node: Any):
+    import pathlib
+    from edb.common import markup
+
+    with ('.' / pathlib.Path(path)).open('w') as file:
+        markup.dump(node, file=file)

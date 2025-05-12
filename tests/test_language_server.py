@@ -484,7 +484,8 @@ class TestLanguageServer(unittest.TestCase):
                             "languageId": "edgeql",
                             "version": 1,
                             "text": """
-                                select Hello { world }
+                                with h := (select Hello filter .id = <uuid>$0)
+                                select Hello { world } filter .world = h.world
                             """,
                         }
                     },
@@ -514,16 +515,17 @@ class TestLanguageServer(unittest.TestCase):
                 },
             )
 
+            # test definition of an object type
             runner.send(
                 {
                     "jsonrpc": "2.0",
-                    "id": 3,
+                    "id": 4,
                     "method": "textDocument/definition",
                     "params": {
                         "textDocument": {"uri": "file://myquery.edgeql"},
                         "position": {
                             "line": 1,
-                            "character": 50,  # falls on "world"
+                            "character": 53,  # falls on "Hello"
                         },
                     },
                 }
@@ -532,22 +534,190 @@ class TestLanguageServer(unittest.TestCase):
                 runner.recv(timeout_sec=1),
                 {
                     "jsonrpc": "2.0",
-                    "id": 3,
+                    "id": 4,
                     "result": {
                         "uri": runner.get_uri("dbschema/default.gel"),
                         "range": {
-                            "start": {
-                                "line": 2,
-                                "character": 20,
-                            },
-                            "end": {
-                                "line": 2,
-                                "character": 40,
-                            },
+                            "start": {"line": 1, "character": 16},
+                            "end": {"line": 3, "character": 17},
                         },
                     },
                 },
             )
+
+            # test definition of a pointer
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "textDocument/definition",
+                    "params": {
+                        "textDocument": {"uri": "file://myquery.edgeql"},
+                        # falls on "world"
+                        "position": {"line": 2, "character": 51},
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "result": {
+                        "uri": runner.get_uri("dbschema/default.gel"),
+                        "range": {
+                            "start": {"line": 2, "character": 20},
+                            "end": {"line": 2, "character": 40},
+                        },
+                    },
+                },
+            )
+            # test definition of a pointer
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "textDocument/definition",
+                    "params": {
+                        "textDocument": {"uri": "file://myquery.edgeql"},
+                        # falls on the second "world"
+                        "position": {"line": 2, "character": 65},
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "result": {
+                        "uri": runner.get_uri("dbschema/default.gel"),
+                        "range": {
+                            "start": {"line": 2, "character": 20},
+                            "end": {"line": 2, "character": 40},
+                        },
+                    },
+                },
+            )
+
+            # definition of a with binding
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 7,
+                    "method": "textDocument/definition",
+                    "params": {
+                        "textDocument": {"uri": "file://myquery.edgeql"},
+                        # falls on "h"
+                        "position": {"line": 2, "character": 72},
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 7,
+                    "result": {
+                        "uri": "file://myquery.edgeql",
+                        "range": {
+                            "start": {"line": 1, "character": 43},
+                            "end": {"line": 1, "character": 77},
+                        },
+                    },
+                },
+            )
+
+            runner.send(
+                {
+                    "id": 8,
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didChange",
+                    "params": {
+                        "textDocument": {
+                            "uri": "file://myquery.edgeql",
+                            "version": 2,
+                        },
+                        "contentChanges": [
+                            {
+                                "text": """
+                                    with h := (select Hello)
+                                    select h filter .world = h.world
+                                """,
+                            }
+                        ],
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=5),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "diagnostics": [],
+                        "uri": "file://myquery.edgeql",
+                        "version": 2,
+                    },
+                },
+            )
+
+            # definition of a with binding
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 8,
+                    "method": "textDocument/definition",
+                    "params": {
+                        "textDocument": {"uri": "file://myquery.edgeql"},
+                        # falls on the first "h"
+                        "position": {"line": 2, "character": 44},
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 8,
+                    "result": {
+                        "uri": "file://myquery.edgeql",
+                        "range": {
+                            "start": {"line": 1, "character": 47},
+                            "end": {"line": 1, "character": 59},
+                        },
+                    },
+                },
+            )
+
+            # definition of a with binding
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 9,
+                    "method": "textDocument/definition",
+                    "params": {
+                        "textDocument": {"uri": "file://myquery.edgeql"},
+                        # falls on the second "h"
+                        "position": {"line": 2, "character": 62},
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=1),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 9,
+                    "result": {
+                        "uri": "file://myquery.edgeql",
+                        "range": {
+                            "start": {"line": 1, "character": 47},
+                            "end": {"line": 1, "character": 59},
+                        },
+                    },
+                },
+            )
+
         finally:
             runner.finish()
 

@@ -1284,7 +1284,12 @@ def fini_stmt(
             view = view_obj
         else:
             view = schemactx.derive_view(
-                t, derived_name=view_name, preserve_shape=True, ctx=parent_ctx)
+                t,
+                derived_name=view_name,
+                preserve_shape=True,
+                attrs={'span': irstmt.span},
+                ctx=parent_ctx
+            )
         path_id = pathctx.get_path_id(view, ctx=parent_ctx)
     else:
         view = None

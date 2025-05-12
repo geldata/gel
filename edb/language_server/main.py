@@ -62,6 +62,7 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
 
     # construct server
     ls = ls_server.GelLanguageServer(config)
+    debug_init(ls)
 
     # register hooks
     @ls.feature(
@@ -97,3 +98,18 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
         return ls_completion.get_completion(ls, params)
 
     return ls
+
+
+# Last gel-ls instance initialed. Use ONLY for debugging purposes.
+__gel_ls: ls_server.GelLanguageServer | None = None
+
+
+def debug_init(ls: ls_server.GelLanguageServer):
+    global __gel_ls
+    __gel_ls = ls
+
+
+def send_log_message(message: str):
+    global __gel_ls
+    assert __gel_ls, 'GelLanguageServer has not be started yet'
+    __gel_ls.show_message_log(message)

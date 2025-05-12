@@ -29,6 +29,8 @@ from edb.ir import ast as irast
 
 from edb.schema import objects as s_objects
 from edb.schema import name as s_name
+from edb.schema import schema as s_schema
+from edb.schema import types as s_types
 
 from . import parsing as ls_parsing
 from . import utils as ls_utils
@@ -46,7 +48,7 @@ def get_definition(
     position: int = qltokenizer.line_col_to_source_point(
         document.source, params.position.line, params.position.character
     ).offset
-    ls.show_message_log(f'position = {position}')
+    ls.show_message_log(f'get_definition at position = {position}')
 
     try:
         if is_schema_file(doc_uri):
@@ -96,25 +98,59 @@ def _get_definition_in_ql(
         return None
     node = node_path[0]
     assert isinstance(node, irast.Base), node
-    ls.show_message_log(f"node: {str(node)}")
+    ls.show_message_log(f"node: {node}")
 
     schema = ir_stmt.schema
     assert schema
 
     # lookup schema objects depending on which ir node we are over
-    target: Optional[s_objects.Object] = None
-    if isinstance(node, irast.Set):
-        node = node.expr
-    if isinstance(node, irast.TypeRoot):
-        target = schema.get_by_id(node.typeref.id)
-    elif isinstance(node, irast.Pointer):
-        if isinstance(node.ptrref, irast.PointerRef):
-            target = schema.get_by_id(node.ptrref.id)
+    target = _determine_ir_target(node, schema)
     if not target:
         ls.show_message_log(f"don't know how to lookup schema by {node}")
         return None
 
-    return _schema_obj_to_doc_location(ls, target, document)
+    return _schema_obj_to_doc_location(ls, target, schema, document)
+
+
+def _determine_ir_target(
+    node: irast.Base, schema: s_schema.Schema
+) -> Optional[s_objects.Object]:
+    # special handling: references to WITH bindings
+    if (
+        isinstance(node, irast.SetE)
+        and node.is_binding == irast.BindingKind.With
+    ):
+        target = schema.get_by_id(
+            node.typeref.id, type=s_objects.InheritingObject
+        )
+        assert target
+        while (
+            target.get_span(schema) is None
+            and isinstance(target, s_types.Type)
+            and target.get_from_alias(schema)
+        ):
+            target = target.get_bases(schema).objects(schema)[0]
+        return target
+
+    # unwrap a set
+    if isinstance(node, irast.SetE):
+        node = node.expr
+
+    # unwrap select stmts
+    while isinstance(node, irast.SelectStmt):
+        node = node.result.expr
+
+    # references to object types
+    if isinstance(node, irast.TypeRoot):
+        return schema.get_by_id(node.typeref.id)
+
+    # references to pointers
+    if isinstance(node, irast.Pointer) and isinstance(
+        node.ptrref, irast.PointerRef
+    ):
+        return schema.get_by_id(node.ptrref.id)
+
+    return None
 
 
 # Finds definition of names in schema files.
@@ -170,19 +206,21 @@ def _get_definition_in_schema(
         ls.show_message_log(f"object with this name not found")
         return None
 
-    return _schema_obj_to_doc_location(ls, obj, document)
+    return _schema_obj_to_doc_location(ls, obj, schema, document)
 
 
 def _schema_obj_to_doc_location(
     ls: ls_server.GelLanguageServer,
     obj: s_objects.Object,
+    schema: s_schema.Schema,
     curr_doc: pygls.workspace.TextDocument,
 ) -> lsp_types.Location | None:
-    assert ls.state.schema
-    span: edb_span.Span | None = obj.get_span(ls.state.schema)
+    name = obj.get_name(schema)
+    ls.show_message_log(f"find schema object: {name}")
+
+    span: edb_span.Span | None = obj.get_span(schema)
     if not span:
-        name = obj.get_name(ls.state.schema)
-        ls.show_message_log(f"schema object found, but no span: {name}")
+        ls.show_message_log(f"no span for schema object")
         return None
 
     # find originating document
