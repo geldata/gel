@@ -549,19 +549,12 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
         elif not new_constraint.delegated:
             # Some other modification
-            if old_constraint.is_non_row_and_identical(new_constraint):
-                # If the constraint itself is a non-row constraint and
-                # unchanged, delete any triggers just in case.
-                self.drop_constraint_trigger_and_fuction(old_constraint)
-
-            else:
+            if not old_constraint.is_non_row_and_identical(new_constraint):
                 # If the constraint is actually different, drop and create.
                 self.drop_constraint(old_constraint)
                 self.create_constraint(new_constraint)
 
     def drop_constraint(self, constraint: SchemaConstraintTableConstraint):
-        self.drop_constraint_trigger_and_fuction(constraint)
-
         # Drop the constraint normally from our table
         #
         my_alter = dbops.AlterTable(constraint._subject_name)
@@ -619,6 +612,7 @@ class AlterTableDropConstraint(AlterTableConstraintBase):
 
     def generate(self, block):
         if not self._constraint.delegated:
+            self.drop_constraint_trigger_and_fuction(self._constraint)
             self.drop_constraint(self._constraint)
         super().generate(block)
 
