@@ -544,14 +544,26 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
             self.create_constraint(new_constraint)
 
         elif not old_constraint.delegated and new_constraint.delegated:
-            # Now delegated, drop db structures
+            # Becoming delegated, drop db structures
             self.drop_constraint(old_constraint)
 
         elif not new_constraint.delegated:
             # Some other modification
             if old_constraint.is_non_row_and_identical(new_constraint):
-                # If the constraint itself is a non-row constraint and
-                # unchanged, delete any triggers just in case.
+                # If the constraint itself is unchanged, it is still necessary
+                # to drop any constraint triggers. This is to clear any
+                # postgres dependencies on constraint columns.
+                #
+                # For example, given:
+                #   type X { property n: int64 { constraint exclusive } };
+                #   type Y extending X;
+                #
+                # Altering the property with
+                #   alter type X alter property n using (1);
+                #
+                # will result in the column for X.n to be dropped. To ensure
+                # this operation succeeds, the constraint trigger must be
+                # deleted before dropping the column.
                 self.drop_constraint_trigger_and_fuction(old_constraint)
 
             else:
