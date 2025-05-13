@@ -95,9 +95,6 @@ def span_to_lsp(
 def error_to_lsp(error: errors.EdgeDBError) -> lsp_types.Diagnostic:
     message: str = error.args[0]
 
-    from edb.language_server import main
-    main.send_log_message(str(error) + str(error.hint) + str(error.details))
-
     if hint := error.hint:
         message += f"\nHint: {hint}"
 
