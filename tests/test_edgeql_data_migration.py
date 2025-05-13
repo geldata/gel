@@ -11526,6 +11526,10 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
             type Test2 extending Parent;
         """)
 
+    @tb.ignore_warnings(
+        r"Redundant index on \(\.[\w\d_]+\)\. "
+        r"Non-computed links are automatically indexed\."
+    )
     async def test_edgeql_migration_access_policy_02(self):
         # Make sure policies don't interfere with constraints or indexes
         await self.migrate(r"""
