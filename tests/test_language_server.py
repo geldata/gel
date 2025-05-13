@@ -327,7 +327,8 @@ class TestLanguageServer(unittest.TestCase):
                             {
                                 "message": (
                                     "object type 'default::Hello' "
-                                    "has no link or property 'worl'"
+                                    "has no link or property 'worl'\n"
+                                    "Hint: did you mean 'world'?"
                                 ),
                                 "range": {
                                     "start": {"character": 47, "line": 1},
@@ -439,7 +440,9 @@ class TestLanguageServer(unittest.TestCase):
                             {
                                 "message": (
                                     "operator '+' cannot be applied to operands"
-                                    " of type 'std::str' and 'std::int64'"
+                                    " of type 'std::str' and 'std::int64'\n"
+                                    "Hint: Consider using an explicit type "
+                                    "cast or a conversion function."
                                 ),
                                 "range": {
                                     "start": {"character": 7, "line": 0},

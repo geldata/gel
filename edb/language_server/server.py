@@ -169,7 +169,7 @@ def compile_ql(
                 if isinstance(ir_res, irast.Statement):
                     ir_stmts.append(ir_res)
             else:
-                ls.send_log_message(f"skip compile of {ql_stmt}")
+                ls.show_message_log(f"skip compile of {ql_stmt}")
         except errors.EdgeDBError as error:
             diagnostics.append(ls_utils.error_to_lsp(error))
 
