@@ -11,7 +11,7 @@ dependencies = [
     'parsing~=2.0',
     'uvloop~=0.21.0',
 
-    'click~=8.0',
+    'click~=8.1.0',
     'cryptography~=42.0',
     'graphql-core~=3.1.5',
     'psutil~=5.8',
