@@ -77,15 +77,7 @@ def parse(
             result.out, productions, source, doc.filename
         ).val
     except errors.EdgeDBError as e:
-        return Result(
-            err=[
-                lsp_types.Diagnostic(
-                    range=ls_utils.span_to_lsp(source.text(), e.get_span()),
-                    severity=lsp_types.DiagnosticSeverity.Error,
-                    message=e.args[0],
-                )
-            ]
-        )
+        return Result(err=[ls_utils.error_to_lsp(e)])
     if sdl:
         assert isinstance(ast, qlast.Schema), ast
     else:

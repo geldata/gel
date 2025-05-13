@@ -455,6 +455,150 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
+    def test_language_server_diagnostics_05(self):
+        # Test hints
+        runner = LspRunner()
+        try:
+            runner.add_file("gel.toml", "")
+            runner.add_file("dbschema/default.gel", "")
+            runner.send_init()
+
+            # hint originating from parser
+            file_uri = runner.get_uri("my_query.edgeql")
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": file_uri,
+                            "languageId": "edgeql",
+                            "version": 1,
+                            "text": "explain select 1",
+                        }
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=10),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": file_uri,
+                        "version": 1,
+                        "diagnostics": [
+                            {
+                                "message": (
+                                    "Unexpected keyword 'EXPLAIN'\n"
+                                    "Hint: Use `analyze` to show query "
+                                    "performance details"
+                                ),
+                                "range": {
+                                    "start": {"character": 0, "line": 0},
+                                    "end": {"character": 7, "line": 0},
+                                },
+                                "severity": 1,
+                            }
+                        ],
+                    },
+                },
+            )
+
+            # hint originating from CST to AST mapper
+            file_uri = runner.get_uri("my_query.edgeql")
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": file_uri,
+                            "languageId": "edgeql",
+                            "version": 2,
+                            "text": "insert 1 if true else 2",
+                        }
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=10),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": file_uri,
+                        "version": 2,
+                        "diagnostics": [
+                            {
+                                "message": (
+                                    "INSERT only works with object types, not "
+                                    "conditional expressions\n"
+                                    "Hint: To resolve this try surrounding the "
+                                    "INSERT branch of the conditional "
+                                    "expression with parentheses. This way the "
+                                    "INSERT will be triggered conditionally in "
+                                    "one of the branches."
+                                ),
+                                "range": {
+                                    "start": {"character": 7, "line": 0},
+                                    "end": {"character": 23, "line": 0},
+                                },
+                                "severity": 1,
+                            }
+                        ],
+                    },
+                },
+            )
+
+            # hint originating from ql compiler
+            file_uri = runner.get_uri("my_query.edgeql")
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": file_uri,
+                            "languageId": "edgeql",
+                            "version": 3,
+                            "text": "select std::len(4)",
+                        }
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=10),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": file_uri,
+                        "version": 3,
+                        "diagnostics": [
+                            {
+                                "message": (
+                                    'function "std::len(arg0: std::int64)" does'
+                                    ' not exist\n'
+                                    "Hint: Did you want one of the following "
+                                    "functions instead:\n"
+                                    "std::len(array: array<anytype>)\n"
+                                    "std::len(bytes: std::bytes)\n"
+                                    "std::len(str: std::str)"
+                                ),
+                                "range": {
+                                    "start": {"character": 7, "line": 0},
+                                    "end": {"character": 18, "line": 0},
+                                },
+                                "severity": 1,
+                            }
+                        ],
+                    },
+                },
+            )
+        finally:
+            runner.finish()
+
     def test_language_server_definition_01(self):
         # get definition in edgeql
         runner = LspRunner()
