@@ -908,7 +908,7 @@ def prepare_patch(
 
         metadata_user_schema = reflschema
 
-    elif kind.startswith('edgeql+user'):
+    elif kind.startswith('edgeql+user') or kind.startswith('edgeql+user_ext'):
         assert '+schema' not in kind
 
         # There isn't anything to do on the system database for
