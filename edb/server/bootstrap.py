@@ -908,22 +908,23 @@ def prepare_patch(
 
         metadata_user_schema = reflschema
 
-    elif kind.startswith('edgeql+user_ext'):
+    elif kind.startswith('edgeql+user') or kind.startswith('edgeql+user_ext'):
         assert '+schema' not in kind
 
         # There isn't anything to do on the system database for
-        # userext updates.
+        # user updates.
         if user_schema is None:
             return (update,), (), dict(is_user_update=True)
 
-        # Only run a userext update if the extension we are trying to
-        # update is installed.
-        extension_name = kind.split('|')[-1]
-        extension = user_schema.get_global(
-            s_exts.Extension, extension_name, default=None)
+        if kind.startswith('edgeql+user_ext'):
+            # Only run a userext update if the extension we are trying to
+            # update is installed.
+            extension_name = kind.split('|')[-1]
+            extension = user_schema.get_global(
+                s_exts.Extension, extension_name, default=None)
 
-        if not extension:
-            return (update,), (), {}
+            if not extension:
+                return (update,), (), {}
 
         assert global_schema
         cschema = s_schema.ChainedSchema(
