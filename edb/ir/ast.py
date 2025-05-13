@@ -160,6 +160,11 @@ class TypeRef(ImmutableBase):
     collection: typing.Optional[str] = None
     # Collection subtypes if this is a collection
     subtypes: tuple[TypeRef, ...] = ()
+    # If this is array<array<...>>, the padded type is array<tuple<array<...>>>
+    padded_array_type: typing.Optional[TypeRef] = None
+    # If this is array<...> and tuple<array<...>> is persisted
+    # in the schema, this is the tuple's id
+    wrapped_array_id: typing.Optional[uuid.UUID] = None
     # True, if this describes a scalar type
     is_scalar: bool = False
     # True, if this describes a view
@@ -1081,8 +1086,9 @@ class OperatorCall(Call):
 
 class IndexIndirection(ImmutableExpr):
 
-    expr: Base
+    expr: Set | IndexIndirection | SliceIndirection
     index: Base
+    input_typeref: TypeRef
     typeref: TypeRef
 
 
