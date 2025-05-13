@@ -140,6 +140,10 @@ def get_completion(
             break
     tokens = source.tokens()[0:cut_index]
 
+    # special case: cursor is *on* the last ident
+    if tokens[-1].is_ident() and tokens[-1].span_end() == target:
+        return [], True
+
     # run parser and suggest next possible keywords
     suggestions, can_be_ident = rust_parser.suggest_next_keywords(
         start_t_name, tokens

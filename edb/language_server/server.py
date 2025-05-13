@@ -98,11 +98,8 @@ def document_updated(ls: GelLanguageServer, doc_uri: str, *, compile: bool):
             diagnostic_set.merge(ls_schema._parse_schema(ls))
 
             # compile
-            if compile:
-                ls.state.schema = None
-                _schema, _, err_msg = ls_schema.get_schema(ls)
-                if err_msg:
-                    ls.show_message(f'Error: {err_msg}')
+            if compile and not diagnostic_set.has_any():
+                _, _ = ls_schema._compile_schema(ls)
 
             # add schema diagnostics from last compilation
             if ls.state.schema_diagnostics:

@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Optional, Sequence
+from typing import Optional
 
 from lsprotocol import types as lsp_types
 import pygls
@@ -191,7 +191,7 @@ def _get_definition_in_schema(
     name: str = node_path[0].name
     module: Optional[str] = node_path[0].module
     if not module:
-        module = _get_module_context(node_path)
+        module = ls_schema.get_module_context(node_path[1:])
     if not module:
         return None
     q_name = s_name.QualName(module, name)
@@ -243,16 +243,3 @@ def _schema_obj_to_doc_location(
         uri=doc.uri,
         range=ls_utils.span_to_lsp(doc.source, (span.start, span.end)),
     )
-
-
-# Given a path from a node to qlast.Schema root, collects the names of
-# encapsulating modules.
-def _get_module_context(path: Sequence[qlast.Base]) -> str | None:
-    mod_names = []
-    for node in path[1:]:
-        if isinstance(node, qlast.ModuleDeclaration):
-            mod_names.append(node.name.name)
-    if not mod_names:
-        return None
-    mod_names.reverse()
-    return '::'.join(mod_names)

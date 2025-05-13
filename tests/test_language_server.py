@@ -27,6 +27,8 @@ import tempfile
 import pathlib
 import os
 
+from edb.common.assert_data_shape import assert_data_shape, bag
+
 try:
     from edb.language_server import main as ls_main
 except ImportError:
@@ -1138,7 +1140,7 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_completion_07(self):
+    def test_language_server_completion_03(self):
         # completion might suggest give all reserved keywords
         runner = LspRunner()
         try:
@@ -1254,7 +1256,7 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_completion_08(self):
+    def test_language_server_completion_04(self):
         # completion might not suggest some unreserved keywords (i.e. property)
         runner = LspRunner()
         try:
@@ -1301,7 +1303,7 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_completion_09(self):
+    def test_language_server_completion_05(self):
         # completion might not suggest some unreserved keywords (i.e. property)
         runner = LspRunner()
         try:
@@ -1441,7 +1443,7 @@ class TestLanguageServer(unittest.TestCase):
         finally:
             runner.finish()
 
-    def test_language_server_completion_10(self):
+    def test_language_server_completion_06(self):
         # empty document
         runner = LspRunner()
         try:
@@ -1523,6 +1525,113 @@ class TestLanguageServer(unittest.TestCase):
                         ],
                     },
                 },
+            )
+
+        finally:
+            runner.finish()
+
+    def test_language_server_completion_07(self):
+        # empty document
+        runner = LspRunner()
+        try:
+            default_gel_uri = runner.get_uri("dbschema/default.gel")
+            default_gel = """
+                module default {
+                    scalar type age extending int16;
+
+                    type Club;
+
+                    type Player {
+                        property name: str;
+                        property age: age;
+                        link club: Club;
+                    };
+
+                    alias YoungPlayers := (
+                        select Player filter .age < 16
+                    );
+                }
+                module another {
+                    type Another;
+                }
+                type flat::Another;
+            """
+
+            runner.add_file("gel.toml", "")
+            runner.add_file("dbschema/default.gel", default_gel)
+            runner.send_init()
+
+            runner.send(
+                {
+                    "id": 2,
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/didOpen",
+                    "params": {
+                        "textDocument": {
+                            "uri": default_gel_uri,
+                            "languageId": "edgeql",
+                            "version": 1,
+                            "text": default_gel,
+                        }
+                    },
+                }
+            )
+            self.assertEqual(
+                runner.recv(timeout_sec=50),
+                {
+                    "jsonrpc": "2.0",
+                    "method": "textDocument/publishDiagnostics",
+                    "params": {
+                        "uri": default_gel_uri,
+                        "version": 1,
+                        "diagnostics": [],
+                    },
+                },
+            )
+
+            runner.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "method": "textDocument/completion",
+                    "params": {
+                        "textDocument": {"uri": default_gel_uri},
+                        "position": {"line": 9, "character": 46},
+                    },
+                }
+            )
+            assert_data_shape(
+                runner.recv(timeout_sec=5),
+                {
+                    "jsonrpc": "2.0",
+                    "id": 5,
+                    "result": {
+                        "isIncomplete": False,
+                        'items': bag([
+                            {'kind': 22, 'label': 'Player'},
+                            {'kind': 22, 'label': 'Club'},
+                            {'kind': 12, 'label': 'age'},
+                            {'kind': 9, 'label': 'std::net'},
+                            {'kind': 9, 'label': 'sys', 'insertText': 'sys::'},
+                            {'kind': 9, 'label': 'cfg', 'insertText': 'cfg::'},
+                            {'kind': 9, 'label': 'std::net::http'},
+                            {'kind': 9, 'label': 'std::pg'},
+                            {'kind': 9, 'label': 'std::cal'},
+                            {'kind': 9, 'label': 'std::enc'},
+                            {'kind': 9, 'label': 'std::math'},
+                            {'kind': 9, 'label': 'another'},
+                            {'kind': 9, 'label': 'std', 'insertText': 'std::'},
+                            {'kind': 9, 'label': 'schema'},
+                            {'kind': 9, 'label': 'default'},
+                            {'kind': 9, 'label': 'flat'},
+                            {'kind': 9, 'label': 'ext'},
+                            {'kind': 9, 'label': 'std::fts'},
+                            {'kind': 14, 'label': 'optional'},
+                            {'kind': 14, 'label': 'single'},
+                        ]),
+                    },
+                },
+                fail=self.fail
             )
 
         finally:

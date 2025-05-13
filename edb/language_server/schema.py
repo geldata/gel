@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Optional, cast
+from typing import Optional, cast, Iterable
 import pathlib
 import os
 
@@ -229,8 +229,10 @@ def _compile_schema(
         schema, _warnings = s_ddl.apply_sdl(
             ls.state.schema_sdl, base_schema=std_schema
         )
+        ls.state.schema = schema
         ls.show_message_log(".. done")
     except errors.EdgeDBError as error:
+        ls.show_message_log(".. error")
         schema = None
 
         # find doc
@@ -248,7 +250,6 @@ def _compile_schema(
         # convert error
         diagnostics.append(do, ls_utils.error_to_lsp(error))
 
-    ls.state.schema = schema
     ls.state.schema_diagnostics = diagnostics
     return (schema, diagnostics)
 
@@ -258,10 +259,21 @@ def _load_std_schema(state: ls_server.State) -> s_schema.Schema:
         return state.std_schema
 
     schema: s_schema.Schema = s_schema.EMPTY_SCHEMA
-    for modname in [*s_schema.STD_SOURCES, *s_schema.TESTMODE_SOURCES]:
+    for modname in s_schema.STD_SOURCES:
         schema = s_std.load_std_module(schema, modname)
-    schema, _ = s_std.make_schema_version(schema)
-    schema, _ = s_std.make_global_schema_version(schema)
 
     state.std_schema = schema
     return state.std_schema
+
+
+# Given a path from a node to qlast.Schema root, collects the names of
+# encapsulating modules.
+def get_module_context(path: Iterable[qlast.Base]) -> str | None:
+    mod_names = []
+    for node in path:
+        if isinstance(node, qlast.ModuleDeclaration):
+            mod_names.append(node.name.name)
+    if not mod_names:
+        return None
+    mod_names.reverse()
+    return '::'.join(mod_names)
