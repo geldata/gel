@@ -32,6 +32,8 @@ from edb.schema import modules as s_modules
 from edb.schema import objtypes as s_objtypes
 from edb.schema import types as s_types
 from edb.schema import scalars as s_scalars
+from edb.schema import schema as s_schema
+from edb.schema import objects as s_objects
 
 from . import parsing as ls_parsing
 from . import server as ls_server
@@ -126,7 +128,7 @@ def _get_completion_in_schema(
     module = ls_schema.get_module_context(node_path[1:])
     ls.show_message_log(f"module = {module}")
     if module:
-        objects = schema.get_objects(
+        objects: s_schema.SchemaIterator[s_objects.Object] = schema.get_objects(
             included_modules=(sn.UnqualName(module),),
         )
         for obj in objects:
