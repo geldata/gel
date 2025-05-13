@@ -22,6 +22,7 @@ for obj in data['packages'] + data_testing['packages']:
     if (
         obj['basename'] in {'gel-server', 'edgedb-server'}
         and obj['version_details']['major'] == version
+        and obj['version_details']['minor'] != 6  # sigh.
         and (
             not obj['version_details']['prerelease']
             or obj['version_details']['prerelease'][0]['phase'] in ('beta', 'rc')
