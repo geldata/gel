@@ -7757,13 +7757,11 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         from_alias,
                         type_name := (.__type__.name),
                     }}
-                    filter .id not in {{{','.join(
-                        f'<uuid>"{str(existing_type)}"'
-                        for existing_type in existing_types
-                    )}}}
+                    filter not contains(<array<uuid>>$existing_types, .id)
                     order by .name
                 ''',
                 expected_types,
+                variables={'existing_types': existing_types}
             )
 
     async def test_edgeql_ddl_global_type_changes_01(self):
@@ -11460,13 +11458,11 @@ type default::Foo {
                         from_alias,
                         type_name := (.__type__.name),
                     }}
-                    filter .id not in {{{','.join(
-                        f'<uuid>"{str(existing_type)}"'
-                        for existing_type in existing_types
-                    )}}}
+                    filter not contains(<array<uuid>>$existing_types, .id)
                     order by .name
                 ''',
                 expected_types,
+                variables={'existing_types': existing_types}
             )
 
     async def test_edgeql_ddl_alias_type_changes_01(self):
