@@ -3091,12 +3091,13 @@ def process_set_as_call(
         # Operator call
         return process_set_as_oper_expr(ir_set, ctx=ctx)
 
+    assert irutils.is_set_instance(ir_set, irast.FunctionCall)
+
     if any(
         arg.param_typemod is qltypes.TypeModifier.SetOfType
         for key, arg in ir_set.expr.args.items()
     ):
         # Call to an aggregate function.
-        assert irutils.is_set_instance(ir_set, irast.FunctionCall)
         return process_set_as_agg_expr(ir_set, ctx=ctx)
 
     # Regular function call.
@@ -3641,7 +3642,7 @@ def _should_unwrap_polymorphic_return_array(
 
 
 def _compile_call_args(
-    ir_set: irast.Set,
+    ir_set: irast.SetE[irast.Call],
     *,
     skip: Collection[int] = (),
     no_subquery_args: bool = False,
@@ -3652,7 +3653,6 @@ def _compile_call_args(
     """
 
     expr = ir_set.expr
-    assert isinstance(expr, irast.Call)
 
     args = []
 
@@ -3736,10 +3736,9 @@ def _compile_call_args(
 
 
 def _compile_inlined_call_args(
-    ir_set: irast.Set, *, ctx: context.CompilerContextLevel
+    ir_set: irast.SetE[irast.FunctionCall], *, ctx: context.CompilerContextLevel
 ) -> None:
     expr = ir_set.expr
-    assert isinstance(expr, irast.FunctionCall)
     assert expr.body is not None
 
     if irutils.contains_dml(expr.body):
@@ -3850,14 +3849,13 @@ def _compile_inlined_call_args(
 
 
 def process_set_as_func_enumerate(
-    ir_set: irast.Set, *, ctx: context.CompilerContextLevel
+    ir_set: irast.SetE[irast.Call], *, ctx: context.CompilerContextLevel
 ) -> SetRVars:
     expr = ir_set.expr
-    assert isinstance(expr, irast.FunctionCall)
 
     inner_func_set = irutils.unwrap_set(expr.args[0].expr)
+    assert irutils.is_set_instance(inner_func_set, irast.FunctionCall)
     inner_func = inner_func_set.expr
-    assert isinstance(inner_func, irast.FunctionCall)
 
     with ctx.subrel() as newctx:
         with newctx.new() as newctx2:
@@ -3880,10 +3878,9 @@ def process_set_as_func_enumerate(
 
 
 def process_set_as_func_expr(
-    ir_set: irast.Set, *, ctx: context.CompilerContextLevel
+    ir_set: irast.SetE[irast.FunctionCall], *, ctx: context.CompilerContextLevel
 ) -> SetRVars:
     expr = ir_set.expr
-    assert isinstance(expr, irast.FunctionCall)
 
     with ctx.subrel() as newctx:
         newctx.expr_exposed = False
