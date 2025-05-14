@@ -18968,7 +18968,6 @@ class TestDDLNonIsolated(tb.DDLTestCase):
                     create constraint exclusive;
                 };
                 create property bar -> str;
-                create index on (.foo);
                 create constraint exclusive on ((.foo, .bar));
                 create link tgt -> Tgt {
                     create property foo -> str;
