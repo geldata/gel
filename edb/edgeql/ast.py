@@ -201,6 +201,18 @@ class Anchor(Expr):
 
 class IRAnchor(Anchor):
     has_dml: bool = False
+    # Whether, when the anchor is referenced, to move the entire
+    # referenced scope tree of the anchor to wherever it is referenced.
+    #
+    # This is important when the anchor is being used to substitute an
+    # expression in, being used only once, and we want it to behave
+    # like it was written at the point it is being substituted.
+    #
+    # (Sometimes we have anchors that get used repeatedly and which we
+    # *want* to have be bound above, basically. I'd like to get rid of
+    # all of those uses, though.)
+    # (And also the scope tree.)
+    move_scope: bool = False
 
 
 class SpecialAnchor(Anchor):

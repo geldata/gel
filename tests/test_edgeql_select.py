@@ -8576,6 +8576,29 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             __typenames__=True
         )
 
+    async def test_edgeql_select_policies_subquery_args_01(self):
+        # There used to be a bug where we screwed up cardinality
+        # inference when functions with prefer_subquery_args (like
+        # std::contains on ranges) were used, which would lead to
+        # bogus FILTER clause warnings.
+        #
+        # This is in select because it only happened with old
+        # factoring, I think.
+        await self.con.execute('''
+            create type XR {
+                create required property r -> range<int64>;
+                create required property e -> int64;
+                create access policy lol allow all using (contains(.r, .e));
+            };
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select XR
+            ''',
+            []
+        )
+
     async def test_edgeql_type_pointer_backlink_01(self):
         # Type injection on bare backlinks was broken in 3.x (#5930)
         await self.con._fetchall(

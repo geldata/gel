@@ -341,36 +341,6 @@ def compile_Array(expr: qlast.Array, *, ctx: context.ContextLevel) -> irast.Set:
     return setgen.new_array_set(elements, ctx=ctx, span=expr.span)
 
 
-def _move_fenced_anchor(ir: irast.Set, *, ctx: context.ContextLevel) -> None:
-    """Move the scope tree of a fenced anchor to its use site.
-
-    For technical reasons, in _compile_dml_coalesce and
-    _compile_dml_ifelse, we compile the expressions normally and then
-    extract the subcomponents and use them as anchors inside a
-    desugared expression.
-
-    Because of this, the resultant scope tree does not have the right
-    shape, since the scope trees of the fenced subexpressions aren't
-    nested inside the trees of the FOR loops. This results in subtle
-    problems in backend compilation, since the loop iterators are not
-    visible to the loop bodies.
-
-    Fix the trees by finding the scope tree associated with a set used
-    as an anchor, finding where that anchor was used, and moving the
-    scope tree there.
-    """
-    match ir.expr:
-        case irast.SelectStmt(result=irast.SetE(path_scope_id=int(id))):
-            node = next(iter(
-                x for x in ctx.path_scope.root.descendants
-                if x.unique_id == id
-            ))
-            target = ctx.path_scope.find_descendant(ir.path_id)
-            assert target and target.parent
-            node.remove()
-            target.parent.attach_child(node)
-
-
 def _compile_dml_coalesce(
     expr: qlast.BinOp, *, ctx: context.ContextLevel
 ) -> irast.Set:
@@ -429,7 +399,9 @@ def _compile_dml_coalesce(
                     operand=qlast.UnaryOp(op='EXISTS', operand=cond_path),
                 ),
             ),
-            result=subctx.create_anchor(rhs_ir, check_dml=True),
+            result=subctx.create_anchor(
+                rhs_ir, move_scope=True, check_dml=True
+            ),
         )
 
         full = qlast.ForQuery(
@@ -446,8 +418,6 @@ def _compile_dml_coalesce(
         # cardinality/multiplicity.
         assert isinstance(res.expr, irast.SelectStmt)
         res.expr.card_inference_override = ir
-
-        _move_fenced_anchor(rhs_ir, ctx=subctx)
 
         return res
 
@@ -509,7 +479,9 @@ def _compile_dml_ifelse(
                     result=qlast.Tuple(elements=[]),
                     where=cond_path,
                 ),
-                result=subctx.create_anchor(if_ir, check_dml=True),
+                result=subctx.create_anchor(
+                    if_ir, move_scope=True, check_dml=True
+                ),
             )
             els.append(if_b)
 
@@ -520,7 +492,9 @@ def _compile_dml_ifelse(
                     result=qlast.Tuple(elements=[]),
                     where=qlast.UnaryOp(op='NOT', operand=cond_path),
                 ),
-                result=subctx.create_anchor(else_ir, check_dml=True),
+                result=subctx.create_anchor(
+                    else_ir, move_scope=True, check_dml=True
+                ),
             )
             els.append(else_b)
 
@@ -540,9 +514,6 @@ def _compile_dml_ifelse(
         # cardinality/multiplicity.
         assert isinstance(res.expr, irast.SelectStmt)
         res.expr.card_inference_override = ir
-
-        _move_fenced_anchor(if_ir, ctx=subctx)
-        _move_fenced_anchor(else_ir, ctx=subctx)
 
         return res
 
