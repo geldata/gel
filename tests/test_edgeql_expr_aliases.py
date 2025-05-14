@@ -1304,6 +1304,437 @@ class TestEdgeQLExprAliases(tb.QueryTestCase):
             []
         )
 
+    async def _check_ddl_type_changes(self, ddls_and_expected_types):
+        """Check newly created schema types after a series of ddl stmts."""
+        existing_types = await self.con.query("select schema::Type.id")
+
+        for ddl, expected_types in ddls_and_expected_types:
+            await self.con.execute(f'''
+                {ddl};
+            ''')
+
+            await self.assert_query_result(
+                f'''
+                    select schema::Type {{
+                        name,
+                        from_alias,
+                        type_name := (.__type__.name),
+                    }}
+                    filter .id not in {{{','.join(
+                        f'<uuid>"{str(existing_type)}"'
+                        for existing_type in existing_types
+                    )}}}
+                    order by .name
+                ''',
+                expected_types,
+            )
+
+    async def test_edgeql_aliases_ddl_type_changes_01(self):
+        # Create alias
+        # Delete alias
+
+        # int64
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := 1',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ScalarType',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_aliases_ddl_type_changes_02(self):
+        # Create alias
+        # Delete alias
+
+        # array<int64>
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := [1]',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_aliases_ddl_type_changes_03(self):
+        # Create alias
+        # Delete alias
+
+        # tuple<int64>
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_aliases_ddl_type_changes_04(self):
+        # Create alias
+        # Delete alias
+
+        # tuple<f:int64>
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := (f := 1)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<f:std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_aliases_ddl_type_changes_05(self):
+        # Create alias
+        # Delete alias
+
+        # array<tuple<int64>>
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_aliases_ddl_type_changes_06(self):
+        # Create alias
+        # Delete alias
+
+        # array<tuple<f:array<int64>>>
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := [(f := [1])]',
+                [
+                    {
+                        'name': 'array<tuple<f:array<std||int64>>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<f:array<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_aliases_ddl_type_changes_07(self):
+        # Create alias
+        # Delete alias
+
+        # tuple<array<int64>>
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := ([1],)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<array<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_aliases_ddl_type_changes_08(self):
+        # Create alias 1
+        # Create alias 2
+        # Delete alias 1
+        # Delete alias 2
+
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create alias bar := ((1,),)',
+                [
+                    {
+                        'name': 'array<tuple<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop alias foo',
+                [
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias bar', []),
+        ])
+
+    async def test_edgeql_aliases_ddl_type_changes_09(self):
+        # Create alias 1
+        # Create alias 2
+        # Delete alias 2
+        # Delete alias 1
+
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create alias bar := ((1,),)',
+                [
+                    {
+                        'name': 'array<tuple<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop alias bar',
+                [
+                    {
+                        'name': 'array<tuple<std|int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_aliases_ddl_type_changes_10(self):
+        # Create alias
+        # Alter expr, same type
+        # Delete alias
+
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'alter alias foo {using ((2,))}',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_aliases_ddl_type_changes_11(self):
+        # Create alias
+        # Alter expr, different type
+        # Delete alias
+
+        await self._check_ddl_type_changes([
+            (
+                'create alias foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'alter alias foo {using (("a",))}',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::str>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
     async def test_edgeql_aliases_array_of_array_01(self):
         await self.assert_query_result(
             r"""
