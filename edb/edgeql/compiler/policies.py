@@ -146,13 +146,13 @@ def compile_pol(
     }
 
     # Compile it with all of the
-    with ctx.detached() as dctx:
+    with ctx.newscope(fenced=True) as _, _.detached() as dctx:
         dctx.schema_factoring()
         dctx.partial_path_prefix = ctx.partial_path_prefix
         dctx.expr_exposed = context.Exposure.UNEXPOSED
         dctx.suppress_rewrites = frozenset(descs)
 
-        return dispatch.compile(expr, ctx=dctx)
+        return setgen.scoped_set(dispatch.compile(expr, ctx=dctx), ctx=dctx)
 
 
 def get_extra_function_rewrite_filter(ctx: context.ContextLevel) -> qlast.Expr:
@@ -205,7 +205,7 @@ def get_rewrite_filter(
             continue
 
         ir_set = compile_pol(pol, ctx=ctx)
-        expr: qlast.Expr = ctx.create_anchor(ir_set)
+        expr: qlast.Expr = ctx.create_anchor(ir_set, move_scope=True)
 
         is_allow = pol.get_action(schema) == qltypes.AccessPolicyAction.Allow
         if is_allow:
@@ -230,12 +230,12 @@ def get_rewrite_filter(
 
     # We compile the expression again so we can do an IR based
     # analysis on it below.
-    with ctx.new() as dctx:
+    with ctx.newscope(fenced=False) as dctx:
         # HACK: to prevent filter_ir from being warning fenced
         dctx.allow_factoring()
         dctx.expr_exposed = context.Exposure.UNEXPOSED
         filter_ir = dispatch.compile(filter_expr, ctx=dctx)
-    filter_expr = ctx.create_anchor(filter_ir)
+        filter_expr = setgen.moveable_anchor(filter_ir, ctx=dctx)
 
     # This is a bad hack, but add an always false condition that
     # postgres does not *know* is always false. This prevents postgres

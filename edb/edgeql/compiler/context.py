@@ -807,15 +807,23 @@ class ContextLevel(compiler.ContextLevel):
         return self.new(ContextSwitchMode.DETACHED)
 
     def create_anchor(
-        self, ir: irast.Set, name: str = 'v', *, check_dml: bool = False
+        self,
+        ir: irast.Set,
+        name: str = 'v', *,
+        check_dml: bool = False,
+        move_scope: bool = False,
     ) -> qlast.Path:
         alias = self.aliases.get(name)
         # TODO: We should probably always check for DML, but I'm
         # concerned about perf, since we don't cache it at all.
         has_dml = check_dml and irutils.contains_dml(ir)
         self.anchors[alias] = ir
+        if move_scope:
+            assert ir.path_scope_id is not None
         return qlast.Path(
-            steps=[qlast.IRAnchor(name=alias, has_dml=has_dml)],
+            steps=[qlast.IRAnchor(
+                name=alias, has_dml=has_dml, move_scope=move_scope
+            )],
         )
 
     def maybe_create_anchor(
