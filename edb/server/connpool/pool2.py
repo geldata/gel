@@ -213,7 +213,7 @@ class Pool(typing.Generic[C]):
                 if f := self._acquires.pop(msg[1], None):
                     f.set_exception(error)
                 else:
-                    logger.warn(f"Duplicate exception for acquire {msg[1]}")
+                    logger.warning(f"Duplicate exception for acquire {msg[1]}")
         elif msg[0] == 6:
             # Pickled metrics
             self._counts = pickle.loads(msg[1])
