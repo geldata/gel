@@ -220,8 +220,7 @@ class CompilerContextLevel(compiler.ContextLevel):
     #: Record of DML CTEs generated for the corresponding IR DML.
     #: CTEs generated for DML-containing FOR statements are keyed
     #: by their iterator set.
-    dml_stmts: dict[irast.MutatingStmt | irast.Set,
-                    pgast.CommonTableExpr]
+    dml_stmts: dict[irast.MutatingStmt | irast.Set, pgast.CommonTableExpr]
 
     #: Inline DML functions may require additional CTEs.
     #: Record such CTEs as well as the path used by their iterators.
@@ -545,6 +544,7 @@ class Environment:
     materialized_views: dict[uuid.UUID, irast.Set]
     backend_runtime_params: pgparams.BackendRuntimeParams
     versioned_stdlib: bool
+    sql_dml_mode: bool
 
     #: A list of CTEs that implement constraint validation at the
     #: query level.
@@ -570,6 +570,7 @@ class Environment:
         backend_runtime_params: pgparams.BackendRuntimeParams,
         # XXX: TRAMPOLINE: THIS IS WRONG
         versioned_stdlib: bool = True,
+        sql_dml_mode: bool = False,
     ) -> None:
         self.aliases = alias_generator or pg_aliases.AliasGenerator()
         self.output_format = output_format
@@ -588,6 +589,7 @@ class Environment:
         self.check_ctes = []
         self.backend_runtime_params = backend_runtime_params
         self.versioned_stdlib = versioned_stdlib
+        self.sql_dml_mode = sql_dml_mode
 
 
 # XXX: this context hack is necessary until pathctx is converted

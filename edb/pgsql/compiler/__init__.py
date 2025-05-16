@@ -88,6 +88,7 @@ def compile_ir_to_sql_tree(
     versioned_stdlib: bool = True,
     # HACK?
     versioned_singleton: bool = False,
+    sql_dml_mode: bool = False,
 ) -> CompileResult:
     if singleton_mode and not versioned_singleton:
         versioned_stdlib = False
@@ -146,6 +147,7 @@ def compile_ir_to_sql_tree(
             external_rvars=external_rvars,
             backend_runtime_params=backend_runtime_params,
             versioned_stdlib=versioned_stdlib,
+            sql_dml_mode=sql_dml_mode,
         )
 
         ctx = context.CompilerContextLevel(

@@ -272,22 +272,33 @@ def gen_dml_cte(
         # touches link tables).
         dml_stmt = pgast.SelectStmt()
 
-        # We join with the concrete table for this type, but also include
-        # overlays produced by previous DML stmts. This is needed for SQL DML
-        # support, which needs to update a link table of a newly inserted object
-        subject_rel_overlayed = relctx.range_for_typeref(
-            typeref,
-            subject_path_id,
-            for_mutation=False,
-            include_descendants=False,
-            dml_source=[
-                k for k in ctx.dml_stmts.keys()
-                if isinstance(k, irast.MutatingLikeStmt)
-            ],
-            ctx=ctx,
-        )
-        dml_stmt.from_clause.append(subject_rel_overlayed)
-        subject_rvar = subject_rel_overlayed
+        if ctx.env.sql_dml_mode:
+            # We join with the concrete table for this type, but also include
+            # overlays produced by previous DML stmts. This is needed for SQL
+            # DML, which needs to update a link table of a newly inserted object
+            subject_rel_overlayed = relctx.range_for_typeref(
+                typeref,
+                subject_path_id,
+                for_mutation=False,
+                include_descendants=False,
+                dml_source=[
+                    k for k in ctx.dml_stmts.keys()
+                    if isinstance(k, irast.MutatingLikeStmt)
+                ],
+                ctx=ctx,
+            )
+            dml_stmt.from_clause.append(subject_rel_overlayed)
+            subject_rvar = subject_rel_overlayed
+        else:
+            # We join with the concrete table for this type
+            relation = relctx.range_for_typeref(
+                typeref,
+                subject_path_id,
+                for_mutation=True,
+                ctx=ctx,
+            )
+            dml_stmt.from_clause.append(relation)
+            subject_rvar = relation
 
     elif isinstance(ir_stmt, irast.DeleteStmt):
         relation = relctx.range_for_typeref(
