@@ -718,68 +718,70 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             """,
             url=webhook_url,
         )
+        provider_config = await self.get_builtin_provider_config_by_name(
+            "oauth_github"
+        )
+        provider_name = provider_config.name
+        client_id = provider_config.client_id
+        client_secret = GITHUB_SECRET
+
+        now = utcnow()
+        webhook_request = (
+            "POST",
+            base_url,
+            "/webhook-01",
+        )
+        self.mock_net_server.register_route_handler(*webhook_request)(
+            (
+                "",
+                204,
+            )
+        )
+
+        token_request = (
+            "POST",
+            "https://github.com",
+            "login/oauth/access_token",
+        )
+        self.mock_oauth_server.register_route_handler(*token_request)(
+            (
+                json.dumps(
+                    {
+                        "access_token": "github_access_token",
+                        "scope": "read:user",
+                        "token_type": "bearer",
+                    }
+                ),
+                200,
+            )
+        )
+
+        user_request = ("GET", "https://api.github.com", "user")
+        self.mock_oauth_server.register_route_handler(*user_request)(
+            (
+                json.dumps(
+                    {
+                        "id": 1,
+                        "login": "octocat",
+                        "name": "monalisa octocat",
+                        "email": "octocat@example.com",
+                        "avatar_url": "https://example.com/example.jpg",
+                        "updated_at": now.isoformat(),
+                    }
+                ),
+                200,
+            )
+        )
         await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
         try:
             with self.http_con() as http_con:
-                provider_config = await self.get_builtin_provider_config_by_name(
-                    "oauth_github"
-                )
-                provider_name = provider_config.name
-                client_id = provider_config.client_id
-                client_secret = GITHUB_SECRET
-
-                now = utcnow()
-                webhook_request = (
-                    "POST",
-                    base_url,
-                    "/webhook-01",
-                )
-                self.mock_net_server.register_route_handler(*webhook_request)(
-                    (
-                        "",
-                        204,
-                    )
-                )
-
-                token_request = (
-                    "POST",
-                    "https://github.com",
-                    "login/oauth/access_token",
-                )
-                self.mock_oauth_server.register_route_handler(*token_request)(
-                    (
-                        json.dumps(
-                            {
-                                "access_token": "github_access_token",
-                                "scope": "read:user",
-                                "token_type": "bearer",
-                            }
-                        ),
-                        200,
-                    )
-                )
-
-                user_request = ("GET", "https://api.github.com", "user")
-                self.mock_oauth_server.register_route_handler(*user_request)(
-                    (
-                        json.dumps(
-                            {
-                                "id": 1,
-                                "login": "octocat",
-                                "name": "monalisa octocat",
-                                "email": "octocat@example.com",
-                                "avatar_url": "https://example.com/example.jpg",
-                                "updated_at": now.isoformat(),
-                            }
-                        ),
-                        200,
-                    )
-                )
 
                 challenge = (
                     base64.urlsafe_b64encode(
                         hashlib.sha256(
-                            base64.urlsafe_b64encode(os.urandom(43)).rstrip(b'=')
+                            base64.urlsafe_b64encode(os.urandom(43)).rstrip(
+                                b'='
+                            )
                         ).digest()
                     )
                     .rstrip(b'=')
@@ -818,7 +820,9 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 self.assertEqual(url.hostname, server_url.hostname)
                 self.assertEqual(url.path, f"{server_url.path}/some/path")
 
-                requests_for_token = self.mock_oauth_server.requests[token_request]
+                requests_for_token = self.mock_oauth_server.requests[
+                    token_request
+                ]
                 self.assertEqual(len(requests_for_token), 1)
                 body = requests_for_token[0].body
                 assert body is not None
@@ -833,7 +837,9 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     },
                 )
 
-                requests_for_user = self.mock_oauth_server.requests[user_request]
+                requests_for_user = self.mock_oauth_server.requests[
+                    user_request
+                ]
                 self.assertEqual(len(requests_for_user), 1)
                 self.assertEqual(
                     requests_for_user[0].headers["authorization"],
@@ -879,7 +885,9 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
 
                 self.assertEqual(len(pkce_object), 1)
-                self.assertEqual(pkce_object[0].auth_token, "github_access_token")
+                self.assertEqual(
+                    pkce_object[0].auth_token, "github_access_token"
+                )
                 self.assertIsNone(pkce_object[0].refresh_token)
 
                 self.mock_oauth_server.register_route_handler(*user_request)(
