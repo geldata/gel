@@ -1971,6 +1971,7 @@ def _compile_uncompiled_dml(
             external_rels=external_rels,
             output_format=pgcompiler.OutputFormat.NATIVE_INTERNAL,
             alias_generator=ctx.alias_generator,
+            sql_dml_mode=True,
         )
 
         merge_params(sql_result, ir_stmt, ctx)
