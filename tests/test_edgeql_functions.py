@@ -3631,6 +3631,24 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
                 ''',
             )
 
+    async def test_edgeql_functions_json_bytes_conversion(self):
+        string = json.dumps({"a": [1, 2, 3], "b": "foo"})
+
+        await self.assert_query_result(
+            r'''
+            WITH
+                input := <bytes>$input,
+                as_json := to_json(to_str(input)),
+                as_bytes := to_bytes(as_json),
+            SELECT
+                as_bytes = input;
+            ''',
+            {True},
+            variables={
+                "input": string.encode("utf-8"),
+            },
+        )
+
     async def test_edgeql_functions_int_bytes_conversion_01(self):
         # Make sure we can convert the bytes to ints and back
         for num in range(256):
