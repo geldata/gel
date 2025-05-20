@@ -16,17 +16,20 @@ for managing |Gel| instances.
     :maxdepth: 3
     :hidden:
 
+    gel_instance_backup
     gel_instance_create
     gel_instance_credentials
     gel_instance_destroy
     gel_instance_link
     gel_instance_list
+    gel_instance_listbackups
     gel_instance_logs
     gel_instance_start
     gel_instance_status
     gel_instance_stop
     gel_instance_reset_password
     gel_instance_restart
+    gel_instance_restore
     gel_instance_revert
     gel_instance_unlink
     gel_instance_upgrade
@@ -34,6 +37,8 @@ for managing |Gel| instances.
 .. list-table::
     :class: funcoptable
 
+    * - :ref:`ref_cli_gel_instance_backup`
+      - Create a backup for an instance
     * - :ref:`ref_cli_gel_instance_create`
       - Initialize a new server instance
     * - :ref:`ref_cli_gel_instance_credentials`
@@ -44,6 +49,8 @@ for managing |Gel| instances.
       - Link a remote instance
     * - :ref:`ref_cli_gel_instance_list`
       - Show all instances
+    * - :ref:`ref_cli_gel_instance_listbackups`
+      - List backups for an instance
     * - :ref:`ref_cli_gel_instance_logs`
       - Show logs of an instance
     * - :ref:`ref_cli_gel_instance_start`
@@ -58,6 +65,8 @@ for managing |Gel| instances.
       - Restart an instance
     * - :ref:`ref_cli_gel_instance_revert`
       - Revert a major instance upgrade
+    * - :ref:`ref_cli_gel_instance_restore`
+      - Restore an instance from a backup
     * - :ref:`ref_cli_gel_instance_unlink`
       - Unlink a remote instance
     * - :ref:`ref_cli_gel_instance_upgrade`
