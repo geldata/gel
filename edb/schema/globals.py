@@ -97,10 +97,6 @@ class Global(
         so.ObjectSet[s_types.Type],
         default=so.DEFAULT_CONSTRUCTOR,
     )
-    existing_types = so.SchemaField(
-        so.ObjectSet[s_types.Type],
-        default=so.DEFAULT_CONSTRUCTOR,
-    )
 
     def is_computable(self, schema: s_schema.Schema) -> bool:
         return bool(self.get_expr(schema))
