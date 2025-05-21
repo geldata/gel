@@ -175,6 +175,10 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
 
         alter property secret {
             set default := ''
+        };
+
+        alter property api_style {
+            set protected := true;
             set default := ext::ai::ProviderAPIStyle.Ollama;
         };
     };
