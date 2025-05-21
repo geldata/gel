@@ -99,3 +99,36 @@ std::net::http::schedule_request(
         }
     ));
 };
+
+CREATE FUNCTION
+std::net::http::schedule_request(
+    url: str,
+    named only body: std::json,
+    named only headers: optional std::array<
+        std::tuple<
+            name: std::str,
+            value: std::str
+        >
+    > = {},
+    named only method: std::net::http::Method = std::net::http::Method.`GET`,
+) -> std::net::http::ScheduledRequest
+{
+    SET is_inlined := true;
+    USING ((
+        INSERT std::net::http::ScheduledRequest {
+            url := url,
+            method := method,
+            headers := headers ++ [
+                (
+                    name := "Content-Type",
+                    value := "application/json",
+                ),
+            ],
+            body := to_bytes(body),
+
+            created_at := std::datetime_of_statement(),
+            updated_at := std::datetime_of_statement(),
+            state := std::net::RequestState.Pending,
+        }
+    ));
+};
