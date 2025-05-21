@@ -455,6 +455,23 @@ class OptGroupingAlias(Nonterm):
         self.val = None
 
 
+FunctionResultData = collections.namedtuple(
+    'FunctionResultData',
+    ['type_qualifier', 'result_type'],
+    module=__name__
+)
+
+
+class FunctionResult(Nonterm):
+    def reduce_ARROW_OptTypeQualifier_FunctionType(
+        self, _, type_qualifier, result_type
+    ):
+        self.val = FunctionResultData(
+            type_qualifier=type_qualifier.val,
+            result_type=result_type.val,
+        )
+
+
 WithBlockData = collections.namedtuple(
     'WithBlockData', ['aliases'], module=__name__)
 

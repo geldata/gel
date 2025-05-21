@@ -2938,15 +2938,14 @@ commands_block(
 class CreateFunctionStmt(Nonterm, commondl.ProcessFunctionBlockMixin):
     def reduce_CreateFunction(self, *kids):
         r"""%reduce CREATE FUNCTION NodeName CreateFunctionArgs \
-                ARROW OptTypeQualifier FunctionType \
-                CreateFunctionCommandsBlock
+                FunctionResult CreateFunctionCommandsBlock
         """
         self.val = qlast.CreateFunction(
             name=kids[2].val,
             params=kids[3].val,
-            returning=kids[6].val,
-            returning_typemod=kids[5].val,
-            **self._process_function_body(kids[7])
+            returning=kids[4].val.result_type,
+            returning_typemod=kids[4].val.type_qualifier,
+            **self._process_function_body(kids[5])
         )
 
 
@@ -3097,32 +3096,30 @@ class CreateOperatorStmt(Nonterm):
     def reduce_CreateOperatorStmt(self, *kids):
         r"""%reduce
             CREATE OperatorKind OPERATOR NodeName CreateFunctionArgs
-            ARROW OptTypeQualifier FunctionType
-            CreateOperatorCommandsBlock
+            FunctionResult CreateOperatorCommandsBlock
         """
         self.val = qlast.CreateOperator(
             kind=kids[1].val,
             name=kids[3].val,
             params=kids[4].val,
-            returning_typemod=kids[6].val,
-            returning=kids[7].val,
-            **self._process_operator_body(kids[8])
+            returning_typemod=kids[5].val.type_qualifier,
+            returning=kids[5].val.result_type,
+            **self._process_operator_body(kids[6])
         )
 
     def reduce_CreateAbstractOperatorStmt(self, *kids):
         r"""%reduce
             CREATE ABSTRACT OperatorKind OPERATOR NodeName CreateFunctionArgs
-            ARROW OptTypeQualifier FunctionType
-            OptCreateOperatorCommandsBlock
+            FunctionResult OptCreateOperatorCommandsBlock
         """
         self.val = qlast.CreateOperator(
             kind=kids[2].val,
             name=kids[4].val,
             params=kids[5].val,
-            returning_typemod=kids[7].val,
-            returning=kids[8].val,
+            returning_typemod=kids[6].val.type_qualifier,
+            returning=kids[6].val.result_type,
             abstract=True,
-            **self._process_operator_body(kids[9], abstract=True)
+            **self._process_operator_body(kids[7], abstract=True)
         )
 
     def _process_operator_body(self, block, abstract: bool = False):
