@@ -583,6 +583,40 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::embedding_model_supports_shortening := "true";
     };
 
+    create abstract type ext::ai::Voyage35EmbedModel
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "voyage-3.5";
+        alter annotation
+            ext::ai::model_provider := "builtin::voyageai";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "32000";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "32000";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "2048";
+        alter annotation
+            ext::ai::embedding_model_supports_shortening := "true";
+    };
+
+    create abstract type ext::ai::Voyage35LiteEmbedModel
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "voyage-3.5-lite";
+        alter annotation
+            ext::ai::model_provider := "builtin::voyageai";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "32000";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "32000";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "2048";
+        alter annotation
+            ext::ai::embedding_model_supports_shortening := "true";
+    };
+
     create abstract type ext::ai::Voyage3EmbedModel
         extending ext::ai::EmbeddingModel
     {
