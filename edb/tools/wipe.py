@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Tuple, List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import asyncio
 import json
@@ -64,7 +64,7 @@ class AbsPath(click.Path):
     '--tenant-id',
     type=str,
     multiple=True,
-    help='The tenant ID of an Gel server to wipe.  May be specified'
+    help='The tenant ID of a Gel server to wipe.  May be specified'
          ' multiple times.  If not specified, all tenants are wiped.')
 @click.option(
     '-y',
@@ -272,7 +272,7 @@ async def wipe_tenant(
 
 async def _get_all_tenants(
     conn: pgcon.PGConnection,
-) -> List[str]:
+) -> list[str]:
     dbs = await conn.sql_fetch_col(
         b"""
         SELECT datname
@@ -295,7 +295,7 @@ async def _get_all_tenants(
 
 async def _get_dbs_and_roles(
     pgconn: pgcon.PGConnection,
-) -> Tuple[List[str], List[str]]:
+) -> tuple[list[str], list[str]]:
     compiler = await edbcompiler.new_compiler_from_pg(pgconn)
     compilerctx = edbcompiler.new_compiler_context(
         compiler_state=compiler.state,

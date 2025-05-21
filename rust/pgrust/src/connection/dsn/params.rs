@@ -8,6 +8,24 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+#[cfg(windows)]
+mod cert_paths {
+    // On Windows, the "home" directory is already PostgreSQL-specific
+    pub const USER_CERT_FILE: &str = "postgresql.crt";
+    pub const USER_KEY_FILE: &str = "postgresql.key";
+    pub const ROOT_CERT_FILE: &str = "root.crt";
+    pub const ROOT_CRL_FILE: &str = "root.crl";
+}
+#[cfg(not(windows))]
+mod cert_paths {
+    pub const USER_CERT_FILE: &str = ".postgresql/postgresql.crt";
+    pub const USER_KEY_FILE: &str = ".postgresql/postgresql.key";
+    pub const ROOT_CERT_FILE: &str = ".postgresql/root.crt";
+    pub const ROOT_CRL_FILE: &str = ".postgresql/root.crl";
+}
+
+use cert_paths::*;
+
 impl<'a, I: Into<RawConnectionParameters<'a>>, E: EnvVar> TryInto<ConnectionParameters> for (I, E) {
     type Error = ParseError;
     fn try_into(self) -> Result<ConnectionParameters, ParseError> {
@@ -240,8 +258,7 @@ pub struct SslParameters {
 
 impl Ssl {
     /// Resolve the SSL paths relative to the home directory.
-    pub fn resolve(&mut self, home_dir: &Path) -> Result<(), std::io::Error> {
-        let postgres_dir = home_dir;
+    pub fn resolve(&mut self, home_dir: Option<&Path>) -> Result<(), std::io::Error> {
         let Ssl::Enable(mode, params) = self else {
             return Ok(());
         };
@@ -249,35 +266,39 @@ impl Ssl {
             let root_cert = params
                 .rootcert
                 .clone()
-                .unwrap_or_else(|| postgres_dir.join("root.crt"));
-            if root_cert.exists() {
+                .or_else(|| home_dir.map(|p| p.join(ROOT_CERT_FILE)));
+            if let Some(root_cert) = root_cert.clone().filter(|p| p.exists()) {
                 params.rootcert = Some(root_cert);
             } else if *mode > SslMode::Require {
+                let reason = root_cert.map(|p| format!(": {p:?}")).unwrap_or_default();
                 return Err(std::io::Error::new(ErrorKind::NotFound,
-                    format!("Root certificate not found: {root_cert:?}. Either provide the file or change sslmode to disable SSL certificate verification.")));
+                    format!("Root certificate not found{reason}. Either provide the file or change sslmode to disable SSL certificate verification.")));
             }
 
             let crl = params
                 .crl
                 .clone()
-                .unwrap_or_else(|| postgres_dir.join("root.crl"));
-            if crl.exists() {
-                params.crl = Some(crl);
+                .or_else(|| home_dir.map(|p| p.join(ROOT_CRL_FILE)))
+                .filter(|p| p.exists());
+            if crl.is_some() {
+                params.crl = crl;
             }
         }
         let key = params
             .key
             .clone()
-            .unwrap_or_else(|| postgres_dir.join("postgresql.key"));
-        if key.exists() {
-            params.key = Some(key);
+            .or_else(|| home_dir.map(|p| p.join(USER_KEY_FILE)))
+            .filter(|p| p.exists());
+        if key.is_some() {
+            params.key = key;
         }
         let cert = params
             .cert
             .clone()
-            .unwrap_or_else(|| postgres_dir.join("postgresql.crt"));
-        if cert.exists() {
-            params.cert = Some(cert);
+            .or_else(|| home_dir.map(|p| p.join(USER_CERT_FILE)))
+            .filter(|p| p.exists());
+        if cert.is_some() {
+            params.cert = cert;
         }
         Ok(())
     }

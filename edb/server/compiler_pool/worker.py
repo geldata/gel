@@ -43,6 +43,7 @@ BACKEND_RUNTIME_PARAMS: pgparams.BackendRuntimeParams = \
     pgparams.get_default_runtime_params()
 COMPILER: compiler.Compiler
 LAST_STATE: Optional[compiler.dbstate.CompilerConnectionState] = None
+LAST_STATE_PICKLE: Optional[bytes] = None
 STD_SCHEMA: s_schema.FlatSchema
 GLOBAL_SCHEMA: s_schema.FlatSchema
 INSTANCE_CONFIG: immutables.Map[str, config.SettingValue]
@@ -52,7 +53,6 @@ def __init_worker__(
     init_args_pickled: bytes,
 ) -> None:
     global INITED
-    global DBS
     global BACKEND_RUNTIME_PARAMS
     global COMPILER
     global STD_SCHEMA
@@ -60,7 +60,6 @@ def __init_worker__(
     global INSTANCE_CONFIG
 
     (
-        dbs,
         backend_runtime_params,
         std_schema,
         refl_schema,
@@ -70,24 +69,6 @@ def __init_worker__(
     ) = pickle.loads(init_args_pickled)
 
     INITED = True
-    DBS = immutables.Map(
-        [
-            (
-                dbname,
-                state.DatabaseState(
-                    name=dbname,
-                    user_schema=(
-                        None  # type: ignore
-                        if db.user_schema_pickle is None
-                        else pickle.loads(db.user_schema_pickle)
-                    ),
-                    reflection_cache=db.reflection_cache,
-                    database_config=db.database_config,
-                ),
-            )
-            for dbname, db in dbs.items()
-        ]
-    )
     BACKEND_RUNTIME_PARAMS = backend_runtime_params
     STD_SCHEMA = std_schema
     GLOBAL_SCHEMA = pickle.loads(global_schema_pickle)
@@ -104,6 +85,7 @@ def __init_worker__(
 
 def __sync__(
     dbname: str,
+    evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
     global_schema: Optional[bytes],
@@ -115,6 +97,12 @@ def __sync__(
     global INSTANCE_CONFIG
 
     try:
+        if evicted_dbs:
+            dbs = DBS.mutate()
+            for name in evicted_dbs:
+                dbs.pop(name, None)
+            DBS = dbs.finish()
+
         db = DBS.get(dbname)
         if db is None:
             assert user_schema is not None
@@ -159,6 +147,7 @@ def __sync__(
 
 def compile(
     dbname: str,
+    evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
     global_schema: Optional[bytes],
@@ -169,6 +158,7 @@ def compile(
 ):
     db = __sync__(
         dbname,
+        evicted_dbs,
         user_schema,
         reflection_cache,
         global_schema,
@@ -186,24 +176,29 @@ def compile(
         **compile_kwargs
     )
 
-    global LAST_STATE
-    LAST_STATE = cstate
-    pickled_state = None
-    if cstate is not None:
-        pickled_state = pickle.dumps(cstate, -1)
+    global LAST_STATE, LAST_STATE_PICKLE
 
-    return units, pickled_state
+    LAST_STATE = cstate
+    LAST_STATE_PICKLE = None
+    if cstate is not None:
+        LAST_STATE_PICKLE = pickle.dumps(cstate, -1)
+
+    return units, LAST_STATE_PICKLE
 
 
 def compile_in_tx(
     dbname: Optional[str], user_schema: Optional[bytes], cstate, *args, **kwargs
 ):
-    global LAST_STATE
+    global LAST_STATE, LAST_STATE_PICKLE
+
+    prev_last_state_key = None
     if cstate == state.REUSE_LAST_STATE_MARKER:
         assert LAST_STATE is not None
         cstate = LAST_STATE
+        prev_last_state_key = cstate.get_state_key()
     else:
         cstate = pickle.loads(cstate)
+        LAST_STATE_PICKLE = None
         if dbname is None:
             assert user_schema is not None
             cstate.set_root_user_schema(pickle.loads(user_schema))
@@ -211,12 +206,25 @@ def compile_in_tx(
             cstate.set_root_user_schema(DBS[dbname].user_schema)
     units, cstate = COMPILER.compile_serialized_request_in_tx(
         cstate, *args, **kwargs)
+
     LAST_STATE = cstate
-    return units, pickle.dumps(cstate, -1)
+
+    # We don't want to continuously re-pickle transaction state
+    # for every new query in a transaction that doesn't actually change
+    # its state in every query. I.e. it doesn't run DDL, configures
+    # new session aliases, configs, or globals.
+    if (prev_last_state_key is None or
+        LAST_STATE_PICKLE is None or
+        prev_last_state_key != cstate.get_state_key()
+    ):
+        LAST_STATE_PICKLE = pickle.dumps(cstate, -1)
+
+    return units, LAST_STATE_PICKLE
 
 
 def compile_notebook(
     dbname: str,
+    evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
     global_schema: Optional[bytes],
@@ -227,6 +235,7 @@ def compile_notebook(
 ):
     db = __sync__(
         dbname,
+        evicted_dbs,
         user_schema,
         reflection_cache,
         global_schema,
@@ -247,6 +256,7 @@ def compile_notebook(
 
 def compile_graphql(
     dbname: str,
+    evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
     global_schema: Optional[bytes],
@@ -257,6 +267,7 @@ def compile_graphql(
 ) -> tuple[compiler.QueryUnitGroup, graphql.TranspiledOperation]:
     db = __sync__(
         dbname,
+        evicted_dbs,
         user_schema,
         reflection_cache,
         global_schema,
@@ -309,6 +320,7 @@ def compile_graphql(
 
 def compile_sql(
     dbname: str,
+    evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
     global_schema: Optional[bytes],
@@ -319,6 +331,7 @@ def compile_sql(
 ):
     db = __sync__(
         dbname,
+        evicted_dbs,
         user_schema,
         reflection_cache,
         global_schema,

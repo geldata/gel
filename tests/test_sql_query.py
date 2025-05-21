@@ -22,7 +22,7 @@ import decimal
 import io
 import os.path
 import subprocess
-from typing import Coroutine, Optional, Tuple
+from typing import Coroutine, Optional
 import unittest
 import uuid
 
@@ -99,6 +99,9 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             create property b := global glob_mod::b;
         };
         insert glob_mod::Computed;
+
+        create module Dup;
+        create type Dup::Movie;
         ''',
         os.path.join(
             os.path.dirname(__file__), 'schemas', 'movies_setup.edgeql'
@@ -1285,11 +1288,12 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 ['Movie.director', 'bar', 'YES', 3],
                 ['Person', 'id', 'NO', 1],
                 ['Person', '__type__', 'NO', 2],
-                ['Person', 'favorite_genre_id', 'YES', 3],
-                ['Person', 'first_name', 'NO', 4],
-                ['Person', 'full_name', 'NO', 5],
-                ['Person', 'last_name', 'YES', 6],
-                ['Person', 'username', 'NO', 7],
+                ['Person', 'directed_movie_id', 'YES', 3],
+                ['Person', 'favorite_genre_id', 'YES', 4],
+                ['Person', 'first_name', 'NO', 5],
+                ['Person', 'full_name', 'NO', 6],
+                ['Person', 'last_name', 'YES', 7],
+                ['Person', 'username', 'NO', 8],
                 ['novel', 'id', 'NO', 1],
                 ['novel', '__type__', 'NO', 2],
                 ['novel', 'foo', 'YES', 3],
@@ -1341,13 +1345,27 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'pg_toast'
                 AND has_schema_privilege(n.oid, 'USAGE')
-            ORDER BY relname LIMIT 1
+            ORDER BY relname
             '''
         )
-        # res may be empty
+        if len(res) == 0:
+            return
+
+        # verify that at least one of the pg_toast tables exists
+        had_success = False
+        exception = None
         for [toast_table] in res:
-            # Result will probably be empty, so we cannot validate column names
-            await self.squery_values(f'SELECT * FROM pg_toast.{toast_table}')
+            try:
+                # Result will probably be empty, so we cannot validate column
+                # names
+                await self.squery_values(
+                    f'SELECT * FROM pg_toast.{toast_table}'
+                )
+                had_success = True
+            except BaseException as e:
+                exception = e
+        if not had_success:
+            raise exception
 
     async def test_sql_query_introspection_04(self):
         res = await self.squery_values(
@@ -1387,6 +1405,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             SELECT pc.relname, pcon.contype, pa.key, pcf.relname, paf.key
             FROM pg_constraint pcon
             JOIN pg_class pc ON pc.oid = pcon.conrelid
+            LEFT JOIN pg_namespace pn ON pn.oid = pc.relnamespace
             LEFT JOIN pg_class pcf ON pcf.oid = pcon.confrelid
             LEFT JOIN LATERAL (
                 SELECT string_agg(attname, ',') as key
@@ -1403,7 +1422,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             WHERE pc.relname IN (
                 'Book.chapters', 'Movie', 'Movie.director', 'Movie.actors'
             )
-            ORDER BY pc.relname ASC, pcon.contype DESC, pa.key
+            ORDER BY pc.relname ASC, pn.nspname ASC, pcon.contype DESC, pa.key
             '''
         )
 
@@ -1411,6 +1430,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             res,
             [
                 ['Book.chapters', b'f', 'source', 'Book', 'id'],
+                ['Movie', b'p', 'id', None, None],
                 ['Movie', b'p', 'id', None, None],
                 ['Movie', b'f', 'director_id', 'Person', 'id'],
                 ['Movie', b'f', 'genre_id', 'Genre', 'id'],
@@ -1421,6 +1441,28 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 ['Movie.director', b'f', 'source', 'Movie', 'id'],
                 ['Movie.director', b'f', 'target', 'Person', 'id'],
             ],
+        )
+
+    async def test_sql_query_introspection_06(self):
+        res = await self.squery_values(
+            '''
+            SELECT column_name, col_description(
+                'public.novel'::regclass::oid, ordinal_position)
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'novel'
+            ORDER BY ordinal_position
+            '''
+        )
+        self.assertEqual(
+            res,
+            [
+                ['id', '__::pages'],
+                ['__type__', '__::id'],
+                ['foo', '__::title'],
+                ['genre_id', '__::genre'],
+                ['pages', '__::foo'],
+                ['title', None],
+            ]
         )
 
     async def test_sql_query_schemas_01(self):
@@ -1529,6 +1571,15 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         )
         self.assertEqual(res, [[11]])
 
+    async def test_sql_query_static_eval_04a(self):
+        [[res1, res2]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie.actors"'),
+                format('%I.%I', 'public', 'Movie.actors')::regclass
+            '''
+        )
+        self.assertEqual(res1, res2)
+
     async def test_sql_query_static_eval_05(self):
         # pg_get_serial_sequence always returns NULL, we don't expose sequences
 
@@ -1589,6 +1640,48 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ],
         )
 
+    async def test_sql_query_static_eval_07(self):
+        # to_regclass() is aware of search_path
+        await self.scon.execute('SET search_path TO public, "Dup";')
+        [[res1, res2]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie"'), 'public."Movie"'::regclass;
+            '''
+        )
+        self.assertEqual(res1, res2)
+
+        # Now flip the search_path
+        await self.scon.execute('SET search_path TO "Dup", public;')
+        [[res3, res4]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie"'), '"Dup"."Movie"'::regclass;
+            '''
+        )
+        self.assertEqual(res3, res4)
+
+        self.assertNotEqual(res1, res3)
+
+        # Emulate a typo in search_path, Dup without quotes will be lowercased,
+        # and thus not found; `public` will be used instead.
+        await self.scon.execute('SET search_path TO Dup, public;')
+        [[res5]] = await self.squery_values(
+            '''
+            SELECT to_regclass('"Movie"')
+            '''
+        )
+        self.assertEqual(res5, res1)
+
+    async def test_sql_query_static_eval_08(self):
+        # to_regclass() is aware of implicit search_path like pg_catalog
+        await self.scon.execute('SET search_path TO nonexist;')
+        [[res1, res2]] = await self.squery_values(
+            '''
+            SELECT to_regclass('pg_database'),
+                'pg_catalog.pg_database'::regclass;
+            '''
+        )
+        self.assertEqual(res1, res2)
+
     async def test_sql_native_query_static_eval_01(self):
         await self.assert_sql_query_result(
             'select current_schemas(false);',
@@ -1622,6 +1715,40 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             self.assertEqual(res, [['read committed']])
         finally:
             await con.aclose()
+
+    async def test_sql_query_privileges_01(self):
+
+        res = await self.squery_values(
+            '''
+            select has_database_privilege($1, 'CONNECT');
+            ''',
+            self.con.dbname,
+        )
+        self.assertEqual(res, [[True]])
+
+    async def test_sql_query_privileges_02(self):
+        res = await self.squery_values(
+            '''
+            select has_table_privilege('"Movie"', 'SELECT');
+            '''
+        )
+        self.assertEqual(res, [[True]])
+
+    async def test_sql_query_privileges_03(self):
+        res = await self.squery_values(
+            '''
+            select has_column_privilege('"Movie"', 'title', 'SELECT');
+            '''
+        )
+        self.assertEqual(res, [[True]])
+
+    async def test_sql_query_privileges_04(self):
+        res = await self.squery_values(
+            '''
+            select has_any_column_privilege('"Movie"', 'SELECT');
+            '''
+        )
+        self.assertEqual(res, [[True]])
 
     async def test_sql_query_client_encoding_1(self):
         self.assertEqual(
@@ -1791,6 +1918,27 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         self.assertEqual(
             {row[2] for row in res},
             {"Captain Miller", ""}
+        )
+
+    async def test_sql_query_copy_06(self):
+        out = io.BytesIO()
+        await self.scon.copy_from_query(
+            """
+            SELECT title, pages FROM public."Book" ORDER BY pages
+            """,
+            output=out,
+            format="csv",
+            delimiter="\t",
+        )
+        out = io.StringIO(out.getvalue().decode("utf-8"))
+        res = list(csv.reader(out, delimiter="\t"))
+
+        self.assertEqual(
+            res,
+            [
+                ['Chronicles of Narnia', '206'],
+                ['Hunger Games', '374'],
+            ]
         )
 
     async def test_sql_query_error_01(self):
@@ -2215,6 +2363,19 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         self.assertEqual(await query_glob_bool("'ON'"), True)
         self.assertEqual(await query_glob_bool("'OFF'"), False)
         self.assertEqual(await query_glob_bool("'HELLO'"), None)
+
+    async def test_sql_query_computed_14(self):
+        # single link, using a backlink
+
+        res = await self.squery_values(
+            """
+            SELECT first_name, directed_movie_id IS NOT NULL FROM "Person"
+            ORDER BY first_name
+            """
+        )
+        self.assertEqual(
+            res, [["Robin", False], ["Steven", True], ["Tom", False]]
+        )
 
     async def test_sql_query_access_policy_01(self):
         # no access policies
@@ -3252,7 +3413,7 @@ class TestSQLQueryNonTransactional(tb.SQLQueryTestCase):
         async def assert_not_blocked(coroutine: Coroutine) -> None:
             await asyncio.wait_for(coroutine, 0.25)
 
-        async def assert_blocked(coroutine: Coroutine) -> Tuple[asyncio.Task]:
+        async def assert_blocked(coroutine: Coroutine) -> tuple[asyncio.Task]:
             task: asyncio.Task = asyncio.create_task(coroutine)
             done, pending = await asyncio.wait((task,), timeout=0.25)
             if len(done) != 0:

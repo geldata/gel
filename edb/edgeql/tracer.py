@@ -20,8 +20,8 @@
 from __future__ import annotations
 
 # Import specific things to avoid name clashes
-from typing import (Dict, FrozenSet, Generator, List, Mapping, Optional,
-                    Union, Set, Tuple, Iterable, Generic, TypeVar, Sequence,
+from typing import (Generator, Mapping, Optional,
+                    Iterable, Generic, TypeVar, Sequence,
                     AbstractSet)
 
 import functools
@@ -62,7 +62,7 @@ SentinelObject = NamedObject(
 )
 
 
-ObjectLike = Union[NamedObject, so.Object]
+ObjectLike = NamedObject | so.Object
 
 
 class Function(NamedObject):
@@ -114,7 +114,7 @@ class ScalarType(Type):
         return True
 
 
-TypeLike = Union[Type, s_types.Type]
+TypeLike = Type | s_types.Type
 
 
 T = TypeVar('T')
@@ -128,13 +128,13 @@ class UnqualObjectIndex(Generic[T]):
     def items(
         self,
         schema: s_schema.Schema,
-    ) -> Iterable[Tuple[sn.UnqualName, T]]:
+    ) -> Iterable[tuple[sn.UnqualName, T]]:
         return self._items.items()
 
 
 class Source(NamedObject):
 
-    pointers: Dict[sn.UnqualName, Union[s_pointers.Pointer, Pointer]]
+    pointers: dict[sn.UnqualName, s_pointers.Pointer | Pointer]
 
     '''Abstract type that mocks the s_sources.Source for tracing purposes.'''
 
@@ -146,14 +146,14 @@ class Source(NamedObject):
         self,
         schema: s_schema.Schema,
         name: sn.UnqualName,
-    ) -> Optional[Union[s_pointers.Pointer, Pointer]]:
+    ) -> Optional[s_pointers.Pointer | Pointer]:
         return self.pointers.get(name)
 
     def getptr(
         self,
         schema: s_schema.Schema,
         name: sn.UnqualName,
-    ) -> Union[s_pointers.Pointer, Pointer]:
+    ) -> s_pointers.Pointer | Pointer:
         ptr = self.maybe_get_ptr(schema, name)
         if ptr is None:
             raise AssertionError(f'{self.name} has no link or property {name}')
@@ -162,12 +162,12 @@ class Source(NamedObject):
     def get_pointers(
         self,
         schema: s_schema.Schema,
-    ) -> UnqualObjectIndex[Union[s_pointers.Pointer, Pointer]]:
+    ) -> UnqualObjectIndex[s_pointers.Pointer | Pointer]:
         return UnqualObjectIndex(self.pointers)
 
 
 Source_T = TypeVar("Source_T", bound="Source")
-SourceLike = Union[Source, s_sources.Source]
+SourceLike = Source | s_sources.Source
 SourceLike_T = TypeVar("SourceLike_T", bound="SourceLike")
 
 
@@ -189,7 +189,7 @@ class Alias(ObjectType):
 
 class UnionType(Type):
 
-    def __init__(self, types: List[Union[Type, UnionType, so.Object]]) -> None:
+    def __init__(self, types: list[Type | UnionType | so.Object]) -> None:
         self.types = types
 
     def get_name(self, schema: s_schema.Schema) -> sn.QualName:
@@ -229,7 +229,7 @@ class Pointer(Source):
         self,
         schema: s_schema.Schema,
         name: sn.UnqualName,
-    ) -> Optional[Union[s_pointers.Pointer, Pointer]]:
+    ) -> Optional[s_pointers.Pointer | Pointer]:
         if (not (res := super().maybe_get_ptr(schema, name))
                 and isinstance(self.target, (Source, s_sources.Source))):
             res = self.target.maybe_get_ptr(schema, name)
@@ -341,11 +341,11 @@ def trace_refs(
     anchors: Optional[Mapping[str, sn.QualName]] = None,
     path_prefix: Optional[sn.QualName] = None,
     module: str,
-    objects: Dict[sn.QualName, Optional[ObjectLike]],
-    pointers: Mapping[sn.UnqualName, Set[sn.QualName]],
+    objects: dict[sn.QualName, Optional[ObjectLike]],
+    pointers: Mapping[sn.UnqualName, set[sn.QualName]],
     params: Mapping[str, sn.QualName],
     local_modules: AbstractSet[str]
-) -> Tuple[FrozenSet[sn.QualName], FrozenSet[sn.QualName]]:
+) -> tuple[frozenset[sn.QualName], frozenset[sn.QualName]]:
 
     """Return a list of schema item names used in an expression.
 
@@ -373,8 +373,8 @@ def resolve_name(
     *,
     current_module: str,
     schema: s_schema.Schema,
-    objects: Dict[sn.QualName, Optional[ObjectLike]],
-    modaliases: Optional[Dict[Optional[str], str]],
+    objects: dict[sn.QualName, Optional[ObjectLike]],
+    modaliases: Optional[dict[Optional[str], str]],
     local_modules: AbstractSet[str],
     declaration: bool=False,
 ) -> sn.QualName:
@@ -446,18 +446,18 @@ class TracerContext:
         *,
         schema: s_schema.Schema,
         module: str,
-        objects: Dict[sn.QualName, Optional[ObjectLike]],
-        pointers: Mapping[sn.UnqualName, Set[sn.QualName]],
+        objects: dict[sn.QualName, Optional[ObjectLike]],
+        pointers: Mapping[sn.UnqualName, set[sn.QualName]],
         anchors: Mapping[str, sn.QualName],
         path_prefix: Optional[sn.QualName],
-        modaliases: Dict[Optional[str], str],
+        modaliases: dict[Optional[str], str],
         params: Mapping[str, sn.QualName],
-        visited: Set[Union[s_pointers.Pointer, Pointer]],
+        visited: set[s_pointers.Pointer | Pointer],
         local_modules: AbstractSet[str],
     ) -> None:
         self.schema = schema
-        self.refs: Set[sn.QualName] = set()
-        self.weak_refs: Set[sn.QualName] = set()
+        self.refs: set[sn.QualName] = set()
+        self.weak_refs: set[sn.QualName] = set()
         self.module = module
         self.objects = objects
         self.pointers = pointers
@@ -485,7 +485,7 @@ class TracerContext:
             local_modules=self.local_modules,
         )
 
-    def get_ref_name_startswith(self, ref: qlast.ObjectRef) -> Set[sn.QualName]:
+    def get_ref_name_startswith(self, ref: qlast.ObjectRef) -> set[sn.QualName]:
         refs = set()
         prefixes = set()
 
@@ -558,7 +558,7 @@ def alias_context(
 @contextmanager
 def result_alias_context(
     ctx: TracerContext,
-    node: Union[qlast.ReturningQuery, qlast.SubjectQuery],
+    node: qlast.ReturningQuery | qlast.SubjectQuery,
     obj: Optional[ObjectLike],
 ) -> Generator[TracerContext, None, None]:
 
@@ -687,7 +687,7 @@ def trace_Global(
         ctx.refs.add(refname)
         tip = ctx.objects[refname]
     else:
-        tip = ctx.schema.get(refname, sourcectx=node.span)
+        tip = ctx.schema.get(refname, span=node.span)
     return tip
 
 
@@ -703,7 +703,7 @@ def check_type_exists(
 
     try:
         # Check if the typename is already in the schema
-        ctx.schema.get(typename, type=s_types.Type, sourcectx=span)
+        ctx.schema.get(typename, type=s_types.Type, span=span)
     except errors.InvalidReferenceError as e:
         if hint and not e.hint:
             e.set_hint_and_details(hint, e.details)
@@ -791,7 +791,7 @@ def trace_Path(
     ctx: TracerContext,
 ) -> Optional[ObjectLike]:
     tip: Optional[ObjectLike] = None
-    ptr: Optional[Union[Pointer, s_pointers.Pointer]] = None
+    ptr: Optional[Pointer | s_pointers.Pointer] = None
     plen = len(node.steps)
 
     # HACK: This isn't very smart, and can't properly track types
@@ -814,7 +814,7 @@ def trace_Path(
                     ctx.refs.add(refname)
                     tip = ctx.objects[refname]
                 else:
-                    tip = ctx.schema.get(refname, sourcectx=step.span)
+                    tip = ctx.schema.get(refname, span=step.span)
 
         elif isinstance(step, qlast.Ptr):
             pname = sn.UnqualName(step.name)
@@ -1007,7 +1007,7 @@ def _resolve_type_expr(
             obj: TypeLike
             if local_obj is None:
                 obj = ctx.schema.get(
-                    refname, type=s_types.Type, sourcectx=texpr.span)
+                    refname, type=s_types.Type, span=texpr.span)
             else:
                 assert isinstance(local_obj, Type)
                 obj = local_obj

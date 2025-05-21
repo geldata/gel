@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Sequence, Optional, List, TYPE_CHECKING
+from typing import Any, Sequence, Optional, TYPE_CHECKING
 import json
 
 from dataclasses import dataclass
@@ -24,8 +24,8 @@ class PropertyTypeView:
     is_primitive: bool
     is_optional: bool
     is_singular: bool
-    target_type_name: List[e.QualifiedName]  # a union (choice) of names
-    link_props: Dict[
+    target_type_name: list[e.QualifiedName]  # a union (choice) of names
+    link_props: dict[
         str, PropertyTypeView
     ]  # link props must be empty when is_primitive is True
 
@@ -51,7 +51,7 @@ class PropertyTypeView:
 
 @dataclass(frozen=True)
 class TableTypeView:
-    columns: Dict[str, PropertyTypeView]  # property name -> property type
+    columns: dict[str, PropertyTypeView]  # property name -> property type
     indexes: Sequence[Sequence[str]]
 
 
@@ -63,7 +63,7 @@ class ColumnSpec:
 
 @dataclass(frozen=True)
 class TableSpec:
-    columns: Dict[str, ColumnSpec]
+    columns: dict[str, ColumnSpec]
     primary_key: Sequence[str]
     indexes: Sequence[Sequence[str]]
 
@@ -131,7 +131,7 @@ def get_property_type_view(result_tp: e.ResultTp) -> PropertyTypeView:
             raise ValueError(f"Unimplemented type {tp}")
 
 
-def get_schema_property_view(schema: e.DBSchema) -> Dict[str, TableTypeView]:
+def get_schema_property_view(schema: e.DBSchema) -> dict[str, TableTypeView]:
     if ("default",) not in schema.modules:
         raise ValueError("Default module not found in schema")
     default_module = schema.modules[("default",)]
@@ -163,8 +163,8 @@ def get_schema_property_view(schema: e.DBSchema) -> Dict[str, TableTypeView]:
 
 
 def get_table_view_from_property_view(
-    schema_property_view: Dict[str, TableTypeView]
-) -> Dict[str, TableSpec]:
+    schema_property_view: dict[str, TableTypeView]
+) -> dict[str, TableSpec]:
     result_table = {}
     for tname, tview in schema_property_view.items():
         assert tname not in result_table, "Duplicate table name"
@@ -314,8 +314,8 @@ class SQLiteEdgeDatabaseStorageProvider(EdgeDatabaseStorageProviderInterface):
 
     def convert_sqlite_link_props_to_object_val(
         self,
-        link_props: Dict[str, Any],
-        link_props_view: Dict[str, PropertyTypeView],
+        link_props: dict[str, Any],
+        link_props_view: dict[str, PropertyTypeView],
     ) -> ObjectVal:
         assert (
             link_props.keys() == link_props_view.keys()
@@ -346,7 +346,7 @@ class SQLiteEdgeDatabaseStorageProvider(EdgeDatabaseStorageProviderInterface):
         self,
         result_data: Any,
         result_tp: PropertyTypeView,
-        link_props: Dict[str, Any],
+        link_props: dict[str, Any],
     ) -> Val:
         if result_data is None:
             raise ValueError("Unexpected sqlite value None (Internal Error)")
@@ -426,7 +426,7 @@ class SQLiteEdgeDatabaseStorageProvider(EdgeDatabaseStorageProviderInterface):
 
     def query_ids_for_a_type(
         self, tp: e.QualifiedName, filters: e.EdgeDatabaseSelectFilter
-    ) -> List[EdgeID]:
+    ) -> list[EdgeID]:
 
         query_args = []
 
@@ -589,7 +589,7 @@ class SQLiteEdgeDatabaseStorageProvider(EdgeDatabaseStorageProviderInterface):
     def reverse_project(
         self, subject_ids: Sequence[EdgeID], prop: str
     ) -> MultiSetVal:
-        result: List[Val] = []
+        result: list[Val] = []
         for tp_name, tdef in self.schema_property_view.items():
             for prop_name, pview in tdef.columns.items():
                 if prop_name == prop:
@@ -642,7 +642,7 @@ class SQLiteEdgeDatabaseStorageProvider(EdgeDatabaseStorageProviderInterface):
         return e.ResultMultiSetVal(result)
 
     def insert(
-        self, id: EdgeID, tp: e.QualifiedName, props: Dict[str, MultiSetVal]
+        self, id: EdgeID, tp: e.QualifiedName, props: dict[str, MultiSetVal]
     ) -> None:
         tp_name = self.get_tp_name(tp)
         tdef = self.schema_property_view[tp_name].columns
@@ -719,7 +719,7 @@ class SQLiteEdgeDatabaseStorageProvider(EdgeDatabaseStorageProviderInterface):
         self.do_execute_query(f"DELETE FROM objects WHERE id=?", (id,))
 
     def update(
-        self, id: EdgeID, tp: e.QualifiedName, props: Dict[str, MultiSetVal]
+        self, id: EdgeID, tp: e.QualifiedName, props: dict[str, MultiSetVal]
     ) -> None:
         tp_name = self.get_tp_name(tp)
         tdef = self.schema_property_view[tp_name]

@@ -1,5 +1,5 @@
 <% from "ls-build.inc.yml" import workflow -%>
-name: 'edgedb-ls: Build and Publish Nightly Packages'
+name: 'ls: Build and Publish Nightly Packages'
 
 on:
   schedule:

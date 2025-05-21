@@ -27,9 +27,9 @@ class ASTModule(str, enum.Enum):
 @dataclasses.dataclass()
 class ASTClass:
     name: str
-    typ: typing.Type
-    bases: typing.Set[str]
-    children: typing.Set[str]
+    typ: typing.Any
+    bases: set[str]
+    children: set[str]
 
 
 @edbcommands.command("ast-inheritance-graph")
@@ -46,7 +46,7 @@ def main(ast: ASTModule) -> None:
         raise AssertionError()
 
     # discover all nodes
-    ast_classes: typing.Dict[str, ASTClass] = {}
+    ast_classes: dict[str, ASTClass] = {}
     for name, typ in ast_mod.__dict__.items():
         if not isinstance(typ, type):
             continue
@@ -81,7 +81,7 @@ def main(ast: ASTModule) -> None:
     enum_graph(ast_classes)
 
 
-def inheritance_graph(ast_classes: typing.Dict[str, ASTClass]):
+def inheritance_graph(ast_classes: dict[str, ASTClass]):
     print('digraph I {')
     for ast_class in ast_classes.values():
         if ast_class.typ.__abstract_node__:
@@ -92,7 +92,7 @@ def inheritance_graph(ast_classes: typing.Dict[str, ASTClass]):
     print('}')
 
 
-def enum_graph(ast_classes: typing.Dict[str, ASTClass]):
+def enum_graph(ast_classes: dict[str, ASTClass]):
     print('digraph M {')
 
     def dfs(node, start):

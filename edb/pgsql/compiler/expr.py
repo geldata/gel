@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Union, Sequence
+from typing import Optional, Sequence
 
 from edb import errors
 
@@ -311,10 +311,14 @@ def compile_IndexIndirection(
         subj = dispatch.compile(expr.expr, ctx=subctx)
         index = dispatch.compile(expr.index, ctx=subctx)
 
-    result = pgast.FuncCall(
+    result: pgast.BaseExpr = pgast.FuncCall(
         name=astutils.edgedb_func('_index', ctx=ctx),
         args=[subj, index, span]
     )
+
+    if irtyputils.is_array(expr.typeref):
+        # Unwrap the nested array from its tuple
+        result = astutils.array_get_inner_array(result, expr.typeref)
 
     return result
 
@@ -343,7 +347,8 @@ def compile_SliceIndirection(
 
         typ = expr.expr.typeref
         inline_array_slicing = irtyputils.is_array(typ) and any(
-            irtyputils.is_tuple(st) for st in typ.subtypes
+            irtyputils.is_tuple(st) or irtyputils.is_array(st)
+            for st in typ.subtypes
         )
 
         if inline_array_slicing:
@@ -571,7 +576,7 @@ def _cast_operands(
     lexpr: Optional[pgast.BaseExpr],
     rexpr: Optional[pgast.BaseExpr],
     sql_types: Sequence[str],
-) -> Tuple[Optional[pgast.BaseExpr], Optional[pgast.BaseExpr]]:
+) -> tuple[Optional[pgast.BaseExpr], Optional[pgast.BaseExpr]]:
 
     if lexpr is not None:
         lexpr = pgast.TypeCast(
@@ -616,7 +621,7 @@ def _cast_operands(
 def get_func_call_backend_name(
     expr: irast.FunctionCall, *,
     ctx: context.CompilerContextLevel
-) -> Tuple[str, ...]:
+) -> tuple[str, ...]:
     if expr.func_sql_function:
         # The name might contain a "." if it's one of our
         # metaschema helpers.
@@ -790,7 +795,7 @@ def compile_FunctionCall(
 def _tuple_to_row_expr(
         tuple_set: irast.Set, *,
         ctx: context.CompilerContextLevel,
-) -> Union[pgast.ImplicitRowExpr, pgast.RowExpr]:
+) -> pgast.ImplicitRowExpr | pgast.RowExpr:
     tuple_val = dispatch.compile(tuple_set, ctx=ctx)
     if not isinstance(tuple_val, (pgast.RowExpr, pgast.ImplicitRowExpr)):
         raise RuntimeError('tuple compilation unexpectedly did '
@@ -824,7 +829,7 @@ def _compile_set(
 
 def _compile_shape(
         ir_set: irast.Set,
-        shape: Sequence[Tuple[irast.SetE[irast.Pointer], qlast.ShapeOp]],
+        shape: Sequence[tuple[irast.SetE[irast.Pointer], qlast.ShapeOp]],
         *,
         ctx: context.CompilerContextLevel) -> pgast.TupleVar:
 

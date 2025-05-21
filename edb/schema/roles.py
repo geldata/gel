@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Type, List, Union, overload, TYPE_CHECKING
+from typing import Optional, overload, TYPE_CHECKING
 
 from edgedb import scram
 
@@ -113,7 +113,7 @@ class RoleCommand(
         schema: s_schema.Schema,
         astnode: qlast.ObjectDDL,
         context: sd.CommandContext,
-    ) -> List[so.ObjectShell[Role]]:
+    ) -> list[so.ObjectShell[Role]]:
         result = []
         for b in getattr(astnode, 'bases', None) or []:
             result.append(utils.ast_objref_to_object_shell(
@@ -166,7 +166,7 @@ class CreateRole(RoleCommand, inheriting.CreateInheritingObject[Role]):
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if (
             field == 'superuser'
@@ -203,8 +203,8 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         context: sd.CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[Role, so.NoDefaultT] = so.NoDefault,
-        sourcectx: Optional[qlast.Span] = None,
+        default: Role | so.NoDefaultT = so.NoDefault,
+        span: Optional[qlast.Span] = None,
     ) -> Role:
         ...
 
@@ -216,7 +216,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         *,
         name: Optional[sn.Name] = None,
         default: None = None,
-        sourcectx: Optional[qlast.Span] = None,
+        span: Optional[qlast.Span] = None,
     ) -> Optional[Role]:
         ...
 
@@ -226,8 +226,8 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
         context: sd.CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: Union[Role, so.NoDefaultT, None] = so.NoDefault,
-        sourcectx: Optional[qlast.Span] = None,
+        default: Role | so.NoDefaultT | None = so.NoDefault,
+        span: Optional[qlast.Span] = None,
     ) -> Optional[Role]:
         # On an ALTER ROLE edgedb, if 'edgedb' doesn't exist, fall
         # back to 'admin'. This mirrors what we do for login and
@@ -237,7 +237,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
                 return super().get_object(
                     schema,
                     context,
-                    sourcectx=sourcectx,
+                    span=span,
                 )
             except errors.InvalidReferenceError:
                 name = sn.UnqualName('admin')
@@ -247,7 +247,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
             context,
             name=name,
             default=default,
-            sourcectx=sourcectx,
+            span=span,
         )
 
     @classmethod

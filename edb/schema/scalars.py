@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Type, Iterable, Sequence, cast
+from typing import Optional, Iterable, Sequence, cast
 
 from edb import errors
 
@@ -142,7 +142,7 @@ class ScalarType(
         self,
         schema: s_schema.Schema,
         concrete_type: s_types.Type,
-    ) -> Tuple[s_schema.Schema, s_types.Type]:
+    ) -> tuple[s_schema.Schema, s_types.Type]:
         if (not concrete_type.is_polymorphic(schema) and
                 concrete_type.issubclass(schema, self)):
             return schema, concrete_type
@@ -171,6 +171,8 @@ class ScalarType(
             return False
         left = self.get_base_for_cast(schema)
         right = other.get_base_for_cast(schema)
+        assert isinstance(left, s_types.Type)
+        assert isinstance(right, s_types.Type)
         return s_casts.is_assignment_castable(schema, left, right)
 
     def implicitly_castable_to(
@@ -221,7 +223,7 @@ class ScalarType(
         self,
         other: s_types.Type,
         schema: s_schema.Schema,
-    ) -> Tuple[s_schema.Schema, Optional[ScalarType]]:
+    ) -> tuple[s_schema.Schema, Optional[ScalarType]]:
 
         if not isinstance(other, ScalarType):
             return schema, None
@@ -627,7 +629,7 @@ class CreateScalarType(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-    ) -> Type[qlast.DDLOperation]:
+    ) -> type[qlast.DDLOperation]:
         if self.get_attribute_value('expr'):
             return qlast.CreateAlias
         else:

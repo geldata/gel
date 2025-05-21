@@ -23,6 +23,7 @@ __all__ = base.__all__ + (  # type: ignore
     'CapabilityError',
     'UnsupportedCapabilityError',
     'DisabledCapabilityError',
+    'UnsafeIsolationLevelError',
     'QueryError',
     'InvalidSyntaxError',
     'EdgeQLSyntaxError',
@@ -84,6 +85,7 @@ __all__ = base.__all__ + (  # type: ignore
     'TransactionConflictError',
     'TransactionSerializationError',
     'TransactionDeadlockError',
+    'QueryCacheInvalidationError',
     'WatchError',
     'ConfigurationError',
     'AccessError',
@@ -97,6 +99,8 @@ __all__ = base.__all__ + (  # type: ignore
     'UnsupportedBackendFeatureError',
     'LogMessage',
     'WarningMessage',
+    'StatusMessage',
+    'MigrationStatusMessage',
 )
 
 
@@ -154,6 +158,10 @@ class UnsupportedCapabilityError(CapabilityError):
 
 class DisabledCapabilityError(CapabilityError):
     _code = 0x_03_04_02_00
+
+
+class UnsafeIsolationLevelError(CapabilityError):
+    _code = 0x_03_04_03_00
 
 
 class QueryError(EdgeDBError):
@@ -400,6 +408,10 @@ class TransactionDeadlockError(TransactionConflictError):
     _code = 0x_05_03_01_02
 
 
+class QueryCacheInvalidationError(TransactionConflictError):
+    _code = 0x_05_03_01_03
+
+
 class WatchError(ExecutionError):
     _code = 0x_05_04_00_00
 
@@ -450,3 +462,11 @@ class LogMessage(EdgeDBMessage):
 
 class WarningMessage(LogMessage):
     _code = 0x_F0_01_00_00
+
+
+class StatusMessage(LogMessage):
+    _code = 0x_F0_02_00_00
+
+
+class MigrationStatusMessage(StatusMessage):
+    _code = 0x_F0_02_00_01

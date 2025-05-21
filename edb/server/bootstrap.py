@@ -22,15 +22,10 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
     Iterable,
     Mapping,
     Awaitable,
-    Dict,
-    List,
-    Set,
     Sequence,
     NamedTuple,
     TYPE_CHECKING,
@@ -75,10 +70,12 @@ from edb.schema import schema as s_schema
 from edb.schema import std as s_std
 from edb.schema import types as s_types
 from edb.schema import utils as s_utils
+from edb.schema import version as s_ver
 
 from edb.server import args as edbargs
 from edb.server import config
 from edb.server import compiler as edbcompiler
+from edb.server.compiler import dbstate
 from edb.server import defines as edbdef
 from edb.server import pgcluster
 from edb.server import pgcon
@@ -620,7 +617,7 @@ def compile_bootstrap_script(
     bootstrap_mode: bool = True,
     expected_cardinality_one: bool = False,
     output_format: edbcompiler.OutputFormat = edbcompiler.OutputFormat.JSON,
-) -> Tuple[s_schema.Schema, str]:
+) -> tuple[s_schema.Schema, str]:
     ctx = edbcompiler.new_compiler_context(
         compiler_state=compiler.state,
         user_schema=schema,
@@ -645,7 +642,7 @@ def compile_single_query(
 
 
 def _get_all_subcommands(
-    cmd: sd.Command, type: Optional[Type[sd.Command]] = None
+    cmd: sd.Command, type: Optional[type[sd.Command]] = None
 ) -> list[sd.Command]:
     cmds = []
 
@@ -661,7 +658,7 @@ def _get_all_subcommands(
 
 def _get_schema_object_ids(
     delta: sd.Command,
-) -> Mapping[Tuple[sn.Name, Optional[str]], uuid.UUID]:
+) -> Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]:
     schema_object_ids = {}
     for cmd in _get_all_subcommands(delta, sd.CreateObject):
         assert isinstance(cmd, sd.CreateObject)
@@ -883,7 +880,9 @@ def prepare_patch(
         assert '+user_ext' not in kind
 
         for ddl_cmd in edgeql.parse_block(patch):
-            assert isinstance(ddl_cmd, qlast.DDLCommand)
+            if not isinstance(ddl_cmd, qlast.DDLCommand):
+                assert isinstance(ddl_cmd, qlast.Query)
+                ddl_cmd = qlast.DDLQuery(query=ddl_cmd)
             # First apply it to the regular schema, just so we can update
             # stdschema
             delta_command = s_ddl.delta_from_ddl(
@@ -909,22 +908,23 @@ def prepare_patch(
 
         metadata_user_schema = reflschema
 
-    elif kind.startswith('edgeql+user_ext'):
+    elif kind.startswith('edgeql+user') or kind.startswith('edgeql+user_ext'):
         assert '+schema' not in kind
 
         # There isn't anything to do on the system database for
-        # userext updates.
+        # user updates.
         if user_schema is None:
             return (update,), (), dict(is_user_update=True)
 
-        # Only run a userext update if the extension we are trying to
-        # update is installed.
-        extension_name = kind.split('|')[-1]
-        extension = user_schema.get_global(
-            s_exts.Extension, extension_name, default=None)
+        if kind.startswith('edgeql+user_ext'):
+            # Only run a userext update if the extension we are trying to
+            # update is installed.
+            extension_name = kind.split('|')[-1]
+            extension = user_schema.get_global(
+                s_exts.Extension, extension_name, default=None)
 
-        if not extension:
-            return (update,), (), {}
+            if not extension:
+                return (update,), (), {}
 
         assert global_schema
         cschema = s_schema.ChainedSchema(
@@ -934,13 +934,22 @@ def prepare_patch(
         )
 
         for ddl_cmd in edgeql.parse_block(patch):
-            assert isinstance(ddl_cmd, qlast.DDLCommand)
+            if not isinstance(ddl_cmd, qlast.DDLCommand):
+                assert isinstance(ddl_cmd, qlast.Query)
+                ddl_cmd = qlast.DDLQuery(query=ddl_cmd)
 
             delta_command = s_ddl.delta_from_ddl(
                 ddl_cmd, modaliases={}, schema=cschema,
                 stdmode=False,
                 testmode=True,
             )
+            # Prune any AlterSchemaVersion commands, because they
+            # won't work, since we defer all the
+            # compile_schema_storage_in_delta calls to the end.
+            for sub in delta_command.get_subcommands(
+                type=s_ver.AlterSchemaVersion
+            ):
+                delta_command.discard(sub)
             cschema, plan, tplan = _process_delta_params(
                 delta_command, cschema, backend_params)
             std_plans.append(delta_command)
@@ -1173,10 +1182,14 @@ async def create_branch(
 ) -> None:
     """Create a new database (branch) based on an existing one."""
 
-    # Dump the edgedbpub schema that holds user data and any extensions.
+    # Dump the edgedbpub schema that holds user data and any
+    # extensions.  Also dump edgedbext, which can unfortunately
+    # include some tables/views for the AI extension.  (And some
+    # extensions, which get created with IF NOT EXISTS, so that is
+    # fine.)
     schema_dump = await cluster.dump_database(
         src_dbname,
-        include_schemas=('edgedbpub',),
+        include_schemas=('edgedbpub', 'edgedbext'),
         include_extensions=('*',),
         schema_only=True,
     )
@@ -1282,9 +1295,9 @@ class StdlibBits(NamedTuple):
     #: Descriptors of all the needed trampolines
     trampolines: list[trampoline.Trampoline]
     #: A set of ids of all types in std.
-    types: Set[uuid.UUID]
+    types: set[uuid.UUID]
     #: Schema class reflection layout.
-    classlayout: Dict[Type[s_obj.Object], s_refl.SchemaTypeLayout]
+    classlayout: dict[type[s_obj.Object], s_refl.SchemaTypeLayout]
     #: Schema introspection SQL query.
     local_intro_query: str
     #: Global object introspection SQL query.
@@ -1326,8 +1339,8 @@ def _make_stdlib(
             std_texts.append(s_std.get_std_module_text(modname))
 
     ddl_text = '\n'.join(std_texts)
-    types: Set[uuid.UUID] = set()
-    std_plans: List[sd.Command] = []
+    types: set[uuid.UUID] = set()
+    std_plans: list[sd.Command] = []
 
     for ddl_cmd in edgeql.parse_block(ddl_text):
         assert isinstance(ddl_cmd, qlast.DDLCommand)
@@ -1446,7 +1459,7 @@ async def _amend_stdlib(
     ctx: BootstrapContext,
     ddl_text: str,
     stdlib: StdlibBits,
-) -> Tuple[StdlibBits, str, list[trampoline.Trampoline]]:
+) -> tuple[StdlibBits, str, list[trampoline.Trampoline]]:
     schema = s_schema.ChainedSchema(
         s_schema.EMPTY_SCHEMA,
         stdlib.stdschema,
@@ -1506,7 +1519,7 @@ def compile_intro_queries_stdlib(
     user_schema: s_schema.Schema,
     global_schema: s_schema.Schema=s_schema.EMPTY_SCHEMA,
     reflection: s_refl.SchemaReflectionParts,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     compilerctx = edbcompiler.new_compiler_context(
         compiler_state=compiler.state,
         user_schema=user_schema,
@@ -2211,7 +2224,7 @@ def compile_sys_queries(
 
 async def _populate_misc_instance_data(
     ctx: BootstrapContext,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
 
     mock_auth_nonce = scram.generate_nonce()
     json_instance_data = {
@@ -2258,6 +2271,18 @@ async def _populate_misc_instance_data(
             f'{edbdef.EDGEDB_SYSTEM_DB}metadata',
             json.dumps({}),
         )
+
+    await _store_static_json_cache(
+        ctx,
+        'sql_default_fe_settings',
+        json.dumps(
+            [
+                {"name": key, "value": pg_common.setting_to_sql(key, val)}
+                for key, val in dbstate.DEFAULT_SQL_FE_SETTINGS.items()
+            ]
+        )
+    )
+
     return json_instance_data
 
 
@@ -2336,7 +2361,7 @@ async def _get_instance_data(
     conn: metaschema.PGConnection,
     *,
     versioned: bool=True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     schema = 'edgedbinstdata_VER' if versioned else 'edgedbinstdata'
     data = await conn.sql_fetch_val(
         trampoline.fixup_query(f"""

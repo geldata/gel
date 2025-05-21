@@ -24,12 +24,7 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Type,
     TypeVar,
-    Dict,
-    List,
-    FrozenSet,
 )
 
 import decimal
@@ -310,7 +305,7 @@ def evaluate_OperatorCall(
             f'unsupported operator: {opcall.func_shortname}',
             span=opcall.span)
 
-    args: Dict[int, irast.CallArg] = {}
+    args: dict[int, irast.CallArg] = {}
     for key, arg in opcall.args.items():
         arg_val = evaluate_to_python_val(arg.expr, schema=schema)
         if isinstance(arg_val, tuple):
@@ -328,7 +323,7 @@ def evaluate_OperatorCall(
 
         args[key] = arg_val
 
-    args_list: List[irast.CallArg] = []
+    args_list: list[irast.CallArg] = []
     for key in range(len(args)):
         if key not in args:
             raise UnsupportedExpressionError(
@@ -376,7 +371,7 @@ def _evaluate_union(
     opcall: irast.OperatorCall, schema: s_schema.Schema
 ) -> irast.ConstExpr:
 
-    elements: List[irast.BaseConstant] = []
+    elements: list[irast.BaseConstant] = []
     for arg in opcall.args.values():
         val = evaluate(arg.expr, schema=schema)
         if isinstance(val, irast.TypeCast):
@@ -425,7 +420,7 @@ def empty_set_to_python(
 @const_to_python.register(irast.ConstantSet)
 def const_set_to_python(
     ir: irast.ConstantSet, schema: s_schema.Schema
-) -> Tuple[Any, ...]:
+) -> tuple[Any, ...]:
     return tuple(const_to_python(v, schema) for v in ir.elements)
 
 
@@ -513,7 +508,7 @@ def python_cast_none(sval: None, pytype: type) -> None:
 
 
 @python_cast.register(tuple)
-def python_cast_tuple(sval: Tuple[Any, ...], pytype: type) -> Any:
+def python_cast_tuple(sval: tuple[Any, ...], pytype: type) -> Any:
     return tuple(python_cast(elem, pytype) for elem in sval)
 
 
@@ -582,9 +577,9 @@ def object_type_to_spec(
     *,
     # We pass a spec_class so that users like the config system can ask for
     # their own subtyped versions of a spec.
-    spec_class: Type[T_spec],
+    spec_class: type[T_spec],
     parent: Optional[T_spec] = None,
-    _memo: Optional[Dict[s_types.Type, T_spec | type]] = None,
+    _memo: Optional[dict[s_types.Type, T_spec | type]] = None,
 ) -> T_spec:
     if _memo is None:
         _memo = {}
@@ -624,7 +619,7 @@ def object_type_to_spec(
             raise UnsupportedExpressionError()
 
         if is_multi:
-            pytype = FrozenSet[pytype]  # type: ignore
+            pytype = frozenset[pytype]  # type: ignore
 
         default = p.get_default(schema)
         if default is None:

@@ -789,6 +789,30 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             ],
         )
 
+    async def test_edgeql_select_computable_36(self):
+        # array of array of scalar computed property
+        await self.con.execute('''
+            ALTER TYPE Issue {
+                CREATE PROPERTY array_of_array {
+                    using ([[1]])
+                };
+            };
+        ''')
+        await self.assert_query_result(
+            """
+            SELECT Issue {
+                number, array_of_array,
+            }
+            FILTER .number = '3'
+            """,
+            [
+                {
+                    'number': '3',
+                    'array_of_array': [[1]]
+                },
+            ],
+        )
+
     async def test_edgeql_select_match_01(self):
         await self.assert_query_result(
             r"""
@@ -8328,6 +8352,38 @@ class TestEdgeQLSelect(tb.QueryTestCase):
         ''')
         self.assertFalse(hasattr(foo, 'id'))
 
+    async def test_edgeql_select_free_object_distinct_02(self):
+        # This was a 6.x regression :(
+        await self.assert_query_result(
+            '''
+            select {
+              lol := assert_distinct((for x in {1,2,3} select { x := x }))
+            };
+            ''',
+            [{"lol": [{"x": 1}, {"x": 2}, {"x": 3}]}]
+        )
+        # This was always supposed to work but was broken forever :(
+        await self.assert_query_result(
+            '''
+            select {
+              lol := (for x in {1,2,3} select { x := x })
+            };
+            ''',
+            [{"lol": [{"x": 1}, {"x": 2}, {"x": 3}]}]
+        )
+
+    @test.xerror('''
+        Can't compile ref to visible binding ns~1@@(__derived__::x@w~2)
+    ''')
+    async def test_edgeql_select_free_object_distinct_03(self):
+        await self.assert_query_result(
+            '''
+            with X := { lol := ((for x in {1,2,3} select { x := x })) },
+            select X {lol: { x }};
+            ''',
+            [{"lol": [{"x": 1}, {"x": 2}, {"x": 3}]}]
+        )
+
     async def test_edgeql_select_shadow_computable_01(self):
         # The thing this is testing for
         await self.assert_query_result(
@@ -8442,6 +8498,38 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                         (DELETE User filter .name = 't1')
             ''')
 
+    async def test_edgeql_select_params_array_of_array_01(self):
+        await self.assert_query_result(
+            r'''
+            SELECT <array<array<int64>>>$0
+            ''',
+            [[[1, 2], [3, 4]]],
+            variables=([[1, 2], [3, 4]],),
+        )
+        await self.assert_query_result(
+            r'''
+            SELECT <array<array<int64>>>$foo
+            ''',
+            [[[1, 2], [3, 4]]],
+            variables={'foo': [[1, 2], [3, 4]]},
+        )
+
+        await self.assert_query_result(
+            r'''
+            SELECT <tuple<array<array<int64>>, array<array<str>>>>$foo
+            ''',
+            [([[1, 2], [3, 4]], [['A', 'B'], ['C', 'D']])],
+            variables={'foo': ([[1, 2], [3, 4]], [['A', 'B'], ['C', 'D']])},
+        )
+
+        await self.assert_query_result(
+            r'''
+            SELECT <array<array<tuple<int64, str>>>>$foo
+            ''',
+            [[[(1, 'A'), (1, 'B')], [(2, 'A'), (2, 'B')]]],
+            variables={'foo': [[(1, 'A'), (1, 'B')], [(2, 'A'), (2, 'B')]]},
+        )
+
     async def test_edgeql_select_params_01(self):
         with self.assertRaisesRegex(edgedb.QueryError, "missing a type cast"):
             await self.con.query("select ($0, $1)")
@@ -8486,6 +8574,29 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             select pointers_2;
             ''',
             __typenames__=True
+        )
+
+    async def test_edgeql_select_policies_subquery_args_01(self):
+        # There used to be a bug where we screwed up cardinality
+        # inference when functions with prefer_subquery_args (like
+        # std::contains on ranges) were used, which would lead to
+        # bogus FILTER clause warnings.
+        #
+        # This is in select because it only happened with old
+        # factoring, I think.
+        await self.con.execute('''
+            create type XR {
+                create required property r -> range<int64>;
+                create required property e -> int64;
+                create access policy lol allow all using (contains(.r, .e));
+            };
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select XR
+            ''',
+            []
         )
 
     async def test_edgeql_type_pointer_backlink_01(self):

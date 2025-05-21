@@ -15,7 +15,7 @@ Bulk importing of data
 
   The array of card IDs is initially an array of strings. To satisfy the |Gel| type system, which expects the ``id`` property of ``Card`` objects to be a ``uuid`` rather than a ``str``, you need to cast the array of strings to an array of UUIDs. Use the ``e.literal(e.array(e.uuid), cardIds)`` function to perform this casting.
 
-  The function ``e.includes(cardIdsLiteral, c.id)`` from our standard library checks if a value is present in an array and returns a boolean. When inserting the ``Deck`` object, set the ``cards`` to the result of selecting only the ``Card`` objects whose ``id`` is included in the ``cardIds`` array.
+  The function ``e.contains(cardIdsLiteral, c.id)`` from our standard library checks if a value is present in an array and returns a boolean. When inserting the ``Deck`` object, set the ``cards`` to the result of selecting only the ``Card`` objects whose ``id`` is included in the ``cardIds`` array.
 
   .. code-block:: typescript-diff
     :caption: app/actions.ts

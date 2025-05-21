@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Sequence, Dict
+from typing import Any, Optional, Sequence
 
 from edb.edgeql import ast as qlast
 from edb.schema.pointers import PointerDirection
@@ -84,7 +84,7 @@ def reverse_elab_label(lbl: Label) -> qlast.Path:
             raise ValueError(lbl)
 
 
-def reverse_elab_shape(expr: ShapeExpr) -> List[qlast.ShapeElement]:
+def reverse_elab_shape(expr: ShapeExpr) -> list[qlast.ShapeElement]:
     return [
         qlast.ShapeElement(
             expr=reverse_elab_label(lbl),
@@ -138,8 +138,8 @@ def reverse_elab_type_name(tp: Tp | e.RawName) -> qlast.TypeName:
 
 
 def reverse_elab_order(
-    order: Dict[str, Expr]
-) -> Optional[List[qlast.SortExpr]]:
+    order: dict[str, Expr]
+) -> Optional[list[qlast.SortExpr]]:
     keys = sorted(
         [
             (idx, spec, k)

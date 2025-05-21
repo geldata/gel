@@ -105,8 +105,6 @@ Reference
 
 .. eql:type:: std::array
 
-    :index: array
-
     An ordered list of values of the same type.
 
     Array indexing starts at zero.
@@ -151,7 +149,7 @@ Reference
 
 .. eql:operator:: arrayidx: array<anytype> [ int64 ] -> anytype
 
-    :index: [int], index access
+    .. api-index:: §array§[§int§]
 
     Accesses the array element at a given index.
 
@@ -185,7 +183,7 @@ Reference
 
 .. eql:operator:: arrayslice: array<anytype> [ int64 : int64 ] -> anytype
 
-    :index: [int:int]
+    .. api-index:: §array§[§int§:§int§]
 
     Produces a sub-array from an existing array.
 
@@ -230,7 +228,8 @@ Reference
 
 .. eql:operator:: arrayplus: array<anytype> ++ array<anytype> -> array<anytype>
 
-    :index: ++, concatenate, join, add
+    .. index:: concatenate, join, add
+    .. api-index:: §array §++§ array§
 
     Concatenates two arrays of the same type into one.
 
@@ -245,7 +244,7 @@ Reference
 
 .. eql:function:: std::array_agg(s: set of anytype) -> array<anytype>
 
-    :index: aggregate array set
+    .. index:: aggregate
 
     Returns an array made from all of the input set elements.
 
@@ -267,8 +266,6 @@ Reference
                                  index: int64, \
                                  named only default: anytype = {} \
                               ) -> optional anytype
-
-    :index: array access get
 
     Returns the element of a given *array* at the specified *index*.
 
@@ -294,8 +291,6 @@ Reference
 
 .. eql:function:: std::array_unpack(array: array<anytype>) -> set of anytype
 
-    :index: set array unpack
-
     Returns the elements of an array as a set.
 
     .. note::
@@ -320,7 +315,7 @@ Reference
                   std::array_join(array: array<bytes>, \
                                   delimiter: bytes) -> bytes
 
-    :index: join array_to_string implode
+    .. index:: array_to_string, implode
 
     Renders an array to a string or byte-string.
 
@@ -344,8 +339,6 @@ Reference
 
 
 .. eql:function:: std::array_fill(val: anytype, n: int64) -> array<anytype>
-
-    :index: fill
 
     Returns an array of the specified size, filled with the provided value.
 

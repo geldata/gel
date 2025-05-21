@@ -8,7 +8,7 @@ Sets
 Everything is a set
 -------------------
 
-.. index:: set, multiset, cardinality, empty set, singleton
+.. index:: multiset, cardinality, empty set, singleton
 
 All values in EdgeQL are actually **sets**: a collection of values of a given
 **type**. All elements of a set must have the same type. The number of items in
@@ -21,7 +21,7 @@ referred to as an **empty set**. A set with a cardinality of one is known as a
 Constructing sets
 -----------------
 
-.. index:: constructor, { }, union
+.. api-index:: {§expr [\, ...]§}, union
 
 Set literals are declared with *set constructor* syntax: a comma-separated
 list of values inside a set of ``{curly braces}``.
@@ -215,7 +215,7 @@ schema.
 Multisets
 ---------
 
-.. index:: multisets, distinct, duplicates
+.. api-index:: distinct
 
 Technically sets in Gel are actually *multisets*, because they can contain
 duplicates of the same element. To eliminate duplicates, use the
@@ -233,7 +233,7 @@ duplicates of the same element. To eliminate duplicates, use the
 Checking membership
 -------------------
 
-.. index:: in
+.. api-index:: §element§ in §set§
 
 Use the :eql:op:`in` operator to check whether a set contains a particular
 element.
@@ -251,7 +251,7 @@ element.
 Merging sets
 ------------
 
-.. index:: union, merge
+.. api-index:: union
 
 Use the :eql:op:`union` operator to merge two sets.
 
@@ -265,7 +265,7 @@ Use the :eql:op:`union` operator to merge two sets.
 Finding common members
 ----------------------
 
-.. index:: intersect
+.. api-index:: intersect
 
 Use the :eql:op:`intersect` operator to find common members between two sets.
 
@@ -295,7 +295,7 @@ resulting set.
 Removing common members
 -----------------------
 
-.. index:: except
+.. api-index:: except
 
 Use the :eql:op:`except` operator to leave only the members in the first set
 that do not appear in the second set.
@@ -328,7 +328,8 @@ first set's ``3`` members are eliminated from the resulting set.
 Coalescing
 ----------
 
-.. index:: empty set, ??, default values, optional
+.. index:: empty set, default values, optional
+.. api-index:: ??
 
 Occasionally in queries, you need to handle the case where a set is empty. This
 can be achieved with a coalescing operator :eql:op:`?? <coalesce>`. This is
@@ -357,7 +358,8 @@ commonly used to provide default values for optional :ref:`query parameters
 Inheritance
 -----------
 
-.. index:: type intersection, backlinks, [is ]
+.. index:: type intersection, backlinks
+.. api-index:: §expr§[is §type§]
 
 |Gel| schemas support :ref:`inheritance <ref_datamodel_objects_inheritance>`;
 types (usually object types) can extend one or more other types. For instance
@@ -477,7 +479,7 @@ Cardinality <ref_reference_cardinality>`.
 Conversion to/from arrays
 -------------------------
 
-.. index:: array_unpack, array_agg, converting sets
+.. api-index:: array_unpack, array_agg
 
 Both arrays and sets are collections of values that share a type. EdgeQL
 provides ways to convert one into the other.

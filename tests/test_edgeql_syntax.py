@@ -2830,6 +2830,13 @@ aa';
         default::Movie.name;
         """
 
+    @tb.must_fail(errors.EdgeQLSyntaxError,
+                  r"Missing keyword 'SELECT'", line=1, col=1)
+    def test_edgeql_syntax_select_14(self):
+        """
+        std::assert_single((select 1));
+        """
+
     def test_edgeql_syntax_group_01(self):
         """
         GROUP User
@@ -3410,7 +3417,7 @@ aa';
         """
 
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  r'Unexpected.+bad', hint=None, line=4, col=25)
+                  r"Missing '\.'", hint=None, line=4, col=24)
     def test_edgeql_syntax_update_08(self):
         """
         WITH x := (
@@ -3827,7 +3834,7 @@ aa';
         """
 
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  r"Missing '\('",
+                  r"Missing ','",
                   line=2, col=29)
     def test_edgeql_syntax_function_20(self):
         """

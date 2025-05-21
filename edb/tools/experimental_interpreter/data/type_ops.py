@@ -1,6 +1,6 @@
 from . import data_ops as e
 from . import expr_ops as eops
-from typing import List, Dict, Optional, Callable
+from typing import Optional, Callable
 from . import module_ops as mops
 from ..data import expr_to_str as pp
 from functools import reduce
@@ -30,12 +30,12 @@ def construct_tp_union(tp1: e.Tp, tp2: e.Tp) -> e.Tp:
         return e.UnionTp(tp1, tp2)
 
 
-def construct_tps_union(tps: List[e.Tp]) -> e.Tp:
+def construct_tps_union(tps: list[e.Tp]) -> e.Tp:
     assert len(tps) > 0
     return reduce(construct_tp_union, tps)
 
 
-def collect_tp_intersection(tp1: e.Tp) -> List[e.Tp]:
+def collect_tp_intersection(tp1: e.Tp) -> list[e.Tp]:
     match tp1:
         case e.IntersectTp(left=tp1, right=tp2):
             return collect_tp_intersection(tp1) + collect_tp_intersection(tp2)
@@ -43,7 +43,7 @@ def collect_tp_intersection(tp1: e.Tp) -> List[e.Tp]:
             return [tp1]
 
 
-def collect_tp_union(tp1: e.Tp) -> List[e.Tp]:
+def collect_tp_union(tp1: e.Tp) -> list[e.Tp]:
     match tp1:
         case e.UnionTp(left=tp1, right=tp2):
             return collect_tp_union(tp1) + collect_tp_union(tp2)
@@ -248,7 +248,7 @@ def collect_is_subtype_with_instantiation(
     ctx: e.TcCtx,
     syn_tp: e.Tp,
     ck_tp: e.Tp,
-    some_tp_mapping: Dict[int, List[e.Tp]],
+    some_tp_mapping: dict[int, list[e.Tp]],
 ) -> bool:
     """
     Here, tp2 may be a some type
@@ -274,7 +274,7 @@ def collect_is_subtype_with_instantiation(
 
 
 def check_is_subtype_with_instantiation(
-    ctx: e.TcCtx, syn_tp: e.Tp, ck_tp: e.Tp, some_tp_mapping: Dict[int, e.Tp]
+    ctx: e.TcCtx, syn_tp: e.Tp, ck_tp: e.Tp, some_tp_mapping: dict[int, e.Tp]
 ) -> bool:
     if isinstance(ck_tp, e.SomeTp):
         if ck_tp.index in some_tp_mapping:
@@ -296,7 +296,7 @@ def check_is_subtype_with_instantiation(
 
 
 def recursive_instantiate_tp(
-    tp: e.Tp, some_tp_mapping: Dict[int, e.Tp]
+    tp: e.Tp, some_tp_mapping: dict[int, e.Tp]
 ) -> e.Tp:
     """
     Instantiate all Some(i) sub term in a type.

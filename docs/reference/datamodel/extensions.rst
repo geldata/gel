@@ -4,7 +4,7 @@
 Extensions
 ==========
 
-.. index:: using extension
+.. api-index:: using extension
 
 Extensions are the way |Gel| can be extended with more functionality.
 They can add new types, scalars, functions, etc., but, more
@@ -14,8 +14,8 @@ importantly, they can add new ways of interacting with the database.
 Built-in extensions
 ===================
 
-.. index:: edgeql_http, graphql, auth, ai, pg_trgm, pg_unaccent, pgcrypto,
-           pgvector
+.. api-index:: edgeql_http, graphql, auth, ai, pg_trgm, pg_unaccent, pgcrypto,
+               pgvector
 
 There are a few built-in extensions available:
 
@@ -51,10 +51,9 @@ your schema:
 Standalone extensions
 =====================
 
-.. index:: postgis
+.. api-index:: postgis
 
-Additionally, standalone extension packages can be installed via the CLI,
-with ``postgis`` being a notable example.
+Additionally, standalone extension packages can be installed on local project-managed instances via the CLI, with ``postgis`` being a notable example.
 
 List installed extensions:
 
@@ -79,7 +78,7 @@ Install the ``postgis`` extension:
 
 .. code-block:: bash
 
-  $ gel extension install -E postgis
+  $ gel extension install postgis
   Found extension package: postgis version 3.4.3+6b82d77
   00:00:03 [====================] 22.49 MiB/22.49 MiB
   Extension 'postgis' installed successfully.

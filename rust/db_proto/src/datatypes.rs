@@ -61,15 +61,15 @@ impl Meta for RestMeta {
     }
 }
 
-impl<'a> Rest<'a> {}
+impl Rest<'_> {}
 
-impl<'a> AsRef<[u8]> for Rest<'a> {
+impl AsRef<[u8]> for Rest<'_> {
     fn as_ref(&self) -> &[u8] {
         self.buf
     }
 }
 
-impl<'a> std::ops::Deref for Rest<'a> {
+impl std::ops::Deref for Rest<'_> {
     type Target = [u8];
     fn deref(&self) -> &Self::Target {
         self.buf
@@ -155,7 +155,7 @@ impl std::fmt::Debug for ZTString<'_> {
     }
 }
 
-impl<'a> ZTString<'a> {
+impl ZTString<'_> {
     pub fn to_owned(&self) -> Result<String, std::str::Utf8Error> {
         std::str::from_utf8(self.buf).map(|s| s.to_owned())
     }
@@ -264,7 +264,7 @@ impl std::fmt::Debug for LString<'_> {
     }
 }
 
-impl<'a> LString<'a> {
+impl LString<'_> {
     pub fn to_owned(&self) -> Result<String, std::str::Utf8Error> {
         std::str::from_utf8(self.buf).map(|s| s.to_owned())
     }
@@ -348,7 +348,7 @@ pub enum Encoded<'a> {
     Value(&'a [u8]),
 }
 
-impl<'a> Encoded<'a> {
+impl Encoded<'_> {
     pub fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
         match self {
             Encoded::Null => "".into(),
@@ -439,7 +439,7 @@ impl Meta for EncodedMeta {
     }
 }
 
-impl<'a> Encoded<'a> {}
+impl Encoded<'_> {}
 
 impl PartialEq<str> for Encoded<'_> {
     fn eq(&self, other: &str) -> bool {

@@ -1,6 +1,6 @@
 from functools import reduce
 import operator
-from typing import Tuple, Dict, Sequence, List
+from typing import Sequence
 
 from edb import errors
 from ..data import data_ops as e
@@ -25,7 +25,7 @@ def synthesize_type_for_val(val: e.Val) -> e.Tp:
 
 def check_shape_transform(
     ctx: e.TcCtx, s: e.ShapeExpr, tp: e.Tp
-) -> Tuple[e.Tp, e.ShapeExpr]:
+) -> tuple[e.Tp, e.ShapeExpr]:
 
     result_s_tp = e.ObjectTp({})
     result_l_tp = e.ObjectTp({})
@@ -132,7 +132,7 @@ def check_filter_body_is_exclusive(ctx: e.TcCtx, filter_ck: e.Expr) -> bool:
             return False
 
 
-def synthesize_type(ctx: e.TcCtx, expr: e.Expr) -> Tuple[e.ResultTp, e.Expr]:
+def synthesize_type(ctx: e.TcCtx, expr: e.Expr) -> tuple[e.ResultTp, e.Expr]:
     result_tp: e.Tp
     result_card: e.CMMode
     result_expr: e.Expr = expr  # by default we don't change expr
@@ -272,7 +272,7 @@ def synthesize_type(ctx: e.TcCtx, expr: e.Expr) -> Tuple[e.ResultTp, e.Expr]:
                 result_expr = e.LinkPropProjExpr(subject_ck, lp)
         case e.BackLinkExpr(subject=subject, label=label):
             (_, subject_ck) = synthesize_type(ctx, subject)
-            candidates: List[e.NamedNominalLinkTp] = []
+            candidates: list[e.NamedNominalLinkTp] = []
             for t_name, name_def in mops.enumerate_all_object_type_defs(ctx):
                 for name_label, comp_tp in name_def.val.items():
                     if name_label == label:
@@ -386,7 +386,7 @@ def synthesize_type(ctx: e.TcCtx, expr: e.Expr) -> Tuple[e.ResultTp, e.Expr]:
                 ctx, filter, e.ResultTp(subject_tp.tp, e.CardOne)
             )
 
-            order_ck: Dict[str, e.BindingExpr] = {}
+            order_ck: dict[str, e.BindingExpr] = {}
             for order_label, o in order.items():
                 order_ctx, order_body, order_bound_var = (
                     eops.tcctx_add_binding(
@@ -605,7 +605,7 @@ def expr_tp_is_not_synthesizable(expr: e.Expr) -> bool:
 
 def check_type_no_card(
     ctx: e.TcCtx, expr: e.Expr, tp: e.Tp, with_assignment_cast: bool = False
-) -> Tuple[e.CMMode, e.Expr]:
+) -> tuple[e.CMMode, e.Expr]:
     match expr:
         case e.MultiSetExpr(expr=[]):
             return (e.CardAtMostOne, expr)

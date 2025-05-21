@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Tuple, Iterable, List
+from typing import Iterable
 
 import functools
 
@@ -55,7 +55,7 @@ MODIFYING = qltypes.Volatility.Modifying
 
 def _normalize_volatility(
     vol: InferredVolatility,
-) -> Tuple[qltypes.Volatility, qltypes.Volatility]:
+) -> tuple[qltypes.Volatility, qltypes.Volatility]:
     if not isinstance(vol, tuple):
         return (vol, vol)
     else:
@@ -367,7 +367,7 @@ def __infer_slice(
 ) -> InferredVolatility:
     # slice indirection volatility depends on the volatility of
     # the base expression and the slice index expressions
-    args: List[irast.Base] = [ir.expr]
+    args: list[irast.Base] = [ir.expr]
     if ir.start is not None:
         args.append(ir.start)
     if ir.stop is not None:

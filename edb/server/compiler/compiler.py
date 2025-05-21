@@ -21,14 +21,10 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Union,
     AbstractSet,
     Iterable,
     Mapping,
     Sequence,
-    Dict,
-    List,
     NamedTuple,
     cast,
     TYPE_CHECKING,
@@ -125,7 +121,7 @@ class CompilerDatabaseState:
 
     user_schema: s_schema.Schema
     global_schema: s_schema.Schema
-    cached_reflection: immutables.Map[str, Tuple[str, ...]]
+    cached_reflection: immutables.Map[str, tuple[str, ...]]
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -228,7 +224,7 @@ DEFAULT_MODULE_ALIASES_MAP: immutables.Map[Optional[str], str] = (
 def compile_edgeql_script(
     ctx: CompileContext,
     eql: str,
-) -> Tuple[s_schema.Schema, str]:
+) -> tuple[s_schema.Schema, str]:
 
     sql = _compile_ql_script(ctx, eql)
     new_schema = ctx.state.current_tx().get_schema(
@@ -434,9 +430,9 @@ class Compiler:
 
     @staticmethod
     def _try_compile_rollback(
-        eql: Union[edgeql.Source, bytes]
+        eql: edgeql.Source | bytes
     ) -> tuple[dbstate.QueryUnitGroup, int]:
-        source: Union[str, edgeql.Source]
+        source: str | edgeql.Source
         if isinstance(eql, edgeql.Source):
             source = eql
         else:
@@ -475,16 +471,16 @@ class Compiler:
         self,
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
-        reflection_cache: immutables.Map[str, Tuple[str, ...]],
+        reflection_cache: immutables.Map[str, tuple[str, ...]],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
-        queries: List[str],
+        queries: list[str],
         protocol_version: defines.ProtocolVersion,
         implicit_limit: int = 0,
-    ) -> List[
-        Tuple[
+    ) -> list[
+        tuple[
             bool,
-            Union[dbstate.QueryUnit, Tuple[str, str, Dict[int, str]]]
+            dbstate.QueryUnit | tuple[str, str, dict[int, str]]
         ]
     ]:
 
@@ -500,10 +496,10 @@ class Compiler:
 
         state.start_tx()
 
-        result: List[
-            Tuple[
+        result: list[
+            tuple[
                 bool,
-                Union[dbstate.QueryUnit, Tuple[str, str, Dict[int, str]]]
+                dbstate.QueryUnit | tuple[str, str, dict[int, str]]
             ]
         ] = []
 
@@ -544,7 +540,7 @@ class Compiler:
         self,
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
-        reflection_cache: immutables.Map[str, Tuple[str, ...]],
+        reflection_cache: immutables.Map[str, tuple[str, ...]],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
         source: pg_parser.Source,
@@ -552,7 +548,7 @@ class Compiler:
         prepared_stmt_map: Mapping[str, str],
         current_database: str,
         current_user: str,
-    ) -> List[dbstate.SQLQueryUnit]:
+    ) -> list[dbstate.SQLQueryUnit]:
         state = dbstate.CompilerConnectionState(
             user_schema=user_schema,
             global_schema=global_schema,
@@ -592,12 +588,12 @@ class Compiler:
         self,
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
-        reflection_cache: immutables.Map[str, Tuple[str, ...]],
+        reflection_cache: immutables.Map[str, tuple[str, ...]],
         database_config: Optional[immutables.Map[str, config.SettingValue]],
         system_config: Optional[immutables.Map[str, config.SettingValue]],
         serialized_request: bytes,
         original_query: str,
-    ) -> Tuple[
+    ) -> tuple[
         dbstate.QueryUnitGroup | SQLDescriptors,
         Optional[dbstate.CompilerConnectionState]
     ]:
@@ -621,11 +617,11 @@ class Compiler:
         *,
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
-        reflection_cache: immutables.Map[str, Tuple[str, ...]],
+        reflection_cache: immutables.Map[str, tuple[str, ...]],
         database_config: Optional[immutables.Map[str, config.SettingValue]],
         system_config: Optional[immutables.Map[str, config.SettingValue]],
         request: rpc.CompilationRequest,
-    ) -> Tuple[dbstate.QueryUnitGroup | SQLDescriptors,
+    ) -> tuple[dbstate.QueryUnitGroup | SQLDescriptors,
                Optional[dbstate.CompilerConnectionState]]:
 
         if request.input_language is enums.InputLanguage.SQL_PARAMS:
@@ -712,7 +708,7 @@ class Compiler:
         serialized_request: bytes,
         original_query: str,
         expect_rollback: bool = False,
-    ) -> Tuple[
+    ) -> tuple[
         dbstate.QueryUnitGroup | SQLDescriptors,
         Optional[dbstate.CompilerConnectionState]
     ]:
@@ -735,7 +731,7 @@ class Compiler:
         txid: int,
         request: rpc.CompilationRequest,
         expect_rollback: bool = False,
-    ) -> Tuple[
+    ) -> tuple[
         dbstate.QueryUnitGroup | SQLDescriptors,
         Optional[dbstate.CompilerConnectionState]
     ]:
@@ -1114,8 +1110,8 @@ class Compiler:
         dump_server_ver_str: str,
         dump_catalog_version: Optional[int],
         schema_ddl: bytes,
-        schema_ids: List[Tuple[str, str, bytes]],
-        blocks: List[Tuple[bytes, bytes]],  # type_id, typespec
+        schema_ids: list[tuple[str, str, bytes]],
+        blocks: list[tuple[bytes, bytes]],  # type_id, typespec
         protocol_version: defines.ProtocolVersion,
     ) -> RestoreDescriptor:
         schema_object_ids = {
@@ -1347,7 +1343,7 @@ class Compiler:
             stmt = (
                 f'COPY {table_name} '
                 f'({", ".join(col_list)})'
-                f'FROM STDIN WITH BINARY'
+                f'FROM STDIN WITH (FORMAT binary, FREEZE true)'
             ).encode()
 
             restore_blocks.append(
@@ -1381,7 +1377,7 @@ class Compiler:
         schema_a: bytes,
         schema_b: bytes,
         global_schema: bytes,
-        conn_state_pickle: Any,
+        conn_state_pickle: Optional[bytes],
     ) -> None:
         if conn_state_pickle:
             conn_state = pickle.loads(conn_state_pickle)
@@ -1436,7 +1432,7 @@ def compile_schema_storage_in_delta(
     funcblock = block.add_block()
     cmdblock = block.add_block()
 
-    meta_blocks: List[Tuple[str, Dict[str, Any]]] = []
+    meta_blocks: list[tuple[str, dict[str, Any]]] = []
 
     # Use a provided context if one was passed in, which lets us
     # used the cached values for resolved properties. (Which is
@@ -1596,9 +1592,11 @@ def _get_compile_options(
     ctx: CompileContext,
     *,
     is_explain: bool = False,
+    no_implicit_fields: bool = False,
 ) -> qlcompiler.CompilerOptions:
-    can_have_implicit_fields = (
-        ctx.output_format is enums.OutputFormat.BINARY)
+    can_have_implicit_fields = not no_implicit_fields and (
+        ctx.output_format is enums.OutputFormat.BINARY
+    )
 
     return qlcompiler.CompilerOptions(
         modaliases=ctx.state.current_tx().get_modaliases(),
@@ -1614,6 +1612,7 @@ def _get_compile_options(
         json_parameters=ctx.json_parameters,
         implicit_limit=ctx.implicit_limit,
         bootstrap_mode=ctx.bootstrap_mode,
+        dump_restore_mode=ctx.dump_restore_mode,
         apply_query_rewrites=(
             not ctx.bootstrap_mode
             and not ctx.schema_reflection_mode
@@ -1755,6 +1754,8 @@ def _compile_ql_administer(
         return ddl.administer_vacuum(ctx, ql)
     elif ql.expr.func == 'prepare_upgrade':
         return ddl.administer_prepare_upgrade(ctx, ql)
+    elif ql.expr.func == '_remove_pointless_triggers':
+        return ddl.administer_remove_pointless_triggers(ctx, ql)
     else:
         raise errors.QueryError(
             'Unknown ADMINISTER function',
@@ -1776,7 +1777,7 @@ def _compile_ql_query(
     is_explain = explain_data is not None
     current_tx = ctx.state.current_tx()
 
-    sql_info: Dict[str, Any] = {}
+    sql_info: dict[str, Any] = {}
     if (
         not ctx.bootstrap_mode
         and ctx.backend_runtime_params.has_stat_statements
@@ -1794,7 +1795,7 @@ def _compile_ql_query(
                                      and spec[v.name].affects_compilation,
             include_source=False,
         )
-        extras: Dict[str, Any] = {
+        extras: dict[str, Any] = {
             'cc': dict(sorted(cconfig.items())),  # compilation_config
             'pv': ctx.protocol_version,  # protocol_version
             'of': ctx.output_format,  # output_format
@@ -1854,7 +1855,7 @@ def _compile_ql_query(
         output_format=_convert_format(ctx.output_format),
         backend_runtime_params=ctx.backend_runtime_params,
         is_explain=options.is_explain,
-        detach_params=(use_persistent_cache
+        cache_as_function=(use_persistent_cache
                        and cache_mode is config.QueryCacheMode.PgFunc),
         versioned_stdlib=True,
     )
@@ -1878,10 +1879,13 @@ def _compile_ql_query(
         (mstate := current_tx.get_migration_state())
         and not migration_block_query
     ):
-        mstate = mstate._replace(
-            accepted_cmds=mstate.accepted_cmds + (ql,),
-        )
-        current_tx.update_migration_state(mstate)
+        if isinstance(ql, qlast.Query):
+            mstate = mstate._replace(
+                accepted_cmds=(
+                    mstate.accepted_cmds + (qlast.DDLQuery(query=ql),)
+                )
+            )
+            current_tx.update_migration_state(mstate)
 
         return dbstate.NullQuery()
 
@@ -1921,6 +1925,29 @@ def _compile_ql_query(
     in_type_args, in_type_data, in_type_id = describe_params(
         ctx, ir, sql_res.argmap, script_info
     )
+
+    server_param_conversions: Optional[
+        list[dbstate.ServerParamConversion]
+    ] = None
+    if isinstance(ir, irast.Statement) and ir.server_param_conversions:
+        # The irast.ServerParamConversion we get from the ql compiler contains
+        # either a script_param_index or a constant value.
+        #
+        # A script_param_index can refer to either an actual query param or a
+        # constant that was normalized out of a query.
+        #
+        # A constant value is used as is by the server.
+
+        server_param_conversions = [
+            dbstate.ServerParamConversion(
+                param_name=p.param_name,
+                conversion_name=p.conversion_name,
+                additional_info=p.additional_info,
+                script_param_index=p.script_param_index,
+                constant_value=p.constant_value
+            )
+            for p in ir.server_param_conversions
+        ]
 
     sql_hash = _hash_sql(
         sql_text.encode(defines.EDGEDB_ENCODING),
@@ -1965,10 +1992,12 @@ def _compile_ql_query(
         in_type_args=in_type_args,
         out_type_id=out_type_id.bytes,
         out_type_data=out_type_data,
+        server_param_conversions=server_param_conversions,
         cacheable=cacheable,
         has_dml=bool(ir.dml_exprs),
         query_asts=query_asts,
         warnings=ir.warnings,
+        unsafe_isolation_dangers=ir.unsafe_isolation_dangers,
     )
 
 
@@ -2025,7 +2054,7 @@ def _build_cache_function(
     fname = (pg_common.versioned_schema("edgedb"), f"__qh_{key}")
     func = pg_dbops.Function(
         name=fname,
-        args=[(None, arg) for arg in sql_res.detached_params or []],
+        args=[(None, arg) for arg in sql_res.cached_params or []],
         returns=return_type,
         set_returning=set_returning,
         text=pg_codegen.generate_source(sql_ast),
@@ -2052,7 +2081,7 @@ def _build_cache_function(
                 arg=pgast.ParamRef(number=i),
                 type_name=pgast.TypeName(name=arg),
             )
-            for i, arg in enumerate(sql_res.detached_params or [], 1)
+            for i, arg in enumerate(sql_res.cached_params or [], 1)
         ],
         coldeflist=[],
     )
@@ -2094,9 +2123,9 @@ def _build_cache_function(
 def describe_params(
     ctx: CompileContext,
     ir: irast.Statement | irast.ConfigCommand,
-    argmap: Dict[str, pgast.Param],
+    argmap: dict[str, pgast.Param],
     script_info: Optional[irast.ScriptInfo],
-) -> Tuple[Optional[list[dbstate.Param]], bytes, uuid.UUID]:
+) -> tuple[Optional[list[dbstate.Param]], bytes, uuid.UUID]:
     in_type_args = None
     params: list[tuple[str, s_types.Type, bool]] = []
     assert ir.schema
@@ -2129,6 +2158,7 @@ def _compile_ql_transaction(
     final_global_schema: Optional[s_schema.Schema] = None
     sp_name = None
     sp_id = None
+    iso = None
 
     if ctx.expect_rollback and not isinstance(
         ql, (qlast.RollbackTransaction, qlast.RollbackToSavepoint)
@@ -2154,25 +2184,10 @@ def _compile_ql_transaction(
         # Compute the effective access mode
         access = ql.access
         if access is None:
-            if default_iso is qltypes.TransactionIsolationLevel.SERIALIZABLE:
-                access_mode: statypes.TransactionAccessMode = _get_config_val(
-                    ctx, "default_transaction_access_mode"
-                )
-                access = access_mode.to_qltypes()
-            else:
-                access = qltypes.TransactionAccessMode.READ_ONLY
-
-        # Guard against unsupported isolation + access combinations
-        if (
-            iso is not qltypes.TransactionIsolationLevel.SERIALIZABLE
-            and access is not qltypes.TransactionAccessMode.READ_ONLY
-        ):
-            raise errors.TransactionError(
-                f"{iso.value} transaction isolation level is only "
-                "supported in read-only transactions",
-                span=ql.span,
-                hint=f"specify READ ONLY access mode",
+            access_mode: statypes.TransactionAccessMode = _get_config_val(
+                ctx, "default_transaction_access_mode"
             )
+            access = access_mode.to_qltypes()
 
         sqls = f'START TRANSACTION ISOLATION LEVEL {iso.value} {access.value}'
         if ql.deferrable is not None:
@@ -2248,6 +2263,7 @@ def _compile_ql_transaction(
         global_schema=final_global_schema,
         sp_name=sp_name,
         sp_id=sp_id,
+        isolation_level=iso,
         feature_used_metrics=(
             ddl.produce_feature_used_metrics(
                 ctx.compiler_state, final_user_schema
@@ -2400,7 +2416,6 @@ def _compile_ql_config_op(
     current_tx = ctx.state.current_tx()
     schema = current_tx.get_schema(ctx.compiler_state.std_schema)
 
-    modaliases = current_tx.get_modaliases()
     session_config = current_tx.get_session_config()
     database_config = current_tx.get_database_config()
 
@@ -2414,14 +2429,13 @@ def _compile_ql_config_op(
         raise errors.QueryError(
             'CONFIGURE INSTANCE cannot be executed in a transaction block')
 
+    options = _get_compile_options(ctx, no_implicit_fields=True)
+    options.in_server_config_op = True
+
     ir = qlcompiler.compile_ast_to_ir(
         ql,
         schema=schema,
-        options=qlcompiler.CompilerOptions(
-            modaliases=modaliases,
-            in_server_config_op=True,
-            dump_restore_mode=ctx.dump_restore_mode,
-        ),
+        options=options,
     )
 
     globals = None
@@ -2522,7 +2536,7 @@ def _compile_dispatch_ql(
     *,
     in_script: bool=False,
     script_info: Optional[irast.ScriptInfo] = None,
-) -> Tuple[dbstate.BaseQuery, enums.Capability]:
+) -> tuple[dbstate.BaseQuery, enums.Capability]:
     if isinstance(ql, qlast.MigrationCommand):
         query = ddl.compile_dispatch_ql_migration(
             ctx, ql, in_script=in_script
@@ -2967,6 +2981,7 @@ def _make_query_unit(
         cache_key=ctx.cache_key,
         user_schema_version=schema_version,
         warnings=comp.warnings,
+        unsafe_isolation_dangers=comp.unsafe_isolation_dangers,
     )
 
     if not comp.is_transactional:
@@ -3001,6 +3016,8 @@ def _make_query_unit(
         unit.out_type_id = comp.out_type_id
         unit.in_type_data = comp.in_type_data
         unit.in_type_id = comp.in_type_id
+
+        unit.server_param_conversions = comp.server_param_conversions
 
         unit.cacheable = comp.cacheable
 
@@ -3055,6 +3072,7 @@ def _make_query_unit(
             )
         unit.sql = comp.sql
         unit.cacheable = comp.cacheable
+        unit.tx_isolation_level = comp.isolation_level
 
         if not ctx.dump_restore_mode:
             if comp.user_schema is not None:
@@ -3188,18 +3206,21 @@ def _make_query_unit(
     if unit.warnings:
         for warning in unit.warnings:
             warning.__traceback__ = None
+    if unit.unsafe_isolation_dangers:
+        for warning in unit.unsafe_isolation_dangers:
+            warning.__traceback__ = None
 
     return unit, final_user_schema
 
 
 def _extract_params(
-    params: List[irast.Param],
+    params: list[irast.Param],
     *,
     schema: s_schema.Schema,
-    argmap: Optional[Dict[str, pgast.Param]],
+    argmap: Optional[dict[str, pgast.Param]],
     script_info: Optional[irast.ScriptInfo],
     ctx: CompileContext,
-) -> Tuple[List[tuple[str, s_types.Type, bool]], List[dbstate.Param]]:
+) -> tuple[list[tuple[str, s_types.Type, bool]], list[dbstate.Param]]:
     first_param = next(iter(params)) if params else None
     has_named_params = first_param and not first_param.name.isdecimal()
 
@@ -3328,11 +3349,11 @@ def _describe_object(
     schema: s_schema.Schema,
     source: s_obj.Object,
     protocol_version: defines.ProtocolVersion,
-) -> List[DumpBlockDescriptor]:
+) -> list[DumpBlockDescriptor]:
 
     cols = []
     shape = []
-    ptrdesc: List[DumpBlockDescriptor] = []
+    ptrdesc: list[DumpBlockDescriptor] = []
 
     if isinstance(source, s_props.Property):
         schema, prop_tuple = s_types.Tuple.from_subtypes(
@@ -3675,8 +3696,8 @@ def _extract_roles(
 class DumpDescriptor(NamedTuple):
 
     schema_ddl: str
-    schema_dynamic_ddl: Tuple[str, ...]
-    schema_ids: List[Tuple[str, str, bytes]]
+    schema_dynamic_ddl: tuple[str, ...]
+    schema_ids: list[tuple[str, str, bytes]]
     blocks: Sequence[DumpBlockDescriptor]
 
 
@@ -3684,7 +3705,7 @@ class DumpBlockDescriptor(NamedTuple):
 
     schema_object_id: uuid.UUID
     schema_object_class: qltypes.SchemaObjectClass
-    schema_deps: Tuple[uuid.UUID, ...]
+    schema_deps: tuple[uuid.UUID, ...]
     type_desc_id: uuid.UUID
     type_desc: bytes
     sql_copy_stmt: bytes
@@ -3705,7 +3726,7 @@ class DataMendingDescriptor(NamedTuple):
     #: The kind of a type we are dealing with
     schema_object_class: qltypes.SchemaObjectClass
     #: If type is a collection, mending descriptors of element types
-    elements: Tuple[Optional[DataMendingDescriptor], ...] = tuple()
+    elements: tuple[Optional[DataMendingDescriptor], ...] = tuple()
     #: Whether a datum represented by this descriptor will need mending
     needs_mending: bool = False
 
@@ -3718,8 +3739,8 @@ class RestoreBlockDescriptor(NamedTuple):
     sql_copy_stmt: bytes
     #: For compatibility with old dumps, a list of column indexes
     #: that should be ignored in the COPY stream.
-    compat_elided_cols: Tuple[int, ...]
+    compat_elided_cols: tuple[int, ...]
     #: If the tuple requires mending of unstable Postgres OIDs in data,
     #: this will contain the recursive descriptor on which parts of
     #: each datum need mending.
-    data_mending_desc: Tuple[Optional[DataMendingDescriptor], ...]
+    data_mending_desc: tuple[Optional[DataMendingDescriptor], ...]

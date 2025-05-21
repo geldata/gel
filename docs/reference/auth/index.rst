@@ -8,11 +8,13 @@ Auth
     :hidden:
     :maxdepth: 3
 
+    http
     built_in_ui
     email_password
     oauth
     magic_link
     webauthn
+    webhooks
 
 :edb-alt-title: Using Gel Auth
 
@@ -23,7 +25,7 @@ into the Gel server. Here's how you can integrate it with your app.
 Enable extension in your schema
 ===============================
 
-Auth is an Gel extension. To enable it, you will need to add the extension
+Auth is a Gel extension. To enable it, you will need to add the extension
 to your app's schema:
 
 .. code-block:: sdl
@@ -81,7 +83,7 @@ auth_signing_key
 
 The extension uses JSON Web Tokens (JWTs) internally for many operations.
 ``auth_signing_key`` is the value that is used as a symmetric key for signing
-the JWTs. At the moment, the JWTs are not considered “public” API, so there is
+the JWTs. At the moment, the JWTs are not considered "public" API, so there is
 no need to save this value for your own application use. It is exposed mainly
 to allow rotation.
 
@@ -100,7 +102,7 @@ token_time_to_live
 ------------------
 
 This value controls the expiration time on the authentication token's
-JSON Web Token. This is effectively the “session” time.
+JSON Web Token. This is effectively the "session" time.
 
 To configure via query or script:
 
@@ -162,116 +164,48 @@ To configure via query or script:
     };
 
 
-Configuring webhooks
-====================
+Webhooks
+========
 
-The auth extension supports sending webhooks for a variety of auth events. You
-can use these webhooks to, for instance, send a fully customized email for
-email verification, or password reset instead of our built-in email
-verification and password reset emails. You could also use them to trigger
-analytics events, start an email drip campaign, create an audit log, or
-trigger other side effects in your application.
+The auth extension supports sending webhooks for a variety of auth events. You can use these webhooks to, for instance, send a fully customized email for email verification, or password reset instead of our built-in email verification and password reset emails. You could also use them to trigger analytics events, start an email drip campaign, create an audit log, or trigger other side effects in your application.
 
-.. note::
-
-  We send webhooks with no durability or reliability guarantees, so you should
-  always provide a mechanism for retrying delivery of any critical events,
-  such as email verification and password reset. We detail how to resend these
-  events in the relevant sections on the various authentication flows.
-
-
-Here are the webhooks that are currently supported:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 70
-
-   * - Event
-     - Payload
-   * - ``IdentityCreated``
-     - | - ``event_type``: ``"IdentityCreated"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: ID of created identity (``str``)
-   * - ``IdentityAuthenticated``
-     - | - ``event_type``: ``"IdentityAuthenticated"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: ID of authenticated identity (``str``)
-   * - ``EmailFactorCreated``
-     - | - ``event_type``: ``"EmailFactorCreated"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: Associated identity ID (``str``)
-       | - ``email_factor_id``: ID of created email factor (``str``)
-   * - ``EmailVerified``
-     - | - ``event_type``: ``"EmailVerified"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: Associated identity ID (``str``)
-       | - ``email_factor_id``: ID of verified email factor (``str``)
-   * - ``EmailVerificationRequested``
-     - | - ``event_type``: ``"EmailVerificationRequested"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: Associated identity ID (``str``)
-       | - ``email_factor_id``: ID of email factor to verify (``str``)
-       | - ``verification_token``: Token for verification (``str``)
-   * - ``PasswordResetRequested``
-     - | - ``event_type``: ``"PasswordResetRequested"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: Associated identity ID (``str``)
-       | - ``email_factor_id``: ID of email factor (``str``)
-       | - ``reset_token``: Token for password reset (``str``)
-   * - ``MagicLinkRequested``
-     - | - ``event_type``: ``"MagicLinkRequested"`` (``str``)
-       | - ``event_id``: Unique event identifier (``str``)
-       | - ``timestamp``: ISO 8601 timestamp (``datetime``)
-       | - ``identity_id``: Associated identity ID (``str``)
-       | - ``email_factor_id``: ID of email factor (``str``)
-       | - ``magic_link_token``: Token for magic link (``str``)
-       | - ``magic_link_url``: Complete URL for magic link (``str``)
-
-You can configure webhooks with the UI or via query.
-
-.. code-block:: edgeql
-
-    CONFIGURE CURRENT BRANCH INSERT
-    ext::auth::WebhookConfig {
-        url := 'https://example.com/auth/webhook',
-        events := {
-            ext::auth::WebhookEvent.EmailVerificationRequested,
-            ext::auth::WebhookEvent.PasswordResetRequested,
-        }
-    };
-
-.. note::
-
-  URLs must be unique across all webhooks configured for each branch. If you want
-  to send multiple events to the same URL, you can do so by adding multiple
-  ``ext::auth::WebhookEvent`` values to the ``events`` set.
-
+See the :ref:`webhooks documentation <ref_auth_webhooks>` for more details on how to configure and use webhooks.
 
 Configuring SMTP
 ================
 
-For email-based factors, you can configure SMTP to allow the extension to send
-emails on your behalf. You should either configure SMTP, or webhooks for the
-relevant events.
 
-Here is an example of configuring SMTP for local development, using something
-like `Mailpit <https://mailpit.axllent.org/docs/>`__.
+For email-based factors, you can configure SMTP to allow the extension to send emails on your behalf. You should either configure SMTP, or webhooks for the relevant events.
+
+The easiest way to configure SMTP is to use the built-in UI. Here is an example of configuring SMTP for local development using EdgeQL directly, using something like `Mailpit <https://mailpit.axllent.org/docs/>`__.
+
+.. note:: Gel Cloud users, rejoice!
+
+  If you are using Gel Cloud, you can use the built-in development SMTP provider without any configuration. This special provider is already configured for development usage and is ready to send emails while you are developing your application. This provider is tuned specifically for development: it is  rate limited and the sender is hardcoded. Do not use it in production, it will not work for that purpose.
 
 .. code-block:: edgeql
 
-    CONFIGURE CURRENT BRANCH INSERT cfg::SMTPProviderConfig {
+    # Create a new SMTP provider:
+    #
+    configure current branch
+      insert cfg::SMTPProviderConfig {
+        # This name must be unique and is used to reference the provider
+        name := 'local_mailpit',
         sender := 'hello@example.com',
         host := 'localhost',
         port := <int32>1025,
+        username := 'smtpuser',
+        password := 'smtppassword',
         security := 'STARTTLSOrPlainText',
         validate_certs := false,
-    };
+        timeout_per_email := <duration>'60 seconds',
+        timeout_per_attempt := <duration>'15 seconds',
+      };
+
+    # Set this provider as the current email provider by name:
+    #
+    configure current branch
+      set current_email_provider_name := 'local_mailpit';
 
 
 Enabling authentication providers

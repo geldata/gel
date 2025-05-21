@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Dict, List, FrozenSet
+from typing import Any, Optional
 
 import dataclasses
 import json
@@ -358,8 +358,10 @@ def _get_delta_context_args(ctx: compiler.CompileContext) -> dict[str, Any]:
 
 
 def _process_delta(
-    ctx: compiler.CompileContext, delta: s_delta.DeltaRoot
-) -> tuple[pg_dbops.SQLBlock, FrozenSet[str], Any]:
+    ctx: compiler.CompileContext,
+    delta: s_delta.DeltaRoot,
+    context_args: Any = None,
+) -> tuple[pg_dbops.SQLBlock, frozenset[str], Any]:
     """Adapt and process the delta command."""
 
     current_tx = ctx.state.current_tx()
@@ -367,7 +369,7 @@ def _process_delta(
 
     pgdelta = pg_delta.CommandMeta.adapt(delta)
     assert isinstance(pgdelta, pg_delta.DeltaRoot)
-    context = _new_delta_context(ctx)
+    context = _new_delta_context(ctx, context_args)
     schema = pgdelta.apply(schema, context)
     current_tx.update_schema(schema)
 
@@ -381,7 +383,7 @@ def _process_delta(
 
     if db_cmd:
         block = pg_dbops.SQLBlock()
-        new_types: FrozenSet[str] = frozenset()
+        new_types: frozenset[str] = frozenset()
     else:
         block = pg_dbops.PLTopBlock()
         new_types = frozenset(str(tid) for tid in pgdelta.new_types)
@@ -528,7 +530,6 @@ def _start_migration(
         target_schema, warnings = s_ddl.apply_sdl(
             ql.target,
             base_schema=base_schema,
-            current_schema=schema,
             testmode=ctx.is_testmode(),
         )
         query = dataclasses.replace(query, warnings=tuple(warnings))
@@ -565,7 +566,7 @@ def _populate_migration(
         debug.header('Populate Migration Diff')
         debug.dump(diff, schema=schema)
 
-    new_ddl: Tuple[qlast.DDLCommand, ...] = tuple(
+    new_ddl: tuple[qlast.DDLCommand, ...] = tuple(
         s_ddl.ddlast_from_delta(  # type: ignore
             schema,
             mstate.target_schema,
@@ -1029,7 +1030,6 @@ def _start_migration_rewrite(
             ]
         ),
         base_schema=base_schema,
-        current_schema=base_schema,
     )
 
     # Set our current schema to be the empty one
@@ -1070,7 +1070,7 @@ def _commit_migration_rewrite(
     current_tx.update_schema(schema)
     current_tx.update_migration_rewrite_state(None)
 
-    cmds: List[qlast.DDLCommand] = []
+    cmds: list[qlast.DDLCommand] = []
     # Now we find all the migrations...
     migrations = s_migrations.get_ordered_migrations(schema)
     for mig in reversed(migrations):
@@ -1178,12 +1178,11 @@ def _reset_schema(
             ]
         ),
         base_schema=empty_schema,
-        current_schema=empty_schema,
     )
 
     # diff and create migration that drops all objects
     diff = s_ddl.delta_schemas(schema, empty_schema)
-    new_ddl: Tuple[qlast.DDLCommand, ...] = tuple(
+    new_ddl: tuple[qlast.DDLCommand, ...] = tuple(
         s_ddl.ddlast_from_delta(schema, empty_schema, diff),  # type: ignore
     )
     create_mig = qlast.CreateMigration(  # type: ignore
@@ -1377,7 +1376,7 @@ def repair_schema(
 
     # Apply and adapt delta, build native delta plan, which
     # will also update the schema.
-    block, new_types, config_ops = _process_delta(ctx, delta)
+    block, new_types, config_ops = _process_delta(ctx, delta, context_args)
     is_transactional = block.is_transactional()
     assert not new_types
     assert is_transactional
@@ -1414,6 +1413,70 @@ def administer_repair_schema(
         user_schema=current_tx.get_user_schema_if_updated(),
         global_schema=current_tx.get_global_schema_if_updated(),
         config_ops=config_ops,
+        feature_used_metrics=None,
+    )
+
+
+def remove_pointless_triggers(
+    schema: s_schema.Schema,
+) -> pg_dbops.CommandGroup:
+    from edb.pgsql import schemamech
+
+    constraints = schema.get_objects(
+        exclude_stdlib=True,
+        type=s_constraints.Constraint,
+    )
+
+    cmds = pg_dbops.CommandGroup()
+
+    for constraint in constraints:
+        if not pg_delta.ConstraintCommand.constraint_is_effective(
+            schema, constraint
+        ):
+            continue
+
+        subject = constraint.get_subject(schema)
+        bconstr = schemamech.compile_constraint(
+            subject, constraint, schema, None
+        )
+
+        # Q: we could also use update_trigger_ops, which would
+        # generate more useless code but avoid the need for an extra
+        # code path?
+        cmds.add_command(bconstr.fixup_trigger_ops())
+
+    return cmds
+
+
+def administer_remove_pointless_triggers(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    if ql.expr.args or ql.expr.kwargs:
+        raise errors.QueryError(
+            '_remove_pointless_triggers() does not take arguments',
+            span=ql.expr.span,
+        )
+    if not ctx.is_testmode():
+        raise errors.QueryError(
+            '_remove_pointless_triggers() is for testmode only',
+            span=ql.expr.span,
+        )
+
+    current_tx = ctx.state.current_tx()
+    schema = current_tx.get_schema(ctx.compiler_state.std_schema)
+
+    block = pg_dbops.PLTopBlock()
+    remove_pointless_triggers(schema).generate(block)
+    src = block.to_string()
+
+    if debug.flags.delta_execute_ddl or debug.flags.delta_execute:
+        debug.header('remove_pointless_triggers')
+        debug.dump_code(src, lexer='sql')
+
+    return dbstate.DDLQuery(
+        sql=src.encode('utf-8'),
+        user_schema=ctx.state.current_tx().get_user_schema(),
         feature_used_metrics=None,
     )
 
@@ -1568,7 +1631,7 @@ def _identify_administer_tables_and_cols(
     from edb.ir import typeutils as irtypeutils
     from edb.schema import objtypes as s_objtypes
 
-    args: List[Tuple[irast.Pointer | None, s_objtypes.ObjectType]] = []
+    args: list[tuple[irast.Pointer | None, s_objtypes.ObjectType]] = []
     current_tx = ctx.state.current_tx()
     schema = current_tx.get_schema(ctx.compiler_state.std_schema)
     modaliases = current_tx.get_modaliases()
@@ -1686,7 +1749,7 @@ def administer_vacuum(
     ql: qlast.AdministerStmt,
 ) -> dbstate.BaseQuery:
     # check that the kwargs are valid
-    kwargs: Dict[str, str] = {}
+    kwargs: dict[str, str] = {}
     for name, val in ql.expr.kwargs.items():
         if name not in ('statistics_update', 'full'):
             raise errors.QueryError(

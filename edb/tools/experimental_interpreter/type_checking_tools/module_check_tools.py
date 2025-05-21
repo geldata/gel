@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, Callable
+from typing import Callable
 
 from ..data import data_ops as e
 from ..data import expr_ops as eops
@@ -7,7 +7,7 @@ from ..data import path_factor as path_factor
 
 def unchecked_module_map(
     dbschema: e.DBSchema,
-    module_name: Tuple[str, ...],
+    module_name: tuple[str, ...],
     f: Callable[[e.TcCtx, e.Tp, e.Tp, e.CMMode], e.Tp],
     g: Callable[[e.TcCtx, e.FuncDef], e.FuncDef],
 ) -> None:
@@ -19,14 +19,14 @@ def unchecked_module_map(
     def unchecked_object_tp_map(
         subject_tp: e.Tp, obj_tp: e.ObjectTp
     ) -> e.ObjectTp:
-        result_vals: Dict[str, e.ResultTp] = {}
+        result_vals: dict[str, e.ResultTp] = {}
         for lbl, (t_comp_tp, t_comp_card) in obj_tp.val.items():
             result_vals[lbl] = e.ResultTp(
                 f(root_ctx, subject_tp, t_comp_tp, t_comp_card), t_comp_card
             )
         return e.ObjectTp(result_vals)
 
-    result_vals: Dict[str, e.ModuleEntity] = {}
+    result_vals: dict[str, e.ModuleEntity] = {}
     dbmodule = dbschema.unchecked_modules[module_name]
     for t_name, t_me in dbmodule.defs.items():
         match t_me:

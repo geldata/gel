@@ -29,6 +29,7 @@ import traceback
 from edb.common import debug
 from edb.common import devmode
 from edb.common import markup
+from edb.common import lru
 from edb.edgeql import parser as ql_parser
 
 from . import amsg
@@ -69,6 +70,10 @@ def worker(sockname, version_serial, get_handler):
                 pickled = pickle.dumps((2, ex_str), -1)
 
             con.reply(req_id, pickled)
+
+            # Now that we have responded, clear the compiler LRU
+            # caches to avoid hanging onto heavy objects like schemas.
+            lru.clear_lru_caches()
     finally:
         con.abort()
 

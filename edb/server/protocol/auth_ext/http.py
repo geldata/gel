@@ -35,7 +35,6 @@ import dataclasses
 from typing import (
     Any,
     Optional,
-    FrozenSet,
     cast,
     TYPE_CHECKING,
     Callable,
@@ -2241,7 +2240,7 @@ class Router:
             "ext::auth::AuthConfig::allowed_redirect_urls",
             frozenset,
         )
-        allowed_urls = cast(FrozenSet[str], allowed_urls).union(
+        allowed_urls = cast(frozenset[str], allowed_urls).union(
             {self.base_path}
         )
 

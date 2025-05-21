@@ -295,7 +295,7 @@ class TestIndexes(tb.DDLTestCase):
                 {
                     'indexes': [
                         {
-                            'name': 'fts::index',
+                            'name': 'std::fts::index',
                             'kwargs': [],
                             'expr': (
                                 'std::fts::with_options(.name, '

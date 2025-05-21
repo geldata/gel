@@ -1,12 +1,9 @@
 from __future__ import annotations
 from typing import (
-    Dict,
     NamedTuple,
     Sequence,
-    Tuple,
     Optional,
     Callable,
-    List,
     Any,
 )
 
@@ -37,7 +34,7 @@ Label = StrLabel | LinkPropLabel
 class ObjectTp:
     """Object Type encapsulating val: Dict[str, ResultTp]"""
 
-    val: Dict[str, ResultTp]
+    val: dict[str, ResultTp]
 
     def __hash__(self):
         return hash(tuple(self.val.items()))
@@ -87,8 +84,8 @@ class CompositeTpKind(Enum):
 @dataclass(frozen=True)
 class CompositeTp:
     kind: CompositeTpKind
-    tps: List[Tp]
-    labels: List[str]
+    tps: list[Tp]
+    labels: list[str]
 
     def __hash__(self):
         return hash((self.kind, tuple(self.tps), tuple(self.labels)))
@@ -102,11 +99,11 @@ def ArrTp(tp: Tp):
     return CompositeTp(CompositeTpKind.Array, [tp], [])
 
 
-def UnnamedTupleTp(tps: List[Tp]):
+def UnnamedTupleTp(tps: list[Tp]):
     return CompositeTp(CompositeTpKind.Tuple, tps, [])
 
 
-def NamedTupleTp(val: Dict[str, Tp]):
+def NamedTupleTp(val: dict[str, Tp]):
     lbls = [*val.keys()]
     tps = [*val.values()]
     return CompositeTp(CompositeTpKind.Tuple, tps, lbls)
@@ -427,7 +424,7 @@ class TypeCastExpr:
 
 @dataclass(frozen=True)
 class CheckedTypeCastExpr:
-    cast_tp: Tuple[Tp, Tp]
+    cast_tp: tuple[Tp, Tp]
     cast_spec: TpCast
     arg: Expr
 
@@ -444,7 +441,7 @@ class FunAppExpr:
     fun: UnqualifiedName | QualifiedName
     overloading_index: Optional[int]
     args: Sequence[Expr]
-    kwargs: Dict[str, Expr]
+    kwargs: dict[str, Expr]
 
 
 @dataclass(frozen=True)
@@ -469,7 +466,7 @@ class BoundVarExpr:
 
 @dataclass(frozen=True)
 class QualifiedName:
-    names: List[str]
+    names: list[str]
 
     def __hash__(self):
         return hash(tuple(self.names))
@@ -604,7 +601,7 @@ class QualifiedNameWithFilter:
 class FilterOrderExpr:
     subject: Expr
     filter: BindingExpr
-    order: Dict[str, BindingExpr]  # keys are order-specifying list
+    order: dict[str, BindingExpr]  # keys are order-specifying list
 
 
 @dataclass(frozen=True)
@@ -617,7 +614,7 @@ class OffsetLimitExpr:
 @dataclass(frozen=True)
 class InsertExpr:
     name: UnqualifiedName | QualifiedName
-    new: Dict[str, Expr]
+    new: dict[str, Expr]
 
 
 @dataclass(frozen=True)
@@ -645,7 +642,7 @@ class BindingExpr:
 
 @dataclass(frozen=True)
 class ShapeExpr:
-    shape: Dict[Label, BindingExpr]
+    shape: dict[Label, BindingExpr]
 
 
 @dataclass(frozen=True)
@@ -655,7 +652,7 @@ class UnnamedTupleExpr:
 
 @dataclass(frozen=True)
 class NamedTupleExpr:
-    val: Dict[str, Expr]
+    val: dict[str, Expr]
 
 
 @dataclass(frozen=True)
@@ -668,7 +665,7 @@ class ArrExpr:
 
 @dataclass(frozen=True)
 class ObjectVal:
-    val: Dict[Label, Tuple[Marker, MultiSetVal]]
+    val: dict[Label, tuple[Marker, MultiSetVal]]
 
     def __post_init__(self):
         for lbl, (marker, val) in self.val.items():
@@ -700,7 +697,7 @@ class UnnamedTupleVal:
 
 @dataclass(frozen=True)
 class NamedTupleVal:
-    val: Dict[str, Val]
+    val: dict[str, Val]
 
 
 @dataclass(frozen=True)
@@ -779,26 +776,26 @@ Expr = (
 @dataclass(frozen=True)
 class DBEntry:
     tp: QualifiedName
-    data: Dict[str, MultiSetVal]
+    data: dict[str, MultiSetVal]
 
 
 @dataclass(frozen=True)
 class DB:
-    dbdata: Dict[int, DBEntry]
+    dbdata: dict[int, DBEntry]
 
 
 @dataclass(frozen=True)
 class BuiltinFuncDef:
     tp: FunArgRetType
     impl: Callable[[Sequence[Sequence[Val]]], Sequence[Val]]
-    defaults: Dict[str, Expr]
+    defaults: dict[str, Expr]
 
 
 @dataclass(frozen=True)
 class DefinedFuncDef:
     tp: FunArgRetType
     impl: Expr  # Has the same number of bindings as num_args = len(tp.args_tp)
-    defaults: Dict[str, Expr]
+    defaults: dict[str, Expr]
 
 
 FuncDef = BuiltinFuncDef | DefinedFuncDef
@@ -830,7 +827,7 @@ class ModuleEntityTypeDef:
 
 @dataclass(frozen=True)
 class ModuleEntityFuncDef:
-    funcdefs: List[FuncDef]
+    funcdefs: list[FuncDef]
 
 
 ModuleEntity = ModuleEntityTypeDef | ModuleEntityFuncDef
@@ -838,26 +835,26 @@ ModuleEntity = ModuleEntityTypeDef | ModuleEntityFuncDef
 
 @dataclass(frozen=True)
 class DBModule:
-    defs: Dict[str, ModuleEntity]
+    defs: dict[str, ModuleEntity]
 
 
-ModuleName = Tuple[str, ...]
+ModuleName = tuple[str, ...]
 
 
 @dataclass(frozen=True)
 class DBSchema:
-    modules: Dict[Tuple[str, ...], DBModule]
+    modules: dict[tuple[str, ...], DBModule]
 
     # modules that are currently under type checking
-    unchecked_modules: Dict[Tuple[str, ...], DBModule]
+    unchecked_modules: dict[tuple[str, ...], DBModule]
 
     # subtyping_relations: indexed by subtypes,
     # subtype -> immediate super types mapping
-    subtyping_relations: Dict[QualifiedName, List[QualifiedName]]
-    unchecked_subtyping_relations: Dict[
-        QualifiedName, List[Tuple[Tuple[str, ...], RawName]]
+    subtyping_relations: dict[QualifiedName, list[QualifiedName]]
+    unchecked_subtyping_relations: dict[
+        QualifiedName, list[tuple[tuple[str, ...], RawName]]
     ]  # name -> current declared module and raw name
-    casts: Dict[Tuple[Tp, Tp], TpCast]
+    casts: dict[tuple[Tp, Tp], TpCast]
 
 
 class RTExpr(NamedTuple):
@@ -873,10 +870,10 @@ class RTVal(NamedTuple):
 @dataclass
 class TcCtx:
     schema: DBSchema
-    current_module: Tuple[
+    current_module: tuple[
         str, ...
     ]  # current module name, TODO: nested modules
-    varctx: Dict[str, ResultTp]
+    varctx: dict[str, ResultTp]
 
 
 starting_id = 0

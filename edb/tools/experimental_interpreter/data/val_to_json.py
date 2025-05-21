@@ -1,4 +1,4 @@
-from typing import Any, Dict, Sequence
+from typing import Any, Sequence
 import json
 from . import data_ops as e
 from .data_ops import (
@@ -17,7 +17,7 @@ from .data_ops import (
 from . import type_ops as tops
 from . import expr_to_str as pp
 
-json_like = str | int | bool | Dict[str, Any] | Sequence[Any]
+json_like = str | int | bool | dict[str, Any] | Sequence[Any]
 
 
 def label_to_str(lbl: Label) -> str:
@@ -29,7 +29,7 @@ def label_to_str(lbl: Label) -> str:
     raise ValueError("MATCH")
 
 
-def objectval_to_json_like(objv: ObjectVal) -> Dict[str, json_like]:
+def objectval_to_json_like(objv: ObjectVal) -> dict[str, json_like]:
     return {
         label_to_str(k): multi_set_val_to_json_like(v[1])
         for (k, v) in objv.val.items()
@@ -66,8 +66,8 @@ def multi_set_val_to_json_like(m: MultiSetVal) -> json_like:
 
 def typed_objectval_to_json_like(
     objv: ObjectVal, obj_tp: e.Tp, dbschema: e.DBSchema
-) -> Dict[str, json_like]:
-    result: Dict[str, json_like] = {}
+) -> dict[str, json_like]:
+    result: dict[str, json_like] = {}
     for k, v in objv.val.items():
         if isinstance(v[0], Visible):
             sub_tp = tops.tp_project(

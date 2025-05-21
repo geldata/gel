@@ -19,7 +19,7 @@
 """SQL resolver that compiles public SQL to internal SQL which is executable
 in our internal Postgres instance."""
 
-from typing import List, Optional, Dict, Tuple, Iterable, Mapping, Set
+from typing import Optional, Iterable, Mapping
 import dataclasses
 import functools
 import uuid
@@ -104,7 +104,9 @@ def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
     where = dispatch.resolve_opt(stmt.where_clause, ctx=ctx)
 
     # COPY will always be top-level, so we must extract CTEs
-    query.ctes = list(ctx.ctes_buffer)
+    if not query.ctes:
+        query.ctes = list()
+    query.ctes.extend(ctx.ctes_buffer)
     ctx.ctes_buffer.clear()
 
     return pgast.CopyStmt(
@@ -122,12 +124,12 @@ def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
 
 def _pull_columns_from_table(
     table: context.Table,
-    col_names: Optional[Iterable[Tuple[str, pgast.Span | None]]],
-) -> List[context.Column]:
+    col_names: Optional[Iterable[tuple[str, pgast.Span | None]]],
+) -> list[context.Column]:
     if not col_names:
         return [c for c in table.columns if not c.hidden]
 
-    col_map: Dict[str, context.Column] = {
+    col_map: dict[str, context.Column] = {
         col.name: col for col in table.columns
     }
 
@@ -145,7 +147,7 @@ def _pull_columns_from_table(
 
 def compile_dml(
     stmt: pgast.Base, *, ctx: Context
-) -> List[pgast.CommonTableExpr]:
+) -> list[pgast.CommonTableExpr]:
     # extract all dml stmts
     dml_stmts_sql = _collect_dml_stmts(stmt)
     if len(dml_stmts_sql) == 0:
@@ -160,13 +162,13 @@ def compile_dml(
     return ctes
 
 
-def _collect_dml_stmts(stmt: pgast.Base) -> List[pgast.DMLQuery]:
+def _collect_dml_stmts(stmt: pgast.Base) -> list[pgast.DMLQuery]:
     if not isinstance(stmt, pgast.Query):
         return []
 
     # DML can only be in the top-level statement or its CTEs.
     # If it is in any of the nested CTEs, throw errors later on
-    res: List[pgast.DMLQuery] = []
+    res: list[pgast.DMLQuery] = []
     if stmt.ctes:
         for cte in stmt.ctes:
             if isinstance(cte.query, pgast.DMLQuery):
@@ -177,7 +179,7 @@ def _collect_dml_stmts(stmt: pgast.Base) -> List[pgast.DMLQuery]:
     return res
 
 
-ExternalRel = Tuple[pgast.BaseRelation, Tuple[pgce.PathAspect, ...]]
+ExternalRel = tuple[pgast.BaseRelation, tuple[pgce.PathAspect, ...]]
 
 
 @dataclasses.dataclass(kw_only=True, eq=False, repr=False)
@@ -192,16 +194,16 @@ class UncompiledDML:
     ql_stmt: qlast.Expr
 
     # additional params needed during compilation of the edgeql node
-    ql_returning_shape: List[qlast.ShapeElement]
-    ql_singletons: Set[irast.PathId]
+    ql_returning_shape: list[qlast.ShapeElement]
+    ql_singletons: set[irast.PathId]
     ql_anchors: Mapping[str, irast.PathId]
     external_rels: Mapping[irast.PathId, ExternalRel]
 
     # list of column names of the subject type, along with pointer name
     # these columns will be available within RETURNING clause
-    subject_columns: List[Tuple[str, str]]
+    subject_columns: list[tuple[str, str]]
 
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]]
+    stype_refs: dict[uuid.UUID, list[qlast.Set]]
 
     # data needed for stitching the compiled ast into the resolver output
     early_result: context.CompiledDML
@@ -226,7 +228,7 @@ def _uncompile_dml_stmt(stmt: pgast.DMLQuery, *, ctx: Context):
 
 def _uncompile_dml_subject(
     rvar: pgast.RelRangeVar, *, ctx: Context
-) -> Tuple[
+) -> tuple[
     context.Table, s_objtypes.ObjectType | s_links.Link | s_properties.Property
 ]:
     """
@@ -276,12 +278,6 @@ def _uncompile_subject_columns(
 def _uncompile_insert_stmt(
     stmt: pgast.InsertStmt, *, ctx: Context
 ) -> UncompiledDML:
-    if stmt.on_conflict:
-        raise errors.UnsupportedFeatureError(
-            'ON CONFLICT is not yet supported',
-            span=stmt.on_conflict.span,
-        )
-
     # determine the subject object
     sub_table, sub = _uncompile_dml_subject(stmt.relation, ctx=ctx)
 
@@ -311,13 +307,19 @@ def _uncompile_insert_object_stmt(
     stmt: pgast.InsertStmt,
     sub: s_objtypes.ObjectType,
     sub_table: context.Table,
-    expected_columns: List[context.Column],
+    expected_columns: list[context.Column],
     *,
     ctx: Context,
 ) -> UncompiledDML:
     """
     Translates a 'SQL INSERT into an object type table' to an EdgeQL insert.
     """
+
+    subject_id = irast.PathId.from_type(
+        ctx.schema,
+        sub,
+        env=None,
+    )
 
     # handle DEFAULT and prepare the value relation
     value_relation, expected_columns = _uncompile_default_value(
@@ -353,10 +355,10 @@ def _uncompile_insert_object_stmt(
     )
     value_columns = []
     insert_shape = []
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]] = {}
+    stype_refs: dict[uuid.UUID, list[qlast.Set]] = {}
     for index, expected_col in enumerate(expected_columns):
         ptr, ptr_name, is_link = _get_pointer_for_column(expected_col, sub, ctx)
-        value_columns.append((ptr_name, is_link))
+        value_columns.append((expected_col.name, ptr_name, is_link))
 
         # inject type annotation into value relation
         _try_inject_ptr_type_cast(value_relation, index, ptr, ctx)
@@ -396,10 +398,12 @@ def _uncompile_insert_object_stmt(
 
     # construct the EdgeQL DML AST
     sub_name = sub.get_name(ctx.schema)
-    ql_stmt: qlast.Expr = qlast.InsertQuery(
+    ql_stmt_insert = qlast.InsertQuery(
         subject=s_utils.name_to_ast_ref(sub_name),
         shape=insert_shape,
     )
+
+    ql_stmt: qlast.Expr = ql_stmt_insert
     if not is_value_single:
         # value relation might contain multiple rows
         # to express this in EdgeQL, we must wrap `insert` into a `for` query
@@ -409,7 +413,14 @@ def _uncompile_insert_object_stmt(
             result=ql_stmt,
         )
 
-    ql_returning_shape: List[qlast.ShapeElement] = []
+    # on conflict
+    conflict = _uncompile_on_conflict(
+        stmt, sub, sub_table, value_id, ctx, stype_refs
+    )
+    if conflict:
+        ql_stmt_insert.unless_conflict = conflict.ql_unless_conflict
+
+    ql_returning_shape: list[qlast.ShapeElement] = []
     if stmt.returning_list:
         # construct the shape that will extract all needed column of the subject
         # table (because they might be be used by RETURNING clause)
@@ -423,25 +434,73 @@ def _uncompile_insert_object_stmt(
                 )
             )
 
+    ql_singletons = {value_id}
+    ql_anchors = {value_name: value_id}
+    external_rels: dict[irast.PathId, ExternalRel] = {
+        value_id: (
+            value_rel,
+            (pgce.PathAspect.SOURCE,),
+        )
+    }
+
+    subject_columns = None
+    if conflict and conflict.update_name is not None:
+        assert conflict.update_id
+        assert conflict.update_input_placeholder
+
+        # inject path_output for identity aspect
+        # (that will be injected after resolving)
+        conflict.update_input_placeholder.path_outputs[
+            (conflict.update_id, pgce.PathAspect.VALUE)
+        ] = pgast.ColumnRef(name=('id',))
+        conflict.update_input_placeholder.path_outputs[
+            (conflict.update_id, pgce.PathAspect.IDENTITY)
+        ] = pgast.ColumnRef(name=('id',))
+
+        # register __cu__ as singleton and provided by an external rel
+        ql_singletons.add(conflict.update_id)
+        ql_anchors[conflict.update_name] = conflict.update_id
+        external_rels[conflict.update_id] = (
+            conflict.update_input_placeholder,
+            (
+                pgce.PathAspect.SOURCE,
+                pgce.PathAspect.VALUE,
+                pgce.PathAspect.IDENTITY,
+            ),
+        )
+
+        # subject columns are needed to pull them into the "conflict update" rel
+        subject_columns = []
+        for column in sub_table.columns:
+            if column.hidden:
+                continue
+            ptr, _, _ = _get_pointer_for_column(column, sub, ctx)
+            path_id = _get_ptr_id(subject_id, ptr, ctx)
+            subject_columns.append((column.name, path_id))
+
     return UncompiledDML(
         input=stmt,
         subject=sub,
         ql_stmt=ql_stmt,
         ql_returning_shape=ql_returning_shape,
-        ql_singletons={value_id},
-        ql_anchors={value_name: value_id},
-        external_rels={
-            value_id: (
-                value_rel,
-                (pgce.PathAspect.SOURCE,),
-            )
-        },
+        ql_singletons=ql_singletons,
+        ql_anchors=ql_anchors,
+        external_rels=external_rels,
         stype_refs=stype_refs,
         early_result=context.CompiledDML(
             value_cte_name=value_cte_name,
             value_relation_input=value_relation,
             value_columns=value_columns,
             value_iterator_name=value_iterator,
+
+            conflict_update_input=conflict.update_input if conflict else None,
+            conflict_update_name=conflict.update_name if conflict else None,
+            conflict_update_iterator=(
+                conflict.update_iterator if conflict else None
+            ),
+            subject_id=subject_id,
+            subject_columns=subject_columns,
+            value_id=value_id,
             # these will be populated after compilation
             output_ctes=[],
             output_relation_name='',
@@ -452,13 +511,226 @@ def _uncompile_insert_object_stmt(
     )
 
 
+@dataclasses.dataclass(kw_only=True, frozen=True, repr=False, eq=False)
+class UncompileOnConflict:
+    ql_unless_conflict: tuple[qlast.Expr | None, qlast.Expr | None]
+
+    # relation (that still has to be resolved) which will provide the values of
+    # columns that must be updated by the ON CONFLICT clause
+    update_input: Optional[pgast.Query] = None
+
+    # name of the CTE that will contain resolved update_input
+    update_name: Optional[str] = None
+
+    # name of the IR anchor which provides the iterator to the update stmt
+    update_iterator: Optional[str] = None
+
+    # IR id which can be used as an anchor that will refer to the update_input
+    update_id: Optional[irast.PathId] = None
+
+    # a dummy relation that has all necessary path_outputs set, so it can be
+    # passed into external_rels
+    update_input_placeholder: Optional[pgast.Relation] = None
+
+
+# Uncompiles pg INSERT ON CONFLICT into edgeql UNLESS CONFLICT.
+# Will produce:
+# - qlast unless conflict that contain an empty node or an update stmt,
+# - update_input relation (that provides values to the UPDATE stmt) and a bunch
+#   of related variables needed for compiling it.
+def _uncompile_on_conflict(
+    stmt: pgast.InsertStmt,
+    sub: s_objtypes.ObjectType,
+    sub_table: context.Table,
+    value_id: irast.PathId,
+    ctx: Context,
+    stype_refs: dict[uuid.UUID, list[qlast.Set]]
+) -> Optional[UncompileOnConflict]:
+    if not stmt.on_conflict:
+        return None
+
+    # determine the target constraint
+    on_clause: Optional[qlast.Expr] = None
+    if stmt.on_conflict.target:
+        tgt = stmt.on_conflict.target
+        if tgt.constraint_name:
+            raise errors.UnsupportedFeatureError(
+                'ON CONFLICT ON CONSTRAINT',
+                span=tgt.span,
+            )
+        if tgt.index_where:
+            raise errors.UnsupportedFeatureError(
+                'ON CONFLICT WHERE',
+                span=tgt.span,
+            )
+        index_col_names: list[tuple[str, qlast.Span | None]] = []
+        for e in tgt.index_elems or []:
+            if e.nulls_ordering or e.ordering:
+                raise errors.UnsupportedFeatureError(
+                    'ON CONFLICT index ordering',
+                    span=tgt.span,
+                )
+            if not (
+                isinstance(e.expr, pgast.ColumnRef)
+                and len(e.expr.name) == 1
+                and isinstance(e.expr.name[0], str)
+            ):
+                raise errors.UnsupportedFeatureError(
+                    'ON CONFLICT supports only plain column names',
+                )
+            index_col_names.append((e.expr.name[0], e.expr.span))
+
+        index_cols = _pull_columns_from_table(sub_table, iter(index_col_names))
+
+        index_paths: list[qlast.Expr] = []
+        for index_col in index_cols:
+            _ptr, ptr_name, _is_link = _get_pointer_for_column(
+                index_col, sub, ctx
+            )
+
+            index_paths.append(qlast.Path(
+                partial=True, steps=[qlast.Ptr(name=ptr_name)]
+            ))
+        on_clause = qlast.Tuple(elements=index_paths)
+
+    if stmt.on_conflict.action == pgast.OnConflictAction.DO_NOTHING:
+        return UncompileOnConflict(
+            ql_unless_conflict=(None, None)  # contraints columns, update
+        )
+
+    if not on_clause:
+        raise errors.QueryError(
+            'ON CONFLICT DO UPDATE requires index specification by column '
+            'names',
+            pgext_code=pgerror.ERROR_SYNTAX_ERROR,
+            span=stmt.on_conflict.span,
+        )
+
+    # determine names of updated columns
+    update_col_names = []
+    assert stmt.on_conflict.update_list is not None
+    for col in stmt.on_conflict.update_list:
+        if isinstance(col, pgast.MultiAssignRef):
+            raise errors.UnsupportedFeatureError(
+                'ON CONFLICT UPDATE of multiple columns at once',
+                span=col.span,
+            )
+        assert isinstance(col, pgast.UpdateTarget)
+        if col.indirection:
+            raise errors.UnsupportedFeatureError(
+                'ON CONFLICT UPDATE with index indirection',
+                span=col.span,
+            )
+        update_col_names.append((col.name, col.span))
+
+    update_columns = _pull_columns_from_table(
+        sub_table,
+        iter(update_col_names),
+    )
+
+    # construct update shape
+    update_name = ctx.alias_generator.get('cu')
+    iterator_name = ctx.alias_generator.get('cu_iter')
+    update_id = irast.PathId.from_type(
+        ctx.schema,
+        sub,
+        typename=sn.QualName('__derived__', update_name),
+        env=None,
+    )
+
+    # the shape of the edge ql update we will generate
+    conflict_update_shape = []
+
+    # IR anchor and placeholder relation for the relation that will provide
+    # values for each of the updated columns. This relation will be replaced
+    # by the resolved sql relation.
+    conflict_source_ql = qlast.Path(steps=[qlast.ObjectRef(name=iterator_name)])
+    update_input_placeholder = pgast.Relation(
+        name=update_name,
+        strip_output_namespaces=True,
+    )
+    for column in update_columns:
+        ptr, ptr_name, is_link = _get_pointer_for_column(column, sub, ctx)
+
+        # prepare the outputs of the source CTE
+        ptr_id = _get_ptr_id(update_id, ptr, ctx)
+        output = pgast.ColumnRef(name=(ptr_name,), nullable=True)
+        if is_link:
+            update_input_placeholder.path_outputs[
+                (ptr_id, pgce.PathAspect.IDENTITY)] = output
+            update_input_placeholder.path_outputs[
+                (ptr_id, pgce.PathAspect.VALUE)] = output
+        else:
+            update_input_placeholder.path_outputs[
+                (ptr_id, pgce.PathAspect.VALUE)] = output
+
+        conflict_update_shape.append(
+            _construct_assign_element_for_ptr(
+                conflict_source_ql,
+                ptr_name,
+                ptr,
+                is_link,
+                ctx,
+                stype_refs,
+            )
+        )
+
+    sub_name = sub.get_name(ctx.schema)
+    ql_update = qlast.UpdateQuery(
+        subject=qlast.Path(
+            steps=[s_utils.name_to_ast_ref(sub_name)]
+        ),
+        shape=conflict_update_shape,
+        where=qlast.BinOp(
+            left=qlast.Path(steps=[
+                qlast.ObjectRef(name=iterator_name), qlast.Ptr(name='id')
+            ]),
+            op='=',
+            right=qlast.Path(steps=[
+                s_utils.name_to_ast_ref(sub_name), qlast.Ptr(name='id')
+            ]),
+        )
+    )
+
+    # update_value relation has to be evaluated *for each conflicting row*
+    # to express this in EdgeQL, we must wrap `update` into a `for` query
+    ql_stmt = qlast.ForQuery(
+        iterator=qlast.Path(steps=[qlast.IRAnchor(name=update_name)]),
+        iterator_alias=iterator_name,
+        result=ql_update,
+    )
+
+    # the relation that we will later resolve and which contains all columns
+    # that the user specified to need to be updated. When this is resolved,
+    # it will replace conflict_source_rel CTE in the final compiled output.
+    update_input = pgast.SelectStmt(
+        target_list=[
+            pgast.ResTarget(
+                name=ut.name,
+                val=ut.val,
+                # TODO: UpdateTarget indirections
+            )
+            for ut in stmt.on_conflict.update_list
+            if isinstance(ut, pgast.UpdateTarget)
+        ],
+        where_clause=stmt.on_conflict.update_where,
+    )
+    return UncompileOnConflict(
+        ql_unless_conflict=(on_clause, ql_stmt),
+        update_name=update_name,
+        update_id=update_id,
+        update_input=update_input,
+        update_input_placeholder=update_input_placeholder,
+    )
+
+
 def _construct_assign_element_for_ptr(
     source_ql: qlast.PathElement,
     ptr_name: str,
     ptr: s_pointers.Pointer,
     is_link: bool,
     ctx: context.ResolverContextLevel,
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]],
+    stype_refs: dict[uuid.UUID, list[qlast.Set]],
 ):
     ptr_ql: qlast.Expr = qlast.Path(
         steps=[
@@ -488,7 +760,7 @@ def _construct_assign_element_for_ptr(
 def _construct_cast_from_uuid_to_obj_type(
     ptr_ql: qlast.Path,
     object: s_objtypes.ObjectType,
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]],
+    stype_refs: dict[uuid.UUID, list[qlast.Set]],
     *,
     optional: bool,
     ctx: Context,
@@ -608,7 +880,7 @@ def _uncompile_insert_pointer_stmt(
     stmt: pgast.InsertStmt,
     sub: s_links.Link | s_properties.Property,
     sub_table: context.Table,
-    expected_columns: List[context.Column],
+    expected_columns: list[context.Column],
     *,
     ctx: Context,
 ) -> UncompiledDML:
@@ -616,6 +888,12 @@ def _uncompile_insert_pointer_stmt(
     Translates a SQL 'INSERT INTO a link / multi-property table' into
     an `EdgeQL update SourceObject { subject: ... }`.
     """
+
+    if stmt.on_conflict:
+        raise errors.UnsupportedFeatureError(
+            'ON CONFLICT is not yet supported for link tables',
+            span=stmt.on_conflict.span,
+        )
 
     if not any(c.name == 'source' for c in expected_columns):
         raise errors.QueryError(
@@ -679,7 +957,7 @@ def _uncompile_insert_pointer_stmt(
         name=value_cte_name,
         strip_output_namespaces=True,
     )
-    value_columns: List[Tuple[str, bool]] = []
+    value_columns: list[tuple[str, str, bool]] = []
     for index, expected_col in enumerate(expected_columns):
         ptr: Optional[s_pointers.Pointer] = None
         if expected_col.name == 'source':
@@ -716,7 +994,7 @@ def _uncompile_insert_pointer_stmt(
             assert ptr
             _try_inject_ptr_type_cast(value_relation, index, ptr, ctx)
 
-        value_columns.append((ptr_name, is_link))
+        value_columns.append((expected_col.name, ptr_name, is_link))
 
     # source needs an iterator column, so we need to invent one
     # Here we only decide on the name of that iterator column, the actual column
@@ -727,7 +1005,7 @@ def _uncompile_insert_pointer_stmt(
     value_rel.path_outputs[(base_id, pgce.PathAspect.VALUE)] = var
 
     # construct the EdgeQL DML AST
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]] = {}
+    stype_refs: dict[uuid.UUID, list[qlast.Set]] = {}
 
     sub_name = sub.get_shortname(ctx.schema)
 
@@ -758,7 +1036,7 @@ def _uncompile_insert_pointer_stmt(
                         ],
                     ),
                 )
-                for ptr_name, _ in value_columns
+                for ptr_name, _, _ in value_columns
                 if ptr_name not in ('source', 'target')
             ],
         )
@@ -794,7 +1072,6 @@ def _uncompile_insert_pointer_stmt(
                 compexpr=ql_ptr_val,
             )
         ],
-        sql_mode_link_only=is_multi,
     )
     if not is_value_single:
         # value relation might contain multiple rows
@@ -805,7 +1082,7 @@ def _uncompile_insert_pointer_stmt(
             result=ql_stmt,
         )
 
-    ql_returning_shape: List[qlast.ShapeElement] = []
+    ql_returning_shape: list[qlast.ShapeElement] = []
     if stmt.returning_list:
         # construct the shape that will extract all needed column of the subject
         # table (because they might be be used by RETURNING clause)
@@ -896,12 +1173,12 @@ def _compile_standalone_default(
 
 def _uncompile_default_value(
     value_query: Optional[pgast.Query],
-    value_ctes: Optional[List[pgast.CommonTableExpr]],
-    expected_columns: List[context.Column],
+    value_ctes: Optional[list[pgast.CommonTableExpr]],
+    expected_columns: list[context.Column],
     sub: s_objtypes.ObjectType | s_links.Link | s_properties.Property,
     *,
     ctx: Context,
-) -> Tuple[pgast.BaseRelation, List[context.Column]]:
+) -> tuple[pgast.BaseRelation, list[context.Column]]:
     # INSERT INTO x DEFAULT VALUES
     if not value_query:
         value_query = pgast.SelectStmt(values=[])
@@ -1074,7 +1351,7 @@ def _uncompile_delete_object_stmt(
         name=value_cte_name,
         strip_output_namespaces=True,
     )
-    value_columns = [('id', False)]
+    value_columns = [('id', 'id', False)]
 
     output_var = pgast.ColumnRef(name=('id',), nullable=False)
     value_rel.path_outputs[(value_id, pgce.PathAspect.IDENTITY)] = output_var
@@ -1094,7 +1371,7 @@ def _uncompile_delete_object_stmt(
         where=where,
     )
 
-    ql_returning_shape: List[qlast.ShapeElement] = []
+    ql_returning_shape: list[qlast.ShapeElement] = []
     if stmt.returning_list:
         # construct the shape that will extract all needed column of the subject
         # table (because they might be be used by RETURNING clause)
@@ -1146,7 +1423,7 @@ def _uncompile_delete_pointer_stmt(
 ) -> UncompiledDML:
     """
     Translates a SQL 'DELETE FROM a link / multi-property table' into
-    an `EdgeQL update SourceObject { subject: ... }`.
+    an EdgeQL `update SourceObject { pointer := ... }.pointer`.
     """
 
     sub_source = sub.get_source(ctx.schema)
@@ -1218,7 +1495,7 @@ def _uncompile_delete_pointer_stmt(
         name=value_cte_name,
         strip_output_namespaces=True,
     )
-    value_columns = [('source', False), ('target', False)]
+    value_columns = [('source', 'source', False), ('target', 'target', False)]
 
     var = pgast.ColumnRef(name=('source',), nullable=True)
     value_rel.path_outputs[(source_id, pgce.PathAspect.VALUE)] = var
@@ -1280,7 +1557,13 @@ def _uncompile_delete_pointer_stmt(
             result=ql_stmt,
         )
 
-    ql_returning_shape: List[qlast.ShapeElement] = []
+    # append .pointer onto the shape, so the resulting CTE contains the pointer
+    # data, not the subject table
+    # ql_stmt = qlast.Path(
+        # steps=[ql_stmt, qlast.Ptr(name=sub_name.name)]
+    # )
+
+    ql_returning_shape: list[qlast.ShapeElement] = []
     if stmt.returning_list:
         # construct the shape that will extract all needed column of the subject
         # table (because they might be be used by RETURNING clause)
@@ -1341,7 +1624,7 @@ def _uncompile_update_stmt(
     sub_table, sub = _uncompile_dml_subject(stmt.relation, ctx=ctx)
 
     # convert the general repr of SET clause into a list of columns
-    update_targets: List[pgast.UpdateTarget] = []
+    update_targets: list[pgast.UpdateTarget] = []
     for target in stmt.targets:
         if isinstance(target, pgast.UpdateTarget):
             if target.indirection:
@@ -1400,7 +1683,7 @@ def _uncompile_update_object_stmt(
     stmt: pgast.UpdateStmt,
     sub: s_objtypes.ObjectType,
     sub_table: context.Table,
-    column_updates: List[Tuple[context.Column, pgast.BaseExpr]],
+    column_updates: list[tuple[context.Column, pgast.BaseExpr]],
     *,
     ctx: Context,
 ) -> UncompiledDML:
@@ -1472,13 +1755,13 @@ def _uncompile_update_object_stmt(
     value_rel.path_outputs[(value_id, pgce.PathAspect.ITERATOR)] = output_var
     value_rel.path_outputs[(value_id, pgce.PathAspect.VALUE)] = output_var
 
-    value_columns = [('id', False)]
+    value_columns = [('id', 'id', False)]
     update_shape = []
-    stype_refs: Dict[uuid.UUID, List[qlast.Set]] = {}
+    stype_refs: dict[uuid.UUID, list[qlast.Set]] = {}
     for index, (col, val) in enumerate(column_updates):
         ptr, ptr_name, is_link = _get_pointer_for_column(col, sub, ctx)
         if not is_default(val):
-            value_columns.append((ptr_name, is_link))
+            value_columns.append((col.name, ptr_name, is_link))
 
         # inject type annotation into value relation
         _try_inject_ptr_type_cast(value_relation, index + 1, ptr, ctx)
@@ -1548,7 +1831,7 @@ def _uncompile_update_object_stmt(
         result=ql_stmt,
     )
 
-    ql_returning_shape: List[qlast.ShapeElement] = []
+    ql_returning_shape: list[qlast.ShapeElement] = []
     if stmt.returning_list:
         # construct the shape that will extract all needed column of the subject
         # table (because they might be be used by RETURNING clause)
@@ -1592,10 +1875,10 @@ def _uncompile_update_object_stmt(
 
 
 def _compile_uncompiled_dml(
-    stmts: List[UncompiledDML], ctx: context.ResolverContextLevel
-) -> Tuple[
+    stmts: list[UncompiledDML], ctx: context.ResolverContextLevel
+) -> tuple[
     Mapping[pgast.Query, context.CompiledDML],
-    List[pgast.CommonTableExpr],
+    list[pgast.CommonTableExpr],
 ]:
     """
     Compiles *all* DML statements in the query.
@@ -1612,16 +1895,16 @@ def _compile_uncompiled_dml(
 
     # merge params
     singletons = set()
-    anchors: Dict[str, irast.PathId] = {}
+    anchors: dict[str, irast.PathId] = {}
     for stmt in stmts:
         singletons.update(stmt.ql_singletons)
         anchors.update(stmt.ql_anchors)
 
     # construct the main query
-    ql_aliases: List[qlast.Alias] = []
-    ql_stmt_shape: List[qlast.ShapeElement] = []
+    ql_aliases: list[qlast.Alias] = []
+    ql_stmt_shape: list[qlast.ShapeElement] = []
     ql_stmt_shape_names = []
-    inserts_by_type: Dict[uuid.UUID, List[str]] = {}
+    inserts_by_type: dict[uuid.UUID, list[str]] = {}
     for index, stmt in enumerate(stmts):
 
         # fixup references to stypes that have been modified be previous inserts
@@ -1688,6 +1971,7 @@ def _compile_uncompiled_dml(
             external_rels=external_rels,
             output_format=pgcompiler.OutputFormat.NATIVE_INTERNAL,
             alias_generator=ctx.alias_generator,
+            sql_dml_mode=True,
         )
 
         merge_params(sql_result, ir_stmt, ctx)
@@ -1701,47 +1985,65 @@ def _compile_uncompiled_dml(
             # which is the default
             pgext_code=pgerror.ERROR_DATA_EXCEPTION,
         )
+    except errors.UnsupportedFeatureError as e:
+        raise errors.QueryError(
+            msg=e.args[0],
+            position=e.get_position(),
+            details=e.details,
+            hint=e.hint,
+            pgext_code=pgerror.ERROR_FEATURE_NOT_SUPPORTED,
+        )
 
     assert isinstance(sql_result.ast, pgast.Query)
     assert sql_result.ast.ctes
-    ctes = sql_result.ast.ctes
+    ctes = list(sql_result.ast.ctes)
 
     result = {}
     for stmt, ir_mutating_stmt in zip(stmts, ir_stmts):
-        stmt_ctes: List[pgast.CommonTableExpr] = []
-        found_it = False
-        while len(ctes) > 0:
-            matches = ctes[0].for_dml_stmt == ir_mutating_stmt
-            if not matches and found_it:
-                # use all matching CTEs plus all preceding
-                break
-            if matches:
-                found_it = True
+        stmt_ctes = _collect_stmt_ctes(ctes, ir_mutating_stmt)
 
-            stmt_ctes.append(ctes.pop(0))
-
-        # Find the output CTE by filtering by the name of relation that is being
-        # manipulated. This will filter out stmts for link tables and triggers.
-        # XXX: this is the least reliable part of SQL DML
-        subject_id = str(stmt.subject.id)
-        output_cte = next(
-            c
-            for c in reversed(stmt_ctes)
-            if isinstance(c.query, pgast.DMLQuery)
-            and isinstance(c.query.relation, pgast.RelRangeVar)
-            and c.query.relation.relation.name == subject_id
-        )
+        # Find the output CTE of the DML operation. We do this in two different
+        # ways:
+        # - look for SQL DML on the subject relation. This is used for
+        #   operations on link tables. Kinda hacky.
+        # - use the `output_for_dml`, which will be set on the CTE that contains
+        #   the union of all SQL DML stmts that are generated for an IR DML.
+        #   There might be multiple because: 1) inheritance, which stores child
+        #   objects in seprate tables, 2) unless conflict that contains another
+        #   DML stmt.
+        output_cte: pgast.CommonTableExpr | None
+        if isinstance(stmt.subject, (s_pointers.Pointer)):
+            subject_id = str(stmt.subject.id)
+            output_cte = next(
+                c
+                for c in reversed(stmt_ctes)
+                if isinstance(c.query, pgast.DMLQuery)
+                and isinstance(c.query.relation, pgast.RelRangeVar)
+                and c.query.relation.relation.name == subject_id
+            )
+        else:
+            output_cte = next(
+                (c for c in stmt_ctes if c.output_of_dml == ir_mutating_stmt),
+                None,
+            )
+        assert output_cte, 'cannot find the output CTE of a DML stmt'
         output_rel = output_cte.query
 
+        # This "output_rel" must contain entry in path_namespace for each column
+        # of the subject table. This is ensured by applying a shape on the ql
+        # dml stmt, which selects all pointers. Although the shape is not
+        # constructed in CTEs (so we discard it), it causes values for pointers
+        # to be read from DML CTEs, which makes the appear in the path_namespace
+
         # prepare a map from pointer name into pgast
-        ptr_map: Dict[Tuple[str, str], pgast.BaseExpr] = {}
+        ptr_map: dict[tuple[str, str], pgast.BaseExpr] = {}
         for (ptr_id, aspect), output_var in output_rel.path_outputs.items():
             qual_name = ptr_id.rptr_name()
             if not qual_name:
                 ptr_map['id', aspect] = output_var
             else:
                 ptr_map[qual_name.name, aspect] = output_var
-        output_namespace: Dict[str, pgast.BaseExpr] = {}
+        output_namespace: dict[str, pgast.BaseExpr] = {}
         for col_name, ptr_name in stmt.subject_columns:
             val = ptr_map.get((ptr_name, 'serialized'), None)
             if not val:
@@ -1758,6 +2060,13 @@ def _compile_uncompiled_dml(
             value_relation_input=stmt.early_result.value_relation_input,
             value_columns=stmt.early_result.value_columns,
             value_iterator_name=stmt.early_result.value_iterator_name,
+            conflict_update_input=stmt.early_result.conflict_update_input,
+            conflict_update_name=stmt.early_result.conflict_update_name,
+            conflict_update_iterator=stmt.early_result.conflict_update_iterator,
+            subject_id=stmt.early_result.subject_id,
+            subject_columns=stmt.early_result.subject_columns,
+            value_id=stmt.early_result.value_id,
+            env=sql_result.env,
             output_ctes=stmt_ctes,
             output_relation_name=output_cte.name,
             output_namespace=output_namespace,
@@ -1770,13 +2079,51 @@ def _compile_uncompiled_dml(
     return result, ctes
 
 
+def _collect_stmt_ctes(
+    ctes: list[pgast.CommonTableExpr],
+    ir_stmt: irast.MutatingStmt
+) -> list[pgast.CommonTableExpr]:
+    # We compile all SQL DML queries in a single EdgeQL query.
+    # Result is an enormous SQL query with many CTEs.
+    # This function looks through these CTEs and matches them to the original
+    # IR stmt that they originate from.
+
+    # It will pop elements from ctes list until it reaches the main CTE for
+    # the IR stmt.
+
+    # When looking for "CTEs of a stmt" we also want to include stmts that
+    # originate from the UNLESS CONFLICT clause.
+    ir_stmts = {ir_stmt}
+    if isinstance(ir_stmt, irast.InsertStmt):
+        if ir_stmt.on_conflict and ir_stmt.on_conflict.else_ir:
+            else_expr = ir_stmt.on_conflict.else_ir.expr
+            assert isinstance(else_expr, irast.SelectStmt), else_expr
+            assert else_expr.iterator_stmt
+            dml_stmt = else_expr.result.expr
+            assert isinstance(dml_stmt, irast.MutatingStmt), dml_stmt
+            ir_stmts.add(dml_stmt)
+
+    stmt_ctes = []
+    found_it = False
+    while len(ctes) > 0:
+        matches = ctes[0].for_dml_stmt in ir_stmts
+        if not matches and found_it:
+            # use all matching CTEs plus all preceding
+            break
+        if matches:
+            found_it = True
+
+        stmt_ctes.append(ctes.pop(0))
+    return stmt_ctes
+
+
 def _merge_and_prepare_external_rels(
     ir_stmt: irast.Statement,
-    stmts: List[UncompiledDML],
-    stmt_names: List[str],
-) -> Tuple[
+    stmts: list[UncompiledDML],
+    stmt_names: list[str],
+) -> tuple[
     Mapping[irast.PathId, ExternalRel],
-    List[irast.MutatingStmt],
+    list[irast.MutatingStmt],
 ]:
     """Construct external rels used for compiling all DML statements at once."""
 
@@ -1799,7 +2146,7 @@ def _merge_and_prepare_external_rels(
             continue
         shape_elements_by_name[rptr_name.name] = b.expr.expr
 
-    external_rels: Dict[irast.PathId, ExternalRel] = {}
+    external_rels: dict[irast.PathId, ExternalRel] = {}
     ir_stmts = []
     for stmt, name in zip(stmts, stmt_names):
         # find the associated binding (this is real funky)
@@ -1834,7 +2181,7 @@ def _merge_and_prepare_external_rels(
 @dispatch._resolve_relation.register
 def resolve_DMLQuery(
     stmt: pgast.DMLQuery, *, include_inherited: bool, ctx: Context
-) -> Tuple[pgast.Query, context.Table]:
+) -> tuple[pgast.Query, context.Table]:
     assert stmt.relation
 
     if ctx.subquery_depth >= 2:
@@ -1845,16 +2192,28 @@ def resolve_DMLQuery(
             pgext_code=pgerror.ERROR_FEATURE_NOT_SUPPORTED,
         )
 
+    subject_alias: str | None = None
+    if stmt.relation.alias and stmt.relation.alias.aliasname:
+        subject_alias = stmt.relation.alias.aliasname
+    assert stmt.relation.relation.name
+    subject_name = (stmt.relation.relation.name, subject_alias)
+
     compiled_dml = ctx.compiled_dml[stmt]
 
     _resolve_dml_value_rel(compiled_dml, ctx=ctx)
+
+    if compiled_dml.conflict_update_input is not None:
+        _resolve_conflict_update_rel(compiled_dml, subject_name, ctx=ctx)
 
     ctx.ctes_buffer.extend(compiled_dml.output_ctes)
 
     return _fini_resolve_dml(stmt, compiled_dml, ctx=ctx)
 
 
-def _resolve_dml_value_rel(compiled_dml: context.CompiledDML, *, ctx: Context):
+def _resolve_dml_value_rel(
+    compiled_dml: context.CompiledDML, *, ctx: Context
+):
+
     # resolve the value relation
     with ctx.child() as sctx:
         # this subctx is needed so it is not deemed as top-level which would
@@ -1870,7 +2229,7 @@ def _resolve_dml_value_rel(compiled_dml: context.CompiledDML, *, ctx: Context):
         assert isinstance(val_rel, pgast.Query)
 
     if len(compiled_dml.value_columns) != len(val_table.columns):
-        col_names = ', '.join(c for c, _ in compiled_dml.value_columns)
+        col_names = ', '.join(c for c, _, _ in compiled_dml.value_columns)
         raise errors.QueryError(
             f'Expected {len(compiled_dml.value_columns)} columns '
             f'({col_names}), but got {len(val_table.columns)}',
@@ -1886,11 +2245,11 @@ def _resolve_dml_value_rel(compiled_dml: context.CompiledDML, *, ctx: Context):
     # wrap the value relation into a "pre-projection",
     # so we can add type casts for link ids and an iterator column
     pre_projection_needed = compiled_dml.value_iterator_name or (
-        any(cast_to_uuid for _, cast_to_uuid in compiled_dml.value_columns)
+        any(cast_to_uuid for _, _, cast_to_uuid in compiled_dml.value_columns)
     )
     if pre_projection_needed:
-        value_target_list: List[pgast.ResTarget] = []
-        for val_col, (ptr_name, cast_to_uuid) in zip(
+        value_target_list: list[pgast.ResTarget] = []
+        for val_col, (_col_name, ptr_name, cast_to_uuid) in zip(
             val_table.columns, compiled_dml.value_columns
         ):
             # prepare pre-projection of this pointer value
@@ -1936,9 +2295,217 @@ def _resolve_dml_value_rel(compiled_dml: context.CompiledDML, *, ctx: Context):
     ctx.ctes_buffer.append(value_cte)
 
 
+def _resolve_conflict_update_rel(
+    compiled_dml: context.CompiledDML,
+    subject_name: tuple[str, str | None],
+    *,
+    ctx: Context,
+):
+    # Resolves the relation that provides the rows that should be updated in
+    # ON CONFLICT DO UDPATE
+
+    # This is done by manipualting CTEs produced by our pg compiler compiling
+    # `insert Subject { ... } unless conflict (update Subject set {...})`
+    # There is a few relevant CTEs for this:
+    # - "value": provides rows to be inserted
+    #   (produced by resolver just before this function),
+    # - "else": provides iterator over rows that are in conflict and should not
+    #    be inserted but updated instead (generated by pgcompiler),
+    # - "conflict update": provides rows to be updated,
+    #   (produced by this function)
+    # - "ins_contents": computes values of the inserted shape,
+    #   (generated by pg compiler, anti-joined against "else")
+
+    # "conflict update" needs two relational inputs:
+    # - subject relation of rows that exist in the database and are in conflict,
+    # - excluded relation which are rows provided to the insert.
+
+    # "subject" is provided by "else", "excluded" is provided by "value"
+    # To correlate the two, we join them on the iterator that is generated in
+    # the "value" CTE. We cannot use real ids for this because they do not yet
+    # exist for these objects, since they are computed in "ins_contents".
+
+    # Additionally, we need to correlate "conflict update" rel with the EdgeQL
+    # update stmt. This is done via EdgeQL where clause, which compares ids of
+    # the ids of the subject and the update iterator.
+
+    if not (
+        compiled_dml.conflict_update_name
+        and compiled_dml.conflict_update_input
+    ):
+        return
+
+    from edb.pgsql.compiler import enums as pgce
+    from edb.pgsql.compiler import astutils as pg_astutils
+
+    # Find "else" CTE in the list of compiled CTEs
+    # This is comparing by CTE name, which is hacky and error prone
+    # We are guaranteed to have only one such CTE, since these CTEs all
+    # belong to a single insert stmt.
+    else_index, else_cte = next(
+        (i, cte) for i, cte in enumerate(compiled_dml.output_ctes)
+        if cte.name.startswith('else')
+    )
+
+    # Apply a view_map_id_map to get around the fact that rvar map path_ids
+    # contain namespaces due to use using for loops around the insert stmt.
+    assert compiled_dml.subject_id
+    else_cte.query.view_path_id_map[compiled_dml.subject_id] = (
+        next(iter(else_cte.query.view_path_id_map.keys()))
+    )
+
+    # Include 'excluded' rel var in scope
+    # This is outside of the inner scope, so the subject table takes precedence
+    ctx.scope.tables.append(
+        context.Table(
+            name='excluded',
+            reference_as='excluded',
+            columns=[
+                context.Column(
+                    name=col_name,
+                    kind=context.ColumnByName(reference_as=ptr_name),
+                )
+                for col_name, ptr_name, _ in compiled_dml.value_columns
+            ]
+        )
+    )
+
+    # resolve the relation
+    with ctx.child() as sctx:
+        # this subctx is needed so it is not deemed as top-level which would
+        # extract and attach CTEs, but not make the available to all
+        # following CTEs
+
+        # include subject rel var in scope
+        sctx.scope.tables.append(
+            context.Table(
+                name=subject_name[0],
+                alias=subject_name[1],
+                reference_as='else',
+                columns=[
+                    context.Column(
+                        name=col_name,
+                        kind=context.ColumnByName(
+                            reference_as=_get_path_id_output(
+                                else_cte.query,
+                                path_id,
+                                compiled_dml,
+                            )
+                        ),
+                    )
+                    for col_name, path_id in compiled_dml.subject_columns or []
+                ]
+            )
+        )
+
+        # the important bit: resolve "conflict update" rel
+        cu_rel, _ = dispatch.resolve_relation(
+            compiled_dml.conflict_update_input, ctx=sctx
+        )
+        assert isinstance(cu_rel, pgast.SelectStmt)
+
+        # inject the 'excluded' rel var (from "value" CTE)
+        cu_rel.from_clause.append(
+            pgast.RelRangeVar(
+                relation=pgast.Relation(name=compiled_dml.value_cte_name),
+                alias=pgast.Alias(aliasname='excluded'),
+            )
+        )
+        # inject the subject rel var (from "else" CTE)
+        cu_rel.from_clause.append(
+            pgast.RelRangeVar(
+                relation=pgast.Relation(name=else_cte.name),
+                alias=pgast.Alias(aliasname='else'),
+            )
+        )
+
+        # inject interator column, which we can pull from excluded
+        assert compiled_dml.value_iterator_name
+        cu_rel.target_list.append(pgast.ResTarget(
+            val=pgast.ColumnRef(
+                name=('excluded', compiled_dml.value_iterator_name)
+            ),
+        ))
+
+        # inject subject id from "else" rvar
+        subject_id_col = _get_path_id_output(
+            else_cte.query, compiled_dml.subject_id, compiled_dml,
+            aspect=pgce.PathAspect.IDENTITY
+        )
+        cu_rel.target_list.append(pgast.ResTarget(
+            val=pgast.ColumnRef(
+                name=('else', subject_id_col),
+            ),
+            name='id'
+        ))
+
+        # add a join condition for "excluded" and "subject" rvars
+
+        # We start with a plain value_id, but because of for loops, rvar_map
+        # will contain path_ids polluted with namespaces. So instead of a plain
+        # one, we find a path_id from rvar_map that matches the plain one in all
+        # but the namespace.
+        value_id = next(
+            p for p, _ in else_cte.query.path_rvar_map.keys()
+            if p.replace_namespace(set()) == compiled_dml.value_id
+        )
+        # pull value iterator from the else CTE
+        value_iter = _get_path_id_output(
+            else_cte.query, value_id, compiled_dml
+        )
+        cu_rel.where_clause = pg_astutils.extend_binop(
+            cu_rel.where_clause,
+            pgast.Expr(
+                lexpr=pgast.ColumnRef(name=('else', value_iter)),
+                name='=',
+                rexpr=pgast.ColumnRef(
+                    name=('excluded', compiled_dml.value_iterator_name)
+                ),
+            )
+        )
+
+    # convert the resolved "conflict update" into a flat list of ctes
+    conflict_ctes = []
+    if cu_rel.ctes:
+        conflict_ctes.extend(cu_rel.ctes)
+        cu_rel.ctes = None
+    cu_cte = pgast.CommonTableExpr(
+        name=compiled_dml.conflict_update_name,
+        query=cu_rel,
+    )
+    conflict_ctes.append(cu_cte)
+
+    # combine compiled CTEs and CTEs from "conflict update"
+    compiled_dml.output_ctes = (
+        compiled_dml.output_ctes[0:else_index + 1]
+        + conflict_ctes
+        + compiled_dml.output_ctes[else_index + 1:]
+    )
+
+
+# Invokes pg compiler machinery to pull value for columns out of a query
+def _get_path_id_output(
+    query: pgast.Query,
+    path_id: irast.PathId,
+    compiled_dml: context.CompiledDML,
+    *,
+    aspect: pgce.PathAspect = pgce.PathAspect.VALUE,
+) -> str:
+    # The mere fact that this is used outside of the pg compiler signals
+    # that this is hacky.
+    assert compiled_dml.env
+    output = pgcompiler.pathctx.get_path_output(
+        query, path_id, aspect=aspect, env=compiled_dml.env
+    )
+    assert isinstance(output, pgast.ColumnRef)
+    name = output.name[-1]
+    assert isinstance(name, str)
+    return name
+
+
 def _fini_resolve_dml(
     stmt: pgast.DMLQuery, compiled_dml: context.CompiledDML, *, ctx: Context
-) -> Tuple[pgast.Query, context.Table]:
+) -> tuple[pgast.Query, context.Table]:
     if stmt.returning_list:
         assert isinstance(stmt.relation.relation, pgast.Relation)
         assert stmt.relation.relation.name
@@ -1985,33 +2552,35 @@ def _fini_resolve_dml(
 
 
 def _resolve_returning_rows(
-    returning_list: List[pgast.ResTarget],
+    returning_list: list[pgast.ResTarget],
     output_relation_name: str,
     output_namespace: Mapping[str, pgast.BaseExpr],
     subject_name: str,
     subject_alias: Optional[str],
     ctx: context.ResolverContextLevel,
-) -> Tuple[pgast.Query, context.Table]:
-    # relation that provides the values of inserted pointers
-    inserted_rvar_name = ctx.alias_generator.get('ins')
-    inserted_query = pgast.SelectStmt(
+) -> tuple[pgast.Query, context.Table]:
+    # "output" is the relation that provides the values of the subject table
+    # after the DML operation.
+    # It contains data you'd get by having `RETURNING *` on the DML.
+    output_rvar_name = ctx.alias_generator.get('output')
+    output_query = pgast.SelectStmt(
         from_clause=[
             pgast.RelRangeVar(
                 relation=pgast.Relation(name=output_relation_name),
             )
         ]
     )
-    inserted_table = context.Table(
+    output_table = context.Table(
         name=subject_name,
         alias=subject_alias,
-        reference_as=inserted_rvar_name,
+        reference_as=output_rvar_name,
     )
 
     for col_name, val in output_namespace.items():
-        inserted_query.target_list.append(
+        output_query.target_list.append(
             pgast.ResTarget(name=col_name, val=val)
         )
-        inserted_table.columns.append(
+        output_table.columns.append(
             context.Column(
                 name=col_name,
                 kind=context.ColumnByName(reference_as=col_name),
@@ -2019,20 +2588,20 @@ def _resolve_returning_rows(
         )
 
     with ctx.empty() as sctx:
-        sctx.scope.tables.append(inserted_table)
+        sctx.scope.tables.append(output_table)
 
         returning_query = pgast.SelectStmt(
             from_clause=[
                 pgast.RangeSubselect(
-                    alias=pgast.Alias(aliasname=inserted_rvar_name),
-                    subquery=inserted_query,
+                    alias=pgast.Alias(aliasname=output_rvar_name),
+                    subquery=output_query,
                 )
             ],
             target_list=[],
         )
         returning_table = context.Table()
 
-        names: Set[str] = set()
+        names: set[str] = set()
         for t in returning_list:
             targets, columns = pg_res_expr.resolve_ResTarget(
                 t, existing_names=names, ctx=sctx
@@ -2046,7 +2615,7 @@ def _get_pointer_for_column(
     col: context.Column,
     subject: s_objtypes.ObjectType | s_links.Link | s_properties.Property,
     ctx: context.ResolverContextLevel,
-) -> Tuple[s_pointers.Pointer, str, bool]:
+) -> tuple[s_pointers.Pointer, str, bool]:
     if isinstance(
         subject, (s_links.Link, s_properties.Property)
     ) and col.name in ('source', 'target'):
@@ -2089,7 +2658,7 @@ def _try_inject_ptr_type_cast(
 ):
     ptr_name = ptr.get_shortname(ctx.schema).name
 
-    tgt_pg: Tuple[str, ...]
+    tgt_pg: tuple[str, ...]
     if ptr_name == 'id' or isinstance(ptr, s_links.Link):
         tgt_pg = ('uuid',)
     else:
@@ -2141,7 +2710,7 @@ def merge_params(
 ):
     # Merge the params produced by the main compiler with params for the rest of
     # the query that the resolved is keeping track of.
-    param_remapping: Dict[int, int] = {}
+    param_remapping: dict[int, int] = {}
     for arg_name, arg in sql_result.argmap.items():
         # find the global
         glob = next(g for g in ir_stmt.globals if g.name == arg_name)
@@ -2181,7 +2750,7 @@ def merge_params(
 
 class ParamMapper(ast.NodeVisitor):
 
-    def __init__(self, mapping: Dict[int, int]) -> None:
+    def __init__(self, mapping: dict[int, int]) -> None:
         super().__init__()
         self.mapping = mapping
 

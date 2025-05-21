@@ -7,7 +7,7 @@ pub struct TokenVec<'a> {
 }
 
 impl<'a> TokenVec<'a> {
-    pub fn new(tokens: &'a Vec<(Token<'a>, Pos)>) -> TokenVec {
+    pub fn new(tokens: &'a Vec<(Token<'a>, Pos)>) -> TokenVec<'a> {
         TokenVec {
             tokens,
             consumed: 0,

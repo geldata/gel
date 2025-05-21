@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Type, Iterator, List, cast
+from typing import Any, Optional, Iterator, cast
 
 import collections
 import contextlib
@@ -173,13 +173,13 @@ class Extension(
 
     @classmethod
     def create_in_schema(
-        cls: Type[Extension],
+        cls: type[Extension],
         schema: s_schema.Schema_T,
         stable_ids: bool = False,
         *,
         id: Optional[uuid.UUID] = None,
         **data: Any,
-    ) -> Tuple[s_schema.Schema_T, Extension]:
+    ) -> tuple[s_schema.Schema_T, Extension]:
         name = data['name']
         pkg = data['package']
 
@@ -381,7 +381,7 @@ class CreateExtensionPackage(
             node.body = qlast.NestedQLBlock(
                 text=op.new_value,
                 commands=cast(
-                    List[qlast.DDLOperation],
+                    list[qlast.DDLOperation],
                     qlparser.parse_block(op.new_value)),
             )
         elif op.property == 'version':
@@ -496,7 +496,7 @@ class CreateExtensionPackageMigration(
             node.body = qlast.NestedQLBlock(
                 text=op.new_value,
                 commands=cast(
-                    List[qlast.DDLOperation],
+                    list[qlast.DDLOperation],
                     qlparser.parse_block(op.new_value)),
             )
         elif op.property == 'from_version':
@@ -879,7 +879,7 @@ class DeleteExtension(
         # types, which means that if we have a cast between ext::a::T
         # and ext::b::S, we wouldn't have a way to distinguish which
         # is should be.)
-        casts_cleanup: List[sd.Command] = []
+        casts_cleanup: list[sd.Command] = []
         for obj in schema.get_objects(
             included_modules=(sn.UnqualName('__ext_casts__'),),
             type=s_casts.Cast,

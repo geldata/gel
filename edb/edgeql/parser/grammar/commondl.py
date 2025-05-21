@@ -54,7 +54,7 @@ def _parse_language(node):
 
 def _validate_declarations(
     declarations: typing.Sequence[
-        typing.Union[qlast.ModuleDeclaration, qlast.ObjectDDL]]
+        qlast.ModuleDeclaration | qlast.ObjectDDL]
 ) -> None:
     # Check that top-level declarations either use fully-qualified
     # names or are module blocks.
@@ -417,8 +417,10 @@ class FromFunction(Nonterm):
 
 
 class ProcessFunctionBlockMixin:
+    span: parsing.Span
+
     def _process_function_body(self, block, *, optional_using: bool=False):
-        props: typing.Dict[str, typing.Any] = {}
+        props: dict[str, typing.Any] = {}
 
         commands = []
         code = None
@@ -483,6 +485,7 @@ class ProcessFunctionBlockMixin:
                 from_function=from_function,
                 from_expr=from_expr,
                 code=code,
+                span=self.span,
             )
 
             props['nativecode'] = nativecode
@@ -761,7 +764,7 @@ class ProcessIndexMixin(ProcessFunctionParamsMixin):
         return params, kwargs
 
     def _process_sql_body(self, block, *, optional_using: bool=False):
-        props: typing.Dict[str, typing.Any] = {}
+        props: dict[str, typing.Any] = {}
 
         commands = []
         code = None

@@ -21,7 +21,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Type, Mapping, Collection, Dict, TYPE_CHECKING
+from typing import Any, Optional, Mapping, Collection, TYPE_CHECKING
 
 from dataclasses import dataclass, field as dc_field
 
@@ -68,7 +68,7 @@ class GlobalCompilerOptions:
     #: If the expression is being processed in the context of a certain
     #: schema object, i.e. a constraint expression, or a pointer default,
     #: this contains the type of the schema object.
-    schema_object_context: Optional[Type[s_obj.Object]] = None
+    schema_object_context: Optional[type[s_obj.Object]] = None
 
     #: When compiling a function body, the function name.
     func_name: Optional[s_name.QualName] = None
@@ -142,7 +142,7 @@ class CompilerOptions(GlobalCompilerOptions):
     #: Type references that should be remaped to another type.  This
     #: is for dealing with remapping explicit type names in schema
     #: expressions to their subtypes when necessary.
-    type_remaps: Dict[s_obj.Object, s_obj.Object] = dc_field(
+    type_remaps: dict[s_obj.Object, s_obj.Object] = dc_field(
         default_factory=dict
     )
 

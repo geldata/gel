@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, List, NamedTuple
+from typing import Optional, NamedTuple
 
 import contextlib
 import json
@@ -34,7 +34,7 @@ class CoverageConfig(NamedTuple):
 
     config: str
     datadir: str
-    paths: List[str]
+    paths: list[str]
 
     def to_json(self) -> str:
         return json.dumps(self._asdict())

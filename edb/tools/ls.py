@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+from typing import Optional
 import sys
 import click
 
@@ -32,7 +33,8 @@ from edb.tools.edb import edbcommands
     is_flag=True,
     help="Use stdio for LSP. This is currently the only transport.",
 )
-def main(*, version: bool, stdio: bool):
+@click.argument("options", type=str, default='{}')
+def main(options: Optional[str], *, version: bool, stdio: bool):
     # import language_server only if we are using this command
     # otherwise this breaks when pygls is not installed
     from edb.language_server import main as ls_main
@@ -41,7 +43,7 @@ def main(*, version: bool, stdio: bool):
         print(f"gel-ls, version {buildmeta.get_version()}")
         sys.exit(0)
 
-    ls = ls_main.init()
+    ls = ls_main.init(options)
 
     if stdio:
         ls.start_io()

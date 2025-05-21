@@ -134,7 +134,7 @@ Booleans
 
 .. eql:operator:: or: bool or bool -> bool
 
-    :index: or
+    .. api-index:: or
 
     Evaluates ``true`` if either boolean is ``true``.
 
@@ -168,7 +168,7 @@ Booleans
 
 .. eql:operator:: and: bool and bool -> bool
 
-    :index: and
+    .. api-index:: and
 
     Evaluates ``true`` if both booleans are ``true``.
 
@@ -202,7 +202,7 @@ Booleans
 
 .. eql:operator:: not: not bool -> bool
 
-    :index: not
+    .. api-index:: not
 
     Logically negates a given boolean value.
 

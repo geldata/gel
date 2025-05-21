@@ -277,7 +277,14 @@ cdef class CompilationRequest:
     def __hash__(self):
         return hash(self.get_cache_key())
 
-    def __eq__(self, other: CompilationRequest) -> bool:
+    def __eq__(self, rhs) -> bool:
+        cdef:
+            CompilationRequest other
+
+        if not isinstance(rhs, CompilationRequest):
+            return NotImplemented
+        other = rhs
+
         return (
             self.source.cache_key() == other.source.cache_key() and
             self.protocol_version == other.protocol_version and
@@ -292,6 +299,28 @@ cdef class CompilationRequest:
             self.role_name == other.role_name and
             self.branch_name == other.branch_name
         )
+
+
+# A handle class to allow deleting cache entries just by their cache_key.
+@cython.final
+cdef class CompilationRequestIdHandle:
+    def __cinit__(
+        self,
+        cache_key: uuid.UUID
+    ):
+        self.cache_key = cache_key
+
+    def __hash__(self):
+        return hash(self.cache_key)
+
+    def __eq__(self, rhs) -> bool:
+        ty = type(rhs)
+        if ty is CompilationRequestIdHandle:
+            return self.cache_key == rhs.cache_key
+        elif ty is CompilationRequest:
+            return self.cache_key == rhs.get_cache_key()
+        else:
+            return NotImplemented
 
 
 cdef CompilationRequest _deserialize_comp_req(

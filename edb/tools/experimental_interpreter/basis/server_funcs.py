@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Callable, Sequence
+from typing import Callable, Sequence
 
 from ..data import data_ops as e
 from . import std_funcs as stdf
@@ -13,7 +13,7 @@ from .reserved_ops import (
 from ..data.casts import type_cast
 
 
-all_server_std_funcs: Dict[
+all_server_std_funcs: dict[
     str, Callable[[Sequence[Sequence[e.Val]]], Sequence[e.Val]]
 ] = {
     "+": bbo.add_impl,
@@ -67,12 +67,12 @@ all_server_std_funcs: Dict[
     e.IndirectionSliceStartOp: indirection_slice_start_impl,
     e.IndirectionSliceStopOp: indirection_slice_stop_impl,
 }
-all_server_cal_funcs: Dict[
+all_server_cal_funcs: dict[
     str, Callable[[Sequence[Sequence[e.Val]]], Sequence[e.Val]]
 ] = {
     "to_local_datetime": stdf.cal_to_local_datetime_impl,
 }
-all_server_math_funcs: Dict[
+all_server_math_funcs: dict[
     str, Callable[[Sequence[Sequence[e.Val]]], Sequence[e.Val]]
 ] = {
     "mean": stdf.math_mean_impl,

@@ -16,73 +16,142 @@
 # limitations under the License.
 #
 
-from typing import Dict, Mapping, Optional, List, Tuple
+from typing import Mapping
 import dataclasses
 import pathlib
-import os
-
 from pygls.server import LanguageServer
-from pygls import uris as pygls_uris
 import pygls
 from lsprotocol import types as lsp_types
 
-
 from edb import errors
+from edb.common import traceback as edb_traceback
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import compiler as qlcompiler
 
+from edb.ir import ast as irast
+
 from edb.schema import schema as s_schema
-from edb.schema import std as s_std
 from edb.schema import ddl as s_ddl
-import pygls.workspace
 
+from . import project as ls_project
+from . import utils as ls_utils
 from . import parsing as ls_parsing
-from . import is_schema_file
+from . import is_edgeql_file, is_schema_file
 
 
-@dataclasses.dataclass(kw_only=True, slots=True)
+@dataclasses.dataclass(kw_only=True)
 class State:
-    schema_docs: List[pygls.workspace.TextDocument] = dataclasses.field(
+    manifest: tuple[ls_project.Manifest, pathlib.Path] | None = None
+
+    schema_docs: list[pygls.workspace.TextDocument] = dataclasses.field(
         default_factory=lambda: []
     )
 
-    schema: Optional[s_schema.Schema] = None
+    schema_sdl: qlast.Schema | None = None
 
-    std_schema: Optional[s_schema.Schema] = None
+    schema: s_schema.Schema | None = None
+
+    schema_diagnostics: ls_utils.DiagnosticsSet | None = None
+
+    std_schema: s_schema.Schema | None = None
+
+
+@dataclasses.dataclass(kw_only=True)
+class Config:
+    project_dir: str
 
 
 class GelLanguageServer(LanguageServer):
     state: State
+    config: Config
 
-    def __init__(self):
-        super().__init__('Gel Language Server', 'v0.1')
+    def __init__(self, config: Config):
+        super().__init__("Gel Language Server", "v0.1")
         self.state = State()
+        self.config = config
 
 
-@dataclasses.dataclass(kw_only=True, slots=True)
-class DiagnosticsSet:
-    by_doc: Dict[pygls.workspace.TextDocument, List[lsp_types.Diagnostic]] = (
-        dataclasses.field(default_factory=lambda: {})
-    )
+def send_internal_error(ls: GelLanguageServer, e: BaseException):
+    text = edb_traceback.format_exception(e)
+    ls.show_message_log(f'Internal error: {text}')
 
 
-def compile(
+def document_updated(ls: GelLanguageServer, doc_uri: str, *, compile: bool):
+    # each call to this function should yield in exactly one publish_diagnostics
+    # for this document
+
+    from . import schema as ls_schema
+
+    document = ls.workspace.get_text_document(doc_uri)
+
+    diagnostic_set = ls_utils.DiagnosticsSet()
+    diagnostic_set.extend(document, [])  # make sure we publish for document
+
+    try:
+        if is_schema_file(doc_uri):
+            # schema file
+
+            # parse
+            diags = ls_schema.store_schema_doc(ls, document)
+            diagnostic_set.extend(document, diags)
+            diagnostic_set.merge(ls_schema._parse_schema(ls))
+
+            # compile
+            if compile and not diagnostic_set.has_any():
+                _, _ = ls_schema._compile_schema(ls)
+
+            # add schema diagnostics from last compilation
+            if ls.state.schema_diagnostics:
+                diagnostic_set.merge(ls.state.schema_diagnostics)
+
+        elif is_edgeql_file(doc_uri):
+            # query file
+
+            # parse
+            ast_res = ls_parsing.parse(document)
+            if ast_res.err:
+                diagnostic_set.extend(document, ast_res.err)
+
+            # compile
+            if compile and isinstance(ast_res.ok, list):
+                diag, _ = compile_ql(ls, document, ast_res.ok)
+                diagnostic_set.merge(diag)
+        else:
+            ls.show_message_log(f'Unknown file type: {doc_uri}')
+
+        for doc, diags in diagnostic_set.by_doc.items():
+            ls.publish_diagnostics(doc.uri, diags, doc.version)
+    except BaseException as e:
+        send_internal_error(ls, e)
+        ls.publish_diagnostics(document.uri, [], document.version)
+
+
+def compile_ql(
     ls: GelLanguageServer,
     doc: pygls.workspace.TextDocument,
-    stmts: List[qlast.Base],
-) -> DiagnosticsSet:
+    stmts: list[qlast.Base],
+) -> tuple[ls_utils.DiagnosticsSet, list[irast.Statement]]:
+    from . import schema as ls_schema
+
     if not stmts:
-        return DiagnosticsSet(by_doc={doc: []})
+        return (ls_utils.DiagnosticsSet(by_doc={doc: []}), [])
 
-    schema, diagnostics_set = get_schema(ls)
+    schema, diagnostics_set, err_msg = ls_schema.get_schema(ls)
     if not schema:
-        return diagnostics_set
+        if len(ls.state.schema_docs) == 0:
+            diagnostics_set.append(
+                doc,
+                ls_utils.new_diagnostic_at_the_top(
+                    err_msg or "Cannot find schema files"
+                ),
+            )
+        return (diagnostics_set, [])
 
-    diagnostics: List[lsp_types.Diagnostic] = []
-    modaliases: Mapping[Optional[str], str] = {None: 'default'}
+    diagnostics: list[lsp_types.Diagnostic] = []
+    ir_stmts: list[irast.Statement] = []
+    modaliases: Mapping[str | None, str] = {None: "default"}
     for ql_stmt in stmts:
-
         try:
             if isinstance(ql_stmt, qlast.DDLCommand):
                 schema, _delta = s_ddl.delta_and_schema_from_ddl(
@@ -91,172 +160,15 @@ def compile(
 
             elif isinstance(ql_stmt, (qlast.Command, qlast.Expr)):
                 options = qlcompiler.CompilerOptions(modaliases=modaliases)
-                ir_stmt = qlcompiler.compile_ast_to_ir(
+                ir_res = qlcompiler.compile_ast_to_ir(
                     ql_stmt, schema, options=options
                 )
-                ls.show_message_log(
-                    f'IR: {ir_stmt}', msg_type=lsp_types.MessageType.Debug
-                )
+                if isinstance(ir_res, irast.Statement):
+                    ir_stmts.append(ir_res)
             else:
-                ls.show_message_log(f'skip compile of {ql_stmt}')
+                ls.show_message_log(f"skip compile of {ql_stmt}")
         except errors.EdgeDBError as error:
-            diagnostics.append(_convert_error(error))
+            diagnostics.append(ls_utils.error_to_lsp(error))
 
-    diagnostics_set.by_doc[doc] = diagnostics
-    return diagnostics_set
-
-
-def _convert_error(error: errors.EdgeDBError) -> lsp_types.Diagnostic:
-    return lsp_types.Diagnostic(
-        range=(
-            lsp_types.Range(
-                start=lsp_types.Position(
-                    line=error.line - 1,
-                    character=error.col - 1,
-                ),
-                end=lsp_types.Position(
-                    line=error.line_end - 1,
-                    character=error.col_end - 1,
-                ),
-            )
-            if error.line >= 0
-            else lsp_types.Range(
-                start=lsp_types.Position(line=0, character=0),
-                end=lsp_types.Position(line=0, character=0),
-            )
-        ),
-        severity=lsp_types.DiagnosticSeverity.Error,
-        message=error.args[0],
-    )
-
-
-def get_schema(
-    ls: GelLanguageServer,
-) -> Tuple[Optional[s_schema.Schema], DiagnosticsSet]:
-    if ls.state.schema:
-        return (ls.state.schema, DiagnosticsSet())
-
-    if len(ls.state.schema_docs) == 0:
-        _load_schema_docs(ls)
-
-    return _compile_schema(ls)
-
-
-def update_schema_doc(ls: GelLanguageServer, doc: pygls.workspace.TextDocument):
-    # TODO: check that this doc in actually in dbschema dir
-
-    if len(ls.state.schema_docs) == 0:
-        _load_schema_docs(ls)
-
-    existing = next(
-        (i for i, d in enumerate(ls.state.schema_docs) if d.path == doc.path),
-        None,
-    )
-    if existing is not None:
-        # update
-        ls.state.schema_docs[existing] = doc
-    else:
-        # insert
-        ls.show_message_log("new schema file added: " + doc.path)
-        ls.show_message_log("existing files: ")
-        for d in ls.state.schema_docs:
-            ls.show_message_log("- " + d.path)
-
-        ls.state.schema_docs.append(doc)
-
-
-def _load_schema_docs(ls: GelLanguageServer):
-    # discover dbschema/ folders
-    if len(ls.workspace.folders) != 1:
-
-        if len(ls.workspace.folders) > 1:
-            ls.show_message_log(
-                "WARNING: workspaces with multiple root folders "
-                "are not supported"
-            )
-        return None
-
-    # discard all existing docs
-    ls.state.schema_docs.clear()
-
-    workspace: lsp_types.WorkspaceFolder = next(
-        iter(ls.workspace.folders.values())
-    )
-    workspace_path = pathlib.Path(pygls_uris.to_fs_path(workspace.uri))
-
-    # TODO: read gel.toml and use [project.schema-dir]
-    schema_dir = 'dbschema'
-
-    # read .esdl files
-    for entry in os.listdir(workspace_path / schema_dir):
-        if not is_schema_file(entry):
-            continue
-        doc = ls.workspace.get_text_document(
-            str(workspace_path / schema_dir / entry)
-        )
-        ls.state.schema_docs.append(doc)
-
-
-def _compile_schema(
-    ls: GelLanguageServer,
-) -> Tuple[Optional[s_schema.Schema], DiagnosticsSet]:
-    # parse
-    sdl = qlast.Schema(declarations=[])
-    diagnostics = DiagnosticsSet()
-    for doc in ls.state.schema_docs:
-        res = ls_parsing.parse(doc, ls)
-        if d := res.err:
-            diagnostics.by_doc[doc] = d
-        else:
-            diagnostics.by_doc[doc] = []
-            if isinstance(res.ok, qlast.Schema):
-                sdl.declarations.extend(res.ok.declarations)
-            else:
-                # TODO: complain that .esdl contains non-SDL syntax
-                pass
-
-    std_schema = _load_std_schema(ls.state)
-
-    # apply SDL to std schema
-    ls.show_message_log('compiling schema ..')
-    try:
-        schema, _warnings = s_ddl.apply_sdl(
-            sdl,
-            base_schema=std_schema,
-            current_schema=std_schema,
-        )
-        ls.show_message_log('.. done')
-    except errors.EdgeDBError as error:
-        schema = None
-
-        # find doc
-        do = next(
-            (d for d in ls.state.schema_docs if error.filename == d.filename),
-            None,
-        )
-        if do is None:
-            ls.show_message_log(
-                f'cannot find original doc of the error ({error.filename}), '
-                'using first schema file'
-            )
-            do = ls.state.schema_docs[0]
-
-        # convert error
-        diagnostics.by_doc[do].append(_convert_error(error))
-
-    ls.state.schema = schema
-    return (schema, diagnostics)
-
-
-def _load_std_schema(state: State) -> s_schema.Schema:
-    if state.std_schema is not None:
-        return state.std_schema
-
-    schema: s_schema.Schema = s_schema.EMPTY_SCHEMA
-    for modname in [*s_schema.STD_SOURCES, *s_schema.TESTMODE_SOURCES]:
-        schema = s_std.load_std_module(schema, modname)
-    schema, _ = s_std.make_schema_version(schema)
-    schema, _ = s_std.make_global_schema_version(schema)
-
-    state.std_schema = schema
-    return state.std_schema
+    diagnostics_set.extend(doc, diagnostics)
+    return (diagnostics_set, ir_stmts)

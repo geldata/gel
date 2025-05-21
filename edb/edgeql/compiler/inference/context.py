@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Tuple, Union, Dict, FrozenSet, NamedTuple
+from typing import Optional, NamedTuple
 
 import dataclasses
 
@@ -37,9 +37,6 @@ class MultiplicityInfo:
     #: Whether this multiplicity descriptor describes
     #: part of a disjoint set.
     disjoint_union: bool = False
-    #: Whether this multiplicity descriptor represents
-    #: a freshly created free object.
-    fresh_free_object: bool = False
 
     def is_empty(self) -> bool:
         return self.own.is_empty()
@@ -53,18 +50,16 @@ class MultiplicityInfo:
 
 class InfCtx(NamedTuple):
     env: context.Environment
-    inferred_cardinality: Dict[
-        Union[
-            Tuple[irast.Base, irast.ScopeTreeNode, FrozenSet[irast.PathId]],
-            irast.Base,
-        ],
+    inferred_cardinality: dict[
+        tuple[irast.Base, irast.ScopeTreeNode, frozenset[irast.PathId]]
+        | irast.Base,
         qltypes.Cardinality,
     ]
-    inferred_multiplicity: Dict[
-        Tuple[irast.Base, irast.ScopeTreeNode, Optional[irast.PathId]],
+    inferred_multiplicity: dict[
+        tuple[irast.Base, irast.ScopeTreeNode, Optional[irast.PathId]],
         MultiplicityInfo,
     ]
-    singletons: FrozenSet[irast.PathId]
+    singletons: frozenset[irast.PathId]
     distinct_iterator: Optional[irast.PathId]
     ignore_computed_cards: bool
     # Whether to make updates to the cardinality fields in the IR/schema.

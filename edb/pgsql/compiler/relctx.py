@@ -24,13 +24,9 @@ from __future__ import annotations
 from typing import (
     Callable,
     Optional,
-    Tuple,
-    Union,
     AbstractSet,
     Iterable,
     Sequence,
-    List,
-    Set,
     NamedTuple,
     cast,
 )
@@ -79,7 +75,7 @@ def _pull_path_namespace(
         replace_bonds: bool=True, ctx: context.CompilerContextLevel) -> None:
 
     squery = source.query
-    source_qs: List[pgast.BaseRelation]
+    source_qs: list[pgast.BaseRelation]
 
     if astutils.is_set_op_query(squery):
         # Set op query
@@ -89,7 +85,7 @@ def _pull_path_namespace(
         source_qs = [squery]
 
     for source_q in source_qs:
-        s_paths: Set[Tuple[irast.PathId, pgce.PathAspect]] = set()
+        s_paths: set[tuple[irast.PathId, pgce.PathAspect]] = set()
         if flavor == 'normal':
             if hasattr(source_q, 'path_outputs'):
                 s_paths.update(source_q.path_outputs)
@@ -222,7 +218,7 @@ def include_rvar(
     update_mask: bool=True,
     flavor: str='normal',
     aspects: Optional[
-        Tuple[pgce.PathAspect, ...]
+        tuple[pgce.PathAspect, ...]
         | AbstractSet[pgce.PathAspect]
     ]=None,
     ctx: context.CompilerContextLevel,
@@ -369,7 +365,7 @@ def _maybe_get_path_rvar(
     flavor: str='normal',
     aspect: pgce.PathAspect,
     ctx: context.CompilerContextLevel,
-) -> Optional[Tuple[pgast.PathRangeVar, irast.PathId]]:
+) -> Optional[tuple[pgast.PathRangeVar, irast.PathId]]:
     rvar = ctx.env.external_rvars.get((path_id, aspect))
     if rvar:
         return rvar, path_id
@@ -398,7 +394,7 @@ def _get_path_rvar(
     flavor: str='normal',
     aspect: pgce.PathAspect,
     ctx: context.CompilerContextLevel,
-) -> Tuple[pgast.PathRangeVar, irast.PathId]:
+) -> tuple[pgast.PathRangeVar, irast.PathId]:
     result = _maybe_get_path_rvar(
         stmt, path_id, flavor=flavor, aspect=aspect, ctx=ctx)
     if result is None:
@@ -1056,7 +1052,7 @@ def unpack_var(
 
     qry = pgast.SelectStmt()
 
-    view_tvars: List[Tuple[irast.PathId, pgast.TupleVarBase, bool]] = []
+    view_tvars: list[tuple[irast.PathId, pgast.TupleVarBase, bool]] = []
     els = []
     ctr = 0
 
@@ -2021,7 +2017,7 @@ def anti_join(
 
 
 def range_from_queryset(
-    set_ops: Sequence[Tuple[context.OverlayOp, pgast.SelectStmt]],
+    set_ops: Sequence[tuple[context.OverlayOp, pgast.SelectStmt]],
     objname: sn.Name,
     *,
     prep_filter: Callable[
@@ -2368,10 +2364,20 @@ def _range_for_component_ptrref(
 def _prep_filter(larg: pgast.SelectStmt, rarg: pgast.SelectStmt) -> None:
     # Set up the proper join on the source field and clear the target list
     # of the rhs of a filter overlay.
-    assert isinstance(larg.target_list[0].val, pgast.ColumnRef)
-    assert isinstance(rarg.target_list[0].val, pgast.ColumnRef)
-    rarg.where_clause = astutils.join_condition(
-        larg.target_list[0].val, rarg.target_list[0].val)
+
+    # If the names don't have table refs, make them refer to the table
+    # being joined.
+    lval = larg.target_list[0].val
+    assert isinstance(lval, pgast.ColumnRef)
+    if len(lval.name) == 1:
+        lval = astutils.get_column(larg.from_clause[0], lval)
+
+    rval = rarg.target_list[0].val
+    assert isinstance(rval, pgast.ColumnRef)
+    if len(rval.name) == 1:
+        rval = astutils.get_column(rarg.from_clause[0], rval)
+
+    rarg.where_clause = astutils.join_condition(lval, rval)
     rarg.target_list.clear()
 
 
@@ -2542,12 +2548,12 @@ def range_for_pointer(
 
 
 def rvar_for_rel(
-    rel: Union[pgast.BaseRelation, pgast.CommonTableExpr],
+    rel: pgast.BaseRelation | pgast.CommonTableExpr,
     *,
     alias: Optional[str] = None,
     typeref: Optional[irast.TypeRef] = None,
     lateral: bool = False,
-    colnames: Optional[List[str]] = None,
+    colnames: Optional[list[str]] = None,
     ctx: Optional[context.CompilerContextLevel] = None,
     env: Optional[context.Environment] = None,
 ) -> pgast.PathRangeVar:
@@ -2584,7 +2590,7 @@ def rvar_for_rel(
 def _add_type_rel_overlay(
     typeid: uuid.UUID,
     op: context.OverlayOp,
-    rel: Union[pgast.BaseRelation, pgast.CommonTableExpr], *,
+    rel: pgast.BaseRelation | pgast.CommonTableExpr, *,
     dml_stmts: Iterable[irast.MutatingLikeStmt] = (),
     path_id: irast.PathId,
     ctx: context.CompilerContextLevel
@@ -2607,7 +2613,7 @@ def _add_type_rel_overlay(
 def add_type_rel_overlay(
     typeref: irast.TypeRef,
     op: context.OverlayOp,
-    rel: Union[pgast.BaseRelation, pgast.CommonTableExpr], *,
+    rel: pgast.BaseRelation | pgast.CommonTableExpr, *,
     stop_ref: Optional[irast.TypeRef]=None,
     dml_stmts: Iterable[irast.MutatingLikeStmt] = (),
     path_id: irast.PathId,
@@ -2678,7 +2684,7 @@ def _add_ptr_rel_overlay(
     typeid: uuid.UUID,
     ptrref_name: str,
     op: context.OverlayOp,
-    rel: Union[pgast.BaseRelation, pgast.CommonTableExpr], *,
+    rel: pgast.BaseRelation | pgast.CommonTableExpr, *,
     dml_stmts: Iterable[irast.MutatingLikeStmt] = (),
     path_id: irast.PathId,
     ctx: context.CompilerContextLevel
@@ -2703,7 +2709,7 @@ def _add_ptr_rel_overlay(
 def add_ptr_rel_overlay(
     ptrref: irast.PointerRef,
     op: context.OverlayOp,
-    rel: Union[pgast.BaseRelation, pgast.CommonTableExpr], *,
+    rel: pgast.BaseRelation | pgast.CommonTableExpr, *,
     dml_stmts: Iterable[irast.MutatingLikeStmt] = (),
     path_id: irast.PathId,
     ctx: context.CompilerContextLevel

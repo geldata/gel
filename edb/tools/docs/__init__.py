@@ -23,6 +23,7 @@ from docutils import nodes as d_nodes
 from docutils.parsers import rst as d_rst
 from sphinx import addnodes as s_nodes
 from sphinx import transforms as s_transforms
+from sphinx.domains.index import IndexDirective
 
 from . import edb
 from . import cli
@@ -113,6 +114,14 @@ class VersionedReplaceRole:
         return nodes, []
 
 
+class APIIndex(IndexDirective):
+
+    def run(self):
+        nodes = super().run()
+        nodes[0]['api-index'] = True
+        return nodes
+
+
 def setup(app):
     edb.setup_domain(app)
     cli.setup_domain(app)
@@ -126,6 +135,7 @@ def setup(app):
     app.add_directive('versionchanged', VersionChanged, True)
     app.add_directive('code-block', shared.CodeBlock, True)
     app.add_directive('versioned-section', VersionedSection)
+    app.add_directive('api-index', APIIndex)
     app.add_role('versionreplace', VersionedReplaceRole())
 
     app.add_transform(ProhibitedNodeTransform)

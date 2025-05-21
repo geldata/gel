@@ -25,7 +25,7 @@ from typing import (
     Any,
     Callable,
     Optional,
-    Tuple,
+    Hashable,
     Iterator,
     Mapping,
     Sequence,
@@ -143,10 +143,12 @@ class BaseServer:
         runstate_dir,
         internal_runstate_dir,
         compiler_pool_size,
+        compiler_worker_branch_limit,
         compiler_pool_mode: srvargs.CompilerPoolMode,
         compiler_pool_addr,
         nethosts,
         netport,
+        compiler_worker_max_rss: Optional[int] = None,
         listen_sockets: tuple[socket.socket, ...] = (),
         testmode: bool = False,
         daemonized: bool = False,
@@ -190,8 +192,10 @@ class BaseServer:
         self._internal_runstate_dir = internal_runstate_dir
         self._compiler_pool = None
         self._compiler_pool_size = compiler_pool_size
+        self._compiler_worker_branch_limit = compiler_worker_branch_limit
         self._compiler_pool_mode = compiler_pool_mode
         self._compiler_pool_addr = compiler_pool_addr
+        self._compiler_worker_max_rss = compiler_worker_max_rss
         self._system_compile_cache = lru.LRUMapping(
             maxsize=defines._MAX_QUERIES_CACHE
         )
@@ -210,6 +214,7 @@ class BaseServer:
         # and there have been no new connections for n seconds
         self._auto_shutdown_after = auto_shutdown_after
         self._auto_shutdown_handler: Any = None
+        self._keepalive_tokens: set = set()
 
         self._echo_runtime_info = echo_runtime_info
         self._status_sinks = status_sinks
@@ -324,11 +329,6 @@ class BaseServer:
 
     def on_binary_client_created(self) -> str:
         self._binary_proto_id_counter += 1
-
-        if self._auto_shutdown_handler:
-            self._auto_shutdown_handler.cancel()
-            self._auto_shutdown_handler = None
-
         return str(self._binary_proto_id_counter)
 
     def on_binary_client_connected(self, conn):
@@ -362,9 +362,15 @@ class BaseServer:
         )
         self.maybe_auto_shutdown()
 
+    def maybe_delay_auto_shutdown(self):
+        if self._auto_shutdown_handler:
+            self._auto_shutdown_handler.cancel()
+            self._auto_shutdown_handler = None
+
     def maybe_auto_shutdown(self):
         if (
             not self._binary_conns
+            and not self._keepalive_tokens
             and self._auto_shutdown_after >= 0
             and self._auto_shutdown_handler is None
         ):
@@ -377,6 +383,14 @@ class BaseServer:
             event,
             len(self._binary_conns),
         )
+
+    def add_keepalive_token(self, token: Hashable) -> None:
+        self.maybe_delay_auto_shutdown()
+        self._keepalive_tokens.add(token)
+
+    def remove_keepalive_token(self, token: Hashable) -> None:
+        self._keepalive_tokens.discard(token)
+        self.maybe_auto_shutdown()
 
     def on_pgext_client_connected(self, conn):
         self._pgext_conns[conn.get_id()] = conn
@@ -590,6 +604,7 @@ class BaseServer:
 
         args = dict(
             pool_size=self._compiler_pool_size,
+            worker_branch_limit=self._compiler_worker_branch_limit,
             pool_class=self._compiler_pool_mode.pool_class,
             runstate_dir=self._internal_runstate_dir,
             backend_runtime_params=runtime_params,
@@ -599,6 +614,9 @@ class BaseServer:
         )
         if self._compiler_pool_mode == srvargs.CompilerPoolMode.Remote:
             args['address'] = self._compiler_pool_addr
+        else:
+            if self._compiler_worker_max_rss is not None:
+                args['worker_max_rss'] = self._compiler_worker_max_rss
         return args
 
     async def _destroy_compiler_pool(self):
@@ -683,13 +701,6 @@ class BaseServer:
         json_data = await syscon.sql_fetch_val(dbs_query)
         return json.loads(json_data)
 
-    async def get_patch_count(self, conn: pgcon.PGConnection) -> int:
-        """Get the number of applied patches."""
-        num_patches = await instdata.get_instdata(
-            conn, 'num_patches', 'json')
-        res: int = json.loads(num_patches) if num_patches else 0
-        return res
-
     async def _on_system_config_add(self, setting_name, value):
         # CONFIGURE INSTANCE INSERT ConfigObject;
         pass
@@ -728,13 +739,9 @@ class BaseServer:
         # CONFIGURE INSTANCE RESET setting_name;
         pass
 
-    async def _start_server(
-        self,
-        host: str,
-        port: int,
-        sock: Optional[socket.socket] = None,
-    ) -> Optional[asyncio.base_events.Server]:
-        proto_factory = lambda: protocol.HttpProtocol(
+    def _make_protocol(self):
+        self.maybe_delay_auto_shutdown()
+        return protocol.HttpProtocol(
             self,
             self._sslctx,
             self._sslctx_pgext,
@@ -742,13 +749,21 @@ class BaseServer:
             http_endpoint_security=self._http_endpoint_security,
         )
 
+    async def _start_server(
+        self,
+        host: str,
+        port: int,
+        sock: Optional[socket.socket] = None,
+    ) -> Optional[asyncio.base_events.Server]:
         try:
             kwargs: dict[str, Any]
             if sock is not None:
                 kwargs = {"sock": sock}
             else:
                 kwargs = {"host": host, "port": port}
-            return await self.__loop.create_server(proto_factory, **kwargs)
+            return await self.__loop.create_server(
+                self._make_protocol, **kwargs
+            )
         except Exception as e:
             logger.warning(
                 f"could not create listen socket for '{host}:{port}': {e}"
@@ -1056,12 +1071,13 @@ class BaseServer:
             self._request_stats_logger()
         )
 
-        self._compiler_pool = await compiler_pool.create_compiler_pool(
+        pool = await compiler_pool.create_compiler_pool(
             **self._get_compiler_args()
         )
         self.compilation_config_serializer = (
-            await self._compiler_pool.make_compilation_config_serializer()
+            await pool.make_compilation_config_serializer()
         )
+        self._compiler_pool = pool
 
         await self._before_start_servers()
         self._servers, actual_port, listen_addrs = await self._start_servers(
@@ -1332,7 +1348,7 @@ class Server(BaseServer):
         self, conn: pgcon.PGConnection
     ) -> dict[int, bootstrap.PatchEntry]:
         """Prepare all the patches"""
-        num_patches = await self.get_patch_count(conn)
+        num_patches = await self._tenant.get_patch_count(conn)
 
         if num_patches < len(pg_patches.PATCHES):
             logger.info("preparing patches for database upgrade")
@@ -1393,7 +1409,7 @@ class Server(BaseServer):
         sys: bool=False,
     ) -> None:
         """Apply any un-applied patches to the database."""
-        num_patches = await self.get_patch_count(conn)
+        num_patches = await self._tenant.get_patch_count(conn)
         for num, (sql_b, syssql, keys) in patches.items():
             if num_patches <= num:
                 if sys:
@@ -1518,7 +1534,7 @@ class Server(BaseServer):
     async def _load_instance_data(self):
         logger.info("loading instance data")
         async with self._tenant.use_sys_pgcon() as syscon:
-            patch_count = await self.get_patch_count(syscon)
+            patch_count = await self._tenant.get_patch_count(syscon)
             version_key = pg_patches.get_version_key(patch_count)
 
             result = await instdata.get_instdata(
@@ -1730,12 +1746,13 @@ class Server(BaseServer):
         """Run the script specified in *startup_script* and exit immediately"""
         if self._startup_script is None:
             raise AssertionError('startup script is not defined')
-        self._compiler_pool = await compiler_pool.create_compiler_pool(
+        pool = await compiler_pool.create_compiler_pool(
             **self._get_compiler_args()
         )
         self.compilation_config_serializer = (
-            await self._compiler_pool.make_compilation_config_serializer()
+            await pool.make_compilation_config_serializer()
         )
+        self._compiler_pool = pool
         try:
             await binary.run_script(
                 server=self,
@@ -1905,7 +1922,7 @@ async def _resolve_host(host: str) -> list[str] | Exception:
 
 async def _resolve_interfaces(
     hosts: Sequence[str],
-) -> Tuple[Sequence[str], bool, bool]:
+) -> tuple[Sequence[str], bool, bool]:
 
     async with asyncio.TaskGroup() as g:
         resolve_tasks = {

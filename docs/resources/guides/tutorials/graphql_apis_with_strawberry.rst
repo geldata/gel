@@ -69,7 +69,7 @@ dependencies with this command:
 Initialize the database
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-Now, let's initialize an Gel project. From the project's root directory:
+Now, let's initialize a Gel project. From the project's root directory:
 
 .. code-block:: bash
 

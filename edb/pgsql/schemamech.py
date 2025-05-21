@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Optional, Tuple, Sequence, Collection, Dict, List, Set
+from typing import Optional, Sequence, Collection
 
 import itertools
 import dataclasses
@@ -69,7 +69,7 @@ def _get_exclusive_refs(tree: irast.Statement) -> Sequence[irast.Base] | None:
 
 @dataclasses.dataclass(kw_only=True, repr=False, eq=False, slots=True)
 class PGConstrData:
-    subject_db_name: Optional[Tuple[str, str]]
+    subject_db_name: Optional[tuple[str, str]]
     expressions: list[ExprData]
     relative_expressions: list[ExprData]
     table_type: str
@@ -84,7 +84,7 @@ class ExprData:
     exprdata: ExprDataSources
     is_multicol: bool
     is_trivial: bool
-    subject_db_name: Optional[Tuple[str, str]] = None
+    subject_db_name: Optional[tuple[str, str]] = None
     except_data: Optional[ExprDataSources] = None
 
 
@@ -107,7 +107,7 @@ def _to_source(sql_expr: pgast.Base) -> str:
 
 
 def _edgeql_tree_to_expr_data(
-    sql_expr: pgast.Base, refs: Optional[Set[pgast.ColumnRef]] = None
+    sql_expr: pgast.Base, refs: Optional[set[pgast.ColumnRef]] = None
 ) -> ExprDataSources:
     if refs is None:
         refs = set(
@@ -130,12 +130,12 @@ def _edgeql_tree_to_expr_data(
         refs.add(sql_expr)
 
     for ref in refs:
-        assert isinstance(ref.name, List)
+        assert isinstance(ref.name, list)
         ref.name.insert(0, 'NEW')
     new_expr = _to_source(sql_expr)
 
     for ref in refs:
-        assert isinstance(ref.name, List)
+        assert isinstance(ref.name, list)
         ref.name[0] = 'OLD'
     old_expr = _to_source(sql_expr)
 
@@ -215,7 +215,7 @@ def _edgeql_ref_to_pg_constr(
 class CompiledConstraintData:
     subject: s_types.Type | s_pointers.Pointer
     exclusive_expr_refs: Optional[Sequence[irast.Base]]
-    subject_db_name: Optional[Tuple[str, str]]
+    subject_db_name: Optional[tuple[str, str]]
     except_data: Optional[ExprDataSources]
     ir: irast.Statement
     subject_table_type: str
@@ -557,6 +557,10 @@ class SchemaDomainConstraint:
         ops = dbops.CommandGroup()
         return ops
 
+    def fixup_trigger_ops(self) -> dbops.CommandGroup:
+        ops = dbops.CommandGroup()
+        return ops
+
 
 @dataclasses.dataclass(kw_only=True, repr=False, eq=False, slots=True)
 class SchemaTableConstraint:
@@ -714,6 +718,22 @@ class SchemaTableConstraint:
 
         return ops
 
+    def fixup_trigger_ops(self) -> dbops.CommandGroup:
+        # Pre 6.8 versions of gel created needless disabled triggers
+        # in some cases. This path (invoked by administer
+        # remove_pointless_triggers()) deletes them.
+        ops = dbops.CommandGroup()
+
+        tabconstr = self._table_constraint(self)
+        add_constr = deltadbops.AlterTableUpdateConstraintTriggerFixup(
+            name=tabconstr.get_subject_name(quote=False),
+            constraint=tabconstr,
+        )
+
+        ops.add_command(add_constr)
+
+        return ops
+
 
 SchemaConstraint = SchemaDomainConstraint | SchemaTableConstraint
 
@@ -752,10 +772,10 @@ def ptr_default_to_col_default(schema, ptr, expr):
     return sql_text
 
 
-RefTables = Dict[
-    Optional[Tuple[str, str]],
-    List[
-        Tuple[
+RefTables = dict[
+    Optional[tuple[str, str]],
+    list[
+        tuple[
             irast.Set,
             s_pointers.PointerLike,
             s_pointers.PointerLike | s_types.Type,
@@ -768,13 +788,13 @@ RefTables = Dict[
 def get_ref_storage_info(
     schema: s_schema.Schema, refs: Collection[irast.Set]
 ) -> RefTables:
-    link_biased: Dict[irast.Set, types.PointerStorageInfo] = {}
-    objtype_biased: Dict[irast.Set, types.PointerStorageInfo] = {}
+    link_biased: dict[irast.Set, types.PointerStorageInfo] = {}
+    objtype_biased: dict[irast.Set, types.PointerStorageInfo] = {}
 
-    RefPtr = Tuple[
+    RefPtr = tuple[
         s_pointers.PointerLike, s_types.Type | s_pointers.PointerLike
     ]
-    ref_ptrs: Dict[irast.Set, RefPtr] = {}
+    ref_ptrs: dict[irast.Set, RefPtr] = {}
     refs = list(refs)
     for ref in refs:
         ptr: s_pointers.PointerLike
@@ -819,7 +839,7 @@ def get_ref_storage_info(
 
     for ref, (ptr, src) in ref_ptrs.items():
         ptr_info = types.get_pointer_storage_info(
-            ptr, source=src, resolve_type=False, schema=schema)
+            ptr, source=src, resolve_type=False, schema=schema)  # type: ignore
 
         # See if any of the refs are hosted in pointer tables and others
         # are not...
@@ -835,8 +855,11 @@ def get_ref_storage_info(
         for ref in objtype_biased.copy():
             ptr, src = ref_ptrs[ref]
             ptr_info = types.get_pointer_storage_info(
-                ptr, source=src, resolve_type=False, link_bias=True,
-                schema=schema)
+                ptr, source=src,  # type: ignore
+                resolve_type=False,
+                link_bias=True,
+                schema=schema,
+            )
 
             if ptr_info is not None and ptr_info.table_type == 'link':
                 link_biased[ref] = ptr_info

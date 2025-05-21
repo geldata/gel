@@ -85,7 +85,6 @@ jobs:
         else
           find /usr/lib -type f -name 'lib*' -printf '%P %s\n' | sort | sha256sum | cut -d ' ' -f1 > shared-artifacts/lib_cache_key.txt
         fi
-        python setup.py -q ci_helper --type cli > shared-artifacts/edgedbcli_git_rev.txt
         python setup.py -q ci_helper --type rust >shared-artifacts/rust_cache_key.txt
         python setup.py -q ci_helper --type ext >shared-artifacts/ext_cache_key.txt
         python setup.py -q ci_helper --type parsers >shared-artifacts/parsers_cache_key.txt
@@ -93,7 +92,6 @@ jobs:
         python setup.py -q ci_helper --type libpg_query >shared-artifacts/libpg_query_git_rev.txt
         echo 'f8cd94309eaccbfba5dea7835b88c78377608a37' >shared-artifacts/stolon_git_rev.txt
         python setup.py -q ci_helper --type bootstrap >shared-artifacts/bootstrap_cache_key.txt
-        echo EDGEDBCLI_GIT_REV=$(cat shared-artifacts/edgedbcli_git_rev.txt) >> $GITHUB_ENV
         echo POSTGRES_GIT_REV=$(cat shared-artifacts/postgres_git_rev.txt) >> $GITHUB_ENV
         echo LIBPG_QUERY_GIT_REV=$(cat shared-artifacts/libpg_query_git_rev.txt) >> $GITHUB_ENV
         echo STOLON_GIT_REV=$(cat shared-artifacts/stolon_git_rev.txt) >> $GITHUB_ENV
@@ -108,13 +106,6 @@ jobs:
         retention-days: 1
 
     # Restore binary cache
-
-    - name: Handle cached EdgeDB CLI binaries
-      uses: actions/cache@v4
-      id: cli-cache
-      with:
-        path: build/cli
-        key: edb-cli-v4-${{ env.EDGEDBCLI_GIT_REV }}
 
     - name: Handle cached Rust extensions
       uses: actions/cache@v4
@@ -157,7 +148,6 @@ jobs:
 
     - name: Install system deps
       if: |
-        steps.cli-cache.outputs.cache-hit != 'true' ||
         steps.rust-cache.outputs.cache-hit != 'true' ||
         steps.ext-cache.outputs.cache-hit != 'true' ||
         steps.stolon-cache.outputs.cache-hit != 'true' ||
@@ -167,32 +157,8 @@ jobs:
         sudo apt-get install -y uuid-dev libreadline-dev bison flex libprotobuf-c-dev
 
     - name: Install Rust toolchain
-      if: |
-        steps.cli-cache.outputs.cache-hit != 'true' ||
-        steps.rust-cache.outputs.cache-hit != 'true'
+      if: steps.rust-cache.outputs.cache-hit != 'true'
       uses: dsherret/rust-toolchain-file@v1
-
-    # Build EdgeDB CLI
-
-    - name: Handle EdgeDB CLI build cache
-      uses: actions/cache@v4
-      if: steps.cli-cache.outputs.cache-hit != 'true'
-      with:
-        path: ${{ env.BUILD_TEMP }}/rust/cli
-        key: edb-cli-build-v7-${{ env.EDGEDBCLI_GIT_REV }}
-        restore-keys: |
-          edb-cli-build-v7-
-
-    - name: Build EdgeDB CLI
-      env:
-        CARGO_HOME: ${{ env.BUILD_TEMP }}/rust/cli/cargo_home
-        CACHE_HIT: ${{ steps.cli-cache.outputs.cache-hit }}
-      run: |
-        if [[ "$CACHE_HIT" == "true" ]]; then
-          cp -v build/cli/bin/gel edb/cli/gel
-        else
-          python setup.py -v build_cli
-        fi
 
     # Build Rust extensions
 

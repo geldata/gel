@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Type, TYPE_CHECKING
+from typing import TYPE_CHECKING
 import http
 
 from edb import errors
@@ -66,7 +66,7 @@ def _response_error(
     response: protocol.HttpResponse,
     status: http.HTTPStatus,
     message: str,
-    ex_type: Type[errors.EdgeDBError],
+    ex_type: type[errors.EdgeDBError],
 ) -> None:
     response.body = (
         f'Unexpected error in /metrics.\n\n'

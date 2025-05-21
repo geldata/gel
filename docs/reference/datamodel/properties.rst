@@ -31,7 +31,8 @@ readability, or it can be ommitted.
 Required properties
 ===================
 
-.. index:: required, optional, not null
+.. index:: not null
+.. api-index:: required, optional
 
 Properties can be either ``optional`` (the default) or ``required``.
 
@@ -59,7 +60,7 @@ Since ``optional`` keyword is the default, we can omit it:
 Cardinality
 ===========
 
-.. index:: cardinality, single, multi
+.. api-index:: single, multi
 
 Properties have a **cardinality**:
 
@@ -117,7 +118,7 @@ Essentially they are stored in a separate table ``(owner_id, value)``.
 Default values
 ==============
 
-.. index:: default
+.. api-index:: default
 
 Properties can have a default value. This default can be a static value or an
 arbitrary EdgeQL expression, which will be evaluated upon insertion.
@@ -138,7 +139,8 @@ arbitrary EdgeQL expression, which will be evaluated upon insertion.
 Readonly properties
 ===================
 
-.. index:: readonly, immutable
+.. index:: immutable
+.. api-index:: readonly
 
 Properties can be marked as ``readonly``. In the example below, the
 ``User.external_id`` property can be set at the time of creation but not
@@ -156,7 +158,7 @@ modified thereafter.
 Constraints
 ===========
 
-.. index:: constraint
+.. api-index:: constraint
 
 Properties can be augmented wth constraints. The example below showcases a
 subset of Gel's built-in constraints.
@@ -206,7 +208,7 @@ reference <ref_std_constraints>`.
 Annotations
 ===========
 
-.. index:: annotation, metadata, title, description, deprecated
+.. index:: metadata
 
 Properties can contain annotations, small human-readable notes. The built-in
 annotations are ``title``, ``description``, and ``deprecated``. You may also
@@ -224,7 +226,7 @@ declare :ref:`custom annotation types <ref_datamodel_inheritance_annotations>`.
 Abstract properties
 ===================
 
-.. index:: abstract property
+.. api-index:: abstract property
 
 Properties can be *concrete* (the default) or *abstract*. Abstract properties
 are declared independent of a source or target, can contain :ref:`annotations

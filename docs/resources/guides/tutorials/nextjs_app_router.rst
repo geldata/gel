@@ -64,7 +64,7 @@ rendering/server-components>`_
 which lets you integrate server-side logic directly
 into your React components. Server Components are executed on the server and
 can fetch data from a database or an API. We'll use this feature to load blog
-posts from an Gel database.
+posts from a Gel database.
 
 Updating the homepage
 ---------------------
@@ -128,7 +128,7 @@ Initializing Gel
 ----------------
 
 Now let's spin up a database for the app. You have two options to initialize
-an Gel project: using ``$ npx gel`` without installing the CLI, or
+a Gel project: using ``$ npx gel`` without installing the CLI, or
 installing the gel CLI directly. In this tutorial, we'll use the first
 option. If you prefer to install the CLI, see the
 :ref:`Gel CLI guide <ref_cli_overview>` for more information.
@@ -161,7 +161,7 @@ From the application's root directory, run the following command:
   Everything is up to date. Revision initial.
   Project initialized.
 
-This process has spun up an Gel instance called ``nextjs_blog`` and
+This process has spun up a Gel instance called ``nextjs_blog`` and
 associated it with your current directory. As long as you're inside that
 directory, CLI commands and client libraries will be able to connect to the
 linked instance automatically, without additional configuration.
@@ -274,7 +274,7 @@ NPM:
 Then go to the ``app/page.tsx`` file to replace the static data with
 the blogposts fetched from the database.
 
-To fetch these from the homepage, we'll create an Gel client and use the
+To fetch these from the homepage, we'll create a Gel client and use the
 ``.query()`` method to fetch all the posts in the database with a
 ``select`` statement.
 
@@ -506,7 +506,7 @@ you to ``/post/<uuid>``.
 Deploying to Vercel
 -------------------
 
-You can deploy an Gel instance on the Gel Cloud or
+You can deploy a Gel instance on the Gel Cloud or
 on your preferred cloud provider. We'll cover both options here.
 
 With Gel Cloud

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Tuple, AbstractSet, Dict, List, Iterator
+from typing import Optional, AbstractSet, Iterator
 
 from edb.schema import links as s_links
 from edb.schema import name as sn
@@ -22,7 +22,7 @@ def get_inheritance_view(
     ] = frozenset(),
     exclude_ptrs: AbstractSet[s_pointers.Pointer] = frozenset(),
 ) -> pgast.SelectStmt:
-    ptrs: Dict[sn.UnqualName, Tuple[list[str], Tuple[str, ...]]] = {}
+    ptrs: dict[sn.UnqualName, tuple[list[str], tuple[str, ...]]] = {}
 
     if isinstance(obj, s_sources.Source):
         pointers = list(obj.get_pointers(schema).items(schema))
@@ -115,7 +115,7 @@ def _union_all(components: Iterator[pgast.SelectStmt]) -> pgast.SelectStmt:
 def _get_select_from(
     schema: s_schema.Schema,
     obj: s_sources.Source | s_pointers.Pointer,
-    ptr_names: Dict[sn.UnqualName, Tuple[list[str], Tuple[str, ...]]],
+    ptr_names: dict[sn.UnqualName, tuple[list[str], tuple[str, ...]]],
 ) -> Optional[pgast.SelectStmt]:
     schema_name, table_name = common.get_backend_name(
         schema,
@@ -126,7 +126,7 @@ def _get_select_from(
     # the name of the rel var of the object table within the select query
     table_rvar_name = table_name
 
-    target_list: List[pgast.ResTarget] = []
+    target_list: list[pgast.ResTarget] = []
 
     system_cols = ['tableoid', 'xmin', 'cmin', 'xmax', 'cmax', 'ctid']
     for sys_col_name in system_cols:

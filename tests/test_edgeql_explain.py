@@ -72,7 +72,12 @@ class TestEdgeQLExplain(tb.QueryTestCase):
         ''')
         self.assert_plan(res['fine_grained'], {
             "contexts": [
-                {"buffer_idx": 0, "end": 32, "start": 28, "text": "User"}
+                {
+                    "buffer_idx": 0,
+                    "start": 28,
+                    "end": 43,
+                    "text": "User { id, name"
+                }
             ],
             "pipeline": [
                 {
@@ -356,9 +361,9 @@ class TestEdgeQLExplain(tb.QueryTestCase):
             "contexts": [
                 {
                     "start": 28,
-                    "end": 32,
+                    "end": 60,
                     "buffer_idx": 0,
-                    "text": "User",
+                    "text": "User { name, todo: {name, number",
                 },
             ],
             "pipeline": [
@@ -413,9 +418,9 @@ class TestEdgeQLExplain(tb.QueryTestCase):
                     "contexts": [
                         {
                             "start": 41,
-                            "end": 45,
+                            "end": 60,
                             "buffer_idx": 0,
-                            "text": "todo",
+                            "text": "todo: {name, number",
                         },
                     ],
                     "pipeline": tb.bag([
@@ -606,9 +611,9 @@ class TestEdgeQLExplain(tb.QueryTestCase):
         shape = {
             "contexts": [{
                 "start": 28,
-                "end": 32,
+                "end": 68,
                 "buffer_idx": 0,
-                "text": "User"
+                "text": "User { name, owned_issues: {name, number"
             }],
             "pipeline": [{
                 "plan_rows": 1,
@@ -663,9 +668,9 @@ class TestEdgeQLExplain(tb.QueryTestCase):
                     "text": '.<owner[is default::Issue]'
                 }, {
                     "start": 41,
-                    "end": 53,
+                    "end": 68,
                     "buffer_idx": 0,
-                    "text": "owned_issues"
+                    "text": "owned_issues: {name, number"
                 }]),
                 "pipeline": tb.bag([
                     {
@@ -1020,9 +1025,13 @@ class TestEdgeQLExplain(tb.QueryTestCase):
                     "contexts": [
                         {
                             "start": 28,
-                            "end": 32,
+                            "end": 93,
                             "buffer_idx": 0,
-                            "text": 'Text',
+                            'text': (
+                                'Text {\n'
+                                '                body,\n'
+                                '                z := [is Issue].name'
+                            )
                         },
                     ],
                     "pipeline": [
@@ -1374,7 +1383,7 @@ class TestEdgeQLExplain(tb.QueryTestCase):
                                 'title': 'index_name',
                                 'type': 'index',
                                 'value':
-                                    f"index 'pg::gist' of object type "
+                                    f"index 'std::pg::gist' of object type "
                                     f"'default::RangeTest' on (.{fname})",
                             },
                             {
@@ -1410,7 +1419,7 @@ class TestEdgeQLExplain(tb.QueryTestCase):
                                         'title': 'index_name',
                                         'type': 'index',
                                         'value':
-                                            f"index 'pg::gist' of object"
+                                            f"index 'std::pg::gist' of object"
                                             f" type 'default::RangeTest'"
                                             f" on (.{fname})",
                                     },
@@ -1897,7 +1906,7 @@ class TestEdgeQLExplain(tb.QueryTestCase):
                                         'title': 'index_name',
                                         'type': 'index',
                                         'value':
-                                            f"index 'pg::gin' of object"
+                                            f"index 'std::pg::gin' of object"
                                             f" type 'default::JSONTest'"
                                             f" on (.val)",
                                     },

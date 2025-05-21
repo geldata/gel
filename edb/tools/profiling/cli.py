@@ -22,7 +22,7 @@ See README.md in this package for more details.
 """
 
 from __future__ import annotations
-from typing import Optional, Union, List
+from typing import Optional
 
 import pathlib
 
@@ -76,11 +76,11 @@ from . import profiler
 )
 @click.argument("dirs", nargs=-1)  # one or zero
 def perfviz(
-    dirs: List[str],
+    dirs: list[str],
     prefix: str,
     suffix: str,
     sort_by: str,
-    out: Union[pathlib.Path, str],
+    out: pathlib.Path | str,
     width: int,
     threshold: float,
 ) -> None:

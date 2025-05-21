@@ -70,7 +70,7 @@ class ShapeInfo(to_json.ToJson):
 @dataclasses.dataclass
 class AnalysisInfo(to_json.ToJson):
     alias_info: dict[str, AliasInfo]
-    buffers: list[tuple[str, str]]
+    buffers: list[str]
     shape_tree: ShapeInfo
 
 
@@ -131,12 +131,12 @@ def analyze_queries(
     debug_spew = debug.flags.edgeql_explain
 
     assert ql.span
-    contexts = {(ql.span.buffer, ql.span.name): 0}
+    contexts = {(ql.span.buffer, ql.span.filename): 0}
 
     def get_context(node: irast.Set) -> ContextDesc:
         assert node.span, node
         span = node.span
-        key = span.buffer, span.name
+        key = span.buffer, span.filename
         if (idx := contexts.get(key)) is None:
             idx = len(contexts)
             contexts[key] = idx
@@ -237,6 +237,6 @@ def analyze_queries(
 
     return AnalysisInfo(
         alias_info=alias_info,
-        buffers=[text for text, _id in contexts.keys()],
+        buffers=[text for text, _filename in contexts.keys()],
         shape_tree=shape_tree,
     )

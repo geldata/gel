@@ -191,7 +191,7 @@ Now, we'll create an instance of Gel for our project.
 Create a local Gel instance
 ---------------------------
 
-To create our instance, let's initialize our project as an Gel project. Run
+To create our instance, let's initialize our project as a Gel project. Run
 the following in the root of the project:
 
 .. code-block:: bash
@@ -212,7 +212,7 @@ the following in the root of the project:
     [default: 3.2]:
     > 3.2
 
-The CLI should set up an Gel project, an instance, and a default branch on
+The CLI should set up a Gel project, an instance, and a default branch on
 that instance.
 
 - Confirm project creation by checking for an |gel.toml| file and a
@@ -578,7 +578,7 @@ libraries that will help us.
         --save-dev
 
 The ``@gel/generate`` package provides a set of code generation tools that
-are useful when developing an Gel-backed applications with
+are useful when developing a Gel-backed applications with
 TypeScript/JavaScript. We're going to write queries using our
 :ref:`query builder <gel-js-qb>`, but before we can, we
 need to run the query builder generator.

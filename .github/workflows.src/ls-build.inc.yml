@@ -178,6 +178,7 @@
         <%- if tgt.family == "generic" %>
         BUILD_GENERIC: true
         <%- endif %>
+        CMAKE_POLICY_VERSION_MINIMUM: '3.5'
       run: |
         edgedb-pkg/integration/macos/build.sh
 

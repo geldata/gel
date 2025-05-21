@@ -37,6 +37,7 @@ Standard Library
     pg_trgm
     pg_unaccent
     pgvector
+    postgis
     deprecated
 
 |Gel| comes with a rigorously defined type system consisting of **scalar

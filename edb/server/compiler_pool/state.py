@@ -25,7 +25,7 @@ from edb.schema import schema
 from edb.server import config
 
 
-ReflectionCache = immutables.Map[str, typing.Tuple[str, ...]]
+ReflectionCache = immutables.Map[str, tuple[str, ...]]
 
 
 class DatabaseState(typing.NamedTuple):
@@ -42,6 +42,13 @@ class PickledDatabaseState(typing.NamedTuple):
     user_schema_pickle: bytes
     reflection_cache: ReflectionCache
     database_config: immutables.Map[str, config.SettingValue]
+
+    def get_estimated_size(self) -> int:
+        return (
+            len(self.user_schema_pickle) +
+            len(self.reflection_cache) * 128 +
+            len(self.database_config) * 128
+        )
 
 
 class FailedStateSync(Exception):

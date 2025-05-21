@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Callable, Type, cast
+from typing import Callable, cast
 
 from edb import errors
 
@@ -97,7 +97,7 @@ class FutureBehaviorCommand(
 
     @classmethod
     def adapt(
-        cls: Type[FutureBehaviorCommand], obj: sd.Command
+        cls: type[FutureBehaviorCommand], obj: sd.Command
     ) -> FutureBehaviorCommand:
         result = super(FutureBehaviorCommand, cls).adapt(obj)
         assert isinstance(obj, FutureBehaviorCommand)

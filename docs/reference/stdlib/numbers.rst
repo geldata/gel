@@ -144,8 +144,6 @@ Definitions
 
 .. eql:type:: std::int16
 
-    :index: int integer
-
     A 16-bit signed integer.
 
     ``int16`` is capable of representing values from ``-32768`` to
@@ -156,8 +154,6 @@ Definitions
 
 
 .. eql:type:: std::int32
-
-    :index: int integer
 
     A 32-bit signed integer.
 
@@ -170,8 +166,6 @@ Definitions
 
 .. eql:type:: std::int64
 
-    :index: int integer
-
     A 64-bit signed integer.
 
     ``int64`` is capable of representing values from ``-9223372036854775808``
@@ -183,7 +177,7 @@ Definitions
 
 .. eql:type:: std::float32
 
-    :index: float
+    .. index:: float
 
     A variable precision, inexact number.
 
@@ -197,7 +191,7 @@ Definitions
 
 .. eql:type:: std::float64
 
-    :index: float double
+    .. index:: float, double
 
     A variable precision, inexact number.
 
@@ -211,7 +205,7 @@ Definitions
 
 .. eql:type:: std::bigint
 
-    :index: numeric bigint
+    .. index:: numeric
 
     An arbitrary precision integer.
 
@@ -280,7 +274,7 @@ Definitions
 
 .. eql:type:: std::decimal
 
-    :index: numeric float
+    .. index:: numeric, float
 
     Any number of arbitrary precision.
 
@@ -358,7 +352,8 @@ Definitions
 
 .. eql:operator:: plus: anyreal + anyreal -> anyreal
 
-    :index: +, addition
+    .. index:: plus
+    .. api-index:: §number §+§ number§
 
     Arithmetic addition.
 
@@ -373,7 +368,8 @@ Definitions
 
 .. eql:operator:: minus: anyreal - anyreal -> anyreal
 
-    :index: -, subtraction
+    .. index:: minus
+    .. api-index:: §number §-§ number§
 
     Arithmetic subtraction.
 
@@ -388,7 +384,8 @@ Definitions
 
 .. eql:operator:: uminus: - anyreal -> anyreal
 
-    :index: -, unary minus, subtraction
+    .. index:: unary minus, subtraction
+    .. api-index:: -§ number§
 
     Arithmetic negation.
 
@@ -403,7 +400,8 @@ Definitions
 
 .. eql:operator:: mult: anyreal * anyreal -> anyreal
 
-    :index: \*, multiply, multiplication
+    .. index:: times, multiply
+    .. api-index:: §number §*§ number§
 
     Arithmetic multiplication.
 
@@ -418,7 +416,8 @@ Definitions
 
 .. eql:operator:: div: anyreal / anyreal -> anyreal
 
-    :index: /, divide, division
+    .. index:: divide
+    .. api-index:: §number §/§ number§
 
     Arithmetic division.
 
@@ -440,7 +439,8 @@ Definitions
 
 .. eql:operator:: floordiv: anyreal // anyreal -> anyreal
 
-    :index: //, floor divide, division
+    .. index:: floor divide
+    .. api-index:: §number §//§ number§
 
     Floor division.
 
@@ -479,7 +479,7 @@ Definitions
 
 .. eql:operator:: mod: anyreal % anyreal -> anyreal
 
-    :index: %, modulo division, remainder
+    .. api-index:: §number §%§ number§
 
     Remainder from division (modulo).
 
@@ -522,7 +522,8 @@ Definitions
 
 .. eql:operator:: pow: anyreal ^ anyreal -> anyreal
 
-    :index: ^, power, exponentiation
+    .. index:: exponentiation
+    .. api-index:: §number §^§ number§
 
     Power operation.
 
@@ -794,7 +795,7 @@ Definitions
 
 .. eql:function:: std::to_bigint(s: str, fmt: optional str={}) -> bigint
 
-    :index: parse bigint
+    .. index:: parse bigint
 
     Returns a :eql:type:`bigint` value parsed from the given string.
 
@@ -816,7 +817,7 @@ Definitions
 
 .. eql:function:: std::to_decimal(s: str, fmt: optional str={}) -> decimal
 
-    :index: parse decimal
+    .. index:: parse decimal
 
     Returns a :eql:type:`decimal` value parsed from the given string.
 
@@ -840,7 +841,7 @@ Definitions
 .. eql:function:: std::to_int16(s: str, fmt: optional str={}) -> int16
                   std::to_int16(val: bytes, endian: Endian) -> int16
 
-    :index: parse int16
+    .. index:: parse int16
 
     Returns an :eql:type:`int16` value parsed from the given input.
 
@@ -877,7 +878,7 @@ Definitions
 .. eql:function:: std::to_int32(s: str, fmt: optional str={}) -> int32
                   std::to_int32(val: bytes, endian: Endian) -> int32
 
-    :index: parse int32
+    .. index:: parse int32
 
     Returns an :eql:type:`int32` value parsed from the given input.
 
@@ -914,7 +915,7 @@ Definitions
 .. eql:function:: std::to_int64(s: str, fmt: optional str={}) -> int64
                   std::to_int64(val: bytes, endian: Endian) -> int64
 
-    :index: parse int64
+    .. index:: parse int64
 
     Returns an :eql:type:`int64` value parsed from the given input.
 
@@ -952,7 +953,7 @@ Definitions
 
 .. eql:function:: std::to_float32(s: str, fmt: optional str={}) -> float32
 
-    :index: parse float32
+    .. index:: parse float32
 
     Returns a :eql:type:`float32` value parsed from the given string.
 
@@ -966,7 +967,7 @@ Definitions
 
 .. eql:function:: std::to_float64(s: str, fmt: optional str={}) -> float64
 
-    :index: parse float64
+    .. index:: parse float64
 
     Returns a :eql:type:`float64` value parsed from the given string.
 

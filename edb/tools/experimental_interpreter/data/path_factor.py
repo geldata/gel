@@ -1,4 +1,4 @@
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from .data_ops import (
     BackLinkExpr,
@@ -29,7 +29,7 @@ from .expr_ops import (
 from .query_ops import QueryLevel, map_query, map_sub_and_semisub_queries
 
 
-def all_prefixes_of_a_path(expr: Expr) -> List[Expr]:
+def all_prefixes_of_a_path(expr: Expr) -> list[Expr]:
     match expr:
         case FreeVarExpr(_):
             return [expr]
@@ -61,8 +61,8 @@ def path_lexicographic_key(e: Expr) -> str:
             raise ValueError("not a path")
 
 
-def get_all_paths(e: Expr) -> List[Expr]:
-    all_paths: List[Expr] = []
+def get_all_paths(e: Expr) -> list[Expr]:
+    all_paths: list[Expr] = []
 
     def populate(sub: Expr) -> Optional[Expr]:
         nonlocal all_paths
@@ -78,8 +78,8 @@ def get_all_paths(e: Expr) -> List[Expr]:
     return all_paths
 
 
-def get_all_pre_top_level_paths(e: Expr, dbschema: e.TcCtx) -> List[Expr]:
-    all_paths: List[Expr] = []
+def get_all_pre_top_level_paths(e: Expr, dbschema: e.TcCtx) -> list[Expr]:
+    all_paths: list[Expr] = []
 
     def populate(sub: Expr, level: QueryLevel) -> Optional[Expr]:
         nonlocal all_paths
@@ -97,11 +97,11 @@ def get_all_pre_top_level_paths(e: Expr, dbschema: e.TcCtx) -> List[Expr]:
     return all_paths
 
 
-def get_all_proper_top_level_paths(e: Expr, dbschema: e.TcCtx) -> List[Expr]:
-    definite_top_paths: List[Expr] = []
-    semi_sub_paths: List[List[Expr]] = []
-    sub_paths: List[Expr] = []
-    sub_sub_paths: List[List[Expr]] = []
+def get_all_proper_top_level_paths(e: Expr, dbschema: e.TcCtx) -> list[Expr]:
+    definite_top_paths: list[Expr] = []
+    semi_sub_paths: list[list[Expr]] = []
+    sub_paths: list[Expr] = []
+    sub_sub_paths: list[list[Expr]] = []
 
     def populate(sub: Expr, level: QueryLevel) -> Optional[Expr]:
         nonlocal definite_top_paths, semi_sub_paths, sub_paths, sub_sub_paths
@@ -162,7 +162,7 @@ def get_all_proper_top_level_paths(e: Expr, dbschema: e.TcCtx) -> List[Expr]:
 def common_longest_path_prefix(e1: Expr, e2: Expr) -> Optional[Expr]:
     pending = None
 
-    def find_longest(pp1: List[Expr], pp2: List[Expr]) -> Optional[Expr]:
+    def find_longest(pp1: list[Expr], pp2: list[Expr]) -> Optional[Expr]:
         nonlocal pending
         match (pp1, pp2):
             case ([], []):
@@ -180,8 +180,8 @@ def common_longest_path_prefix(e1: Expr, e2: Expr) -> Optional[Expr]:
     return find_longest(all_prefixes_of_a_path(e1), all_prefixes_of_a_path(e2))
 
 
-def common_longest_path_prefix_in_set(test_set: List[Expr]) -> List[Expr]:
-    result: List[Expr] = []
+def common_longest_path_prefix_in_set(test_set: list[Expr]) -> list[Expr]:
+    result: list[Expr] = []
     for s in test_set:
         for t in test_set:
             optional = common_longest_path_prefix(s, t)
@@ -191,9 +191,9 @@ def common_longest_path_prefix_in_set(test_set: List[Expr]) -> List[Expr]:
 
 
 def separate_common_longest_path_prefix_in_set(
-    base_set: List[Expr], compare_set: List[Expr]
-) -> List[Expr]:
-    result: List[Expr] = []
+    base_set: list[Expr], compare_set: list[Expr]
+) -> list[Expr]:
+    result: list[Expr] = []
     for s in base_set:
         for t in compare_set:
             optional = common_longest_path_prefix(s, t)
@@ -202,7 +202,7 @@ def separate_common_longest_path_prefix_in_set(
     return result
 
 
-def toppath_for_factoring(expr: Expr, dbschema: e.TcCtx) -> List[Expr]:
+def toppath_for_factoring(expr: Expr, dbschema: e.TcCtx) -> list[Expr]:
     all_paths = get_all_paths(expr)
     top_level_paths = get_all_proper_top_level_paths(expr, dbschema)
     clpp_a = common_longest_path_prefix_in_set(top_level_paths)
@@ -279,8 +279,8 @@ def sub_select_hoist(top_e: Expr, dbschema: e.TcCtx) -> Expr:
 def select_hoist(expr: Expr, dbschema: e.TcCtx) -> Expr:
 
     top_paths = toppath_for_factoring(expr, dbschema)
-    fresh_names: List[str] = [next_name() for p in top_paths]
-    fresh_vars: List[Expr] = [FreeVarExpr(n) for n in fresh_names]
+    fresh_names: list[str] = [next_name() for p in top_paths]
+    fresh_vars: list[Expr] = [FreeVarExpr(n) for n in fresh_names]
     for_paths = [
         iterative_subst_expr_for_expr(fresh_vars[:i], top_paths[:i], p_i)
         for (i, p_i) in enumerate(top_paths)

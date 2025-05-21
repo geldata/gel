@@ -51,6 +51,7 @@ class Database:
     db_config: Config
     extensions: set[str]
     user_config_spec: config.Spec
+    dml_queries_executed: int
 
     @property
     def server(self) -> server.Server:
@@ -101,6 +102,9 @@ class Database:
         pass
 
     def hydrate_cache(self, query_cache: list[tuple[bytes, ...]]) -> None:
+        ...
+
+    def invalidate_cache_entries(self, to_invalidate: list[uuid.UUID]) -> None:
         ...
 
     def clear_query_cache(self) -> None:
@@ -223,7 +227,10 @@ class DatabaseIndex:
 
     def get_cached_compiler_args(
         self,
-    ) -> tuple[immutables.Map, bytes, Config]:
+    ) -> tuple[
+        bytes,
+        immutables.Map[str, config.SettingValue],
+    ]:
         ...
 
     def lookup_config(self, name: str) -> Any:

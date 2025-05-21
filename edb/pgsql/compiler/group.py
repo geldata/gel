@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, AbstractSet, List
+from typing import Optional, AbstractSet
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import desugar_group
@@ -125,7 +125,7 @@ def _compile_grouping_value(
 
     # Generate a call to ARRAY[...] with a case for each grouping
     # element, then array_remove out the NULLs.
-    els: List[pgast.BaseExpr] = []
+    els: list[pgast.BaseExpr] = []
     for i, name in enumerate(using):
         name = desugar_group.key_name(name)
         mask = 1 << (len(using) - i - 1)

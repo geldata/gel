@@ -4,8 +4,7 @@
 Indexes
 =======
 
-.. index::
-   index on, performance, postgres query planner
+.. index:: performance, postgres query planner
 
 An index is a data structure used internally to speed up filtering, ordering,
 and grouping operations in |Gel|. Indexes help accomplish this in two key ways:
@@ -95,8 +94,6 @@ Example:
 Index on multiple properties
 ============================
 
-.. index:: tuple
-
 A *composite index* references multiple properties. This can speed up queries
 that filter, order, or group on multiple properties at once.
 
@@ -125,8 +122,6 @@ In |Gel|, a composite index is created by indexing on a ``tuple`` of properties:
 Index on a link property
 ========================
 
-.. index:: __subject__, linkprops
-
 Link properties can also be indexed. The special placeholder
 ``__subject__`` refers to the source object in a link property expression:
 
@@ -143,11 +138,26 @@ Link properties can also be indexed. The special placeholder
      };
    }
 
+Exclude objects from an index
+=============================
+
+When specifying an index, you can provide an optional ``except`` clause to exclude objects from the index. This is known as creating a *partial index*. Partial indexes are particularly useful in scenarios where you frequently query a subset of data that meets certain criteria, while consistently excluding other data. For example, if you often filter on a property but always exclude objects with a specific value for another property, a partial index can optimize these queries by indexing only the relevant subset of data, thus improving query performance and reducing index size.
+
+.. code-block:: sdl
+
+  type User {
+    required name: str;
+    required email: str;
+    archived_at: datetime;
+
+    index on (.name) except (exists .archived_at);
+  }
+
 
 Specify a Postgres index type
 =============================
 
-.. index:: pg::hash, pg::btree, pg::gin, pg::gist, pg::spgist, pg::brin
+.. api-index:: pg::hash, pg::btree, pg::gin, pg::gist, pg::spgist, pg::brin
 
 .. versionadded:: 3.0
 
@@ -174,8 +184,6 @@ Example:
 Annotate an index
 =================
 
-.. index:: annotation
-
 Indexes can include annotations:
 
 .. code-block:: sdl
@@ -192,6 +200,8 @@ Indexes can include annotations:
 
 Declaring indexes
 =================
+
+.. api-index:: index on, except
 
 This section describes the syntax to use indexes in your schema.
 

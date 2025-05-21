@@ -43,6 +43,8 @@ class TestTracer(unittest.TestCase):
                     and astcls is not qlast.OptionalExpr
                     # ignore query parameters
                     and not issubclass(astcls, qlast.Parameter)
+                    # ignore Cursor
+                    and not issubclass(astcls, qlast.Cursor)
                     # ignore all config operations
                     and not issubclass(astcls, qlast.ConfigOp)):
 

@@ -20,7 +20,7 @@
 """Abstractions for low-level database DDL and DML operations."""
 
 from __future__ import annotations
-from typing import Optional, Tuple, List, Set
+from typing import Optional
 
 import itertools
 
@@ -120,7 +120,42 @@ class SchemaConstraintTableConstraint(ConstraintCommon, dbops.TableConstraint):
         self._table_type = table_type
         self._except_data = except_data
 
-    def constraint_code(self, block: dbops.PLBlock) -> str | List[str]:
+    def is_non_row_and_identical(
+        self, other: SchemaConstraintTableConstraint
+    ) -> bool:
+        """Constraints which only contain references to columns and have no
+        expressions or except clause are considered trivial. Such constraints
+        can be checked for equivalence without actually generating their code.
+
+        This function should by updated if `constraint_code` changes.
+        """
+        return (
+            # Constraint is on the same subject
+            self._subject_name == other._subject_name
+            # Row scope constraints treated differently, see `constraint_code`
+            and self._scope != 'row'
+            and other._scope != 'row'
+            # Expr data is identical
+            and len(self._exprdata) == len(other._exprdata)
+            and all(
+                exprdata.is_trivial == other_exprdata.is_trivial
+                and (
+                    list(exprdata.exprdata.plain_chunks)
+                    == list(other_exprdata.exprdata.plain_chunks)
+                )
+                and (
+                    list(exprdata.exprdata.plain_chunks)
+                    == list(other_exprdata.exprdata.plain_chunks)
+                )
+                for exprdata, other_exprdata in zip(
+                    self._exprdata, other._exprdata
+                )
+            )
+            # Except data is identical
+            and self._except_data == other._except_data
+        )
+
+    def constraint_code(self, block: dbops.PLBlock) -> str | list[str]:
         if self._scope == 'row':
             if len(self._exprdata) == 1:
                 expr = self._exprdata[0].exprdata.plain
@@ -146,6 +181,7 @@ class SchemaConstraintTableConstraint(ConstraintCommon, dbops.TableConstraint):
                     # A constraint that contains one or more
                     # references to columns, and no expressions.
                     #
+                    # Update `is_non_row_and_identical` if this ever changes!
                     expr = ', '.join(exprdata.exprdata.plain_chunks)
                     expr = 'UNIQUE ({})'.format(expr)
                 else:
@@ -374,12 +410,12 @@ class AlterTableDropMultiConstraint(dbops.AlterTableDropConstraint):
 class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
     def __init__(
         self,
-        name: Tuple[str, ...],
+        name: tuple[str, ...],
         *,
         constraint: SchemaConstraintTableConstraint,
         contained: bool = False,
-        conditions: Optional[Set[str | dbops.Condition]] = None,
-        neg_conditions: Optional[Set[str | dbops.Condition]] = None,
+        conditions: Optional[set[str | dbops.Condition]] = None,
+        neg_conditions: Optional[set[str | dbops.Condition]] = None,
     ):
         dbops.CommandGroup.__init__(
             self, conditions=conditions, neg_conditions=neg_conditions
@@ -392,10 +428,10 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
     def _get_triggers(
         self,
-        table_name: Tuple[str, ...],
+        table_name: tuple[str, ...],
         constraint: SchemaConstraintTableConstraint,
         proc_name='null',
-    ) -> Tuple[dbops.Trigger, ...]:
+    ) -> tuple[dbops.Trigger, ...]:
         cname = constraint.raw_constraint_name()
 
         ins_trigger_name = cname + '_instrigger'
@@ -415,10 +451,10 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
     def create_constr_trigger(
         self,
-        table_name: Tuple[str, ...],
+        table_name: tuple[str, ...],
         constraint: SchemaConstraintTableConstraint,
         proc_name: str,
-    ) -> List[dbops.CreateTrigger]:
+    ) -> list[dbops.CreateTrigger]:
         ins_trigger, upd_trigger = self._get_triggers(
             table_name, constraint, proc_name
         )
@@ -430,38 +466,14 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
     def drop_constr_trigger(
         self,
-        table_name: Tuple[str, ...],
+        table_name: tuple[str, ...],
         constraint: SchemaConstraintTableConstraint,
-    ) -> List[dbops.DDLOperation]:
+    ) -> list[dbops.DDLOperation]:
         ins_trigger, upd_trigger = self._get_triggers(table_name, constraint)
 
         return [
             dbops.DropTrigger(ins_trigger, conditional=True),
             dbops.DropTrigger(upd_trigger, conditional=True),
-        ]
-
-    def enable_constr_trigger(
-        self,
-        table_name: Tuple[str, ...],
-        constraint: SchemaConstraintTableConstraint,
-    ) -> List[dbops.DDLOperation]:
-        ins_trigger, upd_trigger = self._get_triggers(table_name, constraint)
-
-        return [
-            dbops.EnableTrigger(ins_trigger),
-            dbops.EnableTrigger(upd_trigger),
-        ]
-
-    def disable_constr_trigger(
-        self,
-        table_name: Tuple[str, ...],
-        constraint: SchemaConstraintTableConstraint,
-    ) -> List[dbops.DDLOperation]:
-        ins_trigger, upd_trigger = self._get_triggers(table_name, constraint)
-
-        return [
-            dbops.DisableTrigger(ins_trigger),
-            dbops.DisableTrigger(upd_trigger),
         ]
 
     def create_constr_trigger_function(
@@ -484,7 +496,7 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
 
         return [dbops.CreateFunction(func, or_replace=True)]
 
-    def drop_constr_trigger_function(self, proc_name: Tuple[str, ...]):
+    def drop_constr_trigger_function(self, proc_name: tuple[str, ...]):
         return [dbops.DropFunction(
             name=proc_name,
             args=(),
@@ -510,7 +522,10 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
         Adds the new function to the trigger.
         Disables the trigger if possible.
         """
-        if constraint.requires_triggers():
+        if (
+            constraint.requires_triggers()
+            and not constraint.can_disable_triggers()
+        ):
             # Create trigger function
             self.add_commands(self.create_constr_trigger_function(constraint))
 
@@ -518,10 +533,6 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
             cr_trigger = self.create_constr_trigger(
                 self.name, constraint, proc_name)
             self.add_commands(cr_trigger)
-
-            if constraint.can_disable_triggers():
-                self.add_commands(
-                    self.disable_constr_trigger(self.name, constraint))
 
     def alter_constraint(
         self,
@@ -533,13 +544,32 @@ class AlterTableConstraintBase(dbops.AlterTableBaseMixin, dbops.CommandGroup):
             self.create_constraint(new_constraint)
 
         elif not old_constraint.delegated and new_constraint.delegated:
-            # Now delegated, drop db structures
+            # Becoming delegated, drop db structures
             self.drop_constraint(old_constraint)
 
         elif not new_constraint.delegated:
-            # Some other modification, drop/create
-            self.drop_constraint(old_constraint)
-            self.create_constraint(new_constraint)
+            # Some other modification
+            if old_constraint.is_non_row_and_identical(new_constraint):
+                # If the constraint itself is unchanged, it is still necessary
+                # to drop any constraint triggers. This is to clear any
+                # postgres dependencies on constraint columns.
+                #
+                # For example, given:
+                #   type X { property n: int64 { constraint exclusive } };
+                #   type Y extending X;
+                #
+                # Altering the property with
+                #   alter type X alter property n using (1);
+                #
+                # will result in the column for X.n to be dropped. To ensure
+                # this operation succeeds, the constraint trigger must be
+                # deleted before dropping the column.
+                self.drop_constraint_trigger_and_fuction(old_constraint)
+
+            else:
+                # If the constraint is actually different, drop and create.
+                self.drop_constraint(old_constraint)
+                self.create_constraint(new_constraint)
 
     def drop_constraint(self, constraint: SchemaConstraintTableConstraint):
         self.drop_constraint_trigger_and_fuction(constraint)
@@ -614,4 +644,22 @@ class AlterTableUpdateConstraintTrigger(AlterTableConstraintBase):
     def generate(self, block):
         self.drop_constraint_trigger_and_fuction(self._constraint)
         self.create_constraint_trigger_and_fuction(self._constraint)
+        super().generate(block)
+
+
+class AlterTableUpdateConstraintTriggerFixup(AlterTableConstraintBase):
+    def __repr__(self):
+        return '<{}.{} {!r}>'.format(
+            self.__class__.__module__, self.__class__.__name__,
+            self._constraint)
+
+    def generate(self, block):
+        # Pre 6.8 versions of gel created needless disabled triggers
+        # in some cases. This path (invoked by administer
+        # remove_pointless_triggers()) deletes them.
+        if (
+            self._constraint.requires_triggers()
+            and self._constraint.can_disable_triggers()
+        ):
+            self.drop_constraint_trigger_and_fuction(self._constraint)
         super().generate(block)

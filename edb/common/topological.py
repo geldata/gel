@@ -23,13 +23,11 @@ from typing import (
     Generic,
     Optional,
     Protocol,
-    Tuple,
     TypeVar,
     Iterable,
     Iterator,
     Mapping,
     MutableSet,
-    Dict,
     TYPE_CHECKING,
 )
 
@@ -101,11 +99,11 @@ def sort_ex(
     graph: Mapping[K, DepGraphEntry[K, V, T]],
     *,
     allow_unresolved: bool = False,
-) -> Iterator[Tuple[K, DepGraphEntry[K, V, T]]]:
+) -> Iterator[tuple[K, DepGraphEntry[K, V, T]]]:
 
-    adj: Dict[K, OrderedSet[K]] = defaultdict(OrderedSet)
-    weak_adj: Dict[K, OrderedSet[K]] = defaultdict(OrderedSet)
-    loop_control: Dict[K, OrderedSet[K]] = defaultdict(OrderedSet)
+    adj: dict[K, OrderedSet[K]] = defaultdict(OrderedSet)
+    weak_adj: dict[K, OrderedSet[K]] = defaultdict(OrderedSet)
+    loop_control: dict[K, OrderedSet[K]] = defaultdict(OrderedSet)
 
     for item_name, item in graph.items():
         if item.weak_deps:
@@ -206,7 +204,7 @@ def sort(
     graph: Mapping[K, DepGraphEntry[K, V, T]],
     *,
     allow_unresolved: bool = False,
-) -> Tuple[V, ...]:
+) -> tuple[V, ...]:
     items = sort_ex(graph, allow_unresolved=allow_unresolved)
     return tuple(i[1].item for i in items)
 
@@ -229,7 +227,7 @@ def normalize(
     merger: MergeFunction[V],
     **merger_kwargs: Any,
 ) -> Iterable[V]:
-    merged: Dict[K, V] = {}
+    merged: dict[K, V] = {}
 
     for name, item in sort_ex(graph):
         merge = item.merge

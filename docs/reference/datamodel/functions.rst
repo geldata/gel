@@ -5,8 +5,6 @@
 Functions
 =========
 
-.. index:: function, using
-
 .. note::
 
   This page documents how to define custom functions, however |Gel| provides a
@@ -157,6 +155,9 @@ aggregated into an array as described above:
 
 Declaring functions
 ===================
+
+.. api-index:: function, using, ->, variadic, named only, set of, optional,
+               volatility, Immutable, Stable, Volatile, Modifying
 
 This section describes the syntax to declare a function in your schema.
 

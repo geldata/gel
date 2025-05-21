@@ -297,11 +297,17 @@ class Iteration(BaseTransaction, abstract.AsyncIOExecutor):
                 )
             await self.start()
 
+    def _get_retry_options(self) -> options.RetryOptions:
+        return options.RetryOptions.defaults()
+
     def _get_state(self) -> options.State:
         return self._connection._get_state()
 
     def _get_warning_handler(self) -> options.WarningHandler:
         return self._connection._get_warning_handler()
+
+    def _get_annotations(self) -> dict[str, str]:
+        return self._connection._get_annotations()
 
 
 class Retry:
@@ -364,10 +370,13 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
     def remove_log_listener(self, callback):
         self._log_listeners.discard(callback)
 
+    def _get_retry_options(self) -> options.RetryOptions:
+        return self._options.retry_options
+
     def _get_state(self):
         return self._options.state
 
-    def _get_annotations(self) -> typing.Dict[str, str]:
+    def _get_annotations(self) -> dict[str, str]:
         return self._options.annotations
 
     def _warning_handler(self, warnings, res):
@@ -659,7 +668,7 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
     def is_in_transaction(self):
         return self._protocol.is_in_transaction()
 
-    def get_settings(self) -> typing.Dict[str, typing.Any]:
+    def get_settings(self) -> dict[str, typing.Any]:
         return self._protocol.get_settings()
 
     @property

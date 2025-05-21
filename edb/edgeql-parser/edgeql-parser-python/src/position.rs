@@ -30,6 +30,27 @@ impl SourcePoint {
         .map(|v| v.into())
     }
 
+    #[staticmethod]
+    fn from_lines_cols(
+        py: Python,
+        data: &Bound<PyBytes>,
+        lines_cols: PyObject,
+    ) -> PyResult<Py<PyList>> {
+        let mut list: Vec<(u64, u64)> = lines_cols.extract(py)?;
+        let data: &[u8] = data.as_bytes();
+        list.sort();
+        let result = InflatedPos::from_lines_cols(data, &list)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+
+        PyList::new(
+            py,
+            result
+                .into_iter()
+                .map(|_position| SourcePoint { _position }),
+        )
+        .map(|v| v.into())
+    }
+
     #[getter]
     fn line(&self) -> u64 {
         self._position.line + 1

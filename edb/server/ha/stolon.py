@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Dict
+from typing import Any, Optional
 
 import asyncio
 import base64
@@ -38,13 +38,13 @@ logger = logging.getLogger("edb.server")
 
 
 class StolonBackend(base.HABackend):
-    _master_addr: Optional[Tuple[str, int]]
+    _master_addr: Optional[tuple[str, int]]
 
     def __init__(self) -> None:
         super().__init__()
         self._master_addr = None
 
-    async def get_cluster_consensus(self) -> Tuple[str, int]:
+    async def get_cluster_consensus(self) -> tuple[str, int]:
         if self._master_addr is None:
             started_by_us = await self.start_watching()
             try:
@@ -58,7 +58,7 @@ class StolonBackend(base.HABackend):
         assert self._master_addr
         return self._master_addr
 
-    def get_master_addr(self) -> Optional[Tuple[str, int]]:
+    def get_master_addr(self) -> Optional[tuple[str, int]]:
         return self._master_addr
 
     def _on_update(self, payload: bytes) -> None:
@@ -178,7 +178,7 @@ def get_backend(
     if wire_protocol not in {"", "http", "https"}:
         raise ValueError(f"Wire protocol {wire_protocol} is not supported")
 
-    args: Dict[str, Any] = {}
+    args: dict[str, Any] = {}
     if parsed_dsn.hostname:
         args["host"] = parsed_dsn.hostname
     if parsed_dsn.port:

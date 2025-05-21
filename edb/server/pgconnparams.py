@@ -20,9 +20,9 @@ from typing import TypedDict, NotRequired, Optional, Unpack, Self, Any
 import enum
 import pathlib
 import platform
-import warnings
 
 from edb.server._rust_native._pg_rust import PyConnectionParams
+
 
 _system = platform.uname().system
 if _system == 'Windows':
@@ -30,7 +30,7 @@ if _system == 'Windows':
 
     CSIDL_APPDATA = 0x001A
 
-    def get_pg_home_directory() -> pathlib.Path:
+    def get_pg_home_directory() -> Optional[str]:
         # We cannot simply use expanduser() as that returns the user's
         # home directory, whereas Postgres stores its config in
         # %AppData% on Windows.
@@ -39,16 +39,18 @@ if _system == 'Windows':
             0, CSIDL_APPDATA, 0, 0, buf
         )
         if r:
-            # Fall back to the home directory
-            warnings.warn("Could not resolve %AppData%", stacklevel=2)
-            return pathlib.Path.home()
+            return None
         else:
-            return pathlib.Path(buf.value) / 'postgresql'
+            return str(pathlib.Path(buf.value) / 'postgresql')
 
 else:
 
-    def get_pg_home_directory() -> pathlib.Path:
-        return pathlib.Path.home() / '.postgresql'
+    def get_pg_home_directory() -> Optional[str]:
+        try:
+            return str(pathlib.Path.home())
+        except RuntimeError:
+            # This can happen if the home directory is not set
+            return None
 
 
 class SSLMode(enum.IntEnum):
@@ -134,7 +136,7 @@ class ConnectionParams:
 
     def resolve(self) -> Self:
         return self._create(
-            self._params.resolve("", str(get_pg_home_directory())),
+            self._params.resolve("", get_pg_home_directory()),
         )
 
     def __copy__(self) -> Self:

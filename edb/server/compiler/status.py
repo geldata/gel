@@ -268,3 +268,8 @@ def _explain(ql: qlast.Base) -> bytes:
 @get_status.register(qlast.AdministerStmt)
 def _administer(ql: qlast.Base) -> bytes:
     return b'ADMINISTER'
+
+
+@get_status.register(qlast.DDLQuery)
+def _query(ql: qlast.DDLQuery) -> bytes:
+    return get_status(ql.query)

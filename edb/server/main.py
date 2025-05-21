@@ -21,11 +21,8 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Union,
     Iterator,
     Mapping,
-    Dict,
     NoReturn,
     TYPE_CHECKING,
 )
@@ -138,7 +135,7 @@ def _ensure_runstate_dir(
 @contextlib.contextmanager
 def _internal_state_dir(
     runstate_dir: pathlib.Path, args: srvargs.ServerConfig
-) -> Iterator[Tuple[str, srvargs.ServerConfig]]:
+) -> Iterator[tuple[str, srvargs.ServerConfig]]:
     try:
         with tempfile.TemporaryDirectory(prefix="", dir=runstate_dir) as td:
             if (
@@ -231,8 +228,10 @@ async def _run_server(
             runstate_dir=runstate_dir,
             internal_runstate_dir=internal_runstate_dir,
             compiler_pool_size=args.compiler_pool_size,
+            compiler_worker_branch_limit=args.compiler_worker_branch_limit,
             compiler_pool_mode=args.compiler_pool_mode,
             compiler_pool_addr=args.compiler_pool_addr,
+            compiler_worker_max_rss=args.compiler_worker_max_rss,
             nethosts=args.bind_addresses,
             netport=args.port,
             listen_sockets=tuple(s for ss in sockets.values() for s in ss),
@@ -350,7 +349,7 @@ async def _get_local_pgcluster(
     args: srvargs.ServerConfig,
     runstate_dir: pathlib.Path,
     tenant_id: str,
-) -> Tuple[pgcluster.Cluster, srvargs.ServerConfig]:
+) -> tuple[pgcluster.Cluster, srvargs.ServerConfig]:
     pg_max_connections = args.max_backend_connections
     if not pg_max_connections:
         max_conns = srvargs.compute_default_max_backend_connections()
@@ -384,7 +383,7 @@ async def _get_local_pgcluster(
 async def _get_remote_pgcluster(
     args: srvargs.ServerConfig,
     tenant_id: str,
-) -> Tuple[pgcluster.RemoteCluster, srvargs.ServerConfig]:
+) -> tuple[pgcluster.RemoteCluster, srvargs.ServerConfig]:
 
     cluster = await pgcluster.get_remote_pg_cluster(
         args.backend_dsn,
@@ -511,7 +510,7 @@ async def run_server(
     else:
         tenant_id = f'C{args.tenant_id}'
 
-    cluster: Union[pgcluster.Cluster, pgcluster.RemoteCluster]
+    cluster: pgcluster.Cluster | pgcluster.RemoteCluster
 
     runstate_dir_str = str(runstate_dir)
     runstate_dir_str_len = len(
@@ -889,8 +888,8 @@ def initialize_static_cfg(
     args: srvargs.ServerConfig,
     is_remote_cluster: bool,
     compiler: edbcompiler.Compiler,
-) -> Tuple[
-    Mapping[str, config.SettingValue], Dict[str, str], list[config.ConState]
+) -> tuple[
+    Mapping[str, config.SettingValue], dict[str, str], list[config.ConState]
 ]:
     result = {}
     init_con_script_data: list[config.ConState] = []

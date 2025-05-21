@@ -22,12 +22,14 @@ import edgedb
 from edb.pgsql import common
 
 from edb.testbase import server as tb
+from edb.testbase import connection as tb_connection
 
 
 class TestQueryStatsMixin:
     stats_magic_word: str = NotImplemented
     stats_type: str = NotImplemented
     counter: int = 0
+    con: tb_connection.Connection
 
     async def _query_for_stats(self):
         raise NotImplementedError
@@ -121,7 +123,7 @@ class TestQueryStatsMixin:
     async def _test_sys_query_stats_with_tag(self):
         # Test tags are correctly set
         tag = 'test_tag'
-        self.con = self.con.with_annotation('tag', tag)
+        self.con = self.con.with_query_tag(tag)
         self.stats_magic_word += "Tagged"
         self.assertEqual(
             await self.con.query_single(

@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Tuple, TypeVar, TYPE_CHECKING
+from typing import TypeVar, TYPE_CHECKING
 
 import enum
 
@@ -27,6 +27,8 @@ from edb.common import enum as s_enum
 
 if TYPE_CHECKING:
     T = TypeVar("T", covariant=True)
+
+    from edb.schema import types as s_types
 
 
 class ParameterKind(s_enum.StrEnum):
@@ -55,6 +57,23 @@ class TypeModifier(s_enum.StrEnum):
             return 'OPTIONAL'
         else:
             return ''
+
+
+class Polymorphism(s_enum.StrEnum):
+    NotUsed = 'NotUsed'
+    Simple = 'Simple'
+    Array = 'Array'
+    Collection = 'Collection'
+
+    @staticmethod
+    def from_schema_type(type: s_types.Type) -> Polymorphism:
+        return (
+            Polymorphism.Simple
+            if not type.is_collection() else
+            Polymorphism.Array
+            if type.is_array() else
+            Polymorphism.Collection
+        )
 
 
 class OperatorKind(s_enum.StrEnum):
@@ -133,7 +152,7 @@ class Cardinality(s_enum.StrEnum):
     def can_be_zero(self) -> bool:
         return self not in {Cardinality.ONE, Cardinality.AT_LEAST_ONE}
 
-    def to_schema_value(self) -> Tuple[bool, SchemaCardinality]:
+    def to_schema_value(self) -> tuple[bool, SchemaCardinality]:
         return _CARD_TO_TUPLE[self]
 
     @classmethod

@@ -29,7 +29,7 @@ struct ClientEnvironmentImpl {
 
 impl ClientEnvironment for ClientEnvironmentImpl {
     fn generate_nonce(&self) -> String {
-        let nonce: [u8; 32] = rand::thread_rng().r#gen();
+        let nonce: [u8; 32] = rand::rng().random();
         base64::engine::general_purpose::STANDARD.encode(nonce)
     }
     fn get_salted_password(&self, salt: &[u8], iterations: usize) -> Sha256Out {

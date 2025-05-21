@@ -5,8 +5,6 @@
 Annotations
 ===========
 
-.. index:: annotation
-
 *Annotations* are named values associated with schema items and are
 designed to hold arbitrary schema-level metadata represented as a
 :eql:type:`str` (unstructured text).
@@ -18,7 +16,7 @@ more complex metadata.
 Standard annotations
 ====================
 
-.. index:: title, description, deprecated
+.. api-index:: title, description, deprecated
 
 There are a number of annotations defined in the standard library. The
 following are the annotations which can be set on any schema item:
@@ -47,8 +45,6 @@ should be used instead.
 User-defined annotations
 ========================
 
-.. index:: abstract annotation
-
 To declare a custom annotation type beyond the three built-ins, add an abstract
 annotation type to your schema. A custom annotation could be used to attach
 arbitrary JSON-encoded data to your schema—potentially useful for introspection
@@ -67,6 +63,8 @@ and code generation.
 
 Declaring annotations
 =====================
+
+.. api-index:: abstract, inheritable, annotation
 
 This section describes the syntax to use annotations in your schema.
 

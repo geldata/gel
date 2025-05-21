@@ -153,14 +153,14 @@ def compile_ConfigSet(
                 pgast.InsertTarget(name='type'),
             ],
             on_conflict=pgast.OnConflictClause(
-                action='update',
-                infer=pgast.InferClause(
+                action=pgast.OnConflictAction.DO_UPDATE,
+                target=pgast.OnConflictTarget(
                     index_elems=[
-                        pgast.ColumnRef(name=['name']),
-                        pgast.ColumnRef(name=['type']),
+                        pgast.IndexElem(expr=pgast.ColumnRef(name=['name'])),
+                        pgast.IndexElem(expr=pgast.ColumnRef(name=['type'])),
                     ],
                 ),
-                target_list=[
+                update_list=[
                     pgast.MultiAssignRef(
                         columns=['value'],
                         source=pgast.RowExpr(
@@ -219,13 +219,13 @@ def compile_ConfigSet(
                 pgast.InsertTarget(name='value'),
             ],
             on_conflict=pgast.OnConflictClause(
-                action='update',
-                infer=pgast.InferClause(
+                action=pgast.OnConflictAction.DO_UPDATE,
+                target=pgast.OnConflictTarget(
                     index_elems=[
-                        pgast.ColumnRef(name=['name']),
+                        pgast.IndexElem(expr=pgast.ColumnRef(name=['name'])),
                     ],
                 ),
-                target_list=[
+                update_list=[
                     pgast.MultiAssignRef(
                         columns=['value'],
                         source=pgast.RowExpr(
@@ -777,13 +777,13 @@ def top_output_as_config_op(
                 pgast.InsertTarget(name='value'),
             ],
             on_conflict=pgast.OnConflictClause(
-                action='update',
-                infer=pgast.InferClause(
+                action=pgast.OnConflictAction.DO_UPDATE,
+                target=pgast.OnConflictTarget(
                     index_elems=[
-                        pgast.ColumnRef(name=['name']),
+                        pgast.IndexElem(expr=pgast.ColumnRef(name=['name'])),
                     ],
                 ),
-                target_list=[
+                update_list=[
                     pgast.MultiAssignRef(
                         columns=['value'],
                         source=pgast.RowExpr(

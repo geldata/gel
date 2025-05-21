@@ -1,6 +1,5 @@
 from ..data import data_ops as e
 from ..data import expr_ops as eops
-from typing import List
 
 from edb.edgeql import ast as qlast
 from .. import elaboration as elab
@@ -44,7 +43,7 @@ def elaboarate_ret_typemod(ret_typemod: qltypes.TypeModifier) -> e.CMMode:
 
 
 def elaborate_fun_def_arg_type(
-    params: List[qlast.FuncParam],
+    params: list[qlast.FuncParam],
     ret_tp: qlast.TypeExpr,
     ret_typemod: qltypes.TypeModifier,
 ) -> e.FunArgRetType:
@@ -79,7 +78,7 @@ def elaborate_fun_def_arg_type(
 def process_builtin_fun_def(
     schema: e.DBSchema,
     name: qlast.ObjectRef,
-    params: List[qlast.FuncParam],
+    params: list[qlast.FuncParam],
     ret_tp: qlast.TypeExpr,
     ret_typemod: qltypes.TypeModifier,
 ) -> None:

@@ -28,12 +28,7 @@ import re
 from typing import (
     Any,
     Optional,
-    Tuple,
-    Union,
     Mapping,
-    Dict,
-    List,
-    FrozenSet,
     NamedTuple,
 )
 
@@ -151,20 +146,20 @@ class Var(NamedTuple):
 class Operation(NamedTuple):
     name: Any
     stmt: Any
-    critvars: Dict[str, Any]
-    vars: Dict[str, Any]
+    critvars: dict[str, Any]
+    vars: dict[str, Any]
 
 
 class TranspiledOperation(NamedTuple):
 
     edgeql_ast: qlast.Base
-    cache_deps_vars: Optional[FrozenSet[str]]
+    cache_deps_vars: Optional[frozenset[str]]
     variables_desc: dict
 
 
 class Ordering(NamedTuple):
 
-    names: List[str]
+    names: list[str]
     direction: qlast.SortOrder
     nulls: qlast.NonesOrder
 
@@ -1888,7 +1883,7 @@ class TokenLexer(graphql.language.lexer.Lexer):
 
 
 def parse_tokens(
-    text: str, tokens: List[Tuple[gql_lexer.TokenKind, int, int, int, int, str]]
+    text: str, tokens: list[tuple[gql_lexer.TokenKind, int, int, int, int, str]]
 ) -> graphql.Document:
     try:
         src = graphql.Source(text)
@@ -1902,10 +1897,10 @@ def parse_tokens(
 
 
 def convert_errors(
-    errs: List[gql_error.GraphQLError],
+    errs: list[gql_error.GraphQLError],
     *,
-    substitutions: Optional[Dict[str, Tuple[str, int, int]]],
-) -> List[gql_error.GraphQLErrors]:
+    substitutions: Optional[dict[str, tuple[str, int, int]]],
+) -> list[gql_error.GraphQLErrors]:
     result = []
     for err in errs:
         m = REWRITE_TYPE_ERROR.match(err.message)
@@ -1934,7 +1929,7 @@ def translate_ast(
     *,
     operation_name: Optional[str]=None,
     variables: Optional[Mapping[str, Any]]=None,
-    substitutions: Optional[Dict[str, Tuple[str, int, int]]],
+    substitutions: Optional[dict[str, tuple[str, int, int]]],
 ) -> TranspiledOperation:
 
     if variables is None:
@@ -1998,7 +1993,7 @@ def augment_error_message(gqlcore: gt.GQLCoreSchema, message: str):
 
 def convert_default(
     node: gql_ast.ValueNode, varname: str
-) -> Union[str, float, int, bool]:
+) -> str | float | int | bool:
     if isinstance(node, (gql_ast.StringValueNode,
                          gql_ast.BooleanValueNode,
                          gql_ast.EnumValueNode)):

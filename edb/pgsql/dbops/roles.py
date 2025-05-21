@@ -23,7 +23,6 @@ from typing import (
     Iterable,
     Mapping,
     Optional,
-    Union,
     TypeAlias,
 )
 
@@ -46,11 +45,11 @@ class Role(base.DBObject):
         self,
         name: RoleName,
         *,
-        allow_login: Union[bool, base.NotSpecifiedT] = base.NotSpecified,
-        allow_createdb: Union[bool, base.NotSpecifiedT] = base.NotSpecified,
-        allow_createrole: Union[bool, base.NotSpecifiedT] = base.NotSpecified,
-        password: Union[None, str, base.NotSpecifiedT] = base.NotSpecified,
-        superuser: Union[bool, base.NotSpecifiedT] = base.NotSpecified,
+        allow_login: bool | base.NotSpecifiedT = base.NotSpecified,
+        allow_createdb: bool | base.NotSpecifiedT = base.NotSpecified,
+        allow_createrole: bool | base.NotSpecifiedT = base.NotSpecified,
+        password: None | str | base.NotSpecifiedT = base.NotSpecified,
+        superuser: bool | base.NotSpecifiedT = base.NotSpecified,
         membership: Optional[Iterable[str]] = None,
         members: Optional[Iterable[str]] = None,
         metadata: Optional[Mapping[str, Any]] = None,
@@ -76,7 +75,7 @@ class SingleRole(Role):
     def __init__(
         self,
         *,
-        password: Union[None, str, base.NotSpecifiedT] = base.NotSpecified,
+        password: None | str | base.NotSpecifiedT = base.NotSpecified,
         metadata: Optional[Mapping[str, Any]] = None,
     ) -> None:
         super().__init__('current_user', password=password)

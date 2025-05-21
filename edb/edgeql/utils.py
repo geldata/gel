@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import copy
 import itertools
-from typing import Any, Optional, Mapping, Dict, List, Set
+from typing import Any, Optional, Mapping
 
 from edb import errors
 from edb.common import ast
@@ -71,14 +71,14 @@ def inline_parameters(
 
 
 def index_parameters(
-    ql_args: List[qlast.Base],
+    ql_args: list[qlast.Base],
     *,
     parameters: s_func.ParameterLikeList,
     schema: s_schema.Schema
-) -> Dict[str, qlast.Base]:
+) -> dict[str, qlast.Base]:
 
-    result: Dict[str, qlast.Base] = {}
-    varargs: Optional[List[qlast.Expr]] = None
+    result: dict[str, qlast.Base] = {}
+    varargs: Optional[list[qlast.Expr]] = None
     variadic = parameters.find_variadic(schema)
     variadic_num = variadic.get_num(schema) if variadic else -1  # type: ignore
 
@@ -145,11 +145,11 @@ def inline_anchors(
     inliner.visit(ql_expr)
 
 
-def find_paths(ql: qlast.Base) -> List[qlast.Path]:
+def find_paths(ql: qlast.Base) -> list[qlast.Path]:
     return ast.find_children(ql, qlast.Path)
 
 
-def find_subject_ptrs(ast: qlast.Base) -> Set[str]:
+def find_subject_ptrs(ast: qlast.Base) -> set[str]:
     ptrs = set()
     for path in find_paths(ast):
         if path.partial:
@@ -170,7 +170,7 @@ def is_anchor(expr: qlast.PathElement, name: str) -> bool:
 
 def subject_paths_substitute(
     ast: qlast.Base_T,
-    subject_ptrs: Dict[str, qlast.Expr],
+    subject_ptrs: dict[str, qlast.Expr],
 ) -> qlast.Base_T:
     ast = copy.deepcopy(ast)
     for path in find_paths(ast):

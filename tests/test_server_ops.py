@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Tuple, Mapping, NamedTuple, Callable
+from typing import Any, Mapping, NamedTuple, Callable
 
 import asyncio
 import http
@@ -48,7 +48,7 @@ from edb import protocol
 from edb.common import devmode
 from edb.protocol import protocol as edb_protocol  # type: ignore
 from edb.server import args, pgcluster
-from edb.server import cluster as edbcluster
+from edb.testbase import cluster as edbcluster
 from edb.testbase import server as tb
 
 
@@ -112,7 +112,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                 # and the cluster to be shutdown soon.
                 await sd.connect(wait_until_available=0)
 
-    async def test_server_ops_auto_shutdown_after_one(self):
+    async def test_server_ops_auto_shutdown_after_one_1(self):
         async with tb.start_edgedb_server(
             auto_shutdown_after=1,
         ) as sd:
@@ -120,6 +120,27 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
 
             with self.assertRaises(
                     (ConnectionError, edgedb.ClientConnectionError)):
+                await sd.connect(wait_until_available=0)
+
+    async def test_server_ops_auto_shutdown_after_one_2(self):
+        async with tb.start_edgedb_server(
+            auto_shutdown_after=1,
+            http_endpoint_security=(
+                args.ServerEndpointSecurityMode.Optional
+            ),
+        ) as sd:
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(0.5)
+            self.assertEqual(sd.call_system_api('/server/status/ready'), 'OK')
+            await asyncio.sleep(2)
+
+            with self.assertRaises(
+                (ConnectionError, edgedb.ClientConnectionError)):
                 await sd.connect(wait_until_available=0)
 
     @unittest.skipIf(
@@ -227,7 +248,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     else:
                         return result
 
-        async def _waiter() -> Tuple[str, Mapping[str, Any]]:
+        async def _waiter() -> tuple[str, Mapping[str, Any]]:
             loop = asyncio.get_running_loop()
             line = await loop.run_in_executor(None, _read, status_file)
             status, _, dataline = line.partition('=')
@@ -295,7 +316,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     else:
                         return result
 
-        async def _waiter() -> Tuple[str, Mapping[str, Any]]:
+        async def _waiter() -> tuple[str, Mapping[str, Any]]:
             loop = asyncio.get_running_loop()
             lines = await asyncio.gather(
                 loop.run_in_executor(None, _read, status_file),
@@ -744,7 +765,12 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
             ) as sd:
                 con = await sd.connect()
                 try:
-                    qry = 'select schema::Object { name }'
+                    qry = '''
+                        select schema::Object {
+                            name,
+                            enumval := <cfg::TestEnum>$0,
+                        }
+                    '''
                     sql = '''
                         SELECT
                             n.nspname::text AS table_schema,
@@ -765,12 +791,12 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                             AND n.nspname = 'public';
                     '''
 
-                    await con.query(qry)
+                    await con.query(qry, 'Two')
                     await con.query_sql(sql)
 
                     # Querying a second time should hit the cache
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_sql_compilations(sd), 0):
                         await con.query_sql(sql)
 
@@ -782,9 +808,9 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     # the type, so doing the query shouldn't cause another
                     # compile!
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
 
                     # The SQL cache is reset after DDL, because recompiling SQL
                     # requires backend connection for amending in/out tids, and
@@ -797,7 +823,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     # TODO: this does not behave the way I thing it should
                     # with self.assertChange(measure_compilations(sd), 1):
                     #     con_c = con.with_config(apply_access_policies=False)
-                    #     await con_c.query(qry)
+                    #     await con_c.query(qry, 'Two')
 
                     # Set the compilation timeout to 2ms.
                     #
@@ -823,9 +849,9 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     ''')
 
                     with self.assertChange(measure_compilations(sd), 1):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_sql_compilations(sd), 1):
                         await con.query_sql(sql)
                     with self.assertChange(measure_sql_compilations(sd), 0):
@@ -873,9 +899,9 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                         create type X
                     ''')
                     with self.assertChange(measure_compilations(sd), 1):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     with self.assertChange(measure_sql_compilations(sd), 1):
                         await con.query_sql(sql)
                     with self.assertChange(measure_sql_compilations(sd), 0):
@@ -938,7 +964,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                 try:
                     # It should hit the cache no problem.
                     with self.assertChange(measure_compilations(sd), 0):
-                        await con.query(qry)
+                        await con.query(qry, 'Two')
                     # TODO(fantix): persistent SQL cache not working?
                     # with self.assertChange(measure_sql_compilation(sd), 0):
                     #     await con.query_sql(sql)

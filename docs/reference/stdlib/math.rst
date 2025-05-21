@@ -14,8 +14,6 @@ Math
 
 .. eql:function:: math::abs(x: anyreal) -> anyreal
 
-    :index: absolute
-
     Returns the absolute value of the input.
 
 
@@ -35,8 +33,6 @@ Math
                   math::ceil(x: bigint) -> bigint
                   math::ceil(x: decimal) -> decimal
 
-    :index: round
-
     Rounds up a given value to the nearest integer.
 
     .. code-block:: edgeql-repl
@@ -55,8 +51,6 @@ Math
                   math::floor(x: bigint) -> bigint
                   math::floor(x: decimal) -> decimal
 
-    :index: round
-
     Rounds down a given value to the nearest integer.
 
     .. code-block:: edgeql-repl
@@ -74,8 +68,6 @@ Math
                   math::ln(x: float64) -> float64
                   math::ln(x: decimal) -> decimal
 
-    :index: logarithm
-
     Returns the natural logarithm of a given value.
 
     .. code-block:: edgeql-repl
@@ -91,8 +83,6 @@ Math
                   math::lg(x: float64) -> float64
                   math::lg(x: decimal) -> decimal
 
-    :index: logarithm
-
     Returns the base 10 logarithm of a given value.
 
     .. code-block:: edgeql-repl
@@ -104,8 +94,6 @@ Math
 
 
 .. eql:function:: math::log(x: decimal, named only base: decimal) -> decimal
-
-    :index: logarithm
 
     Returns the logarithm of a given value in the specified base.
 
@@ -122,7 +110,7 @@ Math
                   math::mean(vals: set of float64) -> float64
                   math::mean(vals: set of decimal) -> decimal
 
-    :index: average avg
+    .. index:: average, avg
 
     Returns the arithmetic mean of the input set.
 
@@ -139,7 +127,7 @@ Math
                   math::stddev(vals: set of float64) -> float64
                   math::stddev(vals: set of decimal) -> decimal
 
-    :index: average
+    .. index:: average, avg
 
     Returns the sample standard deviation of the input set.
 
@@ -152,7 +140,7 @@ Math
                   math::stddev_pop(vals: set of float64) -> float64
                   math::stddev_pop(vals: set of decimal) -> decimal
 
-    :index: average
+    .. index:: average, avg
 
     Returns the population standard deviation of the input set.
 
@@ -169,7 +157,7 @@ Math
                   math::var(vals: set of float64) -> float64
                   math::var(vals: set of decimal) -> decimal
 
-    :index: average
+    .. index:: average, avg
 
     Returns the sample variance of the input set.
 
@@ -186,7 +174,7 @@ Math
                   math::var_pop(vals: set of float64) -> float64
                   math::var_pop(vals: set of decimal) -> decimal
 
-    :index: average
+    .. index:: average, avg
 
     Returns the population variance of the input set.
 
@@ -201,7 +189,7 @@ Math
 
 .. eql:function:: math::pi() -> float64
 
-    :index: trigonometry
+    .. index:: trigonometry
 
     Returns the value of pi.
 
@@ -216,7 +204,7 @@ Math
 
 .. eql:function:: math::acos(x: float64) -> float64
 
-    :index: trigonometry
+    .. index:: trigonometry
 
     Returns the arc cosine of the input.
 
@@ -235,7 +223,7 @@ Math
 
 .. eql:function:: math::asin(x: float64) -> float64
 
-    :index: trigonometry
+    .. index:: trigonometry
 
     Returns the arc sine of the input.
 
@@ -254,7 +242,7 @@ Math
 
 .. eql:function:: math::atan(x: float64) -> float64
 
-    :index: trigonometry
+    .. index:: trigonometry
 
     Returns the arc tangent of the input.
 
@@ -273,7 +261,7 @@ Math
 
 .. eql:function:: math::atan2(y: float64, x: float64) -> float64
 
-    :index: trigonometry
+    .. index:: trigonometry
 
     Returns the arc tangent of ``y / x``.
 
@@ -296,7 +284,7 @@ Math
 
 .. eql:function:: math::cos(x: float64) -> float64
 
-    :index: trigonometry
+    .. index:: trigonometry
 
     Returns the cosine of the input.
 
@@ -317,7 +305,7 @@ Math
 
 .. eql:function:: math::cot(x: float64) -> float64
 
-    :index: trigonometry
+    .. index:: trigonometry
 
     Returns the cotangent of the input.
 
@@ -336,7 +324,7 @@ Math
 
 .. eql:function:: math::sin(x: float64) -> float64
 
-    :index: trigonometry
+    .. index:: trigonometry
 
     Returns the sinine of the input.
 
@@ -357,7 +345,7 @@ Math
 
 .. eql:function:: math::tan(x: float64) -> float64
 
-    :index: trigonometry
+    .. index:: trigonometry
 
     Returns the tanangent of the input.
 

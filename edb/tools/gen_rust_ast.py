@@ -15,22 +15,22 @@ from edb.tools.edb import edbcommands
 @dataclasses.dataclass()
 class ASTClass:
     name: str
-    typ: typing.Type
-    children: typing.List[typing.Type] = dataclasses.field(default_factory=list)
+    typ: typing.Any
+    children: list[type] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass()
 class ASTUnion:
     name: str
-    variants: typing.Sequence[typing.Type | str]
+    variants: typing.Sequence[type | str]
     for_composition: bool
 
 
 # a queue for union types that are to be generated
-union_types: typing.List[ASTUnion] = []
+union_types: list[ASTUnion] = []
 
 # all discovered AST classes
-ast_classes: typing.Dict[str, ASTClass] = {}
+ast_classes: dict[str, ASTClass] = {}
 
 
 @edbcommands.command("gen-rust-ast")
@@ -96,7 +96,7 @@ def codegen_struct(cls: ASTClass) -> str:
     fields = ''
     doc_comment = ''
 
-    for f in typing.cast(typing.List[ast._Field], cls.typ._direct_fields):
+    for f in typing.cast(list[ast._Field], cls.typ._direct_fields):
 
         if f.hidden:
             continue
@@ -121,7 +121,7 @@ def codegen_struct(cls: ASTClass) -> str:
                 break
 
         name = f'{cls.name}Kind'
-        variants: typing.Sequence[typing.Type | str] = cls.children
+        variants: typing.Sequence[type | str] = cls.children
 
         union_types.append(
             ASTUnion(name=name, variants=variants, for_composition=True)
@@ -147,7 +147,7 @@ def codegen_struct(cls: ASTClass) -> str:
     ).replace('{\n}', r'{}')
 
 
-def codegen_enum(name: str, cls: typing.Type) -> str:
+def codegen_enum(name: str, cls: typing.Any) -> str:
     fields = ''
     for member in cls._member_names_:
         fields += f'    {member},\n'
@@ -201,7 +201,7 @@ def codegen_union(union: ASTUnion) -> str:
 
 
 def translate_type(
-    typ: typing.Type, union_name: str, for_composition: bool
+    typ: typing.Any, union_name: str, for_composition: bool
 ) -> str:
     params = [
         translate_type(param, union_name, for_composition)
@@ -264,7 +264,7 @@ def translate_type(
     return ancestor.__name__
 
 
-def find_covering_ancestor(typ: typing.Type, fields: typing.Set[str]):
+def find_covering_ancestor(typ: type, fields: set[str]):
     # In Rust, a type will not inherit fields from parent types.
     # This means that we need to omit some ancestor of this type, which
     # would include all fields of the type.

@@ -4,14 +4,14 @@ description = "Gel Server"
 requires-python = '>=3.12.0'
 dynamic = ["version"]
 dependencies = [
-    'gel==3.0.0b7',
+    'gel==3.1.0b1',
 
     'httptools>=0.6.0',
     'immutables>=0.18',
     'parsing~=2.0',
     'uvloop~=0.21.0',
 
-    'click~=8.0',
+    'click~=8.1.0',
     'cryptography~=42.0',
     'graphql-core~=3.1.5',
     'psutil~=5.8',
@@ -22,6 +22,10 @@ dependencies = [
     'aiosmtplib~=3.0',
     'tiktoken~=0.7.0',
     'mistral_common~=1.2.1',
+
+    # pin because newer versions are either broken or require
+    # us to update setuptools (in gel-pkg)
+    'calver==2025.03.31',
 ]
 
 [project.scripts]
@@ -30,18 +34,16 @@ edb = "edb.tools.edb:edbcommands"
 edgedb-server = "edb.server.main:main"
 edgedb-load-ext = "edb.load_ext.main:main"
 edgedb-ls = "edb.language_server.main:main"
-edgedb = "edb.cli:rustcli"
 
 gel-server = "edb.server.main:main"
 gel-load-ext = "edb.load_ext.main:main"
 gel-ls = "edb.language_server.main:main"
-gel-dev = "edb.cli:rustcli"
 
 [project.optional-dependencies]
 test = [
     'black~=24.2.0',
     'coverage~=7.4',
-    'ruff==0.3.7',
+    'ruff==0.11.2',
     'asyncpg~=0.30.0',
 
     # Needed for testing asyncutil
@@ -101,7 +103,7 @@ requires = [
     "wheel",
 
     "parsing ~= 2.0",
-    "gel==3.0.0b7",
+    'gel==3.1.0b1',
 ]
 # Custom backend needed to set up build-time sys.path because
 # setup.py needs to import `edb.buildmeta`.
@@ -166,7 +168,7 @@ module = [
     "edb.repl.*",
     "edb.schema.*",
     "edb.schema.reflection.*",
-    "edb.server.cluster",
+    "edb.testbase.cluster",
     "edb.server.compiler.*",
     "edb.server.config",
     "edb.server.connpool.*",
@@ -241,11 +243,14 @@ ignore_errors = true
 [tool.ruff]
 line-length = 80
 indent-width = 4
-exclude = ["postgres", ".github"]
+exclude = ["postgres", ".github", "edb/server/pgproto"]
+
+[tool.ruff.format]
+quote-style = "preserve"
 
 [tool.ruff.lint]
 preview = true
-select = ["E", "F", "W", "B"]
+select = ["E", "F", "W", "B", "UP006", "UP007"]
 ignore = [
     "F541", # f-string without any placeholders
     "B904", # Within an except clause, raise exceptions with raise ... from err

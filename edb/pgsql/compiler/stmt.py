@@ -170,7 +170,8 @@ def compile_InsertStmt(
         )
 
         # Wrap up.
-        return dml.fini_dml_stmt(stmt, ctx.rel, parts, ctx=ctx)
+        dml.fini_dml_stmt(stmt, parts, ctx=ctx)
+        return ctx.rel
 
 
 @dispatch.compile.register(irast.UpdateStmt)
@@ -198,7 +199,8 @@ def compile_UpdateStmt(
                 ctx=ctx,
             )
 
-        return dml.fini_dml_stmt(stmt, ctx.rel, parts, ctx=ctx)
+        dml.fini_dml_stmt(stmt, parts, ctx=ctx)
+        return ctx.rel
 
 
 @dispatch.compile.register(irast.DeleteStmt)
@@ -224,4 +226,5 @@ def compile_DeleteStmt(
             )
 
         # Wrap up.
-        return dml.fini_dml_stmt(stmt, ctx.rel, parts, ctx=ctx)
+        dml.fini_dml_stmt(stmt, parts, ctx=ctx)
+        return ctx.rel

@@ -32,7 +32,7 @@ import edgedb
 from edb import errors
 from edb import protocol
 from edb.server import args
-from edb.server import cluster as edbcluster
+from edb.testbase import cluster as edbcluster
 from edb.server.auth import JWKSet, generate_gel_token, load_secret_key
 from edb.schema import defines as s_def
 from edb.testbase import server as tb

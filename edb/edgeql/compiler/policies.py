@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, List
+from typing import Optional
 
 from edb.ir import ast as irast
 
@@ -73,7 +73,7 @@ def get_access_policies(
     stype: s_objtypes.ObjectType,
     *,
     ctx: context.ContextLevel,
-) -> Tuple[s_policies.AccessPolicy, ...]:
+) -> tuple[s_policies.AccessPolicy, ...]:
     schema = ctx.env.schema
     if not ctx.env.options.apply_query_rewrites:
         return ()
@@ -146,13 +146,13 @@ def compile_pol(
     }
 
     # Compile it with all of the
-    with ctx.detached() as dctx:
+    with ctx.newscope(fenced=True) as _, _.detached() as dctx:
         dctx.schema_factoring()
         dctx.partial_path_prefix = ctx.partial_path_prefix
         dctx.expr_exposed = context.Exposure.UNEXPOSED
         dctx.suppress_rewrites = frozenset(descs)
 
-        return dispatch.compile(expr, ctx=dctx)
+        return setgen.scoped_set(dispatch.compile(expr, ctx=dctx), ctx=dctx)
 
 
 def get_extra_function_rewrite_filter(ctx: context.ContextLevel) -> qlast.Expr:
@@ -205,7 +205,7 @@ def get_rewrite_filter(
             continue
 
         ir_set = compile_pol(pol, ctx=ctx)
-        expr: qlast.Expr = ctx.create_anchor(ir_set)
+        expr: qlast.Expr = ctx.create_anchor(ir_set, move_scope=True)
 
         is_allow = pol.get_action(schema) == qltypes.AccessPolicyAction.Allow
         if is_allow:
@@ -228,12 +228,30 @@ def get_rewrite_filter(
         )
         filter_expr = astutils.extend_binop(filter_expr, deny_expr)
 
+    # We compile the expression again so we can do an IR based
+    # analysis on it below.
+    with ctx.newscope(fenced=False) as dctx:
+        # HACK: to prevent filter_ir from being warning fenced
+        dctx.allow_factoring()
+        dctx.expr_exposed = context.Exposure.UNEXPOSED
+        filter_ir = dispatch.compile(filter_expr, ctx=dctx)
+        filter_expr = setgen.moveable_anchor(filter_ir, ctx=dctx)
+
     # This is a bad hack, but add an always false condition that
     # postgres does not *know* is always false. This prevents postgres
     # from bogusly optimizing away the entire type CTE if it can prove
     # it empty (which could then result in assert_exists on links to
     # the type not always firing).
-    if mode == qltypes.AccessKind.Select:
+    #
+    # As an optimization, we try to only do it when the object might
+    # not be referenced.
+    if (
+        mode == qltypes.AccessKind.Select
+        and not (
+            ctx.partial_path_prefix
+            and _always_references_set(filter_ir, ctx.partial_path_prefix)
+        )
+    ):
         bogus_check = qlast.BinOp(
             op='?=',
             left=qlast.Path(partial=True, steps=[qlast.Ptr(name='id')]),
@@ -246,6 +264,100 @@ def get_rewrite_filter(
         filter_expr = astutils.extend_binop(filter_expr, bogus_check, op='OR')
 
     return filter_expr
+
+
+def _always_references_set(
+    ir: irast.Set | irast.Expr,
+    ref: irast.Set,
+    inverted: bool=False,
+) -> bool:
+    """Return whether *ir* "always references" *ref*
+
+    The idea here is to check whether *ir* references *ref* in a way
+    that ensures that postgres will actually look at *ref* when
+    executing.
+
+    Fortunately postgres doesn't seem to do anything too crazy here(??),
+    so we mostly just have to understand how it works with boolean
+    operators, IF, and coalesce.
+    But we also need to be able to propagate it through other operations.
+
+    We need *ref* to be referenced in *every* conjunct of an AND.
+    We need it referenced by *at least one* disjunct of an OR.
+    But because of DeMorgan's law (which postgres understands),
+    OR sometimes needs to be treated like AND.
+
+    We track the invertedness and invert the AND and OR behavior when
+    underneath a NOT, kind of for fun.
+    """
+    if isinstance(ir, irast.Set):
+        if ir is ref:
+            return True
+        ir = ir.expr
+
+    match ir:
+        case irast.SelectStmt(result=result):
+            return _always_references_set(result, ref, inverted)
+
+        case irast.OperatorCall(
+            func_shortname=s_name.QualName('std', 'OR'), args=args
+        ):
+            check = all if inverted else any
+            return check(
+                _always_references_set(x.expr, ref, inverted)
+                for x in args.values()
+            )
+
+        case irast.OperatorCall(
+            func_shortname=s_name.QualName('std', 'AND'), args=args
+        ):
+            check = any if inverted else all
+            return check(
+                _always_references_set(x.expr, ref, inverted)
+                for x in args.values()
+            )
+
+        case irast.OperatorCall(
+            func_shortname=s_name.QualName('std', 'NOT'), args={0: arg}
+        ):
+            return _always_references_set(arg.expr, ref, not inverted)
+
+        case irast.OperatorCall(
+            func_shortname=s_name.QualName('std', '??'), args={0: lhs, 1: _},
+        ):
+            # LHS always evaluated; RHS might not be
+            return _always_references_set(lhs.expr, ref, inverted)
+
+        case irast.OperatorCall(
+            func_shortname=s_name.QualName('std', 'IF'),
+            args={0: t, 1: c, 2: f},
+        ):
+            return (
+                _always_references_set(c.expr, ref, inverted)
+                or (
+                    _always_references_set(t.expr, ref, inverted)
+                    and _always_references_set(f.expr, ref, inverted)
+                )
+            )
+
+        # Any other call, we use 'any' semantics.
+        case irast.Call(args=args):
+            return any(
+                _always_references_set(x.expr, ref, inverted)
+                for x in args.values()
+            )
+
+        case irast.Pointer(expr=expr) as p:
+            if expr is not None:
+                return _always_references_set(expr, ref, inverted)
+            else:
+                return _always_references_set(p.source, ref, inverted)
+
+        case irast.TypeCast(expr=expr):
+            return _always_references_set(expr, ref, inverted)
+
+        case _:
+            return False
 
 
 def try_type_rewrite(
@@ -302,13 +414,13 @@ def try_type_rewrite(
     # TODO: caching?
     children_overlap = False
     if children_have_policies:
-        all_descs = [
+        all_child_descs = [
             x
             for child in stype.children(schema)
             for x in child.descendants(schema)
         ]
-        descs = set(all_descs)
-        if len(descs) != len(all_descs):
+        child_descs = set(all_child_descs)
+        if len(child_descs) != len(all_child_descs):
             children_overlap = True
 
     # Put a placeholder to prevent recursion.
@@ -355,7 +467,11 @@ def try_type_rewrite(
     if children_have_policies and not skip_subtypes:
         # N.B: we don't filter here, we just generate references
         # they will go in their own CTEs
-        children = stype.children(schema) if not children_overlap else descs
+        children = (
+            stype.children(schema)
+            if not children_overlap
+            else stype.descendants(schema)
+        )
         sets += [
             # We need to wrap it in a type override so that unioning
             # them all together works...
@@ -377,7 +493,7 @@ def try_type_rewrite(
         with ctx.new() as subctx:
             subctx.expr_exposed = context.Exposure.UNEXPOSED
             subctx.anchors = subctx.anchors.copy()
-            parts: List[qlast.Expr] = [subctx.create_anchor(x) for x in sets]
+            parts: list[qlast.Expr] = [subctx.create_anchor(x) for x in sets]
             rewritten_set = dispatch.compile(
                 qlast.Set(elements=parts), ctx=subctx)
     elif len(sets) > 0:

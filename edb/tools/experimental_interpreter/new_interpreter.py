@@ -4,7 +4,6 @@ from __future__ import annotations
 import sys
 import traceback
 import os
-from typing import Tuple
 try:
     import readline
 except ImportError:
@@ -13,7 +12,7 @@ except ImportError:
 from edb.common import debug
 from edb.edgeql import ast as qlast
 
-from typing import Optional, Dict, Any, List, Sequence
+from typing import Optional, Any, Sequence
 from .type_checking_tools import typechecking as tc
 from .back_to_ql import reverse_elab
 from .data import data_ops as e
@@ -38,7 +37,7 @@ from .type_checking_tools import name_resolution
 # sys.setrecursionlimit(10000)
 
 
-VariablesTp = Optional[Dict[str, Val] | Tuple[Val, ...]]
+VariablesTp = Optional[dict[str, Val] | tuple[Val, ...]]
 
 
 def empty_db(schema: DBSchema) -> EdgeDatabase:
@@ -89,7 +88,7 @@ def prepare_statement(
     stmt: qlast.Expr,
     dbschema: DBSchema,
     should_print: bool,
-) -> Tuple[e.Expr, e.ResultTp]:
+) -> tuple[e.Expr, e.ResultTp]:
     dbschema_ctx = e.TcCtx(dbschema, ("default",), {})
 
     if should_print:
@@ -137,7 +136,7 @@ def run_prepared_statement(
     tp: e.ResultTp,
     dbschema: DBSchema,
     should_print: bool,
-    logs: Optional[List[Any]],
+    logs: Optional[list[Any]],
     variables: VariablesTp = None,
 ) -> MultiSetVal:
     result = eval_expr_toplevel(db, deduped, variables=variables, logs=logs)
@@ -154,9 +153,9 @@ def run_statement(
     stmt: qlast.Expr,
     dbschema: DBSchema,
     should_print: bool,
-    logs: Optional[List[Any]],
+    logs: Optional[list[Any]],
     variables: VariablesTp = None,
-) -> Tuple[MultiSetVal, e.ResultTp]:
+) -> tuple[MultiSetVal, e.ResultTp]:
 
     deduped, tp = prepare_statement(stmt, dbschema, should_print)
     result = run_prepared_statement(
@@ -170,7 +169,7 @@ def run_stmts(
     stmts: Sequence[qlast.Expr],
     dbschema: DBSchema,
     debug_print: bool,
-    logs: Optional[List[Any]],
+    logs: Optional[list[Any]],
 ) -> Sequence[MultiSetVal]:
     match stmts:
         case []:
@@ -208,7 +207,7 @@ def run_str(
     dbschema: DBSchema,
     s: str,
     print_asts: bool = False,
-    logs: Optional[List[str]] = None,
+    logs: Optional[list[str]] = None,
 ) -> Sequence[MultiSetVal]:
 
     q = parse_ql(s)
@@ -217,11 +216,11 @@ def run_str(
 
 
 def run_single_str(
-    dbschema_and_db: Tuple[DBSchema, EdgeDatabase],
+    dbschema_and_db: tuple[DBSchema, EdgeDatabase],
     s: str,
     variables: VariablesTp = None,
     print_asts: bool = False,
-) -> Tuple[MultiSetVal, ResultTp]:
+) -> tuple[MultiSetVal, ResultTp]:
     q = parse_ql(s)
     if len(q) != 1:
         raise ValueError("Not a single query")
@@ -233,7 +232,7 @@ def run_single_str(
 
 
 def run_single_str_get_json(
-    dbschema_and_db: Tuple[DBSchema, EdgeDatabase],
+    dbschema_and_db: tuple[DBSchema, EdgeDatabase],
     s: str,
     variables: VariablesTp = None,
     print_asts: bool = False,
@@ -266,7 +265,7 @@ def repl(
 
     dbschema: DBSchema
     db: EdgeDatabase
-    logs: List[Any] = []  # type: ignore[var]
+    logs: list[Any] = []  # type: ignore[var]
 
     dbschema = default_dbschema()
     if library_ddl_files:
@@ -355,8 +354,8 @@ def dbschema_and_db_with_initial_schema_and_queries(
     initial_queries: str,
     sqlite_file_name: Optional[str] = None,
     debug_print=False,
-    logs: Optional[List[Any]] = None,
-) -> Tuple[DBSchema, EdgeDatabase]:
+    logs: Optional[list[Any]] = None,
+) -> tuple[DBSchema, EdgeDatabase]:
     if sqlite_file_name is not None:
         dbschema, db = sqlite_adapter.schema_and_db_from_sqlite(
             initial_schema_defs, sqlite_file_name
@@ -383,7 +382,7 @@ class EdgeQLInterpreter:
         )
         self.dbschema: e.DBSchema = dbschema
         self.db: EdgeDatabase = db
-        self.query_cache: Dict[str, Tuple[Expr, ResultTp]] = {}
+        self.query_cache: dict[str, tuple[Expr, ResultTp]] = {}
 
     def run_single_str_get_json_with_cache(
         self,

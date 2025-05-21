@@ -53,7 +53,8 @@ Generic
 
 .. eql:operator:: eq: anytype = anytype -> bool
 
-    :index: =, equal, comparison, compare
+    .. index:: comparison
+    .. api-index:: =
 
     Compares two values for equality.
 
@@ -91,7 +92,8 @@ Generic
 
 .. eql:operator:: neq: anytype != anytype -> bool
 
-    :index: !=, not equal, comparison, compare
+    .. index:: not equal, comparison
+    .. api-index:: !=
 
     Compares two values for inequality.
 
@@ -131,7 +133,8 @@ Generic
 
 .. eql:operator:: coaleq: optional anytype ?= optional anytype -> bool
 
-    :index: ?=, coalesce equal, comparison, compare, empty set
+    .. index:: coalesce equal, comparison, empty set
+    .. api-index:: ?=
 
     Compares two (potentially empty) values for equality.
 
@@ -153,7 +156,8 @@ Generic
 
 .. eql:operator:: coalneq: optional anytype ?!= optional anytype -> bool
 
-    :index: ?!=, coalesce not equal, comparison, compare
+    .. index:: coalesce not equal, comparison
+    .. api-index:: ?!=
 
     Compares two (potentially empty) values for inequality.
 
@@ -175,7 +179,8 @@ Generic
 
 .. eql:operator:: lt: anytype < anytype -> bool
 
-    :index: <, less than, comparison, compare
+    .. index:: comparison
+    .. api-index:: <
 
     Less than operator.
 
@@ -218,7 +223,8 @@ Generic
 
 .. eql:operator:: gt: anytype > anytype -> bool
 
-    :index: >, greater than, comparison, compare
+    .. index:: comparison
+    .. api-index:: >
 
     Greater than operator.
 
@@ -261,7 +267,8 @@ Generic
 
 .. eql:operator:: lteq: anytype <= anytype -> bool
 
-    :index: <=, less than or equal, comparison, compare
+    .. index:: comparison
+    .. api-index:: <=
 
     Less or equal operator.
 
@@ -306,7 +313,8 @@ Generic
 
 .. eql:operator:: gteq: anytype >= anytype -> bool
 
-    :index: >=, greater than or equal, comparison, compare
+    .. index:: comparison
+    .. api-index:: >=
 
     Greater or equal operator.
 
@@ -353,7 +361,7 @@ Generic
                   std::len(value: bytes) -> int64
                   std::len(value: array<anytype>) -> int64
 
-    :index: length count array
+    .. index:: length, count
 
     Returns the number of elements of a given value.
 
@@ -395,7 +403,7 @@ Generic
                                 needle: anypoint) \
                   -> std::bool
 
-    :index: find strpos strstr position array
+    .. index:: find, strpos, includes
 
     Returns true if the given sub-value exists within the given value.
 
@@ -495,7 +503,7 @@ Generic
                   std::find(haystack: array<anytype>, needle: anytype, \
                             from_pos: int64=0) -> int64
 
-    :index: find strpos strstr position array
+    .. index:: find, strpos
 
     Returns the index of a given sub-value in a given value.
 

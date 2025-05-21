@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Type, TypeVar, Dict, Set
+from typing import Any, Optional, TypeVar
 
 
 T = TypeVar("T")
@@ -29,17 +29,17 @@ class AdapterError(Exception):
     pass
 
 
-_adapters: Dict[Any, Dict[type, Adapter]] = {}
+_adapters: dict[Any, dict[type, Adapter]] = {}
 
 
 class Adapter(type):
     __edb_adaptee__: Optional[type]
 
     def __new__(
-        mcls: Type[Adapter_T],
+        mcls: type[Adapter_T],
         name: str,
-        bases: Tuple[type, ...],
-        clsdict: Dict[str, Any],
+        bases: tuple[type, ...],
+        clsdict: dict[str, Any],
         *,
         adapts: Optional[type] = None,
         **kwargs: Any,
@@ -68,8 +68,8 @@ class Adapter(type):
     def __init__(
         cls,
         name: str,
-        bases: Tuple[type, ...],
-        clsdict: Dict[str, Any],
+        bases: tuple[type, ...],
+        clsdict: dict[str, Any],
         *,
         adapts: Optional[type] = None,
         **kwargs: Any,
@@ -94,14 +94,14 @@ class Adapter(type):
     @classmethod
     def _get_adapter(
         mcls,
-        reversed_mro: Tuple[type, ...],
+        reversed_mro: tuple[type, ...],
     ) -> Optional[Adapter]:
         adapters = _adapters.get(mcls)
         if adapters is None:
             return None
 
         result = None
-        seen: Set[Adapter] = set()
+        seen: set[Adapter] = set()
         for base in reversed_mro:
             for adaptee, adapter in adapters.items():
                 found = mcls._match_adapter(base, adaptee, adapter)

@@ -18,9 +18,8 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Tuple, Mapping, Dict, List
+from typing import Any, Optional, Mapping
 
-import functools
 
 from edb import graphql
 
@@ -29,7 +28,6 @@ from edb.schema import schema as s_schema
 from graphql.language import lexer as gql_lexer
 
 
-@functools.lru_cache()
 def _get_gqlcore(
     std_schema: s_schema.FlatSchema,
     user_schema: s_schema.FlatSchema,
@@ -52,8 +50,8 @@ def compile_graphql(
     system_config: Mapping[str, Any],
     gql: str,
     tokens: Optional[
-        List[Tuple[gql_lexer.TokenKind, int, int, int, int, str]]],
-    substitutions: Optional[Dict[str, Tuple[str, int, int]]],
+        list[tuple[gql_lexer.TokenKind, int, int, int, int, str]]],
+    substitutions: Optional[dict[str, tuple[str, int, int]]],
     operation_name: Optional[str] = None,
     variables: Optional[Mapping[str, object]] = None,
 ) -> graphql.TranspiledOperation:

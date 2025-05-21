@@ -16,6 +16,7 @@
 # limitations under the License.
 #
 
+cimport cython
 cimport cpython
 
 from libc.stdint cimport int8_t, uint8_t, int16_t, uint16_t, \
@@ -24,6 +25,7 @@ from libc.stdint cimport int8_t, uint8_t, int16_t, uint16_t, \
 from edb import errors
 from edb.server.compiler import sertypes
 from edb.server.compiler import enums
+from edb.server.compiler import dbstate
 from edb.server.dbview cimport dbview
 
 from edb.server.pgproto cimport hton
@@ -46,6 +48,7 @@ cdef recode_bind_args_for_script(
     dbview.DatabaseConnectionView dbv,
     dbview.CompiledQuery compiled,
     bytes bind_args,
+    object converted_args,
     ssize_t start,
     ssize_t end,
 ):
@@ -60,7 +63,7 @@ cdef recode_bind_args_for_script(
     # TODO: just do the simple thing if it is only one!
 
     positions = []
-    recoded_buf = recode_bind_args(dbv, compiled, bind_args, positions)
+    recoded_buf = recode_bind_args(dbv, compiled, bind_args, None, positions)
     # TODO: something with less copies
     recoded = bytes(memoryview(recoded_buf))
 
@@ -76,6 +79,9 @@ cdef recode_bind_args_for_script(
         if compiled.first_extra is not None:
             num_args += compiled.extra_counts[i]
 
+        if query_unit.server_param_conversions is not None:
+            num_args += len(query_unit.server_param_conversions)
+
         bind_data.write_int16(<int16_t>num_args)
 
         if query_unit.in_type_args:
@@ -89,6 +95,11 @@ cdef recode_bind_args_for_script(
 
         _inject_globals(dbv, query_unit, bind_data)
 
+        if converted_args and i in converted_args:
+            for arg in converted_args[i]:
+                assert isinstance(arg, ConvertedArg)
+                arg.encode(bind_data)
+
         bind_data.write_int32(0x00010001)
 
         bind_array.append(bind_data)
@@ -100,6 +111,7 @@ cdef WriteBuffer recode_bind_args(
     dbview.DatabaseConnectionView dbv,
     dbview.CompiledQuery compiled,
     bytes bind_args,
+    list converted_args,
     # XXX do something better?!?
     list positions = None,
     list data_types = None,
@@ -155,6 +167,9 @@ cdef WriteBuffer recode_bind_args(
     num_globals = _count_globals(qug)
     num_args += num_globals
 
+    if converted_args is not None:
+        num_args += len(converted_args)
+
     if live:
         if not compiled.extra_formatted_as_text:
             # all parameter values are in binary
@@ -175,6 +190,10 @@ cdef WriteBuffer recode_bind_args(
             # and injected globals are binary again
             for _ in range(num_globals):
                 out_buf.write_int16(0x0001)
+            # and converted args depend on the conversion
+            if converted_args:
+                for arg in converted_args:
+                    out_buf.write_int16(arg.bind_format_code)
 
         out_buf.write_int16(<int16_t>num_args)
 
@@ -229,6 +248,11 @@ cdef WriteBuffer recode_bind_args(
 
         # Inject any globals variables into the argument stream.
         _inject_globals(dbv, qug, out_buf)
+
+        if converted_args:
+            for arg in converted_args:
+                assert isinstance(arg, ConvertedArg)
+                arg.encode(out_buf)
 
         # All columns are in binary format
         out_buf.write_int32(0x00010001)
@@ -597,3 +621,266 @@ cdef WriteBuffer combine_raw_args(
     bind_data.write_int32(0x00010001)
 
     return bind_data
+
+
+@cython.final
+cdef class ParamConversion:
+    def __init__(
+        self,
+        *,
+        param_name,
+        conversion_name,
+        additional_info,
+        encoded_data,
+        constant_value,
+    ):
+        self.param_name = param_name
+        self.conversion_name = conversion_name
+        self.additional_info = additional_info
+        self.encoded_data = encoded_data
+        self.constant_value = constant_value
+
+    def get_param_name(self):
+        return self.param_name
+
+    def get_conversion_name(self):
+        return self.conversion_name
+
+    def get_additional_info(self):
+        return self.additional_info
+
+    def get_encoded_data(self):
+        return self.encoded_data
+
+    def get_constant_value(self):
+        return self.constant_value
+
+    def param_as_int(self) -> int:
+        return self._decode_int() if self.constant_value is None else self.constant_value
+
+    def param_as_str(self) -> str:
+        return self._decode_str() if self.constant_value is None else self.constant_value
+
+    def param_as_array_of_str(self) -> list[str]:
+        return self._decode_array_of_str() if self.constant_value is None else self.constant_value
+
+    def _decode_int(self) -> int:
+        return int.from_bytes(self.encoded_data)
+
+    def _decode_str(self) -> str:
+        return self.encoded_data.decode("utf-8")
+
+    def _decode_array_of_str(self) -> list[str]:
+        # See gel-python for more details on array encoding
+        texts = []
+        text_count = int.from_bytes(self.encoded_data[12:16])
+        data = self.encoded_data[20:]
+        for _ in range(text_count):
+            text_length = int.from_bytes(data[:4])
+            data = data[4:]
+            texts.append(data[:(text_length)].decode("utf-8"))
+            data = data[text_length:]
+        return texts
+
+
+cdef list[ParamConversion] get_param_conversions(
+    dbview.DatabaseConnectionView dbv,
+    list server_param_conversions,
+    bytes bind_args,
+    list[bytes] extra_blobs,
+):
+    # Get encoded data from bind args and extra blobs
+    bind_args_datas: dict[int, bytes] = get_args_data_for_indexes(
+        bind_args,
+        extra_blobs,
+        [
+            param_conversion.script_param_index
+            for param_conversion in server_param_conversions
+            if param_conversion.script_param_index is not None
+        ],
+    )
+
+    # Construct the ParamConversions
+    result: list[ParamConversion] = []
+    for param_conversion in server_param_conversions:
+        assert isinstance(param_conversion, dbstate.ServerParamConversion)
+        param_name = param_conversion.param_name
+
+        if (
+            param_conversion.script_param_index is not None
+            and param_conversion.constant_value is not None
+        ):
+            raise RuntimeError(
+                f"Parameter '{param_name}' has both "
+                f"a constant and a query arg value"
+            )
+
+        elif param_conversion.script_param_index is not None:
+            # using data from the bind args
+            result.append(ParamConversion(
+                param_name=param_name,
+                conversion_name=param_conversion.conversion_name,
+                additional_info=param_conversion.additional_info,
+                encoded_data=bind_args_datas[
+                    param_conversion.script_param_index
+                ],
+                constant_value=None,
+            ))
+
+        elif param_conversion.constant_value is not None:
+            # using a constant from the query
+            result.append(ParamConversion(
+                param_name=param_name,
+                conversion_name=param_conversion.conversion_name,
+                additional_info=param_conversion.additional_info,
+                encoded_data=None,
+                constant_value=param_conversion.constant_value,
+            ))
+
+        else:
+            raise RuntimeError(
+                f"Parameter '{param_name}' has no value"
+            )
+
+    return result
+
+
+cdef dict[int, bytes] get_args_data_for_indexes(
+    bytes bind_args,
+    list[bytes] extra_blobs,
+    list[int] target_indexes,
+):
+    """Extract bytes from the bind args and extra blobs by reading the length of
+    each variable and skipping forward by that amount.
+
+    When reaching the end of a blob, continue reading data from the next blob.
+    """
+
+    cdef:
+        FRBuffer in_buf
+        ssize_t in_len
+        const char *data_str
+
+    all_blobs = [bind_args, *extra_blobs]
+    curr_blob_index = 0
+    # The first blob is the bind_args, which is has additional data which should
+    # be skipped when extracting the arg data.
+    args_needs_recoding = True
+
+    def setup_blob_buffer():
+        nonlocal curr_blob_index
+        nonlocal args_needs_recoding
+
+        if curr_blob_index >= len(all_blobs):
+            raise RuntimeError('insufficient args data')
+
+        blob = all_blobs[curr_blob_index]
+        assert cpython.PyBytes_CheckExact(blob)
+        frb_init(
+            &in_buf,
+            cpython.PyBytes_AS_STRING(blob),
+            cpython.Py_SIZE(blob)
+        )
+        args_needs_recoding = curr_blob_index == 0
+
+        if args_needs_recoding:
+            # Skip prefixed argument count
+            if frb_get_len(&in_buf) == 0:
+                pass
+            else:
+                frb_read(&in_buf, 4)
+
+    setup_blob_buffer()
+
+    curr_arg_index = 0
+    target_indexes.sort()
+
+    result: dict[int, bytes] = {}
+    for target_index in target_indexes:
+        # Read up to the end of the target variable
+        for arg_index in range(curr_arg_index, target_index + 1):
+            if frb_get_len(&in_buf) == 0:
+                # We've reached the end of the previous blob.
+                # Set up the next one and keep scanning.
+                curr_blob_index += 1
+                setup_blob_buffer()
+
+            if args_needs_recoding:
+                # Skip reserved
+                frb_read(&in_buf, 4)  # reserved
+
+            in_len = hton.unpack_int32(frb_read(&in_buf, 4))
+            data_str = frb_read(&in_buf, in_len)
+
+            if arg_index == target_index:
+                # Store the target variable data
+                data = cpython.PyBytes_FromStringAndSize(data_str, in_len)
+                result[target_index] = data
+
+        curr_arg_index = target_index + 1
+
+    return result
+
+
+# After param conversions, we need to re-encode the converted
+# arg before putting it into the recoded bind args
+cdef class ConvertedArg:
+
+    def encode(self, buffer: WriteBuffer):
+        raise NotImplementedError
+
+
+cdef class ConvertedArgStr(ConvertedArg):
+
+    @staticmethod
+    cdef ConvertedArgStr new(str data):
+        cdef ConvertedArgStr result
+        result = ConvertedArgStr.__new__(ConvertedArgStr)
+        result.bind_format_code = 0x0000
+        result.data = data
+        return result
+
+    def encode(self, buffer: WriteBuffer):
+        encoded = self.data.encode()
+        buffer.write_int32(len(encoded))
+        buffer.write_bytes(encoded)
+
+
+cdef class ConvertedArgFloat64(ConvertedArg):
+
+    @staticmethod
+    cdef ConvertedArgFloat64 new(float data):
+        cdef ConvertedArgFloat64 result
+        result = ConvertedArgFloat64.__new__(ConvertedArgFloat64)
+        result.bind_format_code = 0x0001
+        result.data = data
+        return result
+
+    def encode(self, buffer: WriteBuffer):
+        buffer.write_int32(8) # elem size
+        buffer.write_double(self.data)
+
+
+cdef class ConvertedArgListFloat32(ConvertedArg):
+
+    @staticmethod
+    cdef ConvertedArgListFloat32 new(list data):
+        cdef ConvertedArgListFloat32 result
+        result = ConvertedArgListFloat32.__new__(ConvertedArgListFloat32)
+        result.bind_format_code = 0x0001
+        result.data = data
+        return result
+
+    def encode(self, buffer: WriteBuffer):
+        elem_count = len(self.data)
+        buffer.write_int32(12 + 8 + elem_count * 8)  # buffer length
+        buffer.write_int32(1)  # number of dimensions
+        buffer.write_int32(0)  # flags
+        buffer.write_int32(700)  # array_tid for "real"
+
+        buffer.write_int32(elem_count) # count
+        buffer.write_int32(1) # bound
+
+        for elem in self.data:
+            buffer.write_int32(4) # elem size
+            buffer.write_float(elem)

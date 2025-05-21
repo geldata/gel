@@ -34,6 +34,27 @@ pub fn parse(
     Ok((res, productions))
 }
 
+#[pyfunction]
+pub fn suggest_next_keywords(
+    py: Python,
+    start_token_name: &Bound<PyString>,
+    tokens: PyObject,
+) -> PyResult<(Py<PyList>, bool)> {
+    let start_token_name = start_token_name.to_string();
+
+    let (spec, _) = get_spec()?;
+
+    let tokens = downcast_tokens(py, &start_token_name, tokens)?;
+
+    let context = parser::Context::new(spec);
+    let (suggestions, can_be_ident) = parser::suggest_next_keyword(&tokens, &context);
+
+    let suggestions_py = suggestions.iter().map(|k| PyString::new(py, k.0));
+    let suggestions_py = PyList::new(py, suggestions_py)?.into();
+
+    Ok((suggestions_py, can_be_ident))
+}
+
 #[pyclass]
 pub struct CSTNode {
     #[pyo3(get)]
@@ -48,6 +69,10 @@ pub struct Production {
     id: usize,
     #[pyo3(get)]
     args: PyObject,
+    #[pyo3(get)]
+    start: Option<u64>,
+    #[pyo3(get)]
+    end: Option<u64>,
 }
 
 #[pyclass]
@@ -142,7 +167,7 @@ fn load_productions(py: Python<'_>, spec: &parser::Spec) -> PyResult<PyObject> {
 /// Newtype required to define a trait for a foreign type.
 struct ParserCSTNode<'a>(&'a parser::CSTNode<'a>);
 
-impl<'a, 'py> IntoPyObject<'py> for ParserCSTNode<'a> {
+impl<'py> IntoPyObject<'py> for ParserCSTNode<'_> {
     type Target = CSTNode;
     type Output = Bound<'py, Self::Target>;
     type Error = PyErr;
@@ -174,6 +199,8 @@ impl<'a, 'py> IntoPyObject<'py> for ParserCSTNode<'a> {
                     Production {
                         id: prod.id,
                         args: PyList::new(py, prod.args.iter().map(ParserCSTNode))?.into(),
+                        start: prod.span.map(|s| s.start),
+                        end: prod.span.map(|s| s.end),
                     },
                 )?),
                 terminal: None,

@@ -4,8 +4,6 @@
 Globals
 =======
 
-.. index:: global, required global
-
 Schemas in Gel can contain typed *global variables*. These create a mechanism
 for specifying session-level context that can be referenced in queries,
 access policies, triggers, and elsewhere with the ``global`` keyword.
@@ -173,7 +171,7 @@ If marked ``required``, a default value must be provided.
 Computed globals
 ================
 
-.. index:: global, :=
+.. api-index:: global, :=
 
 Global variables can also be computed. The value of computed globals is
 dynamically computed when they are referenced in queries.
@@ -205,6 +203,8 @@ For example:
 Referencing globals
 ===================
 
+.. api-index:: global
+
 Unlike query parameters, globals can be referenced *inside your schema
 declarations*:
 
@@ -235,6 +235,8 @@ documentation.
 
 Declaring globals
 =================
+
+.. api-index:: required, optional, single, multi, global, :=, :, default
 
 This section describes the syntax to declare a global variable in your schema.
 

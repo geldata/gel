@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple, Type, Dict, List, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
@@ -53,7 +53,7 @@ LinkSourceDeleteAction = qltypes.LinkSourceDeleteAction
 
 def merge_actions(
     target: so.InheritingObject,
-    sources: List[so.Object],
+    sources: list[so.Object],
     field_name: str,
     *,
     ignore_local: bool = False,
@@ -185,7 +185,7 @@ class Link(
         return schema
 
     @classmethod
-    def get_root_classes(cls) -> Tuple[sn.QualName, ...]:
+    def get_root_classes(cls) -> tuple[sn.QualName, ...]:
         return (
             sn.QualName(module='std', name='link'),
             sn.QualName(module='schema', name='__type__'),
@@ -329,8 +329,8 @@ class LinkCommand(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         refdict: so.RefDict,
-    ) -> Tuple[s_schema.Schema,
-               Dict[sn.Name, Type[sd.ObjectCommand[so.Object]]]]:
+    ) -> tuple[s_schema.Schema,
+               dict[sn.Name, type[sd.ObjectCommand[so.Object]]]]:
         if self.scls.get_computable(schema) and refdict.attr != 'pointers':
             # If the link is a computable, the inheritance would only
             # happen in the case of aliasing, and in that case we only
@@ -364,7 +364,7 @@ class CreateLink(
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if (
             field == 'required'

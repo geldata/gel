@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Dict, Tuple, Sequence
+from typing import Sequence
 from .data import data_ops as e
 from .data import expr_ops as eops
 import copy
@@ -10,7 +10,7 @@ class EdgeDatabaseStorageProviderInterface:
     # filters have intersection semantics
     def query_ids_for_a_type(
         self, tp: e.QualifiedName, filters: e.EdgeDatabaseSelectFilter
-    ) -> List[e.EdgeID]:
+    ) -> list[e.EdgeID]:
         raise NotImplementedError()
 
     def get_schema(self) -> e.DBSchema:
@@ -23,7 +23,7 @@ class EdgeDatabaseStorageProviderInterface:
         self,
         id: e.EdgeID,
         tp: e.QualifiedName,
-        props: Dict[str, e.MultiSetVal],
+        props: dict[str, e.MultiSetVal],
     ) -> None:
         raise NotImplementedError()
 
@@ -34,7 +34,7 @@ class EdgeDatabaseStorageProviderInterface:
         self,
         id: e.EdgeID,
         tp: e.QualifiedName,
-        props: Dict[str, e.MultiSetVal],
+        props: dict[str, e.MultiSetVal],
     ) -> None:
         raise NotImplementedError()
 
@@ -81,7 +81,7 @@ class InMemoryEdgeDatabaseStorageProvider(
 
     def query_ids_for_a_type(
         self, tp: e.QualifiedName, filters: e.EdgeDatabaseSelectFilter
-    ) -> List[e.EdgeID]:
+    ) -> list[e.EdgeID]:
         def check_filter(filter: e.EdgeDatabaseEqFilter, id: e.EdgeID) -> bool:
             data_to_check = self.db.dbdata[id].data
             target_vals = data_to_check[filter.propname]
@@ -143,7 +143,7 @@ class InMemoryEdgeDatabaseStorageProvider(
     def reverse_project(
         self, subject_ids: Sequence[e.EdgeID], prop: str
     ) -> e.MultiSetVal:
-        results: List[e.Val] = []
+        results: list[e.Val] = []
         for id, obj in self.db.dbdata.items():
             if prop in obj.data.keys():
                 object_vals = obj.data[prop].getVals()
@@ -187,7 +187,7 @@ class InMemoryEdgeDatabaseStorageProvider(
         self,
         id: e.EdgeID,
         tp: e.QualifiedName,
-        props: Dict[str, e.MultiSetVal],
+        props: dict[str, e.MultiSetVal],
     ) -> None:
         self.db.dbdata[id] = e.DBEntry(tp, props)
 
@@ -198,7 +198,7 @@ class InMemoryEdgeDatabaseStorageProvider(
         self,
         id: e.EdgeID,
         tp: e.QualifiedName,
-        props: Dict[str, e.MultiSetVal],
+        props: dict[str, e.MultiSetVal],
     ) -> None:
         if id not in self.db.dbdata.keys():
             raise ValueError(f"ID {id} not found in database")
@@ -215,9 +215,9 @@ class EdgeDatabase:
     def __init__(self, storage: EdgeDatabaseStorageProviderInterface) -> None:
         super().__init__()
         self.storage = storage
-        self.to_delete: List[Tuple[e.QualifiedName, e.EdgeID]] = []
-        self.to_update: Dict[
-            e.EdgeID, Tuple[e.QualifiedName, Dict[str, e.MultiSetVal]]
+        self.to_delete: list[tuple[e.QualifiedName, e.EdgeID]] = []
+        self.to_update: dict[
+            e.EdgeID, tuple[e.QualifiedName, dict[str, e.MultiSetVal]]
         ] = {}
         self.to_insert = e.DB({})
 
@@ -252,7 +252,7 @@ class EdgeDatabase:
         self.to_delete.append((tp, id))
 
     def insert(
-        self, tp: e.QualifiedName, props: Dict[str, e.MultiSetVal]
+        self, tp: e.QualifiedName, props: dict[str, e.MultiSetVal]
     ) -> e.EdgeID:
         id = self.storage.next_id()
         self.to_insert.dbdata[id] = e.DBEntry(tp, props)
@@ -262,7 +262,7 @@ class EdgeDatabase:
         self,
         id: e.EdgeID,
         tp: e.QualifiedName,
-        props: Dict[str, e.MultiSetVal],
+        props: dict[str, e.MultiSetVal],
     ) -> None:
         if id in self.to_insert.dbdata.keys():
             self.to_insert.dbdata[id] = e.DBEntry(

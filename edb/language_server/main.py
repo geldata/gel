@@ -16,17 +16,19 @@
 # limitations under the License.
 #
 
+import sys
+import json
+
+
 from lsprotocol import types as lsp_types
 import click
-import sys
 
 from edb import buildmeta
-from edb.common import traceback as edb_traceback
 from edb.edgeql import parser as qlparser
 
-from . import parsing as ls_parsing
 from . import server as ls_server
-from . import is_schema_file
+from . import definition as ls_definition
+from . import completion as ls_completion
 
 
 @click.command()
@@ -36,12 +38,13 @@ from . import is_schema_file
     is_flag=True,
     help="Use stdio for LSP. This is currently the only transport.",
 )
-def main(*, version: bool, stdio: bool):
+@click.argument("options", type=str, default='{}')
+def main(options: str | None, *, version: bool, stdio: bool):
     if version:
         print(f"gel-ls, version {buildmeta.get_version()}")
         sys.exit(0)
 
-    ls = init()
+    ls = init(options)
 
     if stdio:
         ls.start_io()
@@ -49,85 +52,64 @@ def main(*, version: bool, stdio: bool):
         print("Error: no LSP transport enabled. Use --stdio.")
 
 
-def init() -> ls_server.GelLanguageServer:
-    ls = ls_server.GelLanguageServer()
+def init(options_json: str | None) -> ls_server.GelLanguageServer:
+    # load config
+    options_dict = json.loads(options_json or '{}')
+    project_dir = '.'
+    if 'project_dir' in options_dict:
+        project_dir = options_dict['project_dir']
+    config = ls_server.Config(project_dir=project_dir)
 
+    # construct server
+    ls = ls_server.GelLanguageServer(config)
+    debug_init(ls)
+
+    # register hooks
     @ls.feature(
         lsp_types.INITIALIZE,
     )
     def init(_params: lsp_types.InitializeParams):
-        ls.show_message_log('Starting')
         qlparser.preload_spec()
-        ls.show_message_log('Started')
+        ls.show_message_log('gel-ls ready for requests')
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DID_OPEN)
     def text_document_did_open(params: lsp_types.DidOpenTextDocumentParams):
-        document_updated(ls, params.text_document.uri)
+        ls_server.document_updated(ls, params.text_document.uri, compile=True)
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DID_CHANGE)
     def text_document_did_change(params: lsp_types.DidChangeTextDocumentParams):
-        document_updated(ls, params.text_document.uri)
+        ls_server.document_updated(ls, params.text_document.uri, compile=False)
+
+    @ls.feature(lsp_types.TEXT_DOCUMENT_DID_SAVE)
+    def text_document_did_save(params: lsp_types.DidChangeTextDocumentParams):
+        ls_server.document_updated(ls, params.text_document.uri, compile=True)
+
+    @ls.feature(lsp_types.TEXT_DOCUMENT_DEFINITION)
+    def text_document_definition(
+        params: lsp_types.DefinitionParams,
+    ) -> lsp_types.Definition:
+        return ls_definition.get_definition(ls, params)
 
     @ls.feature(
         lsp_types.TEXT_DOCUMENT_COMPLETION,
         lsp_types.CompletionOptions(trigger_characters=[',']),
     )
-    def completions(params: lsp_types.CompletionParams):
-        items = []
-
-        document = ls.workspace.get_text_document(params.text_document.uri)
-
-        if item := ls_parsing.parse_and_suggest(document, params.position):
-            items.append(item)
-
-        return lsp_types.CompletionList(is_incomplete=False, items=items)
+    def completion(params: lsp_types.CompletionParams):
+        return ls_completion.get_completion(ls, params)
 
     return ls
 
 
-def document_updated(ls: ls_server.GelLanguageServer, doc_uri: str):
-    # each call to this function should yield in exactly one publish_diagnostics
-    # for this document
-
-    document = ls.workspace.get_text_document(doc_uri)
-    diagnostic_set: ls_server.DiagnosticsSet
-
-    try:
-        if is_schema_file(doc_uri):
-            # schema file
-
-            ls_server.update_schema_doc(ls, document)
-
-            # recompile schema
-            ls.state.schema = None
-            _schema, diagnostic_set = ls_server.get_schema(ls)
-        else:
-            # query file
-            ql_ast_res = ls_parsing.parse(document, ls)
-            if diag := ql_ast_res.err:
-                ls.publish_diagnostics(document.uri, diag, document.version)
-                return
-            assert ql_ast_res.ok
-            ql_ast = ql_ast_res.ok
-
-            if isinstance(ql_ast, list):
-                diagnostic_set = ls_server.compile(ls, document, ql_ast)
-            else:
-                # SDL in query files?
-                ls.publish_diagnostics(document.uri, [], document.version)
-                diagnostic_set = ls_server.DiagnosticsSet()
-
-        for doc, diags in diagnostic_set.by_doc.items():
-            ls.publish_diagnostics(doc.uri, diags, doc.version)
-    except BaseException as e:
-        send_internal_error(ls, e)
-        ls.publish_diagnostics(document.uri, [], document.version)
+# Last gel-ls instance initialed. Use ONLY for debugging purposes.
+__gel_ls: ls_server.GelLanguageServer | None = None
 
 
-def send_internal_error(ls: ls_server.GelLanguageServer, e: BaseException):
-    text = edb_traceback.format_exception(e)
-    ls.show_message_log(f'Internal error: {text}')
+def debug_init(ls: ls_server.GelLanguageServer):
+    global __gel_ls
+    __gel_ls = ls
 
 
-if __name__ == '__main__':
-    main()
+def send_log_message(message: str):
+    global __gel_ls
+    assert __gel_ls, 'GelLanguageServer has not be started yet'
+    __gel_ls.show_message_log(message)

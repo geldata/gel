@@ -1,5 +1,5 @@
 from functools import singledispatch
-from typing import Any, Dict, Optional, Sequence, Tuple, cast, List
+from typing import Any, Optional, Sequence, cast
 
 from edb import errors
 
@@ -82,7 +82,7 @@ def elab_not_implemented(node: qlast.Base, msg: str = "") -> Any:
 
 def elab_Shape(elements: Sequence[qlast.ShapeElement]) -> ShapeExpr:
     """Convert a concrete syntax shape to object expressions"""
-    result: Dict[e.Label, e.BindingExpr] = {}
+    result: dict[e.Label, e.BindingExpr] = {}
     for se in elements:
         if path_contains_splat(se.expr):
             i_logging.print_warning("Splat is not implemented")
@@ -203,7 +203,7 @@ def elab_label(p: qlast.Path) -> Label:
 
 
 @elab.register(qlast.ShapeElement)
-def elab_ShapeElement(s: qlast.ShapeElement) -> Tuple[Label, BindingExpr]:
+def elab_ShapeElement(s: qlast.ShapeElement) -> tuple[Label, BindingExpr]:
     def default_post_processing(x):
         return x
 
@@ -352,10 +352,10 @@ def elab_where(where: Optional[qlast.Expr]) -> BindingExpr:
 
 def elab_orderby(
     qle: Optional[Sequence[qlast.SortExpr]],
-) -> Dict[str, BindingExpr]:
+) -> dict[str, BindingExpr]:
     if qle is None:
         return {}
-    result: Dict[str, Expr] = {}
+    result: dict[str, Expr] = {}
     for idx, sort_expr in enumerate(qle):
 
         empty_label = (
@@ -542,8 +542,8 @@ def elab_single_type_str(name: str, module_name: Optional[str]) -> Tp:
 
 def elab_CompositeTp(
     basetp: qlast.ObjectRef,
-    sub_tps: List[Tp],
-    labels: Optional[List[str]] = None,
+    sub_tps: list[Tp],
+    labels: Optional[list[str]] = None,
 ) -> Tp:
     if labels is None:
         labels = []
@@ -703,7 +703,7 @@ def elab_DetachedExpr(qle: qlast.DetachedExpr):
 @elab.register(qlast.NamedTuple)
 def elab_NamedTuple(qle: qlast.NamedTuple) -> NamedTupleExpr:
     # raise ValueError("TODO : FIX MYPY below")
-    result: Dict[str, Expr] = {}
+    result: dict[str, Expr] = {}
 
     for element in qle.elements:
         if element.name.name in result.keys():

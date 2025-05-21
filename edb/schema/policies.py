@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, Type, List, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
 from edb import errors
 
@@ -99,8 +99,8 @@ class AccessPolicy(
         special_ddl_syntax=True,
     )
 
-    def get_expr_refs(self, schema: s_schema.Schema) -> List[so.Object]:
-        objs: List[so.Object] = []
+    def get_expr_refs(self, schema: s_schema.Schema) -> list[so.Object]:
+        objs: list[so.Object] = []
         if (condition := self.get_condition(schema)) and condition.refs:
             objs.extend(condition.refs.objects(schema))
         if (expr := self.get_expr(schema)) and expr.refs:
@@ -288,7 +288,7 @@ class CreateAccessPolicy(
     def get_ast_attr_for_field(
         self,
         field: str,
-        astnode: Type[qlast.DDLOperation],
+        astnode: type[qlast.DDLOperation],
     ) -> Optional[str]:
         if (
             field in ('expr', 'condition', 'action', 'access_kinds')

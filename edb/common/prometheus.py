@@ -452,6 +452,12 @@ class BaseLabeledCounter(BaseMetric):
                     f'{self._name}_created{{{fmt_label}}} {float(value)}'
                 )
 
+    def clear(self, label_filter: typing.Callable[..., bool]) -> None:
+        for label in list(self._metric_values):
+            if label_filter(*label):
+                self._metric_values.pop(label)
+                self._metric_created.pop(label, None)
+
 
 class _TotalMixin(BaseMetric):
 

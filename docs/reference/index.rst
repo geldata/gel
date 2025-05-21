@@ -6,11 +6,11 @@ Reference
     :maxdepth: 3
     :hidden:
 
+    using/index
+    running/index
     datamodel/index
     edgeql/index
     stdlib/index
-    clients/index
-    cli/index
     ai/index
     auth/index
     reference/index

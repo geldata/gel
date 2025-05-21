@@ -17,7 +17,7 @@
 #
 
 from __future__ import annotations
-from typing import Optional, List
+from typing import Optional
 
 import copy
 import dataclasses
@@ -51,7 +51,7 @@ class ResolvedSQL:
     command_complete_tag: Optional[dbstate.CommandCompleteTag]
 
     # query parameters
-    params: List[dbstate.SQLParam]
+    params: list[dbstate.SQLParam]
 
 
 def resolve(

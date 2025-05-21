@@ -139,7 +139,7 @@ Bytes
 
 .. eql:operator:: bytesidx: bytes [ int64 ] -> bytes
 
-    :index: [int]
+    .. api-index:: §bytes§[§int§]
 
     Accesses a byte at a given index.
 
@@ -158,7 +158,7 @@ Bytes
 
 .. eql:operator:: bytesslice: bytes [ int64 : int64 ] -> bytes
 
-    :index: [int:int]
+    .. api-index:: §bytes§[§int§:§int§]
 
     Produces a bytes sub-sequence from an existing bytes value.
 
@@ -177,7 +177,8 @@ Bytes
 
 .. eql:operator:: bytesplus: bytes ++ bytes ->
 
-    :index: ++, bytes, concatenate, join, add
+    .. index:: join, add
+    .. api-index:: §bytes §++§ bytes§
 
     Concatenates two bytes values into one.
 
@@ -197,9 +198,9 @@ Bytes
                   std::to_bytes(val: int64, endian: Endian) -> bytes
                   std::to_bytes(val: uuid) -> bytes
 
-    :index: encode stringencoder
-
     .. versionadded:: 4.0
+
+    .. index:: encode, stringencoder
 
     Converts a given value into binary representation as :eql:type:`bytes`.
 

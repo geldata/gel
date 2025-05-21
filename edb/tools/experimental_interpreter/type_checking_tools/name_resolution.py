@@ -1,4 +1,3 @@
-from typing import Tuple, Dict
 
 from ..data import data_ops as e
 from ..data import module_ops as mops
@@ -25,7 +24,7 @@ def object_tp_comp_name_resolve(
                     "Scalar type cannot carry link props", tp_comp
                 )
 
-            linkprop_ck: Dict[str, e.ResultTp] = {}
+            linkprop_ck: dict[str, e.ResultTp] = {}
             for lbl, (t_comp_tp, t_comp_card) in l_prop.val.items():
                 linkprop_ck[lbl] = e.ResultTp(
                     object_tp_comp_name_resolve(
@@ -120,7 +119,7 @@ def func_def_name_resolve(
 
 
 def module_name_resolve(
-    dbschema: e.DBSchema, module_name: Tuple[str, ...]
+    dbschema: e.DBSchema, module_name: tuple[str, ...]
 ) -> None:
     """
     Modifies the db schema after checking
@@ -138,7 +137,7 @@ def module_name_resolve(
 
 
 def checked_module_name_resolve(
-    dbschema: e.DBSchema, module_name: Tuple[str, ...]
+    dbschema: e.DBSchema, module_name: tuple[str, ...]
 ) -> None:
     """
     Modifies the db schema after checking

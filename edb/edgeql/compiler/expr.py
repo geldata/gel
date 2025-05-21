@@ -22,7 +22,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Type, Union, Sequence, List, cast
+from typing import Callable, Optional, Sequence, cast
 
 from edb import errors
 
@@ -245,7 +245,7 @@ def compile_Constant(
 ) -> irast.Set:
     value = expr.value
 
-    node_cls: Type[irast.BaseConstant]
+    node_cls: type[irast.BaseConstant]
 
     if expr.kind == qlast.ConstantKind.STRING:
         std_type = sn.QualName('std', 'str')
@@ -278,7 +278,8 @@ def compile_Constant(
         ctx.env.get_schema_type_and_track(std_type),
         env=ctx.env,
     )
-    return setgen.ensure_set(node_cls(value=value, typeref=ct), ctx=ctx)
+    ir_expr = node_cls(value=value, typeref=ct, span=expr.span)
+    return setgen.ensure_set(ir_expr, ctx=ctx)
 
 
 @dispatch.compile.register(qlast.BytesConstant)
@@ -337,44 +338,7 @@ def compile_Tuple(expr: qlast.Tuple, *, ctx: context.ContextLevel) -> irast.Set:
 @dispatch.compile.register(qlast.Array)
 def compile_Array(expr: qlast.Array, *, ctx: context.ContextLevel) -> irast.Set:
     elements = [dispatch.compile(e, ctx=ctx) for e in expr.elements]
-    # check that none of the elements are themselves arrays
-    for el, expr_el in zip(elements, expr.elements):
-        if isinstance(setgen.get_set_type(el, ctx=ctx), s_abc.Array):
-            raise errors.QueryError(
-                f'nested arrays are not supported',
-                span=expr_el.span)
-
     return setgen.new_array_set(elements, ctx=ctx, span=expr.span)
-
-
-def _move_fenced_anchor(ir: irast.Set, *, ctx: context.ContextLevel) -> None:
-    """Move the scope tree of a fenced anchor to its use site.
-
-    For technical reasons, in _compile_dml_coalesce and
-    _compile_dml_ifelse, we compile the expressions normally and then
-    extract the subcomponents and use them as anchors inside a
-    desugared expression.
-
-    Because of this, the resultant scope tree does not have the right
-    shape, since the scope trees of the fenced subexpressions aren't
-    nested inside the trees of the FOR loops. This results in subtle
-    problems in backend compilation, since the loop iterators are not
-    visible to the loop bodies.
-
-    Fix the trees by finding the scope tree associated with a set used
-    as an anchor, finding where that anchor was used, and moving the
-    scope tree there.
-    """
-    match ir.expr:
-        case irast.SelectStmt(result=irast.SetE(path_scope_id=int(id))):
-            node = next(iter(
-                x for x in ctx.path_scope.root.descendants
-                if x.unique_id == id
-            ))
-            target = ctx.path_scope.find_descendant(ir.path_id)
-            assert target and target.parent
-            node.remove()
-            target.parent.attach_child(node)
 
 
 def _compile_dml_coalesce(
@@ -435,7 +399,9 @@ def _compile_dml_coalesce(
                     operand=qlast.UnaryOp(op='EXISTS', operand=cond_path),
                 ),
             ),
-            result=subctx.create_anchor(rhs_ir, check_dml=True),
+            result=subctx.create_anchor(
+                rhs_ir, move_scope=True, check_dml=True
+            ),
         )
 
         full = qlast.ForQuery(
@@ -452,8 +418,6 @@ def _compile_dml_coalesce(
         # cardinality/multiplicity.
         assert isinstance(res.expr, irast.SelectStmt)
         res.expr.card_inference_override = ir
-
-        _move_fenced_anchor(rhs_ir, ctx=subctx)
 
         return res
 
@@ -515,7 +479,9 @@ def _compile_dml_ifelse(
                     result=qlast.Tuple(elements=[]),
                     where=cond_path,
                 ),
-                result=subctx.create_anchor(if_ir, check_dml=True),
+                result=subctx.create_anchor(
+                    if_ir, move_scope=True, check_dml=True
+                ),
             )
             els.append(if_b)
 
@@ -526,7 +492,9 @@ def _compile_dml_ifelse(
                     result=qlast.Tuple(elements=[]),
                     where=qlast.UnaryOp(op='NOT', operand=cond_path),
                 ),
-                result=subctx.create_anchor(else_ir, check_dml=True),
+                result=subctx.create_anchor(
+                    else_ir, move_scope=True, check_dml=True
+                ),
             )
             els.append(else_b)
 
@@ -546,9 +514,6 @@ def _compile_dml_ifelse(
         # cardinality/multiplicity.
         assert isinstance(res.expr, irast.SelectStmt)
         res.expr.card_inference_override = ir
-
-        _move_fenced_anchor(if_ir, ctx=subctx)
-        _move_fenced_anchor(else_ir, ctx=subctx)
 
         return res
 
@@ -711,7 +676,7 @@ def compile_TypeCast(
             )
         raise
 
-    ir_expr: Union[irast.Set, irast.Expr]
+    ir_expr: irast.Set | irast.Expr
 
     if isinstance(expr.expr, qlast.Parameter):
         if (
@@ -1053,7 +1018,7 @@ def _infer_slice_type(
 def compile_Indirection(
     expr: qlast.Indirection, *, ctx: context.ContextLevel
 ) -> irast.Set:
-    node: Union[irast.Set, irast.Expr] = dispatch.compile(expr.arg, ctx=ctx)
+    node: irast.Set | irast.Expr = dispatch.compile(expr.arg, ctx=ctx)
     for indirection_el in expr.indirection:
         if isinstance(indirection_el, qlast.Index):
             idx = dispatch.compile(indirection_el.index, ctx=ctx)
@@ -1137,7 +1102,7 @@ def compile_type_check_op(
         typeref=output_typeref)
 
 
-def flatten_set(expr: qlast.Set) -> List[qlast.Expr]:
+def flatten_set(expr: qlast.Set) -> list[qlast.Expr]:
     elements = []
     for el in expr.elements:
         if isinstance(el, qlast.Set):
@@ -1148,7 +1113,7 @@ def flatten_set(expr: qlast.Set) -> List[qlast.Expr]:
     return elements
 
 
-def collect_binop(expr: qlast.BinOp) -> List[qlast.Expr]:
+def collect_binop(expr: qlast.BinOp) -> list[qlast.Expr]:
     elements = []
 
     stack = [expr.right, expr.left]
@@ -1188,3 +1153,39 @@ def try_constant_set(expr: irast.Base) -> Optional[irast.ConstantSet]:
         )
     else:
         return None
+
+
+class IdentCompletionException(BaseException):
+    """An exception that is raised to halt the compilation and return a list of
+    suggested idents to be used at the location of qlast.Cursor node.
+    """
+
+    def __init__(self, suggestions: list[str]):
+        self.suggestions = suggestions
+
+
+@dispatch.compile.register(qlast.Cursor)
+def compile_Cursor(
+    expr: qlast.Cursor, *, ctx: context.ContextLevel
+) -> irast.Set:
+    suggestions = []
+
+    # with bindings
+    name: sn.Name
+    for name in ctx.aliased_views.keys():
+        suggestions.append(name.name)
+
+    # names in current module
+    if cur_mod := ctx.modaliases.get(None):
+        obj_types = ctx.env.schema.get_objects(
+            included_modules=[sn.UnqualName(cur_mod)],
+            type=s_objtypes.ObjectType,
+        )
+        obj_type_names = [
+            obj_type.get_name(ctx.env.schema).name
+            for obj_type in obj_types
+        ]
+        obj_type_names.sort()
+        suggestions.extend(obj_type_names)
+
+    raise IdentCompletionException(suggestions)

@@ -24,6 +24,7 @@ import unittest
 import edgedb
 
 from edb.testbase import server as tb
+from edb.tools import test
 
 
 class TestEdgeQLGlobals(tb.QueryTestCase):
@@ -461,6 +462,53 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
                 reset global def_cur_user_excited
                 ''',
             )
+
+    async def test_edgeql_globals_16(self):
+        await self.assert_query_result(
+            r'''select global GlobalArrayOfArrayOfScalar''',
+            [[[1, 2, 3], [4, 5, 6]]],
+        )
+
+    async def test_edgeql_globals_17(self):
+        await self.assert_query_result(
+            r"""
+                select array_agg((
+                    for card_group in array_unpack(global GlobalCardsByCost)
+                        select array_agg((
+                            for card in array_unpack(card_group)
+                                select card.name
+                        ))
+                ))
+            """,
+            [
+                [
+                    tb.bag([]),
+                    tb.bag(['Imp', 'Dwarf', 'Sprite']),
+                    tb.bag(['Bog monster', 'Giant eagle']),
+                    tb.bag(['Giant turtle', 'Golem']),
+                    tb.bag(['Djinn']),
+                    tb.bag(['Dragon']),
+                ],
+            ],
+        )
+
+    @test.skip(
+        "cannot resolve backend oid for type first created by computed global"
+    )
+    async def test_edgeql_globals_18(self):
+        await self.con.execute('''
+            CREATE GLOBAL foo := ([(f := 1)]);
+        ''')
+        await self.con.execute('''
+            CREATE GLOBAL bar -> array<tuple<f: int64>>;
+        ''')
+        await self.con.execute('''
+            SET GLOBAL bar := ([(f := 1)]);
+        ''')
+        await self.assert_query_result(
+            'SELECT GLOBAL default::bar',
+            [[{'f': 1}]],
+        )
 
     async def test_edgeql_globals_client_01(self):
         con = edgedb.create_async_client(

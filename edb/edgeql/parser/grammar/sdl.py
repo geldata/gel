@@ -333,7 +333,7 @@ class FutureRequirementDeclaration(Nonterm):
 
 
 class ModuleDeclaration(Nonterm):
-    def reduce_MODULE_ModuleName_SDLCommandBlock(self, _, module_name, block):
+    def reduce_MODULE_ModuleName_SDLCommandBlock(self, _, name, block):
 
         # Check that top-level declarations DO NOT use fully-qualified
         # names and aren't nested module blocks.
@@ -355,7 +355,9 @@ class ModuleDeclaration(Nonterm):
 
         self.val = qlast.ModuleDeclaration(
             # mirror what we do in CREATE MODULE
-            name=qlast.ObjectRef(module=None, name='::'.join(module_name.val)),
+            name=qlast.ObjectRef(
+                module=None, name='::'.join(name.val), span=name.span
+            ),
             declarations=declarations,
         )
 
@@ -665,7 +667,7 @@ class ConcreteIndexDeclarationBlock(Nonterm, commondl.ProcessIndexMixin):
         """
         _, on_expr, except_expr, commands = kids
         self.val = qlast.CreateConcreteIndex(
-            name=qlast.ObjectRef(module='__', name='idx'),
+            name=qlast.ObjectRef(module='__', name='idx', span=kids[0].span),
             expr=on_expr.val,
             except_expr=except_expr.val,
             commands=commands.val,
@@ -677,7 +679,7 @@ class ConcreteIndexDeclarationBlock(Nonterm, commondl.ProcessIndexMixin):
         """
         _, _, on_expr, except_expr, commands = kids
         self.val = qlast.CreateConcreteIndex(
-            name=qlast.ObjectRef(module='__', name='idx'),
+            name=qlast.ObjectRef(module='__', name='idx', span=kids[0].span),
             expr=on_expr.val,
             except_expr=except_expr.val,
             deferred=True,
@@ -747,7 +749,7 @@ class ConcreteIndexDeclarationShort(Nonterm, commondl.ProcessIndexMixin):
     def reduce_INDEX_OnExpr_OptExceptExpr(self, *kids):
         _, on_expr, except_expr = kids
         self.val = qlast.CreateConcreteIndex(
-            name=qlast.ObjectRef(module='__', name='idx'),
+            name=qlast.ObjectRef(module='__', name='idx', span=kids[0].span),
             expr=on_expr.val,
             except_expr=except_expr.val,
         )
@@ -755,7 +757,7 @@ class ConcreteIndexDeclarationShort(Nonterm, commondl.ProcessIndexMixin):
     def reduce_DEFERRED_INDEX_OnExpr_OptExceptExpr(self, *kids):
         _, _, on_expr, except_expr = kids
         self.val = qlast.CreateConcreteIndex(
-            name=qlast.ObjectRef(module='__', name='idx'),
+            name=qlast.ObjectRef(module='__', name='idx', span=kids[0].span),
             expr=on_expr.val,
             except_expr=except_expr.val,
             deferred=True,
@@ -831,7 +833,7 @@ class RewriteDeclarationBlock(Nonterm):
         # have one.
         name = '/'.join(str(kind) for kind in kinds.val)
         self.val = qlast.CreateRewrite(
-            name=qlast.ObjectRef(name=name),
+            name=qlast.ObjectRef(name=name, span=kinds.span),
             kinds=kinds.val,
             expr=expr.val,
             commands=commands.val,
@@ -848,7 +850,7 @@ class RewriteDeclarationShort(Nonterm):
         # have one.
         name = '/'.join(str(kind) for kind in kinds.val)
         self.val = qlast.CreateRewrite(
-            name=qlast.ObjectRef(name=name),
+            name=qlast.ObjectRef(name=name, span=kinds.span),
             kinds=kinds.val,
             expr=expr.val,
         )
@@ -1776,6 +1778,7 @@ class AliasDeclarationShort(Nonterm):
                     name='expr',
                     value=expr.val,
                     special_syntax=True,
+                    span=self.span,
                 )
             ]
         )

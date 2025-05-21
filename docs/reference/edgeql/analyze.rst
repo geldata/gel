@@ -3,7 +3,8 @@
 Analyze
 =======
 
-.. index:: analyze, explain, performance, postgres query planner
+.. index:: explain, performance, postgres query planner
+.. api-index:: analyze
 
 Prefix an EdgeQL query with ``analyze`` to run a performance analysis of that
 query.

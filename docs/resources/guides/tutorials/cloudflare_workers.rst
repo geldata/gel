@@ -85,7 +85,7 @@ to create a new instance:
 It creates an |gel.toml| config file and a schema file
 :code:`dbschema/default.gel`.
 
-It also spins up an Gel instance and associates it with the current
+It also spins up a Gel instance and associates it with the current
 directory.
 As long as you're inside the project directory, all CLI commands will
 be executed against this instance.

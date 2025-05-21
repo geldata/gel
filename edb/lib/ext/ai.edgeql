@@ -24,7 +24,7 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
     create module ext::ai;
 
     create scalar type ext::ai::ProviderAPIStyle
-        extending enum<OpenAI, Anthropic, VoyageAI>;
+        extending enum<OpenAI, Anthropic, Ollama, VoyageAI>;
 
     create abstract type ext::ai::ProviderConfig extending cfg::ConfigObject {
         create required property name: std::str {
@@ -155,6 +155,27 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         alter property api_style {
             set protected := true;
             set default := ext::ai::ProviderAPIStyle.VoyageAI;
+        };
+    };
+
+    create type ext::ai::OllamaProviderConfig extending ext::ai::ProviderConfig {
+        alter property name {
+            set protected := true;
+            set default := 'builtin::ollama';
+        };
+
+        alter property display_name {
+            set protected := true;
+            set default := 'Ollama';
+        };
+
+        alter property api_url {
+            set default := 'http://localhost:11434/api'
+        };
+
+        alter property secret {
+            set default := ''
+            set default := ext::ai::ProviderAPIStyle.Ollama;
         };
     };
 
@@ -503,7 +524,7 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::text_gen_model_context_window := "200000";
     };
 
-   # Anthropic fastest model
+    # Anthropic fastest model
     create abstract type ext::ai::AnthropicClaude_3_5_HaikuModel
         extending ext::ai::TextGenerationModel
     {
@@ -692,6 +713,59 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::embedding_model_max_output_dimensions := "1536";
     };
 
+    # Ollama embedding models
+    create abstract type ext::ai::OllamaLlama_3_2_Model
+        extending ext::ai::TextGenerationModel
+    {
+        alter annotation
+            ext::ai::model_name := "llama3.2";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::text_gen_model_context_window := "131072";
+    };
+
+    create abstract type ext::ai::OllamaLlama_3_3_Model
+        extending ext::ai::TextGenerationModel
+    {
+        alter annotation
+            ext::ai::model_name := "llama3.3";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::text_gen_model_context_window := "131072";
+    };
+
+    create abstract type ext::ai::OllamaNomicEmbedTextModel
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "nomic-embed-text";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "768";
+    };
+
+    create abstract type ext::ai::OllamaBgeM3Model
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "bge-m3";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "1024";
+    };
+
     create scalar type ext::ai::DistanceFunction
         extending enum<Cosine, InnerProduct, L2>;
 
@@ -745,6 +819,24 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         using sql expression;
     };
 
+    create function ext::ai::search(
+        object: anyobject,
+        query: str,
+    ) -> optional tuple<object: anyobject, distance: float64>
+    {
+        create annotation std::description := '
+            Search an object using its ext::ai::index index.
+            Gets an embedding for the query from the ai provider then
+            returns objects that match the specified semantic query and the
+            similarity score.
+        ';
+        set volatility := 'Volatile';
+        # Needed to pick up the indexes when used in ORDER BY.
+        set prefer_subquery_args := true;
+        set server_param_conversions := '{"query": ["ai_text_embedding", "object"]}';
+        using sql expression;
+    };
+
     create scalar type ext::ai::ChatParticipantRole
         extending enum<System, User, Assistant, Tool>;
 
@@ -794,7 +886,7 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
                      1. Never directly reference the given context in your \
                         answer.\n\
                      2. Never include phrases like 'Based on the context, ...' \
-                        or any similar phrases in your responses. \
+                        or any similar phrases in your responses.\n\
                      3. When the context does not provide information about \
                         the question, answer with \
                         'No information available.'.\n\
@@ -803,6 +895,13 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
                      knowledge, answer the user query."
                 ),
             }),
+            (insert ext::ai::ChatPromptMessage {
+                participant_role := ext::ai::ChatParticipantRole.User,
+                content := (
+                    "Query: {query}\n\
+                     Answer: "
+                ),
+            })
         }
     };
 

@@ -183,6 +183,8 @@ class flags(metaclass=FlagsMeta):
 
     zombodb = Flag(doc="Enabled zombodb and disables postgres FTS")
 
+    ast_span = Flag(doc="Enables spans in markup of ASTs")
+
 
 @contextlib.contextmanager
 def timeit(title='block'):

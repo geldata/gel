@@ -405,3 +405,15 @@ sys::__pg_or(a: OPTIONAL std::bool, b: OPTIONAL std::bool) -> std::bool
         SELECT a OR b;
     $$;
 };
+
+
+CREATE FUNCTION
+sys::approximate_count(
+    type: schema::ObjectType,
+    NAMED ONLY ignore_subtypes: std::bool=false,
+) -> int64
+{
+    SET volatility := 'Stable';
+    USING SQL FUNCTION 'edgedb.approximate_count';
+    set impl_is_strict := false;
+};

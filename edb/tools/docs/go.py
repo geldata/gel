@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 
-from typing import Any, Dict
+from typing import Any
 
 from sphinx import addnodes as s_nodes
 from sphinx import directives as s_directives
@@ -122,7 +122,7 @@ class GolangDomain(s_domains.Domain):
         'method': GoMethodDirective,
     }
 
-    initial_data: Dict[str, Dict[str, Any]] = {
+    initial_data: dict[str, dict[str, Any]] = {
         'objects': {}  # fullname -> docname, objtype
     }
 

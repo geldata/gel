@@ -16,18 +16,18 @@
 # limitations under the License.
 #
 
-from typing import Optional, List
+from typing import Optional
 
 from edb.schema import name as sn
 
 from . import ast as irast
 
 
-def get_constraint_references(tree: irast.Base) -> Optional[List[irast.Base]]:
+def get_constraint_references(tree: irast.Base) -> Optional[list[irast.Base]]:
     return is_constraint_expr(tree)
 
 
-def is_constraint_expr(tree: irast.Base) -> Optional[List[irast.Base]]:
+def is_constraint_expr(tree: irast.Base) -> Optional[list[irast.Base]]:
     return (
         is_distinct_expr(tree) or
         is_set_expr(tree) or
@@ -35,14 +35,14 @@ def is_constraint_expr(tree: irast.Base) -> Optional[List[irast.Base]]:
     )
 
 
-def is_distinct_expr(tree: irast.Base) -> Optional[List[irast.Base]]:
+def is_distinct_expr(tree: irast.Base) -> Optional[list[irast.Base]]:
     return (
         is_pure_distinct_expr(tree) or
         is_possibly_wrapped_distinct_expr(tree)
     )
 
 
-def is_pure_distinct_expr(tree: irast.Base) -> Optional[List[irast.Base]]:
+def is_pure_distinct_expr(tree: irast.Base) -> Optional[list[irast.Base]]:
     if not isinstance(tree, irast.FunctionCall):
         return None
     if tree.func_shortname != sn.QualName('std', '_is_exclusive'):
@@ -59,14 +59,14 @@ def is_pure_distinct_expr(tree: irast.Base) -> Optional[List[irast.Base]]:
 
 def is_possibly_wrapped_distinct_expr(
     tree: irast.Base
-) -> Optional[List[irast.Base]]:
+) -> Optional[list[irast.Base]]:
     if not isinstance(tree, irast.SelectStmt):
         return None
 
     return is_set_expr(tree.result)
 
 
-def is_set_expr(tree: irast.Base) -> Optional[List[irast.Base]]:
+def is_set_expr(tree: irast.Base) -> Optional[list[irast.Base]]:
     if not isinstance(tree, irast.Set):
         return None
 
@@ -76,7 +76,7 @@ def is_set_expr(tree: irast.Base) -> Optional[List[irast.Base]]:
     )
 
 
-def is_binop(tree: irast.Base) -> Optional[List[irast.Base]]:
+def is_binop(tree: irast.Base) -> Optional[list[irast.Base]]:
     if not isinstance(tree, irast.OperatorCall):
         return None
     if not tree.func_shortname != sn.QualName('std', 'AND'):
