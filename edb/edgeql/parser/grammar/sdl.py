@@ -1811,15 +1811,15 @@ sdl_commands_block(
 class FunctionDeclaration(Nonterm, commondl.ProcessFunctionBlockMixin):
     def reduce_CreateFunction(self, *kids):
         r"""%reduce FUNCTION NodeName CreateFunctionArgs \
-                ARROW OptTypeQualifier FunctionType \
+                CreateFunctionResult \
                 CreateFunctionSDLCommandsBlock
         """
-        _, name, args, _, type_qualifier, function_type, body = kids
+        _, name, args, result, body = kids
         self.val = qlast.CreateFunction(
             name=name.val,
             params=args.val,
-            returning=function_type.val,
-            returning_typemod=type_qualifier.val,
+            returning=result.val.result_type,
+            returning_typemod=result.val.type_qualifier,
             **self._process_function_body(body),
         )
 
@@ -1827,15 +1827,15 @@ class FunctionDeclaration(Nonterm, commondl.ProcessFunctionBlockMixin):
 class FunctionDeclarationShort(Nonterm, commondl.ProcessFunctionBlockMixin):
     def reduce_CreateFunction(self, *kids):
         r"""%reduce FUNCTION NodeName CreateFunctionArgs \
-                ARROW OptTypeQualifier FunctionType \
+                CreateFunctionResult \
                 CreateFunctionSingleSDLCommandBlock
         """
-        _, name, args, _, type_qualifier, function_type, body = kids
+        _, name, args, result, body = kids
         self.val = qlast.CreateFunction(
             name=name.val,
             params=args.val,
-            returning=function_type.val,
-            returning_typemod=type_qualifier.val,
+            returning=result.val.result_type,
+            returning_typemod=result.val.type_qualifier,
             **self._process_function_body(body),
         )
 
