@@ -637,6 +637,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 provider=None,
                 redirect_to=None,
                 challenge=None,
+                redirect_uri=None,
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -659,6 +660,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 provider=provider_name,
                 redirect_to=f"{self.http_addr}/some/path",
                 challenge="1234",
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(
                 auth_jwt.SigningKey(lambda: 'wrong key', self.http_addr),
@@ -679,6 +681,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 redirect_to="https://example.com",
                 redirect_to_on_signup=None,
                 challenge="challenge",
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -800,6 +803,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     provider=provider_name,
                     redirect_to=f"{self.http_addr}/some/path",
                     challenge=challenge,
+                    redirect_uri=f"{self.http_addr}/auth/oauth/code",
                 )
                 state_token = state_claims.sign(self.signing_key())
 
@@ -833,7 +837,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                         "code": "abc123",
                         "client_id": client_id,
                         "client_secret": client_secret,
-                        "redirect_uri": f"{self.http_addr}/callback",
+                        "redirect_uri": f"{self.http_addr}/auth/oauth/code",
                     },
                 )
 
@@ -959,6 +963,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 provider=provider_name,
                 redirect_to=f"{self.http_addr}/some/path",
                 challenge="challenge",
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -1020,6 +1025,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 provider=provider_name,
                 redirect_to=f"{self.http_addr}/some/path",
                 challenge="challenge",
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -1192,6 +1198,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 provider=provider_name,
                 redirect_to=f"{self.http_addr}/some/path",
                 challenge=challenge,
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -1222,7 +1229,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     "code": ["abc123"],
                     "client_id": [client_id],
                     "client_secret": [client_secret],
-                    "redirect_uri": [f"{self.http_addr}/callback"],
+                    "redirect_uri": [f"{self.http_addr}/auth/oauth/code"],
                 },
             )
 
@@ -1337,6 +1344,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 provider=provider_name,
                 redirect_to=f"{self.http_addr}/some/path",
                 challenge=challenge,
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -1371,7 +1379,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     "code": ["abc123"],
                     "client_id": [client_id],
                     "client_secret": [client_secret],
-                    "redirect_uri": [f"{self.http_addr}/callback"],
+                    "redirect_uri": [f"{self.http_addr}/auth/oauth/code"],
                 },
             )
 
@@ -1586,6 +1594,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 provider=provider_name,
                 redirect_to=f"{self.http_addr}/some/path",
                 challenge=challenge,
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -1620,7 +1629,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     "code": ["abc123"],
                     "client_id": [client_id],
                     "client_secret": [client_secret],
-                    "redirect_uri": [f"{self.http_addr}/callback"],
+                    "redirect_uri": [f"{self.http_addr}/auth/oauth/code"],
                 },
             )
 
@@ -1754,6 +1763,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 provider=provider_name,
                 redirect_to=f"{self.http_addr}/some/path",
                 challenge=challenge,
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -1793,7 +1803,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     "code": ["abc123"],
                     "client_id": [client_id],
                     "client_secret": [client_secret],
-                    "redirect_uri": [f"{self.http_addr}/callback"],
+                    "redirect_uri": [f"{self.http_addr}/auth/oauth/code"],
                 },
             )
 
@@ -1851,6 +1861,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 redirect_to=f"{self.http_addr}/some/path",
                 redirect_to_on_signup=f"{self.http_addr}/some/other/path",
                 challenge=challenge,
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -1950,6 +1961,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 provider=provider_name,
                 redirect_to=f"{self.http_addr}/some/path",
                 challenge=challenge,
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -1984,7 +1996,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     "code": ["abc123"],
                     "client_id": [client_id],
                     "client_secret": [client_secret],
-                    "redirect_uri": [f"{self.http_addr}/callback"],
+                    "redirect_uri": [f"{self.http_addr}/auth/oauth/code"],
                 },
             )
 
@@ -2210,6 +2222,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 provider=provider_name,
                 redirect_to=f"{self.http_addr}/some/path",
                 challenge=challenge,
+                redirect_uri=f"{self.http_addr}/auth/oauth/code",
             )
             state_token = state_claims.sign(self.signing_key())
 
@@ -2244,7 +2257,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     "code": ["abc123"],
                     "client_id": [client_id],
                     "client_secret": [client_secret],
-                    "redirect_uri": [f"{self.http_addr}/callback"],
+                    "redirect_uri": [f"{self.http_addr}/auth/oauth/code"],
                 },
             )
 
