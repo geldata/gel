@@ -2563,7 +2563,7 @@ async def _handle_rag_request(
         if ctx_globals is not None and not isinstance(ctx_globals, dict):
             raise TypeError('"globals" must be a JSON object')
 
-        model = body.get('model')
+        model = cast(str, body.get('model'))
         if not model:
             raise TypeError(
                 'missing required "model" in request')
@@ -2729,13 +2729,30 @@ async def _handle_rag_request(
     except Exception as ex:
         raise BadRequestError(ex.args[0])
 
-    provider_name = await _get_model_provider(
-        db,
-        base_model_type="ext::ai::TextGenerationModel",
-        model_name=model,
-    )
+    provider_name: str
+    model_name: str
+    try_builtin = False
+    if ':' in model:
+        parts = model.split(':')
+        if len(parts) > 2:
+            raise BadRequestError(
+                f"Invalid model uri, ':' used more than once: {model}"
+            )
+        provider_name = parts[0]
+        model_name = parts[1]
+        try_builtin = True
 
-    chat_provider = _get_provider_config(db, provider_name)
+    else:
+        provider_name = await _get_model_provider(
+            db,
+            base_model_type="ext::ai::TextGenerationModel",
+            model_name=model,
+        )
+        model_name = model
+
+    chat_provider = _get_provider_config(
+        db, provider_name, try_builtin=try_builtin
+    )
 
     vector_provider, vector_query = await _generate_embeddings_for_type(
         db,
@@ -2836,7 +2853,7 @@ async def _handle_rag_request(
         response=response,
         provider=chat_provider,
         http_client=http_client,
-        model_name=model,
+        model_name=model_name,
         messages=messages,
         stream=stream,
         temperature=body.get("temperature"),
@@ -3013,24 +3030,46 @@ async def _db_error(
 def _get_provider_config(
     db: dbview.Database,
     provider_name: str,
+    try_builtin: bool = False,
 ) -> ProviderConfig:
+    """Try to return a provider config with a matching name.
+    Otherwise, raise an error.
+
+    Checks if there is a builtin provider with a matching name.
+
+    eg. "openai" -> ProviderConfig(name="builtin::openai", ...)
+    """
+
     cfg = db.lookup_config("ext::ai::Config::providers")
 
+    def _create_provider_config(db_cfg: Any) -> ProviderConfig:
+        cfg = cast(ProviderConfig, db_cfg)
+        return ProviderConfig(
+            name=cfg.name,
+            display_name=cfg.display_name,
+            api_url=cfg.api_url,
+            client_id=cfg.client_id,
+            secret=cfg.secret,
+            api_style=cfg.api_style,
+        )
+
+    # try builtin prefix
+    builtin_prefix = "builtin::"
+    if try_builtin and not provider_name.startswith(builtin_prefix):
+        builtin_name = builtin_prefix + provider_name
+
+        for provider in cfg:
+            if provider.name == builtin_name:
+                return _create_provider_config(provider)
+
+    # try unmodified name
     for provider in cfg:
         if provider.name == provider_name:
-            provider = cast(ProviderConfig, provider)
-            return ProviderConfig(
-                name=provider.name,
-                display_name=provider.display_name,
-                api_url=provider.api_url,
-                client_id=provider.client_id,
-                secret=provider.secret,
-                api_style=provider.api_style,
-            )
-    else:
-        raise ConfigurationError(
-            f"provider {provider_name!r} has not been configured"
-        )
+            return _create_provider_config(provider)
+
+    raise ConfigurationError(
+        f"provider {provider_name!r} has not been configured"
+    )
 
 
 async def _get_model_annotation_as_json(
