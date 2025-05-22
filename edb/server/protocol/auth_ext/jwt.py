@@ -290,11 +290,15 @@ class SessionToken:
 @dataclasses.dataclass
 class OAuthStateToken:
     """
-    The token representing an OAuth state passed to the identity provider.
+    The token representing an OAuth state passed to the identity provider. It
+    allows the auth extension server to reference data from the original
+    authorize request, such as the provider, application redirect URLs, PKCE
+    challenge, and OAuth callback URL.
     """
     provider: str
     redirect_to: str
     challenge: str
+    redirect_uri: str
     redirect_to_on_signup: str | None = None
 
     def sign(
@@ -313,6 +317,7 @@ class OAuthStateToken:
                 "redirect_to": self.redirect_to,
                 "redirect_to_on_signup": self.redirect_to_on_signup,
                 "challenge": self.challenge,
+                "redirect_uri": self.redirect_uri,
             },
             ctx=signing_ctx,
         )
@@ -328,6 +333,7 @@ class OAuthStateToken:
                 cls, claims, 'redirect_to_on_signup'
             ),
             challenge=verify_str(cls, claims, 'challenge'),
+            redirect_uri=verify_str(cls, claims, 'redirect_uri'),
         )
 
 

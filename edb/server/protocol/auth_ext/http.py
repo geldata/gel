@@ -327,12 +327,13 @@ class Router:
             http_client=self.tenant.get_http_client(originator="auth"),
         )
         await pkce.create(self.db, challenge)
+        redirect_uri = (
+            allowed_callback_url.url
+            if allowed_callback_url
+            else self._get_callback_url()
+        )
         authorize_url = await oauth_client.get_authorize_url(
-            redirect_uri=(
-                allowed_callback_url.url
-                if allowed_callback_url
-                else self._get_callback_url()
-            ),
+            redirect_uri=redirect_uri,
             state=jwt.OAuthStateToken(
                 provider=provider_name,
                 redirect_to=allowed_redirect_to.url,
@@ -342,6 +343,7 @@ class Router:
                     else None
                 ),
                 challenge=challenge,
+                redirect_uri=redirect_uri,
             ).sign(self.signing_key),
         )
         # n.b. Explicitly allow authorization URL to be outside of allowed
@@ -413,13 +415,12 @@ class Router:
         try:
             claims = jwt.OAuthStateToken.verify(state, self.signing_key)
             provider_name = claims.provider
-            allowed_redirect_to = self._make_allowed_url(
-                claims.redirect_to
-            )
+            allowed_redirect_to = self._make_allowed_url(claims.redirect_to)
             allowed_redirect_to_on_signup = self._maybe_make_allowed_url(
                 claims.redirect_to_on_signup
             )
             challenge = claims.challenge
+            redirect_uri = claims.redirect_uri
         except Exception:
             raise errors.InvalidData("Invalid state token")
         oauth_client = oauth.Client(
@@ -434,7 +435,7 @@ class Router:
             auth_token,
             refresh_token,
             id_token,
-        ) = await oauth_client.handle_callback(code, self._get_callback_url())
+        ) = await oauth_client.handle_callback(code, redirect_uri)
         if new_identity:
             await self._maybe_send_webhook(
                 webhook.IdentityCreated(
@@ -564,9 +565,7 @@ class Router:
         email_password_client = email_password.Client(db=self.db)
         require_verification = email_password_client.config.require_verification
         if not require_verification and maybe_challenge is None:
-            raise errors.InvalidData(
-                'Missing "challenge" in register request'
-            )
+            raise errors.InvalidData('Missing "challenge" in register request')
         pkce_code: Optional[str] = None
 
         try:
@@ -613,7 +612,7 @@ class Router:
                     "identity_id": identity.id,
                     "verification_email_sent_at": datetime.datetime.now(
                         datetime.timezone.utc
-                    ).isoformat()
+                    ).isoformat(),
                 }
             else:
                 # Checked at the beginning of the route handler
