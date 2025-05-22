@@ -17,6 +17,7 @@
 #
 
 
+import contextlib
 import contextvars
 import urllib.parse
 import uuid
@@ -29,6 +30,7 @@ import pickle
 import re
 import hashlib
 import hmac
+import functools
 
 from typing import Optional, cast
 from email.message import EmailMessage
@@ -704,7 +706,37 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             )
 
     async def test_http_auth_ext_github_callback_01(self):
-        with self.http_con() as http_con:
+        # We use an ExitStack to keep us to one level of indentation,
+        # mostly to make backporting to 6.x easier.
+        async with contextlib.AsyncExitStack() as stack:
+            http_con = stack.enter_context(self.http_con())
+
+            base_url = self.mock_net_server.get_base_url().rstrip("/")
+            webhook_url = f"{base_url}/webhook-01"
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::WebhookConfig {
+                    url := <str>$url,
+                    events := {
+                        ext::auth::WebhookEvent.IdentityCreated,
+                    },
+                };
+                """,
+                url=webhook_url,
+            )
+            stack.push_async_callback(
+                functools.partial(
+                    self.con.query,
+                    """
+                    CONFIGURE CURRENT DATABASE
+                    RESET ext::auth::WebhookConfig
+                    filter .url = <str>$url;
+                    """,
+                    url=webhook_url,
+                )
+            )
+
             provider_config = await self.get_builtin_provider_config_by_name(
                 "oauth_github"
             )
@@ -713,6 +745,18 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             client_secret = GITHUB_SECRET
 
             now = utcnow()
+            webhook_request = (
+                "POST",
+                base_url,
+                "/webhook-01",
+            )
+            self.mock_net_server.register_route_handler(*webhook_request)(
+                (
+                    "",
+                    204,
+                )
+            )
+
             token_request = (
                 "POST",
                 "https://github.com",
@@ -747,7 +791,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     200,
                 )
             )
-
+            await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
             challenge = (
                 base64.urlsafe_b64encode(
                     hashlib.sha256(
@@ -820,6 +864,26 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 """
             )
             self.assertEqual(len(identity), 1)
+
+            # Test Webhook side effect
+            async for tr in self.try_until_succeeds(
+                delay=2, timeout=120, ignore=(KeyError, AssertionError)
+            ):
+                async with tr:
+                    requests_for_webhook = self.mock_net_server.requests[
+                        webhook_request
+                    ]
+                    self.assertEqual(len(requests_for_webhook), 1)
+
+            body = requests_for_webhook[0].body
+            self.assertIsNotNone(body)
+            event_data = json.loads(body)
+            self.assertEqual(
+                event_data["event_type"], "IdentityCreated"
+            )
+            self.assertEqual(
+                event_data["identity_id"], str(identity[0].id)
+            )
 
             pkce_object = await self.con.query(
                 """

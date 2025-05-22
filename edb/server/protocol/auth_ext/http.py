@@ -435,6 +435,14 @@ class Router:
             refresh_token,
             id_token,
         ) = await oauth_client.handle_callback(code, self._get_callback_url())
+        if new_identity:
+            await self._maybe_send_webhook(
+                webhook.IdentityCreated(
+                    event_id=str(uuid.uuid4()),
+                    timestamp=datetime.datetime.now(datetime.timezone.utc),
+                    identity_id=identity.id,
+                )
+            )
         pkce_code = await pkce.link_identity_challenge(
             self.db, identity.id, challenge
         )
