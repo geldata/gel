@@ -1685,6 +1685,15 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
     def visit_DropAccessPolicy(self, node: qlast.DropAccessPolicy) -> None:
         self._visit_DropObject(node, 'ACCESS POLICY', unqualified=True)
 
+    def visit_CreatePermission(self, node: qlast.CreatePermission) -> None:
+        self._visit_CreateObject(node, 'PERMISSION', unqualified=True)
+
+    def visit_AlterPermission(self, node: qlast.AlterPermission) -> None:
+        self._visit_AlterObject(node, 'PERMISSION', unqualified=True)
+
+    def visit_DropPermission(self, node: qlast.DropPermission) -> None:
+        self._visit_DropObject(node, 'PERMISSION', unqualified=True)
+
     def _format_trigger_kinds(self, kinds: list[qltypes.TriggerKind]) -> str:
         # Canonicalize the order, since the schema loses track
         kinds = [k for k in list(qltypes.TriggerKind) if k in kinds]

@@ -306,6 +306,11 @@ CREATE TYPE schema::AccessPolicy
         schema::InheritingObject, schema::AnnotationSubject;
 
 
+CREATE TYPE schema::Permission
+    EXTENDING
+        schema::AnnotationSubject;
+
+
 CREATE TYPE schema::Trigger
     EXTENDING
         schema::InheritingObject, schema::AnnotationSubject;

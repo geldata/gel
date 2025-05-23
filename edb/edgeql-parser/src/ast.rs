@@ -1014,6 +1014,7 @@ pub enum CreateObjectKind {
     CreateConcreteIndex(CreateConcreteIndex),
     CreateAnnotationValue(CreateAnnotationValue),
     CreateAccessPolicy(CreateAccessPolicy),
+    CreatePermission(CreatePermission),
     CreateTrigger(CreateTrigger),
     CreateRewrite(CreateRewrite),
     CreateFunction(CreateFunction),
@@ -1052,6 +1053,7 @@ pub enum AlterObjectKind {
     AlterConcreteIndex(AlterConcreteIndex),
     AlterAnnotationValue(AlterAnnotationValue),
     AlterAccessPolicy(AlterAccessPolicy),
+    AlterPermission(AlterPermission),
     AlterTrigger(AlterTrigger),
     AlterRewrite(AlterRewrite),
     AlterFunction(AlterFunction),
@@ -1092,6 +1094,7 @@ pub enum DropObjectKind {
     DropConcreteIndex(DropConcreteIndex),
     DropAnnotationValue(DropAnnotationValue),
     DropAccessPolicy(DropAccessPolicy),
+    DropPermission(DropPermission),
     DropTrigger(DropTrigger),
     DropRewrite(DropRewrite),
     DropFunction(DropFunction),
@@ -1574,6 +1577,18 @@ pub struct DropAccessPolicy {}
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "python", derive(IntoPython))]
+pub struct CreatePermission {}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "python", derive(IntoPython))]
+pub struct AlterPermission {}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "python", derive(IntoPython))]
+pub struct DropPermission {}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "python", derive(IntoPython))]
 pub struct CreateTrigger {
     pub timing: TriggerTiming,
     pub kinds: Vec<TriggerKind>,
@@ -2017,6 +2032,7 @@ pub enum SchemaObjectClass {
     MODULE,
     OPERATOR,
     PARAMETER,
+    PERMISSION,
     PROPERTY,
     PSEUDO_TYPE,
     RANGE_TYPE,

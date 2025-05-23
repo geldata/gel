@@ -63,6 +63,7 @@ from edb.schema import links as s_links
 from edb.schema import name as s_name
 from edb.schema import objects as s_obj
 from edb.schema import objtypes as s_objtypes
+from edb.schema import permissions as s_permissions
 from edb.schema import properties as s_props
 from edb.schema import pseudo as s_pseudo
 from edb.schema import scalars as s_scalars
@@ -406,6 +407,8 @@ def sdl_to_ddl(
                     ctx.objects[fq_name] = qltracer.Global(fq_name)
                 elif isinstance(decl_ast, qlast.CreateIndex):
                     ctx.objects[fq_name] = qltracer.Index(fq_name)
+                elif isinstance(decl_ast, qlast.CreatePermission):
+                    ctx.objects[fq_name] = qltracer.Permission(fq_name)
                 else:
                     raise AssertionError(
                         f'unexpected SDL declaration: {decl_ast}')
@@ -736,6 +739,16 @@ def _trace_item_layout(
             assert isinstance(obj, qltracer.Source)
             ctx.objects[pol_name] = qltracer.AccessPolicy(pol_name, source=obj)
 
+        elif isinstance(decl, qlast.CreatePermission):
+            _, perm_fq_name = ctx.get_fq_name(decl)
+
+            perm_name = s_name.QualName(
+                module=fq_name.module,
+                name=f'{fq_name.name}@{perm_fq_name}'
+            )
+            assert isinstance(obj, qltracer.Source)
+            ctx.objects[perm_name] = qltracer.Permission(perm_name, source=obj)
+
         # XXX: name conflict with triggers, other things??
         elif isinstance(decl, qlast.CreateTrigger):
             _, trigger_fq_name = ctx.get_fq_name(decl)
@@ -912,6 +925,21 @@ def trace_AccessPolicy(
         subject=ctx.depstack[-1][1],
         ctx=ctx,
     )
+
+
+@trace_dependencies.register
+def trace_Permission(
+    node: qlast.CreatePermission,
+    *,
+    ctx: DepTraceContext,
+) -> None:
+    deps: list[Dependency] = [
+        TypeDependency(texpr=qlast.TypeName(
+            maintype=qlast.ObjectRef(module='__std__', name='bool')
+        ))
+    ]
+
+    _register_item(node, hard_dep_exprs=deps, ctx=ctx)
 
 
 @trace_dependencies.register
@@ -1522,6 +1550,7 @@ TRACER_TO_REAL_TYPE_MAP = {
     qltracer.Property: s_props.Property,
     qltracer.Link: s_links.Link,
     qltracer.Index: s_indexes.Index,
+    qltracer.Permission: s_permissions.Permission,
 }
 
 
@@ -1605,6 +1634,8 @@ def _get_tracer_type(
     elif isinstance(decl, (qlast.CreateIndex,
                            qlast.CreateConcreteIndex)):
         tracer_type = qltracer.Index
+    elif isinstance(decl, qlast.CreatePermission):
+        tracer_type = qltracer.Permission
 
     return tracer_type
 
