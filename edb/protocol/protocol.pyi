@@ -20,6 +20,8 @@ from typing import Any
 
 from . import messages
 
+class Protocol: ...
+
 class Connection:
     async def connect(self) -> None:
         ...
