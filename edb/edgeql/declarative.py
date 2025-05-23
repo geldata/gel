@@ -621,7 +621,7 @@ def _trace_item_layout(
     assert fq_name is not None
     PointerType: type[qltracer.Pointer]
 
-    if isinstance(node, qlast.BasedOnTuple):
+    if isinstance(node, qlast.BasedOn):
         bases = []
         # construct the parents set, used later in ancestors graph
         parents = set()
@@ -1435,7 +1435,7 @@ def _get_bases(
     decl: qlast.CreateObject, *, ctx: LayoutTraceContext
 ) -> list[s_name.QualName]:
     """Resolve object bases from the "extends" declaration."""
-    if not isinstance(decl, qlast.BasedOnTuple):
+    if not isinstance(decl, qlast.BasedOn):
         return []
 
     bases = []

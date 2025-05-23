@@ -481,12 +481,6 @@ SessionCommand = (
     | SessionResetModule
     | SessionResetAllAliases
 )
-SessionCommand_tuple = (
-    SessionSetAliasDecl,
-    SessionResetAliasDecl,
-    SessionResetModule,
-    SessionResetAllAliases
-)
 
 
 class ShapeOp(s_enum.StrEnum):
@@ -1649,24 +1643,9 @@ BasedOn = (
     | CreateRole
     | CreateConcretePointer
 )
-# TODO: this is required because mypy does support `instanceof(x, A | B)`
-BasedOnTuple = (
-    AlterAddInherit,
-    AlterDropInherit,
-    CreateExtendingObject,
-    CreateRole,
-    CreateConcretePointer,
-)
 
 CallableObjectCommand = (
     CreateConstraint | CreateIndex | FunctionCommand | OperatorCommand
-)
-# TODO: this is required because mypy does support `instanceof(x, A | B)`
-CallableObjectCommandTuple = (
-    CreateConstraint,
-    CreateIndex,
-    FunctionCommand,
-    OperatorCommand,
 )
 
 # A node that can have a WITH block

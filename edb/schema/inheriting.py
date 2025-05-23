@@ -838,7 +838,7 @@ class CreateInheritingObject(
 
             if explicit_bases:
                 if isinstance(node, qlast.CreateObject):
-                    if isinstance(node, qlast.BasedOnTuple):
+                    if isinstance(node, qlast.BasedOn):
                         node.bases = [
                             qlast.TypeName(maintype=utils.name_to_ast_ref(b))
                             for b in explicit_bases
@@ -856,7 +856,7 @@ class CreateInheritingObject(
                     )
             else:
                 if isinstance(node, qlast.CreateObject):
-                    if isinstance(node, qlast.BasedOnTuple):
+                    if isinstance(node, qlast.BasedOn):
                         node.bases = []
         else:
             super()._apply_field_ast(schema, context, node, op)

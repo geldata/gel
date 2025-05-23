@@ -1012,7 +1012,7 @@ class ParametrizedCommand(sd.ObjectCommand[so.Object_T]):
             # Some Callables, like the concrete constraints,
             # have no params in their AST.
             return []
-        assert isinstance(astnode, qlast.CallableObjectCommandTuple)
+        assert isinstance(astnode, qlast.CallableObjectCommand)
         return cls._get_param_desc_from_params_ast(
             schema, modaliases, astnode.params, param_offset=param_offset)
 
@@ -1214,7 +1214,7 @@ class CreateCallableObject(
     ) -> None:
         super()._apply_fields_ast(schema, context, node)
         params = self._get_params_ast(schema, context, node)
-        if isinstance(node, qlast.CallableObjectCommandTuple):
+        if isinstance(node, qlast.CallableObjectCommand):
             node.params = [p[1] for p in params]
 
 
@@ -2349,7 +2349,7 @@ class DeleteFunction(DeleteCallableObject[Function], FunctionCommand):
 
         params.sort(key=lambda e: e[0])
 
-        assert isinstance(node, qlast.CallableObjectCommandTuple)
+        assert isinstance(node, qlast.CallableObjectCommand)
         node.params = [p[1] for p in params]
 
 

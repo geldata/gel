@@ -2563,7 +2563,7 @@ def _compile_dispatch_ql(
             enums.Capability.TRANSACTION,
         )
 
-    elif isinstance(ql, qlast.SessionCommand_tuple):
+    elif isinstance(ql, qlast.SessionCommand):
         return (
             _compile_ql_sess_state(ctx, ql),
             enums.Capability.SESSION_CONFIG,
