@@ -198,7 +198,6 @@ def __infer_cleared(
 def _infer_shape(
     ir: irast.Set,
     *,
-    is_mutation: bool=False,
     scope_tree: irast.ScopeTreeNode,
     ctx: inf_ctx.InfCtx,
 ) -> None:
@@ -221,7 +220,7 @@ def _infer_shape(
                     ptrref, schema=ctx.env.schema)
                 assert isinstance(ptrcls, s_pointers.Pointer)
                 desc = ptrcls.get_verbosename(ctx.env.schema)
-                if not is_mutation:
+                if not rptr.is_mutation:
                     desc = f"computed {desc}"
                 raise errors.QueryError(
                     f'possibly not a distinct set returned by an '
@@ -236,13 +235,12 @@ def _infer_shape(
                 )
 
         _infer_shape(
-            shape_set, is_mutation=is_mutation, scope_tree=scope_tree, ctx=ctx)
+            shape_set, scope_tree=scope_tree, ctx=ctx)
 
 
 def _infer_set(
     ir: irast.Set,
     *,
-    is_mutation: bool=False,
     scope_tree: irast.ScopeTreeNode,
     ctx: inf_ctx.InfCtx,
 ) -> inf_ctx.MultiplicityInfo:
@@ -252,7 +250,7 @@ def _infer_set(
     ctx.inferred_multiplicity[ir, scope_tree, ctx.distinct_iterator] = result
 
     # The shape doesn't affect multiplicity, but requires validation.
-    _infer_shape(ir, is_mutation=is_mutation, scope_tree=scope_tree, ctx=ctx)
+    _infer_shape(ir, scope_tree=scope_tree, ctx=ctx)
 
     return result
 
@@ -692,11 +690,11 @@ def __infer_insert_stmt(
     # INSERT will always return a proper set, but we still want to
     # process the sub-expressions.
     infer_multiplicity(
-        ir.subject, is_mutation=True, scope_tree=scope_tree, ctx=ctx
+        ir.subject, scope_tree=scope_tree, ctx=ctx
     )
     new_scope = inf_utils.get_set_scope(ir.result, scope_tree, ctx=ctx)
     infer_multiplicity(
-        ir.result, is_mutation=True, scope_tree=new_scope, ctx=ctx
+        ir.result, scope_tree=new_scope, ctx=ctx
     )
 
     if ir.on_conflict:
@@ -720,7 +718,7 @@ def __infer_update_stmt(
     # fed something with higher multiplicity, but we still want to
     # process the expression being updated.
     infer_multiplicity(
-        ir.result, is_mutation=True, scope_tree=scope_tree, ctx=ctx,
+        ir.result, scope_tree=scope_tree, ctx=ctx,
     )
     result = _infer_stmt_multiplicity(ir, scope_tree=scope_tree, ctx=ctx)
 
@@ -743,7 +741,7 @@ def __infer_delete_stmt(
     # fed something with higher multiplicity, but we still want to
     # process the expression being deleted.
     infer_multiplicity(
-        ir.result, is_mutation=True, scope_tree=scope_tree, ctx=ctx,
+        ir.result, scope_tree=scope_tree, ctx=ctx,
     )
     result = _infer_stmt_multiplicity(ir, scope_tree=scope_tree, ctx=ctx)
 
@@ -777,7 +775,6 @@ def _infer_mutating_stmt(
             for rewrite, _ in rewrites.values():
                 infer_multiplicity(
                     rewrite,
-                    is_mutation=True,
                     scope_tree=scope_tree,
                     ctx=ctx,
                 )
@@ -946,7 +943,6 @@ def __infer_searchable_string(
 def infer_multiplicity(
     ir: irast.Base,
     *,
-    is_mutation: bool=False,
     scope_tree: irast.ScopeTreeNode,
     ctx: inf_ctx.InfCtx,
 ) -> inf_ctx.MultiplicityInfo:
@@ -960,13 +956,10 @@ def infer_multiplicity(
 
     # We can use cardinality as a helper in determining multiplicity,
     # since singletons have multiplicity one.
-    card = cardinality.infer_cardinality(
-        ir, is_mutation=is_mutation, scope_tree=scope_tree, ctx=ctx)
+    card = cardinality.infer_cardinality(ir, scope_tree=scope_tree, ctx=ctx)
 
     if isinstance(ir, irast.Set):
-        result = _infer_set(
-            ir, is_mutation=is_mutation, scope_tree=scope_tree, ctx=ctx,
-        )
+        result = _infer_set(ir, scope_tree=scope_tree, ctx=ctx)
     else:
         result = _infer_multiplicity(ir, scope_tree=scope_tree, ctx=ctx)
 

@@ -491,7 +491,6 @@ def _update_cardinality_in_derived(
 def _infer_shape(
     ir: irast.Set,
     *,
-    is_mutation: bool=False,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,
 ) -> None:
@@ -527,14 +526,13 @@ def _infer_shape(
                 ctx=ctx,
             )
 
-        _infer_shape(shape_set, is_mutation=is_mutation, scope_tree=scope_tree,
+        _infer_shape(shape_set, scope_tree=scope_tree,
                      ctx=ctx)
 
 
 def _infer_set(
     ir: irast.Set,
     *,
-    is_mutation: bool=False,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,
 ) -> qltypes.Cardinality:
@@ -542,8 +540,7 @@ def _infer_set(
     # First compute (or look up) the "intrinsic" cardinality of the set
     if not (result := ctx.inferred_cardinality.get(ir)):
         result = _infer_set_inner(
-            ir, is_mutation=is_mutation,
-            scope_tree=scope_tree, ctx=ctx)
+            ir, scope_tree=scope_tree, ctx=ctx)
 
         # We need to cache the main result before doing the shape,
         # since sometimes the shape will refer to the enclosing set.
@@ -551,7 +548,7 @@ def _infer_set(
 
         new_scope = inf_utils.get_set_scope(ir, scope_tree, ctx=ctx)
         _infer_shape(
-            ir, is_mutation=is_mutation, scope_tree=new_scope, ctx=ctx)
+            ir, scope_tree=new_scope, ctx=ctx)
 
     # With that in hand, compute the cardinality of a *reference* to the
     # set from this location in the tree.
@@ -572,7 +569,6 @@ def _infer_set(
 def _infer_pointer(
     ir: irast.Pointer,
     *,
-    is_mutation: bool=False,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,
 ) -> qltypes.Cardinality:
@@ -582,7 +578,6 @@ def _infer_pointer(
 def _infer_set_inner(
     ir: irast.Set,
     *,
-    is_mutation: bool=False,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,
 ) -> qltypes.Cardinality:
@@ -1189,7 +1184,6 @@ def _infer_dml_check_cardinality(
             for rewrite, _ in rewrites.values():
                 infer_cardinality(
                     rewrite,
-                    is_mutation=True,
                     scope_tree=scope_tree,
                     ctx=ctx,
                 )
@@ -1207,7 +1201,6 @@ def _infer_stmt_cardinality(
     result = ir.subject if isinstance(ir, irast.MutatingStmt) else ir.result
     result_card = infer_cardinality(
         result,
-        is_mutation=isinstance(ir, irast.MutatingStmt),
         scope_tree=scope_tree,
         ctx=ctx,
     )
@@ -1352,11 +1345,11 @@ def __infer_insert_stmt(
         infer_cardinality(part, scope_tree=scope_tree, ctx=ctx)
 
     infer_cardinality(
-        ir.subject, is_mutation=True, scope_tree=scope_tree, ctx=ctx
+        ir.subject, scope_tree=scope_tree, ctx=ctx
     )
     new_scope = inf_utils.get_set_scope(ir.result, scope_tree, ctx=ctx)
     infer_cardinality(
-        ir.result, is_mutation=True, scope_tree=new_scope, ctx=ctx
+        ir.result, scope_tree=new_scope, ctx=ctx
     )
 
     assert not ir.iterator_stmt, "InsertStmt shouldn't ever have an iterator"
@@ -1387,8 +1380,7 @@ def __infer_update_stmt(
     ctx: inference_context.InfCtx,
 ) -> qltypes.Cardinality:
     infer_cardinality(
-        ir.result, is_mutation=True,
-        scope_tree=scope_tree, ctx=ctx,
+        ir.result, scope_tree=scope_tree, ctx=ctx,
     )
 
     return _infer_stmt_cardinality(ir, scope_tree=scope_tree, ctx=ctx)
@@ -1510,7 +1502,6 @@ def __infer_searchable_string(
 def infer_cardinality(
     ir: irast.Base,
     *,
-    is_mutation: bool=False,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,
 ) -> qltypes.Cardinality:
@@ -1521,7 +1512,7 @@ def infer_cardinality(
 
     if isinstance(ir, irast.Set):
         result = _infer_set(
-            ir, is_mutation=is_mutation, scope_tree=scope_tree, ctx=ctx,
+            ir, scope_tree=scope_tree, ctx=ctx,
         )
     else:
         result = _infer_cardinality(ir, scope_tree=scope_tree, ctx=ctx)
