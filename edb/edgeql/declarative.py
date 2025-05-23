@@ -404,6 +404,8 @@ def sdl_to_ddl(
                     ctx.objects[fq_name] = qltracer.Annotation(fq_name)
                 elif isinstance(decl_ast, qlast.CreateGlobal):
                     ctx.objects[fq_name] = qltracer.Global(fq_name)
+                elif isinstance(decl_ast, qlast.CreatePermission):
+                    ctx.objects[fq_name] = qltracer.Permission(fq_name)
                 elif isinstance(decl_ast, qlast.CreateIndex):
                     ctx.objects[fq_name] = qltracer.Index(fq_name)
                 else:
@@ -1047,6 +1049,21 @@ def trace_Global(
 
 
 @trace_dependencies.register
+def trace_Permission(
+    node: qlast.CreatePermission,
+    *,
+    ctx: DepTraceContext,
+) -> None:
+    deps: list[Dependency] = [
+        TypeDependency(texpr=qlast.TypeName(
+            maintype=qlast.ObjectRef(module='__std__', name='bool')
+        ))
+    ]
+
+    _register_item(node, hard_dep_exprs=deps, ctx=ctx)
+
+
+@trace_dependencies.register
 def trace_Function(
     node: qlast.CreateFunction,
     *,
@@ -1602,6 +1619,8 @@ def _get_tracer_type(
     elif isinstance(decl, (qlast.CreateLink,
                            qlast.CreateConcreteLink)):
         tracer_type = qltracer.Link
+    elif isinstance(decl, qlast.CreatePermission):
+        tracer_type = qltracer.Permission
     elif isinstance(decl, (qlast.CreateIndex,
                            qlast.CreateConcreteIndex)):
         tracer_type = qltracer.Index

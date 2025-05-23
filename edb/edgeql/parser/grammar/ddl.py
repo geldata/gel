@@ -249,6 +249,18 @@ class InnerDDLStmt(Nonterm):
         pass
 
     @parsing.inline(0)
+    def reduce_CreatePermissionStmt(self, *_):
+        pass
+
+    @parsing.inline(0)
+    def reduce_AlterPermissionStmt(self, *_):
+        pass
+
+    @parsing.inline(0)
+    def reduce_DropPermissionStmt(self, *_):
+        pass
+
+    @parsing.inline(0)
     def reduce_DropCastStmt(self, *_):
         pass
 
@@ -3599,6 +3611,67 @@ class DropGlobalStmt(Nonterm):
         self.val = qlast.DropGlobal(
             name=kids[2].val
         )
+
+
+#
+# CREATE PERMISSION
+#
+commands_block(
+    'CreatePermission',
+    CreateAnnotationValueStmt,
+)
+
+
+class CreatePermissionStmt(Nonterm):
+    def reduce_CreatePermission(self, *kids):
+        """%reduce
+            CREATE PERMISSION NodeName
+            OptCreatePermissionCommandsBlock
+        """
+        _, _, name, commands = kids
+        self.val = qlast.CreatePermission(
+            name=name.val,
+            commands=commands.val,
+        )
+
+
+#
+# ALTER PERMISSION
+#
+commands_block(
+    'AlterPermission',
+    CreateAnnotationValueStmt,
+    AlterAnnotationValueStmt,
+    DropAnnotationValueStmt,
+    RenameStmt,
+    opt=False
+)
+
+
+class AlterPermissionStmt(Nonterm):
+    def reduce_AlterPermission(self, *kids):
+        r"""%reduce \
+            ALTER PERMISSION NodeName \
+            AlterPermissionCommandsBlock \
+        """
+        _, _, name, commands = kids
+        self.val = qlast.AlterPermission(
+            name=name.val,
+            commands=commands.val,
+        )
+
+
+#
+# DROP PERMISSION
+#
+class DropPermissionStmt(Nonterm):
+    def reduce_DropPermission(self, *kids):
+        r"""%reduce DROP PERMISSION NodeName"""
+        _, _, name = kids
+        self.val = qlast.DropPermission(
+            name=name.val
+        )
+
 
 #
 # MIGRATIONS

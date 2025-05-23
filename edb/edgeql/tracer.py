@@ -89,6 +89,10 @@ class Global(NamedObject):
     pass
 
 
+class Permission(NamedObject):
+    pass
+
+
 class Index(NamedObject):
     pass
 

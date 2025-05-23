@@ -526,6 +526,11 @@ CREATE TYPE schema::Global EXTENDING schema::AnnotationSubject {
 };
 
 
+CREATE TYPE schema::Permission
+    EXTENDING
+        schema::AnnotationSubject;
+
+
 CREATE TYPE schema::Function
     EXTENDING schema::CallableObject, schema::VolatilitySubject
 {

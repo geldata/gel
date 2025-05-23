@@ -1166,6 +1166,23 @@ class SetGlobalType(SetField):
     reset_value: bool = False
 
 
+class PermissionCommand(ObjectDDL):
+
+    __abstract_node__ = True
+
+
+class CreatePermission(CreateObject, PermissionCommand):
+    pass
+
+
+class AlterPermission(AlterObject, PermissionCommand):
+    pass
+
+
+class DropPermission(DropObject, PermissionCommand):
+    pass
+
+
 class LinkCommand(ObjectDDL):
 
     __abstract_node__ = True
