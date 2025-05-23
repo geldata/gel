@@ -476,6 +476,8 @@ class Pointer(Expr):
     anchor: typing.Optional[str] = None
     show_as_anchor: typing.Optional[str] = None
 
+    is_mutation: bool = False
+
     @property
     def is_inbound(self) -> bool:
         return self.direction == s_pointers.PointerDirection.Inbound

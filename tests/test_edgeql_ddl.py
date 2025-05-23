@@ -3595,16 +3595,90 @@ class TestEdgeQLDDL(tb.DDLTestCase):
         await self.assert_query_result("select X { foo }", [{"foo": "test"}])
 
     async def test_edgeql_ddl_link_property_01(self):
-        with self.assertRaisesRegex(
-                edgedb.InvalidPropertyDefinitionError,
-                r"link properties cannot be required"):
-            await self.con.execute("""
-                CREATE TYPE TestLinkPropType_01 {
-                    CREATE LINK test_linkprop_link_01 -> std::Object {
-                        CREATE REQUIRED PROPERTY test_link_prop_01
-                            -> std::int64;
-                    };
+        await self.con.execute("""
+            CREATE TYPE Tgt;
+            INSERT Tgt;
+            CREATE TYPE TestLinkPropType_01 {
+                CREATE LINK test_linkprop_link_01 -> std::Object {
+                    CREATE REQUIRED PROPERTY test_link_prop_01
+                        -> std::int64;
                 };
+            };
+        """)
+        await self.con.execute("""
+            insert TestLinkPropType_01 {
+                test_linkprop_link_01 := (select Tgt limit 1) {
+                    @test_link_prop_01 := 12
+                }
+            }
+        """)
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            r"required property 'test_link_prop_01'",
+        ):
+            await self.con.execute("""
+                insert TestLinkPropType_01 {
+                    test_linkprop_link_01 := (select Tgt limit 1) {
+                        @test_link_prop_01 := (select 12 filter false)
+                    }
+                }
+            """)
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            r"required property 'test_link_prop_01'",
+        ):
+            # TODO?: It would be better if we rejected this statically...
+            await self.con.execute("""
+                insert TestLinkPropType_01 {
+                    test_linkprop_link_01 := (select Tgt limit 1)
+                }
+            """)
+
+        await self.con.execute("""
+            alter type TestLinkPropType_01
+            alter link test_linkprop_link_01
+            alter property test_link_prop_01
+            set optional
+        """)
+
+        await self.con.execute("""
+            insert TestLinkPropType_01 {
+                test_linkprop_link_01 := (select Tgt limit 1)
+            }
+        """)
+
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            r"required property 'test_link_prop_01'",
+        ):
+            await self.con.execute("""
+                alter type TestLinkPropType_01
+                alter link test_linkprop_link_01
+                alter property test_link_prop_01
+                set required
+            """)
+
+        await self.con.execute("""
+            delete TestLinkPropType_01
+        """)
+
+        await self.con.execute("""
+            alter type TestLinkPropType_01
+            alter link test_linkprop_link_01
+            alter property test_link_prop_01
+            set required
+        """)
+
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            r"required property 'test_link_prop_01'",
+        ):
+            await self.con.execute("""
+                insert TestLinkPropType_01 {
+                    test_linkprop_link_01 := (select Tgt limit 1) {
+                        @test_link_prop_01 := (select 12 filter false)
+                    }
+                }
             """)
 
     async def test_edgeql_ddl_link_property_02(self):
@@ -3622,23 +3696,6 @@ class TestEdgeQLDDL(tb.DDLTestCase):
     async def test_edgeql_ddl_link_property_03(self):
         with self.assertRaisesRegex(
                 edgedb.InvalidPropertyDefinitionError,
-                r"link properties cannot be required"):
-            await self.con.execute("""
-                CREATE TYPE TestLinkPropType_03 {
-                    CREATE LINK test_linkprop_link_03 -> std::Object;
-                };
-
-                ALTER TYPE TestLinkPropType_03 {
-                    ALTER LINK test_linkprop_link_03 {
-                        CREATE REQUIRED PROPERTY test_link_prop_03
-                            -> std::int64;
-                    };
-                };
-            """)
-
-    async def test_edgeql_ddl_link_property_04(self):
-        with self.assertRaisesRegex(
-                edgedb.InvalidPropertyDefinitionError,
                 r"multi properties aren't supported for links"):
             await self.con.execute("""
                 CREATE TYPE TestLinkPropType_04 {
@@ -3652,27 +3709,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 };
             """)
 
-    async def test_edgeql_ddl_link_property_05(self):
-        with self.assertRaisesRegex(
-                edgedb.InvalidPropertyDefinitionError,
-                r"link properties cannot be required"):
-            await self.con.execute("""
-                CREATE TYPE TestLinkPropType_05 {
-                    CREATE LINK test_linkprop_link_05 -> std::Object {
-                        CREATE PROPERTY test_link_prop_05 -> std::int64;
-                    };
-                };
-
-                ALTER TYPE TestLinkPropType_05 {
-                    ALTER LINK test_linkprop_link_05 {
-                        ALTER PROPERTY test_link_prop_05 {
-                            SET REQUIRED;
-                        };
-                    };
-                };
-            """)
-
-    async def test_edgeql_ddl_link_property_06(self):
+    async def test_edgeql_ddl_link_property_04(self):
         with self.assertRaisesRegex(
                 edgedb.InvalidPropertyDefinitionError,
                 r"multi properties aren't supported for links"):

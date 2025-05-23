@@ -610,7 +610,8 @@ def _process_view(
 
         if ptr_set:
             src_path_id = path_id
-            if ptrcls.is_link_property(ctx.env.schema):
+            is_linkprop = ptrcls.is_link_property(ctx.env.schema)
+            if is_linkprop:
                 src_path_id = src_path_id.ptr_path()
 
             ptr_set.path_id = pathctx.extend_path_id(
@@ -626,6 +627,15 @@ def _process_view(
                 direction=s_pointers.PointerDirection.Outbound,
                 ptrref=not_none(ptr_set.path_id.rptr()),
                 is_definition=True,
+
+                is_mutation=(
+                    is_mutation
+                    or (
+                        is_linkprop
+                        and s_ctx.view_rptr is not None
+                        and s_ctx.view_rptr.exprtype.is_mutation()
+                    )
+                ),
             )
             # XXX: We would maybe like to *not* do this when it
             # already has a context, since for explain output that
