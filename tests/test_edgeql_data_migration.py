@@ -12117,6 +12117,10 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
 class TestEdgeQLDataMigrationNonisolated(EdgeQLDataMigrationTestCase):
     TRANSACTION_ISOLATION = False
 
+    PER_TEST_TEARDOWN = [
+        'reset schema to initial'
+    ]
+
     async def test_edgeql_migration_eq_collections_25(self):
         await self.con.execute(r"""
             START MIGRATION TO {
@@ -12437,6 +12441,127 @@ class TestEdgeQLDataMigrationNonisolated(EdgeQLDataMigrationTestCase):
                 select Foo.data
             """,
             tb.bag([[3, 1, 4], [5, 6, 0]]),
+        )
+
+    async def _test_schema_repair(
+        self, *,
+        schema,
+        setup_script=None,
+        breakage_script,
+        check_breakage=True,
+    ):
+        '''Helper for testing ADMINISTER schema_repair()
+
+        Takes a schema and an optional setup_script and runs them.
+
+        Then runs the breakage_script, which will be run with access
+        to the reflschema and which should break the schema in some
+        way.
+
+        We will then load back the broken schema, verify migrations
+        are broken, run schema_repair, and verify migrations work.
+        '''
+
+        await self.migrate(schema, module='default')
+        if setup_script:
+            await self.con.execute(setup_script)
+
+        # Use a transaction to make sure the configures get rolled back
+        async with self.con.transaction():
+            # Enable poking directly at the schema
+            await self.con.execute('''
+                configure session set __internal_query_reflschema := true;
+                configure session set __internal_no_apply_query_rewrites :=
+                    true;
+            ''')
+
+            # Break the schema
+            await self.con.execute(breakage_script)
+
+        # Do some random configure current database in order to force
+        # a reload of the schema from reflection.
+        await self.con.execute("""
+            configure current database reset __internal_sess_testvalue
+        """)
+
+        # Make sure we succesfully busted the schema.
+        async with self.assertRaisesRegexTx(
+            # Error could be the 'complete' assertion in this test
+            # suite or some failure in the server.
+            (AssertionError, edgedb.EdgeDBError),
+            '',
+        ):
+            await self.migrate(schema, module='default')
+
+        await self.con.execute('''
+            administer schema_repair()
+        ''')
+
+        # Make sure the schema is repaired
+        async with self._run_and_rollback():
+            await self.start_migration(schema, module='default')
+            await self.assert_describe_migration({
+                'complete': True
+            })
+
+        # Make sure objects still can be fetched
+        await self.con.query('''
+            select Object
+        ''')
+
+    async def test_edgeql_migration_schema_repair_01(self):
+        await self._test_schema_repair(
+            schema='''
+                type T {
+                    lol := count(Object);
+                    foo: str;
+                }
+                type S extending T;
+            ''',
+            setup_script='''
+                insert T { foo := "t" };
+                insert S { foo := "s" };
+            ''',
+            breakage_script='''
+                update schema::Property
+                filter .name__internal = 'default::__|foo@default|S'
+                set { required := true };
+            ''',
+        )
+
+        # Check that a query works and the data is still there
+        await self.assert_query_result(
+            '''
+                select T { foo };
+            ''',
+            tb.bag([
+                {'foo': 't'},
+                {'foo': 's'},
+            ])
+        )
+
+    async def test_edgeql_migration_schema_repair_02(self):
+        await self._test_schema_repair(
+            schema='''
+            abstract type Named {
+                index std::fts::index on (
+                    std::fts::with_options(
+                        .name, language := std::fts::Language.eng));
+                required name: std::str;
+            };
+
+            type Project0 extending Named;
+            ''',
+            breakage_script='''
+                update schema::Index
+                filter .name__internal =
+                'default::std|fts|index@default|Project0' ++
+                '@bb75b87f16a631d2bd48c6c660d4b52a8b7274cb'
+                set { name__internal :=
+                    'default::fts|index@default|Project0' ++
+                    '@bb75b87f16a631d2bd48c6c660d4b52a8b7274cb'
+                }
+            ''',
         )
 
 
