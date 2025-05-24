@@ -270,6 +270,15 @@ std::to_bytes(s: std::str) -> std::bytes {
 };
 
 
+CREATE FUNCTION
+std::to_bytes(j: std::json) -> std::bytes {
+    CREATE ANNOTATION std::description :=
+        'Convert a json value to a binary UTF-8 string.';
+    SET volatility := 'Immutable';
+    USING (to_bytes(to_str(j)));
+};
+
+
 CREATE SCALAR TYPE
 std::Endian EXTENDING enum<Little, Big>;
 
