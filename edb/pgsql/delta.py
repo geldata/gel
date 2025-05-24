@@ -55,6 +55,7 @@ from edb.schema import functions as s_funcs
 from edb.schema import globals as s_globals
 from edb.schema import indexes as s_indexes
 from edb.schema import links as s_links
+from edb.schema import permissions as s_permissions
 from edb.schema import policies as s_policies
 from edb.schema import properties as s_props
 from edb.schema import migrations as s_migrations
@@ -779,6 +780,31 @@ class AlterAccessPolicy(
 class DeleteAccessPolicy(
     AccessPolicyCommand,
     adapts=s_policies.DeleteAccessPolicy,
+):
+    pass
+
+
+class PermissionCommand(MetaCommand):
+    pass
+
+
+class CreatePermission(
+    PermissionCommand,
+    adapts=s_permissions.CreatePermission,
+):
+    pass
+
+
+class AlterPermission(
+    PermissionCommand,
+    adapts=s_permissions.AlterPermission,
+):
+    pass
+
+
+class DeletePermission(
+    PermissionCommand,
+    adapts=s_permissions.DeletePermission,
 ):
     pass
 

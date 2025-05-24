@@ -1356,6 +1356,23 @@ class DropAccessPolicy(DropObject, AccessPolicyCommand):
     pass
 
 
+class PermissionCommand(ObjectDDL):
+
+    __abstract_node__ = True
+
+
+class CreatePermission(CreateObject, PermissionCommand):
+    pass
+
+
+class AlterPermission(AlterObject, PermissionCommand):
+    pass
+
+
+class DropPermission(DropObject, PermissionCommand):
+    pass
+
+
 class TriggerCommand(ObjectDDL):
 
     __abstract_node__ = True

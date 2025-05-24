@@ -74,6 +74,8 @@ def get_schema_class(ql: qlast.ObjectDDL) -> qltypes.SchemaObjectClass:
             return osc.INDEX
         case qlast.AccessPolicyCommand():
             return osc.INDEX_MATCH
+        case qlast.PermissionCommand():
+            return osc.PERMISSION
         case qlast.TriggerCommand():
             return osc.TRIGGER
         case qlast.RewriteCommand():
@@ -103,6 +105,7 @@ def get_schema_class(ql: qlast.ObjectDDL) -> qltypes.SchemaObjectClass:
         case qlast.ConstraintCommand():
             return osc.CONSTRAINT
         case qlast.AccessPolicyCommand():
+            # Why is this duplicate here?
             return osc.ACCESS_POLICY
 
         case _:
