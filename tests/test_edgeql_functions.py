@@ -3632,15 +3632,40 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
             )
 
     async def test_edgeql_functions_json_bytes_conversion(self):
-        strings = [
-            json.dumps({"a": [1, 2, 3], "b": "foo"}),
-            json.dumps(
-                {"數": [1, 2, 3], "言": "你好世界！"},
-                ensure_ascii=False
+        cases = [
+            (
+                json.dumps({"a": [1, 2, 3], "b": "foo"}),
+                json.dumps({"a": [1, 2, 3], "b": "foo"}),
+            ),
+
+            # Without ensure_ascii=False, json.dumps will escape unicode to
+            # ascii characters. For example, the character '數' (U+6578)
+            # is encoded as b'\\u6578' instead of b'\xe6\x95\xb8'.
+            # Test that both will be decoded to the correct json and then back
+            # to utf-8 encoded bytes.
+            (
+                json.dumps(
+                    {"數": [1, 2, 3], "言": "你好世界！"},
+                    ensure_ascii=True
+                ),
+                json.dumps(
+                    {"數": [1, 2, 3], "言": "你好世界！"},
+                    ensure_ascii=False
+                ),
+            ),
+            (
+                json.dumps(
+                    {"數": [1, 2, 3], "言": "你好世界！"},
+                    ensure_ascii=False
+                ),
+                json.dumps(
+                    {"數": [1, 2, 3], "言": "你好世界！"},
+                    ensure_ascii=False
+                ),
             ),
         ]
 
-        for string in strings:
+        for input, expected in cases:
             await self.assert_query_result(
                 r'''
                 WITH
@@ -3648,11 +3673,12 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
                     as_json := to_json(to_str(input)),
                     as_bytes := to_bytes(as_json),
                 SELECT
-                    as_bytes = input;
+                    as_bytes = <bytes>$expected;
                 ''',
                 {True},
                 variables={
-                    "input": string.encode("utf-8"),
+                    "input": input.encode("utf-8"),
+                    "expected": expected.encode("utf-8"),
                 },
             )
 
