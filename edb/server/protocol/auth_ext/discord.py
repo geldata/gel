@@ -45,6 +45,7 @@ class DiscordProvider(base.BaseProvider):
             "state": state,
             "redirect_uri": redirect_uri,
             "response_type": "code",
+            "prompt": "none"
         }
         encoded = urllib.parse.urlencode(params)
         return f"{self.auth_domain}/oauth2/authorize?{encoded}"
