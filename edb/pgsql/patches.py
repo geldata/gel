@@ -288,4 +288,13 @@ update ext::ai::ChatPrompt filter .name = 'builtin::rag-default' set {
 '''),
     # 6.8
     ('edgeql+user+remove_pointless_triggers', ''),
+    ('edgeql', '''
+CREATE FUNCTION
+std::to_bytes(j: std::json) -> std::bytes {
+    CREATE ANNOTATION std::description :=
+        'Convert a json value to a binary UTF-8 string.';
+    SET volatility := 'Immutable';
+    USING (to_bytes(to_str(j)));
+};
+'''),
 ]
