@@ -1746,26 +1746,32 @@ def _compile_ql_administer(
     script_info: Optional[irast.ScriptInfo] = None,
 ) -> dbstate.BaseQuery:
     if ql.expr.func == 'statistics_update':
-        return ddl.administer_statistics_update(ctx, ql)
+        res = ddl.administer_statistics_update(ctx, ql)
     elif ql.expr.func == 'schema_repair':
-        return ddl.administer_repair_schema(ctx, ql)
+        res = ddl.administer_repair_schema(ctx, ql)
     elif ql.expr.func == 'reindex':
-        return ddl.administer_reindex(ctx, ql)
+        res = ddl.administer_reindex(ctx, ql)
     elif ql.expr.func == 'vacuum':
-        return ddl.administer_vacuum(ctx, ql)
+        res = ddl.administer_vacuum(ctx, ql)
     elif ql.expr.func == 'prepare_upgrade':
-        return ddl.administer_prepare_upgrade(ctx, ql)
+        res = ddl.administer_prepare_upgrade(ctx, ql)
     elif ql.expr.func == '_remove_pointless_triggers':
-        return ddl.administer_remove_pointless_triggers(ctx, ql)
+        res = ddl.administer_remove_pointless_triggers(ctx, ql)
     elif ql.expr.func == 'create_concurrent_index':
-        return ddl.administer_create_concurrent_index(ctx, ql)
+        res = ddl.administer_create_concurrent_index(ctx, ql)
     elif ql.expr.func == 'update_concurrent_index':
-        return ddl.administer_update_concurrent_index(ctx, ql)
+        res = ddl.administer_update_concurrent_index(ctx, ql)
     else:
         raise errors.QueryError(
             'Unknown ADMINISTER function',
             span=ql.expr.span,
         )
+
+    if debug.flags.delta_execute or debug.flags.delta_execute_ddl:
+        debug.header('ADMINISTER script')
+        debug.dump_code(res.sql, lexer='sql')
+
+    return res
 
 
 def _compile_ql_query(
