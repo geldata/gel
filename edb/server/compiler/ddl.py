@@ -23,6 +23,7 @@ from typing import Any, Optional
 import dataclasses
 import json
 import textwrap
+import uuid
 
 from edb import errors
 
@@ -1837,6 +1838,95 @@ def administer_prepare_upgrade(
         cacheable=False,
         migration_block_query=True,
     )
+
+
+def _get_index(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> tuple[s_indexes.Index, s_schema.Schema]:
+    if len(ql.expr.args) != 1 or ql.expr.kwargs:
+        raise errors.QueryError(
+            f'{ql.expr.func}() takes exactly one positional argument',
+            span=ql.expr.span,
+        )
+
+    # This is janky, and we shouldn't do it.
+    arg = ql.expr.args[0]
+    match arg:
+        case qlast.Constant(
+            kind=qlast.ConstantKind.STRING,
+            value=id_string,
+        ):
+            pass
+        case _:
+            raise errors.QueryError(
+                f'argument to {ql.expr.func}() must be a string literal',
+                span=arg.span,
+            )
+
+    try:
+        id = uuid.UUID(id_string)
+    except ValueError:
+        # XXX
+        raise errors.QueryError("Invalid index id")
+
+    user_schema = ctx.state.current_tx().get_user_schema()
+    global_schema = ctx.state.current_tx().get_global_schema()
+
+    schema = s_schema.ChainedSchema(
+        ctx.compiler_state.std_schema,
+        user_schema,
+        global_schema
+    )
+
+    index = schema.get_by_id(id, type=s_indexes.Index)
+    return index, schema
+
+
+def administer_create_concurrent_index(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    index, schema = _get_index(ctx, ql)
+
+    if not index.get_create_concurrently(schema):
+        raise errors.QueryError("Index was not created concurrently")
+    if index.get_active(schema):
+        raise errors.QueryError("Index is already active")
+
+    delta_context = _new_delta_context(ctx)
+
+    create_index = pg_delta.CreateIndex.create_index(
+        index, schema, delta_context
+    )
+
+    block = pg_dbops.SQLBlock()
+    block.set_non_transactional()
+    create_index.generate(block)
+    # HACK: just grab the first
+    # where do the comments even get done??
+    assert isinstance(block.commands[0], pg_dbops.PLBlock)
+    statements = block.commands[0].get_statements()
+    command, _ = statements
+
+    return dbstate.MaintenanceQuery(
+        sql=command.encode('utf-8'),
+        is_transactional=False,
+    )
+
+
+def administer_update_concurrent_index(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    # index = _get_index(ctx, ql)
+
+    raise errors.QueryError('unimplemented')
+
+    # return dbstate.MaintenanceQuery(
+    #     sql=command.encode('utf-8'),
+    #     is_transactional=False,
+    # )
 
 
 def validate_schema_equivalence(

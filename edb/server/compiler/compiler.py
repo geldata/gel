@@ -1757,6 +1757,10 @@ def _compile_ql_administer(
         return ddl.administer_prepare_upgrade(ctx, ql)
     elif ql.expr.func == '_remove_pointless_triggers':
         return ddl.administer_remove_pointless_triggers(ctx, ql)
+    elif ql.expr.func == 'create_concurrent_index':
+        return ddl.administer_create_concurrent_index(ctx, ql)
+    elif ql.expr.func == 'update_concurrent_index':
+        return ddl.administer_update_concurrent_index(ctx, ql)
     else:
         raise errors.QueryError(
             'Unknown ADMINISTER function',
