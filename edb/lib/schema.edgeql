@@ -275,6 +275,8 @@ CREATE TYPE schema::Index
     CREATE PROPERTY except_expr -> std::str;
     CREATE PROPERTY deferrability -> schema::IndexDeferrability;
     CREATE PROPERTY deferred -> std::bool;
+    CREATE PROPERTY active -> std::bool;
+    CREATE PROPERTY create_concurrently -> std::bool;
     CREATE MULTI LINK params EXTENDING schema::ordered -> schema::Parameter {
         ON TARGET DELETE ALLOW;
     };

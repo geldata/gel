@@ -341,6 +341,21 @@ class Index(
         merge_fn=merge_deferred,
     )
 
+    # Whether the index is created and populated in pg. Relevant if
+    # create_concurrently is true?
+    active = so.SchemaField(
+        bool,
+        default=True,
+    )
+
+    # XXX: I am not sure this is what I want to do.
+    create_concurrently = so.SchemaField(
+        bool,
+        default=False,
+        compcoef=0.803,
+        allow_ddl_set=True,
+    )
+
     def __repr__(self) -> str:
         cls = self.__class__
         return '<{}.{} {!r} at 0x{:x}>'.format(
