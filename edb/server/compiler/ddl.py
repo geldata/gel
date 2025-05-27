@@ -67,6 +67,7 @@ from edb.pgsql import delta as pg_delta
 from edb.pgsql import dbops as pg_dbops
 
 from . import dbstate
+from . import enums
 from . import compiler
 
 
@@ -1883,7 +1884,7 @@ def _get_index(
     return index, schema
 
 
-def administer_create_concurrent_index(
+def administer_concurrent_index_create(
     ctx: compiler.CompileContext,
     ql: qlast.AdministerStmt,
 ) -> dbstate.BaseQuery:
@@ -1915,18 +1916,72 @@ def administer_create_concurrent_index(
     )
 
 
-def administer_update_concurrent_index(
+def administer_concurrent_index_update(
     ctx: compiler.CompileContext,
     ql: qlast.AdministerStmt,
 ) -> dbstate.BaseQuery:
-    # index = _get_index(ctx, ql)
+    user_schema = ctx.state.current_tx().get_user_schema()
+    global_schema = ctx.state.current_tx().get_global_schema()
+    schema = s_schema.ChainedSchema(
+        ctx.compiler_state.std_schema,
+        user_schema,
+        global_schema
+    )
+    delta_context = _new_delta_context(ctx)
 
-    raise errors.QueryError('unimplemented')
+    block = pg_dbops.PLTopBlock()
 
-    # return dbstate.MaintenanceQuery(
-    #     sql=command.encode('utf-8'),
-    #     is_transactional=False,
-    # )
+    indexes = schema.get_objects(
+        exclude_stdlib=True,
+        type=s_indexes.Index,
+    )
+    for index in indexes:
+        if (
+            not index.get_create_concurrently(schema)
+            or index.get_active(schema)
+        ):
+            continue
+
+        create_index = pg_delta.CreateIndex.create_index(
+            index, schema, delta_context
+        )
+        assert isinstance(create_index, pg_dbops.CreateIndex)
+        index_op = create_index.index
+        condition = pg_dbops.IndexExists(
+            (index_op.table_name[0], index_op.name_in_catalog)
+        )
+
+        # Extract the comments
+        subblock = pg_dbops.SQLBlock()
+        subblock.set_non_transactional()
+        create_index.generate(subblock)
+        # HACK: just grab the comments
+        assert isinstance(subblock.commands[0], pg_dbops.PLBlock)
+        statements = subblock.commands[0].get_statements()
+        _, comments = statements
+
+
+        # Update the schema::Index
+        eql = f'''
+            update schema::Index filter .id = <uuid>"{index.id}"
+            set {{ active := true }}
+        '''
+        sql, args = compiler._compile_schema_storage_stmt(
+            ctx, eql, output_format=enums.OutputFormat.NONE
+        )
+        assert not args
+        # If the index exists, mark it as active and add the comment
+        # to it.
+        block.add_command(
+            sql + ' INTO _dummy_text;\n' + comments,
+            conditions=[condition],
+        )
+
+    return dbstate.MaintenanceQuery(
+        sql=block.to_string().encode('utf-8'),
+        # Trigger a schema reload from the db, to sync up the 'active' flag.
+        reload_schema=True,
+     )
 
 
 def validate_schema_equivalence(

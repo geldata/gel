@@ -209,7 +209,7 @@ class MigrationControlQuery(BaseQuery):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MaintenanceQuery(BaseQuery):
-    pass
+    reload_schema: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
