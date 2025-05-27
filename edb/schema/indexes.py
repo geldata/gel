@@ -1085,6 +1085,13 @@ class CreateIndex(
                     span=astnode.span,
                 )
 
+            if cmd.get_attribute_span('create_concurrently'):
+                cmd.set_attribute_value(
+                    'active',
+                    False,
+                    span=astnode.span,
+                )
+
         return cmd
 
     @classmethod
