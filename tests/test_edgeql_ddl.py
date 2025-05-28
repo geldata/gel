@@ -20177,12 +20177,24 @@ class TestDDLNonIsolated(tb.DDLTestCase):
                 create index on (.n) { set create_concurrently := true; }
             };
         ''')
+        with self.assertRaisesRegex(edgedb.SchemaDefinitionError, 'not active'):
+            await self.con.execute('''
+                alter type T {
+                    alter index on (.n) { set create_concurrently := false; }
+                };
+            ''')
 
         msgs = []
         await create_concurrent_indexes(self.con, msg_callback=msgs.append)
         self.assertEqual(
             msgs, ["Creating concurrent index on 'default::T' with expr (.n)"]
         )
+
+        await self.con.execute('''
+            alter type T {
+                alter index on (.n) { set create_concurrently := false; }
+            };
+        ''')
 
     async def test_edgeql_ddl_concurrent_index_02(self):
         await self.con.execute('''

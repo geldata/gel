@@ -1695,6 +1695,24 @@ class AlterIndex(
     astnode = [qlast.AlterConcreteIndex, qlast.AlterIndex]
     referenced_astnode = qlast.AlterConcreteIndex
 
+    def validate_object(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+    ) -> None:
+        super().validate_object(schema, context)
+
+        vn = self.scls.get_verbosename(schema, with_parent=True)
+        if (
+            not self.scls.get_create_concurrently(schema)
+            and not self.scls.get_active(schema)
+        ):
+            raise errors.SchemaDefinitionError(
+                f'{vn} is not active, so create_concurrently may '
+                f'not be cleared',
+                span=self.span,
+            )
+
     def canonicalize_alter_from_external_ref(
         self,
         schema: s_schema.Schema,
