@@ -19870,6 +19870,10 @@ DDLStatement);
 class TestDDLNonIsolated(tb.DDLTestCase):
     TRANSACTION_ISOLATION = False
 
+    PER_TEST_TEARDOWN = [
+        'reset schema to initial'
+    ]
+
     async def test_edgeql_ddl_consecutive_create_migration_01(self):
         # A regression test for https://github.com/edgedb/edgedb/issues/2085.
         await self.con.execute('''
@@ -20163,3 +20167,122 @@ class TestDDLNonIsolated(tb.DDLTestCase):
             """,
             [True],
         )
+
+    async def test_edgeql_ddl_concurrent_index_01(self):
+        await self.con.execute('''
+            create type T { create required property n -> str; };
+        ''')
+        await self.con.execute('''
+            alter type T {
+                create index on (.n) { set create_concurrently := true; }
+            };
+        ''')
+
+        msgs = []
+        await create_concurrent_indexes(self.con, msg_callback=msgs.append)
+        self.assertEqual(
+            msgs, ["Creating concurrent index on 'default::T' with expr (.n)"]
+        )
+
+    async def test_edgeql_ddl_concurrent_index_02(self):
+        await self.con.execute('''
+            create type T {
+                create required property n -> str;
+                create required property s -> int64;
+                create index on (.n) { set create_concurrently := true; };
+                create index on (.s) { set create_concurrently := true; };
+            };
+        ''')
+
+        msgs = []
+        await create_concurrent_indexes(self.con, msg_callback=msgs.append)
+        msgs.sort()
+        self.assertEqual(
+            msgs,
+            [
+                "Creating concurrent index on 'default::T' with expr (.n)",
+                "Creating concurrent index on 'default::T' with expr (.s)",
+            ]
+        )
+
+    async def test_edgeql_ddl_concurrent_index_03(self):
+        await self.con.execute('''
+            create type T { create required property n -> str; };
+        ''')
+        await self.con.execute('''
+            alter type T {
+                create index on (.n) { set create_concurrently := true; }
+            };
+        ''')
+
+        ev = asyncio.Event()
+
+        con2 = await self.connect(database=self.con.dbname)
+        try:
+            async with self.con.transaction():
+                await self.con.execute('''
+                    insert T { n := "0123" };
+                ''')
+                task = asyncio.create_task(
+                    create_concurrent_indexes(
+                        con2,
+                        msg_callback=lambda _: ev.set()
+                    )
+                )
+                await ev.wait()
+                await asyncio.sleep(2)
+
+                await self.con.execute('''
+                    insert T { n := "789" };
+                ''')
+
+                # Task can't have finished while the tx is held open
+                assert not task.done()
+
+            self.assertEqual(await task, 1)
+        finally:
+            await con2.aclose()
+
+        self.assertEqual(
+            await create_concurrent_indexes(
+                self.con, msg_callback=lambda _: None
+            ),
+            0,
+        )
+
+
+async def create_concurrent_indexes(db, msg_callback=print):
+    '''Actually create all "create concurrently" indexes
+
+    The protocol here is to call `administer concurrent_index_update()`
+    to make sure that the `active` properties match database reality
+    (since concurrent_index_create can't update them atomically),
+    then find all the indexes that need created,
+    create them with `administer concurrent_index_create()`,
+    and then run `administer concurrent_index_update()` again.
+
+    If we stick with this ADMINISTER-based schemed, I figure this code
+    would live in the CLI.
+    '''
+    await db.execute('''
+        administer concurrent_index_update();
+    ''')
+    indexes = await db.query('''
+        select schema::Index {
+            id, expr, subject_name := .<indexes[is schema::ObjectType].name
+        }
+        filter .create_concurrently and not .active
+    ''')
+    for index in indexes:
+        msg_callback(
+            f"Creating concurrent index on '{index.subject_name}' "
+            f"with expr ({index.expr})"
+        )
+        await db.execute(f'''
+            administer concurrent_index_create("{index.id}")
+        ''')
+    await db.execute('''
+        administer concurrent_index_update();
+    ''')
+
+    return len(indexes)
