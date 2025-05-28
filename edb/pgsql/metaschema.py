@@ -5446,7 +5446,7 @@ classref_attr_aliases = {
 
 
 def tabname(
-    schema: s_schema.Schema, obj: s_obj.QualifiedObject
+    schema: s_schema.Schema, obj: s_obj.Object
 ) -> tuple[str, str]:
     return common.get_backend_name(
         schema,
@@ -5874,15 +5874,23 @@ def _generate_extension_migration_views(
 def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     Role = schema.get('sys::Role', type=s_objtypes.ObjectType)
     member_of = Role.getptr(
-        schema, s_name.UnqualName('member_of'), type=s_links.Link)
+        schema, s_name.UnqualName('member_of'), type=s_links.Link
+    )
     bases = Role.getptr(
-        schema, s_name.UnqualName('bases'), type=s_links.Link)
+        schema, s_name.UnqualName('bases'), type=s_links.Link
+    )
     ancestors = Role.getptr(
-        schema, s_name.UnqualName('ancestors'), type=s_links.Link)
+        schema, s_name.UnqualName('ancestors'), type=s_links.Link
+    )
     annos = Role.getptr(
-        schema, s_name.UnqualName('annotations'), type=s_links.Link)
+        schema, s_name.UnqualName('annotations'), type=s_links.Link
+    )
     int_annos = Role.getptr(
-        schema, s_name.UnqualName('annotations__internal'), type=s_links.Link)
+        schema, s_name.UnqualName('annotations__internal'), type=s_links.Link
+    )
+    permissions = Role.getptr(
+        schema, s_name.UnqualName('permissions'), type=s_props.Property
+    )
 
     superuser = f'''
         a.rolsuper OR EXISTS (
@@ -6043,6 +6051,25 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
                 ) AS annotations
     '''
 
+    permissions_query = f'''
+        SELECT
+            ((d.description)->>'id')::uuid AS source,
+            jsonb_array_elements_text(
+                (d.description)->'permissions'
+            )::text as target
+        FROM
+            pg_catalog.pg_roles AS a
+            CROSS JOIN LATERAL (
+                SELECT
+                    edgedb_VER.shobj_metadata(a.oid, 'pg_authid')
+                        AS description
+            ) AS d
+        WHERE
+            (d.description)->>'id' IS NOT NULL
+            AND
+              (d.description)->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
+    '''
+
     objects = {
         Role: view_query,
         member_of: member_of_link_query,
@@ -6050,6 +6077,7 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         ancestors: ancestors_link_query,
         annos: annos_link_query,
         int_annos: int_annos_link_query,
+        permissions: permissions_query,
     }
 
     views: list[dbops.View] = []
@@ -6064,15 +6092,24 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
 def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     Role = schema.get('sys::Role', type=s_objtypes.ObjectType)
     member_of = Role.getptr(
-        schema, s_name.UnqualName('member_of'), type=s_links.Link)
+        schema, s_name.UnqualName('member_of'), type=s_links.Link
+    )
     bases = Role.getptr(
-        schema, s_name.UnqualName('bases'), type=s_links.Link)
+        schema, s_name.UnqualName('bases'), type=s_links.Link
+    )
     ancestors = Role.getptr(
-        schema, s_name.UnqualName('ancestors'), type=s_links.Link)
+        schema, s_name.UnqualName('ancestors'), type=s_links.Link
+    )
     annos = Role.getptr(
-        schema, s_name.UnqualName('annotations'), type=s_links.Link)
+        schema, s_name.UnqualName('annotations'), type=s_links.Link
+    )
     int_annos = Role.getptr(
-        schema, s_name.UnqualName('annotations__internal'), type=s_links.Link)
+        schema, s_name.UnqualName('annotations__internal'), type=s_links.Link
+    )
+    permissions = Role.getptr(
+        schema, s_name.UnqualName('permissions'), type=s_props.Property
+    )
+
     view_query_fields = {
         'id': "(json->>'id')::uuid",
         'name': "json->>'name'",
@@ -6167,6 +6204,13 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
             AND json->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
     '''
 
+    permissions_query = f'''
+        SELECT
+            '00000000-0000-0000-0000-000000000000'::uuid AS source,
+            ''::text AS target
+        WHERE 1 = 0
+    '''
+
     objects = {
         Role: view_query,
         member_of: member_of_link_query,
@@ -6174,6 +6218,7 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         ancestors: ancestors_link_query,
         annos: annos_link_query,
         int_annos: int_annos_link_query,
+        permissions: permissions_query,
     }
 
     views: list[dbops.View] = []

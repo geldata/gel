@@ -64,6 +64,15 @@ class Role(
         ephemeral=True,
         inheritable=False)
 
+    permissions = so.SchemaField(
+        so.MultiPropSet[str],
+        default=None,
+        coerce=True,
+        allow_ddl_set=True,
+        obj_names_as_string=True,
+        inheritable=False,
+    )
+
 
 class RoleCommandContext(
         sd.ObjectCommandContext[Role],
@@ -152,12 +161,6 @@ class CreateRole(RoleCommand, inheriting.CreateInheritingObject[Role]):
     ) -> sd.Command:
         assert isinstance(astnode, qlast.CreateRole)
         cmd = super()._cmd_tree_from_ast(schema, astnode, context)
-
-        if not astnode.superuser and not context.testmode:
-            raise errors.EdgeQLSyntaxError(
-                'missing required SUPERUSER qualifier',
-                span=astnode.span,
-            )
 
         cmd.set_attribute_value('superuser', astnode.superuser)
         cls._process_role_body(cmd, schema, astnode, context)
