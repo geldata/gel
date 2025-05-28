@@ -2,7 +2,19 @@
 
 import gel
 
-def create_concurrent_indexes(db):
+def create_concurrent_indexes(db, msg_callback=print):
+    '''Actually create all "create concurrently" indexes
+
+    The protocol here is to call `administer concurrent_index_update()`
+    to make sure that the `active` properties match database reality
+    (since concurrent_index_create can't update them atomically),
+    then find all the indexes that need created,
+    create them with `administer concurrent_index_create()`,
+    and then run `administer concurrent_index_update()` again.
+
+    If we stick with this ADMINISTER-based schemed, I figure this code
+    would live in the CLI.
+    '''
     db.execute('''
         administer concurrent_index_update();
     ''')
@@ -13,7 +25,7 @@ def create_concurrent_indexes(db):
         filter .create_concurrently and not .active
     ''')
     for index in indexes:
-        print(
+        msg_callback(
             f"Creating concurrent index on '{index.subject_name}' "
             f"with expr ({index.expr})"
         )
