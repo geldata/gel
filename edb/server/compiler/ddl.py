@@ -1960,7 +1960,6 @@ def administer_concurrent_index_update(
         statements = subblock.commands[0].get_statements()
         _, comments = statements
 
-
         # Update the schema::Index
         eql = f'''
             update schema::Index filter .id = <uuid>"{index.id}"
