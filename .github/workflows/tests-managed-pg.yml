@@ -393,7 +393,12 @@ jobs:
         key: edb-requirements-${{ hashFiles('pyproject.toml') }}
 
     - name: Install Python dependencies
-      run: python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+      run: |
+        python -c "import sys; print(sys.prefix)"
+        cat requirements.txt
+        python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+        # 80.9.0 is broken, and it keeps sneaking in
+        uv pip install setuptools==80.8.0
 
     # Restore the artifacts and environment variables
 
@@ -622,7 +627,12 @@ jobs:
         key: edb-requirements-${{ hashFiles('pyproject.toml') }}
 
     - name: Install Python dependencies
-      run: python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+      run: |
+        python -c "import sys; print(sys.prefix)"
+        cat requirements.txt
+        python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+        # 80.9.0 is broken, and it keeps sneaking in
+        uv pip install setuptools==80.8.0
 
     # Restore the artifacts and environment variables
 
@@ -899,7 +909,12 @@ jobs:
         key: edb-requirements-${{ hashFiles('pyproject.toml') }}
 
     - name: Install Python dependencies
-      run: python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+      run: |
+        python -c "import sys; print(sys.prefix)"
+        cat requirements.txt
+        python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+        # 80.9.0 is broken, and it keeps sneaking in
+        uv pip install setuptools==80.8.0
 
     # Restore the artifacts and environment variables
 
@@ -1142,7 +1157,12 @@ jobs:
         key: edb-requirements-${{ hashFiles('pyproject.toml') }}
 
     - name: Install Python dependencies
-      run: python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+      run: |
+        python -c "import sys; print(sys.prefix)"
+        cat requirements.txt
+        python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+        # 80.9.0 is broken, and it keeps sneaking in
+        uv pip install setuptools==80.8.0
 
     # Restore the artifacts and environment variables
 
@@ -1373,7 +1393,12 @@ jobs:
         key: edb-requirements-${{ hashFiles('pyproject.toml') }}
 
     - name: Install Python dependencies
-      run: python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+      run: |
+        python -c "import sys; print(sys.prefix)"
+        cat requirements.txt
+        python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+        # 80.9.0 is broken, and it keeps sneaking in
+        uv pip install setuptools==80.8.0
 
     # Restore the artifacts and environment variables
 
