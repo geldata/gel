@@ -3025,29 +3025,57 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
             coalesce(string_agg(
                 CASE WHEN
                     role.{qi(name_col)} = {ql(defines.EDGEDB_SUPERUSER)} THEN
-                    NULLIF(concat(
-                        'ALTER ROLE {qi_superuser} {{',
-                        NULLIF((SELECT
-                            concat(
-                                ' EXTENDING ',
-                                string_agg(
-                                    edgedb_VER.quote_ident(parent.{qi(name_col)}),
-                                    ', '
+                    NULLIF(
+                        concat(
+                            'ALTER ROLE {qi_superuser} {{ ',
+                            NULLIF(
+                                (SELECT
+                                    concat(
+                                        'EXTENDING ',
+                                        string_agg(
+                                            edgedb_VER.quote_ident(
+                                                parent.{qi(name_col)}
+                                            ),
+                                            ', '
+                                        ),
+                                        '; '
+                                    )
+                                    FROM {q(*members)} member
+                                        INNER JOIN {q(*roles)} parent
+                                        ON parent.id = member.target
+                                    WHERE member.source = role.id
                                 ),
-                                ';'
-                            )
-                            FROM {q(*members)} member
-                                INNER JOIN {q(*roles)} parent
-                                ON parent.id = member.target
-                            WHERE member.source = role.id
-                        ), ' EXTENDING ;'),
-                        CASE WHEN role.{qi(pass_col)} IS NOT NULL THEN
-                            concat(' SET password_hash := ',
-                                   quote_literal(role.{qi(pass_col)}),
-                                   ';')
-                        ELSE '' END,
-                        '}};'
-                    ), 'ALTER ROLE {qi_superuser} {{}};')
+                                'EXTENDING ; '
+                            ),
+                            (CASE
+                                WHEN role.{qi(pass_col)} IS NOT NULL THEN
+                                    concat(
+                                        'SET password_hash := ',
+                                        quote_literal(role.{qi(pass_col)}),
+                                        '; '
+                                    )
+                                ELSE NULL END
+                            ),
+                            NULLIF (
+                                concat(
+                                    'SET permissions := {{ ',
+                                    (
+                                        SELECT
+                                            string_agg(
+                                                permissions.target,
+                                                ', '
+                                            )
+                                        FROM {q(*permissions)} permissions
+                                        WHERE permissions.source = role.id
+                                    ),
+                                    ' }}; '
+                                ),
+                                'SET permissions := {{  }}; '
+                            ),
+                            '}};'
+                        ),
+                        'ALTER ROLE {qi_superuser} {{ }};'
+                    )
                 ELSE
                     concat(
                         'CREATE ',
