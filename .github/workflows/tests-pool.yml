@@ -76,6 +76,8 @@ jobs:
       run: |
         python -c "import sys; print(sys.prefix)"
         python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+        # 80.9.0 breaks our sphinx, and it keeps sneaking in
+        uv pip install setuptools==80.8.0
 
     - name: Compute cache keys
       run: |
