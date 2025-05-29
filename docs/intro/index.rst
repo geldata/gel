@@ -1,12 +1,14 @@
 .. _ref_intro:
 
-Get Started
-===========
+==============
+Welcome to Gel
+==============
 
 .. toctree::
     :maxdepth: 3
     :hidden:
 
+    installation
     quickstart/index
     tutorials/index
     guides/index
