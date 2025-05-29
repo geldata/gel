@@ -2989,6 +2989,15 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
         members = _schema_alias_view_name(schema, member_of)
         members = (common.maybe_versioned_schema(members[0]), members[1])
 
+        permissions_ptr = role_obj.getptr(
+            schema, s_name.UnqualName('permissions'), type=s_props.Property
+        )
+        permissions = _schema_alias_view_name(schema, permissions_ptr)
+        permissions = (
+            common.maybe_versioned_schema(permissions[0]), permissions[1]
+        )
+
+        super_col = ptr_col_name(schema, role_obj, 'superuser')
         name_col = ptr_col_name(schema, role_obj, 'name')
         pass_col = ptr_col_name(schema, role_obj, 'password')
         qi_superuser = qlquote.quote_ident(defines.EDGEDB_SUPERUSER)
@@ -3041,25 +3050,66 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
                     ), 'ALTER ROLE {qi_superuser} {{}};')
                 ELSE
                     concat(
-                        'CREATE SUPERUSER ROLE ',
+                        'CREATE ',
+                        (CASE
+                            WHEN role.{qi(super_col)} THEN
+                                'SUPERUSER '
+                            ELSE NULL END
+                        ),
+                        'ROLE ',
                         edgedb_VER.quote_ident(role.{qi(name_col)}),
-                        NULLIF((SELECT
-                            concat(' EXTENDING ',
-                                string_agg(
-                                    edgedb_VER.quote_ident(parent.{qi(name_col)}),
-                                    ', '
-                                )
-                            )
-                            FROM {q(*members)} member
-                                INNER JOIN {q(*roles)} parent
-                                ON parent.id = member.target
-                            WHERE member.source = role.id
-                        ), ' EXTENDING '),
-                        CASE WHEN role.{qi(pass_col)} IS NOT NULL THEN
-                            concat(' {{ SET password_hash := ',
-                                   quote_literal(role.{qi(pass_col)}),
-                                   '}};')
-                        ELSE ';' END
+                        NULLIF(
+                            (
+                                SELECT
+                                    concat(
+                                        ' EXTENDING ',
+                                        string_agg(
+                                            edgedb_VER.quote_ident(
+                                                parent.{qi(name_col)}
+                                            ),
+                                            ', '
+                                        )
+                                    )
+                                FROM {q(*members)} member
+                                    INNER JOIN {q(*roles)} parent
+                                    ON parent.id = member.target
+                                WHERE member.source = role.id
+                            ),
+                            ' EXTENDING '
+                        ),
+                        NULLIF(
+                            concat(
+                                ' {{ ',
+                                (CASE
+                                    WHEN role.{qi(pass_col)} IS NOT NULL THEN
+                                        concat(
+                                            'SET password_hash := ',
+                                            quote_literal(role.{qi(pass_col)}),
+                                            '; '
+                                        )
+                                    ELSE NULL END
+                                ),
+                                NULLIF (
+                                    concat(
+                                        'SET permissions := {{ ',
+                                        (
+                                            SELECT
+                                                string_agg(
+                                                    permissions.target,
+                                                    ', '
+                                                )
+                                            FROM {q(*permissions)} permissions
+                                            WHERE permissions.source = role.id
+                                        ),
+                                        ' }}; '
+                                    ),
+                                    'SET permissions := {{  }}; '
+                                ),
+                                '}}'
+                            ),
+                            ' {{ }}'
+                        ),
+                        ';'
                     )
                 END,
                 '\n'
@@ -8754,13 +8804,20 @@ def get_support_views(
     sys_alias_views = _generate_schema_alias_views(
         schema, s_name.UnqualName('sys'))
 
-    # Include sys::Role::member_of to support DescribeRolesAsDDLFunction
+    # Include sys::Role::member_of and sys::Role::permissions
+    # to support DescribeRolesAsDDLFunction
     SysRole = schema.get(
         'sys::Role', type=s_objtypes.ObjectType)
     SysRole__member_of = SysRole.getptr(
         schema, s_name.UnqualName('member_of'))
+    SysRole__permissions = SysRole.getptr(
+        schema, s_name.UnqualName('permissions'))
     sys_alias_views.append(
-        _generate_schema_alias_view(schema, SysRole__member_of))
+        _generate_schema_alias_view(schema, SysRole__member_of)
+    )
+    sys_alias_views.append(
+        _generate_schema_alias_view(schema, SysRole__permissions)
+    )
 
     for alias_view in sys_alias_views:
         commands.add_command(dbops.CreateView(alias_view, or_replace=True))
