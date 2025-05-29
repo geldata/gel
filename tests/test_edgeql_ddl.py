@@ -8642,6 +8642,134 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             ('drop global foo', []),
         ])
 
+    async def test_edgeql_ddl_permissions_01(self):
+        await self.con.execute(r"""
+            create permission foo;
+        """)
+        await self.assert_query_result(
+            'select global foo;',
+            [False],
+        )
+        await self.con.execute(r"""
+            drop permission foo;
+        """)
+        async with self.assertRaisesRegexTx(
+            edgedb.QueryError,
+            r"global 'default::foo' does not exist",
+        ):
+            await self.con.execute('''
+                select global foo;
+            ''')
+
+    async def test_edgeql_ddl_permissions_02(self):
+        await self.con.execute(r"""
+            create permission foo {
+                create annotation title := 'A';
+            };
+        """)
+        await self.assert_query_result(
+            '''
+            select schema::Permission {
+                name,
+                annotations: {n := .name, v := @value},
+            };''',
+            [
+                {
+                    'name': 'default::foo',
+                    'annotations': tb.bag([
+                        {'n': 'std::title', 'v': 'A'},
+                    ]),
+                }
+            ],
+        )
+        await self.con.execute(r"""
+            alter permission foo {
+                create annotation description := 'B';
+            };
+        """)
+        await self.assert_query_result(
+            '''
+            select schema::Permission {
+                name,
+                annotations: {n := .name, v := @value},
+            };''',
+            [
+                {
+                    'name': 'default::foo',
+                    'annotations': tb.bag([
+                        {'n': 'std::title', 'v': 'A'},
+                        {'n': 'std::description', 'v': 'B'},
+                    ]),
+                }
+            ],
+        )
+        await self.con.execute(r"""
+            alter permission foo {
+                alter annotation description := 'C';
+            };
+        """)
+        await self.assert_query_result(
+            '''
+            select schema::Permission {
+                name,
+                annotations: {n := .name, v := @value},
+            };''',
+            [
+                {
+                    'name': 'default::foo',
+                    'annotations': tb.bag([
+                        {'n': 'std::title', 'v': 'A'},
+                        {'n': 'std::description', 'v': 'C'},
+                    ]),
+                }
+            ],
+        )
+        await self.con.execute(r"""
+            alter permission foo {
+                drop annotation description;
+            };
+        """)
+        await self.assert_query_result(
+            '''
+            select schema::Permission {
+                name,
+                annotations: {n := .name, v := @value},
+            };''',
+            [
+                {
+                    'name': 'default::foo',
+                    'annotations': tb.bag([
+                        {'n': 'std::title', 'v': 'A'},
+                    ]),
+                }
+            ],
+        )
+
+    async def test_edgeql_ddl_permissions_03(self):
+        await self.con.execute(r"""
+            create permission foo;
+        """)
+        await self.assert_query_result(
+            'select global foo;',
+            [False],
+        )
+        await self.con.execute(r"""
+            alter permission foo {
+                rename to bar;
+            };
+        """)
+        await self.assert_query_result(
+            'select global bar;',
+            [False],
+        )
+        async with self.assertRaisesRegexTx(
+            edgedb.QueryError,
+            r"global 'default::foo' does not exist",
+        ):
+            await self.con.execute('''
+                select global foo;
+            ''')
+
     async def test_edgeql_ddl_property_computable_01(self):
         await self.con.execute('''\
             CREATE TYPE CompProp;
