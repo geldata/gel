@@ -66,7 +66,7 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -c "import sys; print(sys.prefix)"
-        python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+        python -m pip install uv~=0.1.0 setuptools==80.8.0 && uv pip install -U -r requirements.txt
 
     # Our HA tests currently only work on Postgres 14 (see #6332),
     # so check it out before we compute our build cache keys.

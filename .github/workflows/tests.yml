@@ -69,7 +69,7 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -c "import sys; print(sys.prefix)"
-        python -m pip install uv~=0.1.0 && uv pip install -U -r requirements.txt
+        python -m pip install uv~=0.1.0 setuptools==80.8.0 && uv pip install -U -r requirements.txt
 
     - name: Compute cache keys and download the running times log
       env:
