@@ -6,39 +6,43 @@ CLI
 
 :edb-alt-title: The Gel CLI
 
-The |gelcmd| command-line interface (CLI) provides an idiomatic way to
-install |Gel|, spin up local instances, open a REPL, execute queries,
-manage auth roles, introspect schema, create migrations, and more.
+The |gelcmd| command-line interface (CLI) provides an idiomatic way to spin up local instances, open a REPL, execute queries, manage auth roles, introspect schema, create migrations, and more.
 
-You can install it with one shell command.
+If you're using JavaScript or Python, our client libraries will handle downloading and running the CLI for you using tools like ``npx`` and ``uvx``.
 
-.. _ref_cli_gel_install:
+For everyone else, or if you wish to install the CLI globally, you can install using our bash installer or your operating system's package manager.
 
-.. rubric:: Installation
+.. tabs::
 
-On Linux or MacOS, run the following in your terminal and follow the
-on-screen instructions:
+  .. code-tab:: bash
+    :caption: bash
 
-.. code-block:: bash
+    $ curl https://www.geldata.com/sh --proto "=https" -sSf1 | sh
 
-    $ curl --proto '=https' --tlsv1.2 -sSf https://www.geldata.com/sh | sh
+  .. code-tab:: powershell
+    :caption: Powershell
 
-For Windows, the installation script is:
+    PS> irm https://www.geldata.com/ps1 | iex
 
-.. code-block:: powershell
+  .. code-tab:: bash
+    :caption: Homebrew
 
-    PS> iwr https://www.geldata.com/ps1 -useb | iex
+    $ brew install geldata/tap/gel-cli
 
-* The `script <https://www.geldata.com/sh>`_, inspired by ``rustup``, will
-  detect the OS and download the appropriate build of the Gel CLI
-  tool, ``gel``.
-* The |gelcmd| command is a single executable (it's `open source!
-  <https://github.com/geldata/gel-cli/>`_)
-* Once installed, the ``gel`` command can be used to install,
-  uninstall, upgrade, and interact with |Gel| server instances.
-* You can uninstall Gel server or remove the ``gel`` command at
-  any time.
+  .. code-tab:: bash
+    :caption: Nixpkgs
 
+    $ nix-shell -p gel
+
+  .. code-tab:: bash
+    :caption: JavaScript
+
+    $ npx gel --version
+
+  .. code-tab:: bash
+    :caption: Python
+
+    $ uvx gel --version
 
 .. rubric:: Connection options
 
@@ -46,19 +50,6 @@ All commands respect a common set of
 :ref:`connection options <ref_cli_gel_connopts>`, which let you specify
 a target instance. This instance can be local to your machine or hosted
 remotely.
-
-
-.. _ref_cli_gel_nightly:
-
-.. rubric:: Nightly version
-
-To install the nightly version of the CLI (not to be confused with the nightly
-version of |Gel| itself!) use this command:
-
-.. code-block:: bash
-
-    $ curl --proto '=https' --tlsv1.2 -sSf https://www.geldata.com/sh | \
-      sh -s -- --nightly
 
 
 .. _ref_cli_gel_uninstall:
