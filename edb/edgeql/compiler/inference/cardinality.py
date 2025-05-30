@@ -519,7 +519,7 @@ def _infer_shape(
                 ptrref=ptrref,
                 source_ctx=shape_set.span,
                 irexpr=rptr.expr,
-                is_mut_assignment=is_mutation,
+                is_mut_assignment=rptr.is_mutation,
                 specified_card=specified_card,
                 specified_required=specified_required,
                 shape_op=shape_op,

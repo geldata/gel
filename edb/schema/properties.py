@@ -240,12 +240,7 @@ class PropertyCommand(
             scls.is_link_property(schema)
             and not scls.is_pure_computable(schema)
         ):
-            # link properties cannot be required or multi
-            if self.get_attribute_value('required'):
-                raise errors.InvalidPropertyDefinitionError(
-                    'link properties cannot be required',
-                    span=self.span,
-                )
+            # link properties cannot be multi
             if (self.get_attribute_value('cardinality')
                     is qltypes.SchemaCardinality.Many):
                 raise errors.InvalidPropertyDefinitionError(
