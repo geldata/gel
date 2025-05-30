@@ -157,8 +157,8 @@ async def handle_compiler_query(
     response: protocol.HttpResponse,
 ) -> None:
     try:
-        # This is just testing if the RPC to the compiler is healthy
-        await server.get_compiler_pool().make_compilation_config_serializer()
+        pool = server.get_compiler_pool()
+        ready = await pool.health_check()
     except Exception as ex:
         if debug.flags.server:
             markup.dump(ex)
@@ -169,7 +169,15 @@ async def handle_compiler_query(
             errors.InternalServerError,
         )
     else:
-        _response_ok(response, b'"OK"')
+        if ready:
+            _response_ok(response, b'"OK"')
+        else:
+            _response_error(
+                response,
+                http.HTTPStatus.SERVICE_UNAVAILABLE,
+                "The compiler pool is not ready",
+                errors.AvailabilityError,
+            )
 
 
 async def handle_liveness_query(
