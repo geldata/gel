@@ -3746,18 +3746,14 @@ class TestSchema(tb.BaseSchemaLoadTest):
             "abs' does not exist",
         )
 
-    @tb.must_fail(
-        errors.UnsupportedFeatureError,
-        "nested arrays are not supported",
-    )
     def test_schema_array_of_array_01(self):
         """
         global foo: array<array<int64>>;
         """
 
     @tb.must_fail(
-        errors.UnsupportedFeatureError,
-        "nested arrays are not supported",
+        errors.SchemaDefinitionError,
+        "non-computed globals may not have have object type",
     )
     def test_schema_array_of_array_02(self):
         """
@@ -3776,8 +3772,8 @@ class TestSchema(tb.BaseSchemaLoadTest):
         """
 
     @tb.must_fail(
-        errors.UnsupportedFeatureError,
-        "nested arrays are not supported",
+        errors.InvalidPropertyTargetError,
+        "invalid property type: non-computed nested arrays are not supported",
     )
     def test_schema_array_of_array_05(self):
         """
@@ -3787,8 +3783,9 @@ class TestSchema(tb.BaseSchemaLoadTest):
         """
 
     @tb.must_fail(
-        errors.UnsupportedFeatureError,
-        "nested arrays are not supported",
+        errors.InvalidPropertyTargetError,
+        "invalid property type: expected a scalar type, "
+        "or a scalar collection, got collection 'array<array<test::Foo>>'",
     )
     def test_schema_array_of_array_06(self):
         """
@@ -3804,19 +3801,11 @@ class TestSchema(tb.BaseSchemaLoadTest):
         };
         """
 
-    @tb.must_fail(
-        errors.UnsupportedFeatureError,
-        "nested arrays are not supported",
-    )
     def test_schema_array_of_array_08(self):
         """
         function foo(x: array<array<int64>>) -> int64 using (1);
         """
 
-    @tb.must_fail(
-        errors.UnsupportedFeatureError,
-        "nested arrays are not supported",
-    )
     def test_schema_array_of_array_09(self):
         """
         type Foo;

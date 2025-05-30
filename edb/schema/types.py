@@ -1169,6 +1169,63 @@ class Collection(Type, s_abc.Collection):
             if_exists=True,
         )
 
+    def get_padded_types(self, schema: s_schema.Schema) -> list[Type]:
+        """Get all types produced by padding arrays of arrays.
+
+        Examples:
+        array<array<str>> -> [
+            array<tuple<array<str>>>,
+            tuple<array<str>>,
+        ]
+        tuple<array<array<str>>> -> [
+            tuple<array<tuple<array<str>>>>,
+            array<tuple<array<str>>>,
+            tuple<array<str>>,
+        ]
+        array<array<array<str>>> -> [
+            array<tuple<array<tuple<array<str>>>>>,
+            tuple<array<tuple<array<str>>>>,
+            array<tuple<array<str>>>,
+            tuple<array<str>>,
+        ]
+        """
+
+        # TODO: It would be best for the get_padded_collection functions
+        # to call this function to prevent needless double recursion.
+
+        if not self.contains_array_of_array(schema):
+            return []
+
+        result: list[Type] = []
+
+        padded_type: Type
+        if isinstance(self, Array):
+            element_type = self.get_element_type(schema)
+            padded_type = Array.get_padded_collection(
+                schema, element_type=element_type
+            )
+            result.append(padded_type)
+            if self.is_array_of_arrays(schema):
+                result.append(padded_type.get_element_type(schema))
+
+            if isinstance(element_type, Collection):
+                result.extend(element_type.get_padded_types(schema))
+
+        elif isinstance(self, Tuple):
+            element_types = dict(self.get_element_types(schema).items(schema))
+            padded_type = Tuple.get_padded_collection(
+                schema,
+                element_types=element_types,
+                named=self.get_named(schema),
+            )
+            result.append(padded_type)
+
+            for _, element_type in element_types.items():
+                if isinstance(element_type, Collection):
+                    result.extend(element_type.get_padded_types(schema))
+
+        return result
+
 
 Dimensions = checked.FrozenCheckedList[int]
 Array_T = typing.TypeVar("Array_T", bound="Array")
@@ -1283,6 +1340,20 @@ class Array(
             result = schema.get_global(cls, name, default=None)
 
         if result is None:
+            if (
+                isinstance(element_type, Array)
+                or (
+                    isinstance(element_type, Type)
+                    and element_type.contains_array_of_array(schema)
+                )
+            ):
+                # Nested arrays are represented as array<tuple<array< ... >>
+                # and so we need to ensure these types also exist.
+                schema, _ = Array.create_padded_collection(
+                    schema,
+                    element_type=element_type,
+                )
+
             schema, result = super().create_in_schema(
                 schema,
                 id=id,
@@ -1295,6 +1366,82 @@ class Array(
             schema, _ = result.material_type(schema)
 
         return schema, result
+
+    @classmethod
+    def create_padded_collection(
+        cls,
+        schema: s_schema.Schema,
+        *,
+        element_type: Any,
+    ) -> tuple[s_schema.Schema, Array]:
+        # Create the corresponding array<tuple<array<...>>> for a nested array
+
+        # Recursively pad any inner nested arrays
+        if isinstance(element_type, Array):
+            schema, element_type = Array.create_padded_collection(
+                schema,
+                element_type=element_type.get_element_type(schema),
+            )
+            schema, element_type = Tuple.create(
+                schema,
+                element_types={
+                    'f1': element_type
+                },
+                named=True,
+            )
+        elif isinstance(element_type, Tuple):
+            schema, element_type = Tuple.create_padded_collection(
+                schema,
+                element_types=dict(
+                    element_type.get_element_types(schema).items(schema)
+                ),
+                named=element_type.get_named(schema),
+            )
+
+        return Array.create(
+            schema,
+            element_type=element_type,
+        )
+
+    @classmethod
+    def get_padded_collection(
+        cls,
+        schema: s_schema.Schema,
+        *,
+        element_type: Any,
+    ) -> Array:
+        # Get the corresponding array<tuple<array<...>>> for a nested array
+
+        # Recursively pad any inner nested arrays
+        padded_element_name: s_name.Name
+        if isinstance(element_type, Array):
+            element_type = Array.get_padded_collection(
+                schema,
+                element_type=element_type.get_element_type(schema),
+            )
+            padded_element_name = Tuple.generate_name(
+                {'f1': element_type.get_name(schema)},
+                named=True,
+            )
+        elif isinstance(element_type, Tuple):
+            element_type = Tuple.get_padded_collection(
+                schema,
+                element_types=dict(
+                    element_type.get_element_types(schema).items(schema)
+                ),
+                named=element_type.get_named(schema),
+            )
+            padded_element_name = element_type.get_name(schema)
+        else:
+            padded_element_name = element_type.get_name(schema)
+
+        padded_collection_name = Array.generate_name(
+            padded_element_name
+        )
+        return schema.get_global(
+            Array,
+            padded_collection_name,
+        )
 
     def get_generated_name(self, schema: s_schema.Schema) -> s_name.UnqualName:
         return type(self).generate_name(
@@ -1491,12 +1638,53 @@ class Array(
 
         st = next(iter(subtypes))
 
+        # If this type contains an array of array, recursively include the
+        # padded array<tuple<array<...>>> in the shell.
+        padded_collection_type = None
+        if isinstance(st, ArrayTypeShell):
+            padded_subtype = (
+                st
+                if st.padded_collection_type is None else
+                st.padded_collection_type
+            )
+            wrapped_element_name = Tuple.generate_name(
+                {'f1': padded_subtype.name},
+                named=True,
+            )
+            wrapped_element_type = Tuple.create_shell(
+                schema,
+                subtypes={'f1': padded_subtype},
+                typemods={'named': True},
+                name=wrapped_element_name,
+            )
+            padded_collection_name = Array.generate_name(
+                wrapped_element_name
+            )
+            padded_collection_type = Array.create_shell(
+                schema,
+                subtypes=[wrapped_element_type],
+                name=padded_collection_name
+            )
+        elif (
+            isinstance(st, TupleTypeShell)
+            and st.padded_collection_type is not None
+        ):
+            padded_collection_name = Array.generate_name(
+                st.padded_collection_type.name
+            )
+            padded_collection_type = Array.create_shell(
+                schema,
+                subtypes=[st.padded_collection_type],
+                name=padded_collection_name,
+            )
+
         return ArrayTypeShell(
             subtype=st,
             typemods=typemods,
             name=name,
             expr=expr,
             schemaclass=cls,
+            padded_collection_type=padded_collection_type,
         )
 
     def as_shell(
@@ -1543,6 +1731,7 @@ class ArrayTypeShell(CollectionTypeShell[Array_T_co]):
         subtype: TypeShell[Type],
         typemods: tuple[typing.Any, ...],
         schemaclass: type[Array_T_co],
+        padded_collection_type: Optional[TypeShell[Type]] = None,
     ) -> None:
         if name is None:
             name = schemaclass.generate_name(subtype.name)
@@ -1550,6 +1739,7 @@ class ArrayTypeShell(CollectionTypeShell[Array_T_co]):
         super().__init__(name=name, schemaclass=schemaclass, expr=expr)
         self.subtype = subtype
         self.typemods = typemods
+        self.padded_collection_type = padded_collection_type
 
     def get_subtypes(
         self,
@@ -1582,6 +1772,9 @@ class ArrayTypeShell(CollectionTypeShell[Array_T_co]):
         el = self.subtype
         if isinstance(el, CollectionTypeShell):
             cmd.add(el.as_create_delta(schema))
+
+        if self.padded_collection_type:
+            cmd.add_prerequisite(self.padded_collection_type.as_create_delta(schema))
 
         ca.set_attribute_value('name', ca.classname)
         ca.set_attribute_value('element_type', el)
@@ -1678,6 +1871,18 @@ class Tuple(
             result = schema.get_global(cls, name, default=None)
 
         if result is None:
+            if any(
+                st.contains_array_of_array(schema)
+                for st in element_types.values()
+            ):
+                # Nested arrays are represented as array<tuple<array< ... >>
+                # and so we need to ensure these types also exist.
+                schema, _ = Tuple.create_padded_collection(
+                    schema,
+                    element_types=element_types,
+                    named=named,
+                )
+
             schema, result = super().create_in_schema(
                 schema,
                 id=id,
@@ -1690,6 +1895,87 @@ class Tuple(
             schema, _ = result.material_type(schema)
 
         return schema, result
+
+    @classmethod
+    def create_padded_collection(
+        cls,
+        schema: s_schema.Schema,
+        *,
+        element_types: Mapping[str, Type],
+        named: bool = False,
+    ) -> tuple[s_schema.Schema, Collection]:
+        # If a tuple contains array<array<...>>, create the coresponding
+        # tuple which contains array<tuple<array<...>>> instead.
+        #
+        # eg. tuple<array<array<int64>>>
+        #     ->  tuple<array<tuple<array<int64>>>>
+
+        # Recursively pad any inner nested arrays
+        padded_element_types = {}
+        for name, element_type in element_types.items():
+            if isinstance(element_type, Array):
+                schema, element_type = Array.create_padded_collection(
+                    schema,
+                    element_type=element_type.get_element_type(schema),
+                )
+            elif isinstance(element_type, Tuple):
+                schema, element_type = Tuple.create_padded_collection(
+                    schema,
+                    element_types=dict(
+                        element_type.get_element_types(schema).items(schema)
+                    ),
+                    named=element_type.get_named(schema),
+                )
+
+            padded_element_types[name] = element_type
+
+        return Tuple.create(
+            schema,
+            element_types=padded_element_types,
+            named=named,
+        )
+
+    @classmethod
+    def get_padded_collection(
+        cls,
+        schema: s_schema.Schema,
+        *,
+        element_types: Mapping[str, Type],
+        named: bool = False,
+    ) -> Tuple:
+        # If a tuple contains array<array<...>>, get the coresponding
+        # tuple which contains array<tuple<array<...>>> instead.
+        #
+        # eg. tuple<array<array<int64>>>
+        #     ->  tuple<array<tuple<array<int64>>>>
+
+        # Recursively pad any inner nested arrays
+        padded_element_types = {}
+        for name, element_type in element_types.items():
+            if isinstance(element_type, Array):
+                element_type = Array.get_padded_collection(
+                    schema,
+                    element_type=element_type.get_element_type(schema),
+                )
+            elif isinstance(element_type, Tuple):
+                element_type = Tuple.get_padded_collection(
+                    schema,
+                    element_types=dict(
+                        element_type.get_element_types(schema).items(schema)
+                    ),
+                    named=element_type.get_named(schema),
+                )
+
+            padded_element_types[name] = element_type.get_name(schema)
+
+        padded_collection_name = Tuple.generate_name(
+            padded_element_types,
+            named=named,
+        )
+        return schema.get_global(
+            Tuple,
+            padded_collection_name,
+        )
 
     def get_generated_name(self, schema: s_schema.Schema) -> s_name.UnqualName:
         els = {n: st.get_name(schema) for n, st in self.iter_subtypes(schema)}
@@ -1820,11 +2106,50 @@ class Tuple(
         typemods: Any = None,
         name: Optional[s_name.Name] = None,
     ) -> TupleTypeShell[Tuple_T]:
+
+        # If this type contains an array of array, recursively include the
+        # padded array<tuple<array<...>>> in the shell.
+        padded_collection_type = None
+        if any(
+            (
+                isinstance(st, (ArrayTypeShell, TupleTypeShell))
+                and st.padded_collection_type is not None
+            )
+            for _, st in subtypes.items()
+        ):
+            named = typemods is not None and typemods.get('named', False)
+            padded_subtypes = {
+                n: (
+                    st.padded_collection_type
+                    if (
+                        isinstance(st, (ArrayTypeShell, TupleTypeShell))
+                        and st.padded_collection_type is not None
+                    ) else
+                    st
+                )
+                for n, st in subtypes.items()
+            }
+            padded_subtype_names = {
+                n: st.name
+                for n, st in padded_subtypes.items()
+            }
+            padded_collection_name = Tuple.generate_name(
+                element_names=padded_subtype_names,
+                named=named,
+            )
+            padded_collection_type = Tuple.create_shell(
+                schema,
+                subtypes=padded_subtypes,
+                typemods=typemods,
+                name=padded_collection_name,
+            )
+
         return TupleTypeShell(
             subtypes=subtypes,
             typemods=typemods,
             name=name,
             schemaclass=cls,
+            padded_collection_type=padded_collection_type,
         )
 
     def as_shell(
@@ -2080,6 +2405,7 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
         subtypes: Mapping[str, TypeShell[Type]],
         typemods: Any = None,
         schemaclass: type[Tuple_T_co],
+        padded_collection_type: Optional[TypeShell[Type]] = None,
     ) -> None:
         if name is None:
             named = typemods is not None and typemods.get('named', False)
@@ -2091,6 +2417,7 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
         super().__init__(name=name, schemaclass=schemaclass)
         self.subtypes = subtypes
         self.typemods = typemods
+        self.padded_collection_type = padded_collection_type
 
     def get_displayname(self, schema: s_schema.Schema) -> str:
         st_names = ', '.join(st.get_displayname(schema)
@@ -2134,6 +2461,9 @@ class TupleTypeShell(CollectionTypeShell[Tuple_T_co]):
 
         if view_name is not None:
             ct.add_prerequisite(plain_tuple)
+
+        if self.padded_collection_type:
+            ct.add_prerequisite(self.padded_collection_type.as_create_delta(schema))
 
         return ct
 
