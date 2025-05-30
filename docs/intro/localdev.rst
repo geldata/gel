@@ -2,7 +2,12 @@
 Local Development
 =================
 
-One of Gel's most powerful features is its seamless support for local development. The Gel CLI makes it incredibly easy to spin up a local instance, manage it, and iterate on your schema quickly and safely. This guide outlines the flexible options available for your local development workflow.
+One of Gel's most powerful features is its seamless support for local development. The Gel CLI makes it incredibly easy to spin up a local instance, manage it, access GUI, and iterate on your schema quickly and safely. This guide outlines the flexible options available for your local development workflow.
+
+If you're using JavaScript or Python, our client libraries will automatically handle the installation for you using tools like ``npx`` and ``uvx``. For other environments or to install the CLI globally, you can use one of the following methods:
+
+.. include:: ./install_table.rst
+
 
 Initialize your local instance
 ==============================
