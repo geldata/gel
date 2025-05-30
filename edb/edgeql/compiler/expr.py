@@ -563,8 +563,12 @@ def compile_GlobalExpr(
         type=so.Object,
     )
 
-    # Check None
+    # Check for None first.
     if expr_obj is None:
+        # If no object is found, we want to raise an error with 'global' as
+        # the desired type.
+        # If we let `get_schema_object_and_track`, the error will contain
+        # 'object' instead.
         s_schema.Schema.raise_bad_reference(
             expr_schema_name,
             module_aliases=ctx.modaliases,
@@ -592,7 +596,9 @@ def compile_GlobalExpr(
             s_globals.Global,
             span=expr.span,
         )
-        raise  # for type inference
+        # Raise an error here so mypy knows that expr_obj can only be a global
+        # past this point.
+        raise AssertionError('should never happen')
 
     # Non-permission global
     glob = expr_obj
