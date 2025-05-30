@@ -12,6 +12,7 @@ Welcome to Gel
     quickstart/index
     tutorials/index
     guides/index
+    localdev
     cli
     instances
     projects
