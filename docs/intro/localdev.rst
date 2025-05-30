@@ -24,7 +24,7 @@ This command takes care of several things for you:
 * It configures a local Postgres cluster.
 * It manages the instance through your operating system's background task launcher.
 
-To conserve resources, Gel automatically puts inactive instances to sleep. This means you can have multiple instances running without them draining your system's resources when not in use.
+To conserve resources, Gel automatically puts inactive local development instances to sleep. This means you can have multiple instances running without them draining your system's resources when not in use.
 
 Iterate on your schema
 ======================
