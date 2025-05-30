@@ -24,7 +24,6 @@ import unittest
 import edgedb
 
 from edb.testbase import server as tb
-from edb.tools import test
 
 
 class TestEdgeQLGlobals(tb.QueryTestCase):
@@ -492,9 +491,6 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ],
         )
 
-    @test.skip(
-        "cannot resolve backend oid for type first created by computed global"
-    )
     async def test_edgeql_globals_18(self):
         await self.con.execute('''
             CREATE GLOBAL foo := ([(f := 1)]);
