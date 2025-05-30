@@ -55,6 +55,7 @@ from . import casts
 from . import context
 from . import dispatch
 from . import pathctx
+from . import schemactx
 from . import setgen
 from . import stmt
 from . import tuple_args
@@ -547,6 +548,37 @@ def compile_UnaryOp(
         expr, op_name=expr.op, qlargs=[expr.operand], ctx=ctx)
 
 
+def _cache_as_type_rewrite(
+    target: irast.Set,
+    stype: s_types.Type,
+    populate: Callable[[], irast.Set],
+    *,
+    ctx: context.ContextLevel,
+) -> irast.Set:
+    key = (stype, False)
+    if not ctx.env.type_rewrites.get(key):
+        ctx.env.type_rewrites[key] = populate()
+    rewrite_target = ctx.env.type_rewrites[key]
+
+    # We need to have the set with expr=None, so that the rewrite
+    # will be applied, but we also need to wrap it with a
+    # card_inference_override so that we use the real cardinality
+    # instead of assuming it is MANY.
+    assert isinstance(rewrite_target, irast.Set)
+    typeref = typegen.type_to_typeref(stype, env=ctx.env)
+    target = setgen.new_set_from_set(
+        target,
+        expr=irast.TypeRoot(typeref=typeref, is_cached_global=True),
+        stype=stype,
+        ctx=ctx,
+    )
+    wrap = irast.SelectStmt(
+        result=target,
+        card_inference_override=rewrite_target,
+    )
+    return setgen.new_set_from_set(target, expr=wrap, ctx=ctx)
+
+
 @dispatch.compile.register(qlast.GlobalExpr)
 def compile_GlobalExpr(
     expr: qlast.GlobalExpr, *, ctx: context.ContextLevel
@@ -602,33 +634,20 @@ def compile_GlobalExpr(
         # If the global is single, use type_rewrites to make sure it
         # is computed only once in the SQL query.
         if glob.get_cardinality(ctx.env.schema).is_single():
-            key = (setgen.get_set_type(target, ctx=ctx), False)
-            if not ctx.env.type_rewrites.get(key):
+            def _populate() -> irast.Set:
                 with ctx.detached() as dctx:
                     # The official rewrite needs to be in a detached
                     # scope to avoid collisions; this won't really
                     # recompile the whole thing, it will hit a cache
                     # of the view.
-                    ctx.env.type_rewrites[key] = dispatch.compile(qry, ctx=dctx)
-            rewrite_target = ctx.env.type_rewrites[key]
+                    return dispatch.compile(qry, ctx=dctx)
 
-            # We need to have the set with expr=None, so that the rewrite
-            # will be applied, but we also need to wrap it with a
-            # card_inference_override so that we use the real cardinality
-            # instead of assuming it is MANY.
-            assert isinstance(rewrite_target, irast.Set)
-            target = setgen.new_set_from_set(
+            target = _cache_as_type_rewrite(
                 target,
-                expr=irast.TypeRoot(
-                    typeref=target.typeref, is_cached_global=True
-                ),
+                setgen.get_set_type(target, ctx=ctx),
+                populate=_populate,
                 ctx=ctx,
             )
-            wrap = irast.SelectStmt(
-                result=target,
-                card_inference_override=rewrite_target,
-            )
-            target = setgen.new_set_from_set(target, expr=wrap, ctx=ctx)
 
         return target
 
@@ -707,6 +726,32 @@ def compile_GlobalExpr(
             )
     elif not isinstance(param_set, irast.Set):
         param_set = dispatch.compile(param_set, ctx=ctx)
+
+    # When we are compiling a global as something we are pulling out
+    # of JSON, arrange to cache it as a type rewrite. This can have
+    # big performance wins.
+    if (
+        not ctx.env.options.schema_object_context
+        and not (
+            ctx.env.options.func_params is None
+            and not ctx.env.options.json_parameters
+        )
+        # TODO: support this for permissions too?
+        # OR! Don't put the permissions into the globals JSON?
+        and isinstance(glob, s_globals.Global)
+    ):
+        name = glob.get_name(ctx.env.schema)
+        if name not in ctx.env.query_globals_types:
+            # HACK: We have mechanism for caching based on type... so
+            # make up a type.
+            # I would like us to be less type-forward though.
+            ctx.env.query_globals_types[name] = (
+                schemactx.derive_view(glob.get_target(ctx.env.schema), ctx=ctx)
+            )
+        ty = ctx.env.query_globals_types[name]
+        param_set = _cache_as_type_rewrite(
+            param_set, ty, lambda: param_set, ctx=ctx
+        )
 
     return param_set
 
