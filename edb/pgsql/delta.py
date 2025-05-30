@@ -3427,7 +3427,7 @@ class CreateIndex(IndexCommand, adapts=s_indexes.CreateIndex):
         index: s_indexes.Index,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-    ):
+    ) -> dbops.Command:
         from .compiler import astutils
 
         options = get_index_compile_options(
@@ -3540,7 +3540,12 @@ class CreateIndex(IndexCommand, adapts=s_indexes.CreateIndex):
                 'kwargs': sql_kwarg_exprs,
             }
         )
-        return dbops.CreateIndex(pg_index)
+        concurrently = index.get_create_concurrently(schema)
+        return dbops.CreateIndex(
+            pg_index,
+            concurrently=concurrently,
+            builtin_conditional=concurrently,
+        )
 
     def _create_innards(
         self,
@@ -3552,6 +3557,9 @@ class CreateIndex(IndexCommand, adapts=s_indexes.CreateIndex):
 
         if index.get_abstract(schema):
             # Don't do anything for abstract indexes
+            return schema
+
+        if index.get_create_concurrently(schema):
             return schema
 
         with errors.ensure_span(self.span):
