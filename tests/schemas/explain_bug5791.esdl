@@ -110,7 +110,6 @@ type File {
     index on ((.userId, .status));
     index on ((.hash, .status));
     index on ((.userId, .isPremium, .status, .publishedAt));
-    index on (.hash);
     index on (.isSticker);
     index on (.isPremium);
     index on (.status);
