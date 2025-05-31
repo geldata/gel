@@ -881,3 +881,23 @@ class TestEdgeQLMultiplicityInference(tb.BaseEdgeQLCompilerTest):
 % OK %
         UNIQUE
         """
+
+    def test_edgeql_ir_mult_inference_94(self):
+        """
+        FOR user IN User SELECT user {
+          name,
+          asdf := (FOR card IN .deck SELECT card),
+        }
+% OK %
+        UNIQUE
+        """
+
+    def test_edgeql_ir_mult_inference_95(self):
+        """
+        FOR user IN User SELECT user {
+          name,
+          asdf := (FOR card IN .deck SELECT Card filter Card = card),
+        }
+% OK %
+        UNIQUE
+        """
