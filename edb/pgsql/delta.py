@@ -6975,6 +6975,9 @@ class CreateRole(MetaCommand, RoleMixin, adapts=s_roles.CreateRole):
         members = set()
 
         role_name = str(role.get_name(schema))
+        permissions: list[str] = list(sorted(
+            role.get_permissions(schema) or ()
+        ))
 
         instance_params = backend_params.instance_params
         tenant_id = instance_params.tenant_id
@@ -7008,6 +7011,7 @@ class CreateRole(MetaCommand, RoleMixin, adapts=s_roles.CreateRole):
                 tenant_id=tenant_id,
                 password_hash=passwd,
                 builtin=role.get_builtin(schema),
+                permissions=permissions,
             ),
         )
         self.pgops.add(dbops.CreateRole(db_role))
@@ -7029,18 +7033,30 @@ class AlterRole(MetaCommand, RoleMixin, adapts=s_roles.AlterRole):
         role_name = str(role.get_name(schema))
 
         kwargs = {}
+        update_metadata = False
+        metadata = dict(
+            id=str(role.id),
+            name=role_name,
+            tenant_id=tenant_id,
+            builtin=role.get_builtin(schema),
+        )
+
         if self.has_attribute_value('password'):
             passwd = self.get_attribute_value('password')
             if backend_params.has_create_role:
                 # Only modify Postgres password of roles managed by EdgeDB
                 kwargs['password'] = passwd
-            kwargs['metadata'] = dict(
-                id=str(role.id),
-                name=role_name,
-                tenant_id=tenant_id,
-                password_hash=passwd,
-                builtin=role.get_builtin(schema),
-            )
+
+            update_metadata = True
+            metadata['password_hash'] = passwd
+
+        if self.has_attribute_value('permissions'):
+            permissions = list(sorted(
+                self.get_attribute_value('permissions') or ()
+            ))
+
+            update_metadata = True
+            metadata['permissions'] = permissions
 
         pg_role_name = common.get_role_backend_name(
             role_name, tenant_id=tenant_id)
@@ -7067,6 +7083,9 @@ class AlterRole(MetaCommand, RoleMixin, adapts=s_roles.AlterRole):
                 superuser_flag = backend_params.has_superuser_access
 
             kwargs['superuser'] = superuser_flag
+
+        if update_metadata:
+            kwargs['metadata'] = metadata
 
         if backend_params.has_create_role:
             dbrole = dbops.Role(name=pg_role_name, **kwargs)
