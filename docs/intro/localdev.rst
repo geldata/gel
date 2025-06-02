@@ -16,7 +16,7 @@ It's easy to get started with a local Gel instance. Navigate to the root of your
 
 .. code-block:: bash
 
-  $ gel init
+  $ gel project init
 
 This command takes care of several things for you:
 
