@@ -1,8 +1,8 @@
 diff --git a/edb/buildmeta.py b/edb/buildmeta.py
-index 52d9f700d..2297151e7 100644
+index 28eabc77c..10f19f6a0 100644
 --- a/edb/buildmeta.py
 +++ b/edb/buildmeta.py
-@@ -68,6 +68,12 @@ class MetadataError(Exception):
+@@ -65,6 +65,12 @@ class MetadataError(Exception):
      pass
  
  
@@ -16,11 +16,11 @@ index 52d9f700d..2297151e7 100644
      major: int
      minor: int
 diff --git a/edb/edgeql/ast.py b/edb/edgeql/ast.py
-index 53f317d26..ce83fb341 100644
+index 59973c0ec..003700c76 100644
 --- a/edb/edgeql/ast.py
 +++ b/edb/edgeql/ast.py
-@@ -1134,6 +1134,23 @@ class SetGlobalType(SetField):
-     reset_value: bool = False
+@@ -1183,6 +1183,23 @@ class DropPermission(DropObject, PermissionCommand):
+     pass
  
  
 +class BlobalCommand(ObjectDDL):
@@ -44,12 +44,12 @@ index 53f317d26..ce83fb341 100644
  
      __abstract_node__ = True
 diff --git a/edb/edgeql/codegen.py b/edb/edgeql/codegen.py
-index 5e82472ff..d06a8cd72 100644
+index 2dffdd519..e05a4108d 100644
 --- a/edb/edgeql/codegen.py
 +++ b/edb/edgeql/codegen.py
-@@ -2448,6 +2448,12 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
-     def visit_DropGlobal(self, node: qlast.DropGlobal) -> None:
-         self._visit_DropObject(node, 'GLOBAL')
+@@ -2474,6 +2474,12 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
+     def visit_DropPermission(self, node: qlast.DropPermission) -> None:
+         self._visit_DropObject(node, 'PERMISSION')
  
 +    def visit_CreateBlobal(self, node: qlast.CreateGlobal) -> None:
 +        self._visit_CreateObject(node, 'BLOBAL')
@@ -61,11 +61,11 @@ index 5e82472ff..d06a8cd72 100644
          if node.scope == qltypes.ConfigScope.GLOBAL:
              self._write_keywords('SET GLOBAL ')
 diff --git a/edb/edgeql/parser/grammar/ddl.py b/edb/edgeql/parser/grammar/ddl.py
-index 72bbb77fa..5a59b25b8 100644
+index bd55c93af..22fc58bf6 100644
 --- a/edb/edgeql/parser/grammar/ddl.py
 +++ b/edb/edgeql/parser/grammar/ddl.py
-@@ -246,6 +246,14 @@ class InnerDDLStmt(Nonterm):
-     def reduce_DropGlobalStmt(self, *_):
+@@ -260,6 +260,14 @@ class InnerDDLStmt(Nonterm):
+     def reduce_DropPermissionStmt(self, *_):
          pass
  
 +    @parsing.inline(0)
@@ -79,9 +79,9 @@ index 72bbb77fa..5a59b25b8 100644
      @parsing.inline(0)
      def reduce_DropCastStmt(self, *_):
          pass
-@@ -3565,6 +3573,38 @@ class DropGlobalStmt(Nonterm):
-             name=kids[2].val
+@@ -3613,6 +3621,38 @@ class DropGlobalStmt(Nonterm):
          )
+ 
  
 +#
 +# CREATE BLOBAL
@@ -116,13 +116,13 @@ index 72bbb77fa..5a59b25b8 100644
 +
 +
  #
- # MIGRATIONS
+ # CREATE PERMISSION
  #
 diff --git a/edb/lib/_testmode.edgeql b/edb/lib/_testmode.edgeql
-index 0f0f1332c..ef977c8dd 100644
+index 761a5dc53..d9a70f541 100644
 --- a/edb/lib/_testmode.edgeql
 +++ b/edb/lib/_testmode.edgeql
-@@ -214,6 +214,15 @@ create extension package _conf VERSION '1.0' {
+@@ -232,6 +232,15 @@ create extension package _conf VERSION '1.0' {
  
  # std::_gen_series
  
@@ -139,11 +139,11 @@ index 0f0f1332c..ef977c8dd 100644
  std::_gen_series(
      `start`: std::int64,
 diff --git a/edb/lib/schema.edgeql b/edb/lib/schema.edgeql
-index ae5c70d5b..b7692b16c 100644
+index a41bbba6e..f8f1b1ccb 100644
 --- a/edb/lib/schema.edgeql
 +++ b/edb/lib/schema.edgeql
-@@ -526,9 +526,17 @@ CREATE TYPE schema::Global EXTENDING schema::AnnotationSubject {
- };
+@@ -531,9 +531,17 @@ CREATE TYPE schema::Permission
+         schema::AnnotationSubject;
  
  
 +CREATE TYPE schema::Blobal EXTENDING schema::AnnotationSubject {
@@ -161,10 +161,10 @@ index ae5c70d5b..b7692b16c 100644
          SET default := false;
      };
 diff --git a/edb/pgsql/delta.py b/edb/pgsql/delta.py
-index b447e6a4c..fc7ee4a74 100644
+index 2bec402fd..6b08a1b61 100644
 --- a/edb/pgsql/delta.py
 +++ b/edb/pgsql/delta.py
-@@ -748,6 +748,38 @@ class DeleteGlobal(
+@@ -777,6 +777,38 @@ class RenamePermission(
      pass
  
  
@@ -204,10 +204,10 @@ index b447e6a4c..fc7ee4a74 100644
      pass
  
 diff --git a/edb/schema/functions.py b/edb/schema/functions.py
-index a8792324b..527b8c38f 100644
+index 48baa30be..48fb55b89 100644
 --- a/edb/schema/functions.py
 +++ b/edb/schema/functions.py
-@@ -1244,6 +1244,27 @@ class Function(
+@@ -1252,6 +1252,27 @@ class Function(
      data_safe=True,
  ):
  
@@ -235,7 +235,7 @@ index a8792324b..527b8c38f 100644
      used_globals = so.SchemaField(
          so.ObjectSet[s_globals.Global],
          coerce=True, default=so.DEFAULT_CONSTRUCTOR,
-@@ -1615,6 +1636,10 @@ class FunctionCommand(
+@@ -1655,6 +1676,10 @@ class FunctionCommand(
                  nativecode.not_compiled()
              )
  
@@ -247,7 +247,7 @@ index a8792324b..527b8c38f 100644
          # volatility, so force it to happen as part of
          # canonicalization of attributes.
 diff --git a/edb/schema/globals.py b/edb/schema/globals.py
-index 76ec833f4..460ea0a67 100644
+index ca0874880..682051516 100644
 --- a/edb/schema/globals.py
 +++ b/edb/schema/globals.py
 @@ -619,3 +619,60 @@ class DeleteGlobal(
@@ -312,7 +312,7 @@ index 76ec833f4..460ea0a67 100644
 +):
 +    astnode = qlast.DropBlobal
 diff --git a/edb/schema/operators.py b/edb/schema/operators.py
-index 856225997..bc9a3aea7 100644
+index baba8c1dd..371d59240 100644
 --- a/edb/schema/operators.py
 +++ b/edb/schema/operators.py
 @@ -68,12 +68,6 @@ class Operator(
@@ -329,7 +329,7 @@ index 856225997..bc9a3aea7 100644
      # contain the name of the origin operator.
      # For example, the `std::IN` operator has `std::=`
 diff --git a/edb/server/compiler/status.py b/edb/server/compiler/status.py
-index 9c11af6e3..54321982e 100644
+index c66a6274e..10fddead8 100644
 --- a/edb/server/compiler/status.py
 +++ b/edb/server/compiler/status.py
 @@ -68,6 +68,8 @@ def get_schema_class(ql: qlast.ObjectDDL) -> qltypes.SchemaObjectClass:
@@ -338,15 +338,15 @@ index 9c11af6e3..54321982e 100644
              return osc.GLOBAL
 +        case qlast.BlobalCommand():
 +            return osc.GLOBAL
+         case qlast.PermissionCommand():
+             return osc.PERMISSION
          case qlast.LinkCommand():
-             return osc.LINK
-         case qlast.IndexCommand():
 diff --git a/tests/test_edgeql_select.py b/tests/test_edgeql_select.py
-index aa26da128..18da441d0 100644
+index 17f302373..b812e04f6 100644
 --- a/tests/test_edgeql_select.py
 +++ b/tests/test_edgeql_select.py
-@@ -1964,6 +1964,18 @@ class TestEdgeQLSelect(tb.QueryTestCase):
-             ]),
+@@ -2060,6 +2060,18 @@ class TestEdgeQLSelect(tb.QueryTestCase):
+             [],
          )
  
 +    async def test_edgeql_select_baseobject_function_01(self):
@@ -361,9 +361,9 @@ index aa26da128..18da441d0 100644
 +            [{"name": "default::asdf"}],
 +        )
 +
-     async def test_edgeql_select_id_01(self):
-         # allow assigning id to a computed (#4781)
-         await self.con.query('SELECT schema::Type { XYZ := .id};')
+     async def test_edgeql_select_empty_intersection_property(self):
+         with self.assertRaisesRegex(
+             edgedb.InvalidReferenceError,
 diff --git a/tests/test_link_target_delete.py b/tests/test_link_target_delete.py
 index 8982b3113..f50b28c92 100644
 --- a/tests/test_link_target_delete.py
