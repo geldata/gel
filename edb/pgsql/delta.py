@@ -7049,6 +7049,11 @@ class AlterRole(MetaCommand, RoleMixin, adapts=s_roles.AlterRole):
 
             update_metadata = True
             metadata['password_hash'] = passwd
+        elif old_passwd := role.get_password(schema):
+            if backend_params.has_create_role:
+                # Only modify Postgres password of roles managed by EdgeDB
+                kwargs['password'] = old_passwd
+            metadata['password_hash'] = old_passwd
 
         if self.has_attribute_value('permissions'):
             permissions = list(sorted(
@@ -7057,6 +7062,8 @@ class AlterRole(MetaCommand, RoleMixin, adapts=s_roles.AlterRole):
 
             update_metadata = True
             metadata['permissions'] = permissions
+        elif old_permissions := role.get_permissions(schema):
+            metadata['permissions'] = list(sorted(old_permissions))
 
         pg_role_name = common.get_role_backend_name(
             role_name, tenant_id=tenant_id)
