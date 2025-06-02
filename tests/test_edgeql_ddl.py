@@ -10874,6 +10874,7 @@ type default::Foo {
         )
 
     async def test_edgeql_ddl_role_permission_inheritance_01(self):
+        # Check different inheritance trees produce correct permissions
         if not self.has_create_role:
             self.skipTest("create role is not supported by the backend")
 
@@ -10904,6 +10905,7 @@ type default::Foo {
                 SELECT sys::Role {
                     name,
                     permissions,
+                    all_permissions,
                 }
                 FILTER contains(.name, 'perm_inh_01')
                 ORDER BY .name
@@ -10912,40 +10914,194 @@ type default::Foo {
                 {
                     'name': 'perm_inh_01_a',
                     'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
                 },
                 {
                     'name': 'perm_inh_01_b',
                     'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
                 },
                 {
                     'name': 'perm_inh_01_c',
                     'permissions': ['custom::bar', 'custom::baz'],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                        'custom::baz',
+                    ]),
                 },
                 {
                     'name': 'perm_inh_01_d',
                     'permissions': [],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
                 },
                 {
                     'name': 'perm_inh_01_e',
                     'permissions': [],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
                 },
                 {
                     'name': 'perm_inh_01_f',
                     'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
                 },
                 {
                     'name': 'perm_inh_01_g',
                     'permissions': [],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                        'custom::baz',
+                        'default::foo',
+                    ]),
                 },
                 {
                     'name': 'perm_inh_01_h',
                     'permissions': ['sys::data_modification'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                        'sys::data_modification',
+                    ]),
                 },
                 {
                     'name': 'perm_inh_01_i',
                     'permissions': [],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                        'custom::baz',
+                        'default::foo',
+                        'sys::data_modification',
+                    ]),
                 },
             ]
+        )
+
+    async def test_edgeql_ddl_role_permission_inheritance_02(self):
+        # Check altering inheritance trees produces correct permissions
+        if not self.has_create_role:
+            self.skipTest("create role is not supported by the backend")
+
+        await self.con.execute(r"""
+            CREATE ROLE perm_inh_02_a {
+                SET permissions := default::foo
+            };
+            CREATE ROLE perm_inh_02_b {
+                SET permissions := custom::bar
+            };
+            CREATE ROLE perm_inh_02_c extending perm_inh_02_a {
+                SET permissions := custom::baz
+            };
+        """)
+
+        query = r"""
+            SELECT sys::Role {
+                name,
+                permissions,
+                all_permissions,
+            }
+            FILTER contains(.name, 'perm_inh_02')
+            ORDER BY .name
+        """
+
+        await self.assert_query_result(
+            query,
+            [
+                {
+                    'name': 'perm_inh_02_a',
+                    'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_b',
+                    'permissions': ['custom::bar'],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_c',
+                    'permissions': ['custom::baz'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                        'custom::baz',
+                    ]),
+                },
+            ],
+        )
+
+        await self.con.execute(r"""
+            ALTER ROLE perm_inh_02_c {
+                DROP EXTENDING perm_inh_02_a
+            };
+        """)
+        await self.assert_query_result(
+            query,
+            [
+                {
+                    'name': 'perm_inh_02_a',
+                    'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_b',
+                    'permissions': ['custom::bar'],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_c',
+                    'permissions': ['custom::baz'],
+                    'all_permissions': tb.bag([
+                        'custom::baz',
+                    ]),
+                },
+            ],
+        )
+
+        await self.con.execute(r"""
+            ALTER ROLE perm_inh_02_c {
+                EXTENDING perm_inh_02_b
+            };
+        """)
+        await self.assert_query_result(
+            query,
+            [
+                {
+                    'name': 'perm_inh_02_a',
+                    'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_b',
+                    'permissions': ['custom::bar'],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_c',
+                    'permissions': ['custom::baz'],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                        'custom::baz',
+                    ]),
+                },
+            ],
         )
 
     async def test_edgeql_ddl_describe_roles(self):
