@@ -763,7 +763,7 @@ def _expand_splat(
     for ptr in pointers.objects(ctx.env.schema):
         if not isinstance(ptr, s_props.Property):
             continue
-        if ptr.get_secret(ctx.env.schema):
+        if ptr.get_secret(ctx.env.schema) or ptr.get_lazy(ctx.env.schema):
             continue
         sname = ptr.get_shortname(ctx.env.schema)
         if sname.name in skip_ptrs:
@@ -803,6 +803,8 @@ def _expand_splat(
     if depth > 1:
         for ptr in pointers.objects(ctx.env.schema):
             if not isinstance(ptr, s_links.Link):
+                continue
+            if ptr.get_secret(ctx.env.schema) or ptr.get_lazy(ctx.env.schema):
                 continue
             pn = ptr.get_shortname(ctx.env.schema)
             if pn.name == '__type__' or pn.name in skip_ptrs:

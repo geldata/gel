@@ -298,6 +298,7 @@ CREATE ABSTRACT TYPE schema::Pointer
     CREATE PROPERTY default -> std::str;
     CREATE PROPERTY expr -> std::str;
     CREATE PROPERTY secret -> std::bool;
+    CREATE PROPERTY lazy -> std::bool;
 };
 
 
