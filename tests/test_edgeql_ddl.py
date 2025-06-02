@@ -10878,25 +10878,25 @@ type default::Foo {
             self.skipTest("create role is not supported by the backend")
 
         await self.con.execute(r"""
-            CREATE ROLE perm_inh_1 {
+            CREATE ROLE perm_inh_01_a {
                 SET permissions := default::foo
             };
-            CREATE ROLE perm_inh_2 {
+            CREATE ROLE perm_inh_01_b {
                 SET permissions := default::foo
             };
-            CREATE ROLE perm_inh_3 {
+            CREATE ROLE perm_inh_01_c {
                 SET permissions := { custom::bar, custom::baz }
             };
-            CREATE ROLE perm_inh_4 EXTENDING perm_inh_1;
-            CREATE ROLE perm_inh_5 EXTENDING perm_inh_1, perm_inh_2;
-            CREATE ROLE perm_inh_6 EXTENDING perm_inh_1, perm_inh_2 {
+            CREATE ROLE perm_inh_01_d EXTENDING perm_inh_01_a;
+            CREATE ROLE perm_inh_01_e EXTENDING perm_inh_01_a, perm_inh_01_b;
+            CREATE ROLE perm_inh_01_f EXTENDING perm_inh_01_a, perm_inh_01_b {
                 SET permissions := default::foo
             };
-            CREATE ROLE perm_inh_7 EXTENDING perm_inh_1, perm_inh_3;
-            CREATE ROLE perm_inh_8 EXTENDING perm_inh_1 {
+            CREATE ROLE perm_inh_01_g EXTENDING perm_inh_01_a, perm_inh_01_c;
+            CREATE ROLE perm_inh_01_h EXTENDING perm_inh_01_a {
                 SET permissions := sys::data_modification
             };
-            CREATE ROLE perm_inh_9 EXTENDING perm_inh_8, perm_inh_3;
+            CREATE ROLE perm_inh_01_i EXTENDING perm_inh_01_h, perm_inh_01_c;
         """)
 
         await self.assert_query_result(
@@ -10905,44 +10905,44 @@ type default::Foo {
                     name,
                     permissions,
                 }
-                FILTER contains(.name, 'perm_inh_')
+                FILTER contains(.name, 'perm_inh_01')
                 ORDER BY .name
             """,
             [
                 {
-                    'name': 'perm_inh_1',
+                    'name': 'perm_inh_01_a',
                     'permissions': ['default::foo'],
                 },
                 {
-                    'name': 'perm_inh_2',
+                    'name': 'perm_inh_01_b',
                     'permissions': ['default::foo'],
                 },
                 {
-                    'name': 'perm_inh_3',
+                    'name': 'perm_inh_01_c',
                     'permissions': ['custom::bar', 'custom::baz'],
                 },
                 {
-                    'name': 'perm_inh_4',
+                    'name': 'perm_inh_01_d',
                     'permissions': [],
                 },
                 {
-                    'name': 'perm_inh_5',
+                    'name': 'perm_inh_01_e',
                     'permissions': [],
                 },
                 {
-                    'name': 'perm_inh_6',
+                    'name': 'perm_inh_01_f',
                     'permissions': ['default::foo'],
                 },
                 {
-                    'name': 'perm_inh_7',
+                    'name': 'perm_inh_01_g',
                     'permissions': [],
                 },
                 {
-                    'name': 'perm_inh_8',
+                    'name': 'perm_inh_01_h',
                     'permissions': ['sys::data_modification'],
                 },
                 {
-                    'name': 'perm_inh_9',
+                    'name': 'perm_inh_01_i',
                     'permissions': [],
                 },
             ]
