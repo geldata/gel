@@ -3156,6 +3156,82 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
             text=text)
 
 
+class AllRoleMembershipsFunctionForwardDecl(trampoline.VersionedFunction):
+    """Forward declaration for _all_role_memberships"""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name=('edgedb', '_all_role_memberships'),
+            args=[('role_id', ('uuid',))],
+            returns=('uuid[]'),
+            volatility='stable',
+            text='SELECT NULL::uuid[]',
+        )
+
+
+class AllRoleMembershipsFunction(trampoline.VersionedFunction):
+    """Get all memberships for a given role"""
+
+    def __init__(self, schema: s_schema.Schema) -> None:
+        role_obj = schema.get("sys::Role", type=s_objtypes.ObjectType)
+        roles = _schema_alias_view_name(schema, role_obj)
+        roles = (common.maybe_versioned_schema(roles[0]), roles[1])
+
+        member_of = role_obj.getptr(schema, s_name.UnqualName('member_of'))
+        members = _schema_alias_view_name(schema, member_of)
+        members = (common.maybe_versioned_schema(members[0]), members[1])
+
+        permissions_ptr = role_obj.getptr(
+            schema, s_name.UnqualName('permissions'), type=s_props.Property
+        )
+        permissions = _schema_alias_view_name(schema, permissions_ptr)
+        permissions = (
+            common.maybe_versioned_schema(permissions[0]), permissions[1]
+        )
+
+        text = f"""
+            WITH RECURSIVE memberships (id, member_of)
+            AS (
+                (
+                    SELECT
+                        r.id as id,
+                        m.target as member_of
+                    FROM {q(*roles)} r
+                    INNER JOIN {q(*members)} m
+                    ON
+                        r.id = m.source
+                    WHERE
+                        r.id = "role_id"
+                )
+                UNION
+                (
+                    SELECT
+                        r.id as id,
+                        m.target as member_of
+                    FROM {q(*roles)} r
+                    INNER JOIN {q(*members)} m
+                    ON
+                        r.id = m.source
+                    INNER JOIN memberships ms
+                    ON
+                        ms.member_of = r.id
+                )
+            )
+            SELECT
+                array_agg(member_of)
+            FROM
+                memberships
+        """
+
+        super().__init__(
+            name=('edgedb', '_all_role_memberships'),
+            args=[('role_id', ('uuid',))],
+            returns=('uuid[]'),
+            volatility='stable',
+            text=text,
+        )
+
+
 class DumpSequencesFunction(trampoline.VersionedFunction):
 
     text = r"""
@@ -5427,6 +5503,7 @@ def get_bootstrap_commands(
         dbops.CreateFunction(GetTypeToMultiRangeNameMap()),
         dbops.CreateFunction(GetPgTypeForEdgeDBTypeFunction()),
         dbops.CreateFunction(DescribeRolesAsDDLFunctionForwardDecl()),
+        dbops.CreateFunction(AllRoleMembershipsFunctionForwardDecl()),
         dbops.CreateFunction(RangeToJsonFunction()),
         dbops.CreateFunction(MultiRangeToJsonFunction()),
         dbops.CreateFunction(RangeValidateFunction()),
@@ -8939,7 +9016,11 @@ async def generate_more_support_functions(
 
     cmds = [
         dbops.CreateFunction(
-            DescribeRolesAsDDLFunction(schema), or_replace=True),
+            DescribeRolesAsDDLFunction(schema), or_replace=True
+        ),
+        dbops.CreateFunction(
+            AllRoleMembershipsFunction(schema), or_replace=True
+        ),
         dbops.CreateFunction(GetSequenceBackendNameFunction()),
         dbops.CreateFunction(DumpSequencesFunction()),
     ]
