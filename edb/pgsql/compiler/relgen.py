@@ -1616,7 +1616,8 @@ def process_set_as_membership_expr(
     assert isinstance(expr, irast.OperatorCall)
 
     with ctx.new() as newctx:
-        left_arg, right_arg = (a.expr for a in expr.args.values())
+        left, right = (a for a in expr.args.values())
+        left_arg, right_arg = left.expr, right.expr
 
         newctx.expr_exposed = False
         left_out = dispatch.compile(left_arg, ctx=newctx)
@@ -1698,6 +1699,14 @@ def process_set_as_membership_expr(
                 empty_val = negated
                 set_expr = pgast.CoalesceExpr(args=[
                     set_expr, pgast.BooleanConstant(val=empty_val)])
+
+            # Filter out situations where the LHS is a SQL NULL,
+            # since those will report false instead of {}.
+            if left.cardinality.can_be_zero() and left_out.nullable:
+                ctx.rel.where_clause = astutils.extend_binop(
+                    ctx.rel.where_clause,
+                    pgast.NullTest(arg=left_out, negated=True),
+                )
 
             pathctx.put_path_value_var_if_not_exists(
                 ctx.rel, ir_set.path_id, set_expr

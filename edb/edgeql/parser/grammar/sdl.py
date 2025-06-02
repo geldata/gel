@@ -103,6 +103,10 @@ class SDLBlockStatement(Nonterm):
     def reduce_IndexDeclaration(self, *kids):
         pass
 
+    @parsing.inline(0)
+    def reduce_PermissionDeclaration(self, *kids):
+        pass
+
 
 # these statements have no {} block
 class SDLShortStatement(Nonterm):
@@ -153,6 +157,10 @@ class SDLShortStatement(Nonterm):
 
     @parsing.inline(0)
     def reduce_IndexDeclarationShort(self, *kids):
+        pass
+
+    @parsing.inline(0)
+    def reduce_PermissionDeclarationShort(self, *kids):
         pass
 
 
@@ -1948,4 +1956,39 @@ class GlobalDeclarationShort(Nonterm):
         self.val = qlast.CreateGlobal(
             name=name.val,
             target=expr.val,
+        )
+
+
+#
+# Permissions
+#
+
+
+sdl_commands_block(
+    'CreatePermission',
+    SetAnnotation,
+)
+
+
+class PermissionDeclaration(Nonterm):
+    def reduce_CreatePermission(self, *kids):
+        """%reduce
+            PERMISSION NodeName
+            CreatePermissionSDLCommandsBlock
+        """
+        _, name, commands = kids
+        self.val = qlast.CreatePermission(
+            name=name.val,
+            commands=commands.val,
+        )
+
+
+class PermissionDeclarationShort(Nonterm):
+    def reduce_CreatePermission(self, *kids):
+        """%reduce
+            PERMISSION NodeName
+        """
+        _, name = kids
+        self.val = qlast.CreatePermission(
+            name=name.val,
         )

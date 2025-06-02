@@ -267,13 +267,29 @@ class ComparisonContext:
 # derived from ProtoField for validation
 class Field(struct.ProtoField, Generic[T]):
 
-    __slots__ = ('name', 'sname', 'type', 'coerce',
-                 'compcoef', 'inheritable', 'simpledelta',
-                 'merge_fn', 'ephemeral',
-                 'allow_ddl_set', 'ddl_identity', 'special_ddl_syntax',
-                 'aux_cmd_data', 'describe_visibility',
-                 'weak_ref', 'reflection_method', 'reflection_proxy',
-                 'type_is_generic_self', 'is_reducible', 'patch_level')
+    __slots__ = (
+        'name',
+        'sname',
+        'type',
+        'type_is_generic_self',
+        'coerce',
+        'compcoef',
+        'inheritable',
+        'simpledelta',
+        'ephemeral',
+        'allow_ddl_set',
+        'ddl_identity',
+        'aux_cmd_data',
+        'special_ddl_syntax',
+        'describe_visibility',
+        'weak_ref',
+        'merge_fn',
+        'reflection_method',
+        'reflection_proxy',
+        'is_reducible',
+        'patch_level',
+        'obj_names_as_string',
+    )
 
     #: Name of the field on the target class; assigned by ObjectMeta
     name: str
@@ -333,6 +349,8 @@ class Field(struct.ProtoField, Generic[T]):
     #: Which patch for the current major version this field was introduced in.
     #: Ensures that the data tuples always get extended strictly at the end.
     patch_level: int
+    #: Interpret any assigned object names as strings.
+    obj_names_as_string: bool
 
     def __init__(
         self,
@@ -357,6 +375,7 @@ class Field(struct.ProtoField, Generic[T]):
         name: Optional[str] = None,
         reflection_name: Optional[str] = None,
         patch_level: int = -1,
+        obj_names_as_string: bool = False,
         **kwargs: Any,
     ) -> None:
         """Schema item core attribute definition.
@@ -382,6 +401,7 @@ class Field(struct.ProtoField, Generic[T]):
         self.reflection_proxy = reflection_proxy
         self.is_reducible = issubclass(type_, s_abc.Reducible)
         self.patch_level = patch_level
+        self.obj_names_as_string = obj_names_as_string
 
         if name is not None:
             self.name = name
@@ -422,10 +442,20 @@ class Field(struct.ProtoField, Generic[T]):
             # Mypy complains about ambiguity and generics in class vars here,
             # although the generic in SingleParameter is clearly a type.
             valtype = ftype.type  # type: ignore
-            for v in value:
-                if v is not None and not isinstance(v, valtype):
-                    v = valtype(v)
-                casted_list.append(v)
+            # When creating a checked collection field, we may receive either
+            # collections or single items.
+            # If the value is a collection, cast each item separately. If the
+            # value is a single item, cast it directly.
+            if (
+                isinstance(value, Collection)
+                and not isinstance(value, (str, bytes, bytearray))
+            ):
+                for v in value:
+                    if v is not None and not isinstance(v, valtype):
+                        v = valtype(v)
+                    casted_list.append(v)
+            else:
+                casted_list.append(valtype(value))
 
             value = casted_list
 

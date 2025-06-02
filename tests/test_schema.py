@@ -1117,6 +1117,18 @@ class TestSchema(tb.BaseSchemaLoadTest):
           scalar type TwoThings extending enum<One, Two>;
        """
 
+    def test_schema_permissions_01(self):
+        """
+          permission foo;
+       """
+
+    def test_schema_permissions_02(self):
+        # Check tracing dependency works
+        """
+          permission foo;
+          alias bar := global foo;
+       """
+
     def test_schema_hard_sorting_01(self):
         # This is hard to sort properly because we don't understand the types.
         # From #4683.
@@ -8413,6 +8425,32 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
             "function got deleted/recreated and should have been altered",
         )
 
+    def test_schema_migrations_equivalence_permissions_02(self):
+        self._assert_migration_equivalence([
+            '''
+                permission foo;
+                global bar := global foo;
+            ''',
+            '''
+                global bar := 1;
+            ''',
+        ])
+
+    def test_schema_migrations_equivalence_permissions_03(self):
+        self._assert_migration_equivalence([
+            '''
+                permission foo;
+            ''',
+            '''
+                permission foo {
+                    annotation title := 'B';
+                };
+            ''',
+            '''
+                permission foo;
+            ''',
+        ])
+
     # NOTE: array<str>, array<int16>, array<json> already exist in std
     # schema, so it's better to use array<float32> or some other
     # non-typical scalars in tests as a way of testing a collection
@@ -12656,7 +12694,7 @@ class TestSDLTextFromSchema(BaseDescribeTest):
         )
 
     def test_schema_sdl_text_order_global_01(self):
-        # Test that function non-computed global are in order
+        # Test that non-computed global contents are in order
 
         ordered_statements = (
             ["default := true;"]
@@ -12692,7 +12730,7 @@ class TestSDLTextFromSchema(BaseDescribeTest):
         )
 
     def test_schema_sdl_text_order_global_02(self):
-        # Test that function computed global are in order
+        # Test that computed global contents are in order
 
         ordered_statements = (
             ["using (true);"]
@@ -12719,6 +12757,39 @@ class TestSDLTextFromSchema(BaseDescribeTest):
             "    abstract annotation AnnotationC;\n"
             "    abstract annotation AnnotationD;\n"
             "    global Foo {\n"
+                    + ''.join(
+                        ' ' * 8 + s + '\n'
+                        for s in ordered_statements
+                    ) +
+            "    };\n"
+            "};",
+        )
+
+    def test_schema_sdl_text_order_permission_01(self):
+        # Test that non-computed permission contents are in order
+
+        ordered_statements = TestSDLTextFromSchema.annotation_statements
+        shuffled_statements = ordered_statements[:]
+        random.Random(1).shuffle(shuffled_statements)
+
+        self._assert_sdl_text_from_schema(
+            "abstract annotation AnnotationA;\n"
+            "abstract annotation AnnotationB;\n"
+            "abstract annotation AnnotationC;\n"
+            "abstract annotation AnnotationD;\n"
+            "permission Foo {\n"
+                + ''.join(
+                    ' ' * 4 + s + '\n'
+                    for s in shuffled_statements
+                ) +
+            "}",
+
+            "module default {\n"
+            "    abstract annotation AnnotationA;\n"
+            "    abstract annotation AnnotationB;\n"
+            "    abstract annotation AnnotationC;\n"
+            "    abstract annotation AnnotationD;\n"
+            "    permission Foo {\n"
                     + ''.join(
                         ' ' * 8 + s + '\n'
                         for s in ordered_statements
@@ -12983,6 +13054,10 @@ class TestSDLTextFromSchema(BaseDescribeTest):
             "abstract link LinkB;",
             "abstract link LinkC;",
             "abstract link LinkD;",
+            "permission PermissionA;"
+            "permission PermissionB;"
+            "permission PermissionC;"
+            "permission PermissionD;"
             "abstract property PropertyA;",
             "abstract property PropertyB;",
             "abstract property PropertyC;",

@@ -1318,7 +1318,7 @@ def produce_feature_used_metrics(
 
 def repair_schema(
     ctx: compiler.CompileContext,
-) -> Optional[tuple[bytes, s_schema.Schema, Any]]:
+) -> Optional[tuple[bytes, Any]]:
     """Repair inconsistencies in the schema caused by bug fixes
 
     Works by comparing the actual current schema to the schema we get
@@ -1386,7 +1386,7 @@ def repair_schema(
         debug.header('Repair Delta Script')
         debug.dump_code(sql, lexer='sql')
 
-    return sql, reloaded_schema, config_ops
+    return sql, config_ops
 
 
 def administer_repair_schema(
@@ -1404,9 +1404,7 @@ def administer_repair_schema(
     res = repair_schema(ctx)
     if not res:
         return dbstate.MaintenanceQuery(sql=b"")
-    sql, new_schema, config_ops = res
-
-    current_tx.update_schema(new_schema)
+    sql, config_ops = res
 
     return dbstate.DDLQuery(
         sql=sql,

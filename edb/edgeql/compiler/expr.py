@@ -39,9 +39,12 @@ from edb.schema import functions as s_func
 from edb.schema import globals as s_globals
 from edb.schema import indexes as s_indexes
 from edb.schema import name as sn
+from edb.schema import objects as so
 from edb.schema import objtypes as s_objtypes
+from edb.schema import permissions as s_permissions
 from edb.schema import pseudo as s_pseudo
 from edb.schema import scalars as s_scalars
+from edb.schema import schema as s_schema
 from edb.schema import types as s_types
 from edb.schema import utils as s_utils
 from edb.schema import expr as s_expr
@@ -549,10 +552,56 @@ def compile_UnaryOp(
 def compile_GlobalExpr(
     expr: qlast.GlobalExpr, *, ctx: context.ContextLevel
 ) -> irast.Set:
-    glob = ctx.env.get_schema_object_and_track(
-        s_utils.ast_ref_to_name(expr.name), expr.name,
-        modaliases=ctx.modaliases, type=s_globals.Global)
-    assert isinstance(glob, s_globals.Global)
+    # The expr object can be either a Permission or Global.
+    # Get an Object and manually check for correct type and None.
+    expr_schema_name = s_utils.ast_ref_to_name(expr.name)
+    expr_obj = ctx.env.get_schema_object_and_track(
+        expr_schema_name,
+        expr.name,
+        default=None,
+        modaliases=ctx.modaliases,
+        type=so.Object,
+    )
+
+    # Check for None first.
+    if expr_obj is None:
+        # If no object is found, we want to raise an error with 'global' as
+        # the desired type.
+        # If we let `get_schema_object_and_track`, the error will contain
+        # 'object' instead.
+        s_schema.Schema.raise_bad_reference(
+            expr_schema_name,
+            module_aliases=ctx.modaliases,
+            span=expr.span,
+            type=s_globals.Global,
+        )
+
+    # Check for permission
+    if isinstance(expr_obj, s_permissions.Permission):
+        std_type = sn.QualName('std', 'bool')
+        ct = typegen.type_to_typeref(
+            ctx.env.get_schema_type_and_track(std_type),
+            env=ctx.env,
+        )
+        ir_expr = irast.BooleanConstant(
+            value="false", typeref=ct, span=expr.span
+        )
+        return setgen.ensure_set(ir_expr, ctx=ctx)
+
+    # Check for non-global
+    if not isinstance(expr_obj, s_globals.Global):
+        s_schema.Schema.raise_wrong_type(
+            expr_schema_name,
+            expr_obj.__class__,
+            s_globals.Global,
+            span=expr.span,
+        )
+        # Raise an error here so mypy knows that expr_obj can only be a global
+        # past this point.
+        raise AssertionError('should never happen')
+
+    # Non-permission global
+    glob = expr_obj
 
     if glob.is_computable(ctx.env.schema):
         obj_ref = s_utils.name_to_ast_ref(

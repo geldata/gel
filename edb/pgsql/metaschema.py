@@ -2989,6 +2989,15 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
         members = _schema_alias_view_name(schema, member_of)
         members = (common.maybe_versioned_schema(members[0]), members[1])
 
+        permissions_ptr = role_obj.getptr(
+            schema, s_name.UnqualName('permissions'), type=s_props.Property
+        )
+        permissions = _schema_alias_view_name(schema, permissions_ptr)
+        permissions = (
+            common.maybe_versioned_schema(permissions[0]), permissions[1]
+        )
+
+        super_col = ptr_col_name(schema, role_obj, 'superuser')
         name_col = ptr_col_name(schema, role_obj, 'name')
         pass_col = ptr_col_name(schema, role_obj, 'password')
         qi_superuser = qlquote.quote_ident(defines.EDGEDB_SUPERUSER)
@@ -3016,50 +3025,119 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
             coalesce(string_agg(
                 CASE WHEN
                     role.{qi(name_col)} = {ql(defines.EDGEDB_SUPERUSER)} THEN
-                    NULLIF(concat(
-                        'ALTER ROLE {qi_superuser} {{',
-                        NULLIF((SELECT
-                            concat(
-                                ' EXTENDING ',
-                                string_agg(
-                                    edgedb_VER.quote_ident(parent.{qi(name_col)}),
-                                    ', '
+                    NULLIF(
+                        concat(
+                            'ALTER ROLE {qi_superuser} {{ ',
+                            NULLIF(
+                                (SELECT
+                                    concat(
+                                        'EXTENDING ',
+                                        string_agg(
+                                            edgedb_VER.quote_ident(
+                                                parent.{qi(name_col)}
+                                            ),
+                                            ', '
+                                        ),
+                                        '; '
+                                    )
+                                    FROM {q(*members)} member
+                                        INNER JOIN {q(*roles)} parent
+                                        ON parent.id = member.target
+                                    WHERE member.source = role.id
                                 ),
-                                ';'
-                            )
-                            FROM {q(*members)} member
-                                INNER JOIN {q(*roles)} parent
-                                ON parent.id = member.target
-                            WHERE member.source = role.id
-                        ), ' EXTENDING ;'),
-                        CASE WHEN role.{qi(pass_col)} IS NOT NULL THEN
-                            concat(' SET password_hash := ',
-                                   quote_literal(role.{qi(pass_col)}),
-                                   ';')
-                        ELSE '' END,
-                        '}};'
-                    ), 'ALTER ROLE {qi_superuser} {{}};')
+                                'EXTENDING ; '
+                            ),
+                            (CASE
+                                WHEN role.{qi(pass_col)} IS NOT NULL THEN
+                                    concat(
+                                        'SET password_hash := ',
+                                        quote_literal(role.{qi(pass_col)}),
+                                        '; '
+                                    )
+                                ELSE NULL END
+                            ),
+                            NULLIF (
+                                concat(
+                                    'SET permissions := {{ ',
+                                    (
+                                        SELECT
+                                            string_agg(
+                                                permissions.target,
+                                                ', '
+                                            )
+                                        FROM {q(*permissions)} permissions
+                                        WHERE permissions.source = role.id
+                                    ),
+                                    ' }}; '
+                                ),
+                                'SET permissions := {{  }}; '
+                            ),
+                            '}};'
+                        ),
+                        'ALTER ROLE {qi_superuser} {{ }};'
+                    )
                 ELSE
                     concat(
-                        'CREATE SUPERUSER ROLE ',
+                        'CREATE ',
+                        (CASE
+                            WHEN role.{qi(super_col)} THEN
+                                'SUPERUSER '
+                            ELSE NULL END
+                        ),
+                        'ROLE ',
                         edgedb_VER.quote_ident(role.{qi(name_col)}),
-                        NULLIF((SELECT
-                            concat(' EXTENDING ',
-                                string_agg(
-                                    edgedb_VER.quote_ident(parent.{qi(name_col)}),
-                                    ', '
-                                )
-                            )
-                            FROM {q(*members)} member
-                                INNER JOIN {q(*roles)} parent
-                                ON parent.id = member.target
-                            WHERE member.source = role.id
-                        ), ' EXTENDING '),
-                        CASE WHEN role.{qi(pass_col)} IS NOT NULL THEN
-                            concat(' {{ SET password_hash := ',
-                                   quote_literal(role.{qi(pass_col)}),
-                                   '}};')
-                        ELSE ';' END
+                        NULLIF(
+                            (
+                                SELECT
+                                    concat(
+                                        ' EXTENDING ',
+                                        string_agg(
+                                            edgedb_VER.quote_ident(
+                                                parent.{qi(name_col)}
+                                            ),
+                                            ', '
+                                        )
+                                    )
+                                FROM {q(*members)} member
+                                    INNER JOIN {q(*roles)} parent
+                                    ON parent.id = member.target
+                                WHERE member.source = role.id
+                            ),
+                            ' EXTENDING '
+                        ),
+                        NULLIF(
+                            concat(
+                                ' {{ ',
+                                (CASE
+                                    WHEN role.{qi(pass_col)} IS NOT NULL THEN
+                                        concat(
+                                            'SET password_hash := ',
+                                            quote_literal(role.{qi(pass_col)}),
+                                            '; '
+                                        )
+                                    ELSE NULL END
+                                ),
+                                NULLIF (
+                                    concat(
+                                        'SET permissions := {{ ',
+                                        (
+                                            SELECT
+                                                string_agg(
+                                                    permissions.target,
+                                                    ', '
+                                                )
+                                            FROM {q(*permissions)} permissions
+                                            WHERE permissions.source = role.id
+                                        ),
+                                        ' }}; '
+                                    ),
+                                    'SET permissions := {{  }}; '
+                                ),
+                                '}}'
+                            ),
+                            ' {{ }}'
+                        ),
+                        ';'
                     )
                 END,
                 '\n'
@@ -3076,6 +3154,82 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
             # Stable because it's raising exceptions.
             volatility='stable',
             text=text)
+
+
+class AllRoleMembershipsFunctionForwardDecl(trampoline.VersionedFunction):
+    """Forward declaration for _all_role_memberships"""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name=('edgedb', '_all_role_memberships'),
+            args=[('role_id', ('uuid',))],
+            returns=('uuid[]'),
+            volatility='stable',
+            text='SELECT NULL::uuid[]',
+        )
+
+
+class AllRoleMembershipsFunction(trampoline.VersionedFunction):
+    """Get all memberships for a given role"""
+
+    def __init__(self, schema: s_schema.Schema) -> None:
+        role_obj = schema.get("sys::Role", type=s_objtypes.ObjectType)
+        roles = _schema_alias_view_name(schema, role_obj)
+        roles = (common.maybe_versioned_schema(roles[0]), roles[1])
+
+        member_of = role_obj.getptr(schema, s_name.UnqualName('member_of'))
+        members = _schema_alias_view_name(schema, member_of)
+        members = (common.maybe_versioned_schema(members[0]), members[1])
+
+        permissions_ptr = role_obj.getptr(
+            schema, s_name.UnqualName('permissions'), type=s_props.Property
+        )
+        permissions = _schema_alias_view_name(schema, permissions_ptr)
+        permissions = (
+            common.maybe_versioned_schema(permissions[0]), permissions[1]
+        )
+
+        text = f"""
+            WITH RECURSIVE memberships (id, member_of)
+            AS (
+                (
+                    SELECT
+                        r.id as id,
+                        m.target as member_of
+                    FROM {q(*roles)} r
+                    INNER JOIN {q(*members)} m
+                    ON
+                        r.id = m.source
+                    WHERE
+                        r.id = "role_id"
+                )
+                UNION
+                (
+                    SELECT
+                        r.id as id,
+                        m.target as member_of
+                    FROM {q(*roles)} r
+                    INNER JOIN {q(*members)} m
+                    ON
+                        r.id = m.source
+                    INNER JOIN memberships ms
+                    ON
+                        ms.member_of = r.id
+                )
+            )
+            SELECT
+                array_agg(member_of)
+            FROM
+                memberships
+        """
+
+        super().__init__(
+            name=('edgedb', '_all_role_memberships'),
+            args=[('role_id', ('uuid',))],
+            returns=('uuid[]'),
+            volatility='stable',
+            text=text,
+        )
 
 
 class DumpSequencesFunction(trampoline.VersionedFunction):
@@ -5349,6 +5503,7 @@ def get_bootstrap_commands(
         dbops.CreateFunction(GetTypeToMultiRangeNameMap()),
         dbops.CreateFunction(GetPgTypeForEdgeDBTypeFunction()),
         dbops.CreateFunction(DescribeRolesAsDDLFunctionForwardDecl()),
+        dbops.CreateFunction(AllRoleMembershipsFunctionForwardDecl()),
         dbops.CreateFunction(RangeToJsonFunction()),
         dbops.CreateFunction(MultiRangeToJsonFunction()),
         dbops.CreateFunction(RangeValidateFunction()),
@@ -5446,7 +5601,7 @@ classref_attr_aliases = {
 
 
 def tabname(
-    schema: s_schema.Schema, obj: s_obj.QualifiedObject
+    schema: s_schema.Schema, obj: s_obj.Object
 ) -> tuple[str, str]:
     return common.get_backend_name(
         schema,
@@ -5874,15 +6029,23 @@ def _generate_extension_migration_views(
 def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     Role = schema.get('sys::Role', type=s_objtypes.ObjectType)
     member_of = Role.getptr(
-        schema, s_name.UnqualName('member_of'), type=s_links.Link)
+        schema, s_name.UnqualName('member_of'), type=s_links.Link
+    )
     bases = Role.getptr(
-        schema, s_name.UnqualName('bases'), type=s_links.Link)
+        schema, s_name.UnqualName('bases'), type=s_links.Link
+    )
     ancestors = Role.getptr(
-        schema, s_name.UnqualName('ancestors'), type=s_links.Link)
+        schema, s_name.UnqualName('ancestors'), type=s_links.Link
+    )
     annos = Role.getptr(
-        schema, s_name.UnqualName('annotations'), type=s_links.Link)
+        schema, s_name.UnqualName('annotations'), type=s_links.Link
+    )
     int_annos = Role.getptr(
-        schema, s_name.UnqualName('annotations__internal'), type=s_links.Link)
+        schema, s_name.UnqualName('annotations__internal'), type=s_links.Link
+    )
+    permissions = Role.getptr(
+        schema, s_name.UnqualName('permissions'), type=s_props.Property
+    )
 
     superuser = f'''
         a.rolsuper OR EXISTS (
@@ -6043,6 +6206,25 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
                 ) AS annotations
     '''
 
+    permissions_query = f'''
+        SELECT
+            ((d.description)->>'id')::uuid AS source,
+            jsonb_array_elements_text(
+                (d.description)->'permissions'
+            )::text as target
+        FROM
+            pg_catalog.pg_roles AS a
+            CROSS JOIN LATERAL (
+                SELECT
+                    edgedb_VER.shobj_metadata(a.oid, 'pg_authid')
+                        AS description
+            ) AS d
+        WHERE
+            (d.description)->>'id' IS NOT NULL
+            AND
+              (d.description)->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
+    '''
+
     objects = {
         Role: view_query,
         member_of: member_of_link_query,
@@ -6050,6 +6232,7 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         ancestors: ancestors_link_query,
         annos: annos_link_query,
         int_annos: int_annos_link_query,
+        permissions: permissions_query,
     }
 
     views: list[dbops.View] = []
@@ -6064,15 +6247,24 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
 def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     Role = schema.get('sys::Role', type=s_objtypes.ObjectType)
     member_of = Role.getptr(
-        schema, s_name.UnqualName('member_of'), type=s_links.Link)
+        schema, s_name.UnqualName('member_of'), type=s_links.Link
+    )
     bases = Role.getptr(
-        schema, s_name.UnqualName('bases'), type=s_links.Link)
+        schema, s_name.UnqualName('bases'), type=s_links.Link
+    )
     ancestors = Role.getptr(
-        schema, s_name.UnqualName('ancestors'), type=s_links.Link)
+        schema, s_name.UnqualName('ancestors'), type=s_links.Link
+    )
     annos = Role.getptr(
-        schema, s_name.UnqualName('annotations'), type=s_links.Link)
+        schema, s_name.UnqualName('annotations'), type=s_links.Link
+    )
     int_annos = Role.getptr(
-        schema, s_name.UnqualName('annotations__internal'), type=s_links.Link)
+        schema, s_name.UnqualName('annotations__internal'), type=s_links.Link
+    )
+    permissions = Role.getptr(
+        schema, s_name.UnqualName('permissions'), type=s_props.Property
+    )
+
     view_query_fields = {
         'id': "(json->>'id')::uuid",
         'name': "json->>'name'",
@@ -6167,6 +6359,16 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
             AND json->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
     '''
 
+    # The single superuser role already has all permissions.
+    # For completeness, create a permissions multi-prop table with dummy
+    # values. It will return no rows since its WHERE clause is always false.
+    permissions_query = f'''
+        SELECT
+            '00000000-0000-0000-0000-000000000000'::uuid AS source,
+            ''::text AS target
+        WHERE 1 = 0
+    '''
+
     objects = {
         Role: view_query,
         member_of: member_of_link_query,
@@ -6174,6 +6376,7 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         ancestors: ancestors_link_query,
         annos: annos_link_query,
         int_annos: int_annos_link_query,
+        permissions: permissions_query,
     }
 
     views: list[dbops.View] = []
@@ -8709,13 +8912,20 @@ def get_support_views(
     sys_alias_views = _generate_schema_alias_views(
         schema, s_name.UnqualName('sys'))
 
-    # Include sys::Role::member_of to support DescribeRolesAsDDLFunction
+    # Include sys::Role::member_of and sys::Role::permissions
+    # to support DescribeRolesAsDDLFunction
     SysRole = schema.get(
         'sys::Role', type=s_objtypes.ObjectType)
     SysRole__member_of = SysRole.getptr(
         schema, s_name.UnqualName('member_of'))
+    SysRole__permissions = SysRole.getptr(
+        schema, s_name.UnqualName('permissions'))
     sys_alias_views.append(
-        _generate_schema_alias_view(schema, SysRole__member_of))
+        _generate_schema_alias_view(schema, SysRole__member_of)
+    )
+    sys_alias_views.append(
+        _generate_schema_alias_view(schema, SysRole__permissions)
+    )
 
     for alias_view in sys_alias_views:
         commands.add_command(dbops.CreateView(alias_view, or_replace=True))
@@ -8806,7 +9016,11 @@ async def generate_more_support_functions(
 
     cmds = [
         dbops.CreateFunction(
-            DescribeRolesAsDDLFunction(schema), or_replace=True),
+            DescribeRolesAsDDLFunction(schema), or_replace=True
+        ),
+        dbops.CreateFunction(
+            AllRoleMembershipsFunction(schema), or_replace=True
+        ),
         dbops.CreateFunction(GetSequenceBackendNameFunction()),
         dbops.CreateFunction(DumpSequencesFunction()),
     ]

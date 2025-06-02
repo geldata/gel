@@ -704,7 +704,7 @@ def prepare_repair_patch(
     res = edbcompiler.repair_schema(compilerctx)
     if not res:
         return ""
-    sql, _, _ = res
+    sql, _ = res
 
     return sql.decode('utf-8')
 
