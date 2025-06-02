@@ -6282,6 +6282,9 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
             AND json->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
     '''
 
+    # The single superuser role already has all permissions.
+    # For completeness, create a permissions multi-prop table with dummy
+    # values. It will return no rows since its WHERE clause is always false.
     permissions_query = f'''
         SELECT
             '00000000-0000-0000-0000-000000000000'::uuid AS source,

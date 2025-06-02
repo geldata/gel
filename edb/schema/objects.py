@@ -442,6 +442,10 @@ class Field(struct.ProtoField, Generic[T]):
             # Mypy complains about ambiguity and generics in class vars here,
             # although the generic in SingleParameter is clearly a type.
             valtype = ftype.type  # type: ignore
+            # When creating a checked collection field, we may receive either
+            # collections or single items.
+            # If the value is a collection, cast each item separately. If the
+            # value is a single item, cast it directly.
             if (
                 isinstance(value, Collection)
                 and not isinstance(value, (str, bytes, bytearray))
@@ -451,7 +455,7 @@ class Field(struct.ProtoField, Generic[T]):
                         v = valtype(v)
                     casted_list.append(v)
             else:
-                casted_list.append(value)
+                casted_list.append(valtype(value))
 
             value = casted_list
 
