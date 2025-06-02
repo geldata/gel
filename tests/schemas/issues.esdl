@@ -85,6 +85,10 @@ type Issue extending Named, Owned, Text {
     priority: Priority;
 
     optional multi watchers: User;
+    num_watchers {
+      using (count(.watchers));
+      lazy := true;
+    }
 
     optional time_estimate: int64;
 
@@ -97,13 +101,17 @@ type Issue extending Named, Owned, Text {
     }
     due_date: datetime;
 
-    multi related_to: Issue;
+    multi related_to: Issue {
+        lazy := true;
+    }
 
     multi references: File | URL | Publication {
         list_order: int64;
     };
 
-    tags: array<str>;
+    tags: array<str> {
+        lazy := true;
+    }
 
     index fts::index on ((
         fts::with_options(.name, language := fts::Language.eng),
