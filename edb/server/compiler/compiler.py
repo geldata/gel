@@ -24,6 +24,7 @@ from typing import (
     AbstractSet,
     Iterable,
     Mapping,
+    MutableMapping,
     Sequence,
     NamedTuple,
     cast,
@@ -1898,10 +1899,16 @@ def _compile_ql_query(
         sql_info_prefix = ''
 
     globals = None
+    permissions = None
     if ir.globals:
         globals = [
             (str(glob.global_name), glob.has_present_arg)
             for glob in ir.globals
+        ]
+    if isinstance(ir, irast.Statement) and ir.permissions:
+        permissions = [
+            str(permission.global_name)
+            for permission in ir.permissions
         ]
 
     out_type_id: uuid.UUID
@@ -1987,6 +1994,7 @@ def _compile_ql_query(
         cache_func_call=cache_func_call,
         cardinality=result_cardinality,
         globals=globals,
+        permissions=permissions,
         in_type_id=in_type_id.bytes,
         in_type_data=in_type_data,
         in_type_args=in_type_args,
@@ -3008,6 +3016,7 @@ def _make_query_unit(
         unit.cache_sql = comp.cache_sql
         unit.cache_func_call = comp.cache_func_call
         unit.globals = comp.globals
+        unit.permissions = comp.permissions
         unit.in_type_args = comp.in_type_args
 
         unit.sql_hash = comp.sql_hash
@@ -3682,15 +3691,41 @@ def _extract_extensions(
 def _extract_roles(
     global_schema: s_schema.Schema,
 ) -> immutables.Map[str, immutables.Map[str, Any]]:
-    roles = {}
-    for role in global_schema.get_objects(type=s_role.Role):
+    extracted_roles = {}
+    schema_roles = global_schema.get_objects(type=s_role.Role)
+    for role in schema_roles:
         role_name = str(role.get_name(global_schema))
-        roles[role_name] = immutables.Map(
+        extracted_roles[role_name] = dict(
             name=role_name,
             superuser=role.get_superuser(global_schema),
             password=role.get_password(global_schema),
         )
-    return immutables.Map(roles)
+
+    # To populate all_permissions, combine the permissions of each role
+    # and its ancestors.
+    role_memberships: MutableMapping[s_role.Role, list[s_role.Role]] = {}
+    role_permissions: MutableMapping[s_role.Role, Sequence[str]] = {}
+    for role in schema_roles:
+        role_memberships[role] = list(
+            role.get_bases(global_schema).objects(global_schema)
+        )
+        role_permissions[role] = list(sorted(
+            role.get_permissions(global_schema) or ()
+        ))
+
+    for role in schema_roles:
+        role_name = str(role.get_name(global_schema))
+        extracted_roles[role_name]['all_permissions'] = list(set(
+            p
+            for m in [role] + role_memberships.get(role, [])
+            for p in role_permissions[m]
+        ))
+
+    # Convert everything into immutable maps
+    return immutables.Map({
+        name: immutables.Map(role)
+        for name, role in extracted_roles.items()
+    })
 
 
 class DumpDescriptor(NamedTuple):

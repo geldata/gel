@@ -180,6 +180,10 @@ class Environment:
     """A mapping of query globals.  Gets populated during
     the compilation."""
 
+    query_permissions: dict[s_name.QualName, irast.Global]
+    """A mapping of query permissions.  Gets populated during
+    the compilation."""
+
     server_param_conversions: dict[
         str,
         dict[str, ServerParamConversion],
@@ -335,6 +339,7 @@ class Environment:
         self.schema_view_cache = {}
         self.query_parameters = {}
         self.query_globals = {}
+        self.query_permissions = {}
         self.server_param_conversions = {}
         self.server_param_conversion_calls = []
         self.set_types = {}

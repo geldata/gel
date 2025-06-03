@@ -578,15 +578,7 @@ def compile_GlobalExpr(
 
     # Check for permission
     if isinstance(expr_obj, s_permissions.Permission):
-        std_type = sn.QualName('std', 'bool')
-        ct = typegen.type_to_typeref(
-            ctx.env.get_schema_type_and_track(std_type),
-            env=ctx.env,
-        )
-        ir_expr = irast.BooleanConstant(
-            value="false", typeref=ct, span=expr.span
-        )
-        return setgen.ensure_set(ir_expr, ctx=ctx)
+        return setgen.get_permission_param_set(expr_obj, ctx=ctx)
 
     # Check for non-global
     if not isinstance(expr_obj, s_globals.Global):
