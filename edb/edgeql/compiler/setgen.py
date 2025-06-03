@@ -55,6 +55,7 @@ from edb.schema import indexes as s_indexes
 from edb.schema import links as s_links
 from edb.schema import name as s_name
 from edb.schema import objtypes as s_objtypes
+from edb.schema import permissions as s_permissions
 from edb.schema import pointers as s_pointers
 from edb.schema import pseudo as s_pseudo
 from edb.schema import scalars as s_scalars
@@ -2310,3 +2311,46 @@ def get_globals_as_json(
             full_expr = astutils.extend_binop(simple_obj, *full_objs, op='++')
 
         return dispatch.compile(full_expr, ctx=subctx)
+
+
+def get_permissions_param(
+    permission: s_permissions.Permission, *, ctx: context.ContextLevel
+) -> irast.Global:
+    name = permission.get_name(ctx.env.schema)
+
+    if name not in ctx.env.query_permissions:
+        param_name = f'__edb_permission_{len(ctx.env.query_permissions)}__'
+
+        target = ctx.env.schema.get('std::bool', type=s_types.Type)
+        target_typeref = typegen.type_to_typeref(target, env=ctx.env)
+
+        ctx.env.query_permissions[name] = irast.Global(
+            name=param_name,
+            required=True,
+            schema_type=target,
+            ir_type=target_typeref,
+            global_name=name,
+            has_present_arg=False,
+        )
+
+    return ctx.env.query_permissions[name]
+
+
+def get_permission_param_set(
+    glob: s_permissions.Permission,
+    *,
+    ctx: context.ContextLevel,
+    is_implicit_global: bool = False,
+) -> irast.Set:
+    param = get_permissions_param(glob, ctx=ctx)
+
+    param_set = ensure_set(
+        irast.Parameter(
+            name=param.name,
+            required=True,
+            typeref=param.ir_type,
+            is_implicit_global=True,
+        ),
+        ctx=ctx,
+    )
+    return param_set

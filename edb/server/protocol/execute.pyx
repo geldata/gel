@@ -241,6 +241,7 @@ async def execute(
     compiled: dbview.CompiledQuery,
     bind_args: bytes,
     *,
+    role_name: Optional[str] = None,
     fe_conn: frontend.AbstractFrontendConnection = None,
     use_prep_stmt: bint = False,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
@@ -311,7 +312,13 @@ async def execute(
 
                     data_types = []
                     bound_args_buf = args_ser.recode_bind_args(
-                        dbv, compiled, bind_args, converted_args, None, data_types,
+                        dbv,
+                        role_name,
+                        compiled,
+                        bind_args,
+                        converted_args,
+                        None,
+                        data_types,
                     )
 
                     assert not (query_unit.database_config
@@ -633,6 +640,7 @@ async def execute_script(
     compiled: dbview.CompiledQuery,
     bind_args: bytes,
     *,
+    role_name: Optional[str] = None,
     query_req: Optional[rpc.CompilationRequest] = None,
     fe_conn: Optional[frontend.AbstractFrontendConnection],
 ):
@@ -711,6 +719,7 @@ async def execute_script(
 
                     bind_array = args_ser.recode_bind_args_for_script(
                         dbv,
+                        role_name,
                         compiled,
                         bind_args,
                         converted_args,
@@ -1030,6 +1039,7 @@ async def execute_json(
     variables: Mapping[str, Any] = immutables.Map(),
     globals_: Optional[Mapping[str, Any]] = None,
     *,
+    role_name: Optional[str] = None,
     fe_conn: Optional[frontend.AbstractFrontendConnection] = None,
     use_prep_stmt: bint = False,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
@@ -1066,6 +1076,7 @@ async def execute_json(
             dbv,
             compiled,
             bind_args,
+            role_name=role_name,
             fe_conn=fe_conn,
             query_req=query_req,
         )
@@ -1089,6 +1100,7 @@ async def execute_json(
             dbv,
             compiled,
             bind_args,
+            role_name=role_name,
             fe_conn=fe_conn,
             tx_isolation=tx_isolation,
             query_req=query_req,

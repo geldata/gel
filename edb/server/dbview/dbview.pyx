@@ -17,7 +17,7 @@
 #
 
 from typing import (
-    Optional,
+    Optional, Sequence
 )
 
 import asyncio
@@ -1019,6 +1019,14 @@ cdef class DatabaseConnectionView:
     @property
     def tenant(self):
         return self._db._index._tenant
+
+    def get_permissions(self, role_name: str) -> tuple[Sequence[str]]:
+        if role_desc := self.tenant.get_roles().get(role_name):
+            return (
+                bool(role_desc.get('superuser')),
+                (role_desc.get('all_permissions') or ())
+            )
+        return False, ()
 
     cpdef in_tx(self):
         return self._in_tx

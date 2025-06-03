@@ -97,6 +97,7 @@ def compile_ir_to_sql_tree(
         # Transform to sql tree
         query_params: list[irast.Param] = []
         query_globals: list[irast.Global] = []
+        query_permissions: list[irast.Global] = []
         server_param_conversion_params: list[irast.Param] = []
         type_rewrites: dict[tuple[uuid.UUID, bool], irast.Set] = {}
         triggers: tuple[tuple[irast.Trigger, ...], ...] = ()
@@ -106,6 +107,7 @@ def compile_ir_to_sql_tree(
             scope_tree = ir_expr.scope_tree
             query_params = list(ir_expr.params)
             query_globals = list(ir_expr.globals)
+            query_permissions = list(ir_expr.permissions)
             server_param_conversion_params = (
                 ir_expr.server_param_conversion_params
             )
@@ -137,7 +139,11 @@ def compile_ir_to_sql_tree(
             output_format=output_format,
             expected_cardinality_one=expected_cardinality_one,
             named_param_prefix=named_param_prefix,
-            query_params=list(tuple(query_params) + tuple(query_globals)),
+            query_params=list(
+                tuple(query_params)
+                + tuple(query_globals)
+                + tuple(query_permissions)
+            ),
             type_rewrites=type_rewrites,
             ignore_object_shapes=ignore_shapes,
             explicit_top_cast=explicit_top_cast,
@@ -167,7 +173,10 @@ def compile_ir_to_sql_tree(
         if external_rels:
             ctx.external_rels = external_rels
         clauses.populate_argmap(
-            query_params, query_globals, server_param_conversion_params, ctx=ctx
+            query_params,
+            query_globals + query_permissions,
+            server_param_conversion_params,
+            ctx=ctx,
         )
 
         qtree = dispatch.compile(ir_expr, ctx=ctx)

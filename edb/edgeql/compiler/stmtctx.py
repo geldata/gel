@@ -330,6 +330,7 @@ def fini_expression(
         expr=ir,
         params=params,
         globals=list(ctx.env.query_globals.values()),
+        permissions=list(ctx.env.query_permissions.values()),
         server_param_conversions=server_param_conversions,
         server_param_conversion_params=server_param_conversion_params,
         views=ctx.view_nodes,
