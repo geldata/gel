@@ -17,15 +17,8 @@
 
 use std::{cell::RefCell, num::NonZeroU32, rc::Rc};
 
-use crate::protocol::postgres::{
-    builder,
-    data::{
-        BindComplete, CloseComplete, CommandComplete, CopyData, CopyDone, CopyOutResponse, DataRow,
-        EmptyQueryResponse, ErrorResponse, Message, NoData, NoticeResponse, ParameterDescription,
-        ParseComplete, PortalSuspended, ReadyForQuery, RowDescription,
-    },
-};
-use db_proto::{match_message, Encoded};
+use gel_db_protocol::{match_message, Encoded};
+use gel_pg_protocol::protocol::*;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Param<'a> {
@@ -182,7 +175,7 @@ struct QueryFlow<'a> {
 impl Flow for ParseFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
         let param_types = bytemuck::cast_slice(self.param_types);
-        builder::Parse {
+        ParseBuilder {
             statement: self.name.0,
             query: self.query,
             param_types,
@@ -215,7 +208,7 @@ impl Flow for BindFlow<'_> {
 
         let result_format_codes = bytemuck::cast_slice(self.result_format_codes);
 
-        builder::Bind {
+        BindBuilder {
             portal: self.portal.0,
             statement: self.statement.0,
             format_codes: &format_codes,
@@ -232,7 +225,7 @@ impl Flow for ExecuteFlow<'_> {
             MaxRows::Unlimited => 0,
             MaxRows::Limited(n) => n.get() as i32,
         };
-        builder::Execute {
+        ExecuteBuilder {
             portal: self.portal.0,
             max_rows,
         }
@@ -242,9 +235,9 @@ impl Flow for ExecuteFlow<'_> {
 
 impl Flow for DescribePortalFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
-        builder::Describe {
+        DescribeBuilder {
             name: self.name.0,
-            dtype: b'P',
+            dtype: DescribeType::Portal,
         }
         .to_vec()
     }
@@ -252,9 +245,9 @@ impl Flow for DescribePortalFlow<'_> {
 
 impl Flow for DescribeStatementFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
-        builder::Describe {
+        DescribeBuilder {
             name: self.name.0,
-            dtype: b'S',
+            dtype: DescribeType::Statement,
         }
         .to_vec()
     }
@@ -262,9 +255,9 @@ impl Flow for DescribeStatementFlow<'_> {
 
 impl Flow for ClosePortalFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
-        builder::Close {
+        CloseBuilder {
             name: self.name.0,
-            ctype: b'P',
+            ctype: CloseType::Portal,
         }
         .to_vec()
     }
@@ -272,9 +265,9 @@ impl Flow for ClosePortalFlow<'_> {
 
 impl Flow for CloseStatementFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
-        builder::Close {
+        CloseBuilder {
             name: self.name.0,
-            ctype: b'S',
+            ctype: CloseType::Statement,
         }
         .to_vec()
     }
@@ -282,7 +275,7 @@ impl Flow for CloseStatementFlow<'_> {
 
 impl Flow for QueryFlow<'_> {
     fn to_vec(&self) -> Vec<u8> {
-        builder::Query { query: self.query }.to_vec()
+        QueryBuilder { query: self.query }.to_vec()
     }
 }
 
@@ -306,7 +299,7 @@ pub(crate) struct SyncMessageHandler;
 
 impl MessageHandler for SyncMessageHandler {
     fn handle(&mut self, message: Message) -> MessageResult {
-        if ReadyForQuery::try_new(&message).is_some() {
+        if ReadyForQuery::new(&message.as_ref()).is_ok() {
             return MessageResult::Done;
         }
         MessageResult::Unknown
@@ -356,11 +349,11 @@ impl<S: SimpleFlowSink + 'static> FlowWithSink for (ParseFlow<'_>, S) {
     }
     fn make_handler(mut self) -> Box<dyn MessageHandler> {
         Box::new(("Parse", move |message: Message<'_>| {
-            if ParseComplete::try_new(&message).is_some() {
+            if ParseComplete::new(&message.as_ref()).is_ok() {
                 self.1.handle(Ok(()));
                 return MessageResult::Done;
             }
-            if let Some(msg) = ErrorResponse::try_new(&message) {
+            if let Ok(msg) = ErrorResponse::new(&message.as_ref()) {
                 self.1.handle(Err(msg));
                 return MessageResult::SkipUntilSync;
             }
@@ -375,11 +368,11 @@ impl<S: SimpleFlowSink + 'static> FlowWithSink for (BindFlow<'_>, S) {
     }
     fn make_handler(mut self) -> Box<dyn MessageHandler> {
         Box::new(("Bind", move |message: Message<'_>| {
-            if BindComplete::try_new(&message).is_some() {
+            if BindComplete::new(&message.as_ref()).is_ok() {
                 self.1.handle(Ok(()));
                 return MessageResult::Done;
             }
-            if let Some(msg) = ErrorResponse::try_new(&message) {
+            if let Ok(msg) = ErrorResponse::new(&message.as_ref()) {
                 self.1.handle(Err(msg));
                 return MessageResult::SkipUntilSync;
             }
@@ -394,11 +387,11 @@ impl<S: SimpleFlowSink + 'static> FlowWithSink for (ClosePortalFlow<'_>, S) {
     }
     fn make_handler(mut self) -> Box<dyn MessageHandler> {
         Box::new(("ClosePortal", move |message: Message<'_>| {
-            if CloseComplete::try_new(&message).is_some() {
+            if CloseComplete::new(&message.as_ref()).is_ok() {
                 self.1.handle(Ok(()));
                 return MessageResult::Done;
             }
-            if let Some(msg) = ErrorResponse::try_new(&message) {
+            if let Ok(msg) = ErrorResponse::new(&message.as_ref()) {
                 self.1.handle(Err(msg));
                 return MessageResult::SkipUntilSync;
             }
@@ -413,11 +406,11 @@ impl<S: SimpleFlowSink + 'static> FlowWithSink for (CloseStatementFlow<'_>, S) {
     }
     fn make_handler(mut self) -> Box<dyn MessageHandler> {
         Box::new(("CloseStatement", move |message: Message<'_>| {
-            if CloseComplete::try_new(&message).is_some() {
+            if CloseComplete::new(&message.as_ref()).is_ok() {
                 self.1.handle(Ok(()));
                 return MessageResult::Done;
             }
-            if let Some(msg) = ErrorResponse::try_new(&message) {
+            if let Ok(msg) = ErrorResponse::new(&message.as_ref()) {
                 self.1.handle(Err(msg));
                 return MessageResult::Done;
             }
@@ -1116,7 +1109,7 @@ impl FlowAccumulator {
             let message = Message::new(&self.data[offset..]).unwrap();
             let len = message.mlen();
             // Then resize the message to the correct length
-            let message = Message::new(&self.data[offset..offset + len + 1]).unwrap();
+            let message = Message::new(&self.data[offset..offset + (len.0 as usize) + 1]).unwrap();
             f(message);
         }
     }

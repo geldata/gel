@@ -4,13 +4,12 @@ use captive_postgres::{
 use clap::Parser;
 use clap_derive::Parser;
 use gel_auth::AuthType;
+use gel_dsn::postgres::*;
+use gel_pg_protocol::protocol::*;
 use gel_stream::{Connector, ResolvedTarget, Target};
-use pgrust::{
-    connection::{
-        dsn::parse_postgres_dsn_env, Client, Credentials, ExecuteSink, Format, MaxRows,
-        PipelineBuilder, Portal, QuerySink, Statement,
-    },
-    protocol::postgres::data::{CopyData, CopyOutResponse, DataRow, ErrorResponse, RowDescription},
+use pgrust::connection::{
+    Client, Credentials, ExecuteSink, Format, MaxRows, PipelineBuilder, Portal, QuerySink,
+    Statement,
 };
 use std::net::SocketAddr;
 use tokio::task::LocalSet;
@@ -103,7 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if let Some(dsn) = args.dsn {
-        let mut conn = parse_postgres_dsn_env(&dsn, std::env::vars())?;
+        // TODO
+        let mut conn = parse_postgres_dsn_env(&dsn, ())?;
         #[allow(deprecated)]
         let home = std::env::home_dir().unwrap();
         conn.password

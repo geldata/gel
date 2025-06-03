@@ -5,12 +5,7 @@ members = [
     "edb/edgeql-parser/edgeql-parser-python",
     "edb/graphql-rewrite",
     "edb/server/_rust_native",
-    "rust/captive_postgres",
-    "rust/conn_pool",
-    "rust/db_proto",
-    "rust/gel-http",
-    "rust/pgrust",
-    "rust/pyo3_util",
+    "rust/*",
 ]
 resolver = "2"
 
@@ -20,12 +15,14 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", 
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["registry", "env-filter"] }
 
-gel-auth = { version = "0.1.4" }
-gel-stream = { version = "0.3.0" }
-gel-protocol = { version = "0.8.1" }
-gel-jwt = { version = "0.1.1" }
+gel-auth = { version = "0.1.5" }
+gel-stream = { version = "0.4.2" }
+gel-protocol = { version = "0.8.4" }
+gel-jwt = { version = "0.1.2" }
+gel-db-protocol = { version = "0.1.1" }
+gel-pg-protocol = { version = "0.1.0" }
+gel-dsn = { version = "0.2.13" }
 
-db_proto = { path = "rust/db_proto" }
 captive_postgres = { path = "rust/captive_postgres" }
 conn_pool = { path = "rust/conn_pool" }
 pgrust = { path = "rust/pgrust" }

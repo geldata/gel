@@ -4,13 +4,13 @@ use std::num::NonZero;
 use std::rc::Rc;
 
 // Constants
-use db_proto::match_message;
 use gel_auth::AuthType;
+use gel_db_protocol::match_message;
+use gel_pg_protocol::protocol::*;
 use gel_stream::{Connector, ResolvedTarget, Target};
 use pgrust::connection::{
     Client, Credentials, FlowAccumulator, MaxRows, Oid, Param, PipelineBuilder, Portal, Statement,
 };
-use pgrust::protocol::postgres::data::*;
 use tokio::task::LocalSet;
 
 use captive_postgres::*;
@@ -98,7 +98,7 @@ where
                 s.push_str(&format!("CopyData {:?}\n", String::from_utf8_lossy(&copy_data.data())));
             },
             (CopyOutResponse as copy_out) => {
-                s.push_str(&format!("CopyOutResponse {}\n", copy_out.format()));
+                s.push_str(&format!("CopyOutResponse {:?}\n", copy_out.format()));
             },
             _unknown => {
                 s.push_str("Unknown\n");

@@ -6,14 +6,10 @@ use super::{
 use crate::{
     connection::flow::{QueryMessageHandler, SyncMessageHandler},
     handshake::ConnectionSslRequirement,
-    protocol::postgres::{
-        builder,
-        data::{Message, NotificationResponse, ParameterStatus},
-        meta,
-    },
 };
-use db_proto::StructBuffer;
 use futures::{future::Either, FutureExt};
+use gel_db_protocol::prelude::*;
+use gel_pg_protocol::protocol::*;
 use gel_stream::{Connector, Stream};
 use std::{
     cell::RefCell,
@@ -299,11 +295,11 @@ impl PGConn {
         match state {
             ConnState::Ready { handlers, .. } => {
                 let message = message.ok_or(PGConnError::InvalidState)?;
-                if NotificationResponse::try_new(&message).is_some() {
+                if NotificationResponse::new(&message.as_ref()).is_ok() {
                     warn!("Notification: {:?}", message);
                     return Ok(());
                 }
-                if ParameterStatus::try_new(&message).is_some() {
+                if ParameterStatus::new(&message.as_ref()).is_ok() {
                     warn!("ParameterStatus: {:?}", message);
                     return Ok(());
                 }
@@ -389,7 +385,7 @@ impl PGConn {
 
             drop(ready_lock);
 
-            let mut buffer = StructBuffer::<meta::Message>::default();
+            let mut buffer = StructBuffer::<Message<'static>>::default();
             loop {
                 let mut read_buffer = [0; 1024];
                 let n = poll_fn(|cx| {
@@ -417,7 +413,7 @@ impl PGConn {
                     if let Ok(message) = &message {
                         if tracing::enabled!(Level::TRACE) {
                             trace!("Message ({:?})", message.mtype() as char);
-                            for s in hexdump::hexdump_iter(message.__buf) {
+                            for s in hexdump::hexdump_iter(message.as_ref()) {
                                 trace!("{}", s);
                             }
                         }
@@ -439,7 +435,7 @@ impl PGConn {
         f: impl QuerySink + 'static,
     ) -> Result<impl Future<Output = Result<(), PGConnError>>, PGConnError> {
         trace!("Query task started: {query}");
-        let message = builder::Query { query }.to_vec();
+        let message = QueryBuilder { query }.to_vec();
         let rx = self.write(
             vec![Box::new(QueryMessageHandler {
                 sink: f,
@@ -464,7 +460,7 @@ impl PGConn {
             mut handlers,
         } = pipeline;
         handlers.push(Box::new(SyncMessageHandler));
-        messages.extend_from_slice(&builder::Sync::default().to_vec());
+        messages.extend_from_slice(&SyncBuilder::default().to_vec());
 
         let rx = self.write(handlers, messages)?;
         Ok(async {
@@ -488,7 +484,6 @@ mod tests {
         flow::{CopyDataSink, DataSink, DoneHandling},
         raw_conn::ConnectionParams,
     };
-    use crate::protocol::postgres::data::*;
 
     use super::*;
 

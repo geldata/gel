@@ -15,18 +15,21 @@ optimizer = []
 [dependencies]
 gel-auth.workspace = true
 gel-stream = { workspace = true, features = ["client"] }
+gel-pg-protocol.workspace = true
+gel-db-protocol.workspace = true
+gel-dsn = { workspace = true, features = ["postgres"] }
+
 pyo3.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-db_proto.workspace = true
 
-futures = "0"
+futures = "0.3"
 thiserror = "2"
 openssl = { version = "0.10.70", features = ["v111"] }
 paste = "1"
 base64 = "0.22"
-rand = "0"
-hexdump = "0"
+rand = "0.9"
+hexdump = "0.1"
 url = "2"
 serde = "1"
 serde_derive = "1"
@@ -46,6 +49,6 @@ rstest = "0"
 clap = "4"
 clap_derive = "4"
 libc = "0.2.158"
-hex-literal = "0.4.1"
+hex-literal = "1"
 
 [lib]

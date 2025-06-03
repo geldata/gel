@@ -1,6 +1,4 @@
-use pgrust::connection::dsn::{
-    parse_postgres_dsn, parse_postgres_dsn_env, RawConnectionParameters,
-};
+use gel_dsn::postgres::*;
 use std::collections::HashMap;
 
 mod dsn_libpq;

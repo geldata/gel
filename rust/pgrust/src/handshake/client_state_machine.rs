@@ -2,24 +2,16 @@ use super::ConnectionSslRequirement;
 use crate::{
     connection::{invalid_state, Credentials, PGConnectionError, SslError},
     errors::PgServerError,
-    protocol::postgres::{
-        builder,
-        data::{
-            AuthenticationCleartextPassword, AuthenticationMD5Password, AuthenticationMessage,
-            AuthenticationOk, AuthenticationSASL, AuthenticationSASLContinue,
-            AuthenticationSASLFinal, BackendKeyData, ErrorResponse, Message, NoticeResponse,
-            ParameterStatus, ReadyForQuery, SSLResponse,
-        },
-        FrontendBuilder, InitialBuilder,
-    },
 };
 use base64::Engine;
-use db_proto::{match_message, ParseError};
 use gel_auth::{
-    scram::{generate_salted_password, ClientEnvironment, ClientTransaction, Sha256Out},
+    scram::{
+        generate_salted_password, ClientEnvironment, ClientTransaction, SCRAMError, Sha256Out,
+    },
     AuthType,
 };
-use rand::Rng;
+use gel_db_protocol::{match_message, prelude::ParseError};
+use gel_pg_protocol::protocol::*;
 use tracing::{error, trace, warn};
 
 #[derive(Debug)]
@@ -29,7 +21,7 @@ struct ClientEnvironmentImpl {
 
 impl ClientEnvironment for ClientEnvironmentImpl {
     fn generate_nonce(&self) -> String {
-        let nonce: [u8; 32] = rand::rng().random();
+        let nonce: [u8; 32] = rand::random();
         base64::engine::general_purpose::STANDARD.encode(nonce)
     }
     fn get_salted_password(&self, salt: &[u8], iterations: usize) -> Sha256Out {
@@ -162,7 +154,7 @@ impl ConnectionState {
         trace!("Received drive {drive:?} in state {:?}", self.0);
         match (&mut self.0, drive) {
             (SslInitializing(credentials, mode), ConnectionDrive::Initial) => {
-                update.send_initial(InitialBuilder::SSLRequest(builder::SSLRequest::default()))?;
+                update.send_initial(InitialBuilder::SSLRequest(SSLRequestBuilder::default()))?;
                 self.0 = SslWaiting(std::mem::take(credentials), *mode);
                 update.state_changed(ConnectionStateType::Connecting);
             }
@@ -227,10 +219,10 @@ impl ConnectionState {
                         let mut tx = ClientTransaction::new("".into());
                         let env = ClientEnvironmentImpl { credentials };
                         let Some(initial_message) = tx.process_message(&[], &env)? else {
-                            return Err(gel_auth::scram::SCRAMError::ProtocolError.into());
+                            return Err(SCRAMError::ProtocolError.into());
                         };
                         update.auth(AuthType::ScramSha256);
-                        update.send(builder::SASLInitialResponse {
+                        update.send(SASLInitialResponseBuilder {
                             mechanism: "SCRAM-SHA-256",
                             response: &initial_message,
                         }.into())?;
@@ -242,7 +234,7 @@ impl ConnectionState {
                         trace!("auth md5");
                         let md5_hash = gel_auth::md5::md5_password(&credentials.password, &credentials.username, md5.salt());
                         update.auth(AuthType::Md5);
-                        update.send(builder::PasswordMessage {
+                        update.send(PasswordMessageBuilder {
                             password: &md5_hash,
                         }.into())?;
                     },
@@ -250,13 +242,9 @@ impl ConnectionState {
                         *sent_auth = true;
                         trace!("auth cleartext");
                         update.auth(AuthType::Plain);
-                        update.send(builder::PasswordMessage {
+                        update.send(PasswordMessageBuilder {
                             password: &credentials.password,
                         }.into())?;
-                    },
-                    (NoticeResponse as notice) => {
-                        let err = PgServerError::from(notice);
-                        update.server_notice(&err);
                     },
                     (ErrorResponse as error) => {
                         self.0 = Error;
@@ -273,15 +261,15 @@ impl ConnectionState {
                 match_message!(message, Backend {
                     (AuthenticationSASLContinue as sasl) => {
                         let Some(message) = tx.process_message(&sasl.data(), env)? else {
-                            return Err(gel_auth::scram::SCRAMError::ProtocolError.into());
+                            return Err(SCRAMError::ProtocolError.into());
                         };
-                        update.send(builder::SASLResponse {
+                        update.send(SASLResponseBuilder {
                             response: &message,
                         }.into())?;
                     },
                     (AuthenticationSASLFinal as sasl) => {
                         let None = tx.process_message(&sasl.data(), env)? else {
-                            return Err(gel_auth::scram::SCRAMError::ProtocolError.into());
+                            return Err(SCRAMError::ProtocolError.into());
                         };
                     },
                     (AuthenticationOk) => {
@@ -291,10 +279,6 @@ impl ConnectionState {
                     },
                     (AuthenticationMessage as auth) => {
                         trace!("SCRAM Unknown auth message: {}", auth.status())
-                    },
-                    (NoticeResponse as notice) => {
-                        let err = PgServerError::from(notice);
-                        update.server_notice(&err);
                     },
                     (ErrorResponse as error) => {
                         self.0 = Error;
@@ -323,10 +307,6 @@ impl ConnectionState {
                         self.0 = Ready;
                         update.state_changed(ConnectionStateType::Ready);
                     },
-                    (NoticeResponse as notice) => {
-                        let err = PgServerError::from(notice);
-                        update.server_notice(&err);
-                    },
                     (ErrorResponse as error) => {
                         self.0 = Error;
                         let err = PgServerError::from(error);
@@ -351,20 +331,20 @@ impl ConnectionState {
         update: &mut impl ConnectionStateUpdate,
     ) -> Result<(), std::io::Error> {
         let mut params = vec![
-            builder::StartupNameValue {
+            StartupNameValueBuilder {
                 name: "user",
                 value: &credentials.username,
             },
-            builder::StartupNameValue {
+            StartupNameValueBuilder {
                 name: "database",
                 value: &credentials.database,
             },
         ];
         for (name, value) in &credentials.server_settings {
-            params.push(builder::StartupNameValue { name, value })
+            params.push(StartupNameValueBuilder { name, value })
         }
 
-        update.send_initial(InitialBuilder::StartupMessage(builder::StartupMessage {
+        update.send_initial(InitialBuilder::StartupMessage(StartupMessageBuilder {
             params: &params,
         }))
     }
@@ -379,7 +359,7 @@ fn log_unknown_message(
             warn!(
                 "Unexpected message {:?} (length {}) received in {} state",
                 message.mtype(),
-                message.mlen(),
+                message.mlen().0,
                 state
             );
             Ok(())

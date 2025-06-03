@@ -6,10 +6,9 @@ use crate::handshake::{
     },
     ConnectionSslRequirement,
 };
-use crate::protocol::postgres::{FrontendBuilder, InitialBuilder};
-use crate::protocol::{postgres::data::SSLResponse, postgres::meta};
-use db_proto::StructBuffer;
 use gel_auth::AuthType;
+use gel_db_protocol::StructBuffer;
+use gel_pg_protocol::protocol::{FrontendBuilder, InitialBuilder, Message, SSLResponse};
 use gel_stream::{ConnectionError, Connector, Stream, StreamUpgrade};
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -75,7 +74,7 @@ impl ConnectionDriver {
         &mut self,
         state: &mut ConnectionState,
         drive: &[u8],
-        message_buffer: &mut StructBuffer<meta::Message>,
+        message_buffer: &mut StructBuffer<Message<'static>>,
         stream: &mut S,
     ) -> Result<(), PGConnectionError> {
         message_buffer.push_fallible(drive, |msg| {
@@ -184,8 +183,8 @@ impl RawClient {
             .drive(&mut state, ConnectionDrive::Initial, &mut stream)
             .await?;
 
-        let mut struct_buffer: StructBuffer<meta::Message> =
-            StructBuffer::<meta::Message>::default();
+        let mut struct_buffer: StructBuffer<Message<'static>> =
+            StructBuffer::<Message<'static>>::default();
 
         while !state.is_ready() {
             let mut buffer = [0; 1024];

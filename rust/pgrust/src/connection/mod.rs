@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use crate::errors::{edgedb::EdbError, PgServerError};
-use db_proto::ParseError;
 mod conn;
-pub mod dsn;
 mod flow;
 pub(crate) mod queue;
 mod raw_conn;
@@ -13,6 +11,7 @@ pub use flow::{
     CopyDataSink, DataSink, DoneHandling, ExecuteSink, FlowAccumulator, Format, MaxRows, Oid,
     Param, Pipeline, PipelineBuilder, Portal, QuerySink, Statement,
 };
+use gel_db_protocol::prelude::ParseError;
 use gel_stream::ConnectionError;
 pub use raw_conn::RawClient;
 
