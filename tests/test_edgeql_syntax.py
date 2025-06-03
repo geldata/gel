@@ -3769,68 +3769,75 @@ aa';
         SELECT baz(x := User.age y := User.name);
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_12(self):
         """
         SELECT count(SELECT 1);
+
+% OK %
+
+        SELECT count((SELECT 1));
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_13(self):
         """
         SELECT count(INSERT Foo);
+
+% OK %
+
+        SELECT count((INSERT Foo));
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_14(self):
         """
         SELECT count(UPDATE Foo SET {bar := 1});
+
+% OK %
+
+        SELECT count((UPDATE Foo SET {bar := 1}));
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_15(self):
         """
         SELECT count(DELETE Foo);
+
+% OK %
+
+        SELECT count((DELETE Foo));
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_16(self):
         """
         SELECT count(FOR X IN {Foo} UNION X);
+
+% OK %
+
+        SELECT count((FOR X IN {Foo} UNION X));
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_17(self):
         """
         SELECT count(WITH X := 1 SELECT Foo FILTER .bar = X);
+
+% OK %
+
+        SELECT count((WITH X := 1 SELECT Foo FILTER (.bar = X)));
         """
 
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=23)
+                  "Missing ','",
+                  line=2, col=32)
     def test_edgeql_syntax_function_18(self):
         """
         SELECT (count(SELECT 1) 1);
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=26)
     def test_edgeql_syntax_function_19(self):
         """
         SELECT ((((count(SELECT 1)))));
+
+% OK %
+
+        SELECT count((SELECT 1));
         """
 
     @tb.must_fail(errors.EdgeQLSyntaxError,
