@@ -43,5 +43,6 @@ class TestEdgeQLPermissions(tb.QueryTestCase):
             r'''
                 select global GameAdmin
             ''',
-            [False],
+            # Tests run as superuser
+            [True],
         )
