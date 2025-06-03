@@ -431,6 +431,23 @@ class SimpleDelete(Nonterm):
         )
 
 
+FunctionResultData = collections.namedtuple(
+    'FunctionResultData',
+    ['type_qualifier', 'result_type'],
+    module=__name__
+)
+
+
+class CreateFunctionResult(Nonterm):
+    def reduce_ARROW_OptTypeQualifier_FunctionType(
+        self, _, type_qualifier, result_type
+    ):
+        self.val = FunctionResultData(
+            type_qualifier=type_qualifier.val,
+            result_type=result_type.val,
+        )
+
+
 WithBlockData = collections.namedtuple(
     'WithBlockData', ['aliases'], module=__name__)
 
