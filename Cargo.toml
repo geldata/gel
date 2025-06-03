@@ -5,7 +5,10 @@ members = [
     "edb/edgeql-parser/edgeql-parser-python",
     "edb/graphql-rewrite",
     "edb/server/_rust_native",
-    "rust/*",
+    "rust/conn_pool",
+    "rust/gel-http",
+    "rust/pgrust",
+    "rust/pyo3_util",
 ]
 resolver = "2"
 
