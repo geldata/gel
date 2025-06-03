@@ -3244,6 +3244,20 @@ def _process_nested_array_set_func_with_ordinality(
     # Get (ordinal, tuple<array<...>>)
     # - unnests the outer array with ordinal
     # - select the resulting ordinal and tuple<array<...>>
+    if inner_rtype.wrapped_array_id:
+        # tuple in schema
+        coldeflist = None
+    else:
+        coldeflist = [
+            pgast.ColumnDef(
+                name='0',
+                typename=pgast.TypeName(
+                    name=pg_types.pg_type_from_ir_typeref(
+                        inner_rtype
+                    )
+                )
+            )
+        ]
     ordinal_tuple_expr = pgast.SelectStmt(
         target_list=[
             pgast.ResTarget(
@@ -3259,16 +3273,7 @@ def _process_nested_array_set_func_with_ordinality(
                     pgast.FuncCall(
                         name=('unnest',),
                         args=[args[0]],
-                        coldeflist=[
-                            pgast.ColumnDef(
-                                name='0',
-                                typename=pgast.TypeName(
-                                    name=pg_types.pg_type_from_ir_typeref(
-                                        inner_rtype
-                                    )
-                                )
-                            )
-                        ]
+                        coldeflist=coldeflist
                     )
                 ],
                 lateral=True,
@@ -3458,9 +3463,14 @@ def _process_set_func(
     else:
         colnames = [ctx.env.aliases.get('v')]
 
-        if _should_unwrap_polymorphic_return_array(expr):
-            # If we are unwrapping a previously nested array, its pg type is
-            # record and so we need to provide a column definition list.
+        if (
+            _should_unwrap_polymorphic_return_array(expr)
+            and not expr.typeref.wrapped_array_id
+        ):
+            # Unwrapping a previously nested array.
+            # If the wrapped array (ie. tuple<array<...>>) is not in the schema,
+            # its pg type is record and so we need to provide a column
+            # definition list.
             coldeflist = [
                 pgast.ColumnDef(
                     name='v',
@@ -3704,7 +3714,9 @@ def _compile_call_args(
             _should_wrap_polymorphic_array_args(expr)
             and _is_array_arg_as_simple_polymorphic(ir_arg)
         ):
-            arg_ref = pgast.RowExpr(args=[arg_ref])
+            arg_ref = _wrap_array_of_array_element(
+                arg_ref, ir_arg.expr.typeref,
+            )
 
         args.append(arg_ref)
         _compile_arg_null_check(expr, ir_arg, arg_ref, typemod, ctx=ctx)
@@ -4104,12 +4116,29 @@ def process_set_as_agg_expr_inner(
                     _should_wrap_polymorphic_array_args(expr)
                     and _is_array_arg_as_simple_polymorphic(ir_call_arg)
                 ):
-                    # Wrap aggregated arrays in a tuple
-                    arg_ref = pgast.RowExpr(args=[arg_ref])
-
                     if aspect == pgce.PathAspect.SERIALIZED:
+                        # In serialized json output, arg_ref will already be
+                        # a postgres json and should not be wrapped in a tuple.
+                        #
+                        # Otherwise, wrap aggregated inner arrays in a tuple.
+                        if argctx.env.output_format not in (
+                            context.OutputFormat.JSON,
+                            context.OutputFormat.JSON_ELEMENTS,
+                            context.OutputFormat.JSONB
+                        ):
+                            arg_ref = _wrap_array_of_array_element(
+                                arg_ref, ir_arg.expr.typeref
+                            )
+
                         arg_ref = output.serialize_expr(
                             arg_ref, path_id=ir_arg.path_id, env=argctx.env)
+
+                    else:
+                        # Not serialized, wrap aggregated inner arrays in
+                        # a tuple
+                        arg_ref = _wrap_array_of_array_element(
+                            arg_ref, ir_arg.expr.typeref
+                        )
 
                 args.append(arg_ref)
 
@@ -4329,14 +4358,15 @@ def process_set_as_json_object_pack(
 
 
 def build_array_expr(
-        ir_expr: irast.Base,
-        elements: list[pgast.BaseExpr], *,
-        ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
+    ir_expr: irast.Array,
+    elements: list[pgast.BaseExpr],
+    *,
+    ctx: context.CompilerContextLevel
+) -> pgast.BaseExpr:
 
     array = astutils.safe_array_expr(elements, ctx=ctx)
 
     if irutils.is_empty_array_expr(ir_expr):
-        assert isinstance(ir_expr, irast.Array)
         typeref = ir_expr.typeref
 
         if irtyputils.is_any(typeref.subtypes[0]):
@@ -4357,6 +4387,20 @@ def build_array_expr(
                 name=pg_type,
             ),
         )
+
+    elif irtyputils.is_persistent_array_of_array(ir_expr.typeref):
+        assert ir_expr.typeref.padded_array_type is not None
+        pg_type = pg_types.pg_type_from_ir_typeref(
+            ir_expr.typeref.padded_array_type
+        )
+
+        return pgast.TypeCast(
+            arg=array,
+            type_name=pgast.TypeName(
+                name=pg_type,
+            ),
+        )
+
     else:
         return array
 
@@ -4378,7 +4422,9 @@ def process_set_as_array_expr(
         element = dispatch.compile(ir_element, ctx=ctx)
         if irtyputils.is_array(ir_element.typeref):
             # Wrap nested arrays in a tuple
-            element = pgast.RowExpr(args=[element])
+            element = _wrap_array_of_array_element(
+                element, ir_element.typeref,
+            )
         elements.append(element)
 
         if serializing:
@@ -4419,6 +4465,29 @@ def process_set_as_array_expr(
     pathctx.put_path_value_var_if_not_exists(ctx.rel, ir_set.path_id, set_expr)
 
     return new_stmt_set_rvar(ir_set, ctx.rel, ctx=ctx)
+
+
+def _wrap_array_of_array_element(
+    element: pgast.BaseExpr,
+    typeref: irast.TypeRef,
+) -> pgast.BaseExpr:
+    # Wrap aggregated arrays in a tuple
+    if typeref.wrapped_array_id:
+        # tuple in schema
+        name = cast(
+            tuple[str, str],
+            common.get_tuple_backend_name(
+                typeref.wrapped_array_id, catenate=False
+            ),
+        )
+        return pgast.TypeCast(
+            arg=pgast.RowExpr(args=[element]),
+            type_name=pgast.TypeName(
+                name=name,
+            ),
+        )
+    else:
+        return pgast.RowExpr(args=[element])
 
 
 def process_encoded_param(

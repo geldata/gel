@@ -383,7 +383,17 @@ def pg_type_from_ir_typeref(
                     and irtyputils.is_scalar(ir_typeref.subtypes[0]))):
             return ('anyarray',)
         elif irtyputils.is_array(ir_typeref.subtypes[0]):
-            return ('record[]',)
+            if (
+                ir_typeref.padded_array_type is not None
+                and ir_typeref.padded_array_type.in_schema
+            ):
+                tp = pg_type_from_ir_typeref(
+                    ir_typeref.padded_array_type.subtypes[0],
+                    serialized=serialized,
+                    persistent_tuples=persistent_tuples)
+                return pg_type_array(tp)
+            else:
+                return ('record[]',)
         else:
             tp = pg_type_from_ir_typeref(
                 ir_typeref.subtypes[0],

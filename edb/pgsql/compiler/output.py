@@ -248,14 +248,20 @@ def array_as_json_object(
         # To prevent this, we need to explicitly serialize the inner arrays then
         # aggregate them.
         el_name = 'f1'
-        coldeflist = [
-            pgast.ColumnDef(
-                name=str(el_name),
-                typename=pgast.TypeName(
-                    name=pgtypes.pg_type_from_ir_typeref(el_type),
-                ),
-            )
-        ]
+        if (
+            styperef.padded_array_type is not None
+            and styperef.padded_array_type.in_schema
+        ):
+            coldeflist = None
+        else:
+            coldeflist = [
+                pgast.ColumnDef(
+                    name=str(el_name),
+                    typename=pgast.TypeName(
+                        name=pgtypes.pg_type_from_ir_typeref(el_type),
+                    ),
+                )
+            ]
         unwrapped_inner_array = pgast.RangeFunction(
             functions=[
                 pgast.FuncCall(
