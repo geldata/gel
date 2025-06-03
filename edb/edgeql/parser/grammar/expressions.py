@@ -513,6 +513,9 @@ class AliasDecl(Nonterm):
     def reduce_AliasedExpr(self, *kids):
         pass
 
+    def reduce_Identifier_ASSIGN_ExprStmtSimple(self, *kids):
+        self.val = qlast.AliasedExpr(alias=kids[0].val, expr=kids[2].val)
+
 
 class WithDecl(Nonterm):
     @parsing.inline(0)

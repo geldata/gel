@@ -2660,6 +2660,15 @@ aa';
         WITH a AS MODULE `__std__` SELECT Foo;
         """
 
+    def test_edgeql_syntax_with_13(self):
+        """
+        with x := select Card filter .element = 'Air' select x;
+
+% OK %
+
+        with x := (select Card filter (.element = 'Air')) select x;
+        """
+
     def test_edgeql_syntax_detached_01(self):
         """
         WITH F := DETACHED Foo
