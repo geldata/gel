@@ -303,13 +303,13 @@ class Using(Nonterm):
 
 class SetField(Nonterm):
     # field := <expr>
-    def reduce_Identifier_ASSIGN_Expr(self, *kids):
+    def reduce_Identifier_ASSIGN_GenExpr(self, *kids):
         identifier, _, expr = kids
         self.val = qlast.SetField(name=identifier.val, value=expr.val)
 
 
 class SetAnnotation(Nonterm):
-    def reduce_ANNOTATION_NodeName_ASSIGN_Expr(self, *kids):
+    def reduce_ANNOTATION_NodeName_ASSIGN_GenExpr(self, *kids):
         _, name, _, expr = kids
         self.val = qlast.CreateAnnotationValue(name=name.val, value=expr.val)
 
@@ -1064,7 +1064,7 @@ class ConcreteUnknownPointerShort(Nonterm):
 class ConcreteUnknownPointerObjectShort(Nonterm):
     def reduce_CreateComputableUnknownPointer(self, *kids):
         """%reduce
-            PathNodeName ASSIGN Expr
+            PathNodeName ASSIGN GenExpr
         """
         name, _, expr = kids
         self.val = qlast.CreateConcreteUnknownPointer(
@@ -1074,7 +1074,7 @@ class ConcreteUnknownPointerObjectShort(Nonterm):
 
     def reduce_CreateQualifiedComputableUnknownPointer(self, *kids):
         """%reduce
-            PtrQuals PathNodeName ASSIGN Expr
+            PtrQuals PathNodeName ASSIGN GenExpr
         """
         quals, name, _, expr = kids
         self.val = qlast.CreateConcreteUnknownPointer(
@@ -1294,7 +1294,7 @@ class ConcretePropertyShort(Nonterm):
 
     def reduce_CreateComputableProperty(self, *kids):
         """%reduce
-            PROPERTY PathNodeName ASSIGN Expr
+            PROPERTY PathNodeName ASSIGN GenExpr
         """
         _, name, _, expr = kids
         self.val = qlast.CreateConcreteProperty(
@@ -1304,7 +1304,7 @@ class ConcretePropertyShort(Nonterm):
 
     def reduce_CreateQualifiedComputableProperty(self, *kids):
         """%reduce
-            PtrQuals PROPERTY PathNodeName ASSIGN Expr
+            PtrQuals PROPERTY PathNodeName ASSIGN GenExpr
         """
         quals, _, name, _, expr = kids
         self.val = qlast.CreateConcreteProperty(
@@ -1556,7 +1556,7 @@ class ConcreteLinkShort(Nonterm):
 
     def reduce_CreateComputableLink(self, *kids):
         """%reduce
-            LINK PathNodeName ASSIGN Expr
+            LINK PathNodeName ASSIGN GenExpr
         """
         _, name, _, expr = kids
         self.val = qlast.CreateConcreteLink(
@@ -1566,7 +1566,7 @@ class ConcreteLinkShort(Nonterm):
 
     def reduce_CreateQualifiedComputableLink(self, *kids):
         """%reduce
-            PtrQuals LINK PathNodeName ASSIGN Expr
+            PtrQuals LINK PathNodeName ASSIGN GenExpr
         """
         quals, _, name, _, expr = kids
         self.val = qlast.CreateConcreteLink(
@@ -1776,7 +1776,7 @@ class AliasDeclaration(Nonterm):
 class AliasDeclarationShort(Nonterm):
     def reduce_CreateAliasShortStmt(self, *kids):
         r"""%reduce
-            ALIAS NodeName ASSIGN Expr
+            ALIAS NodeName ASSIGN GenExpr
         """
         _, name, _, expr = kids
         self.val = qlast.CreateAlias(
@@ -1938,7 +1938,7 @@ class GlobalDeclarationShort(Nonterm):
 
     def reduce_CreateComputedGlobalShortQuals(self, *kids):
         """%reduce
-            PtrQuals GLOBAL NodeName ASSIGN Expr
+            PtrQuals GLOBAL NodeName ASSIGN GenExpr
         """
         quals, _, name, _, expr = kids
         self.val = qlast.CreateGlobal(
@@ -1950,7 +1950,7 @@ class GlobalDeclarationShort(Nonterm):
 
     def reduce_CreateComputedGlobalShort(self, *kids):
         """%reduce
-            GLOBAL NodeName ASSIGN Expr
+            GLOBAL NodeName ASSIGN GenExpr
         """
         _, name, _, expr = kids
         self.val = qlast.CreateGlobal(

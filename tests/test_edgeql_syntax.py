@@ -5670,12 +5670,22 @@ aa';
         """
         CREATE TYPE Foo {
             CREATE PROPERTY bar := 'something';
+            CREATE PROPERTY baz := select 'something';
+            CREATE LINK quux := select Foo;
+            CREATE PROPERTY foo: str {
+                set default := select 'lol'
+            };
         };
 
 % OK %
 
         CREATE TYPE Foo {
             CREATE PROPERTY bar := ('something');
+            CREATE PROPERTY baz := (select 'something');
+            CREATE LINK quux := (select Foo);
+            CREATE PROPERTY foo: str {
+                set default := (select 'lol');
+            };
         };
         """
 

@@ -706,6 +706,27 @@ class TestEdgeSchemaParser(SchemaSyntaxTest):
         };
         """
 
+    def test_eschema_syntax_type_37(self):
+        """
+        module default {
+            type Foo {
+                x1 := select Baz;
+                property x2 := select 5;
+                link x2 := select Baz;
+            };
+        };
+
+% OK %
+
+        module default {
+            type Foo {
+                x1 := (select Baz);
+                property x2 := (select 5);
+                link x2 := (select Baz);
+            };
+        };
+        """
+
     def test_eschema_syntax_link_target_type_01(self):
         """
         module test {
