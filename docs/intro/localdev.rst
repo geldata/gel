@@ -16,13 +16,9 @@ It's easy to get started with a local Gel instance. Navigate to the root of your
 
 .. code-block:: bash
 
-  $ gel project init
+  $ gel init
 
-This command takes care of several things for you:
-
-* It downloads and installs the latest version of the Gel server.
-* It configures a local Postgres cluster.
-* It manages the instance through your operating system's background task launcher.
+Creates a database tied to the current directory and to the :ref:`gel.toml <ref_reference_gel_toml>` file in it. This simplifies connection configuration and installation for you. Alias for :ref:`gel project init <ref_cli_gel_project_init>`.
 
 To conserve resources, Gel automatically puts inactive local development instances to sleep. This means you can have multiple instances running without them draining your system's resources when not in use.
 
