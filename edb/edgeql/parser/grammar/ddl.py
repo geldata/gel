@@ -513,7 +513,7 @@ class UsingStmt(Nonterm):
 
 class SetFieldStmt(Nonterm):
     # field := <expr>
-    def reduce_SET_Identifier_ASSIGN_Expr(self, *kids):
+    def reduce_SET_Identifier_ASSIGN_GenExpr(self, *kids):
         self.val = qlast.SetField(
             name=kids[1].val.lower(),
             value=kids[3].val,
@@ -536,7 +536,7 @@ class ResetFieldStmt(Nonterm):
 
 
 class CreateAnnotationValueStmt(Nonterm):
-    def reduce_CREATE_ANNOTATION_NodeName_ASSIGN_Expr(self, *kids):
+    def reduce_CREATE_ANNOTATION_NodeName_ASSIGN_GenExpr(self, *kids):
         self.val = qlast.CreateAnnotationValue(
             name=kids[2].val,
             value=kids[4].val,
@@ -544,7 +544,7 @@ class CreateAnnotationValueStmt(Nonterm):
 
 
 class AlterAnnotationValueStmt(Nonterm):
-    def reduce_ALTER_ANNOTATION_NodeName_ASSIGN_Expr(self, *kids):
+    def reduce_ALTER_ANNOTATION_NodeName_ASSIGN_GenExpr(self, *kids):
         self.val = qlast.AlterAnnotationValue(
             name=kids[2].val,
             value=kids[4].val,
@@ -2041,7 +2041,7 @@ class CreateConcretePropertyStmt(Nonterm):
 
     def reduce_CreateComputableProperty(self, *kids):
         """%reduce
-            CREATE OptPtrQuals PROPERTY UnqualifiedPointerName ASSIGN Expr
+            CREATE OptPtrQuals PROPERTY UnqualifiedPointerName ASSIGN GenExpr
         """
         self.val = qlast.CreateConcreteProperty(
             name=kids[3].val,
@@ -2382,7 +2382,7 @@ class CreateConcreteLinkStmt(Nonterm):
 
     def reduce_CreateComputableLink(self, *kids):
         """%reduce
-            CREATE OptPtrQuals LINK UnqualifiedPointerName ASSIGN Expr
+            CREATE OptPtrQuals LINK UnqualifiedPointerName ASSIGN GenExpr
         """
         self.val = qlast.CreateConcreteLink(
             name=kids[3].val,
@@ -2816,7 +2816,7 @@ commands_block(
 class CreateAliasStmt(Nonterm):
     def reduce_CreateAliasShortStmt(self, *kids):
         r"""%reduce
-            CREATE ALIAS NodeName ASSIGN Expr
+            CREATE ALIAS NodeName ASSIGN GenExpr
         """
         self.val = qlast.CreateAlias(
             name=kids[2].val,
@@ -3518,7 +3518,7 @@ class CreateGlobalStmt(Nonterm):
 
     def reduce_CreateComputableGlobal(self, *kids):
         """%reduce
-            CREATE OptPtrQuals GLOBAL NodeName ASSIGN Expr
+            CREATE OptPtrQuals GLOBAL NodeName ASSIGN GenExpr
         """
         self.val = qlast.CreateGlobal(
             name=kids[3].val,
