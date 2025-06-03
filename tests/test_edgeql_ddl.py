@@ -8880,7 +8880,8 @@ class TestEdgeQLDDL(tb.DDLTestCase):
         """)
         await self.assert_query_result(
             'select global foo;',
-            [False],
+            # Tests run as superuser
+            [True],
         )
         await self.con.execute(r"""
             drop permission foo;
@@ -8983,7 +8984,8 @@ class TestEdgeQLDDL(tb.DDLTestCase):
         """)
         await self.assert_query_result(
             'select global foo;',
-            [False],
+            # Tests run as superuser
+            [True],
         )
         await self.con.execute(r"""
             alter permission foo {
@@ -8992,7 +8994,8 @@ class TestEdgeQLDDL(tb.DDLTestCase):
         """)
         await self.assert_query_result(
             'select global bar;',
-            [False],
+            # Tests run as superuser
+            [True],
         )
         async with self.assertRaisesRegexTx(
             edgedb.QueryError,
