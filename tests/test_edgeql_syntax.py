@@ -1834,6 +1834,36 @@ aa';
         };
         """
 
+    def test_edgeql_syntax_shape_73(self):
+        """
+        select Foo {
+            x := select Card { ** } filter .element = 'Air',
+            y := select User { ** } filter .name = 'Alice',
+        };
+
+% OK %
+
+        select Foo {
+            x := (select Card { ** } filter (.element = 'Air')),
+            y := (select User { ** } filter (.name = 'Alice')),
+        };
+        """
+
+    def test_edgeql_syntax_shape_74(self):
+        """
+        select {
+            x := select Card { ** } filter .element = 'Air',
+            y := select User { ** } filter .name = 'Alice',
+        };
+
+% OK %
+
+        select {
+            x := (select Card { ** } filter (.element = 'Air')),
+            y := (select User { ** } filter (.name = 'Alice')),
+        };
+        """
+
     def test_edgeql_syntax_shape_splat_01(self):
         """
         select Foo {
