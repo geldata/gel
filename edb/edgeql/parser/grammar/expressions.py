@@ -136,6 +136,22 @@ class ExprStmtAnnoyingCore(Nonterm):
         pass
 
 
+# A "generalized expression" that can be either an expression or
+# *most* unparenthesized statements.
+#
+# (Note that a number of places that are *approximately* using this
+# instead need to spell it out more explicitly because it doesn't
+# exactly fit.)
+class GenExpr(Nonterm):
+    @parsing.inline(0)
+    def reduce_Expr(self, *kids):
+        pass
+
+    @parsing.inline(0)
+    def reduce_ExprStmtSimpleCore(self, *kids):
+        pass
+
+
 class AliasedExpr(Nonterm):
     val: qlast.AliasedExpr
 
@@ -1650,7 +1666,7 @@ class CompareOp(Nonterm):
 
 
 class Tuple(Nonterm):
-    def reduce_LPAREN_Expr_COMMA_OptExprList_RPAREN(self, *kids):
+    def reduce_LPAREN_GenExpr_COMMA_OptExprList_RPAREN(self, *kids):
         self.val = qlast.Tuple(elements=[kids[1].val] + kids[3].val)
 
     def reduce_LPAREN_RPAREN(self, *kids):
@@ -1663,7 +1679,7 @@ class NamedTuple(Nonterm):
 
 
 class NamedTupleElement(Nonterm):
-    def reduce_ShortNodeName_ASSIGN_Expr(self, *kids):
+    def reduce_ShortNodeName_ASSIGN_GenExpr(self, *kids):
         self.val = qlast.TupleElement(
             name=qlast.Ptr(name=kids[0].val.name, span=kids[0].span),
             val=kids[2].val
@@ -1696,7 +1712,7 @@ class OptExprList(Nonterm):
         self.val = []
 
 
-class ExprList(ListNonterm, element=Expr, separator=tokens.T_COMMA,
+class ExprList(ListNonterm, element=GenExpr, separator=tokens.T_COMMA,
                allow_trailing_separator=True):
     pass
 

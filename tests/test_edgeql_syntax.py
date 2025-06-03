@@ -2823,8 +2823,10 @@ aa';
         SELECT User.name OFFSET Foo.bar LIMIT (Foo.bar * 10);
         """
 
+    # @tb.must_fail(errors.EdgeQLSyntaxError,
+    #               r'Unexpected.+bar', hint=None, line=3, col=24)
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  r'Unexpected.+bar', hint=None, line=3, col=24)
+                  r"Missing ','", hint=None, line=3, col=23)
     def test_edgeql_syntax_select_12(self):
         """
         SELECT (
@@ -3330,8 +3332,10 @@ aa';
         } UNLESS CONFLICT ELSE (SELECT Foo);
         """
 
+    # @tb.must_fail(errors.EdgeQLSyntaxError,
+    #               r'Unexpected.+bar', hint=None, line=3, col=24)
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  r'Unexpected.+bar', hint=None, line=3, col=24)
+                  r"Missing ','", hint=None, line=3, col=23)
     def test_edgeql_syntax_insert_22(self):
         """
         SELECT (
@@ -3378,8 +3382,10 @@ aa';
         OFFSET 2 LIMIT 5;
         """
 
+    # @tb.must_fail(errors.EdgeQLSyntaxError,
+    #               r'Unexpected.+bar', hint=None, line=3, col=24)
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  r'Unexpected.+bar', hint=None, line=3, col=24)
+                  r"Missing ','", hint=None, line=3, col=23)
     def test_edgeql_syntax_delete_06(self):
         """
         SELECT (
@@ -3511,8 +3517,10 @@ aa';
         SELECT x;
         """
 
+    # @tb.must_fail(errors.EdgeQLSyntaxError,
+    #               r'Unexpected.+bad', hint=None, line=3, col=56)
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  r'Unexpected.+bad', hint=None, line=3, col=56)
+                  r"Missing ','", hint=None, line=3, col=55)
     def test_edgeql_syntax_selectfor_04(self):
         """
         WITH x := (
@@ -4068,6 +4076,30 @@ aa';
 % OK %
 
         SELECT (1, 2);
+        """
+
+    def test_edgeql_syntax_tuple_18(self):
+        """
+        SELECT (select Foo, delete Foo, update Foo set { x := 1 },
+                for x in y select x);
+
+% OK %
+
+        SELECT ((select Foo), (delete Foo), (update Foo set { x := 1 }),
+                (for x in y select x));
+        """
+
+    def test_edgeql_syntax_tuple_19(self):
+        """
+        SELECT (x := select Foo, y := delete Foo,
+                z := update Foo set { x := 1 },
+                w := for x in y select x);
+
+% OK %
+
+        SELECT (x := (select Foo), y := (delete Foo),
+                z := (update Foo set { x := 1 }),
+                w := (for x in y select x));
         """
 
     def test_edgeql_syntax_introspect_01(self):
