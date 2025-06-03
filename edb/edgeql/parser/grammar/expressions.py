@@ -945,7 +945,7 @@ class OptPtrQuals(Nonterm):
 # by a keyword).
 class ComputableShapePointer(Nonterm):
 
-    def reduce_OPTIONAL_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = False
@@ -954,7 +954,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_REQUIRED_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = True
@@ -963,7 +963,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_MULTI_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_MULTI_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.Many
@@ -972,7 +972,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_SINGLE_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_SINGLE_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.One
@@ -981,7 +981,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_OPTIONAL_MULTI_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_MULTI_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -991,7 +991,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_OPTIONAL_SINGLE_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_SINGLE_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -1001,7 +1001,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_MULTI_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_MULTI_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -1011,7 +1011,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_SINGLE_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_SINGLE_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -1021,7 +1021,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -1029,7 +1029,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[1].span),
         )
 
-    def reduce_SimpleShapePointer_ADDASSIGN_Expr(self, *kids):
+    def reduce_SimpleShapePointer_ADDASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -1037,7 +1037,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[1].span),
         )
 
-    def reduce_SimpleShapePointer_REMASSIGN_Expr(self, *kids):
+    def reduce_SimpleShapePointer_REMASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -1049,7 +1049,7 @@ class ComputableShapePointer(Nonterm):
 # This is the same as the above ComputableShapePointer, except using
 # FreeSimpleShapePointer and not allowing +=/-=.
 class FreeComputableShapePointer(Nonterm):
-    def reduce_OPTIONAL_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = False
@@ -1058,7 +1058,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_REQUIRED_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = True
@@ -1067,7 +1067,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_MULTI_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_MULTI_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.Many
@@ -1076,7 +1076,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_SINGLE_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_SINGLE_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.One
@@ -1085,7 +1085,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_OPTIONAL_MULTI_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_MULTI_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -1095,7 +1097,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_OPTIONAL_SINGLE_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_SINGLE_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -1105,7 +1109,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_MULTI_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_MULTI_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -1115,7 +1121,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_SINGLE_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_SINGLE_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -1125,7 +1133,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
