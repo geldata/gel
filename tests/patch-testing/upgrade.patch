@@ -187,10 +187,10 @@ index 3a9effaa5..145a472cd 100644
      pass
  
 diff --git a/edb/pgsql/patches.py b/edb/pgsql/patches.py
-index 9d63263a9..0a6f9eca6 100644
+index 12c627df8..df6773aeb 100644
 --- a/edb/pgsql/patches.py
 +++ b/edb/pgsql/patches.py
-@@ -60,4 +60,38 @@ The current kinds are:
+@@ -66,4 +66,41 @@ The current kinds are:
   * ...+testmode - only run the patch in testmode. Works with any patch kind.
  """
  PATCHES: list[tuple[str, str]] = [
@@ -204,13 +204,16 @@ index 9d63263a9..0a6f9eca6 100644
 +};
 +'''),
 +    ('edgeql+schema', '''
++# Empty edgeql+schema patch to make sure that non-initial
++# edgeql+schema patches can add things publically. (They didn't
++# use to be able to.)
++    '''),
++    ('edgeql+schema', '''
 +CREATE TYPE schema::Blobal EXTENDING schema::AnnotationSubject {
 +    CREATE PROPERTY required -> std::bool;
 +};
-+# ASDF! We can't apply these separately because it gets picked up from
-+# the present schema nonsense!
-+# The patch system is so janky.
-+# Worse, adding these publically only works in the *first* +schema patch.
++'''),
++    ('edgeql+schema', '''
 +ALTER TYPE schema::Function
 +{
 +    CREATE PROPERTY test_field_a -> std::str;
@@ -230,7 +233,7 @@ index 9d63263a9..0a6f9eca6 100644
 +    ('metaschema-sql', 'SysConfigFullFunction'),
  ]
 diff --git a/edb/schema/functions.py b/edb/schema/functions.py
-index 48baa30be..c903d58fc 100644
+index 48baa30be..a3c238a7c 100644
 --- a/edb/schema/functions.py
 +++ b/edb/schema/functions.py
 @@ -1252,6 +1252,31 @@ class Function(
@@ -243,7 +246,7 @@ index 48baa30be..c903d58fc 100644
 +        default=None,
 +        compcoef=0.4,
 +        allow_ddl_set=True,
-+        patch_level=1,
++        patch_level=2,
 +    )
 +
 +    test_field_b = so.SchemaField(
@@ -251,14 +254,14 @@ index 48baa30be..c903d58fc 100644
 +        default=None,
 +        compcoef=0.4,
 +        allow_ddl_set=True,
-+        patch_level=1,
++        patch_level=2,
 +    )
 +
 +    test_nativecode_size = so.SchemaField(
 +        int,
 +        default=None,
 +        compcoef=0.99,
-+        patch_level=1,
++        patch_level=2,
 +    )
 +    ##
 +
@@ -277,10 +280,10 @@ index 48baa30be..c903d58fc 100644
          # volatility, so force it to happen as part of
          # canonicalization of attributes.
 diff --git a/edb/schema/globals.py b/edb/schema/globals.py
-index 0bac4f113..9754274cd 100644
+index 0bac4f113..7ff961aa6 100644
 --- a/edb/schema/globals.py
 +++ b/edb/schema/globals.py
-@@ -637,3 +637,60 @@ class DeleteGlobal(
+@@ -637,3 +637,61 @@ class DeleteGlobal(
                  self.add_caused(op)
  
          return schema
@@ -291,6 +294,7 @@ index 0bac4f113..9754274cd 100644
 +    s_anno.AnnotationSubject,
 +    qlkind=qltypes.SchemaObjectClass.GLOBAL,
 +    data_safe=True,
++    patch_level=1,
 +):
 +
 +    required = so.SchemaField(
