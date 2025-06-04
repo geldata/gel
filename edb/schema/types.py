@@ -1016,9 +1016,11 @@ class Collection(Type, s_abc.Collection):
     @classmethod
     def get_displayname_static(cls, name: s_name.Name) -> str:
         if isinstance(name, s_name.QualName):
-            return str(name)
+            # FIXME: Globals and alias names do mangling but *don't*
+            # duplicate the module name, which most places do.
+            return str(name).split('@', 1)[0]
         else:
-            return s_name.unmangle_name(str(name))
+            return s_name.recursively_unmangle_shortname(str(name))
 
     @classmethod
     def get_schema_name(cls) -> str:

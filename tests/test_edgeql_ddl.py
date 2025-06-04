@@ -7832,7 +7832,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := [1]',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
@@ -7851,7 +7851,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := (1,)',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -7875,7 +7875,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := (f := 1)',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -7899,12 +7899,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := [(1,)]',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
@@ -7928,17 +7928,17 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := [(f := [1])]',
                 [
                     {
-                        'name': 'array<tuple<f:array<std||int64>>>',
+                        'name': 'array<tuple<f:array<std::int64>>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
                     {
-                        'name': 'tuple<f:array<std|int64>>',
+                        'name': 'tuple<f:array<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -7957,12 +7957,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := ([1],)',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
                     {
-                        'name': 'tuple<array<std|int64>>',
+                        'name': 'tuple<array<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8045,7 +8045,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo: array<tuple<int64>>',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -8069,12 +8069,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo: array<tuple<f:array<int64>>>',
                 [
                     {
-                        'name': 'array<tuple<f:array<std||int64>>>',
+                        'name': 'array<tuple<f:array<std::int64>>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'tuple<f:array<std|int64>>',
+                        'name': 'tuple<f:array<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8093,7 +8093,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo: tuple<array<int64>>',
                 [
                     {
-                        'name': 'tuple<array<std|int64>>',
+                        'name': 'tuple<array<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8113,12 +8113,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := [(1,)]',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
@@ -8133,12 +8133,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global bar: tuple<tuple<int64>>',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
@@ -8148,7 +8148,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8163,7 +8163,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8183,12 +8183,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := [(1,)]',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
@@ -8203,12 +8203,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global bar: tuple<tuple<int64>>',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
@@ -8218,7 +8218,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8228,12 +8228,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'drop global bar',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
@@ -8263,7 +8263,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8273,12 +8273,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global bar := [(1,)]',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::bar@default|bar@global',
+                        'name': 'default::bar',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
@@ -8288,7 +8288,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8303,7 +8303,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8328,7 +8328,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8338,12 +8338,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global bar := [(1,)]',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::bar@default|bar@global',
+                        'name': 'default::bar',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
@@ -8353,7 +8353,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8363,12 +8363,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'drop global foo',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::bar@default|bar@global',
+                        'name': 'default::bar',
                         'from_alias': True,
                         'type_name': 'schema::ArrayExprAlias',
                     },
@@ -8393,7 +8393,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := ((1,),)',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8403,7 +8403,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8413,12 +8413,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create function bar() -> array<tuple<int64>> using([(1,)])',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8428,7 +8428,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8438,7 +8438,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'drop global foo',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -8463,7 +8463,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create function foo() -> array<tuple<int64>> using([(1,)])',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -8478,12 +8478,12 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global bar := ((1,),)',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'default::bar@default|bar@global',
+                        'name': 'default::bar',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8493,7 +8493,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8503,7 +8503,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'drop function foo()',
                 [
                     {
-                        'name': 'default::bar@default|bar@global',
+                        'name': 'default::bar',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8513,7 +8513,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8538,7 +8538,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8548,7 +8548,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create function bar() -> array<tuple<int64>> using([(1,)])',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -8558,7 +8558,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8568,7 +8568,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'drop global foo',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -8593,7 +8593,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create function foo() -> array<tuple<int64>> using([(1,)])',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -8608,7 +8608,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global bar: tuple<tuple<int64>>',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -8618,7 +8618,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8633,7 +8633,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8652,7 +8652,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := (1,)',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8667,7 +8667,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'alter global foo {using ((2,))}',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8691,7 +8691,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := (1,)',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8706,7 +8706,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'alter global foo {using (("a",))}',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8730,7 +8730,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := (1,)',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8769,7 +8769,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 'create global foo := (1,)',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8858,7 +8858,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 ''',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -8897,7 +8897,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 ''',
                 [
                     {
-                        'name': 'default::foo@default|foo@global',
+                        'name': 'default::foo',
                         'from_alias': True,
                         'type_name': 'schema::TupleExprAlias',
                     },
@@ -12389,7 +12389,7 @@ type default::Foo {
                 'create alias foo := [(1,)]',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12418,7 +12418,7 @@ type default::Foo {
                 'create alias foo := [(f := [1])]',
                 [
                     {
-                        'name': 'array<tuple<f:array<std||int64>>>',
+                        'name': 'array<tuple<f:array<std::int64>>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12428,7 +12428,7 @@ type default::Foo {
                         'type_name': 'schema::ArrayExprAlias',
                     },
                     {
-                        'name': 'tuple<f:array<std|int64>>',
+                        'name': 'tuple<f:array<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -12452,7 +12452,7 @@ type default::Foo {
                         'type_name': 'schema::TupleExprAlias',
                     },
                     {
-                        'name': 'tuple<array<std|int64>>',
+                        'name': 'tuple<array<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -12472,7 +12472,7 @@ type default::Foo {
                 'create alias foo := [(1,)]',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12492,7 +12492,7 @@ type default::Foo {
                 'create alias bar := ((1,),)',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12512,7 +12512,7 @@ type default::Foo {
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -12532,7 +12532,7 @@ type default::Foo {
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -12552,7 +12552,7 @@ type default::Foo {
                 'create alias foo := [(1,)]',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12572,7 +12572,7 @@ type default::Foo {
                 'create alias bar := ((1,),)',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12592,7 +12592,7 @@ type default::Foo {
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -12602,7 +12602,7 @@ type default::Foo {
                 'drop alias bar',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12642,7 +12642,7 @@ type default::Foo {
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -12652,7 +12652,7 @@ type default::Foo {
                 'create function bar() -> array<tuple<int64>> using([(1,)])',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12667,7 +12667,7 @@ type default::Foo {
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -12677,7 +12677,7 @@ type default::Foo {
                 'drop alias foo',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12702,7 +12702,7 @@ type default::Foo {
                 'create function foo() -> array<tuple<int64>> using([(1,)])',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12717,7 +12717,7 @@ type default::Foo {
                 'create alias bar := ((1,),)',
                 [
                     {
-                        'name': 'array<tuple<std|int64>>',
+                        'name': 'array<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12732,7 +12732,7 @@ type default::Foo {
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -12752,7 +12752,7 @@ type default::Foo {
                         'type_name': 'schema::Tuple',
                     },
                     {
-                        'name': 'tuple<tuple<std|int64>>',
+                        'name': 'tuple<tuple<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
