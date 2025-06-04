@@ -984,7 +984,9 @@ def prepare_patch(
         # in the public schema and to discover the new introspection
         # query.
         reflection = s_refl.generate_structure(
-            reflschema, make_funcs=False,
+            reflschema,
+            make_funcs=False,
+            patch_level=patches.get_patch_level(num),
         )
 
         reflschema, plan, tplan = _process_delta_params(
