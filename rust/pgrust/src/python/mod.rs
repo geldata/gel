@@ -1,22 +1,14 @@
-use crate::{
-    connection::{Credentials, PGConnectionError},
-    errors::PgServerError,
-    handshake::{
-        client::{
-            ConnectionDrive, ConnectionState, ConnectionStateSend, ConnectionStateType,
-            ConnectionStateUpdate,
-        },
-        ConnectionSslRequirement,
-    },
-};
-use gel_db_protocol::prelude::{ParseError, *};
+use gel_auth::postgres::{ConnectionSslRequirement, Credentials};
+use gel_auth::postgres::client::{ConnectionDrive, ConnectionState, ConnectionStateSend, ConnectionStateType, ConnectionStateUpdate};
+use gel_db_protocol::prelude::StructBuffer;
 use gel_dsn::postgres::*;
 use gel_dsn::*;
+use gel_pg_protocol::errors::PgServerError;
 use gel_pg_protocol::protocol::{FrontendBuilder, InitialBuilder, Message, SSLResponse};
 use gel_stream::ResolvedTarget;
 use pyo3::{
     buffer::PyBuffer,
-    exceptions::{PyException, PyRuntimeError},
+    exceptions::PyException,
     prelude::*,
     pymodule,
     types::{PyAnyMethods, PyByteArray, PyBytes, PyMemoryView, PyModule, PyModuleMethods},
@@ -35,12 +27,6 @@ pub enum SSLMode {
     Require,
     VerifyCa,
     VerifyFull,
-}
-
-impl From<PGConnectionError> for PyErr {
-    fn from(err: PGConnectionError) -> PyErr {
-        PyRuntimeError::new_err(err.to_string())
-    }
 }
 
 struct PyEnvVar<'a>(String, Bound<'a, PyAny>);
@@ -152,11 +138,7 @@ impl PyConnectionParams {
         }
 
         if resolved_hosts.is_empty() {
-            return Err(PGConnectionError::Io(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Could not resolve addresses: {errors:?}"),
-            ))
-            .into());
+            return Err(PyException::new_err(format!("Could not resolve addresses: {errors:?}")));
         }
 
         Ok(resolved_hosts)
@@ -346,7 +328,7 @@ impl PyConnectionState {
 
     fn drive_initial(&mut self) -> PyResult<()> {
         self.inner
-            .drive(ConnectionDrive::Initial, &mut self.update)?;
+            .drive(ConnectionDrive::Initial, &mut self.update).map_err(|e| PyException::new_err(e.to_string()))?;
         Ok(())
     }
 
@@ -358,21 +340,21 @@ impl PyConnectionState {
             let response =
                 SSLResponse::new(&response).map_err(|e| PyException::new_err(e.to_string()))?;
             self.inner
-                .drive(ConnectionDrive::SslResponse(response), &mut self.update)?;
+                .drive(ConnectionDrive::SslResponse(response), &mut self.update).map_err(|e| PyException::new_err(e.to_string()))?;
         } else {
             with_python_buffer(py, buffer, |buf| {
                 self.message_buffer.push_fallible(buf, |message| {
                     self.inner
                         .drive(ConnectionDrive::Message(message), &mut self.update)
                 })
-            })?;
+            }).map_err(|e| PyException::new_err(e.to_string()))?;
         }
         Ok(())
     }
 
     fn drive_ssl_ready(&mut self) -> PyResult<()> {
         self.inner
-            .drive(ConnectionDrive::SslReady, &mut self.update)?;
+            .drive(ConnectionDrive::SslReady, &mut self.update).map_err(|e| PyException::new_err(e.to_string()))?;
         Ok(())
     }
 

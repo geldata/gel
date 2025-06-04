@@ -13,7 +13,7 @@ python_extension = ["pyo3/serde"]
 optimizer = []
 
 [dependencies]
-gel-auth.workspace = true
+gel-auth = { workspace = true, features = ["postgres"] }
 gel-stream = { workspace = true, features = ["client"] }
 gel-pg-protocol.workspace = true
 gel-db-protocol.workspace = true
@@ -39,8 +39,8 @@ derive_more = { version = "2", features = ["full"] }
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
-captive_postgres.workspace = true
-gel-stream = { workspace = true, features = ["rustls"] }
+gel-pg-captive.workspace = true
+gel-stream = { workspace = true, features = ["rustls", "client", "tokio"] }
 
 scopeguard = "1"
 pretty_assertions = "1.2.0"
