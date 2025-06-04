@@ -18,14 +18,14 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", 
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["registry", "env-filter"] }
 
-gel-auth = { version = "0.1.6" }
-gel-stream = { version = "0.4.2" }
-gel-protocol = { version = "0.8.5" }
-gel-jwt = { version = "0.1.2" }
-gel-db-protocol = { version = "0.1.2" }
-gel-pg-protocol = { version = "0.1.1" }
-gel-pg-captive = { version = "0.1.1" }
-gel-dsn = { version = "0.2.14" }
+gel-auth = { version = "=0.1.6" }
+gel-stream = { version = "=0.4.3" }
+gel-protocol = { version = "=0.8.5" }
+gel-jwt = { version = "=0.1.3" }
+gel-db-protocol = { version = "=0.1.2" }
+gel-pg-protocol = { version = "=0.1.1" }
+gel-pg-captive = { version = "=0.1.1" }
+gel-dsn = { version = "=0.2.14" }
 
 conn_pool = { path = "rust/conn_pool" }
 pgrust = { path = "rust/pgrust" }
