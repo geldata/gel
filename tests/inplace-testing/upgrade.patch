@@ -1,5 +1,5 @@
 diff --git a/edb/buildmeta.py b/edb/buildmeta.py
-index 28eabc77c..10f19f6a0 100644
+index b6222e4a2..5f1b366fb 100644
 --- a/edb/buildmeta.py
 +++ b/edb/buildmeta.py
 @@ -65,6 +65,12 @@ class MetadataError(Exception):
@@ -161,7 +161,7 @@ index a41bbba6e..f8f1b1ccb 100644
          SET default := false;
      };
 diff --git a/edb/pgsql/delta.py b/edb/pgsql/delta.py
-index 2bec402fd..6b08a1b61 100644
+index 3a9effaa5..145a472cd 100644
 --- a/edb/pgsql/delta.py
 +++ b/edb/pgsql/delta.py
 @@ -777,6 +777,38 @@ class RenamePermission(
@@ -247,13 +247,13 @@ index 48baa30be..48fb55b89 100644
          # volatility, so force it to happen as part of
          # canonicalization of attributes.
 diff --git a/edb/schema/globals.py b/edb/schema/globals.py
-index ca0874880..682051516 100644
+index 0bac4f113..9754274cd 100644
 --- a/edb/schema/globals.py
 +++ b/edb/schema/globals.py
-@@ -619,3 +619,60 @@ class DeleteGlobal(
-     GlobalCommand,
- ):
-     astnode = qlast.DropGlobal
+@@ -637,3 +637,60 @@ class DeleteGlobal(
+                 self.add_caused(op)
+ 
+         return schema
 +
 +
 +class Blobal(
