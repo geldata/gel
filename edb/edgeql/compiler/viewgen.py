@@ -1308,7 +1308,9 @@ def prepare_rewrite_anchors(
         pointer_path_id = irast.PathId.from_type(
             schema,
             bool_type,
-            typename=sn.QualName(module="__derived__", name=pn.name),
+            typename=sn.QualName(
+                module="__derived__", name=ctx.aliases.get(pn.name)
+            ),
             namespace=ctx.path_id_namespace,
             env=ctx.env,
         )
@@ -1332,7 +1334,7 @@ def prepare_rewrite_anchors(
 
     # init set for __old__
     if r_ctx.kind == qltypes.RewriteKind.Update:
-        old_name = sn.QualName("__derived__", "__old__")
+        old_name = sn.QualName("__derived__", ctx.aliases.get("__old__"))
         old_path_id = irast.PathId.from_type(
             schema, stype, typename=old_name,
             namespace=ctx.path_id_namespace, env=ctx.env,
