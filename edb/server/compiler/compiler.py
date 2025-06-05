@@ -2452,6 +2452,7 @@ def _compile_ql_config_op(
         globals = [
             (str(glob.global_name), glob.has_present_arg)
             for glob in ir.globals
+            if not glob.is_permission
         ]
 
     if isinstance(ir, irast.Statement):

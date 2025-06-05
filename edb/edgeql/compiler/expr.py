@@ -674,6 +674,12 @@ def compile_GlobalExpr(
             glob, ctx=ctx
         )
 
+        if isinstance(glob, s_permissions.Permission):
+            # Globals are assumed to be optional within functions. However,
+            # permissions always have a value. Provide a default value to
+            # reassure the cardinality checks.
+            default_ql = qlast.Constant.boolean(False)
+
     if default_ql and not present_set:
         # If we have a default value and the global is required,
         # then we can use the param being {} as a signal to use

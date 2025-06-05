@@ -30,6 +30,8 @@ class TestEdgeQLPermissions(tb.QueryTestCase):
                           'cards.esdl')
 
     SETUP = '''
+    CREATE FUNCTION is_game_admin() -> bool using(global GameAdmin);
+    CREATE FUNCTION is_game_admin_nested() -> bool using(is_game_admin());
     '''
 
     async def test_edgeql_permissions_errors_01(self):
@@ -45,6 +47,26 @@ class TestEdgeQLPermissions(tb.QueryTestCase):
         await self.assert_query_result(
             r'''
                 select global GameAdmin
+            ''',
+            # Tests run as superuser
+            [True],
+        )
+
+    async def test_edgeql_permissions_basic_02(self):
+        # Permission within function
+        await self.assert_query_result(
+            r'''
+                select is_game_admin()
+            ''',
+            # Tests run as superuser
+            [True],
+        )
+
+    async def test_edgeql_permissions_basic_03(self):
+        # Permission within nested function
+        await self.assert_query_result(
+            r'''
+                select is_game_admin_nested()
             ''',
             # Tests run as superuser
             [True],
