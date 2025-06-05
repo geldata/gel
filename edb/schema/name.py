@@ -233,6 +233,7 @@ def shortname_from_fullname(fullname: Name) -> Name:
 
 unmangle_re_1 = re.compile(r'\|+')
 
+
 def recursively_unmangle_shortname(name: str) -> str:
     # Any number of pipes becomes a single ::.
     return unmangle_re_1.sub('::', name)
