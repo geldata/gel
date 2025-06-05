@@ -3717,7 +3717,7 @@ def _extract_roles(
 
     for role in schema_roles:
         role_name = str(role.get_name(global_schema))
-        extracted_roles[role_name]['all_permissions'] = list(set(
+        extracted_roles[role_name]['all_permissions'] = tuple(set(
             p
             for m in [role] + role_memberships.get(role, [])
             for p in role_permissions[m]
