@@ -45,10 +45,12 @@ from edb.ir import typeutils as irtyputils
 from edb.schema import constraints as s_constr
 from edb.schema import delta as sd
 from edb.schema import functions as s_func
+from edb.schema import globals as s_globals
 from edb.schema import modules as s_mod
 from edb.schema import name as sn
 from edb.schema import objtypes as s_objtypes
 from edb.schema import operators as s_oper
+from edb.schema import permissions as s_permissions
 from edb.schema import scalars as s_scalars
 from edb.schema import types as s_types
 from edb.schema import indexes as s_indexes
@@ -1053,15 +1055,19 @@ def get_globals(
 
     schema = ctx.env.schema
 
-    globs = set()
+    globs: set[s_globals.Global | s_permissions.Permission] = set()
     if bound_call.func.get_params(schema).has_objects(schema):
         # We look at all the candidates since it might be used in a
         # subtype's overload.
         # TODO: be careful and only do this in the needed cases
         for func in candidates:
             globs.update(set(func.get_used_globals(schema).objects(schema)))
+            globs.update(set(func.get_used_permissions(schema).objects(schema)))
     else:
         globs.update(bound_call.func.get_used_globals(schema).objects(schema))
+        globs.update(
+            bound_call.func.get_used_permissions(schema).objects(schema)
+        )
 
     if (
         (
