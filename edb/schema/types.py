@@ -1649,7 +1649,7 @@ class Tuple(
     ) -> s_name.UnqualName:
         if named:
             st_names = ', '.join(
-                f'{n}:{st}' for n, st in element_names.items()
+                f'{n}: {st}' for n, st in element_names.items()
             )
         else:
             st_names = ', '.join(str(st) for st in element_names.values())
