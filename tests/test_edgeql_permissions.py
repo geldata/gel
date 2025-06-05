@@ -29,6 +29,9 @@ class TestEdgeQLPermissions(tb.QueryTestCase):
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'cards.esdl')
 
+    SETUP = '''
+    '''
+
     async def test_edgeql_permissions_errors_01(self):
         async with self.assertRaisesRegexTx(
             edgedb.QueryError,

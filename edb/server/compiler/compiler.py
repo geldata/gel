@@ -1904,11 +1904,12 @@ def _compile_ql_query(
         globals = [
             (str(glob.global_name), glob.has_present_arg)
             for glob in ir.globals
+            if not glob.is_permission
         ]
-    if isinstance(ir, irast.Statement) and ir.permissions:
         permissions = [
-            str(permission.global_name)
-            for permission in ir.permissions
+            str(glob.global_name)
+            for glob in ir.globals
+            if glob.is_permission
         ]
 
     out_type_id: uuid.UUID
