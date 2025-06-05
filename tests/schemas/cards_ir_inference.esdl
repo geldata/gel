@@ -163,3 +163,5 @@ abstract type Named2 {
 type Named2Sub extending Named2;
 
 global Alice := (select User filter .name = 'Alice');
+
+permission GameAdmin;

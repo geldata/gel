@@ -275,7 +275,11 @@ def fini_expression(
     # ConfigSet and ConfigReset don't like being part of a Set, so bail early
     if isinstance(ir.expr, (irast.ConfigSet, irast.ConfigReset)):
         ir.expr.scope_tree = ctx.path_scope
-        ir.expr.globals = list(ctx.env.query_globals.values())
+        ir.expr.globals = list(
+            g
+            for g in ctx.env.query_globals.values()
+            if not g.is_permission
+        )
         ir.expr.params = params
         ir.expr.schema = ctx.env.schema
         ir.expr.type_rewrites = _get_type_rewrites(ctx)
@@ -330,7 +334,6 @@ def fini_expression(
         expr=ir,
         params=params,
         globals=list(ctx.env.query_globals.values()),
-        permissions=list(ctx.env.query_permissions.values()),
         server_param_conversions=server_param_conversions,
         server_param_conversion_params=server_param_conversion_params,
         views=ctx.view_nodes,
