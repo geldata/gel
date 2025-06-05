@@ -251,8 +251,14 @@ def generate_structure(
     schema: s_schema.Schema,
     *,
     make_funcs: bool=True,
+    patch_level: int=2**30,
 ) -> SchemaReflectionParts:
     """Generate schema reflection structure from Python schema classes.
+
+    If specified, patch_level is the "patch level" of the currently
+    patch being applied during minor version upgrading. All schema
+    objects with patch levels that are higher will be skipped, to
+    avoid adding things created by later patches prematurely.
 
     Returns:
         A quadruple (as a SchemaReflectionParts instance) containing:
@@ -266,6 +272,7 @@ def generate_structure(
               a database schema.
             - A sequence of EdgeQL queries necessary to introspect
               global objects, such as roles and databases.
+
     """
 
     delta = sd.DeltaRoot()
@@ -339,6 +346,9 @@ def generate_structure(
             continue
 
         if py_cls is s_obj.GlobalObject:
+            continue
+
+        if py_cls._patch_level > patch_level:
             continue
 
         py_classes.append(py_cls)
@@ -465,6 +475,9 @@ def generate_structure(
         ownfields = py_cls.get_ownfields()
 
         for fn, field in py_cls.get_fields().items():
+            if field.patch_level > patch_level:
+                continue
+
             sfn = field.sname
 
             if (
@@ -567,6 +580,9 @@ def generate_structure(
         schema_cls = schema.get(rschema_name, type=s_objtypes.ObjectType)
 
         for refdict in py_cls.get_own_refdicts().values():
+            if py_cls.get_field(refdict.attr).patch_level > patch_level:
+                continue
+
             ref_ptr = schema_cls.maybe_get_ptr(
                 schema, sn.UnqualName(refdict.attr))
             ref_cls = refdict.ref_cls
@@ -702,6 +718,9 @@ def generate_structure(
         read_shape = read_sets[py_cls]
 
         for refdict in py_cls.get_refdicts():
+            if py_cls.get_field(refdict.attr).patch_level > patch_level:
+                continue
+
             if py_cls not in classlayout:
                 classlayout[py_cls] = {}
 

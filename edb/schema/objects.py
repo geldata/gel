@@ -330,8 +330,10 @@ class Field(struct.ProtoField, Generic[T]):
     #: this specifies a (ProxyType, linkname) pair of a proxy object type
     #: and the name of the link within that proxy type.
     reflection_proxy: Optional[tuple[str, str]]
-    #: Which patch for the current major version this field was introduced in.
-    #: Ensures that the data tuples always get extended strictly at the end.
+    #: Which edgeql+schema patch for the current major version this
+    #: field was introduced in.  Ensures that the data tuples always
+    #: get extended strictly at the end and filters out the field when
+    #: applying earlier patches.
     patch_level: int
 
     def __init__(
@@ -628,6 +630,11 @@ class ObjectMeta(type):
     #: standpoint of persistent data.  In other words, changes to the
     #: object are fully reversible without possible data loss.
     _data_safe: bool
+    #: Which edgeql+schema patch for the current major version this
+    #: object was introduced in.  Ensures that the data tuples always
+    #: get extended strictly at the end and filters out the field when
+    #: applying earlier patches.
+    _patch_level: int
 
     #: Whether the type should be abstract in EdgeDB schema.
     #: This only applies if the type wasn't specified in schema.edgeql.
@@ -644,6 +651,7 @@ class ObjectMeta(type):
         reflection_link: Optional[str] = None,
         data_safe: bool = False,
         abstract: Optional[bool] = None,
+        patch_level: int = -1,
         **kwargs: Any,
     ) -> ObjectMeta:
         refdicts: collections.OrderedDict[str, RefDict]
@@ -702,6 +710,7 @@ class ObjectMeta(type):
 
         cls._data_safe = data_safe
         cls._abstract = abstract
+        cls._patch_level = patch_level
         cls._fields = fields
         cls._schema_fields = {
             fn: f
