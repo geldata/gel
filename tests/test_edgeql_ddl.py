@@ -7869,7 +7869,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
         # Create computed global
         # Delete computed global
 
-        # tuple<f:int64>
+        # tuple<f: int64>
         await self._check_ddl_global_type_changes([
             (
                 'create global foo := (f := 1)',
@@ -7880,7 +7880,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::TupleExprAlias',
                     },
                     {
-                        'name': 'tuple<f:std::int64>',
+                        'name': 'tuple<f: std::int64>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -7922,13 +7922,13 @@ class TestEdgeQLDDL(tb.DDLTestCase):
         # Create computed global
         # Delete computed global
 
-        # array<tuple<f:array<int64>>>
+        # array<tuple<f: array<int64>>>
         await self._check_ddl_global_type_changes([
             (
                 'create global foo := [(f := [1])]',
                 [
                     {
-                        'name': 'array<tuple<f:array<std::int64>>>',
+                        'name': 'array<tuple<f: array<std::int64>>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -7938,7 +7938,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                         'type_name': 'schema::ArrayExprAlias',
                     },
                     {
-                        'name': 'tuple<f:array<std::int64>>',
+                        'name': 'tuple<f: array<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8020,13 +8020,13 @@ class TestEdgeQLDDL(tb.DDLTestCase):
         # Create non-computed global
         # Delete non-computed global
 
-        # tuple<f:int64>
+        # tuple<f: int64>
         await self._check_ddl_global_type_changes([
             (
-                'create global foo: tuple<f:int64>',
+                'create global foo: tuple<f: int64>',
                 [
                     {
-                        'name': 'tuple<f:std::int64>',
+                        'name': 'tuple<f: std::int64>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -8063,18 +8063,18 @@ class TestEdgeQLDDL(tb.DDLTestCase):
         # Create non-computed global
         # Delete non-computed global
 
-        # array<tuple<f:array<int64>>>
+        # array<tuple<f: array<int64>>>
         await self._check_ddl_global_type_changes([
             (
-                'create global foo: array<tuple<f:array<int64>>>',
+                'create global foo: array<tuple<f: array<int64>>>',
                 [
                     {
-                        'name': 'array<tuple<f:array<std::int64>>>',
+                        'name': 'array<tuple<f: array<std::int64>>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
                     {
-                        'name': 'tuple<f:array<std::int64>>',
+                        'name': 'tuple<f: array<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -12370,7 +12370,7 @@ type default::Foo {
                         'type_name': 'schema::TupleExprAlias',
                     },
                     {
-                        'name': 'tuple<f:std::int64>',
+                        'name': 'tuple<f: std::int64>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
@@ -12412,13 +12412,13 @@ type default::Foo {
         # Create alias
         # Delete alias
 
-        # array<tuple<f:array<int64>>>
+        # array<tuple<f: array<int64>>>
         await self._check_ddl_alias_type_changes([
             (
                 'create alias foo := [(f := [1])]',
                 [
                     {
-                        'name': 'array<tuple<f:array<std::int64>>>',
+                        'name': 'array<tuple<f: array<std::int64>>>',
                         'from_alias': False,
                         'type_name': 'schema::Array',
                     },
@@ -12428,7 +12428,7 @@ type default::Foo {
                         'type_name': 'schema::ArrayExprAlias',
                     },
                     {
-                        'name': 'tuple<f:array<std::int64>>',
+                        'name': 'tuple<f: array<std::int64>>',
                         'from_alias': False,
                         'type_name': 'schema::Tuple',
                     },
