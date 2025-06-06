@@ -586,9 +586,7 @@ cdef _inject_globals(
         for permission in permissions:
             out_buf.write_int32(1)
             out_buf.write_byte(
-                superuser or (
-                    1 if permission in available_permissions else 0
-                )
+                superuser or permission in available_permissions
             )
 
 

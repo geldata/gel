@@ -126,6 +126,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             await conn.aclose()
             await self.con.query('''
                 DROP ROLE foo;
+                DROP ROLE base;
                 DROP PERMISSION default::perm_a;
                 DROP PERMISSION default::perm_b;
                 DROP PERMISSION default::perm_c;
