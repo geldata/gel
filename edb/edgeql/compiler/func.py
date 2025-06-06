@@ -1083,6 +1083,15 @@ def get_globals(
             # Make sure that we properly track the globals we use in functions
             for glob in globs:
                 setgen.get_global_param(glob, ctx=ctx)
+
+        if ctx.env.options.json_parameters:
+            # With json params, track permissions separately since globals
+            # are bundled into a single param.
+            for glob in globs:
+                if isinstance(glob, s_permissions.Permission):
+                    ctx.env.json_permissions.append(
+                        str(glob.get_name(ctx.env.schema))
+                    )
         glob_set = setgen.get_func_global_json_arg(ctx=ctx)
 
     return [glob_set]

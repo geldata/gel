@@ -2197,6 +2197,16 @@ def get_func_global_param_sets(
         # Make sure that we properly track the globals we use in functions
         get_global_param(glob, ctx=ctx)
 
+    if (
+        ctx.env.options.json_parameters
+        and isinstance(glob, s_permissions.Permission)
+    ):
+        # With json params, track permissions separately since globals
+        # are bundled into a single param.
+        ctx.env.json_permissions.append(
+            str(glob.get_name(ctx.env.schema))
+        )
+
     with ctx.new() as subctx:
         name = str(glob.get_name(ctx.env.schema))
 

@@ -180,9 +180,12 @@ class Environment:
     """A mapping of query globals.  Gets populated during
     the compilation."""
 
-    query_permissions: dict[s_name.QualName, irast.Global]
-    """A mapping of query permissions.  Gets populated during
-    the compilation."""
+    json_permissions: list[str]
+    """Permissions to inject into a globals json param.
+
+    When the input format is JSON, the globals are bundled into a single json.
+    The permissions are injected into this bundle in execute.execute_json.
+    """
 
     server_param_conversions: dict[
         str,
@@ -339,7 +342,7 @@ class Environment:
         self.schema_view_cache = {}
         self.query_parameters = {}
         self.query_globals = {}
-        self.query_permissions = {}
+        self.json_permissions = []
         self.server_param_conversions = {}
         self.server_param_conversion_calls = []
         self.set_types = {}
