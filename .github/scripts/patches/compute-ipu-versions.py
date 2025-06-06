@@ -12,7 +12,7 @@ sys.path.append(str(pathlib.Path(__file__).parent.parent.parent.parent))
 
 import edb.buildmeta
 
-base = 'https://packages.edgedb.com'
+base = 'https://packages.geldata.com'
 u = f'{base}/archive/.jsonindexes/x86_64-unknown-linux-gnu.json'
 data = json.loads(request.urlopen(u).read())
 
