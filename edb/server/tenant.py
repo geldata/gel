@@ -72,6 +72,7 @@ from .ha import adaptive as adaptive_ha
 from .ha import base as ha_base
 from .http import HttpClient
 from .pgcon import errors as pgcon_errors
+from .compiler import enums as compiler_enums
 
 if TYPE_CHECKING:
     from edb.pgsql import params as pgparams
@@ -137,6 +138,7 @@ class Tenant(ha_base.ClusterProtocol):
     _report_config_data: dict[defines.ProtocolVersion, bytes]
 
     _roles: Mapping[str, RoleDescriptor]
+    _role_capabilities: Mapping[str, compiler_enums.Capability]
     _sys_auth: tuple[Any, ...]
     _jwt_sub_allowlist_file: pathlib.Path | None
     _jwt_sub_allowlist: frozenset[str] | None
@@ -216,6 +218,7 @@ class Tenant(ha_base.ClusterProtocol):
         self._branch_sem = asyncio.Semaphore(value=1)
 
         self._roles = immutables.Map()
+        self._role_capabilities = immutables.Map()
         self._sys_auth = tuple()
         self._jwt_sub_allowlist_file = None
         self._jwt_sub_allowlist = None
@@ -414,12 +417,47 @@ class Tenant(ha_base.ClusterProtocol):
 
     def set_roles(self, roles: Mapping[str, RoleDescriptor]) -> None:
         self._roles = roles
+        self._refresh_role_capabilities()
+
+    def get_role_capabilities(self) -> Mapping[str, compiler_enums.Capability]:
+        return self._role_capabilities
+
+    def _refresh_role_capabilities(self) -> None:
+        role_capabilities: dict[str, compiler_enums.Capability] = {}
+
+        for name, role_desc in self._roles.items():
+            superuser = bool(role_desc.get('superuser'))
+            available_permissions = (role_desc.get('all_permissions') or ())
+
+            capability = compiler_enums.Capability.ALL
+            if not superuser:
+                # Non-superuser can be given capability via
+                # the `sys::data_modification` permission
+                if 'sys::data_modification' not in available_permissions:
+                    capability = (
+                        capability
+                        & ~compiler_enums.Capability.MODIFICATIONS
+                    )
+
+                # Other than setting session config,
+                # non-superusers do not have other capabilities
+                capability = (
+                    capability
+                    & ~compiler_enums.Capability.TRANSACTION
+                    & ~compiler_enums.Capability.DDL
+                    & ~compiler_enums.Capability.PERSISTENT_CONFIG
+                )
+
+            role_capabilities[name] = capability
+
+        self._role_capabilities = immutables.Map(role_capabilities)
 
     async def _fetch_roles(self, syscon: pgcon.PGConnection) -> None:
         role_query = self._server.get_sys_query("roles")
         json_data = await syscon.sql_fetch_val(role_query, use_prep_stmt=True)
         roles = json.loads(json_data)
         self._roles = immutables.Map([(r["name"], r) for r in roles])
+        self._refresh_role_capabilities()
 
     async def init_sys_pgcon(self) -> None:
         self._sys_pgcon_waiter = asyncio.Lock()
