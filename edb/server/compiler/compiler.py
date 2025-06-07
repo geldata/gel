@@ -1912,6 +1912,7 @@ def _compile_ql_query(
             for glob in ir.globals
             if glob.is_permission
         ]
+    if ir.json_permissions:
         json_permissions = list(ir.json_permissions)
 
     out_type_id: uuid.UUID
