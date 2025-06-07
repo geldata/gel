@@ -54,35 +54,55 @@ class ListNonterm(parsing.ListNonterm, element=None, is_internal=True):
     pass
 
 
+# We have an annoying split between "simple" ExprStmt and "annoying"
+# ExprStmt. The heart of the issue is we want to allow unparenthesized
+# statements in places like function arguments, but the trailing
+# parenthesis allowed in the BY clause of GROUP conflicts with the
+# commas there.
+#
+# So instead we allow unparenthesized expressions as long as they
+# aren't GROUP (or a FOR <x> IN <whatever> GROUP ...).
 class ExprStmt(Nonterm):
     val: qlast.Query
 
-    def reduce_WithBlock_ExprStmtCore(self, *kids):
+    @parsing.inline(0)
+    def reduce_ExprStmtSimple(self, *kids):
+        pass
+
+    @parsing.inline(0)
+    def reduce_ExprStmtAnnoying(self, *kids):
+        pass
+
+
+class ExprStmtSimple(Nonterm):
+    val: qlast.Query
+
+    def reduce_WithBlock_ExprStmtSimpleCore(self, *kids):
         self.val = kids[1].val
         self.val.aliases = kids[0].val.aliases
 
     @parsing.inline(0)
-    def reduce_ExprStmtCore(self, *kids):
+    def reduce_ExprStmtSimpleCore(self, *kids):
         pass
 
 
-class ExprStmtCore(Nonterm):
+class ExprStmtAnnoying(Nonterm):
+    val: qlast.Query
+
+    def reduce_WithBlock_ExprStmtAnnoyingCore(self, *kids):
+        self.val = kids[1].val
+        self.val.aliases = kids[0].val.aliases
+
+    @parsing.inline(0)
+    def reduce_ExprStmtAnnoyingCore(self, *kids):
+        pass
+
+
+class ExprStmtSimpleCore(Nonterm):
     val: qlast.Query
 
     @parsing.inline(0)
-    def reduce_SimpleFor(self, *kids):
-        pass
-
-    @parsing.inline(0)
     def reduce_SimpleSelect(self, *kids):
-        pass
-
-    @parsing.inline(0)
-    def reduce_SimpleGroup(self, *kids):
-        pass
-
-    @parsing.inline(0)
-    def reduce_InternalGroup(self, *kids):
         pass
 
     @parsing.inline(0)
@@ -95,6 +115,40 @@ class ExprStmtCore(Nonterm):
 
     @parsing.inline(0)
     def reduce_SimpleDelete(self, *kids):
+        pass
+
+    @parsing.inline(0)
+    def reduce_SimpleFor(self, *kids):
+        pass
+
+    @parsing.inline(0)
+    def reduce_InternalGroup(self, *kids):
+        pass
+
+
+class ExprStmtAnnoyingCore(Nonterm):
+    @parsing.inline(0)
+    def reduce_AnnoyingFor(self, *kids):
+        pass
+
+    @parsing.inline(0)
+    def reduce_SimpleGroup(self, *kids):
+        pass
+
+
+# A "generalized expression" that can be either an expression or
+# *most* unparenthesized statements.
+#
+# (Note that a number of places that are *approximately* using this
+# instead need to spell it out more explicitly because it doesn't
+# exactly fit.)
+class GenExpr(Nonterm):
+    @parsing.inline(0)
+    def reduce_Expr(self, *kids):
+        pass
+
+    @parsing.inline(0)
+    def reduce_ExprStmtSimpleCore(self, *kids):
         pass
 
 
@@ -225,7 +279,23 @@ class SimpleFor(Nonterm):
         )
 
     def reduce_ForInStmt(self, *kids):
-        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr ExprStmt"
+        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr ExprStmtSimple"
+        _, optional, iterator_alias, _, iterator, body = kids
+        self.val = qlast.ForQuery(
+            has_union=False,
+            optional=optional.val,
+            iterator_alias=iterator_alias.val,
+            iterator=iterator.val,
+            result=body.val,
+        )
+
+
+class AnnoyingFor(Nonterm):
+    val: qlast.ForQuery
+
+    def reduce_ForInStmt(self, *kids):
+        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr \
+                  ExprStmtAnnoying"
         _, optional, iterator_alias, _, iterator, body = kids
         self.val = qlast.ForQuery(
             has_union=False,
@@ -458,6 +528,9 @@ class AliasDecl(Nonterm):
     @parsing.inline(0)
     def reduce_AliasedExpr(self, *kids):
         pass
+
+    def reduce_Identifier_ASSIGN_ExprStmtSimple(self, *kids):
+        self.val = qlast.AliasedExpr(alias=kids[0].val, expr=kids[2].val)
 
 
 class WithDecl(Nonterm):
@@ -872,7 +945,7 @@ class OptPtrQuals(Nonterm):
 # by a keyword).
 class ComputableShapePointer(Nonterm):
 
-    def reduce_OPTIONAL_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = False
@@ -881,7 +954,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_REQUIRED_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = True
@@ -890,7 +963,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_MULTI_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_MULTI_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.Many
@@ -899,7 +972,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_SINGLE_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_SINGLE_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.One
@@ -908,7 +981,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_OPTIONAL_MULTI_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_MULTI_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -918,7 +991,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_OPTIONAL_SINGLE_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_SINGLE_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -928,7 +1001,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_MULTI_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_MULTI_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -938,7 +1011,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_SINGLE_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_SINGLE_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -948,7 +1021,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -956,7 +1029,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[1].span),
         )
 
-    def reduce_SimpleShapePointer_ADDASSIGN_Expr(self, *kids):
+    def reduce_SimpleShapePointer_ADDASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -964,7 +1037,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[1].span),
         )
 
-    def reduce_SimpleShapePointer_REMASSIGN_Expr(self, *kids):
+    def reduce_SimpleShapePointer_REMASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -976,7 +1049,7 @@ class ComputableShapePointer(Nonterm):
 # This is the same as the above ComputableShapePointer, except using
 # FreeSimpleShapePointer and not allowing +=/-=.
 class FreeComputableShapePointer(Nonterm):
-    def reduce_OPTIONAL_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = False
@@ -985,7 +1058,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_REQUIRED_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = True
@@ -994,7 +1067,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_MULTI_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_MULTI_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.Many
@@ -1003,7 +1076,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_SINGLE_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_SINGLE_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.One
@@ -1012,7 +1085,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_OPTIONAL_MULTI_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_MULTI_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -1022,7 +1097,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_OPTIONAL_SINGLE_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_SINGLE_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -1032,7 +1109,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_MULTI_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_MULTI_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -1042,7 +1121,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_SINGLE_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_SINGLE_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -1052,7 +1133,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -1593,7 +1674,7 @@ class CompareOp(Nonterm):
 
 
 class Tuple(Nonterm):
-    def reduce_LPAREN_Expr_COMMA_OptExprList_RPAREN(self, *kids):
+    def reduce_LPAREN_GenExpr_COMMA_OptExprList_RPAREN(self, *kids):
         self.val = qlast.Tuple(elements=[kids[1].val] + kids[3].val)
 
     def reduce_LPAREN_RPAREN(self, *kids):
@@ -1606,7 +1687,7 @@ class NamedTuple(Nonterm):
 
 
 class NamedTupleElement(Nonterm):
-    def reduce_ShortNodeName_ASSIGN_Expr(self, *kids):
+    def reduce_ShortNodeName_ASSIGN_GenExpr(self, *kids):
         self.val = qlast.TupleElement(
             name=qlast.Ptr(name=kids[0].val.name, span=kids[0].span),
             val=kids[2].val
@@ -1639,7 +1720,7 @@ class OptExprList(Nonterm):
         self.val = []
 
 
-class ExprList(ListNonterm, element=Expr, separator=tokens.T_COMMA,
+class ExprList(ListNonterm, element=GenExpr, separator=tokens.T_COMMA,
                allow_trailing_separator=True):
     pass
 
@@ -1958,6 +2039,20 @@ class FuncCallArg(Nonterm):
                 span=merge_spans(kids),
             )
             self.val = (self.val[0], self.val[1], qry)
+
+    def reduce_ExprStmtSimple(self, *kids):
+        self.val = (
+            None,
+            None,
+            kids[0].val,
+        )
+
+    def reduce_AnyIdentifier_ASSIGN_ExprStmtSimple(self, *kids):
+        self.val = (
+            kids[0].val,
+            kids[0].span,
+            kids[2].val,
+        )
 
 
 class FuncArgList(ListNonterm, element=FuncCallArg, separator=tokens.T_COMMA,
