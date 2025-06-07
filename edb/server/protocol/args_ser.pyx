@@ -46,6 +46,7 @@ cdef uint32_t ARRAY_TAG = int(enums.TypeTag.ARRAY)
 
 cdef recode_bind_args_for_script(
     dbview.DatabaseConnectionView dbv,
+    str role_name,
     dbview.CompiledQuery compiled,
     bytes bind_args,
     object converted_args,
@@ -63,7 +64,9 @@ cdef recode_bind_args_for_script(
     # TODO: just do the simple thing if it is only one!
 
     positions = []
-    recoded_buf = recode_bind_args(dbv, compiled, bind_args, None, positions)
+    recoded_buf = recode_bind_args(
+        dbv, role_name, compiled, bind_args, None, positions
+    )
     # TODO: something with less copies
     recoded = bytes(memoryview(recoded_buf))
 
@@ -93,7 +96,7 @@ cdef recode_bind_args_for_script(
         if compiled.first_extra is not None:
             bind_data.write_bytes(compiled.extra_blobs[i])
 
-        _inject_globals(dbv, query_unit, bind_data)
+        _inject_globals(dbv, role_name, query_unit, bind_data)
 
         if converted_args and i in converted_args:
             for arg in converted_args[i]:
@@ -109,6 +112,7 @@ cdef recode_bind_args_for_script(
 
 cdef WriteBuffer recode_bind_args(
     dbview.DatabaseConnectionView dbv,
+    str role_name,
     dbview.CompiledQuery compiled,
     bytes bind_args,
     list converted_args,
@@ -247,7 +251,7 @@ cdef WriteBuffer recode_bind_args(
             out_buf.write_bytes(compiled.extra_blobs[0])
 
         # Inject any globals variables into the argument stream.
-        _inject_globals(dbv, qug, out_buf)
+        _inject_globals(dbv, role_name, qug, out_buf)
 
         if converted_args:
             for arg in converted_args:
@@ -556,28 +560,34 @@ cdef WriteBuffer _decode_tuple_args(
 
 cdef _inject_globals(
     dbv: dbview.DatabaseConnectionView,
+    role_name: str,
     query_unit_or_group: object,
     out_buf: WriteBuffer,
 ):
-    globals = query_unit_or_group.globals
-    if not globals:
-        return
+    if globals := query_unit_or_group.globals:
+        state_globals = dbv.get_globals()
+        for (name, has_present_arg) in globals:
+            val = None
+            entry = state_globals.get(name)
+            if entry:
+                val = entry.value
+            if val is not None:
+                out_buf.write_int32(len(val))
+                out_buf.write_bytes(val)
+            else:
+                out_buf.write_int32(-1)
+            if has_present_arg:
+                out_buf.write_int32(1)
+                present = b'\x01' if entry is not None else b'\x00'
+                out_buf.write_bytes(present)
 
-    state_globals = dbv.get_globals()
-    for (name, has_present_arg) in globals:
-        val = None
-        entry = state_globals.get(name)
-        if entry:
-            val = entry.value
-        if val is not None:
-            out_buf.write_int32(len(val))
-            out_buf.write_bytes(val)
-        else:
-            out_buf.write_int32(-1)
-        if has_present_arg:
+    if permissions := query_unit_or_group.permissions:
+        superuser, available_permissions = dbv.get_permissions(role_name)
+        for permission in permissions:
             out_buf.write_int32(1)
-            present = b'\x01' if entry is not None else b'\x00'
-            out_buf.write_bytes(present)
+            out_buf.write_byte(
+                superuser or permission in available_permissions
+            )
 
 
 cdef uint64_t _count_globals(
@@ -592,6 +602,8 @@ cdef uint64_t _count_globals(
         for _, has_present_arg in query_unit.globals:
             if has_present_arg:
                 num_args += 1
+    if query_unit.permissions:
+        num_args += len(query_unit.permissions)
 
     return num_args
 

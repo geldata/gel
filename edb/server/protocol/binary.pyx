@@ -465,6 +465,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 dbv,
                 compiled,
                 bind_args,
+                role_name=self.username,
                 fe_conn=self,
                 query_req=query_req,
             )
@@ -794,6 +795,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 dbv,
                 compiled,
                 bind_args,
+                role_name=self.username,
                 fe_conn=self,
                 use_prep_stmt=use_prep_stmt,
                 query_req=query_req,

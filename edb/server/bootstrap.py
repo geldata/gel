@@ -2077,6 +2077,7 @@ def compile_sys_queries(
             name,
             superuser,
             password,
+            all_permissions,
         };
     '''
     _, sql = compile_bootstrap_script(

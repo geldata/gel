@@ -91,6 +91,7 @@ class RoleDescriptor(TypedDict):
     superuser: bool
     name: str
     password: str | None
+    all_permissions: list[str] | None
 
 
 class Tenant(ha_base.ClusterProtocol):

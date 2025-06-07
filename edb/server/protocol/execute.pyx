@@ -241,6 +241,7 @@ async def execute(
     compiled: dbview.CompiledQuery,
     bind_args: bytes,
     *,
+    role_name: Optional[str] = None,
     fe_conn: frontend.AbstractFrontendConnection = None,
     use_prep_stmt: bint = False,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
@@ -311,7 +312,13 @@ async def execute(
 
                     data_types = []
                     bound_args_buf = args_ser.recode_bind_args(
-                        dbv, compiled, bind_args, converted_args, None, data_types,
+                        dbv,
+                        role_name,
+                        compiled,
+                        bind_args,
+                        converted_args,
+                        None,
+                        data_types,
                     )
 
                     assert not (query_unit.database_config
@@ -633,6 +640,7 @@ async def execute_script(
     compiled: dbview.CompiledQuery,
     bind_args: bytes,
     *,
+    role_name: Optional[str] = None,
     query_req: Optional[rpc.CompilationRequest] = None,
     fe_conn: Optional[frontend.AbstractFrontendConnection],
 ):
@@ -711,6 +719,7 @@ async def execute_script(
 
                     bind_array = args_ser.recode_bind_args_for_script(
                         dbv,
+                        role_name,
                         compiled,
                         bind_args,
                         converted_args,
@@ -1035,6 +1044,27 @@ async def execute_json(
     tx_isolation: edbdef.TxIsolationLevel | None = None,
     query_req: Optional[rpc.CompilationRequest] = None,
 ) -> bytes:
+    if compiled.query_unit_group.json_permissions:
+        # Inject any required permissions into the globals json.
+        if globals_ is None:
+            globals_ = {}
+
+        superuser, available_permissions = (
+            dbv.get_permissions(query_req.role_name)
+            if query_req else
+            None
+        )
+
+        for permission in compiled.query_unit_group.json_permissions:
+            if permission in globals_:
+                raise RuntimeError(
+                    f"Permission cannot be passed as globals: '{permission}'"
+                )
+
+            globals_[permission] = (
+                superuser or permission in available_permissions
+            )
+
     dbv.set_globals(immutables.Map({
         "__::__edb_json_globals__": config.SettingValue(
             name="__::__edb_json_globals__",
@@ -1066,6 +1096,7 @@ async def execute_json(
             dbv,
             compiled,
             bind_args,
+            role_name=(query_req.role_name if query_req is not None else None),
             fe_conn=fe_conn,
             query_req=query_req,
         )
@@ -1089,6 +1120,7 @@ async def execute_json(
             dbv,
             compiled,
             bind_args,
+            role_name=(query_req.role_name if query_req is not None else None),
             fe_conn=fe_conn,
             tx_isolation=tx_isolation,
             query_req=query_req,

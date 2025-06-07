@@ -105,7 +105,12 @@ def compile_ir_to_sql_tree(
         if isinstance(ir_expr, irast.Statement):
             scope_tree = ir_expr.scope_tree
             query_params = list(ir_expr.params)
-            query_globals = list(ir_expr.globals)
+            query_globals = (
+                # Ensure permissions are after globals, since they are injected
+                # after other globals.
+                list(filter(lambda g: not g.is_permission, ir_expr.globals))
+                + list(filter(lambda g: g.is_permission, ir_expr.globals))
+            )
             server_param_conversion_params = (
                 ir_expr.server_param_conversion_params
             )
@@ -167,7 +172,10 @@ def compile_ir_to_sql_tree(
         if external_rels:
             ctx.external_rels = external_rels
         clauses.populate_argmap(
-            query_params, query_globals, server_param_conversion_params, ctx=ctx
+            query_params,
+            query_globals,
+            server_param_conversion_params,
+            ctx=ctx,
         )
 
         qtree = dispatch.compile(ir_expr, ctx=ctx)

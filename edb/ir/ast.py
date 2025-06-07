@@ -727,6 +727,13 @@ class Global(Param):
     and so we need to distinguish "unset" and "set to {}".
     """
 
+    is_permission: bool
+    """Whether this global comes from a Permission.
+
+    Permissions are injected directly by the server based on the connection
+    role.
+    """
+
 
 @dataclasses.dataclass(frozen=True)
 class ScriptInfo:
@@ -793,6 +800,7 @@ class Statement(Command):
     views: dict[sn.Name, s_types.Type]
     params: list[Param]
     globals: list[Global]
+    json_permissions: list[str]
     server_param_conversions: list[ServerParamConversion]
     server_param_conversion_params: list[Param]
     cardinality: qltypes.Cardinality
