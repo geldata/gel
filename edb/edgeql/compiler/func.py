@@ -502,6 +502,12 @@ def compile_FunctionCall(
                 ctx=ctx,
             )
 
+    if required_permissions := func.get_require_permission(env.schema):
+        for permission in required_permissions.objects(env.schema):
+            ctx.env.required_permissions.append(
+                str(permission.get_name(env.schema))
+            )
+
     ir_set = setgen.ensure_set(res, typehint=rtype, path_id=path_id, ctx=ctx)
     return stmt.maybe_add_view(ir_set, ctx=ctx)
 

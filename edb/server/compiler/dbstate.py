@@ -126,6 +126,7 @@ class Query(BaseQuery):
 
     globals: Optional[list[tuple[str, bool]]] = None
     permissions: Optional[list[str]] = None
+    required_permissions: Optional[list[str]] = None
     json_permissions: Optional[list[str]] = None
 
     server_param_conversions: Optional[list[ServerParamConversion]] = None
@@ -321,6 +322,7 @@ class QueryUnit:
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
     permissions: Optional[list[str]] = None
+    required_permissions: Optional[list[str]] = None
     json_permissions: Optional[list[str]] = None
 
     server_param_conversions: Optional[list[ServerParamConversion]] = None
@@ -437,6 +439,7 @@ class QueryUnitGroup:
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
     permissions: Optional[list[str]] = None
+    required_permissions: Optional[list[str]] = None
     json_permissions: Optional[list[str]] = None
 
     server_param_conversions: Optional[list[ServerParamConversion]] = None
@@ -512,6 +515,10 @@ class QueryUnitGroup:
             if self.permissions is None:
                 self.permissions = []
             self.permissions.extend(query_unit.permissions)
+        if query_unit.required_permissions is not None:
+            if self.required_permissions is None:
+                self.required_permissions = []
+            self.required_permissions.extend(query_unit.required_permissions)
         if query_unit.json_permissions is not None:
             if self.json_permissions is None:
                 self.json_permissions = []

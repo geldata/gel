@@ -620,3 +620,108 @@ class TestServerPermissions(tb.ConnectedTestCase):
             await self.con.query('''
                 DROP ROLE foo;
             ''')
+
+    async def test_server_permissions_function_required_permission_01(self):
+        # Superuser can run functions with require_permission
+
+        await self.con.query('''
+            CREATE SUPERUSER ROLE foo {
+                SET password := 'secret';
+            };
+            CREATE PERMISSION default::perm_a;
+            CREATE FUNCTION restricted() -> int64 {
+                using (1);
+                SET require_permission := default::perm_a;
+            };
+        ''')  # noqa
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
+            result = json.loads(await conn.query_json("""
+                SELECT restricted();
+            """))
+            self.assert_data_shape(result, [1])
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP FUNCTION restricted();
+                DROP PERMISSION default::perm_a;
+                DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_function_required_permission_02(self):
+        # Non-superuser can run functions with require_permission
+        # with permission
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := default::perm_a;
+            };
+            CREATE PERMISSION default::perm_a;
+            CREATE FUNCTION restricted() -> int64 {
+                using (1);
+                SET require_permission := default::perm_a;
+            };
+        ''')  # noqa
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
+            result = json.loads(await conn.query_json("""
+                SELECT restricted();
+            """))
+            self.assert_data_shape(result, [1])
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP FUNCTION restricted();
+                DROP PERMISSION default::perm_a;
+                DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_function_required_permission_03(self):
+        # Non-superuser cannot run functions with require_permission
+        # without permission
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+            };
+            CREATE PERMISSION perm_a;
+            CREATE FUNCTION restricted() -> int64 {
+                using (1);
+                SET require_permission := perm_a;
+            };
+        ''')  # noqa
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'Missing permission: default::perm_a'
+            ):
+                await conn.query("""
+                    SELECT restricted();
+                """)
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP FUNCTION restricted();
+                DROP PERMISSION default::perm_a;
+                DROP ROLE foo;
+            ''')

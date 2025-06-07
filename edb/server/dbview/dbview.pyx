@@ -1020,7 +1020,7 @@ cdef class DatabaseConnectionView:
     def tenant(self):
         return self._db._index._tenant
 
-    def get_permissions(self, role_name: str) -> tuple[Sequence[str]]:
+    def get_permissions(self, role_name: str) -> tuple[bool, Sequence[str]]:
         if role_desc := self.tenant.get_roles().get(role_name):
             return (
                 bool(role_desc.get('superuser')),
@@ -1459,6 +1459,10 @@ cdef class DatabaseConnectionView:
                 # client in an annotation, though.
                 unsafe_isolation_dangers=None,
             )
+            self.check_required_permissions(
+                query_unit_group.required_permissions,
+                query_req.role_name,
+            )
             self._check_in_tx_error(query_unit_group)
 
             if query_req.input_language is enums.InputLanguage.SQL:
@@ -1843,6 +1847,26 @@ cdef class DatabaseConnectionView:
                     errors.TransactionError,
                     "default_transaction_access_mode is set to ReadOnly",
                 )
+
+    def check_required_permissions(
+        self,
+        required_permissions: Optional[Sequence[str]],
+        role_name,
+    ) -> None:
+        if not required_permissions:
+            return
+
+        superuser, available_permissions = self.get_permissions(role_name)
+        if superuser:
+            # Superuser has all permissions
+            return
+
+        if missing_permissions := list(
+            set(required_permissions) - set(available_permissions)
+        ):
+            raise errors.DisabledCapabilityError(
+                f"Missing permission: {missing_permissions[0]}",
+            )
 
     async def reload_state_serializer(self):
         # This should only happen once when a different protocol version is

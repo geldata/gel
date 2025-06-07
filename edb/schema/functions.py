@@ -830,6 +830,13 @@ class CallableObject(
     impl_is_strict = so.SchemaField(
         bool, default=True, compcoef=0.4)
 
+    require_permission = so.SchemaField(
+        so.ObjectList[s_permissions.Permission],
+        allow_ddl_set=True,
+        default=so.DEFAULT_CONSTRUCTOR,
+        coerce=True,
+    )
+
     # Kind of a hack: indicates that when possible we should pass arguments
     # to this function as a subquery-as-an-expression. This is important for
     # functions that see use in ORDER BY clauses that need indexes.

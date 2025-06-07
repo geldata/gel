@@ -798,6 +798,7 @@ class Statement(Command):
     views: dict[sn.Name, s_types.Type]
     params: list[Param]
     globals: list[Global]
+    required_permissions: list[str]
     json_permissions: list[str]
     server_param_conversions: list[ServerParamConversion]
     server_param_conversion_params: list[Param]

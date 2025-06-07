@@ -180,6 +180,13 @@ class Environment:
     """A mapping of query globals.  Gets populated during
     the compilation."""
 
+    required_permissions: list[str]
+    """Permissions required to run the query.
+
+    Additional required permissions are checked by the compiler. This is used
+    to support objects which don't support access control, such as functions.
+    """
+
     json_permissions: list[str]
     """Permissions to inject into a globals json param.
 
@@ -342,6 +349,7 @@ class Environment:
         self.schema_view_cache = {}
         self.query_parameters = {}
         self.query_globals = {}
+        self.required_permissions = []
         self.json_permissions = []
         self.server_param_conversions = {}
         self.server_param_conversion_calls = []

@@ -541,6 +541,8 @@ CREATE TYPE schema::Function
     CREATE PROPERTY body -> str;
     CREATE REQUIRED PROPERTY language -> str;
 
+    CREATE MULTI LINK require_permission -> schema::Permission;
+
     CREATE MULTI LINK used_globals EXTENDING schema::ordered -> schema::Global;
     CREATE MULTI LINK used_permissions EXTENDING schema::ordered
         -> schema::Permission;

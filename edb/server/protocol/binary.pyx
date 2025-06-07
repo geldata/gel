@@ -1018,6 +1018,10 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             "disabled by the client",
             unsafe_isolation_dangers=query_unit_group.unsafe_isolation_dangers,
         )
+        _dbview.check_required_permissions(
+            query_unit_group.required_permissions,
+            self.username,
+        )
 
         if query_unit_group.in_type_id != in_tid:
             self.write(self.make_command_data_description_msg(compiled))

@@ -351,6 +351,7 @@ def compile_ast_fragment_to_ir(
         views={},
         params=[],
         globals=[],
+        required_permissions=[],
         json_permissions=[],
         server_param_conversions=[],
         server_param_conversion_params=[],
