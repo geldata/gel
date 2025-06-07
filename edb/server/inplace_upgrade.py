@@ -50,6 +50,7 @@ from edb.server import args as edbargs
 from edb.server import bootstrap
 from edb.server import config
 from edb.server import compiler as edbcompiler
+from edb.server.compiler import ddl as compiler_ddl
 from edb.server import defines as edbdef
 from edb.server import instdata
 from edb.server import pgcluster
@@ -104,13 +105,13 @@ def _is_stdlib_target(
     return t.get_name(schema).get_module_name() in s_schema.STD_MODULES
 
 
-def _compile_schema_fixup(
+def _compile_inheritance_schema_fixup(
     ctx: bootstrap.BootstrapContext,
+    current_block: dbops.PLBlock,
     schema: s_schema.ChainedSchema,
     keys: dict[str, Any],
-) -> str:
-    """Compile any schema-specific fixes that need to be applied."""
-    current_block = dbops.PLTopBlock()
+) -> None:
+    """Compile schema-specific fixups for added stdlib types."""
     backend_params = ctx.cluster.get_runtime_params()
 
     # Recompile functions that reference stdlib types (like
@@ -195,7 +196,20 @@ def _compile_schema_fixup(
         )
         plan.generate(current_block)
 
-    return current_block.to_string()
+
+def _compile_schema_fixup(
+    ctx: bootstrap.BootstrapContext,
+    schema: s_schema.ChainedSchema,
+    keys: dict[str, Any],
+) -> dbops.PLBlock:
+    """Compile any schema-specific fixes that need to be applied."""
+    current_block = dbops.PLTopBlock()
+    _compile_inheritance_schema_fixup(ctx, current_block, schema, keys)
+
+    # Remove pointless triggers that existed before 6.8
+    compiler_ddl.remove_pointless_triggers(schema).generate(current_block)
+
+    return current_block
 
 
 async def _upgrade_one(
@@ -300,7 +314,7 @@ async def _upgrade_one(
     ''').encode('utf-8'))
 
     # Compile the fixup script for the schema and stash it away
-    schema_fixup = _compile_schema_fixup(ctx, schema, keys)
+    schema_fixup = _compile_schema_fixup(ctx, schema, keys).to_string()
     await bootstrap._store_static_text_cache(
         ctx,
         f'schema_fixup_query',
