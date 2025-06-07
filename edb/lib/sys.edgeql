@@ -443,3 +443,6 @@ sys::approximate_count(
     USING SQL FUNCTION 'edgedb.approximate_count';
     set impl_is_strict := false;
 };
+
+
+CREATE PERMISSION sys::data_modification;

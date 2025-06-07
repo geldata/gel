@@ -1011,6 +1011,9 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         # `cacheable` flag to compile the query again.
         self._last_anon_compiled = None
 
+        role_capability = _dbview.get_role_capability(self.username)
+        allow_capabilities = allow_capabilities & role_capability
+
         _dbview.check_capabilities(
             query_unit_group.capabilities,
             allow_capabilities,
