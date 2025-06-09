@@ -1900,7 +1900,6 @@ def _compile_ql_query(
 
     globals = None
     permissions = None
-    json_permissions = None
     if ir.globals:
         globals = [
             (str(glob.global_name), glob.has_present_arg)
@@ -1912,8 +1911,6 @@ def _compile_ql_query(
             for glob in ir.globals
             if glob.is_permission
         ]
-    if ir.json_permissions:
-        json_permissions = list(ir.json_permissions)
 
     out_type_id: uuid.UUID
     if ctx.output_format is enums.OutputFormat.NONE:
@@ -1999,7 +1996,6 @@ def _compile_ql_query(
         cardinality=result_cardinality,
         globals=globals,
         permissions=permissions,
-        json_permissions=json_permissions,
         in_type_id=in_type_id.bytes,
         in_type_data=in_type_data,
         in_type_args=in_type_args,
@@ -3023,7 +3019,6 @@ def _make_query_unit(
         unit.cache_func_call = comp.cache_func_call
         unit.globals = comp.globals
         unit.permissions = comp.permissions
-        unit.json_permissions = comp.json_permissions
         unit.in_type_args = comp.in_type_args
 
         unit.sql_hash = comp.sql_hash
