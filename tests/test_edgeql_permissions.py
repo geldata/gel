@@ -120,6 +120,55 @@ class TestEdgeQLPermissions(tb.QueryTestCase):
             },
         )
 
+    async def test_edgeql_permissions_basic_05(self):
+        await self.con.execute('''
+            CREATE TYPE T {
+                create property foo -> bool;
+            };
+            INSERT T;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+            edgedb.UnsupportedFeatureError,
+            # We want to rule out it saying "functions that reference
+            # globals" instead of "globals". str on our exceptions
+            # puts ANSI control sequence garbage in, though, so we
+            # can't just match the start of the string. Match anything
+            # without spaces.
+            '(?m)^[^ ]*globals may not be used when converting/populating '
+            'data in migrations'
+        ):
+            await self.con.execute('''
+                ALTER TYPE T ALTER PROPERTY foo
+                SET REQUIRED USING (global GameAdmin)
+            ''')
+
+    async def test_edgeql_permissions_basic_06(self):
+        await self.con.execute('''
+            CREATE TYPE T;
+            INSERT T;
+        ''')
+        await self.con.execute('''
+            ALTER TYPE T {
+                CREATE REQUIRED PROPERTY foo -> bool {
+                    SET default := (global GameAdmin)
+                }
+            };
+        ''')
+
+    async def test_edgeql_permissions_basic_07(self):
+        await self.con.execute('''
+            CREATE TYPE T;
+            INSERT T;
+        ''')
+        await self.con.execute('''
+            ALTER TYPE T {
+                CREATE REQUIRED PROPERTY foo -> bool {
+                    SET default := (is_game_admin())
+                }
+            };
+        ''')
+
 
 class TestHttpPermissions(tb_http.EdgeQLTestCase):
 

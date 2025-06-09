@@ -2252,13 +2252,9 @@ def get_globals_as_json(
     # TODO: arrange to compute this once per query, in a CTE or some such?
 
     # If globals are empty, arrange to still pass in the argument but
-    # only keep permissions.
+    # don't put anything in it.
     if ctx.env.options.make_globals_empty:
-        globs = tuple(
-            g
-            for g in globs
-            if isinstance(g, s_permissions.Permission)
-        )
+        globs = ()
 
     objctx = ctx.env.options.schema_object_context
     is_constraint_like = objctx in (s_constr.Constraint, s_indexes.Index)

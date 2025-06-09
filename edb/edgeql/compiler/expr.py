@@ -639,10 +639,9 @@ def compile_GlobalExpr(
 
     # If we are compiling with globals suppressed but still allowed, always
     # treat it as being empty.
-    if (
-        isinstance(glob, s_globals.Global)
-        and ctx.env.options.make_globals_empty
-    ):
+    if ctx.env.options.make_globals_empty:
+        if isinstance(glob, s_permissions.Permission):
+            default_ql = qlast.Constant.boolean(False)
         if default_ql:
             return dispatch.compile(default_ql, ctx=ctx)
         else:
@@ -664,10 +663,7 @@ def compile_GlobalExpr(
         and not ctx.env.options.json_parameters
     ):
         param_set, present_set = setgen.get_global_param_sets(
-            glob,
-            ctx=ctx,
-            # Permissions act as implicit globals
-            is_implicit_global=isinstance(glob, s_permissions.Permission)
+            glob, ctx=ctx,
         )
     else:
         param_set, present_set = setgen.get_func_global_param_sets(
