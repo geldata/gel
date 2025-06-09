@@ -1,23 +1,17 @@
-use crate::{
-    connection::{
-        dsn::{ConnectionParameters, RawConnectionParameters, SslMode, *},
-        Credentials, PGConnectionError,
-    },
-    errors::PgServerError,
-    handshake::{
-        client::{
-            ConnectionDrive, ConnectionState, ConnectionStateSend, ConnectionStateType,
-            ConnectionStateUpdate,
-        },
-        ConnectionSslRequirement,
-    },
-    protocol::postgres::{data::SSLResponse, meta, FrontendBuilder, InitialBuilder},
+use gel_auth::postgres::client::{
+    ConnectionDrive, ConnectionState, ConnectionStateSend, ConnectionStateType,
+    ConnectionStateUpdate,
 };
-use db_proto::StructBuffer;
+use gel_auth::postgres::{ConnectionSslRequirement, Credentials};
+use gel_db_protocol::prelude::StructBuffer;
+use gel_dsn::postgres::*;
+use gel_dsn::*;
+use gel_pg_protocol::errors::PgServerError;
+use gel_pg_protocol::protocol::{FrontendBuilder, InitialBuilder, Message, SSLResponse};
 use gel_stream::ResolvedTarget;
 use pyo3::{
     buffer::PyBuffer,
-    exceptions::{PyException, PyRuntimeError},
+    exceptions::PyException,
     prelude::*,
     pymodule,
     types::{PyAnyMethods, PyByteArray, PyBytes, PyMemoryView, PyModule, PyModuleMethods},
@@ -38,26 +32,18 @@ pub enum SSLMode {
     VerifyFull,
 }
 
-impl From<PGConnectionError> for PyErr {
-    fn from(err: PGConnectionError) -> PyErr {
-        PyRuntimeError::new_err(err.to_string())
-    }
-}
+struct PyEnvVar<'a>(String, Bound<'a, PyAny>);
 
-impl From<ParseError> for PyErr {
-    fn from(err: ParseError) -> PyErr {
-        PyRuntimeError::new_err(err.to_string())
-    }
-}
-
-impl EnvVar for (String, Bound<'_, PyAny>) {
-    fn read(&self, name: &'static str) -> Option<std::borrow::Cow<str>> {
+impl EnvVar for PyEnvVar<'_> {
+    fn read(&self, name: &str) -> Result<std::borrow::Cow<str>, std::env::VarError> {
         // os.environ[name], or the default user if not
         let py_str = self.1.get_item(name).ok();
         if name == "PGUSER" && py_str.is_none() {
-            Some((&self.0).into())
+            Ok((&self.0).into())
         } else {
-            py_str.map(|s| s.to_string().into())
+            py_str
+                .map(|s| s.to_string().into())
+                .ok_or(std::env::VarError::NotPresent)
         }
     }
 }
@@ -94,7 +80,10 @@ impl PyConnectionParams {
     ) -> PyResult<Vec<(&'static str, Py<PyAny>, String, u16)>> {
         // As this might be blocking, drop the GIL while we allow for
         // resolution to take place.
-        let hosts = self.inner.hosts()?;
+        let hosts = self
+            .inner
+            .hosts()
+            .map_err(|e| PyException::new_err(e.to_string()))?;
         let hosts = py.allow_threads(|| hosts.to_addrs_sync());
         let mut errors = Vec::new();
         let mut resolved_hosts = Vec::new();
@@ -152,11 +141,9 @@ impl PyConnectionParams {
         }
 
         if resolved_hosts.is_empty() {
-            return Err(PGConnectionError::Io(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Could not resolve addresses: {errors:?}"),
-            ))
-            .into());
+            return Err(PyException::new_err(format!(
+                "Could not resolve addresses: {errors:?}"
+            )));
         }
 
         Ok(resolved_hosts)
@@ -204,7 +191,7 @@ impl PyConnectionParams {
 
         let mut params = self.inner.clone();
         params
-            .apply_env((username.clone(), environ))
+            .apply_env(PyEnvVar(username.clone(), environ))
             .map_err(|err| PyException::new_err(err.to_string()))?;
         let mut params = ConnectionParameters::try_from(params)
             .map_err(|err| PyException::new_err(err.to_string()))?;
@@ -273,7 +260,7 @@ struct PyConnectionState {
     inner: ConnectionState,
     parsed_dsn: Py<PyConnectionParams>,
     update: PyConnectionStateUpdate,
-    message_buffer: StructBuffer<meta::Message>,
+    message_buffer: StructBuffer<Message<'static>>,
 }
 
 #[pymethods]
@@ -291,7 +278,7 @@ impl PyConnectionState {
 
         let mut params = dsn.inner.clone();
         params
-            .apply_env((username.clone(), environ))
+            .apply_env(PyEnvVar(username.clone(), environ))
             .map_err(|err| PyException::new_err(err.to_string()))?;
         let mut params = ConnectionParameters::try_from(params)
             .map_err(|err| PyException::new_err(err.to_string()))?;
@@ -346,7 +333,8 @@ impl PyConnectionState {
 
     fn drive_initial(&mut self) -> PyResult<()> {
         self.inner
-            .drive(ConnectionDrive::Initial, &mut self.update)?;
+            .drive(ConnectionDrive::Initial, &mut self.update)
+            .map_err(|e| PyException::new_err(e.to_string()))?;
         Ok(())
     }
 
@@ -358,21 +346,24 @@ impl PyConnectionState {
             let response =
                 SSLResponse::new(&response).map_err(|e| PyException::new_err(e.to_string()))?;
             self.inner
-                .drive(ConnectionDrive::SslResponse(response), &mut self.update)?;
+                .drive(ConnectionDrive::SslResponse(response), &mut self.update)
+                .map_err(|e| PyException::new_err(e.to_string()))?;
         } else {
             with_python_buffer(py, buffer, |buf| {
                 self.message_buffer.push_fallible(buf, |message| {
                     self.inner
                         .drive(ConnectionDrive::Message(message), &mut self.update)
                 })
-            })?;
+            })
+            .map_err(|e| PyException::new_err(e.to_string()))?;
         }
         Ok(())
     }
 
     fn drive_ssl_ready(&mut self) -> PyResult<()> {
         self.inner
-            .drive(ConnectionDrive::SslReady, &mut self.update)?;
+            .drive(ConnectionDrive::SslReady, &mut self.update)
+            .map_err(|e| PyException::new_err(e.to_string()))?;
         Ok(())
     }
 

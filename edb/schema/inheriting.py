@@ -838,7 +838,7 @@ class CreateInheritingObject(
 
             if explicit_bases:
                 if isinstance(node, qlast.CreateObject):
-                    if isinstance(node, qlast.BasedOnTuple):
+                    if isinstance(node, qlast.BasedOn):
                         node.bases = [
                             qlast.TypeName(maintype=utils.name_to_ast_ref(b))
                             for b in explicit_bases
@@ -856,7 +856,7 @@ class CreateInheritingObject(
                     )
             else:
                 if isinstance(node, qlast.CreateObject):
-                    if isinstance(node, qlast.BasedOnTuple):
+                    if isinstance(node, qlast.BasedOn):
                         node.bases = []
         else:
             super()._apply_field_ast(schema, context, node, op)
@@ -959,6 +959,9 @@ class AlterInheritingObjectOrFragment(
         scls: so.InheritingObject,
         props: tuple[str, ...],
     ) -> None:
+        if _has_implicit_propagation(context):
+            return
+
         descendant_names = [
             d.get_name(schema) for d in scls.ordered_descendants(schema)
         ]
@@ -979,6 +982,7 @@ class AlterInheritingObjectOrFragment(
                 d_alter_cmd.add(self.clone(d_alter_cmd.classname))
 
             with ctx_stack():
+                d_alter_cmd.set_annotation('implicit_propagation', True)
                 assert isinstance(d_alter_cmd, InheritingObjectCommand)
                 schema = d_alter_cmd.inherit_fields(
                     schema, context, d_bases, fields=props, apply=False
@@ -1013,45 +1017,6 @@ class AlterInheritingObjectOrFragment(
                     None,
                     orig_value=cur_inh_fields,
                 )
-
-    # HACK: Recursively propagate the value of is_derived. Use to deal
-    # with altering computed pointers that are aliases. We should
-    # instead not have those be marked is_derived.
-    def _propagate_is_derived_flat(
-        self,
-        schema: s_schema.Schema,
-        context: sd.CommandContext,
-        val: Optional[bool],
-    ) -> None:
-        self.set_attribute_value('is_derived', val)
-        self._propagate_field_alter(schema, context, self.scls, ('is_derived',))
-
-        mcls = self.get_schema_metaclass()
-        for refdict in mcls.get_refdicts():
-            attr = refdict.attr
-            if not issubclass(refdict.ref_cls, so.InheritingObject):
-                continue
-            for obj in self.scls.get_field_value(schema, attr).objects(schema):
-                cmd = obj.init_delta_command(schema, sd.AlterObject)
-                cmd._propagate_is_derived_flat(schema, context, val)
-                self.add(cmd)
-
-    def _propagate_is_derived(
-        self,
-        schema: s_schema.Schema,
-        context: sd.CommandContext,
-        val: Optional[bool],
-    ) -> None:
-        self._propagate_is_derived_flat(schema, context, val)
-        for descendant in self.scls.ordered_descendants(schema):
-            d_root_cmd, d_alter_cmd, ctx_stack = descendant.init_delta_branch(
-                schema, context, sd.AlterObject)
-
-            with ctx_stack():
-                assert isinstance(d_alter_cmd, AlterInheritingObject)
-                d_alter_cmd._propagate_is_derived_flat(schema, context, val)
-
-            self.add(d_root_cmd)
 
 
 class AlterInheritingObject(
@@ -1184,12 +1149,16 @@ class RebaseInheritingObject(
 
         if not context.canonical:
             schema = self._recompute_inheritance(schema, context)
-            if context.enable_recursion:
+            if (
+                context.enable_recursion
+                and not _has_implicit_propagation(context)
+            ):
                 for descendant in self.scls.ordered_descendants(schema):
                     d_root_cmd, d_alter_cmd, ctx_stack = (
                         descendant.init_delta_branch(
                             schema, context, sd.AlterObject))
                     assert isinstance(d_alter_cmd, InheritingObjectCommand)
+                    d_alter_cmd.set_annotation('implicit_propagation', True)
                     with ctx_stack():
                         d_alter_cmd._fixup_inheritance_refdicts(
                             schema, context)
@@ -1370,3 +1339,13 @@ def _needs_refdict(refdict: so.RefDict, context: sd.CommandContext) -> bool:
         inheritance_refdicts is None
         or refdict.attr in inheritance_refdicts
     ) and (context.inheritance_merge is None or context.inheritance_merge)
+
+
+def _has_implicit_propagation(context: sd.CommandContext) -> bool:
+    for ctx in reversed(context.stack):
+        if (
+            isinstance(ctx.op, sd.ObjectCommand)
+            and ctx.op.get_annotation('implicit_propagation')
+        ):
+            return True
+    return False

@@ -77,15 +77,7 @@ def parse(
             result.out, productions, source, doc.filename
         ).val
     except errors.EdgeDBError as e:
-        return Result(
-            err=[
-                lsp_types.Diagnostic(
-                    range=ls_utils.span_to_lsp(source.text(), e.get_span()),
-                    severity=lsp_types.DiagnosticSeverity.Error,
-                    message=e.args[0],
-                )
-            ]
-        )
+        return Result(err=[ls_utils.error_to_lsp(e)])
     if sdl:
         assert isinstance(ast, qlast.Schema), ast
     else:
@@ -147,6 +139,10 @@ def get_completion(
             cut_index = index
             break
     tokens = source.tokens()[0:cut_index]
+
+    # special case: cursor is *on* the last ident
+    if tokens[-1].is_ident() and tokens[-1].span_end() == target:
+        return [], True
 
     # run parser and suggest next possible keywords
     suggestions, can_be_ident = rust_parser.suggest_next_keywords(

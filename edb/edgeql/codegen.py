@@ -2465,6 +2465,15 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
     def visit_DropGlobal(self, node: qlast.DropGlobal) -> None:
         self._visit_DropObject(node, 'GLOBAL')
 
+    def visit_CreatePermission(self, node: qlast.CreatePermission) -> None:
+        self._visit_CreateObject(node, 'PERMISSION')
+
+    def visit_AlterPermission(self, node: qlast.AlterPermission) -> None:
+        self._visit_AlterObject(node, 'PERMISSION')
+
+    def visit_DropPermission(self, node: qlast.DropPermission) -> None:
+        self._visit_DropObject(node, 'PERMISSION')
+
     def visit_ConfigSet(self, node: qlast.ConfigSet) -> None:
         if node.scope == qltypes.ConfigScope.GLOBAL:
             self._write_keywords('SET GLOBAL ')

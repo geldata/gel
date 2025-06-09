@@ -341,7 +341,6 @@ def call_for_client(
     client_id: int,
     pickled_schema: Optional[bytes],
     invalidation: Sequence[int],
-    client_version: int,
     msg: Optional[bytes],
     *args: Any,
 ) -> Any:
@@ -351,38 +350,21 @@ def call_for_client(
     else:
         assert args == ()
         methname, args = pickle.loads(msg)
-        match client_version:
-            case 1:
-                # compatible with pre-#8621 clients
-                (
-                    dbname,
+        (
+            dbname,
 
-                    user_schema,
-                    reflection_cache,
-                    global_schema,
-                    database_config,
-                    system_config,
+            # These are pass-thru arguments from Gel server, they are already
+            # utilized in the compiler server and forwarded to us through
+            # "pickled_schema" argument, so we don't need them here.
+            evicted_dbs,
+            user_schema,
+            reflection_cache,
+            global_schema,
+            database_config,
+            system_config,
 
-                    *compile_args,
-                ) = args
-
-            case _:
-                (
-                    dbname,
-
-                    # These are pass-thru arguments from Gel server, they are
-                    # already utilized in the compiler server and forwarded to
-                    # us through "pickled_schema" argument, so we don't need
-                    # them here
-                    evicted_dbs,
-                    user_schema,
-                    reflection_cache,
-                    global_schema,
-                    database_config,
-                    system_config,
-
-                    *compile_args,
-                ) = args
+            *compile_args,
+        ) = args
 
     if methname == "compile":
         meth = compile

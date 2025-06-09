@@ -1616,7 +1616,8 @@ def process_set_as_membership_expr(
     assert isinstance(expr, irast.OperatorCall)
 
     with ctx.new() as newctx:
-        left_arg, right_arg = (a.expr for a in expr.args.values())
+        left, right = (a for a in expr.args.values())
+        left_arg, right_arg = left.expr, right.expr
 
         newctx.expr_exposed = False
         left_out = dispatch.compile(left_arg, ctx=newctx)
@@ -1698,6 +1699,14 @@ def process_set_as_membership_expr(
                 empty_val = negated
                 set_expr = pgast.CoalesceExpr(args=[
                     set_expr, pgast.BooleanConstant(val=empty_val)])
+
+            # Filter out situations where the LHS is a SQL NULL,
+            # since those will report false instead of {}.
+            if left.cardinality.can_be_zero() and left_out.nullable:
+                ctx.rel.where_clause = astutils.extend_binop(
+                    ctx.rel.where_clause,
+                    pgast.NullTest(arg=left_out, negated=True),
+                )
 
             pathctx.put_path_value_var_if_not_exists(
                 ctx.rel, ir_set.path_id, set_expr
@@ -3091,12 +3100,13 @@ def process_set_as_call(
         # Operator call
         return process_set_as_oper_expr(ir_set, ctx=ctx)
 
+    assert irutils.is_set_instance(ir_set, irast.FunctionCall)
+
     if any(
         arg.param_typemod is qltypes.TypeModifier.SetOfType
         for key, arg in ir_set.expr.args.items()
     ):
         # Call to an aggregate function.
-        assert irutils.is_set_instance(ir_set, irast.FunctionCall)
         return process_set_as_agg_expr(ir_set, ctx=ctx)
 
     # Regular function call.
@@ -3641,7 +3651,7 @@ def _should_unwrap_polymorphic_return_array(
 
 
 def _compile_call_args(
-    ir_set: irast.Set,
+    ir_set: irast.SetE[irast.Call],
     *,
     skip: Collection[int] = (),
     no_subquery_args: bool = False,
@@ -3652,7 +3662,6 @@ def _compile_call_args(
     """
 
     expr = ir_set.expr
-    assert isinstance(expr, irast.Call)
 
     args = []
 
@@ -3736,10 +3745,9 @@ def _compile_call_args(
 
 
 def _compile_inlined_call_args(
-    ir_set: irast.Set, *, ctx: context.CompilerContextLevel
+    ir_set: irast.SetE[irast.FunctionCall], *, ctx: context.CompilerContextLevel
 ) -> None:
     expr = ir_set.expr
-    assert isinstance(expr, irast.FunctionCall)
     assert expr.body is not None
 
     if irutils.contains_dml(expr.body):
@@ -3850,14 +3858,13 @@ def _compile_inlined_call_args(
 
 
 def process_set_as_func_enumerate(
-    ir_set: irast.Set, *, ctx: context.CompilerContextLevel
+    ir_set: irast.SetE[irast.Call], *, ctx: context.CompilerContextLevel
 ) -> SetRVars:
     expr = ir_set.expr
-    assert isinstance(expr, irast.FunctionCall)
 
     inner_func_set = irutils.unwrap_set(expr.args[0].expr)
+    assert irutils.is_set_instance(inner_func_set, irast.FunctionCall)
     inner_func = inner_func_set.expr
-    assert isinstance(inner_func, irast.FunctionCall)
 
     with ctx.subrel() as newctx:
         with newctx.new() as newctx2:
@@ -3880,10 +3887,9 @@ def process_set_as_func_enumerate(
 
 
 def process_set_as_func_expr(
-    ir_set: irast.Set, *, ctx: context.CompilerContextLevel
+    ir_set: irast.SetE[irast.FunctionCall], *, ctx: context.CompilerContextLevel
 ) -> SetRVars:
     expr = ir_set.expr
-    assert isinstance(expr, irast.FunctionCall)
 
     with ctx.subrel() as newctx:
         newctx.expr_exposed = False

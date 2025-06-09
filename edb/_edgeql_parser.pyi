@@ -59,6 +59,8 @@ class CSTNode:
 class Production:
     id: int
     args: list[CSTNode]
+    start: int | None
+    end: int | None
 
 class Terminal:
     text: str
@@ -90,6 +92,7 @@ class OpaqueToken:
 
     def span_start(self) -> int: ...
     def span_end(self) -> int: ...
+    def is_ident(self) -> bool: ...
 
 def tokenize(s: str) -> ParserResult: ...
 def unpickle_token(bytes: bytes) -> OpaqueToken: ...

@@ -27,8 +27,17 @@ from edb.edgeql import ast as qlast
 from edb.edgeql import tokenizer as qltokenizer
 from edb.edgeql import compiler as qlcompiler
 
+from edb.schema import name as sn
+from edb.schema import modules as s_modules
+from edb.schema import objtypes as s_objtypes
+from edb.schema import types as s_types
+from edb.schema import scalars as s_scalars
+from edb.schema import schema as s_schema
+from edb.schema import objects as s_objects
+
 from . import parsing as ls_parsing
 from . import server as ls_server
+from . import schema as ls_schema
 
 
 def get_completion(
@@ -39,15 +48,23 @@ def get_completion(
     target = qltokenizer.line_col_to_source_point(
         document.source, params.position.line, params.position.character
     )
+    ls.show_message_log(f'get_completion at position {target.offset}')
 
     # get syntactic suggestions
     items, can_be_ident = ls_parsing.get_completion(document, target.offset, ls)
 
+    ls.show_message_log(f'can_be_ident = {can_be_ident}')
+
     if can_be_ident:
         ql_ast = ls_parsing.parse_and_recover(document)
+        ls.show_message_log(f'ql_ast = {ql_ast}')
         if isinstance(ql_ast, list):
             items = (
                 _get_completion_in_ql(ls, document, ql_ast, target.offset)
+            ) + items
+        elif isinstance(ql_ast, qlast.Schema):
+            items = (
+                _get_completion_in_schema(ls, document, ql_ast, target.offset)
             ) + items
 
     return lsp_types.CompletionList(is_incomplete=False, items=items)
@@ -73,7 +90,7 @@ def _get_completion_in_ql(
     # compile the stmt that now contains the qlast.Cursor,
     # which should halt compilation, when it gets to the cursor
     try:
-        diagnostics, _ir_stmts = ls_server.compile(ls, document, [ql_stmt])
+        diagnostics, _ir_stmts = ls_server.compile_ql(ls, document, [ql_stmt])
     except qlcompiler.expr.IdentCompletionException as e:
         return [
             lsp_types.CompletionItem(
@@ -88,6 +105,67 @@ def _get_completion_in_ql(
             return []
 
     raise AssertionError('qlast.Cursor did not raise IdentCompletionException')
+
+
+def _get_completion_in_schema(
+    ls: ls_server.GelLanguageServer,
+    document: pygls.workspace.TextDocument,
+    ql_schema: qlast.Schema,
+    target: int,
+) -> list[lsp_types.CompletionItem]:
+    node_path = edb_span.find_by_source_position(ql_schema, target)
+    ls.show_message_log(f"node_path = {node_path}")
+    if not node_path:
+        return []
+
+    schema = ls.state.schema
+    if not schema:
+        return []
+
+    items: list[lsp_types.CompletionItem] = []
+
+    # when in a module, suggest objects from that module
+    module = ls_schema.get_module_context(node_path[1:])
+    ls.show_message_log(f"module = {module}")
+    if module:
+        objects: s_schema.SchemaIterator[s_objects.Object] = schema.get_objects(
+            included_modules=(sn.UnqualName(module),),
+        )
+        for obj in objects:
+            if isinstance(obj, s_types.Type) and obj.get_from_alias(schema):
+                continue
+
+            kind: lsp_types.CompletionItemKind
+            if isinstance(obj, s_objtypes.ObjectType):
+                kind = lsp_types.CompletionItemKind.Struct
+            elif isinstance(obj, s_scalars.ScalarType):
+                kind = lsp_types.CompletionItemKind.Value
+            else:
+                continue
+
+            label = obj.get_name(schema).name
+
+            items.append(
+                lsp_types.CompletionItem(
+                    label=label,
+                    kind=kind,
+                    # detail=str(obj),
+                )
+            )
+
+    # always suggest modules
+    objects = schema.get_objects(type=s_modules.Module)
+    for obj in objects:
+        name = obj.get_displayname(schema)
+        items.append(
+            lsp_types.CompletionItem(
+                label=name,
+                insert_text=name + '::',
+                kind=lsp_types.CompletionItemKind.Module,
+            )
+        )
+
+    return items
 
 
 # Replaces an expr node in AST that has a certain position within the source.

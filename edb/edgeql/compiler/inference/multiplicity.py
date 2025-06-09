@@ -628,8 +628,7 @@ def _infer_for_multiplicity(
     itmult = infer_multiplicity(itset, scope_tree=scope_tree, ctx=ctx)
 
     if itmult != DUPLICATE:
-        new_iter = itset.path_id if not ctx.distinct_iterator else None
-        ctx = ctx._replace(distinct_iterator=new_iter)
+        ctx = ctx._replace(distinct_iterator=itset.path_id)
     result_mult = infer_multiplicity(ir.result, scope_tree=scope_tree, ctx=ctx)
 
     if isinstance(ir.result.expr, irast.InsertStmt):
@@ -639,7 +638,11 @@ def _infer_for_multiplicity(
         return DUPLICATE
     else:
         if result_mult.disjoint_union:
-            return result_mult
+            # If we know the union was disjoint wrt this FOR, then our
+            # set is unique (or empty maybe), but we have to clear
+            # disjoint_union since we it was only with respect to this
+            # FOR, so we can't have it leak.
+            return dataclasses.replace(result_mult, disjoint_union=False)
         else:
             return DUPLICATE
 

@@ -1920,6 +1920,27 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             {"Captain Miller", ""}
         )
 
+    async def test_sql_query_copy_06(self):
+        out = io.BytesIO()
+        await self.scon.copy_from_query(
+            """
+            SELECT title, pages FROM public."Book" ORDER BY pages
+            """,
+            output=out,
+            format="csv",
+            delimiter="\t",
+        )
+        out = io.StringIO(out.getvalue().decode("utf-8"))
+        res = list(csv.reader(out, delimiter="\t"))
+
+        self.assertEqual(
+            res,
+            [
+                ['Chronicles of Narnia', '206'],
+                ['Hunger Games', '374'],
+            ]
+        )
+
     async def test_sql_query_error_01(self):
         with self.assertRaisesRegex(
             asyncpg.UndefinedFunctionError,

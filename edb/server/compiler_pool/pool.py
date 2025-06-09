@@ -113,9 +113,9 @@ HEALTH_CHECK_TIMEOUT: float = float(
 ADAPTIVE_SCALE_UP_WAIT_TIME: float = 3.0
 ADAPTIVE_SCALE_DOWN_WAIT_TIME: float = 60.0
 WORKER_PKG: str = __name__.rpartition('.')[0] + '.'
-CALL_FOR_CLIENT_VERSION = 2
 DEFAULT_CLIENT: str = 'default'
 HIGH_RSS_GRACE_PERIOD: tuple[int, int] = (20 * 3600, 30 * 3600)
+CURRENT_COMPILER_PROTOCOL = 2
 
 
 logger = logging.getLogger("edb.server")
@@ -1534,19 +1534,16 @@ class SimpleAdaptivePool(BaseLocalPool[Worker, InitArgs]):
 class RemoteWorker(BaseWorker):
     _con: amsg.HubConnection
     _secret: bytes
-    _server_version: int
 
     def __init__(
         self,
         con: amsg.HubConnection,
         secret: bytes,
         *args: Any,
-        server_version: int,
     ) -> None:
         super().__init__(*args)
         self._con = con
         self._secret = secret
-        self._server_version = server_version
 
     def close(self) -> None:
         if self._closed:
@@ -1563,21 +1560,6 @@ class RemoteWorker(BaseWorker):
         digest = hmac.digest(self._secret, msg, "sha256")
         return await self._con.request(digest + msg)
 
-    def prepare_evict_db(self, keep: int) -> list[str]:
-        match self._server_version:
-            case 1:
-                return []
-            case _:
-                return super().prepare_evict_db(keep)
-
-    def evict_db(self, name: str) -> None:
-        match self._server_version:
-            case 1:
-                # shouldn't happen, but just in case
-                raise RuntimeError("evict_db is not supported by this server")
-            case _:
-                super().evict_db(name)
-
 
 @srvargs.CompilerPoolMode.Remote.assign_implementation
 class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
@@ -1588,7 +1570,6 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
     _semaphore: asyncio.BoundedSemaphore
     _pool_size: int
     _secret: bytes
-    _server_version: int
 
     def __init__(
         self,
@@ -1610,7 +1591,6 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
                 "is not set"
             )
         self._secret = secret.encode()
-        self._server_version = CALL_FOR_CLIENT_VERSION
 
     async def start(self, *, retry: bool = False) -> None:
         if self._worker is None:
@@ -1657,14 +1637,7 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
         std_args = (
             self._std_schema, self._refl_schema, self._schema_class_layout
         )
-        client_args: tuple[Any, ...]
-        match self._server_version:
-            case 1:
-                # compatible with pre-#8621 servers
-                client_args = (immutables.Map(), self._backend_runtime_params)
-            case _:
-                client_args = (self._backend_runtime_params,)
-
+        client_args = (self._backend_runtime_params,)
         return init_args, (
             pickle.dumps(std_args, -1),
             pickle.dumps(client_args, -1),
@@ -1682,47 +1655,20 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
     ) -> None:
         if self._worker is None:
             return
-        # Note: `version` is worker not `self._server_version`; `version` is
-        # `_template_proc_version` in FixedPool and is not used here.
-        con = amsg.HubConnection(transport, protocol, self._loop, version)
+        compiler_protocol = CURRENT_COMPILER_PROTOCOL
         try:
-            while True:
-                init_args, init_args_pickled = self._get_init_args()
-                worker = RemoteWorker(
-                    con,
-                    self._secret,
-                    *init_args,
-                    server_version=self._server_version,
-                )
-
-                try:
-                    await worker.call(
-                        '__init_server__',
-                        defines.EDGEDB_CATALOG_VERSION,
-                        init_args_pickled,
-                    )
-                except ValueError:
-                    # Here we depend on a ValueError in v1 server trying to
-                    # unpack `client_args` into `(dbs, backend_runtime_params)`
-                    # while we attempt to send only `(backend_runtime_params,)`
-                    # (both supported in v2 server) first, in order to detect
-                    # the server version. We cannot use the method_name prefix
-                    # hack for detection because v1 server will hang until it's
-                    # called with exactly `__init_server__` with no prefix.
-                    if self._server_version > 1:
-                        self._server_version -= 1
-                        lru.clear_method_cache(self._make_cached_init_args)
-                        logger.info(
-                            f"falling back to compiler server protocol "
-                            f"version {self._server_version}"
-                        )
-                    else:
-                        raise state.IncompatibleClient(
-                            "the compiler server's version is incompatible"
-                        )
-                else:
-                    break
-
+            init_args, init_args_pickled = self._get_init_args()
+            worker = RemoteWorker(
+                amsg.HubConnection(transport, protocol, self._loop, version),
+                self._secret,
+                *init_args,
+            )
+            await worker.call(
+                '__init_server__',
+                compiler_protocol,
+                defines.EDGEDB_CATALOG_VERSION,
+                init_args_pickled,
+            )
         except state.IncompatibleClient as ex:
             transport.abort()
             if self._worker is not None:
@@ -1849,13 +1795,6 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
             else:
                 # Case 2: no state sync needed, release the lock immediately.
                 self._sync_lock.release()
-
-        if self._server_version == 1:
-            # Old server doesn't support the `evicted_dbs` param
-            method_name, dbname, evicted_dbs, *rem = preargs
-            assert evicted_dbs == []
-            preargs = (method_name, dbname, *rem)
-
         return preargs, callback, fini
 
     def get_debug_info(self) -> dict[str, Any]:
@@ -1863,7 +1802,6 @@ class RemotePool(AbstractPool[RemoteWorker, InitArgs, RemoteInitArgsPickle]):
             address="{}:{}".format(*self._pool_addr),
             size=self._semaphore._bound_value,  # type: ignore
             free=self._semaphore._value,  # type: ignore
-            server_version=self._server_version,
         )
 
     def get_size_hint(self) -> int:
@@ -2319,7 +2257,6 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
             client_id,
             pickled_schema,
             worker.get_invalidation(),
-            CALL_FOR_CLIENT_VERSION,
             None,  # forwarded msg is only used in remote compiler server
             method_name,
             dbname,

@@ -117,6 +117,7 @@ CREATE TYPE sys::Role EXTENDING
     # Backwards compatibility.
     CREATE PROPERTY is_superuser := .superuser;
     CREATE PROPERTY password -> std::str;
+    CREATE MULTI PROPERTY permissions -> std::str;
 };
 
 
@@ -386,6 +387,31 @@ sys::_describe_roles_as_ddl() -> str
 
 
 CREATE FUNCTION
+sys::_get_all_role_memberships(r: uuid) -> array<uuid>
+{
+    # The results won't change within a single statement.
+    SET volatility := 'Stable';
+    SET internal := true;
+    USING SQL FUNCTION 'edgedb._all_role_memberships';
+    set impl_is_strict := false;
+};
+
+
+ALTER TYPE sys::Role {
+    CREATE MULTI PROPERTY all_permissions := distinct({
+        .permissions,
+        (
+            with self_id := .id
+            select detached sys::Role
+            filter .id in array_unpack(
+                sys::_get_all_role_memberships(self_id)
+            )
+        ).permissions,
+    });
+};
+
+
+CREATE FUNCTION
 sys::__pg_and(a: OPTIONAL std::bool, b: OPTIONAL std::bool) -> std::bool
 {
     SET volatility := 'Immutable';
@@ -404,4 +430,16 @@ sys::__pg_or(a: OPTIONAL std::bool, b: OPTIONAL std::bool) -> std::bool
     USING SQL $$
         SELECT a OR b;
     $$;
+};
+
+
+CREATE FUNCTION
+sys::approximate_count(
+    type: schema::ObjectType,
+    NAMED ONLY ignore_subtypes: std::bool=false,
+) -> int64
+{
+    SET volatility := 'Stable';
+    USING SQL FUNCTION 'edgedb.approximate_count';
+    set impl_is_strict := false;
 };

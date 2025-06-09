@@ -13,31 +13,22 @@ python_extension = ["pyo3/serde"]
 optimizer = []
 
 [dependencies]
-gel-auth.workspace = true
+gel-auth = { workspace = true, features = ["postgres"] }
 gel-stream = { workspace = true, features = ["client"] }
-pyo3.workspace = true
-tokio.workspace = true
-tracing.workspace = true
-db_proto.workspace = true
+gel-pg-protocol.workspace = true
+gel-db-protocol.workspace = true
+gel-dsn = { workspace = true, features = ["postgres"] }
 
-futures = "0"
-thiserror = "2"
-openssl = { version = "0.10.70", features = ["v111"] }
+pyo3.workspace = true
+tracing.workspace = true
+
 paste = "1"
-base64 = "0.22"
-rand = "0"
-hexdump = "0"
-url = "2"
-serde = "1"
-serde_derive = "1"
-percent-encoding = "2"
-bytemuck = { version = "1", features = ["derive"] }
 derive_more = { version = "2", features = ["full"] }
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
-captive_postgres.workspace = true
-gel-stream = { workspace = true, features = ["rustls"] }
+gel-pg-captive.workspace = true
+gel-stream = { workspace = true, features = ["rustls", "client", "tokio"] }
 
 scopeguard = "1"
 pretty_assertions = "1.2.0"
@@ -46,6 +37,5 @@ rstest = "0"
 clap = "4"
 clap_derive = "4"
 libc = "0.2.158"
-hex-literal = "0.4.1"
 
 [lib]

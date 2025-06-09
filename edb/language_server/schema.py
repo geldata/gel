@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-from typing import Optional
+from typing import Optional, cast, Iterable
 import pathlib
 import os
 
@@ -39,6 +39,7 @@ from . import is_schema_file
 from . import project
 from . import utils as ls_utils
 from . import server as ls_server
+from edb.language_server import Result
 
 
 def get_schema(
@@ -61,16 +62,13 @@ def get_schema(
     return schema, diagnostics, None
 
 
-def update_schema_doc(
+def store_schema_doc(
     ls: ls_server.GelLanguageServer, doc: pygls.workspace.TextDocument
 ) -> list[lsp_types.Diagnostic]:
-    schema_dir, err_msg = _determine_schema_dir(ls)
-    if not schema_dir:
-        return [
-            ls_utils.new_diagnostic_at_the_top(
-                err_msg or "cannot find schema-dir"
-            )
-        ]
+    res = _ensure_schema_docs_loaded(ls)
+    if e := res.err:
+        return [ls_utils.new_diagnostic_at_the_top(e)]
+    schema_dir = cast(pathlib.Path, res.ok)
 
     # dont update if doc is not in schema_dir
     if schema_dir not in pathlib.Path(doc.path).parents:
@@ -79,9 +77,6 @@ def update_schema_doc(
                 f"this schema file is not in schema-dir ({schema_dir})"
             )
         ]
-
-    if len(ls.state.schema_docs) == 0:
-        _load_schema_docs(ls, schema_dir)
 
     existing = next(
         (i for i, d in enumerate(ls.state.schema_docs) if d.path == doc.path),
@@ -99,7 +94,23 @@ def update_schema_doc(
 
         ls.state.schema_docs.append(doc)
 
+    # clear AST cache
+    ls.state.schema_sdl = None
+
     return []
+
+
+def _ensure_schema_docs_loaded(
+    ls: ls_server.GelLanguageServer,
+) -> Result[pathlib.Path, str]:
+    schema_dir, err_msg = _determine_schema_dir(ls)
+    if not schema_dir:
+        return Result(err=err_msg or "cannot find schema-dir")
+
+    if len(ls.state.schema_docs) == 0:
+        if err_mgs := _load_schema_docs(ls, schema_dir):
+            return Result(err=err_mgs)
+    return Result(ok=schema_dir)
 
 
 def _get_workspace_path(
@@ -136,6 +147,9 @@ def _load_schema_docs(
         doc = ls.workspace.get_text_document(f"file://{schema_dir / entry}")
         ls.state.schema_docs.append(doc)
 
+    # clear AST cache
+    ls.state.schema_sdl = None
+
     return None
 
 
@@ -153,7 +167,7 @@ def _determine_schema_dir(
         # no manifest: don't infer any schema dir
         return None, err_msg
 
-    if manifest.project:
+    if manifest.project and manifest.project.schema_dir:
         schema_dir = project_dir / manifest.project.schema_dir
     else:
         schema_dir = project_dir / "dbschema"
@@ -177,12 +191,15 @@ def _load_manifest(
         return None, str(e)
 
 
-def _compile_schema(
+def _parse_schema(
     ls: ls_server.GelLanguageServer,
-) -> tuple[s_schema.Schema | None, ls_utils.DiagnosticsSet]:
-    # parse
-    sdl = qlast.Schema(declarations=[])
+) -> ls_utils.DiagnosticsSet:
     diagnostics = ls_utils.DiagnosticsSet()
+
+    if ls.state.schema_sdl:
+        return ls_utils.DiagnosticsSet()
+
+    sdl = qlast.Schema(declarations=[])
     for doc in ls.state.schema_docs:
         res = ls_parsing.parse(doc)
         if d := res.err:
@@ -194,15 +211,28 @@ def _compile_schema(
             else:
                 # TODO: complain that .esdl contains non-SDL syntax
                 pass
+    ls.state.schema_sdl = sdl
+    return diagnostics
+
+
+def _compile_schema(
+    ls: ls_server.GelLanguageServer,
+) -> tuple[s_schema.Schema | None, ls_utils.DiagnosticsSet]:
+    diagnostics = _parse_schema(ls)
+    assert ls.state.schema_sdl
 
     std_schema = _load_std_schema(ls.state)
 
     # apply SDL to std schema
     ls.show_message_log("compiling schema ..")
     try:
-        schema, _warnings = s_ddl.apply_sdl(sdl, base_schema=std_schema)
+        schema, _warnings = s_ddl.apply_sdl(
+            ls.state.schema_sdl, base_schema=std_schema
+        )
+        ls.state.schema = schema
         ls.show_message_log(".. done")
     except errors.EdgeDBError as error:
+        ls.show_message_log(".. error")
         schema = None
 
         # find doc
@@ -218,9 +248,9 @@ def _compile_schema(
             do = ls.state.schema_docs[0]
 
         # convert error
-        diagnostics.by_doc[do].append(ls_utils.error_to_lsp(error))
+        diagnostics.append(do, ls_utils.error_to_lsp(error))
 
-    ls.state.schema = schema
+    ls.state.schema_diagnostics = diagnostics
     return (schema, diagnostics)
 
 
@@ -229,10 +259,21 @@ def _load_std_schema(state: ls_server.State) -> s_schema.Schema:
         return state.std_schema
 
     schema: s_schema.Schema = s_schema.EMPTY_SCHEMA
-    for modname in [*s_schema.STD_SOURCES, *s_schema.TESTMODE_SOURCES]:
+    for modname in s_schema.STD_SOURCES:
         schema = s_std.load_std_module(schema, modname)
-    schema, _ = s_std.make_schema_version(schema)
-    schema, _ = s_std.make_global_schema_version(schema)
 
     state.std_schema = schema
     return state.std_schema
+
+
+# Given a path from a node to qlast.Schema root, collects the names of
+# encapsulating modules.
+def get_module_context(path: Iterable[qlast.Base]) -> str | None:
+    mod_names = []
+    for node in path:
+        if isinstance(node, qlast.ModuleDeclaration):
+            mod_names.append(node.name.name)
+    if not mod_names:
+        return None
+    mod_names.reverse()
+    return '::'.join(mod_names)

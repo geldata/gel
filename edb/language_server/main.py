@@ -62,6 +62,7 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
 
     # construct server
     ls = ls_server.GelLanguageServer(config)
+    debug_init(ls)
 
     # register hooks
     @ls.feature(
@@ -73,11 +74,15 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DID_OPEN)
     def text_document_did_open(params: lsp_types.DidOpenTextDocumentParams):
-        ls_server.document_updated(ls, params.text_document.uri)
+        ls_server.document_updated(ls, params.text_document.uri, compile=True)
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DID_CHANGE)
     def text_document_did_change(params: lsp_types.DidChangeTextDocumentParams):
-        ls_server.document_updated(ls, params.text_document.uri)
+        ls_server.document_updated(ls, params.text_document.uri, compile=False)
+
+    @ls.feature(lsp_types.TEXT_DOCUMENT_DID_SAVE)
+    def text_document_did_save(params: lsp_types.DidChangeTextDocumentParams):
+        ls_server.document_updated(ls, params.text_document.uri, compile=True)
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DEFINITION)
     def text_document_definition(
@@ -93,3 +98,18 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
         return ls_completion.get_completion(ls, params)
 
     return ls
+
+
+# Last gel-ls instance initialed. Use ONLY for debugging purposes.
+__gel_ls: ls_server.GelLanguageServer | None = None
+
+
+def debug_init(ls: ls_server.GelLanguageServer):
+    global __gel_ls
+    __gel_ls = ls
+
+
+def send_log_message(message: str):
+    global __gel_ls
+    assert __gel_ls, 'GelLanguageServer has not be started yet'
+    __gel_ls.show_message_log(message)

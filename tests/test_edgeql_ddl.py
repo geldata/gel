@@ -29,6 +29,8 @@ import edgedb
 from edb.testbase import server as tb
 from edb.tools import test
 
+from typing import cast
+
 
 class TestEdgeQLDDL(tb.DDLTestCase):
 
@@ -3595,16 +3597,90 @@ class TestEdgeQLDDL(tb.DDLTestCase):
         await self.assert_query_result("select X { foo }", [{"foo": "test"}])
 
     async def test_edgeql_ddl_link_property_01(self):
-        with self.assertRaisesRegex(
-                edgedb.InvalidPropertyDefinitionError,
-                r"link properties cannot be required"):
-            await self.con.execute("""
-                CREATE TYPE TestLinkPropType_01 {
-                    CREATE LINK test_linkprop_link_01 -> std::Object {
-                        CREATE REQUIRED PROPERTY test_link_prop_01
-                            -> std::int64;
-                    };
+        await self.con.execute("""
+            CREATE TYPE Tgt;
+            INSERT Tgt;
+            CREATE TYPE TestLinkPropType_01 {
+                CREATE LINK test_linkprop_link_01 -> std::Object {
+                    CREATE REQUIRED PROPERTY test_link_prop_01
+                        -> std::int64;
                 };
+            };
+        """)
+        await self.con.execute("""
+            insert TestLinkPropType_01 {
+                test_linkprop_link_01 := (select Tgt limit 1) {
+                    @test_link_prop_01 := 12
+                }
+            }
+        """)
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            r"required property 'test_link_prop_01'",
+        ):
+            await self.con.execute("""
+                insert TestLinkPropType_01 {
+                    test_linkprop_link_01 := (select Tgt limit 1) {
+                        @test_link_prop_01 := (select 12 filter false)
+                    }
+                }
+            """)
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            r"required property 'test_link_prop_01'",
+        ):
+            # TODO?: It would be better if we rejected this statically...
+            await self.con.execute("""
+                insert TestLinkPropType_01 {
+                    test_linkprop_link_01 := (select Tgt limit 1)
+                }
+            """)
+
+        await self.con.execute("""
+            alter type TestLinkPropType_01
+            alter link test_linkprop_link_01
+            alter property test_link_prop_01
+            set optional
+        """)
+
+        await self.con.execute("""
+            insert TestLinkPropType_01 {
+                test_linkprop_link_01 := (select Tgt limit 1)
+            }
+        """)
+
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            r"required property 'test_link_prop_01'",
+        ):
+            await self.con.execute("""
+                alter type TestLinkPropType_01
+                alter link test_linkprop_link_01
+                alter property test_link_prop_01
+                set required
+            """)
+
+        await self.con.execute("""
+            delete TestLinkPropType_01
+        """)
+
+        await self.con.execute("""
+            alter type TestLinkPropType_01
+            alter link test_linkprop_link_01
+            alter property test_link_prop_01
+            set required
+        """)
+
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            r"required property 'test_link_prop_01'",
+        ):
+            await self.con.execute("""
+                insert TestLinkPropType_01 {
+                    test_linkprop_link_01 := (select Tgt limit 1) {
+                        @test_link_prop_01 := (select 12 filter false)
+                    }
+                }
             """)
 
     async def test_edgeql_ddl_link_property_02(self):
@@ -3622,23 +3698,6 @@ class TestEdgeQLDDL(tb.DDLTestCase):
     async def test_edgeql_ddl_link_property_03(self):
         with self.assertRaisesRegex(
                 edgedb.InvalidPropertyDefinitionError,
-                r"link properties cannot be required"):
-            await self.con.execute("""
-                CREATE TYPE TestLinkPropType_03 {
-                    CREATE LINK test_linkprop_link_03 -> std::Object;
-                };
-
-                ALTER TYPE TestLinkPropType_03 {
-                    ALTER LINK test_linkprop_link_03 {
-                        CREATE REQUIRED PROPERTY test_link_prop_03
-                            -> std::int64;
-                    };
-                };
-            """)
-
-    async def test_edgeql_ddl_link_property_04(self):
-        with self.assertRaisesRegex(
-                edgedb.InvalidPropertyDefinitionError,
                 r"multi properties aren't supported for links"):
             await self.con.execute("""
                 CREATE TYPE TestLinkPropType_04 {
@@ -3652,27 +3711,7 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 };
             """)
 
-    async def test_edgeql_ddl_link_property_05(self):
-        with self.assertRaisesRegex(
-                edgedb.InvalidPropertyDefinitionError,
-                r"link properties cannot be required"):
-            await self.con.execute("""
-                CREATE TYPE TestLinkPropType_05 {
-                    CREATE LINK test_linkprop_link_05 -> std::Object {
-                        CREATE PROPERTY test_link_prop_05 -> std::int64;
-                    };
-                };
-
-                ALTER TYPE TestLinkPropType_05 {
-                    ALTER LINK test_linkprop_link_05 {
-                        ALTER PROPERTY test_link_prop_05 {
-                            SET REQUIRED;
-                        };
-                    };
-                };
-            """)
-
-    async def test_edgeql_ddl_link_property_06(self):
+    async def test_edgeql_ddl_link_property_04(self):
         with self.assertRaisesRegex(
                 edgedb.InvalidPropertyDefinitionError,
                 r"multi properties aren't supported for links"):
@@ -7741,6 +7780,1265 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             [{'name': "test", 'name2': "!", 'name3': "!"}],
         )
 
+    async def _check_ddl_global_type_changes(self, ddls_and_expected_types):
+        """Check newly created schema types after a series of ddl stmts."""
+        existing_types = await self.con.query("select schema::Type.id")
+
+        for ddl, expected_types in ddls_and_expected_types:
+            await self.con.execute(f'''
+                {ddl};
+            ''')
+
+            await self.assert_query_result(
+                f'''
+                    select schema::Type {{
+                        name,
+                        from_alias,
+                        type_name := (.__type__.name),
+                    }}
+                    filter not contains(<array<uuid>>$existing_types, .id)
+                    order by .name
+                ''',
+                expected_types,
+                variables={'existing_types': existing_types}
+            )
+
+    async def test_edgeql_ddl_global_type_changes_01(self):
+        # Create computed global
+        # Delete computed global
+
+        # int64
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := 1',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ScalarType',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_02(self):
+        # Create computed global
+        # Delete computed global
+
+        # array<int64>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := [1]',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_03(self):
+        # Create computed global
+        # Delete computed global
+
+        # tuple<int64>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_04(self):
+        # Create computed global
+        # Delete computed global
+
+        # tuple<f:int64>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := (f := 1)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<f:std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_05(self):
+        # Create computed global
+        # Delete computed global
+
+        # array<tuple<int64>>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_06(self):
+        # Create computed global
+        # Delete computed global
+
+        # array<tuple<f:array<int64>>>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := [(f := [1])]',
+                [
+                    {
+                        'name': 'array<tuple<f:array<std::int64>>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<f:array<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_07(self):
+        # Create computed global
+        # Delete computed global
+
+        # tuple<array<int64>>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := ([1],)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<array<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_08(self):
+        # Create non-computed global
+        # Delete non-computed global
+
+        # int64
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: int64',
+                []
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_09(self):
+        # Create non-computed global
+        # Delete non-computed global
+
+        # array<int64>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: array<int64>',
+                []
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_10(self):
+        # Create non-computed global
+        # Delete non-computed global
+
+        # tuple<int64>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: tuple<int64>',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_11(self):
+        # Create non-computed global
+        # Delete non-computed global
+
+        # tuple<f:int64>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: tuple<f:int64>',
+                [
+                    {
+                        'name': 'tuple<f:std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_12(self):
+        # Create non-computed global
+        # Delete non-computed global
+
+        # array<tuple<int64>>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: array<tuple<int64>>',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_13(self):
+        # Create non-computed global
+        # Delete non-computed global
+
+        # array<tuple<f:array<int64>>>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: array<tuple<f:array<int64>>>',
+                [
+                    {
+                        'name': 'array<tuple<f:array<std::int64>>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'tuple<f:array<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_14(self):
+        # Create non-computed global
+        # Delete non-computed global
+
+        # tuple<array<int64>>
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: tuple<array<int64>>',
+                [
+                    {
+                        'name': 'tuple<array<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_15(self):
+        # Create computed global
+        # Create non-computed global
+        # Delete computed global
+        # Delete non-computed global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create global bar: tuple<tuple<int64>>',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop global foo',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global bar', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_16(self):
+        # Create computed global
+        # Create non-computed global
+        # Delete non-computed global
+        # Delete computed global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create global bar: tuple<tuple<int64>>',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop global bar',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_17(self):
+        # Create non-computed global
+        # Create computed global
+        # Delete computed global
+        # Delete non-computed global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: tuple<tuple<int64>>',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create global bar := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop global bar',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_18(self):
+        # Create non-computed global
+        # Create computed global
+        # Delete non-computed global
+        # Delete computed global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: tuple<tuple<int64>>',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create global bar := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop global foo',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global bar', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_19(self):
+        # Create computed global
+        # Create reference to type
+        # Delete computed global
+        # Delete reference to type
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := ((1,),)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create function bar() -> array<tuple<int64>> using([(1,)])',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop global foo',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop function bar()', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_20(self):
+        # Create reference to type
+        # Create computed global
+        # Delete reference to type
+        # Delete computed global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create function foo() -> array<tuple<int64>> using([(1,)])',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create global bar := ((1,),)',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop function foo()',
+                [
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global bar', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_21(self):
+        # Create non-computed global
+        # Create reference to type
+        # Delete non-computed global
+        # Delete reference to type
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: tuple<tuple<int64>>',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create function bar() -> array<tuple<int64>> using([(1,)])',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop global foo',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop function bar()', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_22(self):
+        # Create reference to type
+        # Create non-computed global
+        # Delete reference to type
+        # Delete non-computed global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create function foo() -> array<tuple<int64>> using([(1,)])',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create global bar: tuple<tuple<int64>>',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop function foo()',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global bar', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_23(self):
+        # Create computed global
+        # Alter expr, same type
+        # Delete global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'alter global foo {using ((2,))}',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_24(self):
+        # Create computed global
+        # Alter expr, different type
+        # Delete global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'alter global foo {using (("a",))}',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::str>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_25(self):
+        # Create computed global
+        # Alter to non-computed, same type
+        # Delete global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                '''
+                alter global foo {
+                    reset expression;
+                    set type tuple<std::int64> reset to default;
+                }
+                ''',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_26(self):
+        # Create computed global
+        # Alter to non-computed, different type
+        # Delete global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                '''
+                alter global foo {
+                    reset expression;
+                    set type tuple<std::str> reset to default;
+                }
+                ''',
+                [
+                    {
+                        'name': 'tuple<std::str>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_27(self):
+        # Create non-computed global
+        # Alter target type
+        # Delete global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: tuple<std::int64>',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                '''
+                alter global foo {
+                    set type tuple<std::str> reset to default;
+                }
+                ''',
+                [
+                    {
+                        'name': 'tuple<std::str>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_28(self):
+        # Create non-computed global
+        # Alter to computed, same type
+        # Delete global
+
+        # This works for now, but breaks while fixing globals tidying up.
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: tuple<std::int64>',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                '''
+                alter global foo {
+                    reset type;
+                    using ((1,))
+                }
+                ''',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_global_type_changes_29(self):
+        # Create non-computed global
+        # Alter to computed, different type
+        # Delete global
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create global foo: tuple<std::int64>',
+                [
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                '''
+                alter global foo {
+                    reset type;
+                    using (("a",))
+                }
+                ''',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::str>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop global foo', []),
+        ])
+
+    async def test_edgeql_ddl_permissions_01(self):
+        await self.con.execute(r"""
+            create permission foo;
+        """)
+        await self.assert_query_result(
+            'select global foo;',
+            [False],
+        )
+        await self.con.execute(r"""
+            drop permission foo;
+        """)
+        async with self.assertRaisesRegexTx(
+            edgedb.QueryError,
+            r"global 'default::foo' does not exist",
+        ):
+            await self.con.execute('''
+                select global foo;
+            ''')
+
+    async def test_edgeql_ddl_permissions_02(self):
+        await self.con.execute(r"""
+            create permission foo {
+                create annotation title := 'A';
+            };
+        """)
+        await self.assert_query_result(
+            '''
+            select schema::Permission {
+                name,
+                annotations: {n := .name, v := @value},
+            };''',
+            [
+                {
+                    'name': 'default::foo',
+                    'annotations': tb.bag([
+                        {'n': 'std::title', 'v': 'A'},
+                    ]),
+                }
+            ],
+        )
+        await self.con.execute(r"""
+            alter permission foo {
+                create annotation description := 'B';
+            };
+        """)
+        await self.assert_query_result(
+            '''
+            select schema::Permission {
+                name,
+                annotations: {n := .name, v := @value},
+            };''',
+            [
+                {
+                    'name': 'default::foo',
+                    'annotations': tb.bag([
+                        {'n': 'std::title', 'v': 'A'},
+                        {'n': 'std::description', 'v': 'B'},
+                    ]),
+                }
+            ],
+        )
+        await self.con.execute(r"""
+            alter permission foo {
+                alter annotation description := 'C';
+            };
+        """)
+        await self.assert_query_result(
+            '''
+            select schema::Permission {
+                name,
+                annotations: {n := .name, v := @value},
+            };''',
+            [
+                {
+                    'name': 'default::foo',
+                    'annotations': tb.bag([
+                        {'n': 'std::title', 'v': 'A'},
+                        {'n': 'std::description', 'v': 'C'},
+                    ]),
+                }
+            ],
+        )
+        await self.con.execute(r"""
+            alter permission foo {
+                drop annotation description;
+            };
+        """)
+        await self.assert_query_result(
+            '''
+            select schema::Permission {
+                name,
+                annotations: {n := .name, v := @value},
+            };''',
+            [
+                {
+                    'name': 'default::foo',
+                    'annotations': tb.bag([
+                        {'n': 'std::title', 'v': 'A'},
+                    ]),
+                }
+            ],
+        )
+
+    async def test_edgeql_ddl_permissions_03(self):
+        await self.con.execute(r"""
+            create permission foo;
+        """)
+        await self.assert_query_result(
+            'select global foo;',
+            [False],
+        )
+        await self.con.execute(r"""
+            alter permission foo {
+                rename to bar;
+            };
+        """)
+        await self.assert_query_result(
+            'select global bar;',
+            [False],
+        )
+        async with self.assertRaisesRegexTx(
+            edgedb.QueryError,
+            r"global 'default::foo' does not exist",
+        ):
+            await self.con.execute('''
+                select global foo;
+            ''')
+
     async def test_edgeql_ddl_property_computable_01(self):
         await self.con.execute('''\
             CREATE TYPE CompProp;
@@ -9709,6 +11007,370 @@ type default::Foo {
         finally:
             await con.aclose()
 
+    async def test_edgeql_ddl_role_06(self):
+        if not self.has_create_role:
+            self.skipTest("create role is not supported by the backend")
+
+        await self.con.execute(r"""
+            CREATE ROLE foo_06;
+        """)
+
+        await self.assert_query_result(
+            r"""
+                SELECT sys::Role {
+                    name,
+                    permissions,
+                } FILTER .name = 'foo_06'
+            """,
+            [{
+                'name': 'foo_06',
+                'permissions': [],
+            }]
+        )
+
+    async def test_edgeql_ddl_role_07(self):
+        if not self.has_create_role:
+            self.skipTest("create role is not supported by the backend")
+
+        await self.con.execute(r"""
+            CREATE ROLE foo_07 {
+                SET permissions := default::foo
+            };
+        """)
+
+        await self.assert_query_result(
+            r"""
+                SELECT sys::Role {
+                    name,
+                    permissions,
+                } FILTER .name = 'foo_07'
+            """,
+            [{
+                'name': 'foo_07',
+                'permissions': ['default::foo'],
+            }]
+        )
+
+    async def test_edgeql_ddl_role_08(self):
+        if not self.has_create_role:
+            self.skipTest("create role is not supported by the backend")
+
+        await self.con.execute(r"""
+            CREATE ROLE foo_08 {
+                SET permissions := {
+                    default::foo, custom::bar, sys::data_modification
+                };
+            };
+        """)
+
+        await self.assert_query_result(
+            r"""
+                SELECT sys::Role {
+                    name,
+                    permissions,
+                } FILTER .name = 'foo_08'
+            """,
+            [{
+                'name': 'foo_08',
+                # permissions get alphabetically sorted
+                'permissions': [
+                    'custom::bar',
+                    'default::foo',
+                    'sys::data_modification',
+                ],
+            }]
+        )
+
+    async def test_edgeql_ddl_role_09(self):
+        if not self.has_create_role:
+            self.skipTest("create role is not supported by the backend")
+
+        await self.con.execute(r"""
+            CREATE ROLE foo_09;
+        """)
+        await self.con.execute(r"""
+            ALTER ROLE foo_09 {
+                SET permissions := default::foo
+            };
+        """)
+
+        await self.assert_query_result(
+            r"""
+                SELECT sys::Role {
+                    name,
+                    permissions,
+                } FILTER .name = 'foo_09'
+            """,
+            [{
+                'name': 'foo_09',
+                'permissions': ['default::foo'],
+            }]
+        )
+
+    async def test_edgeql_ddl_role_10(self):
+        if not self.has_create_role:
+            self.skipTest("create role is not supported by the backend")
+
+        await self.con.execute(r"""
+            CREATE ROLE foo_10;
+        """)
+        await self.con.execute(r"""
+            ALTER ROLE foo_10 {
+                SET permissions := {
+                    default::foo, custom::bar, sys::data_modification
+                };
+            };
+        """)
+
+        await self.assert_query_result(
+            r"""
+                SELECT sys::Role {
+                    name,
+                    permissions,
+                } FILTER .name = 'foo_10'
+            """,
+            [{
+                'name': 'foo_10',
+                # permissions get alphabetically sorted
+                'permissions': [
+                    'custom::bar',
+                    'default::foo',
+                    'sys::data_modification',
+                ],
+            }]
+        )
+
+    async def test_edgeql_ddl_role_permission_inheritance_01(self):
+        # Check different inheritance trees produce correct permissions
+        if not self.has_create_role:
+            self.skipTest("create role is not supported by the backend")
+
+        await self.con.execute(r"""
+            CREATE ROLE perm_inh_01_a {
+                SET permissions := default::foo
+            };
+            CREATE ROLE perm_inh_01_b {
+                SET permissions := default::foo
+            };
+            CREATE ROLE perm_inh_01_c {
+                SET permissions := { custom::bar, custom::baz }
+            };
+            CREATE ROLE perm_inh_01_d EXTENDING perm_inh_01_a;
+            CREATE ROLE perm_inh_01_e EXTENDING perm_inh_01_a, perm_inh_01_b;
+            CREATE ROLE perm_inh_01_f EXTENDING perm_inh_01_a, perm_inh_01_b {
+                SET permissions := default::foo
+            };
+            CREATE ROLE perm_inh_01_g EXTENDING perm_inh_01_a, perm_inh_01_c;
+            CREATE ROLE perm_inh_01_h EXTENDING perm_inh_01_a {
+                SET permissions := sys::data_modification
+            };
+            CREATE ROLE perm_inh_01_i EXTENDING perm_inh_01_h, perm_inh_01_c;
+        """)
+
+        await self.assert_query_result(
+            r"""
+                SELECT sys::Role {
+                    name,
+                    permissions,
+                    all_permissions,
+                }
+                FILTER contains(.name, 'perm_inh_01')
+                ORDER BY .name
+            """,
+            [
+                {
+                    'name': 'perm_inh_01_a',
+                    'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_01_b',
+                    'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_01_c',
+                    'permissions': ['custom::bar', 'custom::baz'],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                        'custom::baz',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_01_d',
+                    'permissions': [],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_01_e',
+                    'permissions': [],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_01_f',
+                    'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_01_g',
+                    'permissions': [],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                        'custom::baz',
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_01_h',
+                    'permissions': ['sys::data_modification'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                        'sys::data_modification',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_01_i',
+                    'permissions': [],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                        'custom::baz',
+                        'default::foo',
+                        'sys::data_modification',
+                    ]),
+                },
+            ]
+        )
+
+    async def test_edgeql_ddl_role_permission_inheritance_02(self):
+        # Check altering inheritance trees produces correct permissions
+        if not self.has_create_role:
+            self.skipTest("create role is not supported by the backend")
+
+        await self.con.execute(r"""
+            CREATE ROLE perm_inh_02_a {
+                SET permissions := default::foo
+            };
+            CREATE ROLE perm_inh_02_b {
+                SET permissions := custom::bar
+            };
+            CREATE ROLE perm_inh_02_c extending perm_inh_02_a {
+                SET permissions := custom::baz
+            };
+        """)
+
+        query = r"""
+            SELECT sys::Role {
+                name,
+                permissions,
+                all_permissions,
+            }
+            FILTER contains(.name, 'perm_inh_02')
+            ORDER BY .name
+        """
+
+        await self.assert_query_result(
+            query,
+            [
+                {
+                    'name': 'perm_inh_02_a',
+                    'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_b',
+                    'permissions': ['custom::bar'],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_c',
+                    'permissions': ['custom::baz'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                        'custom::baz',
+                    ]),
+                },
+            ],
+        )
+
+        await self.con.execute(r"""
+            ALTER ROLE perm_inh_02_c {
+                DROP EXTENDING perm_inh_02_a
+            };
+        """)
+        await self.assert_query_result(
+            query,
+            [
+                {
+                    'name': 'perm_inh_02_a',
+                    'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_b',
+                    'permissions': ['custom::bar'],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_c',
+                    'permissions': ['custom::baz'],
+                    'all_permissions': tb.bag([
+                        'custom::baz',
+                    ]),
+                },
+            ],
+        )
+
+        await self.con.execute(r"""
+            ALTER ROLE perm_inh_02_c {
+                EXTENDING perm_inh_02_b
+            };
+        """)
+        await self.assert_query_result(
+            query,
+            [
+                {
+                    'name': 'perm_inh_02_a',
+                    'permissions': ['default::foo'],
+                    'all_permissions': tb.bag([
+                        'default::foo',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_b',
+                    'permissions': ['custom::bar'],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                    ]),
+                },
+                {
+                    'name': 'perm_inh_02_c',
+                    'permissions': ['custom::baz'],
+                    'all_permissions': tb.bag([
+                        'custom::bar',
+                        'custom::baz',
+                    ]),
+                },
+            ],
+        )
+
     async def test_edgeql_ddl_describe_roles(self):
         if not self.has_create_role:
             self.skipTest("create role is not supported by the backend")
@@ -9719,20 +11381,87 @@ type default::Foo {
             CREATE SUPERUSER ROLE child1 EXTENDING base1;
             CREATE SUPERUSER ROLE child2 EXTENDING `base 2`;
             CREATE SUPERUSER ROLE child3 EXTENDING base1, child2 {
-                SET password := 'test'
+                SET password := 'test_a';
+            };
+            CREATE ROLE subuser1;
+            CREATE ROLE subuser2 EXTENDING subuser1 {
+                SET password := 'test_b';
+            };
+            CREATE ROLE subuser3 EXTENDING subuser1 {
+                SET permissions := default::foo;
+            };
+            CREATE ROLE subuser4 EXTENDING subuser1 {
+                SET password := 'test_c';
+                SET permissions := {
+                    default::foo, custom::bar, sys::data_modification
+                };
+            };
+            CREATE ROLE subuser5 EXTENDING subuser3;
+            CREATE ROLE subuser6 EXTENDING subuser3 {
+                SET permissions := custom::bar;
             };
         """)
-        roles = next(iter(await self.con.query("DESCRIBE ROLES")))
-        base1 = roles.index('CREATE SUPERUSER ROLE `base1`;')
-        base2 = roles.index('CREATE SUPERUSER ROLE `base 2`;')
-        child1 = roles.index('CREATE SUPERUSER ROLE `child1`')
-        child2 = roles.index('CREATE SUPERUSER ROLE `child2`')
-        child3 = roles.index('CREATE SUPERUSER ROLE `child3`')
+        roles = cast(str, next(iter(await self.con.query("DESCRIBE ROLES"))))
+
+        def _look_for(pattern: str) -> int:
+            if match := re.search(pattern, roles):
+                return match.span()[0]
+            return -1
+
+        base1 = _look_for(r"CREATE SUPERUSER ROLE `base1`;")
+        base2 = _look_for(r"CREATE SUPERUSER ROLE `base 2`;")
+        child1 = _look_for(
+            r"CREATE SUPERUSER ROLE `child1` EXTENDING `base1`;"
+        )
+        child2 = _look_for(
+            r"CREATE SUPERUSER ROLE `child2` EXTENDING `base 2`;"
+        )
+        child3 = _look_for(
+            r"CREATE SUPERUSER ROLE `child3` EXTENDING `base1`, `child2` { "
+                r"SET password_hash := 'SCRAM-SHA-256\$4096:.{114}'; "
+            r"};"
+        )
+        subuser1 = _look_for(
+            r"CREATE ROLE `subuser1`;"
+        )
+        subuser2 = _look_for(
+            r"CREATE ROLE `subuser2` EXTENDING `subuser1` { "
+                r"SET password_hash := 'SCRAM-SHA-256\$4096:.{114}'; "
+            r"};"
+        )
+        subuser3 = _look_for(
+            r"CREATE ROLE `subuser3` EXTENDING `subuser1` { "
+                r"SET permissions := { default::foo }; "
+            r"};"
+        )
+        subuser4 = _look_for(
+            r"CREATE ROLE `subuser4` EXTENDING `subuser1` { "
+                r"SET password_hash := 'SCRAM-SHA-256\$4096:.{114}'; "
+                # permissions get alphabetically sorted
+                r"SET permissions := { "
+                    r"custom::bar, "
+                    r"default::foo, "
+                    r"sys::data_modification "
+                r"}; "
+            r"};"
+        )
+        subuser5 = _look_for(
+            r"CREATE ROLE `subuser5` EXTENDING `subuser3`;"
+        )
+        subuser6 = _look_for(
+            r"CREATE ROLE `subuser6` EXTENDING `subuser3` { "
+                r"SET permissions := { custom::bar }; "
+            r"};"
+        )
         self.assertGreater(child1, base1, roles)
         self.assertGreater(child2, base2, roles)
         self.assertGreater(child3, child2, roles)
         self.assertGreater(child3, base1, roles)
-        self.assertIn("SET password_hash := 'SCRAM-SHA-256$4096:", roles)
+        self.assertGreater(subuser2, subuser1, roles)
+        self.assertGreater(subuser3, subuser1, roles)
+        self.assertGreater(subuser4, subuser1, roles)
+        self.assertGreater(subuser5, subuser3, roles)
+        self.assertGreater(subuser6, subuser3, roles)
 
     async def test_edgeql_ddl_describe_schema(self):
         # This is ensuring that describing std does not cause errors.
@@ -10540,6 +12269,575 @@ type default::Foo {
                 alter alias MyAlias {using (global One)};
                 """
             )
+
+    async def _check_ddl_alias_type_changes(self, ddls_and_expected_types):
+        """Check newly created schema types after a series of ddl stmts."""
+        existing_types = await self.con.query("select schema::Type.id")
+
+        for ddl, expected_types in ddls_and_expected_types:
+            await self.con.execute(f'''
+                {ddl};
+            ''')
+
+            await self.assert_query_result(
+                f'''
+                    select schema::Type {{
+                        name,
+                        from_alias,
+                        type_name := (.__type__.name),
+                    }}
+                    filter not contains(<array<uuid>>$existing_types, .id)
+                    order by .name
+                ''',
+                expected_types,
+                variables={'existing_types': existing_types}
+            )
+
+    async def test_edgeql_ddl_alias_type_changes_01(self):
+        # Create alias
+        # Delete alias
+
+        # int64
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := 1',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ScalarType',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_02(self):
+        # Create alias
+        # Delete alias
+
+        # array<int64>
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := [1]',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_03(self):
+        # Create alias
+        # Delete alias
+
+        # tuple<int64>
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_04(self):
+        # Create alias
+        # Delete alias
+
+        # tuple<f:int64>
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := (f := 1)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<f:std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_05(self):
+        # Create alias
+        # Delete alias
+
+        # array<tuple<int64>>
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_06(self):
+        # Create alias
+        # Delete alias
+
+        # array<tuple<f:array<int64>>>
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := [(f := [1])]',
+                [
+                    {
+                        'name': 'array<tuple<f:array<std::int64>>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<f:array<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_07(self):
+        # Create alias
+        # Delete alias
+
+        # tuple<array<int64>>
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := ([1],)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<array<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_08(self):
+        # Create alias 1
+        # Create alias 2
+        # Delete alias 1
+        # Delete alias 2
+
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create alias bar := ((1,),)',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop alias foo',
+                [
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias bar', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_09(self):
+        # Create alias 1
+        # Create alias 2
+        # Delete alias 2
+        # Delete alias 1
+
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := [(1,)]',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create alias bar := ((1,),)',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop alias bar',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::ArrayExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_10(self):
+        # Create alias
+        # Create reference to type
+        # Delete alias
+        # Delete reference to type
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create alias foo := ((1,),)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create function bar() -> array<tuple<int64>> using([(1,)])',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop alias foo',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop function bar()', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_11(self):
+        # Create reference to type
+        # Create alias
+        # Delete reference to type
+        # Delete alias
+
+        await self._check_ddl_global_type_changes([
+            (
+                'create function foo() -> array<tuple<int64>> using([(1,)])',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'create alias bar := ((1,),)',
+                [
+                    {
+                        'name': 'array<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Array',
+                    },
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'drop function foo()',
+                [
+                    {
+                        'name': 'default::bar',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                    {
+                        'name': 'tuple<tuple<std::int64>>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias bar', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_12(self):
+        # Create alias
+        # Alter expr, same type
+        # Delete alias
+
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'alter alias foo {using ((2,))}',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
+
+    async def test_edgeql_ddl_alias_type_changes_13(self):
+        # Create alias
+        # Alter expr, different type
+        # Delete alias
+
+        await self._check_ddl_alias_type_changes([
+            (
+                'create alias foo := (1,)',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::int64>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            (
+                'alter alias foo {using (("a",))}',
+                [
+                    {
+                        'name': 'default::foo',
+                        'from_alias': True,
+                        'type_name': 'schema::TupleExprAlias',
+                    },
+                    {
+                        'name': 'tuple<std::str>',
+                        'from_alias': False,
+                        'type_name': 'schema::Tuple',
+                    },
+                ]
+            ),
+            ('drop alias foo', []),
+        ])
 
     async def test_edgeql_ddl_inheritance_alter_01(self):
         await self.con.execute(r"""
@@ -17538,16 +19836,6 @@ DDLStatement);
             'select Object',
             [{}],
         )
-
-    async def test_edgeql_ddl_schema_repair(self):
-        await self.con.execute('''
-            create type Tgt {
-                create property lol := count(Object)
-            }
-        ''')
-        await self.con.execute('''
-            administer schema_repair()
-        ''')
 
     async def test_edgeql_ddl_alias_and_create_set_required(self):
         await self.con.execute(r"""

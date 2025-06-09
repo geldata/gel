@@ -704,7 +704,7 @@ def prepare_repair_patch(
     res = edbcompiler.repair_schema(compilerctx)
     if not res:
         return ""
-    sql, _, _ = res
+    sql, _ = res
 
     return sql.decode('utf-8')
 
@@ -908,22 +908,23 @@ def prepare_patch(
 
         metadata_user_schema = reflschema
 
-    elif kind.startswith('edgeql+user_ext'):
+    elif kind.startswith('edgeql+user') or kind.startswith('edgeql+user_ext'):
         assert '+schema' not in kind
 
         # There isn't anything to do on the system database for
-        # userext updates.
+        # user updates.
         if user_schema is None:
             return (update,), (), dict(is_user_update=True)
 
-        # Only run a userext update if the extension we are trying to
-        # update is installed.
-        extension_name = kind.split('|')[-1]
-        extension = user_schema.get_global(
-            s_exts.Extension, extension_name, default=None)
+        if kind.startswith('edgeql+user_ext'):
+            # Only run a userext update if the extension we are trying to
+            # update is installed.
+            extension_name = kind.split('|')[-1]
+            extension = user_schema.get_global(
+                s_exts.Extension, extension_name, default=None)
 
-        if not extension:
-            return (update,), (), {}
+            if not extension:
+                return (update,), (), {}
 
         assert global_schema
         cschema = s_schema.ChainedSchema(
@@ -983,7 +984,9 @@ def prepare_patch(
         # in the public schema and to discover the new introspection
         # query.
         reflection = s_refl.generate_structure(
-            reflschema, make_funcs=False,
+            reflschema,
+            make_funcs=False,
+            patch_level=patches.get_patch_level(num),
         )
 
         reflschema, plan, tplan = _process_delta_params(

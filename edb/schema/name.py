@@ -231,6 +231,14 @@ def shortname_from_fullname(fullname: Name) -> Name:
         return fullname
 
 
+unmangle_re_1 = re.compile(r'\|+')
+
+
+def recursively_unmangle_shortname(name: str) -> str:
+    # Any number of pipes becomes a single ::.
+    return unmangle_re_1.sub('::', name)
+
+
 @functools.lru_cache(4096)
 def quals_from_fullname(fullname: QualName) -> list[str]:
     _, _, mangled_quals = fullname.name.partition('@')

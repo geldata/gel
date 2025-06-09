@@ -417,6 +417,8 @@ class FromFunction(Nonterm):
 
 
 class ProcessFunctionBlockMixin:
+    span: parsing.Span
+
     def _process_function_body(self, block, *, optional_using: bool=False):
         props: dict[str, typing.Any] = {}
 
@@ -483,6 +485,7 @@ class ProcessFunctionBlockMixin:
                 from_function=from_function,
                 from_expr=from_expr,
                 code=code,
+                span=self.span,
             )
 
             props['nativecode'] = nativecode

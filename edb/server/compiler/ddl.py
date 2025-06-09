@@ -1318,7 +1318,7 @@ def produce_feature_used_metrics(
 
 def repair_schema(
     ctx: compiler.CompileContext,
-) -> Optional[tuple[bytes, s_schema.Schema, Any]]:
+) -> Optional[tuple[bytes, Any]]:
     """Repair inconsistencies in the schema caused by bug fixes
 
     Works by comparing the actual current schema to the schema we get
@@ -1386,7 +1386,7 @@ def repair_schema(
         debug.header('Repair Delta Script')
         debug.dump_code(sql, lexer='sql')
 
-    return sql, reloaded_schema, config_ops
+    return sql, config_ops
 
 
 def administer_repair_schema(
@@ -1404,15 +1404,77 @@ def administer_repair_schema(
     res = repair_schema(ctx)
     if not res:
         return dbstate.MaintenanceQuery(sql=b"")
-    sql, new_schema, config_ops = res
-
-    current_tx.update_schema(new_schema)
+    sql, config_ops = res
 
     return dbstate.DDLQuery(
         sql=sql,
         user_schema=current_tx.get_user_schema_if_updated(),
         global_schema=current_tx.get_global_schema_if_updated(),
         config_ops=config_ops,
+        feature_used_metrics=None,
+    )
+
+
+def remove_pointless_triggers(
+    schema: s_schema.Schema,
+) -> pg_dbops.CommandGroup:
+    from edb.pgsql import schemamech
+
+    constraints = schema.get_objects(
+        exclude_stdlib=True,
+        type=s_constraints.Constraint,
+    )
+
+    cmds = pg_dbops.CommandGroup()
+
+    for constraint in constraints:
+        if not pg_delta.ConstraintCommand.constraint_is_effective(
+            schema, constraint
+        ):
+            continue
+
+        subject = constraint.get_subject(schema)
+        bconstr = schemamech.compile_constraint(
+            subject, constraint, schema, None
+        )
+
+        # Q: we could also use update_trigger_ops, which would
+        # generate more useless code but avoid the need for an extra
+        # code path?
+        cmds.add_command(bconstr.fixup_trigger_ops())
+
+    return cmds
+
+
+def administer_remove_pointless_triggers(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    if ql.expr.args or ql.expr.kwargs:
+        raise errors.QueryError(
+            '_remove_pointless_triggers() does not take arguments',
+            span=ql.expr.span,
+        )
+    if not ctx.is_testmode():
+        raise errors.QueryError(
+            '_remove_pointless_triggers() is for testmode only',
+            span=ql.expr.span,
+        )
+
+    current_tx = ctx.state.current_tx()
+    schema = current_tx.get_schema(ctx.compiler_state.std_schema)
+
+    block = pg_dbops.PLTopBlock()
+    remove_pointless_triggers(schema).generate(block)
+    src = block.to_string()
+
+    if debug.flags.delta_execute_ddl or debug.flags.delta_execute:
+        debug.header('remove_pointless_triggers')
+        debug.dump_code(src, lexer='sql')
+
+    return dbstate.DDLQuery(
+        sql=src.encode('utf-8'),
+        user_schema=ctx.state.current_tx().get_user_schema(),
         feature_used_metrics=None,
     )
 

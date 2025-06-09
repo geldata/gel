@@ -1,4 +1,4 @@
-use edgeql_parser::tokenizer::{Token, Tokenizer};
+use edgeql_parser::tokenizer::{Kind, Token, Tokenizer};
 use once_cell::sync::OnceCell;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -59,6 +59,10 @@ impl OpaqueToken {
 
     fn span_end(&self) -> u64 {
         self.inner.span.end
+    }
+
+    fn is_ident(&self) -> bool {
+        matches!(self.inner.kind, Kind::Ident)
     }
 }
 

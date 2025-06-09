@@ -201,6 +201,18 @@ class Anchor(Expr):
 
 class IRAnchor(Anchor):
     has_dml: bool = False
+    # Whether, when the anchor is referenced, to move the entire
+    # referenced scope tree of the anchor to wherever it is referenced.
+    #
+    # This is important when the anchor is being used to substitute an
+    # expression in, being used only once, and we want it to behave
+    # like it was written at the point it is being substituted.
+    #
+    # (Sometimes we have anchors that get used repeatedly and which we
+    # *want* to have be bound above, basically. I'd like to get rid of
+    # all of those uses, though.)
+    # (And also the scope tree.)
+    move_scope: bool = False
 
 
 class SpecialAnchor(Anchor):
@@ -278,12 +290,14 @@ class Constant(BaseConstant):
     value: str
 
     @classmethod
-    def string(cls, value: str) -> Constant:
-        return Constant(kind=ConstantKind.STRING, value=value)
+    def string(cls, value: str, span: Span | None = None) -> Constant:
+        return Constant(kind=ConstantKind.STRING, value=value, span=span)
 
     @classmethod
-    def boolean(cls, b: bool) -> Constant:
-        return Constant(kind=ConstantKind.BOOLEAN, value=str(b).lower())
+    def boolean(cls, b: bool, span: Span | None = None) -> Constant:
+        return Constant(
+            kind=ConstantKind.BOOLEAN, value=str(b).lower(), span=span
+        )
 
     @classmethod
     def integer(cls, i: int) -> Constant:
@@ -466,12 +480,6 @@ SessionCommand = (
     | SessionResetAliasDecl
     | SessionResetModule
     | SessionResetAllAliases
-)
-SessionCommand_tuple = (
-    SessionSetAliasDecl,
-    SessionResetAliasDecl,
-    SessionResetModule,
-    SessionResetAllAliases
 )
 
 
@@ -1158,6 +1166,23 @@ class SetGlobalType(SetField):
     reset_value: bool = False
 
 
+class PermissionCommand(ObjectDDL):
+
+    __abstract_node__ = True
+
+
+class CreatePermission(CreateObject, PermissionCommand):
+    pass
+
+
+class AlterPermission(AlterObject, PermissionCommand):
+    pass
+
+
+class DropPermission(DropObject, PermissionCommand):
+    pass
+
+
 class LinkCommand(ObjectDDL):
 
     __abstract_node__ = True
@@ -1635,24 +1660,9 @@ BasedOn = (
     | CreateRole
     | CreateConcretePointer
 )
-# TODO: this is required because mypy does support `instanceof(x, A | B)`
-BasedOnTuple = (
-    AlterAddInherit,
-    AlterDropInherit,
-    CreateExtendingObject,
-    CreateRole,
-    CreateConcretePointer,
-)
 
 CallableObjectCommand = (
     CreateConstraint | CreateIndex | FunctionCommand | OperatorCommand
-)
-# TODO: this is required because mypy does support `instanceof(x, A | B)`
-CallableObjectCommandTuple = (
-    CreateConstraint,
-    CreateIndex,
-    FunctionCommand,
-    OperatorCommand,
 )
 
 # A node that can have a WITH block

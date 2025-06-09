@@ -491,6 +491,21 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ],
         )
 
+    async def test_edgeql_globals_18(self):
+        await self.con.execute('''
+            CREATE GLOBAL foo := ([(f := 1)]);
+        ''')
+        await self.con.execute('''
+            CREATE GLOBAL bar -> array<tuple<f: int64>>;
+        ''')
+        await self.con.execute('''
+            SET GLOBAL bar := ([(f := 1)]);
+        ''')
+        await self.assert_query_result(
+            'SELECT GLOBAL default::bar',
+            [[{'f': 1}]],
+        )
+
     async def test_edgeql_globals_client_01(self):
         con = edgedb.create_async_client(
             **self.get_connect_args(database=self.con.dbname)

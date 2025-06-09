@@ -782,6 +782,12 @@ class TestExpressions(tb.QueryTestCase):
         )
 
         await self.assert_query_result(
+            r'''SELECT <optional int64>$0 IN <int64>{};''',
+            [],
+            variables=(None,),
+        )
+
+        await self.assert_query_result(
             r'''SELECT {1, 2, 3} IN <int64>{};''',
             [False, False, False],
         )

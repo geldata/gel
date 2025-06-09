@@ -490,6 +490,10 @@ class AlterGlobal(
                 ):
                     self.set_attribute_value('cardinality', None)
 
+            if not old_expr and (old_target := self.scls.get_target(schema)):
+                if op := old_target.as_type_delete_if_unused(schema):
+                    self.add_caused(op)
+
         return super()._alter_begin(schema, context)
 
 
@@ -619,3 +623,17 @@ class DeleteGlobal(
     GlobalCommand,
 ):
     astnode = qlast.DropGlobal
+
+    def _delete_begin(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+    ) -> s_schema.Schema:
+        schema = super()._delete_begin(schema, context)
+        scls = self.scls
+        if not self._is_computable(scls, schema):
+            target = scls.get_target(schema)
+            if op := target.as_type_delete_if_unused(schema):
+                self.add_caused(op)
+
+        return schema

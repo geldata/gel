@@ -31,7 +31,7 @@ from edb.testbase import server as tb
 from edb.tools import test
 
 
-class TestEdgeQLFunctions(tb.QueryTestCase):
+class TestEdgeQLFunctions(tb.DDLTestCase):
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
@@ -3629,6 +3629,57 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
                 r'''
                 SELECT to_str(b'\x00')
                 ''',
+            )
+
+    async def test_edgeql_functions_json_bytes_conversion(self):
+        cases = [
+            (
+                json.dumps({"a": [1, 2, 3], "b": "foo"}),
+                json.dumps({"a": [1, 2, 3], "b": "foo"}),
+            ),
+
+            # Without ensure_ascii=False, json.dumps will escape unicode to
+            # ascii characters. For example, the character '數' (U+6578)
+            # is encoded as b'\\u6578' instead of b'\xe6\x95\xb8'.
+            # Test that both will be decoded to the correct json and then back
+            # to utf-8 encoded bytes.
+            (
+                json.dumps(
+                    {"數": [1, 2, 3], "言": "你好世界！"},
+                    ensure_ascii=True
+                ),
+                json.dumps(
+                    {"數": [1, 2, 3], "言": "你好世界！"},
+                    ensure_ascii=False
+                ),
+            ),
+            (
+                json.dumps(
+                    {"數": [1, 2, 3], "言": "你好世界！"},
+                    ensure_ascii=False
+                ),
+                json.dumps(
+                    {"數": [1, 2, 3], "言": "你好世界！"},
+                    ensure_ascii=False
+                ),
+            ),
+        ]
+
+        for input, expected in cases:
+            await self.assert_query_result(
+                r'''
+                WITH
+                    input := <bytes>$input,
+                    as_json := to_json(to_str(input)),
+                    as_bytes := to_bytes(as_json),
+                SELECT
+                    as_bytes = <bytes>$expected;
+                ''',
+                {True},
+                variables={
+                    "input": input.encode("utf-8"),
+                    "expected": expected.encode("utf-8"),
+                },
             )
 
     async def test_edgeql_functions_int_bytes_conversion_01(self):
@@ -9406,3 +9457,26 @@ class TestEdgeQLFunctions(tb.QueryTestCase):
             ['https://edgedb.com', '~/screenshot.png'],
             sort=True,
         )
+
+    async def test_edgeql_functions_approximate_count(self):
+        await self.assert_query_result(
+            '''
+            select sys::approximate_count(introspect Issue);
+            ''',
+            [int],
+        )
+
+        await self.assert_query_result(
+            '''
+            select sys::approximate_count(
+                introspect schema::Object, ignore_subtypes := True);
+            ''',
+            [0],
+        )
+
+        val = await self.con.query_single(
+            '''
+            select sys::approximate_count(introspect schema::Object);
+            '''
+        )
+        self.assertGreater(val, 0)
