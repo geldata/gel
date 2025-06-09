@@ -82,6 +82,7 @@ def compile_ir_to_sql_tree(
             ],
         ]
     ] = None,
+    json_parameters: bool = False,
     backend_runtime_params: Optional[pgparams.BackendRuntimeParams]=None,
     cache_as_function: bool = False,
     alias_generator: Optional[aliases.AliasGenerator] = None,
@@ -124,6 +125,11 @@ def compile_ir_to_sql_tree(
         else:
             scope_tree = irast.new_scope_tree()
 
+        # In JSON parameters mode, keep only the synthetic globals
+        if json_parameters:
+            query_globals = [
+                g for g in query_globals if g.global_name.module == '__'
+            ]
         # Ensure permissions are after globals, since they are injected
         # after other globals.
         query_globals.sort(key=lambda g: g.is_permission)

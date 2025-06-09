@@ -1854,6 +1854,7 @@ def _compile_ql_query(
         ir,
         expected_cardinality_one=ctx.expected_cardinality_one,
         output_format=_convert_format(ctx.output_format),
+        json_parameters=options.json_parameters,
         backend_runtime_params=ctx.backend_runtime_params,
         is_explain=options.is_explain,
         cache_as_function=(use_persistent_cache
@@ -1900,6 +1901,7 @@ def _compile_ql_query(
 
     globals = None
     permissions = None
+    json_permissions = None
     if ir.globals:
         globals = [
             (str(glob.global_name), glob.has_present_arg)
@@ -1911,6 +1913,13 @@ def _compile_ql_query(
             for glob in ir.globals
             if glob.is_permission
         ]
+    if options.json_parameters:
+        # In JSON parameters mode, keep only the synthetic globals,
+        # and report the permissions as needing to be injected into
+        # the JSON.
+        if globals:
+            globals = [g for g in globals if g[0].startswith('__::')]
+        json_permissions, permissions = permissions, []
 
     out_type_id: uuid.UUID
     if ctx.output_format is enums.OutputFormat.NONE:
@@ -1996,6 +2005,7 @@ def _compile_ql_query(
         cardinality=result_cardinality,
         globals=globals,
         permissions=permissions,
+        json_permissions=json_permissions,
         in_type_id=in_type_id.bytes,
         in_type_data=in_type_data,
         in_type_args=in_type_args,
@@ -3019,6 +3029,7 @@ def _make_query_unit(
         unit.cache_func_call = comp.cache_func_call
         unit.globals = comp.globals
         unit.permissions = comp.permissions
+        unit.json_permissions = comp.json_permissions
         unit.in_type_args = comp.in_type_args
 
         unit.sql_hash = comp.sql_hash

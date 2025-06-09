@@ -1044,7 +1044,7 @@ async def execute_json(
     tx_isolation: edbdef.TxIsolationLevel | None = None,
     query_req: Optional[rpc.CompilationRequest] = None,
 ) -> bytes:
-    if compiled.query_unit_group.permissions:
+    if compiled.query_unit_group.json_permissions:
         # Inject any required permissions into the globals json.
         if globals_ is None:
             globals_ = {}
@@ -1055,8 +1055,7 @@ async def execute_json(
             None
         )
 
-        for permission in compiled.query_unit_group.permissions:
-            # XXX?
+        for permission in compiled.query_unit_group.json_permissions:
             if permission in globals_:
                 raise RuntimeError(
                     f"Permission cannot be passed as globals: '{permission}'"

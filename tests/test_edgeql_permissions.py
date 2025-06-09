@@ -250,12 +250,13 @@ class TestHttpPermissions(tb_http.EdgeQLTestCase):
         ]
         for use_http_post in [True, False]:
             for function_name in function_names:
-                self.assert_edgeql_query_result(
-                    f'select {function_name}();',
-                    # Tests run as superuser
-                    [True,],
-                    use_http_post=use_http_post,
-                )
+                with self.annotate(function_name=function_name):
+                    self.assert_edgeql_query_result(
+                        f'select {function_name}();',
+                        # Tests run as superuser
+                        [True,],
+                        use_http_post=use_http_post,
+                    )
 
     def test_http_permissions_03(self):
         # Permission within function that also uses global
