@@ -641,8 +641,8 @@ def compile_GlobalExpr(
     # treat it as being empty.
     if ctx.env.options.make_globals_empty:
         if isinstance(glob, s_permissions.Permission):
-            default_ql = qlast.Constant.boolean(False)
-        if default_ql:
+            return dispatch.compile(qlast.Constant.boolean(False), ctx=ctx)
+        elif default_ql:
             return dispatch.compile(default_ql, ctx=ctx)
         else:
             return setgen.new_empty_set(
