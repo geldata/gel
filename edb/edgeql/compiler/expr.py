@@ -756,7 +756,7 @@ def compile_TypeCast(
         else:
             required = True
 
-        if ctx.env.options.json_parameters:
+        if ctx.env.options.json_parameters and not expr.expr.is_func_param:
             if param_name.isdecimal():
                 raise errors.QueryError(
                     'queries compiled to accept JSON parameters do not '
