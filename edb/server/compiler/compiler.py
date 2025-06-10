@@ -3720,7 +3720,7 @@ def _extract_roles(
     role_permissions: MutableMapping[s_role.Role, Sequence[str]] = {}
     for role in schema_roles:
         role_memberships[role] = list(
-            role.get_bases(global_schema).objects(global_schema)
+            role.get_ancestors(global_schema).objects(global_schema)
         )
         role_permissions[role] = list(sorted(
             role.get_permissions(global_schema) or ()

@@ -133,7 +133,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             ''')
 
     async def test_server_permissions_role_04(self):
-        # Check that permissiosn are updated for existing connections
+        # Check that permissions are updated for existing connections
 
         await self.con.query('''
             CREATE ROLE foo {
@@ -178,6 +178,52 @@ class TestServerPermissions(tb.ConnectedTestCase):
                 DROP ROLE foo;
                 DROP PERMISSION default::perm_a;
                 DROP PERMISSION default::perm_b;
+            ''')
+
+    async def test_server_permissions_role_05(self):
+        # Check that non-superuser has permissions
+
+        await self.con.query('''
+            CREATE ROLE base {
+                SET password := 'secret';
+                SET permissions := default::perm_a;
+            };
+            CREATE ROLE foo EXTENDING base {
+                SET password := 'secret';
+                SET permissions := default::perm_b;
+            };
+            CREATE ROLE bar EXTENDING foo {
+                SET password := 'secret';
+            };
+            CREATE PERMISSION default::perm_a;
+            CREATE PERMISSION default::perm_b;
+            CREATE PERMISSION default::perm_c;
+        ''')  # noqa
+
+        try:
+            conn = await self.connect(
+                user='bar',
+                password='secret',
+            )
+
+            result = await conn.query("""
+                SELECT [
+                    global default::perm_a,
+                    global default::perm_b,
+                    global default::perm_c,
+                ];
+            """)
+            self.assert_data_shape(result, [[True, True, False,]])
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP ROLE bar;
+                DROP ROLE foo;
+                DROP ROLE base;
+                DROP PERMISSION default::perm_a;
+                DROP PERMISSION default::perm_b;
+                DROP PERMISSION default::perm_c;
             ''')
 
     async def test_server_permissions_access_policy_01(self):
