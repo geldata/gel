@@ -776,7 +776,13 @@ def _expand_splat(
         if ptr.get_secret(ctx.env.schema):
             continue
         sname = ptr.get_shortname(ctx.env.schema)
-        if sname.name in skip_ptrs:
+        # Skip any dunder properties; these are injected properties like
+        # __tid__ and __tname__, and we want to manage injecting them
+        # ourselves, in the correct positions.
+        if (
+            (sname.name.startswith('__') and sname.name.endswith('__'))
+            or sname.name in skip_ptrs
+        ):
             continue
         step = qlast.Ptr(name=sname.name)
         # Make sure not to overwrite the id property.
@@ -815,7 +821,10 @@ def _expand_splat(
             if not isinstance(ptr, s_links.Link):
                 continue
             pn = ptr.get_shortname(ctx.env.schema)
-            if pn.name == '__type__' or pn.name in skip_ptrs:
+            if (
+                (pn.name.startswith('__') and pn.name.endswith('__'))
+                or pn.name in skip_ptrs
+            ):
                 continue
             elements.append(
                 qlast.ShapeElement(

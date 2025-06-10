@@ -8431,6 +8431,93 @@ class TestEdgeQLSelect(tb.QueryTestCase):
         for row in res:
             self.assertEqual(row.__tname__, "default::User")
 
+    async def test_edgeql_select_tid_position_01(self):
+        res = await self.con._fetchall("""
+            SELECT Issue {
+              *, lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        # dir(val) returns them sorted by name, but __dataclass_fields__ has
+        # them in protocol order!
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    async def test_edgeql_select_tid_position_02(self):
+        # Test that __tid__ comes first even in some weird situations
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *, lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        # dir(val) returns them sorted by name, but __dataclass_fields__ has
+        # them in protocol order!
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    async def test_edgeql_select_tid_position_03(self):
+        # Well, actually, __tname__ comes first.
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *, lol := 1, sigh := 2,
+            };
+        """, __typeids__=True, __typenames__=True)
+        val = res[0]
+        # dir(val) returns them sorted by name, but __dataclass_fields__ has
+        # them in protocol order!
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tname__')
+        self.assertEqual(ptrs[1], '__tid__')
+
+    async def test_edgeql_select_tid_position_04(self):
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *,
+              owner := issue.owner { *, test := 3 },
+              lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        owner = val.owner
+        ptrs = list(owner.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    async def test_edgeql_select_tid_position_05(self):
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              **,
+              lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        owner = val.owner
+        ptrs = list(owner.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    @test.xerror("a linkprop related ISE!")
+    async def test_edgeql_select_tid_position_06(self):
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *,
+              owner := (for owner in issue.owner select owner { * }),
+              lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        owner = val.owner
+        ptrs = list(owner.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
     async def test_edgeql_select_paths_01(self):
         # This is OK because Issue.id is a property, not a link
         await self.assert_query_result(
