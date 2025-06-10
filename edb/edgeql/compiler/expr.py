@@ -810,42 +810,16 @@ def compile_TypeCast(
         else:
             required = True
 
-        if ctx.env.options.json_parameters and not expr.expr.is_func_param:
-            if param_name.isdecimal():
-                raise errors.QueryError(
-                    'queries compiled to accept JSON parameters do not '
-                    'accept positional parameters',
-                    span=expr.expr.span)
-
-            typeref = typegen.type_to_typeref(
-                ctx.env.get_schema_type_and_track(sn.QualName('std', 'json')),
-                env=ctx.env,
-            )
-
-            param = casts.compile_cast(
-                irast.Parameter(
-                    typeref=typeref,
-                    name=param_name,
-                    required=required,
-                    span=expr.expr.span,
-                ),
-                pt,
+        typeref = typegen.type_to_typeref(pt, env=ctx.env)
+        param = setgen.ensure_set(
+            irast.Parameter(
+                typeref=typeref,
+                name=param_name,
+                required=required,
                 span=expr.expr.span,
-                ctx=ctx,
-                cardinality_mod=expr.cardinality_mod,
-            )
-
-        else:
-            typeref = typegen.type_to_typeref(pt, env=ctx.env)
-            param = setgen.ensure_set(
-                irast.Parameter(
-                    typeref=typeref,
-                    name=param_name,
-                    required=required,
-                    span=expr.expr.span,
-                ),
-                ctx=ctx,
-            )
+            ),
+            ctx=ctx,
+        )
 
         if ex_param := ctx.env.script_params.get(param_name):
             # N.B. Accessing the schema_type from the param is unreliable

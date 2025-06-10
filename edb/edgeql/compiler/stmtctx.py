@@ -1016,6 +1016,17 @@ def preprocess_script(
             mctx.modaliases = modaliases
             target_stype = typegen.ql_typeexpr_to_type(cast.type, ctx=mctx)
 
+        is_func_param = cast.expr.is_func_param
+
+        if ctx.env.options.json_parameters and not cast.expr.is_func_param:
+            # Rule check on JSON-input parameters.
+            # The actual casting of the the parameter happens in
+            if name.isdecimal():
+                raise errors.QueryError(
+                    'queries compiled to accept JSON parameters do not '
+                    'accept positional parameters',
+                    span=cast.expr.span)
+
         # for ObjectType parameters, we inject intermediate cast to uuid,
         # so parameter is uuid and then cast to ObjectType
         if target_stype.is_object_type():
@@ -1034,8 +1045,12 @@ def preprocess_script(
         target_typeref = typegen.type_to_typeref(target_stype, env=ctx.env)
         required = cast.cardinality_mod != qlast.CardinalityModifier.Optional
 
+        # This handles processing of tuple arguments, nested arrays, and
+        # all json-mode parameters.
         sub_params = tuple_args.create_sub_params(
-            name, required, typeref=target_typeref, pt=target_stype, ctx=ctx)
+            name, required, typeref=target_typeref, pt=target_stype,
+            is_func_param=is_func_param,
+            ctx=ctx)
         params[name] = irast.Param(
             name=name,
             required=required,

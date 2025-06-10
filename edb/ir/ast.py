@@ -691,6 +691,8 @@ class ParamTransType:
 
 @dataclasses.dataclass(eq=False)
 class ParamScalar(ParamTransType):
+    cast_to: typing.Optional[TypeRef] = None
+
     def flatten(self) -> tuple[typing.Any, ...]:
         return (int(qltypes.TypeTag.SCALAR), self.idx)
 

@@ -405,15 +405,10 @@ class TestHttpEdgeQL(tb.EdgeQLTestCase):
         )
 
     def test_http_edgeql_query_func_04(self):
-        # JSON parameter can be null, so <str>$x is AT_MOST_ONE in this case
-        with self.assertRaisesRegex(
-                edgedb.QueryError,
-                r'possibly an empty set passed as non-optional argument '
-                r'into modifying function'):
-            self.edgeql_query(
-                r'''select modifying_noop(<str>$x)''',
-                variables=dict(x='foo'),
-            )
+        self.edgeql_query(
+            r'''select modifying_noop(<str>$x)''',
+            variables=dict(x='foo'),
+        )
 
     def test_http_edgeql_query_duration_01(self):
         Q = r"""select <duration>'15m' < <duration>'1h'"""

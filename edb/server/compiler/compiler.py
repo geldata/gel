@@ -3303,7 +3303,6 @@ def _extract_params(
         )
 
         if param.sub_params:
-            assert not ctx.json_parameters
             array_tids: list[Optional[uuid.UUID]] = []
             for p in param.sub_params.params:
                 if isinstance(p.schema_type, s_types.Array):
