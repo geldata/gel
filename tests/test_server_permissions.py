@@ -616,13 +616,13 @@ class TestServerPermissions(tb.ConnectedTestCase):
         ''')  # noqa
 
         try:
-            base_conn = await self.connect(
+            conn = await self.connect(
                 user='foo',
                 password='secret',
             )
-            conn = base_conn.with_globals({
-                'default::bar': 1,
-            })
+            await conn.execute('''
+                set global bar := 1;
+            ''')
 
             result = json.loads(await conn.query_json("""
                 SELECT GLOBAL bar;
@@ -631,7 +631,6 @@ class TestServerPermissions(tb.ConnectedTestCase):
 
         finally:
             await conn.aclose()
-            await base_conn.aclose()
             await self.con.query('''
                 DROP GLOBAL default::bar;
                 DROP ROLE foo;

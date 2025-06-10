@@ -446,3 +446,5 @@ sys::approximate_count(
 
 
 CREATE PERMISSION sys::data_modification;
+CREATE PERMISSION sys::ddl;
+CREATE PERMISSION sys::persistent_config;

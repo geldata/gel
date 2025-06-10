@@ -437,24 +437,23 @@ class Tenant(ha_base.ClusterProtocol):
             superuser = bool(role_desc.get('superuser'))
             available_permissions = (role_desc.get('all_permissions') or ())
 
-            capability = compiler_enums.Capability.ALL
-            if not superuser:
-                # Non-superuser can be given capability via
-                # the `sys::data_modification` permission
-                if 'sys::data_modification' not in available_permissions:
-                    capability = (
-                        capability
-                        & ~compiler_enums.Capability.MODIFICATIONS
-                    )
-
-                # Other than setting session config,
-                # non-superusers do not have other capabilities
+            if superuser:
+                capability = compiler_enums.Capability.ALL
+            else:
                 capability = (
-                    capability
-                    & ~compiler_enums.Capability.TRANSACTION
-                    & ~compiler_enums.Capability.DDL
-                    & ~compiler_enums.Capability.PERSISTENT_CONFIG
+                    compiler_enums.Capability.TRANSACTION
+                    # XXX: Is this what we want???
+                    | compiler_enums.Capability.SESSION_CONFIG
                 )
+
+                # Non-superuser can be given capabilities via
+                # the permissions
+                if 'sys::data_modification' in available_permissions:
+                    capability |= compiler_enums.Capability.MODIFICATIONS
+                if 'sys::ddl' in available_permissions:
+                    capability |= compiler_enums.Capability.DDL
+                if 'sys::persistent_config' in available_permissions:
+                    capability |= compiler_enums.Capability.PERSISTENT_CONFIG
 
             role_capabilities[name] = capability
 
