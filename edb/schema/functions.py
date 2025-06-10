@@ -2363,7 +2363,7 @@ def get_params_symtable(
     anchors: dict[str, qlast.Expr] = {}
 
     defaults_mask = qlast.TypeCast(
-        expr=qlast.Parameter(name='__defaults_mask__'),
+        expr=qlast.Parameter(name='__defaults_mask__', is_func_param=True),
         type=qlast.TypeName(
             maintype=qlast.ObjectRef(
                 module='std',
@@ -2378,7 +2378,7 @@ def get_params_symtable(
             p.get_typemod(schema) is not ft.TypeModifier.SingletonType
         )
         anchors[p_shortname] = qlast.TypeCast(
-            expr=qlast.Parameter(name=p_shortname),
+            expr=qlast.Parameter(name=p_shortname, is_func_param=True),
             cardinality_mod=(
                 qlast.CardinalityModifier.Optional if p_is_optional else None
             ),
@@ -2647,6 +2647,11 @@ def get_compiler_options(
             inlining_context.env.options.func_params
             if inlining_context is not None else
             params
+        ),
+        json_parameters=(
+            inlining_context.env.options.json_parameters
+            if inlining_context is not None else
+            False
         ),
         apply_query_rewrites=not context.stdmode,
         track_schema_ref_exprs=track_schema_ref_exprs,

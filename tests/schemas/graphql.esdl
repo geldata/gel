@@ -163,6 +163,10 @@ optional global test_global_def2 -> str {
     default := ""
 };
 function get_glob() -> optional str using (global test_global_str);
+function get_glob_inline() -> optional str {
+  using (global test_global_str);
+  volatility := 'Modifying';
+};
 
 alias GlobalTest := {
     gstr := global test_global_str,
