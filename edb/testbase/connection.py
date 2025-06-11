@@ -436,8 +436,30 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
                     + random.randrange(100) * 0.001
                 )
 
+    def _prohibit_state(self, state) -> None:
+        # The testbase connection uses our own subclass of
+        # gel-python's AsyncIOProtocol,
+        # edb.protocol.protocol.Protocol, that overrides encode_state
+        # to ignore any user specified state and to always just use
+        # whatever the server suggests.
+        #
+        # It is probably possible to make CONFIGURE .../SET GLOBAL
+        # play nicely with with_globals/etc, by decoding what the server
+        # has sent and then overlaying the user configured stuff.
+        #
+        # Since it doesn't work, disable it.
+        if state.as_dict():
+            raise AssertionError(
+                f'test suite client cannot use with_XXX config methods; '
+                f'use SET ... in the protocol instead '
+                f'or use the stock python client '
+                f'(or go make it work; that would be nice too)\n'
+                f'config was: {state.as_dict()}'
+            )
+
     async def _execute(self, script: abstract.ExecuteContext) -> None:
         await self.ensure_connected()
+        self._prohibit_state(script.state)
 
         async def _inner():
             ctx = script.lower(allow_capabilities=edgedb_enums.Capability.ALL)
@@ -448,6 +470,8 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
         await self._retry_operation(_inner)
 
     async def raw_query(self, query_context: abstract.QueryContext):
+        self._prohibit_state(query_context.state)
+
         async def _inner():
             ctx = query_context.lower(
                 allow_capabilities=edgedb_enums.Capability.ALL)

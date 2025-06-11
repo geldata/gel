@@ -24,6 +24,7 @@ from typing import (
     AbstractSet,
     Iterable,
     Mapping,
+    MutableMapping,
     Sequence,
     NamedTuple,
     cast,
@@ -1853,6 +1854,7 @@ def _compile_ql_query(
         ir,
         expected_cardinality_one=ctx.expected_cardinality_one,
         output_format=_convert_format(ctx.output_format),
+        json_parameters=options.json_parameters,
         backend_runtime_params=ctx.backend_runtime_params,
         is_explain=options.is_explain,
         cache_as_function=(use_persistent_cache
@@ -1898,11 +1900,26 @@ def _compile_ql_query(
         sql_info_prefix = ''
 
     globals = None
+    permissions = None
+    json_permissions = None
     if ir.globals:
         globals = [
             (str(glob.global_name), glob.has_present_arg)
             for glob in ir.globals
+            if not glob.is_permission
         ]
+        permissions = [
+            str(glob.global_name)
+            for glob in ir.globals
+            if glob.is_permission
+        ]
+    if options.json_parameters:
+        # In JSON parameters mode, keep only the synthetic globals,
+        # and report the permissions as needing to be injected into
+        # the JSON.
+        if globals:
+            globals = [g for g in globals if g[0].startswith('__::')]
+        json_permissions, permissions = permissions, []
 
     out_type_id: uuid.UUID
     if ctx.output_format is enums.OutputFormat.NONE:
@@ -1987,6 +2004,8 @@ def _compile_ql_query(
         cache_func_call=cache_func_call,
         cardinality=result_cardinality,
         globals=globals,
+        permissions=permissions,
+        json_permissions=json_permissions,
         in_type_id=in_type_id.bytes,
         in_type_data=in_type_data,
         in_type_args=in_type_args,
@@ -2443,6 +2462,7 @@ def _compile_ql_config_op(
         globals = [
             (str(glob.global_name), glob.has_present_arg)
             for glob in ir.globals
+            if not glob.is_permission
         ]
 
     if isinstance(ir, irast.Statement):
@@ -3008,6 +3028,8 @@ def _make_query_unit(
         unit.cache_sql = comp.cache_sql
         unit.cache_func_call = comp.cache_func_call
         unit.globals = comp.globals
+        unit.permissions = comp.permissions
+        unit.json_permissions = comp.json_permissions
         unit.in_type_args = comp.in_type_args
 
         unit.sql_hash = comp.sql_hash
@@ -3682,15 +3704,41 @@ def _extract_extensions(
 def _extract_roles(
     global_schema: s_schema.Schema,
 ) -> immutables.Map[str, immutables.Map[str, Any]]:
-    roles = {}
-    for role in global_schema.get_objects(type=s_role.Role):
+    extracted_roles = {}
+    schema_roles = global_schema.get_objects(type=s_role.Role)
+    for role in schema_roles:
         role_name = str(role.get_name(global_schema))
-        roles[role_name] = immutables.Map(
+        extracted_roles[role_name] = dict(
             name=role_name,
             superuser=role.get_superuser(global_schema),
             password=role.get_password(global_schema),
         )
-    return immutables.Map(roles)
+
+    # To populate all_permissions, combine the permissions of each role
+    # and its ancestors.
+    role_memberships: MutableMapping[s_role.Role, list[s_role.Role]] = {}
+    role_permissions: MutableMapping[s_role.Role, Sequence[str]] = {}
+    for role in schema_roles:
+        role_memberships[role] = list(
+            role.get_ancestors(global_schema).objects(global_schema)
+        )
+        role_permissions[role] = list(sorted(
+            role.get_permissions(global_schema) or ()
+        ))
+
+    for role in schema_roles:
+        role_name = str(role.get_name(global_schema))
+        extracted_roles[role_name]['all_permissions'] = tuple(set(
+            p
+            for m in [role] + role_memberships.get(role, [])
+            for p in role_permissions[m]
+        ))
+
+    # Convert everything into immutable maps
+    return immutables.Map({
+        name: immutables.Map(role)
+        for name, role in extracted_roles.items()
+    })
 
 
 class DumpDescriptor(NamedTuple):

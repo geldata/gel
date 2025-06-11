@@ -367,6 +367,17 @@ class TestHttpEdgeQL(tb.EdgeQLTestCase):
                 use_http_post=use_http_post,
             )
 
+    def test_http_edgeql_query_globals_05(self):
+        Q = r'''select get_glob_inline()'''
+
+        for use_http_post in [True, False]:
+            self.assert_edgeql_query_result(
+                Q,
+                ['foo'],
+                globals={'default::test_global_str': 'foo'},
+                use_http_post=use_http_post,
+            )
+
     def test_http_edgeql_query_func_01(self):
         Q = r'''select id_func('foo')'''
 

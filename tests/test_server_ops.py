@@ -820,10 +820,14 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     with self.assertChange(measure_sql_compilations(sd), 0):
                         await con.query_sql(sql)
 
-                    # TODO: this does not behave the way I thing it should
-                    # with self.assertChange(measure_compilations(sd), 1):
-                    #     con_c = con.with_config(apply_access_policies=False)
-                    #     await con_c.query(qry, 'Two')
+                    await con.execute(
+                        'configure session set apply_access_policies := false'
+                    )
+                    with self.assertChange(measure_compilations(sd), 1):
+                        await con.query(qry, 'Two')
+                    await con.execute(
+                        'configure session reset apply_access_policies'
+                    )
 
                     # Set the compilation timeout to 2ms.
                     #
@@ -872,9 +876,10 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                         await con.query_sql('select 1')
 
                     # changing globals: cache hit
+                    await con.execute('set global g := "hello"')
                     with self.assertChange(measure_sql_compilations(sd), 0):
-                        con_g = con.with_globals({'g': 'hello'})
-                        await con_g.query_sql('select 1')
+                        await con.query_sql('select 1')
+                    await con.execute('reset global g')
 
                     # normalization: pg_query_normalize is underwhelming
                     with self.assertChange(measure_sql_compilations(sd), 1):
@@ -884,11 +889,14 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     with self.assertChange(measure_sql_compilations(sd), 0):
                         await con.query_sql('select 2')
 
-                    # TODO: this does not behave the way I though it should
-                    # changing certain config options: compiler call
-                    # with self.assertChange(measure_compilations(sd), 1):
-                    #     con_c = con.with_config(apply_access_policies=False)
-                    #     await con_c.query_sql(qry_sql)
+                    await con.execute(
+                        'configure session set apply_access_policies := false'
+                    )
+                    with self.assertChange(measure_sql_compilations(sd), 1):
+                        await con.query_sql('select 1')
+                    await con.execute(
+                        'configure session reset apply_access_policies'
+                    )
 
                     # At last, make sure recompilation switch works fine
                     await con.execute(
