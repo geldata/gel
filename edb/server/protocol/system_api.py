@@ -167,7 +167,7 @@ async def _ping(
                 errors.AvailabilityError,
             )
         else:
-            _response_ok(response, b"OK")
+            _response_ok(response, b'"OK"')
 
 
 async def handle_compiler_query(
