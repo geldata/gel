@@ -76,6 +76,7 @@ STD_MODULES = (
     sn.UnqualName('sys'),
     sn.UnqualName('sys::perm'),
     sn.UnqualName('cfg'),
+    sn.UnqualName('cfg::perm'),
     sn.UnqualName('std::cal'),
     sn.UnqualName('std::net'),
     sn.UnqualName('std::net::http'),

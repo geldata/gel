@@ -153,6 +153,7 @@ create extension package pgvector version '0.7.4' {
         create required property probes: std::int64 {
             create annotation cfg::backend_setting :=
                 '"ivfflat.probes"';
+            create annotation cfg::session_cfg_permissions := '"*"';
             create annotation std::description :=
                 "The number of probes (1 by default) used by IVFFlat "
                 ++ "index. A higher value provides better recall at the "
@@ -165,6 +166,7 @@ create extension package pgvector version '0.7.4' {
         create required property ef_search: std::int64 {
             create annotation cfg::backend_setting :=
                 '"hnsw.ef_search"';
+            create annotation cfg::session_cfg_permissions := '"*"';
             create annotation std::description :=
                 "The size of the dynamic candidate list for search (40 "
                 ++ "by default) used by HNSW index. A higher value "

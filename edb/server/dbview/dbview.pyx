@@ -961,6 +961,21 @@ cdef class DatabaseConnectionView:
         aliases = dict(state.get('aliases', []))
         aliases[None] = state.get('module', defines.DEFAULT_MODULE_ALIAS)
         aliases = immutables.Map(aliases)
+
+        is_superuser, permissions = self.get_permissions()
+        if not is_superuser:
+            settings = self.get_config_spec()
+            for k in state.get('config', ()):
+                setting = settings[k]
+                if setting.session_restricted and not (
+                    setting.session_permission
+                    and setting.session_permission in permissions
+                ):
+                    raise errors.DisabledCapabilityError(
+                        f'role {self._role_name} does not have permission to '
+                        f'configure session config variable {k}'
+                    )
+
         session_config = immutables.Map({
             k: config.SettingValue(
                 name=k,
@@ -1354,6 +1369,19 @@ cdef class DatabaseConnectionView:
                     op.apply(settings, self.get_database_config()),
                 )
             elif op.scope is config.ConfigScope.SESSION:
+                is_superuser, permissions = self.get_permissions()
+                if not is_superuser:
+                    setting = op.get_setting(settings)
+                    if setting.session_restricted and not (
+                        setting.session_permission
+                        and setting.session_permission in permissions
+                    ):
+                        raise errors.DisabledCapabilityError(
+                            f'role {self._role_name} does not have permission '
+                            f'to configure session config variable '
+                            f'{setting.name}'
+                        )
+
                 self.set_session_config(
                     op.apply(settings, self.get_session_config()),
                 )

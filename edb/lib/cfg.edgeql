@@ -19,6 +19,11 @@
 
 CREATE MODULE cfg;
 
+CREATE MODULE cfg::perm;
+CREATE PERMISSION cfg::perm::configure_timeout;
+CREATE PERMISSION cfg::perm::configure_apply_access_policies;
+CREATE PERMISSION cfg::perm::configure_allow_user_specified_id;
+
 CREATE ABSTRACT INHERITABLE ANNOTATION cfg::backend_setting;
 
 # If report is set to 'true', that *system* config will be included
@@ -35,6 +40,11 @@ CREATE ABSTRACT INHERITABLE ANNOTATION cfg::requires_restart;
 CREATE ABSTRACT INHERITABLE ANNOTATION cfg::system;
 
 CREATE ABSTRACT INHERITABLE ANNOTATION cfg::affects_compilation;
+
+# Value is json. "*" means always allowed, other strings mean a permission
+# that must be held.
+CREATE ABSTRACT INHERITABLE ANNOTATION cfg::session_cfg_permissions;
+
 
 CREATE SCALAR TYPE cfg::memory EXTENDING std::anyscalar;
 CREATE SCALAR TYPE cfg::AllowBareDDL EXTENDING enum<AlwaysAllow, NeverAllow>;
@@ -194,6 +204,7 @@ ALTER TYPE cfg::AbstractConfig {
         CREATE ANNOTATION cfg::affects_compilation := 'true';
         CREATE ANNOTATION cfg::backend_setting :=
             '"default_transaction_isolation"';
+        CREATE ANNOTATION cfg::session_cfg_permissions := '"*"';
         CREATE ANNOTATION std::description :=
             'Controls the default isolation level of each new transaction, \
             including implicit transactions. Defaults to `Serializable`. \
@@ -207,6 +218,7 @@ ALTER TYPE cfg::AbstractConfig {
         -> sys::TransactionAccessMode
     {
         CREATE ANNOTATION cfg::affects_compilation := 'true';
+        CREATE ANNOTATION cfg::session_cfg_permissions := '"*"';
         CREATE ANNOTATION std::description :=
             'Controls the default read-only status of each new transaction, \
             including implicit transactions. Defaults to `ReadWrite`. \
@@ -221,6 +233,7 @@ ALTER TYPE cfg::AbstractConfig {
     {
         CREATE ANNOTATION cfg::backend_setting :=
             '"default_transaction_deferrable"';
+        CREATE ANNOTATION cfg::session_cfg_permissions := '"*"';
         CREATE ANNOTATION std::description :=
             'Controls the default deferrable status of each new transaction. \
             It currently has no effect on read-write transactions or those \
@@ -232,6 +245,8 @@ ALTER TYPE cfg::AbstractConfig {
     CREATE REQUIRED PROPERTY session_idle_transaction_timeout -> std::duration {
         CREATE ANNOTATION cfg::backend_setting :=
             '"idle_in_transaction_session_timeout"';
+        CREATE ANNOTATION cfg::session_cfg_permissions :=
+            '"cfg::perm::configure_timeout"';
         CREATE ANNOTATION std::description :=
             'How long client connections can stay inactive while in a \
             transaction.';
@@ -240,6 +255,8 @@ ALTER TYPE cfg::AbstractConfig {
 
     CREATE REQUIRED PROPERTY query_execution_timeout -> std::duration {
         CREATE ANNOTATION cfg::backend_setting := '"statement_timeout"';
+        CREATE ANNOTATION cfg::session_cfg_permissions :=
+            '"cfg::perm::configure_timeout"';
         CREATE ANNOTATION std::description :=
             'How long an individual query can run before being aborted.';
     };
@@ -298,6 +315,8 @@ ALTER TYPE cfg::AbstractConfig {
     CREATE PROPERTY apply_access_policies -> std::bool {
         SET default := true;
         CREATE ANNOTATION cfg::affects_compilation := 'true';
+        CREATE ANNOTATION cfg::session_cfg_permissions :=
+            '"cfg::perm::configure_apply_access_policies"';
         CREATE ANNOTATION std::description :=
             'Whether access policies will be applied when running queries.';
     };
@@ -305,6 +324,8 @@ ALTER TYPE cfg::AbstractConfig {
     CREATE PROPERTY apply_access_policies_pg -> std::bool {
         SET default := false;
         CREATE ANNOTATION cfg::affects_compilation := 'false';
+        CREATE ANNOTATION cfg::session_cfg_permissions :=
+            '"cfg::perm::configure_apply_access_policies"';
         CREATE ANNOTATION std::description :=
             'Whether access policies will be applied when running queries over \
             SQL adapter.';
@@ -313,12 +334,15 @@ ALTER TYPE cfg::AbstractConfig {
     CREATE PROPERTY allow_user_specified_id -> std::bool {
         SET default := false;
         CREATE ANNOTATION cfg::affects_compilation := 'true';
+        CREATE ANNOTATION cfg::session_cfg_permissions :=
+            '"cfg::perm::configure_allow_user_specified_id"';
         CREATE ANNOTATION std::description :=
             'Whether inserts are allowed to set the \'id\' property.';
     };
 
     CREATE PROPERTY simple_scoping -> std::bool {
         CREATE ANNOTATION cfg::affects_compilation := 'true';
+        CREATE ANNOTATION cfg::session_cfg_permissions := '"*"';
         CREATE ANNOTATION std::description :=
             'Whether to use the new simple scoping behavior \
             (disable path factoring)';
@@ -326,6 +350,7 @@ ALTER TYPE cfg::AbstractConfig {
 
     CREATE PROPERTY warn_old_scoping -> std::bool {
         CREATE ANNOTATION cfg::affects_compilation := 'true';
+        CREATE ANNOTATION cfg::session_cfg_permissions := '"*"';
         CREATE ANNOTATION std::description :=
             'Whether to warn when depending on old scoping behavior.';
     };
@@ -417,6 +442,7 @@ ALTER TYPE cfg::AbstractConfig {
     CREATE PROPERTY force_database_error -> std::str {
         SET default := 'false';
         CREATE ANNOTATION cfg::affects_compilation := 'true';
+        CREATE ANNOTATION cfg::session_cfg_permissions := '"*"';
         CREATE ANNOTATION std::description :=
             'A hook to force all queries to produce an error.';
     };
