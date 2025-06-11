@@ -954,17 +954,9 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
     async def health_check(self) -> bool:
         elapsed = time.monotonic() - self._last_active_time
         if elapsed > HEALTH_CHECK_MIN_INTERVAL:
-            try:
-                async with asyncio.timeout(HEALTH_CHECK_TIMEOUT):
-                    await self.make_compilation_config_serializer()
-            except TimeoutError:
-                logger.error("health check timed out")
-                return False
-            except Exception:
-                logger.exception("health check failed")
-                return False
-            else:
-                self._maybe_update_last_active_time()
+            async with asyncio.timeout(HEALTH_CHECK_TIMEOUT):
+                await self.make_compilation_config_serializer()
+            self._maybe_update_last_active_time()
         return True
 
 

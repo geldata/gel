@@ -85,6 +85,12 @@ logger = logging.getLogger("edb.server")
 
 
 HTTP_MAX_CONNECTIONS = 100
+HEALTH_CHECK_MIN_INTERVAL: float = float(
+    os.getenv("GEL_BACKEND_HEALTH_CHECK_MIN_INTERVAL", 10)
+)
+HEALTH_CHECK_TIMEOUT: float = float(
+    os.getenv("GEL_BACKEND_HEALTH_CHECK_TIMEOUT", 10)
+)
 
 
 class RoleDescriptor(TypedDict):
@@ -116,6 +122,7 @@ class Tenant(ha_base.ClusterProtocol):
     _sys_pgcon_waiter: asyncio.Lock
     _sys_pgcon_ready_evt: asyncio.Event
     _sys_pgcon_reconnect_evt: asyncio.Event
+    _sys_pgcon_last_active_time: float
     _max_backend_connections: int
     _suggested_client_pool_size: int
     _pg_pool: connpool.Pool
@@ -177,6 +184,7 @@ class Tenant(ha_base.ClusterProtocol):
         # Never use `self.__sys_pgcon` directly; get it via
         # `async with self.use_sys_pgcon()`.
         self.__sys_pgcon = None
+        self._sys_pgcon_last_active_time = 0
 
         # Increase-only counter to reject outdated attempts to connect
         self._ha_master_serial = 0
@@ -427,6 +435,7 @@ class Tenant(ha_base.ClusterProtocol):
             defines.EDGEDB_SYSTEM_DB,
             source_description="init_sys_pgcon",
         )
+        self._sys_pgcon_last_active_time = time.monotonic()
         self._sys_pgcon_ready_evt = asyncio.Event()
         self._sys_pgcon_reconnect_evt = asyncio.Event()
 
@@ -904,6 +913,8 @@ class Tenant(ha_base.ClusterProtocol):
         try:
             yield self.__sys_pgcon
         finally:
+            if self.__sys_pgcon is not None and self.__sys_pgcon.is_healthy():
+                self._sys_pgcon_last_active_time = time.monotonic()
             self._sys_pgcon_waiter.release()
 
     def set_stmt_cache_size(self, size: int) -> None:
@@ -1029,6 +1040,7 @@ class Tenant(ha_base.ClusterProtocol):
             logger.info("Successfully reconnected to the system database.")
             self.__sys_pgcon = conn
             self.__sys_pgcon.mark_as_system_db()
+            self._sys_pgcon_last_active_time = time.monotonic()
             # This await is meant to be after mark_as_system_db() because we
             # need the pgcon to be able to trigger another reconnect if its
             # connection is lost during this await.
@@ -1866,6 +1878,16 @@ class Tenant(ha_base.ClusterProtocol):
                 1.0, self._instance_name, "on_after_drop_db"
             )
             raise
+
+    async def ping_backend(self) -> bool:
+        if not self._running:
+            return False
+        elapsed = time.monotonic() - self._sys_pgcon_last_active_time
+        if elapsed > HEALTH_CHECK_MIN_INTERVAL:
+            async with asyncio.timeout(HEALTH_CHECK_TIMEOUT):
+                async with self.use_sys_pgcon() as syscon:
+                    await syscon.sql_fetch_val(b"select 'OK'")
+        return True
 
     async def cancel_pgcon_operation(self, con: pgcon.PGConnection) -> bool:
         async with self.use_sys_pgcon() as syscon:
