@@ -3478,6 +3478,20 @@ class TestSQLQueryNonTransactional(tb.SQLQueryTestCase):
         v2 = await self.scon.fetchval("SHOW transaction_isolation")
         self.assertNotEqual(v1, v2)
 
+    async def test_sql_transaction_03(self):
+        self.assertEqual(
+            await self.scon.execute("BEGIN"),
+            "BEGIN",
+        )
+        await self.scon.execute("ROLLBACK")
+
+    async def test_sql_transaction_04(self):
+        self.assertEqual(
+            await self.scon.execute("START TRANSACTION"),
+            "START TRANSACTION",
+        )
+        await self.scon.execute("ROLLBACK")
+
     async def test_sql_query_error_11(self):
         # extended query protocol
         with self.assertRaisesRegex(
