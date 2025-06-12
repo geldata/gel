@@ -317,7 +317,11 @@ def _compile_sql(
         elif isinstance(stmt, (pgast.BeginStmt, pgast.StartStmt)):
             unit.tx_action = dbstate.TxAction.START
             unit.command_complete_tag = dbstate.TagPlain(
-                tag=b"START TRANSACTION"
+                tag=(
+                    b"START TRANSACTION"
+                    if isinstance(stmt, pgast.StartStmt)
+                    else b"BEGIN"
+                )
             )
         elif isinstance(stmt, pgast.CommitStmt):
             unit.tx_action = dbstate.TxAction.COMMIT
