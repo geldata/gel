@@ -131,7 +131,7 @@ generate_tls_cert = secretkey.generate_tls_cert
 
 
 class CustomSNI_HTTPSConnection(http.client.HTTPSConnection):
-    def __init__(self, *args, server_hostname=None, **kwargs):
+    def __init__(self, *args, server_hostname=..., **kwargs):
         super().__init__(*args, **kwargs)
         self.server_hostname = server_hostname
 
@@ -140,7 +140,7 @@ class CustomSNI_HTTPSConnection(http.client.HTTPSConnection):
 
         if self._tunnel_host:
             server_hostname = self._tunnel_host
-        elif self.server_hostname is not None:
+        elif self.server_hostname is not ...:
             server_hostname = self.server_hostname
         else:
             server_hostname = self.host
@@ -439,9 +439,9 @@ class TestCaseWithHttpClient(TestCase):
         cls,
         server,
         keep_alive=True,
-        server_hostname=None,
         client_cert_file=None,
         client_key_file=None,
+        **kwargs,
     ):
         conn_args = server.get_connect_args()
         tls_context = ssl.create_default_context(
@@ -459,8 +459,8 @@ class TestCaseWithHttpClient(TestCase):
         con = ConCls(
             conn_args["host"],
             conn_args["port"],
-            server_hostname=server_hostname,
             context=tls_context,
+            **kwargs,
         )
         con.connect()
         try:
@@ -723,12 +723,17 @@ def _fetch_server_info(host: str, port: int) -> dict[str, Any]:
 
 
 def _call_system_api(
-    host: str, port: int, path: str, return_json=True, sslctx=None
+    host: str,
+    port: int,
+    path: str,
+    return_json=True,
+    sslctx=None,
+    **kwargs,
 ):
     if sslctx is None:
-        con = http.client.HTTPConnection(host, port)
+        con = http.client.HTTPConnection(host, port, **kwargs)
     else:
-        con = http.client.HTTPSConnection(host, port, context=sslctx)
+        con = CustomSNI_HTTPSConnection(host, port, context=sslctx, **kwargs)
     con.connect()
     try:
         con.request(
@@ -923,18 +928,18 @@ class ClusterTestCase(TestCaseWithHttpClient):
         cls,
         server=None,
         keep_alive=True,
-        server_hostname=None,
         client_cert_file=None,
         client_key_file=None,
+        **kwargs,
     ):
         if server is None:
             server = cls
         with super().http_con(
             server,
             keep_alive=keep_alive,
-            server_hostname=server_hostname,
             client_cert_file=client_cert_file,
             client_key_file=client_key_file,
+            **kwargs,
         ) as http_con:
             yield http_con
 
@@ -2321,8 +2326,10 @@ class _EdgeDBServerData(NamedTuple):
     def fetch_server_info(self) -> dict[str, Any]:
         return _fetch_server_info(self.host, self.port)
 
-    def call_system_api(self, path: str):
-        return _call_system_api(self.host, self.port, path)
+    def call_system_api(self, path: str, **kwargs):
+        args = dict(host=self.host, port=self.port, path=path)
+        args.update(kwargs)
+        return _call_system_api(**args)
 
     async def connect(self, **kwargs: Any) -> tconn.Connection:
         conn_args = self.get_connect_args(**kwargs)

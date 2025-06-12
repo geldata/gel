@@ -84,6 +84,12 @@ compiler_pool_wait_time = registry.new_histogram(
     unit=prom.Unit.SECONDS,
 )
 
+compiler_pool_queue_errors = registry.new_labeled_counter(
+    'compiler_pool_queue_errors_total',
+    'Number of compiler pool errors in queue.',
+    labels=('type',),
+)
+
 current_branches = registry.new_labeled_gauge(
     'branches_current',
     'Current number of branches.',
