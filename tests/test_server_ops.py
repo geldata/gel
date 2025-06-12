@@ -1982,6 +1982,23 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                 data,
             )
 
+    async def _test_server_ops_multi_tenant_9(self, mtargs: MultiTenantArgs):
+        sslctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        sslctx.check_hostname = False
+        sslctx.load_verify_locations(mtargs.sd.tls_cert_file)
+        self.assertEqual(
+            mtargs.sd.call_system_api(
+                "/server/status/alive", sslctx=sslctx, server_hostname=None,
+            ),
+            "OK",
+        )
+        self.assertEqual(
+            mtargs.sd.call_system_api(
+                "/server/status/ready", sslctx=sslctx, server_hostname=None,
+            ),
+            "OK",
+        )
+
 
 class MultiTenantArgs(NamedTuple):
     srv: tb._EdgeDBServer
