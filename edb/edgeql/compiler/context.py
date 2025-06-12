@@ -179,6 +179,9 @@ class Environment:
     query_globals: dict[s_name.QualName, irast.Global]
     """A mapping of query globals.  Gets populated during
     the compilation."""
+    query_globals_types: dict[s_name.QualName, s_types.Type]
+    """Injected dummy types for caching globals when the input
+    encoding is JSON"""
 
     server_param_conversions: dict[
         str,
@@ -335,6 +338,7 @@ class Environment:
         self.schema_view_cache = {}
         self.query_parameters = {}
         self.query_globals = {}
+        self.query_globals_types = {}
         self.server_param_conversions = {}
         self.server_param_conversion_calls = []
         self.set_types = {}

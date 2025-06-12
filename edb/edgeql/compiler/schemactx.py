@@ -196,10 +196,12 @@ def derive_view(
 ) -> s_types.Type:
 
     if derived_name is None:
-        assert isinstance(stype, s_obj.DerivableObject)
-        derived_name = derive_view_name(
-            stype=stype, derived_name_quals=derived_name_quals,
-            ctx=ctx)
+        if isinstance(stype, s_obj.DerivableObject):
+            derived_name = derive_view_name(
+                stype=stype, derived_name_quals=derived_name_quals,
+                ctx=ctx)
+        else:
+            derived_name = sn.QualName('__derived__', ctx.aliases.get('v'))
 
     if attrs is None:
         attrs = {}
