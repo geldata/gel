@@ -1508,6 +1508,7 @@ def compile_schema_storage_in_delta(
 def _compile_schema_storage_stmt(
     ctx: CompileContext,
     eql: str,
+    output_format: enums.OutputFormat = enums.OutputFormat.JSON,
 ) -> tuple[str, Sequence[dbstate.Param]]:
 
     schema = ctx.state.current_tx().get_schema(ctx.compiler_state.std_schema)
@@ -1529,7 +1530,7 @@ def _compile_schema_storage_stmt(
             state=ctx.state,
             json_parameters=True,
             schema_reflection_mode=True,
-            output_format=enums.OutputFormat.JSON,
+            output_format=output_format,
             expected_cardinality_one=False,
             bootstrap_mode=ctx.bootstrap_mode,
             protocol_version=ctx.protocol_version,
@@ -1746,22 +1747,32 @@ def _compile_ql_administer(
     script_info: Optional[irast.ScriptInfo] = None,
 ) -> dbstate.BaseQuery:
     if ql.expr.func == 'statistics_update':
-        return ddl.administer_statistics_update(ctx, ql)
+        res = ddl.administer_statistics_update(ctx, ql)
     elif ql.expr.func == 'schema_repair':
-        return ddl.administer_repair_schema(ctx, ql)
+        res = ddl.administer_repair_schema(ctx, ql)
     elif ql.expr.func == 'reindex':
-        return ddl.administer_reindex(ctx, ql)
+        res = ddl.administer_reindex(ctx, ql)
     elif ql.expr.func == 'vacuum':
-        return ddl.administer_vacuum(ctx, ql)
+        res = ddl.administer_vacuum(ctx, ql)
     elif ql.expr.func == 'prepare_upgrade':
-        return ddl.administer_prepare_upgrade(ctx, ql)
+        res = ddl.administer_prepare_upgrade(ctx, ql)
     elif ql.expr.func == '_remove_pointless_triggers':
-        return ddl.administer_remove_pointless_triggers(ctx, ql)
+        res = ddl.administer_remove_pointless_triggers(ctx, ql)
+    elif ql.expr.func == 'concurrent_index_create':
+        res = ddl.administer_concurrent_index_create(ctx, ql)
+    elif ql.expr.func == 'concurrent_index_update':
+        res = ddl.administer_concurrent_index_update(ctx, ql)
     else:
         raise errors.QueryError(
             'Unknown ADMINISTER function',
             span=ql.expr.span,
         )
+
+    if debug.flags.delta_execute or debug.flags.delta_execute_ddl:
+        debug.header('ADMINISTER script')
+        debug.dump_code(res.sql, lexer='sql')
+
+    return res
 
 
 def _compile_ql_query(
@@ -3212,6 +3223,7 @@ def _make_query_unit(
 
     elif isinstance(comp, dbstate.MaintenanceQuery):
         unit.sql = comp.sql
+        unit.database_config = comp.reload_schema
 
     elif isinstance(comp, dbstate.NullQuery):
         pass
