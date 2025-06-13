@@ -110,6 +110,7 @@ class BadRequestError(AIExtError):
 class ApiStyle(s_enum.StrEnum):
     OpenAI = 'OpenAI'
     Anthropic = 'Anthropic'
+    VoyageAI = 'VoyageAI'
     Ollama = 'Ollama'
 
 
@@ -1210,6 +1211,9 @@ async def _generate_embeddings(
         result = await _generate_openai_embeddings(
             provider, model_name, inputs, shortening, user, http_client
         )
+    elif provider.api_style == ApiStyle.VoyageAI:
+        return await _generate_voyageai_embeddings(
+            provider, model_name, inputs, http_client
     elif provider.api_style == ApiStyle.Ollama:
         result = await _generate_ollama_embeddings(
             provider, model_name, inputs, shortening, http_client
@@ -1276,6 +1280,52 @@ async def _generate_openai_embeddings(
     return EmbeddingsResult(
         data=(error if error else EmbeddingsData(result.bytes())),
         limits=_read_openai_limits(result),
+    )
+
+
+async def _generate_voyageai_embeddings(
+    provider: ProviderConfig,
+    model_name: str,
+    inputs: list[str],
+    http_client: http.HttpClient,
+) -> EmbeddingsResult:
+
+    headers = {
+        "Authorization": f"Bearer {provider.secret}",
+    }
+    client = http_client.with_context(
+        headers=headers,
+        base_url=provider.api_url,
+    )
+
+    params: dict[str, Any] = {
+        "input": inputs,
+        "model": model_name,
+        "output_format": "float",
+        "truncation": False
+    }
+
+    result = await client.post(
+        "/embeddings",
+        json=params,
+    )
+
+    error = None
+    if result.status_code >= 400:
+        error = rs.Error(
+            message=(
+                f"API call to generate embeddings failed with status "
+                f"{result.status_code}: {result.text}"
+            ),
+            retry=(
+                # If the request fails with 429 - too many requests, it can be
+                # retried
+                result.status_code == 429
+            ),
+        )
+
+    return EmbeddingsResult(
+        data=(error if error else EmbeddingsData(result.bytes())),
     )
 
 
