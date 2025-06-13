@@ -1576,7 +1576,7 @@ class Tenant(ha_base.ClusterProtocol):
         dbname: str,
         query_cache: bool,
         protocol_version: defines.ProtocolVersion,
-        role_name: Optional[str],
+        role_name: str,
     ) -> dbview.DatabaseConnectionView:
         db = self.get_db(dbname=dbname)
         await db.introspection()
