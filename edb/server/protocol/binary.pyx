@@ -271,6 +271,10 @@ cdef class EdgeConnection(frontend.FrontendConnection):
 
         self.dbname = database
         self.username = user
+        # In the tunneled HTTP endpoint, auth gets done after we have
+        # set up a dbview, so we need to update it..
+        if self._dbview:
+            self._dbview._role_name = user
 
         await self._start_connection(database)
 
@@ -1896,6 +1900,11 @@ async def eval_buffer(
     if vtr.is_closing() or proto._main_task is None:
         raise RuntimeError(
             'cannot process the request, the server is shutting down')
+
+    # HACK: In the tunneled protocol we don't have the username when
+    # we create the dbview, so put in an empty username. It will be
+    # filled in once auth is called.
+    proto.username = ''
 
     try:
         await proto._start_connection(database)
