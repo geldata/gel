@@ -1034,8 +1034,10 @@ cdef class DatabaseConnectionView:
             )
         return False, ()
 
-    def get_role_capability(self, role_name) -> enums.Capability:
-        if capability := self.tenant.get_role_capabilities().get(role_name):
+    def get_role_capability(self) -> enums.Capability:
+        if capability := self.tenant.get_role_capabilities().get(
+            self._role_name
+        ):
             return capability
         return enums.Capability.NONE
 
@@ -1452,7 +1454,7 @@ cdef class DatabaseConnectionView:
                 else:
                     raise
 
-            role_capability = self.get_role_capability(query_req.role_name)
+            role_capability = self.get_role_capability()
             allow_capabilities = allow_capabilities & role_capability
 
             self.check_capabilities(
