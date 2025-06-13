@@ -1238,11 +1238,6 @@ def _compile_rewrites_for_stype(
                 scopectx.iterator_path_ids |= {anchor.path_id}
                 scopectx.anchors[key] = anchor
 
-            # XXX: I am pretty sure this must be wrong, but we get
-            # a failure without due to volatility issues in
-            # test_edgeql_rewrites_16
-            scopectx.env.singletons.append(anchors.subject_set.path_id)
-
             ctx.path_scope.factoring_allowlist.add(anchors.subject_set.path_id)
 
             # prepare expression
