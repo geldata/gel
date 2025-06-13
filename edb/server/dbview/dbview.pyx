@@ -605,7 +605,7 @@ cdef class Database:
 cdef class DatabaseConnectionView:
 
     def __init__(
-        self, db: Database, *, query_cache, protocol_version, role_name
+        self, db: Database, *, query_cache, protocol_version, role_name: str
     ):
         self._db = db
 
@@ -618,7 +618,7 @@ cdef class DatabaseConnectionView:
         self._session_state_db_cache = None
         self._session_state_cache = None
         self._state_serializer = None
-        self._role_name = role_name  # optional!
+        self._role_name = role_name
 
         if db.name == defines.EDGEDB_SYSTEM_DB:
             # Make system database read-only.

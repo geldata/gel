@@ -382,8 +382,8 @@ async def _execute(db, tenant, query, operation_name, variables, globals):
         dbname=db.name,
         query_cache=False,
         protocol_version=edbdef.CURRENT_PROTOCOL,
-        # TODO: This may change
-        role_name=None,
+        # TODO: This should change
+        role_name=edbdef.EDGEDB_SUPERUSER,
     )
 
     async with tenant.with_pgcon(db.name) as pgcon:

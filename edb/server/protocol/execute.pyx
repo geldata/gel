@@ -208,8 +208,8 @@ async def _parse(
         dbname=db.name,
         query_cache=query_cache_enabled,
         protocol_version=edbdef.CURRENT_PROTOCOL,
-        # TODO: This may change
-        role_name=None,
+        # TODO: This should change
+        role_name=edbdef.EDGEDB_SUPERUSER,
     )
     dbv.is_transient = True
     if use_metrics:
@@ -1047,11 +1047,7 @@ async def execute_json(
         if globals_ is None:
             globals_ = {}
 
-        superuser, available_permissions = (
-            dbv.get_permissions()
-            if query_req else
-            None
-        )
+        superuser, available_permissions = dbv.get_permissions()
 
         for permission in compiled.query_unit_group.json_permissions:
             if permission in globals_:
