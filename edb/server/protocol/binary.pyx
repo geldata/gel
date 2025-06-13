@@ -1948,6 +1948,7 @@ async def run_script(
         dbview.CompiledQuery compiled
         dbview.DatabaseConnectionView _dbview
     conn = new_edge_connection(server, tenant)
+    conn.username = user
     await conn._start_connection(database)
     try:
         _dbview = conn.get_dbview()
