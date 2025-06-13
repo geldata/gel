@@ -2072,7 +2072,7 @@ cdef class DatabaseIndex:
         *,
         query_cache: bool,
         protocol_version,
-        role_name: str | None,
+        role_name: str,
     ):
         db = self.get_db(dbname)
         return (<Database>db)._new_view(
