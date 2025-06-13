@@ -11,6 +11,7 @@ Python
    client
    api/types
    api/codegen
+   api/qb
    api/advanced
 
 **gel-python** is the official |Gel| driver for Python.  It provides both :ref:`blocking IO <gel-python-blocking-api-reference>` and :ref:`asyncio <gel-python-asyncio-api-reference>` implementations.
