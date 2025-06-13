@@ -1834,6 +1834,36 @@ aa';
         };
         """
 
+    def test_edgeql_syntax_shape_73(self):
+        """
+        select Foo {
+            x := select Card { ** } filter .element = 'Air',
+            y := select User { ** } filter .name = 'Alice',
+        };
+
+% OK %
+
+        select Foo {
+            x := (select Card { ** } filter (.element = 'Air')),
+            y := (select User { ** } filter (.name = 'Alice')),
+        };
+        """
+
+    def test_edgeql_syntax_shape_74(self):
+        """
+        select {
+            x := select Card { ** } filter .element = 'Air',
+            y := select User { ** } filter .name = 'Alice',
+        };
+
+% OK %
+
+        select {
+            x := (select Card { ** } filter (.element = 'Air')),
+            y := (select User { ** } filter (.name = 'Alice')),
+        };
+        """
+
     def test_edgeql_syntax_shape_splat_01(self):
         """
         select Foo {
@@ -2660,6 +2690,15 @@ aa';
         WITH a AS MODULE `__std__` SELECT Foo;
         """
 
+    def test_edgeql_syntax_with_13(self):
+        """
+        with x := select Card filter .element = 'Air' select x;
+
+% OK %
+
+        with x := (select Card filter (.element = 'Air')) select x;
+        """
+
     def test_edgeql_syntax_detached_01(self):
         """
         WITH F := DETACHED Foo
@@ -2814,8 +2853,10 @@ aa';
         SELECT User.name OFFSET Foo.bar LIMIT (Foo.bar * 10);
         """
 
+    # @tb.must_fail(errors.EdgeQLSyntaxError,
+    #               r'Unexpected.+bar', hint=None, line=3, col=24)
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  r'Unexpected.+bar', hint=None, line=3, col=24)
+                  r"Missing ','", hint=None, line=3, col=23)
     def test_edgeql_syntax_select_12(self):
         """
         SELECT (
@@ -3321,8 +3362,10 @@ aa';
         } UNLESS CONFLICT ELSE (SELECT Foo);
         """
 
+    # @tb.must_fail(errors.EdgeQLSyntaxError,
+    #               r'Unexpected.+bar', hint=None, line=3, col=24)
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  r'Unexpected.+bar', hint=None, line=3, col=24)
+                  r"Missing ','", hint=None, line=3, col=23)
     def test_edgeql_syntax_insert_22(self):
         """
         SELECT (
@@ -3369,8 +3412,10 @@ aa';
         OFFSET 2 LIMIT 5;
         """
 
+    # @tb.must_fail(errors.EdgeQLSyntaxError,
+    #               r'Unexpected.+bar', hint=None, line=3, col=24)
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  r'Unexpected.+bar', hint=None, line=3, col=24)
+                  r"Missing ','", hint=None, line=3, col=23)
     def test_edgeql_syntax_delete_06(self):
         """
         SELECT (
@@ -3502,8 +3547,10 @@ aa';
         SELECT x;
         """
 
+    # @tb.must_fail(errors.EdgeQLSyntaxError,
+    #               r'Unexpected.+bad', hint=None, line=3, col=56)
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  r'Unexpected.+bad', hint=None, line=3, col=56)
+                  r"Missing ','", hint=None, line=3, col=55)
     def test_edgeql_syntax_selectfor_04(self):
         """
         WITH x := (
@@ -3769,68 +3816,75 @@ aa';
         SELECT baz(x := User.age y := User.name);
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_12(self):
         """
         SELECT count(SELECT 1);
+
+% OK %
+
+        SELECT count((SELECT 1));
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_13(self):
         """
         SELECT count(INSERT Foo);
+
+% OK %
+
+        SELECT count((INSERT Foo));
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_14(self):
         """
         SELECT count(UPDATE Foo SET {bar := 1});
+
+% OK %
+
+        SELECT count((UPDATE Foo SET {bar := 1}));
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_15(self):
         """
         SELECT count(DELETE Foo);
+
+% OK %
+
+        SELECT count((DELETE Foo));
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_16(self):
         """
         SELECT count(FOR X IN {Foo} UNION X);
+
+% OK %
+
+        SELECT count((FOR X IN {Foo} UNION X));
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=22)
     def test_edgeql_syntax_function_17(self):
         """
         SELECT count(WITH X := 1 SELECT Foo FILTER .bar = X);
+
+% OK %
+
+        SELECT count((WITH X := 1 SELECT Foo FILTER (.bar = X)));
         """
 
     @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=23)
+                  "Missing ','",
+                  line=2, col=32)
     def test_edgeql_syntax_function_18(self):
         """
         SELECT (count(SELECT 1) 1);
         """
 
-    @tb.must_fail(errors.EdgeQLSyntaxError,
-                  "Missing parentheses around statement used as an expression",
-                  line=2, col=26)
     def test_edgeql_syntax_function_19(self):
         """
         SELECT ((((count(SELECT 1)))));
+
+% OK %
+
+        SELECT count((SELECT 1));
         """
 
     @tb.must_fail(errors.EdgeQLSyntaxError,
@@ -4052,6 +4106,30 @@ aa';
 % OK %
 
         SELECT (1, 2);
+        """
+
+    def test_edgeql_syntax_tuple_18(self):
+        """
+        SELECT (select Foo, delete Foo, update Foo set { x := 1 },
+                for x in y select x);
+
+% OK %
+
+        SELECT ((select Foo), (delete Foo), (update Foo set { x := 1 }),
+                (for x in y select x));
+        """
+
+    def test_edgeql_syntax_tuple_19(self):
+        """
+        SELECT (x := select Foo, y := delete Foo,
+                z := update Foo set { x := 1 },
+                w := for x in y select x);
+
+% OK %
+
+        SELECT (x := (select Foo), y := (delete Foo),
+                z := (update Foo set { x := 1 }),
+                w := (for x in y select x));
         """
 
     def test_edgeql_syntax_introspect_01(self):
@@ -5592,12 +5670,22 @@ aa';
         """
         CREATE TYPE Foo {
             CREATE PROPERTY bar := 'something';
+            CREATE PROPERTY baz := select 'something';
+            CREATE LINK quux := select Foo;
+            CREATE PROPERTY foo: str {
+                set default := select 'lol'
+            };
         };
 
 % OK %
 
         CREATE TYPE Foo {
             CREATE PROPERTY bar := ('something');
+            CREATE PROPERTY baz := (select 'something');
+            CREATE LINK quux := (select Foo);
+            CREATE PROPERTY foo: str {
+                set default := (select 'lol');
+            };
         };
         """
 
