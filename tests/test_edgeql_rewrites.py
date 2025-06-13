@@ -1179,6 +1179,15 @@ class TestRewrites(tb.DDLTestCase):
             [{'title': 'updated'}] * 2,
         )
 
+    async def test_edgeql_rewrites_33(self):
+        async with self.assertRaisesRegexTx(
+            edgedb.InterfaceError,
+            r"more than one element"
+        ):
+            await self.con.query_single('''
+                update Asdf set {}
+            ''')
+
     async def test_edgeql_rewrites_triggers_01(self):
         await self.con.execute('''
             create type Pidgeon {
