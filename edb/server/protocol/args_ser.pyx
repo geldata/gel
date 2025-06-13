@@ -46,7 +46,6 @@ cdef uint32_t ARRAY_TAG = int(enums.TypeTag.ARRAY)
 
 cdef recode_bind_args_for_script(
     dbview.DatabaseConnectionView dbv,
-    str role_name,
     dbview.CompiledQuery compiled,
     bytes bind_args,
     object converted_args,
@@ -65,7 +64,7 @@ cdef recode_bind_args_for_script(
 
     positions = []
     recoded_buf = recode_bind_args(
-        dbv, role_name, compiled, bind_args, None, positions
+        dbv, compiled, bind_args, None, positions
     )
     # TODO: something with less copies
     recoded = bytes(memoryview(recoded_buf))
@@ -96,7 +95,7 @@ cdef recode_bind_args_for_script(
         if compiled.first_extra is not None:
             bind_data.write_bytes(compiled.extra_blobs[i])
 
-        _inject_globals(dbv, role_name, query_unit, bind_data)
+        _inject_globals(dbv, query_unit, bind_data)
 
         if converted_args and i in converted_args:
             for arg in converted_args[i]:
@@ -112,7 +111,6 @@ cdef recode_bind_args_for_script(
 
 cdef WriteBuffer recode_bind_args(
     dbview.DatabaseConnectionView dbv,
-    str role_name,
     dbview.CompiledQuery compiled,
     bytes bind_args,
     list converted_args,
@@ -251,7 +249,7 @@ cdef WriteBuffer recode_bind_args(
             out_buf.write_bytes(compiled.extra_blobs[0])
 
         # Inject any globals variables into the argument stream.
-        _inject_globals(dbv, role_name, qug, out_buf)
+        _inject_globals(dbv, qug, out_buf)
 
         if converted_args:
             for arg in converted_args:
@@ -560,7 +558,6 @@ cdef WriteBuffer _decode_tuple_args(
 
 cdef _inject_globals(
     dbv: dbview.DatabaseConnectionView,
-    role_name: str,
     query_unit_or_group: object,
     out_buf: WriteBuffer,
 ):
@@ -582,7 +579,7 @@ cdef _inject_globals(
                 out_buf.write_bytes(present)
 
     if permissions := query_unit_or_group.permissions:
-        superuser, available_permissions = dbv.get_permissions(role_name)
+        superuser, available_permissions = dbv.get_permissions()
         for permission in permissions:
             out_buf.write_int32(1)
             out_buf.write_byte(

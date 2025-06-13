@@ -102,7 +102,7 @@ cdef class Database:
 
     cdef _invalidate_caches(self)
     cdef _cache_compiled_query(self, key, compiled)
-    cdef _new_view(self, query_cache, protocol_version)
+    cdef _new_view(self, query_cache, protocol_version, role_name)
     cdef _remove_view(self, view)
     cdef _observe_auth_ext_config(self)
     cdef _set_backend_ids(self, types)
@@ -137,6 +137,7 @@ cdef class DatabaseConnectionView:
         Database _db
         bint _query_cache_enabled
         object _protocol_version
+        object _role_name
         public bint is_transient
         # transient dbviews won't cause an immediate error in
         # ensure_database_not_connected(..., close_frontend_conns=False),

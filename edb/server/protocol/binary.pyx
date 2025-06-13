@@ -269,10 +269,10 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 f'database {database!r} does not accept connections'
             )
 
-        await self._start_connection(database)
-
         self.dbname = database
         self.username = user
+
+        await self._start_connection(database)
 
         if self._transport_proto is srvargs.ServerConnTransport.HTTP:
             return
@@ -365,6 +365,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             dbname=database,
             query_cache=self.query_cache_enabled,
             protocol_version=self.protocol_version,
+            role_name=self.username,
         )
         assert type(dbv) is dbview.DatabaseConnectionView
         self._dbview = <dbview.DatabaseConnectionView>dbv
@@ -465,7 +466,6 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 dbv,
                 compiled,
                 bind_args,
-                role_name=self.username,
                 fe_conn=self,
                 query_req=query_req,
             )
@@ -795,7 +795,6 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 dbv,
                 compiled,
                 bind_args,
-                role_name=self.username,
                 fe_conn=self,
                 use_prep_stmt=use_prep_stmt,
                 query_req=query_req,

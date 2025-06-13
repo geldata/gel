@@ -25,7 +25,6 @@ from edb.server.pgproto.pgproto cimport WriteBuffer
 
 cdef WriteBuffer recode_bind_args(
     dbview.DatabaseConnectionView dbv,
-    str role_name,
     dbview.CompiledQuery compiled,
     bytes bind_args,
     list converted_args,
@@ -36,7 +35,6 @@ cdef WriteBuffer recode_bind_args(
 
 cdef recode_bind_args_for_script(
     dbview.DatabaseConnectionView dbv,
-    str role_name,
     dbview.CompiledQuery compiled,
     bytes bind_args,
     object converted_args,

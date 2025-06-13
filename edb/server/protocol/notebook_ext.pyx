@@ -157,6 +157,8 @@ async def execute(db, tenant, queries: list):
         dbname=db.name,
         query_cache=False,
         protocol_version=edbdef.CURRENT_PROTOCOL,
+        # TODO: This may change
+        role_name=None,
     )
     compiler_pool = tenant.server.get_compiler_pool()
     units = await compiler_pool.compile_notebook(

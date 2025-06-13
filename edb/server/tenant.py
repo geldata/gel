@@ -1576,12 +1576,16 @@ class Tenant(ha_base.ClusterProtocol):
         dbname: str,
         query_cache: bool,
         protocol_version: defines.ProtocolVersion,
+        role_name: Optional[str],
     ) -> dbview.DatabaseConnectionView:
         db = self.get_db(dbname=dbname)
         await db.introspection()
         assert self._dbindex is not None
         return self._dbindex.new_view(
-            dbname, query_cache=query_cache, protocol_version=protocol_version
+            dbname,
+            query_cache=query_cache,
+            protocol_version=protocol_version,
+            role_name=role_name,
         )
 
     def remove_dbview(self, dbview_: dbview.DatabaseConnectionView) -> None:

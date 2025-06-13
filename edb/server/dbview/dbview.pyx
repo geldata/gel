@@ -496,9 +496,12 @@ cdef class Database:
             rv = None
         return rv
 
-    cdef _new_view(self, query_cache, protocol_version):
+    cdef _new_view(self, query_cache, protocol_version, role_name):
         view = DatabaseConnectionView(
-            self, query_cache=query_cache, protocol_version=protocol_version
+            self,
+            query_cache=query_cache,
+            protocol_version=protocol_version,
+            role_name=role_name,
         )
         self._views.add(view)
         return view
@@ -601,7 +604,9 @@ cdef class Database:
 
 cdef class DatabaseConnectionView:
 
-    def __init__(self, db: Database, *, query_cache, protocol_version):
+    def __init__(
+        self, db: Database, *, query_cache, protocol_version, role_name
+    ):
         self._db = db
 
         self._query_cache_enabled = query_cache
@@ -613,6 +618,7 @@ cdef class DatabaseConnectionView:
         self._session_state_db_cache = None
         self._session_state_cache = None
         self._state_serializer = None
+        self._role_name = role_name  # optional!
 
         if db.name == defines.EDGEDB_SYSTEM_DB:
             # Make system database read-only.
@@ -1020,8 +1026,8 @@ cdef class DatabaseConnectionView:
     def tenant(self):
         return self._db._index._tenant
 
-    def get_permissions(self, role_name: str) -> tuple[Sequence[str]]:
-        if role_desc := self.tenant.get_roles().get(role_name):
+    def get_permissions(self) -> tuple[Sequence[str]]:
+        if role_desc := self.tenant.get_roles().get(self._role_name):
             return (
                 bool(role_desc.get('superuser')),
                 (role_desc.get('all_permissions') or ())
@@ -2060,9 +2066,18 @@ cdef class DatabaseIndex:
             await self._server._after_system_config_reset(
                 op.setting_name)
 
-    def new_view(self, dbname: str, *, query_cache: bool, protocol_version):
+    def new_view(
+        self,
+        dbname: str,
+        *,
+        query_cache: bool,
+        protocol_version,
+        role_name: str | None,
+    ):
         db = self.get_db(dbname)
-        return (<Database>db)._new_view(query_cache, protocol_version)
+        return (<Database>db)._new_view(
+            query_cache, protocol_version, role_name
+        )
 
     def remove_view(self, view: DatabaseConnectionView):
         db = self.get_db(view.dbname)
