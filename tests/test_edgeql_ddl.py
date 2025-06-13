@@ -8942,7 +8942,9 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             select schema::Permission {
                 name,
                 annotations: {n := .name, v := @value},
-            };''',
+            }
+            filter .name = 'default::foo';
+            ''',
             [
                 {
                     'name': 'default::foo',
@@ -8962,7 +8964,9 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             select schema::Permission {
                 name,
                 annotations: {n := .name, v := @value},
-            };''',
+            }
+            filter .name = 'default::foo';
+            ''',
             [
                 {
                     'name': 'default::foo',
@@ -8983,7 +8987,9 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             select schema::Permission {
                 name,
                 annotations: {n := .name, v := @value},
-            };''',
+            }
+            filter .name = 'default::foo';
+            ''',
             [
                 {
                     'name': 'default::foo',
@@ -9004,7 +9010,9 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             select schema::Permission {
                 name,
                 annotations: {n := .name, v := @value},
-            };''',
+            }
+            filter .name = 'default::foo';
+            ''',
             [
                 {
                     'name': 'default::foo',
