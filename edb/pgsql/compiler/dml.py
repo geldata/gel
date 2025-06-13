@@ -1939,7 +1939,13 @@ def process_update_rewrites(
 
         # pull in contents_select for __subject__
         relctx.include_rvar(
-            rewrites_stmt, contents_rvar, subject_path_id, ctx=ctx
+            rewrites_stmt,
+            contents_rvar,
+            subject_path_id,
+            # We don't want to update the mask... in case the subject
+            # is an iterator that needs to be reexported.
+            update_mask=False,
+            ctx=ctx,
         )
         rewrites_stmt.where_clause = astutils.new_binop(
             lexpr=pathctx.get_rvar_path_identity_var(
