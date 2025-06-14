@@ -321,15 +321,17 @@ class Router:
             http_client=self.tenant.get_http_client(originator="auth"),
         )
         await pkce.create(self.db, challenge)
+        redirect_uri = (
+            allowed_callback_url.url
+            if allowed_callback_url
+            else self._get_callback_url()
+        )
         authorize_url = await oauth_client.get_authorize_url(
-            redirect_uri=(
-                allowed_callback_url.url
-                if allowed_callback_url
-                else self._get_callback_url()
-            ),
+            redirect_uri=redirect_uri,
             state=self._make_state_claims(
                 provider_name,
                 allowed_redirect_to.url,
+                redirect_uri,
                 (
                     allowed_redirect_to_on_signup.url
                     if allowed_redirect_to_on_signup
@@ -414,6 +416,7 @@ class Router:
                 cast(Optional[str], claims.get("redirect_to_on_signup"))
             )
             challenge = cast(str, claims["challenge"])
+            redirect_uri = cast(str, claims["redirect_uri"])
         except Exception:
             raise errors.InvalidData("Invalid state token")
         oauth_client = oauth.Client(
@@ -428,7 +431,7 @@ class Router:
             auth_token,
             refresh_token,
             id_token,
-        ) = await oauth_client.handle_callback(code, self._get_callback_url())
+        ) = await oauth_client.handle_callback(code, redirect_uri)
         if new_identity:
             await self._maybe_send_webhook(
                 webhook.IdentityCreated(
@@ -2114,6 +2117,7 @@ class Router:
         self,
         provider: str,
         redirect_to: str,
+        redirect_uri: str,
         redirect_to_on_signup: Optional[str],
         challenge: str,
     ) -> str:
@@ -2127,6 +2131,7 @@ class Router:
             "provider": provider,
             "exp": expires_at.timestamp(),
             "redirect_to": redirect_to,
+            "redirect_uri": redirect_uri,
             "challenge": challenge,
         }
         if redirect_to_on_signup:
