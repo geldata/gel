@@ -551,9 +551,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             self.assertEqual(claims.get("iss"), self.http_addr)
             self.assertEqual(claims.get("redirect_to"), redirect_to)
 
-            self.assertEqual(
-                qs.get("redirect_uri"), [callback_url]
-            )
+            self.assertEqual(qs.get("redirect_uri"), [callback_url])
             self.assertEqual(qs.get("client_id"), [client_id])
 
             pkce = await self.con.query(
@@ -664,171 +662,262 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             )
 
     async def test_http_auth_ext_github_callback_01(self):
-        with self.http_con() as http_con:
-            provider_config = await self.get_builtin_provider_config_by_name(
-                "oauth_github"
-            )
-            provider_name = provider_config.name
-            client_id = provider_config.client_id
-            client_secret = GITHUB_SECRET
+        base_url = self.mock_net_server.get_base_url().rstrip("/")
+        webhook_url = f"{base_url}/webhook-01"
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::WebhookConfig {
+                url := <str>$url,
+                events := {
+                    ext::auth::WebhookEvent.IdentityCreated,
+                },
+            };
+            """,
+            url=webhook_url,
+        )
+        provider_config = await self.get_builtin_provider_config_by_name(
+            "oauth_github"
+        )
+        provider_name = provider_config.name
+        client_id = provider_config.client_id
+        client_secret = GITHUB_SECRET
 
-            now = utcnow()
-            token_request = (
-                "POST",
-                "https://github.com",
-                "login/oauth/access_token",
+        now = utcnow()
+        webhook_request = (
+            "POST",
+            base_url,
+            "/webhook-01",
+        )
+        self.mock_net_server.register_route_handler(*webhook_request)(
+            (
+                "",
+                204,
             )
-            self.mock_oauth_server.register_route_handler(*token_request)(
-                (
-                    json.dumps(
-                        {
-                            "access_token": "github_access_token",
-                            "scope": "read:user",
-                            "token_type": "bearer",
-                        }
-                    ),
-                    200,
-                )
-            )
+        )
 
-            user_request = ("GET", "https://api.github.com", "user")
-            self.mock_oauth_server.register_route_handler(*user_request)(
-                (
-                    json.dumps(
-                        {
-                            "id": 1,
-                            "login": "octocat",
-                            "name": "monalisa octocat",
-                            "email": "octocat@example.com",
-                            "avatar_url": "https://example.com/example.jpg",
-                            "updated_at": now.isoformat(),
-                        }
-                    ),
-                    200,
-                )
+        token_request = (
+            "POST",
+            "https://github.com",
+            "login/oauth/access_token",
+        )
+        self.mock_oauth_server.register_route_handler(*token_request)(
+            (
+                json.dumps(
+                    {
+                        "access_token": "github_access_token",
+                        "scope": "read:user",
+                        "token_type": "bearer",
+                    }
+                ),
+                200,
             )
+        )
 
-            challenge = (
-                base64.urlsafe_b64encode(
-                    hashlib.sha256(
-                        base64.urlsafe_b64encode(os.urandom(43)).rstrip(b'=')
-                    ).digest()
-                )
-                .rstrip(b'=')
-                .decode()
+        user_request = ("GET", "https://api.github.com", "user")
+        self.mock_oauth_server.register_route_handler(*user_request)(
+            (
+                json.dumps(
+                    {
+                        "id": 1,
+                        "login": "octocat",
+                        "name": "monalisa octocat",
+                        "email": "octocat@example.com",
+                        "avatar_url": "https://example.com/example.jpg",
+                        "updated_at": now.isoformat(),
+                    }
+                ),
+                200,
             )
+        )
+        await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
+        try:
+            with self.http_con() as http_con:
+                provider_config = (
+                    await self.get_builtin_provider_config_by_name(
+                        "oauth_github"
+                    )
+                )
+                provider_name = provider_config.name
+                client_id = provider_config.client_id
+                client_secret = GITHUB_SECRET
+
+                now = utcnow()
+                token_request = (
+                    "POST",
+                    "https://github.com",
+                    "login/oauth/access_token",
+                )
+                self.mock_oauth_server.register_route_handler(*token_request)(
+                    (
+                        json.dumps(
+                            {
+                                "access_token": "github_access_token",
+                                "scope": "read:user",
+                                "token_type": "bearer",
+                            }
+                        ),
+                        200,
+                    )
+                )
+
+                user_request = ("GET", "https://api.github.com", "user")
+                self.mock_oauth_server.register_route_handler(*user_request)(
+                    (
+                        json.dumps(
+                            {
+                                "id": 1,
+                                "login": "octocat",
+                                "name": "monalisa octocat",
+                                "email": "octocat@example.com",
+                                "avatar_url": "https://example.com/example.jpg",
+                                "updated_at": now.isoformat(),
+                            }
+                        ),
+                        200,
+                    )
+                )
+
+                challenge = (
+                    base64.urlsafe_b64encode(
+                        hashlib.sha256(
+                            base64.urlsafe_b64encode(os.urandom(43)).rstrip(
+                                b'='
+                            )
+                        ).digest()
+                    )
+                    .rstrip(b'=')
+                    .decode()
+                )
+                await self.con.query(
+                    """
+                    insert ext::auth::PKCEChallenge {
+                        challenge := <str>$challenge,
+                    }
+                    """,
+                    challenge=challenge,
+                )
+
+                signing_key = await self.get_signing_key()
+
+                expires_at = now + datetime.timedelta(minutes=5)
+                state_claims = {
+                    "iss": self.http_addr,
+                    "provider": str(provider_name),
+                    "exp": expires_at.timestamp(),
+                    "redirect_to": f"{self.http_addr}/some/path",
+                    "challenge": challenge,
+                }
+                state_token = self.generate_state_value(
+                    state_claims, signing_key
+                )
+
+                data, headers, status = self.http_con_request(
+                    http_con,
+                    {"state": state_token, "code": "abc123"},
+                    path="callback",
+                )
+
+                self.assertEqual(data, b"")
+                self.assertEqual(status, 302)
+
+                location = headers.get("location")
+                assert location is not None
+                server_url = urllib.parse.urlparse(self.http_addr)
+                url = urllib.parse.urlparse(location)
+                self.assertEqual(url.scheme, server_url.scheme)
+                self.assertEqual(url.hostname, server_url.hostname)
+                self.assertEqual(url.path, f"{server_url.path}/some/path")
+
+                requests_for_token = self.mock_oauth_server.requests[
+                    token_request
+                ]
+                self.assertEqual(len(requests_for_token), 1)
+                body = requests_for_token[0].body
+                assert body is not None
+                self.assertEqual(
+                    json.loads(body),
+                    {
+                        "grant_type": "authorization_code",
+                        "code": "abc123",
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "redirect_uri": f"{self.http_addr}/callback",
+                    },
+                )
+
+                requests_for_user = self.mock_oauth_server.requests[
+                    user_request
+                ]
+                self.assertEqual(len(requests_for_user), 1)
+                self.assertEqual(
+                    requests_for_user[0].headers["authorization"],
+                    "Bearer github_access_token",
+                )
+
+                identity = await self.con.query(
+                    """
+                    SELECT ext::auth::Identity
+                    FILTER .subject = '1'
+                    AND .issuer = 'https://github.com'
+                    """
+                )
+                self.assertEqual(len(identity), 1)
+
+                pkce_object = await self.con.query(
+                    """
+                    SELECT ext::auth::PKCEChallenge
+                    { id, auth_token, refresh_token }
+                    filter .identity.id = <uuid>$identity_id
+                    """,
+                    identity_id=identity[0].id,
+                )
+
+                self.assertEqual(len(pkce_object), 1)
+                self.assertEqual(
+                    pkce_object[0].auth_token, "github_access_token"
+                )
+                self.assertIsNone(pkce_object[0].refresh_token)
+
+                self.mock_oauth_server.register_route_handler(*user_request)(
+                    (
+                        json.dumps(
+                            {
+                                "id": 1,
+                                "login": "octocat",
+                                "name": "monalisa octocat",
+                                "email": "octocat+2@example.com",
+                                "avatar_url": "https://example.com/example.jpg",
+                                "updated_at": now.isoformat(),
+                            }
+                        ),
+                        200,
+                    )
+                )
+                self.http_con_request(
+                    http_con,
+                    {"state": state_token, "code": "abc123"},
+                    path="callback",
+                )
+
+                same_identity = await self.con.query(
+                    """
+                    SELECT ext::auth::Identity
+                    FILTER .subject = '1'
+                    AND .issuer = 'https://github.com'
+                    """
+                )
+                self.assertEqual(len(same_identity), 1)
+                self.assertEqual(identity[0].id, same_identity[0].id)
+        finally:
             await self.con.query(
                 """
-                insert ext::auth::PKCEChallenge {
-                    challenge := <str>$challenge,
-                }
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::WebhookConfig
+                filter .url = <str>$url;
                 """,
-                challenge=challenge,
+                url=webhook_url,
             )
-
-            signing_key = await self.get_signing_key()
-
-            expires_at = now + datetime.timedelta(minutes=5)
-            state_claims = {
-                "iss": self.http_addr,
-                "provider": str(provider_name),
-                "exp": expires_at.timestamp(),
-                "redirect_to": f"{self.http_addr}/some/path",
-                "challenge": challenge,
-            }
-            state_token = self.generate_state_value(state_claims, signing_key)
-
-            data, headers, status = self.http_con_request(
-                http_con,
-                {"state": state_token, "code": "abc123"},
-                path="callback",
-            )
-
-            self.assertEqual(data, b"")
-            self.assertEqual(status, 302)
-
-            location = headers.get("location")
-            assert location is not None
-            server_url = urllib.parse.urlparse(self.http_addr)
-            url = urllib.parse.urlparse(location)
-            self.assertEqual(url.scheme, server_url.scheme)
-            self.assertEqual(url.hostname, server_url.hostname)
-            self.assertEqual(url.path, f"{server_url.path}/some/path")
-
-            requests_for_token = self.mock_oauth_server.requests[token_request]
-            self.assertEqual(len(requests_for_token), 1)
-            body = requests_for_token[0].body
-            assert body is not None
-            self.assertEqual(
-                json.loads(body),
-                {
-                    "grant_type": "authorization_code",
-                    "code": "abc123",
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "redirect_uri": f"{self.http_addr}/callback",
-                },
-            )
-
-            requests_for_user = self.mock_oauth_server.requests[user_request]
-            self.assertEqual(len(requests_for_user), 1)
-            self.assertEqual(
-                requests_for_user[0].headers["authorization"],
-                "Bearer github_access_token",
-            )
-
-            identity = await self.con.query(
-                """
-                SELECT ext::auth::Identity
-                FILTER .subject = '1'
-                AND .issuer = 'https://github.com'
-                """
-            )
-            self.assertEqual(len(identity), 1)
-
-            pkce_object = await self.con.query(
-                """
-                SELECT ext::auth::PKCEChallenge
-                { id, auth_token, refresh_token }
-                filter .identity.id = <uuid>$identity_id
-                """,
-                identity_id=identity[0].id,
-            )
-
-            self.assertEqual(len(pkce_object), 1)
-            self.assertEqual(pkce_object[0].auth_token, "github_access_token")
-            self.assertIsNone(pkce_object[0].refresh_token)
-
-            self.mock_oauth_server.register_route_handler(*user_request)(
-                (
-                    json.dumps(
-                        {
-                            "id": 1,
-                            "login": "octocat",
-                            "name": "monalisa octocat",
-                            "email": "octocat+2@example.com",
-                            "avatar_url": "https://example.com/example.jpg",
-                            "updated_at": now.isoformat(),
-                        }
-                    ),
-                    200,
-                )
-            )
-            self.http_con_request(
-                http_con,
-                {"state": state_token, "code": "abc123"},
-                path="callback",
-            )
-
-            same_identity = await self.con.query(
-                """
-                SELECT ext::auth::Identity
-                FILTER .subject = '1'
-                AND .issuer = 'https://github.com'
-                """
-            )
-            self.assertEqual(len(same_identity), 1)
-            self.assertEqual(identity[0].id, same_identity[0].id)
 
     async def test_http_auth_ext_github_callback_failure_01(self):
         with self.http_con() as http_con:
