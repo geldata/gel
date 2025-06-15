@@ -74,6 +74,7 @@ STD_MODULES = (
     sn.UnqualName('schema'),
     sn.UnqualName('std::math'),
     sn.UnqualName('sys'),
+    sn.UnqualName('sys::perm'),
     sn.UnqualName('cfg'),
     sn.UnqualName('std::cal'),
     sn.UnqualName('std::net'),

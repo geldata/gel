@@ -1614,6 +1614,7 @@ class TestLanguageServer(unittest.TestCase):
                             {'kind': 9, 'label': 'std::net'},
                             {'kind': 9, 'label': 'sys', 'insertText': 'sys::'},
                             {'kind': 9, 'label': 'cfg', 'insertText': 'cfg::'},
+                            {'kind': 9, 'label': 'sys::perm'},
                             {'kind': 9, 'label': 'std::net::http'},
                             {'kind': 9, 'label': 'std::pg'},
                             {'kind': 9, 'label': 'std::cal'},

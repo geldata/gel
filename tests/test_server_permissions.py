@@ -276,7 +276,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             CREATE ROLE foo {
                 SET password := 'secret';
                 SET permissions := {
-                    sys::data_modification,
+                    sys::perm::data_modification,
                     default::perm_a,
                 };
             };
@@ -322,7 +322,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             CREATE ROLE foo {
                 SET password := 'secret';
                 SET permissions := {
-                    sys::data_modification,
+                    sys::perm::data_modification,
                 };
             };
             CREATE PERMISSION default::perm_a;
@@ -359,7 +359,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             ''')
 
     async def test_server_permissions_data_modification_01(self):
-        # Non-superuser without sys::data_modification
+        # Non-superuser without sys::perm::data_modification
         # cannot insert, update or delete
 
         await self.con.query('''
@@ -422,14 +422,14 @@ class TestServerPermissions(tb.ConnectedTestCase):
             ''')
 
     async def test_server_permissions_data_modification_02(self):
-        # Non-superuser with sys::data_modification
+        # Non-superuser with sys::perm::data_modification
         # can insert, update or delete
 
         await self.con.query('''
             CREATE ROLE foo {
                 SET password := 'secret';
                 SET permissions := {
-                    sys::data_modification,
+                    sys::perm::data_modification,
                 };
             };
             CREATE TYPE Widget {
@@ -489,7 +489,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             CREATE ROLE foo {
                 SET password := 'secret';
                 SET permissions := {
-                    sys::data_modification,
+                    sys::perm::data_modification,
                 };
             };
             CREATE TYPE Widget {
@@ -505,7 +505,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
                 password='secret',
             )
 
-            # Starts with sys::data_modification
+            # Starts with sys::perm::data_modification
             await conn.execute("""
                 INSERT Widget { n := 2 };
             """)
@@ -517,7 +517,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
                 ],
             )
 
-            # Remove sys::data_modification
+            # Remove sys::perm::data_modification
             await self.con.execute('''
                 ALTER ROLE foo {
                     SET permissions := {};
@@ -541,11 +541,11 @@ class TestServerPermissions(tb.ConnectedTestCase):
                 ],
             )
 
-            # Re-add sys::data_modification
+            # Re-add sys::perm::data_modification
             await self.con.execute('''
                 ALTER ROLE foo {
                     SET permissions := {
-                        sys::data_modification,
+                        sys::perm::data_modification,
                     };
                 };
             ''')

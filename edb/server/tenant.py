@@ -448,11 +448,11 @@ class Tenant(ha_base.ClusterProtocol):
 
                 # Non-superuser can be given capabilities via
                 # the permissions
-                if 'sys::data_modification' in available_permissions:
+                if 'sys::perm::data_modification' in available_permissions:
                     capability |= compiler_enums.Capability.MODIFICATIONS
-                if 'sys::ddl' in available_permissions:
+                if 'sys::perm::ddl' in available_permissions:
                     capability |= compiler_enums.Capability.DDL
-                if 'sys::persistent_config' in available_permissions:
+                if 'sys::perm::persistent_config' in available_permissions:
                     capability |= compiler_enums.Capability.PERSISTENT_CONFIG
 
             role_capabilities[name] = capability

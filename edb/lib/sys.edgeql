@@ -445,6 +445,7 @@ sys::approximate_count(
 };
 
 
-CREATE PERMISSION sys::data_modification;
-CREATE PERMISSION sys::ddl;
-CREATE PERMISSION sys::persistent_config;
+CREATE MODULE sys::perm;
+CREATE PERMISSION sys::perm::data_modification;
+CREATE PERMISSION sys::perm::ddl;
+CREATE PERMISSION sys::perm::persistent_config;

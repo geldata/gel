@@ -11069,7 +11069,7 @@ type default::Foo {
         await self.con.execute(r"""
             CREATE ROLE foo_08 {
                 SET permissions := {
-                    default::foo, custom::bar, sys::data_modification
+                    default::foo, custom::bar, sys::perm::data_modification
                 };
             };
         """)
@@ -11087,7 +11087,7 @@ type default::Foo {
                 'permissions': [
                     'custom::bar',
                     'default::foo',
-                    'sys::data_modification',
+                    'sys::perm::data_modification',
                 ],
             }]
         )
@@ -11128,7 +11128,7 @@ type default::Foo {
         await self.con.execute(r"""
             ALTER ROLE foo_10 {
                 SET permissions := {
-                    default::foo, custom::bar, sys::data_modification
+                    default::foo, custom::bar, sys::perm::data_modification
                 };
             };
         """)
@@ -11146,7 +11146,7 @@ type default::Foo {
                 'permissions': [
                     'custom::bar',
                     'default::foo',
-                    'sys::data_modification',
+                    'sys::perm::data_modification',
                 ],
             }]
         )
@@ -11173,7 +11173,7 @@ type default::Foo {
             };
             CREATE ROLE perm_inh_01_g EXTENDING perm_inh_01_a, perm_inh_01_c;
             CREATE ROLE perm_inh_01_h EXTENDING perm_inh_01_a {
-                SET permissions := sys::data_modification
+                SET permissions := sys::perm::data_modification
             };
             CREATE ROLE perm_inh_01_i EXTENDING perm_inh_01_h, perm_inh_01_c;
         """)
@@ -11243,10 +11243,10 @@ type default::Foo {
                 },
                 {
                     'name': 'perm_inh_01_h',
-                    'permissions': ['sys::data_modification'],
+                    'permissions': ['sys::perm::data_modification'],
                     'all_permissions': tb.bag([
                         'default::foo',
-                        'sys::data_modification',
+                        'sys::perm::data_modification',
                     ]),
                 },
                 {
@@ -11256,7 +11256,7 @@ type default::Foo {
                         'custom::bar',
                         'custom::baz',
                         'default::foo',
-                        'sys::data_modification',
+                        'sys::perm::data_modification',
                     ]),
                 },
             ]
@@ -11404,7 +11404,7 @@ type default::Foo {
             CREATE ROLE subuser4 EXTENDING subuser1 {
                 SET password := 'test_c';
                 SET permissions := {
-                    default::foo, custom::bar, sys::data_modification
+                    default::foo, custom::bar, sys::perm::data_modification
                 };
             };
             CREATE ROLE subuser5 EXTENDING subuser3;
@@ -11452,7 +11452,7 @@ type default::Foo {
                 r"SET permissions := { "
                     r"custom::bar, "
                     r"default::foo, "
-                    r"sys::data_modification "
+                    r"sys::perm::data_modification "
                 r"}; "
             r"};"
         )
