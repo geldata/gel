@@ -382,7 +382,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             with self.assertRaisesRegex(
                 edgedb.DisabledCapabilityError,
                 'cannot execute data modification queries: '
-                'disabled by the client'
+                'role foo does not have permission'
             ):
                 await conn.execute("""
                     INSERT Widget { n := 2 };
@@ -391,7 +391,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             with self.assertRaisesRegex(
                 edgedb.DisabledCapabilityError,
                 'cannot execute data modification queries: '
-                'disabled by the client'
+                'role foo does not have permission'
             ):
                 await conn.execute("""
                     UPDATE Widget SET { n := .n + 1 };
@@ -400,7 +400,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             with self.assertRaisesRegex(
                 edgedb.DisabledCapabilityError,
                 'cannot execute data modification queries: '
-                'disabled by the client'
+                'role foo does not have permission'
             ):
                 await conn.execute("""
                     DELETE Widget;
@@ -527,7 +527,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             with self.assertRaisesRegex(
                 edgedb.DisabledCapabilityError,
                 'cannot execute data modification queries: '
-                'disabled by the client'
+                'role foo does not have permission'
             ):
                 await conn.execute("""
                     INSERT Widget { n := 3 };
@@ -654,7 +654,7 @@ class TestServerPermissions(tb.ConnectedTestCase):
             with self.assertRaisesRegex(
                 edgedb.DisabledCapabilityError,
                 'cannot execute DDL commands: '
-                'disabled by the client'
+                'role foo does not have permission'
             ):
                 await conn.execute("""
                     CREATE TYPE Widget;

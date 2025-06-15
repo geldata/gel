@@ -1454,9 +1454,6 @@ cdef class DatabaseConnectionView:
                 else:
                     raise
 
-            role_capability = self.get_role_capability()
-            allow_capabilities = allow_capabilities & role_capability
-
             self.check_capabilities(
                 query_unit_group.capabilities,
                 allow_capabilities,
@@ -1801,6 +1798,14 @@ cdef class DatabaseConnectionView:
                 allowed_capabilities,
                 error_constructor,
                 reason,
+            )
+
+        role_capability = self.get_role_capability()
+        if query_capabilities & ~role_capability:
+            raise query_capabilities.make_error(
+                role_capability,
+                error_constructor,
+                f"role {self._role_name} does not have permission",
             )
 
         if self.tenant.is_readonly():
