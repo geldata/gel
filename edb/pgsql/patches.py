@@ -312,4 +312,19 @@ std::to_bytes(j: std::json) -> std::bytes {
     ('metaschema-sql', 'JSONIndexByTextFunction'),
     ('metaschema-sql', 'JSONIndexByIntFunction'),
     ('metaschema-sql', 'JSONSliceFunction'),
+    ('edgeql', '''
+CREATE MODULE std::lang;
+
+CREATE MODULE std::lang::go;
+CREATE ABSTRACT ANNOTATION std::lang::go::type;
+
+CREATE MODULE std::lang::js;
+CREATE ABSTRACT ANNOTATION std::lang::js::type;
+
+CREATE MODULE std::lang::py;
+CREATE ABSTRACT ANNOTATION std::lang::py::type;
+
+CREATE MODULE std::lang::rs;
+CREATE ABSTRACT ANNOTATION std::lang::rs::type;
+'''),
 ]
