@@ -23,6 +23,7 @@ from typing import Any, Optional
 import dataclasses
 import json
 import textwrap
+import uuid
 
 from edb import errors
 
@@ -66,6 +67,7 @@ from edb.pgsql import delta as pg_delta
 from edb.pgsql import dbops as pg_dbops
 
 from . import dbstate
+from . import enums
 from . import compiler
 
 
@@ -1837,6 +1839,148 @@ def administer_prepare_upgrade(
         cacheable=False,
         migration_block_query=True,
     )
+
+
+def _get_index(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> tuple[s_indexes.Index, s_schema.Schema]:
+    if len(ql.expr.args) != 1 or ql.expr.kwargs:
+        raise errors.QueryError(
+            f'{ql.expr.func}() takes exactly one positional argument',
+            span=ql.expr.span,
+        )
+
+    # This is janky, and we shouldn't do it.
+    arg = ql.expr.args[0]
+    match arg:
+        case qlast.Constant(
+            kind=qlast.ConstantKind.STRING,
+            value=id_string,
+        ):
+            pass
+        case _:
+            raise errors.QueryError(
+                f'argument to {ql.expr.func}() must be a string literal',
+                span=arg.span,
+            )
+
+    try:
+        id = uuid.UUID(id_string)
+    except ValueError:
+        # XXX
+        raise errors.QueryError("Invalid index id")
+
+    user_schema = ctx.state.current_tx().get_user_schema()
+    global_schema = ctx.state.current_tx().get_global_schema()
+
+    schema = s_schema.ChainedSchema(
+        ctx.compiler_state.std_schema,
+        user_schema,
+        global_schema
+    )
+
+    index = schema.get_by_id(id, type=s_indexes.Index)
+    return index, schema
+
+
+def administer_concurrent_index_create(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    index, schema = _get_index(ctx, ql)
+
+    if not index.get_create_concurrently(schema):
+        raise errors.QueryError("Index was not created concurrently")
+    if index.get_active(schema):
+        raise errors.QueryError("Index is already active")
+
+    delta_context = _new_delta_context(ctx)
+
+    create_index = pg_delta.CreateIndex.create_index(
+        index, schema, delta_context
+    )
+
+    block = pg_dbops.SQLBlock()
+    block.set_non_transactional()
+    create_index.generate(block)
+    # HACK: just grab the first
+    # where do the comments even get done??
+    assert isinstance(block.commands[0], pg_dbops.PLBlock)
+    statements = block.commands[0].get_statements()
+    command, _ = statements
+
+    return dbstate.MaintenanceQuery(
+        sql=command.encode('utf-8'),
+        is_transactional=False,
+    )
+
+
+def administer_concurrent_index_update(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    user_schema = ctx.state.current_tx().get_user_schema()
+    global_schema = ctx.state.current_tx().get_global_schema()
+    schema = s_schema.ChainedSchema(
+        ctx.compiler_state.std_schema,
+        user_schema,
+        global_schema
+    )
+    delta_context = _new_delta_context(ctx)
+
+    block = pg_dbops.PLTopBlock()
+
+    indexes = schema.get_objects(
+        exclude_stdlib=True,
+        type=s_indexes.Index,
+    )
+    for index in indexes:
+        if (
+            not index.get_create_concurrently(schema)
+            or index.get_active(schema)
+        ):
+            continue
+
+        create_index = pg_delta.CreateIndex.create_index(
+            index, schema, delta_context
+        )
+        assert isinstance(create_index, pg_dbops.CreateIndex)
+        index_op = create_index.index
+        condition = pg_dbops.IndexExists(
+            (index_op.table_name[0], index_op.name_in_catalog)
+        )
+
+        # Extract the comments
+        subblock = pg_dbops.SQLBlock()
+        subblock.set_non_transactional()
+        create_index.generate(subblock)
+        # HACK: just grab the comments
+        assert isinstance(subblock.commands[0], pg_dbops.PLBlock)
+        statements = subblock.commands[0].get_statements()
+        _, comments = statements
+
+        # Update the schema::Index
+        eql = f'''
+            update schema::Index filter .id = <uuid>"{index.id}"
+            set {{ active := true }}
+        '''
+        sql, args = compiler._compile_schema_storage_stmt(
+            ctx, eql, output_format=enums.OutputFormat.NONE
+        )
+        assert not args
+        # If the index exists, mark it as active and add the comment
+        # to it.
+        block.add_command(
+            sql + ' INTO _dummy_text;\n' + comments,
+            conditions=[condition],
+        )
+
+    return dbstate.MaintenanceQuery(
+        sql=block.to_string().encode('utf-8'),
+        # Trigger a schema reload from the db, to sync up the 'active' flag.
+        reload_schema=True,
+     )
 
 
 def validate_schema_equivalence(

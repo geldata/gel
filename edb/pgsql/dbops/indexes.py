@@ -74,7 +74,11 @@ class Index(tables.InheritableTableObject):
                 raise NotImplementedError()
             self._columns.add(col)
 
-    def creation_code(self) -> str:
+    def creation_code(
+        self,
+        concurrently: bool = False,
+        conditional: bool = False,
+    ) -> str:
         if self.exprs:
             exprs = self.exprs
         else:
@@ -91,7 +95,13 @@ class Index(tables.InheritableTableObject):
         code = 'CREATE'
         if self.unique:
             code += ' UNIQUE'
-        code += f' INDEX {qn(self.name_in_catalog)} ON {qn(*self.table_name)}'
+        code += f' INDEX'
+        if concurrently:
+            code += ' CONCURRENTLY'
+        if conditional:
+            code += ' IF NOT EXISTS'
+
+        code += f' {qn(self.name_in_catalog)} ON {qn(*self.table_name)}'
 
         if using:
             code += f' USING {using}'
@@ -203,17 +213,24 @@ class CreateIndex(ddl.CreateObject):
         index: Index,
         *,
         conditional: bool = False,
+        builtin_conditional: bool = False,
+        concurrently: bool = False,
         **kwargs: Any
     ) -> None:
         super().__init__(index, **kwargs)
         self.index = index
+        self.concurrently = concurrently
+        self.builtin_conditional = builtin_conditional
         if conditional:
             self.neg_conditions.add(
                 IndexExists((index.table_name[0], index.name_in_catalog))
             )
 
     def code(self) -> str:
-        return self.index.creation_code()
+        return self.index.creation_code(
+            concurrently=self.concurrently,
+            conditional=self.builtin_conditional,
+        )
 
 
 class DropIndex(ddl.DropObject):
