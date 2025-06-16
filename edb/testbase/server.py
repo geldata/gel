@@ -855,8 +855,8 @@ class ClusterTestCase(TestCaseWithHttpClient):
         cls,
         *,
         cluster=None,
-        database=edgedb_defines.EDGEDB_SUPERUSER_DB,
-        user=edgedb_defines.EDGEDB_SUPERUSER,
+        database=None,
+        user=None,
         password=None,
         secret_key=None,
     ):
@@ -864,6 +864,10 @@ class ClusterTestCase(TestCaseWithHttpClient):
             password = "test"
         if cluster is None:
             cluster = cls.cluster
+        if database is None:
+            database = edgedb_defines.EDGEDB_SUPERUSER_DB
+        if user is None:
+            user = edgedb_defines.EDGEDB_SUPERUSER
         conargs = cluster.get_connect_args().copy()
         conargs.update(dict(user=user,
                             password=password,
@@ -872,9 +876,7 @@ class ClusterTestCase(TestCaseWithHttpClient):
         return conargs
 
     @classmethod
-    def make_auth_header(
-        cls, user=edgedb_defines.EDGEDB_SUPERUSER, password=None
-    ):
+    def make_auth_header(cls, user=None, password=None):
         # urllib *does* have actual support for basic auth but it is so much
         # more annoying than just doing it yourself...
         conargs = cls.get_connect_args(user=user, password=password)
@@ -1085,8 +1087,8 @@ class ConnectedTestCase(ClusterTestCase):
         cls,
         *,
         cluster=None,
-        database=edgedb_defines.EDGEDB_SUPERUSER_DB,
-        user=edgedb_defines.EDGEDB_SUPERUSER,
+        database=None,
+        user=None,
         password=None,
         secret_key=None,
     ) -> tconn.Connection:
@@ -1461,6 +1463,18 @@ class DatabaseTestCase(ConnectedTestCase):
                     await drop_db(admin_conn, dbname)
                 finally:
                     await admin_conn.aclose()
+
+    @classmethod
+    def get_connect_args(
+        cls,
+        *,
+        database=None,
+        **kwargs,
+    ):
+        return super().get_connect_args(
+            database=database or cls.get_database_name(),
+            **kwargs,
+        )
 
     @classmethod
     def get_database_name(cls):

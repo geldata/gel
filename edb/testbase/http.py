@@ -127,6 +127,9 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
         variables=None,
         globals=None,
         origin=None,
+
+        user=None,
+        password=None,
     ):
         req_data = {"query": query}
 
@@ -137,7 +140,9 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
                 req_data["globals"] = globals
             req = urllib.request.Request(self.http_addr, method="POST")
             req.add_header("Content-Type", "application/json")
-            req.add_header("Authorization", self.make_auth_header())
+            req.add_header(
+                "Authorization", self.make_auth_header(user, password)
+            )
             if origin:
                 req.add_header("Origin", origin)
             response = urllib.request.urlopen(
@@ -152,7 +157,9 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
             req = urllib.request.Request(
                 f"{self.http_addr}/?{urllib.parse.urlencode(req_data)}",
             )
-            req.add_header("Authorization", self.make_auth_header())
+            req.add_header(
+                "Authorization", self.make_auth_header(user, password)
+            )
             response = urllib.request.urlopen(
                 req,
                 context=self.tls_context,
