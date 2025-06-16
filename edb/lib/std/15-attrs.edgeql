@@ -32,9 +32,5 @@ CREATE ABSTRACT ANNOTATION std::deprecated {
 CREATE ABSTRACT ANNOTATION std::identifier;
 
 CREATE MODULE std::lang;
-CREATE ABSTRACT ANNOTATION std::lang::py {
-    CREATE ANNOTATION std::description := 'A hint to Python bindings.';
-};
-CREATE ABSTRACT ANNOTATION std::lang::js {
-    CREATE ANNOTATION std::description := 'A hint to JS bindings.';
-};
+CREATE MODULE std::lang::py;
+CREATE ABSTRACT ANNOTATION std::lang::py::type;
