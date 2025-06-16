@@ -884,3 +884,68 @@ Fixes
 
 * Fix exponential time (in inheritance depth) migrations when altering things
   (:eql:gh:`#8671`)
+
+
+6.8
+===
+
+* Fix having unnecessary constraint triggers after restore
+  (:eql:gh:`#8685`)
+
+* Fix bogus warnings when using certain functions in access policies
+  (:eql:gh:`#8712`)
+
+* Re-disable doing certain UPDATEs on just INSERTed objects
+  (:eql:gh:`#8713`)
+
+* Fix ``administer schema_repair()``
+  (:eql:gh:`#8730`)
+
+* Fix ``IN`` when left hand side is a SQL NULL
+  (:eql:gh:`#8737`)
+
+* Do better multiplicity inference in nested ``FOR`` expressions
+  (:eql:gh:`#8754`)
+
+* Add json implementation for ``to_bytes`` function.
+  (:eql:gh:`#8723`)
+
+* Speed up use of globals from graphql and http endpoints via caching
+  (:eql:gh:`#8753`)
+
+* Cache param conversion in HTTP and graphql endpoints
+  (:eql:gh:`#8795`)
+
+* Fix issue with some recursive triggers
+  (:eql:gh:`#8775`)
+
+* Fix interaction between inlining, globals, and the HTTP protocols
+  (:eql:gh:`#8781`)
+
+* Fix some situations where ``__tid__`` wasn't appearing first
+  (:eql:gh:`#8783`)
+
+* Fix the command status of BEGIN in the SQL protocol, which should
+  fix JDBC connections
+  (:eql:gh:`#8794`)
+
+* Add a test case for mutation rewrites
+  (:eql:gh:`#8589`)
+
+* Fix ``FOR`` + ``UPDATE`` + rewrite interaction
+  (:eql:gh:`#8796`)
+
+* Improve system API responsiveness
+  (:eql:gh:`#8477`)
+
+* Send ``IdentityCreated`` webhook for OAuth sign up
+  (:eql:gh:`#8799`)
+
+* Use provided callback URL in OAuth code exchange
+  (:eql:gh:`#8801`)
+
+* Fix rewrites making ``UPDATE`` infer as ``ONE``
+  (:eql:gh:`#8800`)
+
+* Increase performance of array/json indexing and json to scalar casts
+  (:eql:gh:`#8804`)
