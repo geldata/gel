@@ -83,7 +83,10 @@ STD_MODULES = (
     sn.UnqualName('std::_test'),
     sn.UnqualName('std::fts'),
     sn.UnqualName('std::lang'),
+    sn.UnqualName('std::lang::go'),
+    sn.UnqualName('std::lang::js'),
     sn.UnqualName('std::lang::py'),
+    sn.UnqualName('std::lang::rs'),
     EXT_MODULE,
     sn.UnqualName('std::enc'),
 )

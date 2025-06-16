@@ -32,5 +32,15 @@ CREATE ABSTRACT ANNOTATION std::deprecated {
 CREATE ABSTRACT ANNOTATION std::identifier;
 
 CREATE MODULE std::lang;
+
+CREATE MODULE std::lang::go;
+CREATE ABSTRACT ANNOTATION std::lang::go::type;
+
+CREATE MODULE std::lang::js;
+CREATE ABSTRACT ANNOTATION std::lang::js::type;
+
 CREATE MODULE std::lang::py;
 CREATE ABSTRACT ANNOTATION std::lang::py::type;
+
+CREATE MODULE std::lang::rs;
+CREATE ABSTRACT ANNOTATION std::lang::rs::type;
