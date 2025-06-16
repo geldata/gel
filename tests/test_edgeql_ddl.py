@@ -9632,6 +9632,8 @@ class TestEdgeQLDDL(tb.DDLTestCase):
                 property name -> str;
                 index ON (.name) {
                     annotation title := 'name index';
+                    annotation lang::py := 'null';
+                    annotation lang::js := 'false';
                 }
             }
         ''')
@@ -9654,10 +9656,20 @@ class TestEdgeQLDDL(tb.DDLTestCase):
             [{
                 "indexes": [{
                     "expr": ".name",
-                    "annotations": [{
-                        "name": "std::title",
-                        "@value": "name index",
-                    }]
+                    "annotations": tb.bag([
+                        {
+                            "name": "std::title",
+                            "@value": "name index",
+                        },
+                        {
+                            "name": "std::lang::py",
+                            "@value": "null",
+                        },
+                        {
+                            "name": "std::lang::js",
+                            "@value": "false",
+                        },
+                    ])
                 }]
             }]
         )

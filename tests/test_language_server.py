@@ -1531,6 +1531,13 @@ class TestLanguageServer(unittest.TestCase):
             runner.finish()
 
     def test_language_server_completion_07(self):
+        from edb.schema import schema
+        std_module_completions = [
+            {'kind': 9, 'label': f'{m}', 'insertText': f'{m}::'}
+            for m in schema.STD_MODULES
+            if str(m) != 'std::_test'
+        ]
+
         # empty document
         runner = LspRunner()
         try:
@@ -1611,25 +1618,12 @@ class TestLanguageServer(unittest.TestCase):
                             {'kind': 22, 'label': 'Player'},
                             {'kind': 22, 'label': 'Club'},
                             {'kind': 12, 'label': 'age'},
-                            {'kind': 9, 'label': 'std::net'},
-                            {'kind': 9, 'label': 'sys', 'insertText': 'sys::'},
-                            {'kind': 9, 'label': 'cfg', 'insertText': 'cfg::'},
-                            {'kind': 9, 'label': 'sys::perm'},
-                            {'kind': 9, 'label': 'std::net::http'},
-                            {'kind': 9, 'label': 'std::pg'},
-                            {'kind': 9, 'label': 'std::cal'},
-                            {'kind': 9, 'label': 'std::enc'},
-                            {'kind': 9, 'label': 'std::math'},
                             {'kind': 9, 'label': 'another'},
-                            {'kind': 9, 'label': 'std', 'insertText': 'std::'},
-                            {'kind': 9, 'label': 'schema'},
                             {'kind': 9, 'label': 'default'},
                             {'kind': 9, 'label': 'flat'},
-                            {'kind': 9, 'label': 'ext'},
-                            {'kind': 9, 'label': 'std::fts'},
                             {'kind': 14, 'label': 'optional'},
                             {'kind': 14, 'label': 'single'},
-                        ]),
+                        ] + std_module_completions),
                     },
                 },
                 fail=self.fail
