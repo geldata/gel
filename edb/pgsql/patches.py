@@ -303,4 +303,13 @@ std::to_bytes(j: std::json) -> std::bytes {
     USING (to_bytes(to_str(j)));
 };
 '''),
+    ('metaschema-sql', 'ArrayIndexWithBoundsFunction'),
+    ('metaschema-sql', 'ArraySliceFunction'),
+    ('metaschema-sql', 'StringIndexWithBoundsFunction'),
+    ('metaschema-sql', 'BytesIndexWithBoundsFunction'),
+    ('metaschema-sql', 'StringSliceFunction'),
+    ('metaschema-sql', 'BytesSliceFunction'),
+    ('metaschema-sql', 'JSONIndexByTextFunction'),
+    ('metaschema-sql', 'JSONIndexByIntFunction'),
+    ('metaschema-sql', 'JSONSliceFunction'),
 ]
