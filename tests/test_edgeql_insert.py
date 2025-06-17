@@ -7951,7 +7951,7 @@ class TestInsert(tb.DDLTestCase):
     async def test_edgeql_insert_read_only_tx_01(self):
         con = (
             edgedb.create_async_client(
-                **self.get_connect_args(database=self.con.dbname)
+                **self.get_connect_args()
             ).with_transaction_options(
                 edgedb.TransactionOptions(readonly=True)
             )
@@ -7974,7 +7974,7 @@ class TestInsert(tb.DDLTestCase):
 
         con = (
             edgedb.create_async_client(
-                **self.get_connect_args(database=self.con.dbname)
+                **self.get_connect_args()
             ).with_transaction_options(
                 edgedb.TransactionOptions(readonly=True)
             )

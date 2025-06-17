@@ -11592,7 +11592,7 @@ class TestEdgeQLFunctionsInlineTransaction(tb.QueryTestCase):
     async def test_edgeql_functions_inline_transaction_dml_01(self):
         con = (
             edgedb.create_async_client(
-                **self.get_connect_args(database=self.con.dbname)
+                **self.get_connect_args()
             ).with_transaction_options(
                 edgedb.TransactionOptions(readonly=True)
             )

@@ -19990,7 +19990,7 @@ class TestDDLNonIsolated(tb.DDLTestCase):
 
         try:
             for _ in range(2):
-                con = await self.connect(database=self.con.dbname)
+                con = await self.connect()
                 await con.query('select 1')
                 cons.append(con)
             con2, con3 = cons
