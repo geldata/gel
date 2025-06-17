@@ -2479,6 +2479,7 @@ async def handle_request(
     request: protocol.HttpRequest,
     response: protocol.HttpResponse,
     db: dbview.Database,
+    role_name: str,
     args: list[str],
     tenant: srv_tenant.Tenant,
 ) -> None:
@@ -2502,9 +2503,13 @@ async def handle_request(
 
     try:
         if args[0] == "rag":
-            await _handle_rag_request(protocol, request, response, db, tenant)
+            await _handle_rag_request(
+                protocol, request, response, db, role_name, tenant
+            )
         elif args[0] == "embeddings":
-            await _handle_embeddings_request(request, response, db, tenant)
+            await _handle_embeddings_request(
+                request, response, db, role_name, tenant
+            )
         else:
             response.body = b'Unknown path'
             response.status = http.HTTPStatus.NOT_FOUND
@@ -2529,6 +2534,7 @@ async def _handle_rag_request(
     request: protocol.HttpRequest,
     response: protocol.HttpResponse,
     db: dbview.Database,
+    role_name: str,
     tenant: srv_tenant.Tenant,
 ) -> None:
     try:
@@ -2759,6 +2765,7 @@ async def _handle_rag_request(
         http_client,
         ctx_query,
         content=query,
+        role_name=role_name,
     )
 
     ctx_query = f"""
@@ -2785,6 +2792,7 @@ async def _handle_rag_request(
         query=ctx_query,
         variables=ctx_variables,
         globals_=ctx_globals,
+        role_name=role_name,
     )
     if len(context) == 0:
         raise BadRequestError(
@@ -2813,6 +2821,7 @@ async def _handle_rag_request(
 
         prompts = await _edgeql_query_json(
             db=db,
+            role_name=role_name,
             query=prompt_query,
             variables=prompt_variables,
         )
@@ -2873,6 +2882,7 @@ async def _handle_embeddings_request(
     request: protocol.HttpRequest,
     response: protocol.HttpResponse,
     db: dbview.Database,
+    role_name: str,
     tenant: srv_tenant.Tenant,
 ) -> None:
     try:
@@ -2973,6 +2983,7 @@ async def _edgeql_query_json(
     *,
     db: dbview.Database,
     query: str,
+    role_name: str | None,
     variables: Optional[dict[str, Any]] = None,
     globals_: Optional[dict[str, Any]] = None,
 ) -> list[Any]:
@@ -3080,6 +3091,7 @@ async def _get_model_annotation_as_json(
 ) -> Any:
     models = await _edgeql_query_json(
         db=db,
+        role_name=None,
         query="""
         WITH
             base_model_type := <str>$base_model_type,
@@ -3149,12 +3161,14 @@ async def _generate_embeddings_for_type(
     http_client: http.HttpClient,
     type_query: str,
     content: str,
+    role_name: str,
 ) -> tuple[ProviderConfig, bytes]:
     type_desc = await execute.describe(
         db,
         f"SELECT ({type_query})",
         allow_capabilities=compiler.Capability.NONE,
         query_tag='gel/ai',
+        role_name=role_name,
     )
     if (
         not isinstance(type_desc, sertypes.ShapeDesc)
@@ -3466,6 +3480,7 @@ async def get_ai_index_for_type(
                 .ancestors.name = 'ext::ai::index'
             """,
             variables={"type_id": str(type_id)},
+            role_name=None,
         )
         if len(indexes) == 0:
             raise errors.InvalidReferenceError(

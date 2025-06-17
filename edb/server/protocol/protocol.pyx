@@ -662,10 +662,12 @@ cdef class HttpProtocol:
                 else:
                     args = path_parts[3:]
 
+                role_name = None
                 if extname != 'auth':
-                    if not await self._check_http_auth(
+                    role_name = await self._check_http_auth(
                         request, response, dbname
-                    ):
+                    )
+                    if not role_name:
                         return
 
                 db = self.tenant.maybe_get_db(dbname=dbname)
@@ -677,19 +679,20 @@ cdef class HttpProtocol:
 
                 if extname == 'graphql':
                     await graphql_ext.handle_request(
-                        request, response, db, args, self.tenant
+                        request, response, db, role_name, args, self.tenant
                     )
                 elif extname == 'notebook':
                     await notebook_ext.handle_request(
-                        request, response, db, args, self.tenant
+                        request, response, db, role_name, args, self.tenant
                     )
                 elif extname == 'edgeql_http':
                     await edgeql_ext.handle_request(
-                        request, response, db, args, self.tenant
+                        request, response, db, role_name, args, self.tenant
                     )
                 elif extname == 'ai':
                     await ai_ext.handle_request(
-                        self, request, response, db, args, self.tenant
+                        self,
+                        request, response, db, role_name, args, self.tenant
                     )
                 elif extname == 'auth':
                     netloc = (
@@ -971,9 +974,9 @@ cdef class HttpProtocol:
                     'Basic realm="edgedb", Bearer'
                 )
 
-            return False
+            return None
 
-        return True
+        return username
 
     async def _authenticate_for_default_conn_transport(
         self,

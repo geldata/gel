@@ -20,10 +20,10 @@ import json
 
 import edgedb
 
-from edb.testbase import server as tb
+from edb.testbase import http as tb
 
 
-class TestServerPermissions(tb.ConnectedTestCase):
+class TestServerPermissions(tb.EdgeQLTestCase):
 
     PARALLELISM_GRANULARITY = 'system'
     TRANSACTION_ISOLATION = False
@@ -74,12 +74,20 @@ class TestServerPermissions(tb.ConnectedTestCase):
                 password='secret',
             )
 
-            result = await conn.query("""
+            qry = """
                 SELECT [
                     global default::perm_a,
                     global default::perm_b,
                 ];
-            """)
+            """
+            result = await conn.query(qry)
+            self.assert_data_shape(result, [[True, False]])
+
+            result, _ = self.edgeql_query(
+                qry,
+                user='foo',
+                password='secret',
+            )
             self.assert_data_shape(result, [[True, False]])
 
         finally:

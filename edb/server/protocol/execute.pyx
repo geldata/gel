@@ -164,12 +164,14 @@ async def describe(
     query_cache_enabled: Optional[bool] = None,
     allow_capabilities: compiler.Capability = compiler.Capability.MODIFICATIONS,
     query_tag: str | None = None,
+    role_name: str,
 ) -> sertypes.TypeDesc:
     _, compiled, dbv = await _parse(
         db,
         query,
         query_cache_enabled=query_cache_enabled,
         allow_capabilities=allow_capabilities,
+        role_name=role_name,
     )
     if query_tag:
         compiled.tag = query_tag
@@ -195,6 +197,7 @@ async def _parse(
     use_metrics: bool = True,
     cached_globally: bool = False,
     query_cache_enabled: Optional[bool] = None,
+    role_name: str,
 ) -> tuple[
     rpc.CompilationRequest,
     dbview.CompiledQuery,
@@ -208,8 +211,7 @@ async def _parse(
         dbname=db.name,
         query_cache=query_cache_enabled,
         protocol_version=edbdef.CURRENT_PROTOCOL,
-        # TODO: This should change
-        role_name=edbdef.EDGEDB_SUPERUSER,
+        role_name=role_name,
     )
     dbv.is_transient = True
     if use_metrics:
@@ -224,6 +226,7 @@ async def _parse(
         compilation_config_serializer=db.server.compilation_config_serializer,
         input_format=input_format,
         output_format=output_format,
+        role_name=role_name,
     )
 
     compiled = await dbv.parse(
@@ -994,8 +997,12 @@ async def parse_execute_json(
     cached_globally: bool = False,
     use_metrics: bool = True,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
-    query_tag: str | None = None
+    query_tag: str | None = None,
+    role_name: str | None = None,
 ) -> bytes:
+    if role_name is None:
+        role_name = edbdef.EDGEDB_SUPERUSER
+
     # WARNING: only set cached_globally to True when the query is
     # strictly referring to only shared stable objects in user schema
     # or anything from std schema, for example:
@@ -1010,6 +1017,7 @@ async def parse_execute_json(
         use_metrics=use_metrics,
         cached_globally=cached_globally,
         query_cache_enabled=query_cache_enabled,
+        role_name=role_name,
     )
     if query_tag:
         compiled.tag = query_tag

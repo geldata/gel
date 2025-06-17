@@ -81,6 +81,7 @@ async def handle_request(
     object request,
     object response,
     object db,
+    str role_name,
     list args,
     object tenant,
 ):
@@ -122,7 +123,7 @@ async def handle_request(
 
     response.status = http.HTTPStatus.OK
     try:
-        result = await execute(db, tenant, queries)
+        result = await execute(db, role_name, tenant, queries)
     except Exception as ex:
         return handle_error(request, response, ex)
     else:
@@ -152,13 +153,12 @@ cdef class NotebookConnection(frontend.AbstractFrontendConnection):
         pass
 
 
-async def execute(db, tenant, queries: list):
+async def execute(db, role_name, tenant, queries: list):
     dbv: dbview.DatabaseConnectionView = await tenant.new_dbview(
         dbname=db.name,
         query_cache=False,
         protocol_version=edbdef.CURRENT_PROTOCOL,
-        # TODO: This should change
-        role_name=edbdef.EDGEDB_SUPERUSER,
+        role_name=role_name,
     )
     compiler_pool = tenant.server.get_compiler_pool()
     units = await compiler_pool.compile_notebook(
