@@ -741,6 +741,33 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                     CREATE TYPE Widget;
                 """)
 
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'cannot execute ADMINISTER commands: '
+                'role foo does not have permission'
+            ):
+                await conn.execute("""
+                    ADMINISTER schema_repair();
+                """)
+
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'cannot execute DESCRIBE commands: '
+                'role foo does not have permission'
+            ):
+                await conn.execute("""
+                    DESCRIBE SCHEMA
+                """)
+
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'cannot execute ANALYZE commands: '
+                'role foo does not have permission'
+            ):
+                await conn.execute("""
+                    ANALYZE SELECT 1
+                """)
+
         finally:
             await conn.aclose()
             await self.con.query('''

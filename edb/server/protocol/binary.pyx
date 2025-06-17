@@ -91,6 +91,8 @@ include "./consts.pxi"
 
 cdef bytes EMPTY_TUPLE_UUID = s_obj.get_known_type_id('empty-tuple').bytes
 
+cdef uint64_t PROTO_CAPS = enums.Capability.PROTO_CAPS
+
 cdef object CARD_NO_RESULT = compiler.Cardinality.NO_RESULT
 cdef object CARD_AT_MOST_ONE = compiler.Cardinality.AT_MOST_ONE
 cdef object CARD_MANY = compiler.Cardinality.MANY
@@ -712,7 +714,9 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             msg.write_len_prefixed_bytes(b'unsafe_isolation_dangers')
             msg.write_len_prefixed_bytes(dangers)
 
-        msg.write_int64(<int64_t><uint64_t>query.query_unit_group.capabilities)
+        msg.write_int64(
+            <int64_t><uint64_t>query.query_unit_group.capabilities & PROTO_CAPS
+        )
         msg.write_byte(self.render_cardinality(query.query_unit_group))
 
         in_data = query.query_unit_group.in_type_data
@@ -746,7 +750,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
 
         msg = WriteBuffer.new_message(b'C')
         msg.write_int16(0)  # no annotations
-        msg.write_int64(<int64_t><uint64_t>capabilities)
+        msg.write_int64(<int64_t><uint64_t>capabilities & PROTO_CAPS)
         msg.write_len_prefixed_bytes(status)
 
         msg.write_bytes(state_tid.bytes)
@@ -826,7 +830,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             bytes query
             dbview.DatabaseConnectionView _dbview
 
-        allow_capabilities = <uint64_t>self.buffer.read_int64()
+        allow_capabilities = PROTO_CAPS & <uint64_t>self.buffer.read_int64()
         compilation_flags = <uint64_t>self.buffer.read_int64()
         implicit_limit = self.buffer.read_int64()
 

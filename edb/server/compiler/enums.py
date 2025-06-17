@@ -42,7 +42,12 @@ class Capability(enum.IntFlag):
     DDL               = 1 << 3    # noqa
     PERSISTENT_CONFIG = 1 << 4    # noqa
 
-    ALL               = 0xFFFF_FFFF_FFFF_FFFF  # noqa
+    DESCRIBE          = 1 << 61   # noqa
+    ANALYZE           = 1 << 62   # noqa
+    ADMINISTER        = 1 << 63   # noqa
+
+    PROTO_CAPS        = (1 << 32) - 1  # noqa
+    ALL               = (1 << 64) - 1  # noqa
     WRITE             = (MODIFICATIONS | DDL | PERSISTENT_CONFIG)  # noqa
     NONE              = 0  # noqa
 
@@ -70,6 +75,9 @@ CAPABILITY_TITLES = {
     Capability.TRANSACTION: 'transaction control commands',
     Capability.DDL: 'DDL commands',
     Capability.PERSISTENT_CONFIG: 'configuration commands',
+    Capability.ADMINISTER: 'ADMINISTER commands',
+    Capability.DESCRIBE: 'DESCRIBE commands',
+    Capability.ANALYZE: 'ANALYZE commands',
 }
 
 

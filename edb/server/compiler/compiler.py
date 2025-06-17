@@ -2611,7 +2611,7 @@ def _compile_dispatch_ql(
 
     elif isinstance(ql, qlast.ExplainStmt):
         query = _compile_ql_explain(ctx, ql, script_info=script_info)
-        caps = enums.Capability(0)
+        caps = enums.Capability.ANALYZE
         if (
             isinstance(query, (dbstate.Query, dbstate.SimpleQuery))
             and query.has_dml
@@ -2621,7 +2621,7 @@ def _compile_dispatch_ql(
 
     elif isinstance(ql, qlast.AdministerStmt):
         query = _compile_ql_administer(ctx, ql, script_info=script_info)
-        caps = enums.Capability(0)
+        caps = enums.Capability.ADMINISTER
         return (query, caps)
 
     else:
@@ -2629,6 +2629,8 @@ def _compile_dispatch_ql(
         query = _compile_ql_query(
             ctx, ql, source=source, script_info=script_info)
         caps = enums.Capability(0)
+        if isinstance(ql, qlast.DescribeStmt):
+            caps |= enums.Capability.DESCRIBE
         if (
             isinstance(query, (dbstate.Query, dbstate.SimpleQuery))
             and query.has_dml
