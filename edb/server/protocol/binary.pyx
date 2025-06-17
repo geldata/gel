@@ -1401,6 +1401,13 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 'DUMP must not be executed while in transaction'
             )
 
+        is_superuser, _ = _dbview.get_permissions()
+        if not is_superuser:
+            raise errors.DisabledCapabilityError(
+                f'role {_dbview._role_name} does not have permission to '
+                f'perform dump'
+            )
+
         server = self.server
         compiler_pool = server.get_compiler_pool()
 
@@ -1600,6 +1607,13 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             raise errors.ProtocolError(
                 'RESTORE must not be executed while in transaction'
             )
+        is_superuser, _ = _dbview.get_permissions()
+        if not is_superuser:
+            raise errors.DisabledCapabilityError(
+                f'role {_dbview._role_name} does not have permission to '
+                f'perform dump'
+            )
+
         if _dbview.get_state_serializer() is None:
             await _dbview.reload_state_serializer()
 
