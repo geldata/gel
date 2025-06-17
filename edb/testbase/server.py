@@ -1388,7 +1388,9 @@ class DatabaseTestCase(ConnectedTestCase):
         # Only open an extra admin connection if necessary.
         if class_set_up == 'run':
             script = f'CREATE DATABASE {dbname};'
-            admin_conn = await cls.connect()
+            admin_conn = await cls.connect(
+                database=edgedb_defines.EDGEDB_SUPERUSER_DB
+            )
             await admin_conn.execute(script)
             await admin_conn.aclose()
 
@@ -1396,7 +1398,9 @@ class DatabaseTestCase(ConnectedTestCase):
             dbname = edgedb_defines.EDGEDB_SUPERUSER_DB
 
         elif cls.uses_database_copies():
-            admin_conn = await cls.connect()
+            admin_conn = await cls.connect(
+                database=edgedb_defines.EDGEDB_SUPERUSER_DB
+            )
 
             base_db_name, _, _ = dbname.rpartition('_')
 
@@ -1458,7 +1462,9 @@ class DatabaseTestCase(ConnectedTestCase):
 
             elif class_set_up == 'run' or cls.uses_database_copies():
                 dbname = qlquote.quote_ident(cls.get_database_name())
-                admin_conn = await cls.connect()
+                admin_conn = await cls.connect(
+                    database=edgedb_defines.EDGEDB_SUPERUSER_DB
+                )
                 try:
                     await drop_db(admin_conn, dbname)
                 finally:
