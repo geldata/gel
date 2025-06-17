@@ -1618,6 +1618,7 @@ def _get_compile_options(
         apply_query_rewrites=(
             not ctx.bootstrap_mode
             and not ctx.schema_reflection_mode
+            and not ctx.dump_restore_mode  # HMMM
             and not bool(
                 _get_config_val(ctx, '__internal_no_apply_query_rewrites'))
         ),
@@ -2473,12 +2474,17 @@ def _compile_ql_config_op(
         options=options,
     )
 
-    globals = None
+    globals = permissions = None
     if ir.globals:
         globals = [
             (str(glob.global_name), glob.has_present_arg)
             for glob in ir.globals
             if not glob.is_permission
+        ]
+        permissions = [
+            str(glob.global_name)
+            for glob in ir.globals
+            if glob.is_permission
         ]
 
     if isinstance(ir, irast.Statement):
@@ -2559,6 +2565,7 @@ def _compile_ql_config_op(
         requires_restart=requires_restart,
         config_op=config_op,
         globals=globals,
+        permissions=permissions,
         in_type_args=in_type_args,
         in_type_data=in_type_data,
         in_type_id=in_type_id.bytes,
@@ -3212,6 +3219,7 @@ def _make_query_unit(
     elif isinstance(comp, dbstate.SessionStateQuery):
         unit.sql = comp.sql
         unit.globals = comp.globals
+        unit.permissions = comp.permissions
 
         if comp.config_scope is qltypes.ConfigScope.INSTANCE:
             if not ctx.state.current_tx().is_implicit() or is_script:

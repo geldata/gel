@@ -2305,6 +2305,7 @@ async def _setup_database(
         raise RuntimeError(
             f'exception during initialization of {dbname!r} test DB: '
             f'{type(ex).__name__}({ex})'
+            f'\nrunning: {setup_script}'
         ) from ex
     finally:
         await dbconn.aclose()

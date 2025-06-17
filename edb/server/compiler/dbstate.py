@@ -153,6 +153,7 @@ class SessionStateQuery(BaseQuery):
     config_op: Optional[config.Operation] = None
     is_transactional: bool = True
     globals: Optional[list[tuple[str, bool]]] = None
+    permissions: Optional[list[str]] = None
 
     in_type_data: Optional[bytes] = None
     in_type_id: Optional[bytes] = None

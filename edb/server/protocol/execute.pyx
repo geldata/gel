@@ -912,7 +912,13 @@ async def execute_system_config(
     await conn.sql_fetch(b'select 1', state=state)
 
     if query_unit.sql:
-        data = await conn.sql_fetch_col(query_unit.sql)
+        data = await conn.sql_fetch_col(
+            query_unit.sql,
+            args=(
+                tuple(b'\x01' for _ in query_unit.permissions)
+                if query_unit.permissions else ()
+            ),
+        )
     else:
         data = None
 

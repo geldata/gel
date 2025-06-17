@@ -451,3 +451,11 @@ CREATE PERMISSION sys::perm::data_modification;
 CREATE PERMISSION sys::perm::ddl;
 CREATE PERMISSION sys::perm::branch_config;
 CREATE PERMISSION sys::perm::sql_session_config;
+
+
+CREATE PERMISSION sys::perm::introspect_schema;
+
+ALTER TYPE schema::Object {
+    CREATE ACCESS POLICY can_access_schema
+        DENY SELECT USING (not global sys::perm::introspect_schema);
+};

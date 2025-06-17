@@ -83,6 +83,7 @@ CREATE ABSTRACT TYPE schema::Object EXTENDING std::BaseObject {
 
     CREATE ACCESS POLICY not_internal
         ALLOW SELECT USING (not .internal);
+    # The permission based DENY rule is added in sys.edgeql also
 };
 
 
