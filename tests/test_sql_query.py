@@ -1693,7 +1693,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         )
 
     async def test_sql_query_be_state(self):
-        con = await self.connect(database=self.con.dbname)
+        con = await self.connect()
         try:
             await con.execute(
                 '''

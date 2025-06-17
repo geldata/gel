@@ -942,7 +942,7 @@ class TestDDLExtensions(tb.DDLTestCase):
         )
 
         if not in_tx:
-            con2 = await self.connect(database=self.con.dbname)
+            con2 = await self.connect()
             try:
                 await con2.query('select 1')
                 await self.con.execute('''
