@@ -255,7 +255,7 @@ cdef class DatabaseConnectionView:
 
     cdef check_capabilities(
         self,
-        query_capabilities,
+        query_unit,
         allowed_capabilities,
         error_constructor,
         reason,

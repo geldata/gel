@@ -2583,6 +2583,9 @@ class ObjectCollectionShell(Shell, Generic[Object_T]):
     def __iter__(self) -> Iterator[ObjectShell[Object_T]]:
         return iter(self.items)
 
+    def __bool__(self) -> bool:
+        return bool(self.items)
+
     def resolve(self, schema: s_schema.Schema) -> ObjectCollection[Object_T]:
         return self.collection_type.create(
             schema,

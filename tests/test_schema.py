@@ -1129,6 +1129,16 @@ class TestSchema(tb.BaseSchemaLoadTest):
           alias bar := global foo;
        """
 
+    def test_schema_permissions_03(self):
+        # Check tracing dependency works
+        """
+          function test() -> int64 {
+              using (1);
+              required_permissions := foo;
+          };
+          permission foo;
+       """
+
     def test_schema_hard_sorting_01(self):
         # This is hard to sort properly because we don't understand the types.
         # From #4683.

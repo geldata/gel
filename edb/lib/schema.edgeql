@@ -544,6 +544,10 @@ CREATE TYPE schema::Function
     CREATE MULTI LINK used_globals EXTENDING schema::ordered -> schema::Global;
     CREATE MULTI LINK used_permissions EXTENDING schema::ordered
         -> schema::Permission;
+
+    CREATE MULTI LINK required_permissions EXTENDING schema::ordered
+        -> schema::Permission;
+
 };
 
 

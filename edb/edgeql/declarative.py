@@ -1247,6 +1247,11 @@ def _register_item(
                 alter_cmd.subjectexpr = decl.subjectexpr
                 alter_cmd.args = decl.args
 
+            # functions need to preserve arguments
+            if isinstance(decl, qlast.CreateFunction):
+                assert isinstance(alter_cmd, qlast.FunctionCommand)
+                alter_cmd.params = decl.params
+
             if not ctx.depstack:
                 alter_cmd.aliases = [
                     qlast.ModuleAliasDecl(alias=None, module=ctx.module)

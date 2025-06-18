@@ -1483,7 +1483,7 @@ cdef class DatabaseConnectionView:
                     raise
 
             self.check_capabilities(
-                query_unit_group.capabilities,
+                query_unit_group,
                 allow_capabilities,
                 errors.DisabledCapabilityError,
                 "disabled by the client",
@@ -1807,12 +1807,14 @@ cdef class DatabaseConnectionView:
 
     cdef check_capabilities(
         self,
-        query_capabilities,
+        query_unit,
         allowed_capabilities,
         error_constructor,
         reason,
         unsafe_isolation_dangers,
     ):
+        query_capabilities = query_unit.capabilities
+
         if query_capabilities & ~self._capability_mask:
             # _capability_mask is currently only used for system database
             raise query_capabilities.make_error(
@@ -1847,6 +1849,21 @@ cdef class DatabaseConnectionView:
                     errors.DisabledCapabilityError,
                     msg,
                 )
+
+        if query_unit.required_permissions:
+            is_superuser, permissions = self.get_permissions()
+            if not is_superuser:
+                for perm in query_unit.required_permissions:
+                    if perm not in permissions:
+                        missing = sorted(
+                            set(query_unit.required_permissions)
+                            - set(permissions)
+                        )
+                        plural = 's' if len(missing) > 1 else ''
+                        raise errors.DisabledCapabilityError(
+                            f'role {self._role_name} does not have required '
+                            f'permission{plural}: {", ".join(missing)}'
+                        )
 
         has_write = query_capabilities & enums.Capability.WRITE
         if has_write and unsafe_isolation_dangers:

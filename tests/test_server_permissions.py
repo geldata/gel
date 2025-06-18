@@ -234,6 +234,47 @@ class TestServerPermissions(tb.EdgeQLTestCase):
                 DROP PERMISSION default::perm_c;
             ''')
 
+    async def test_server_permissions_function_01(self):
+        await self.con.query('''
+            CREATE PERMISSION default::perm_a;
+            CREATE PERMISSION default::perm_b;
+            CREATE PERMISSION default::perm_c;
+            CREATE FUNCTION test1() -> int64 {
+                SET required_permissions := perm_a;
+                USING (1);
+            };
+            CREATE FUNCTION test2() -> int64 {
+                SET required_permissions := {perm_a, perm_b, perm_c};
+                USING (1);
+            };
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := default::perm_a;
+            };
+        ''')
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
+            await conn.query('select test1()')
+
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'role foo does not have required permissions: '
+                'default::perm_b, default::perm_c'
+            ):
+                await conn.query('select test2()')
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                RESET SCHEMA TO initial;
+                DROP ROLE foo;
+            ''')
+
     async def test_server_permissions_access_policy_01(self):
         # Check permission access policy works
         # with superuser

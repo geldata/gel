@@ -312,6 +312,10 @@ def compile_FunctionCall(
         # form of the function is actually used.
         env.add_schema_ref(func, expr)
 
+    ctx.env.required_permissions.update(
+        func.get_required_permissions(ctx.env.schema).objects(ctx.env.schema)
+    )
+
     func_initial_value: Optional[irast.Set]
 
     if matched_func_initial_value is not None:

@@ -1921,6 +1921,12 @@ def _compile_ql_query(
             globals = [g for g in globals if g[0].startswith('__::')]
         json_permissions, permissions = permissions, []
 
+    required_permissions = None
+    if ir.required_permissions:
+        required_permissions = [
+            str(perm.get_name(schema)) for perm in ir.required_permissions
+        ]
+
     out_type_id: uuid.UUID
     if ctx.output_format is enums.OutputFormat.NONE:
         out_type_id = sertypes.NULL_TYPE_ID
@@ -2005,6 +2011,7 @@ def _compile_ql_query(
         cardinality=result_cardinality,
         globals=globals,
         permissions=permissions,
+        required_permissions=required_permissions,
         json_permissions=json_permissions,
         in_type_id=in_type_id.bytes,
         in_type_data=in_type_data,
@@ -3030,6 +3037,7 @@ def _make_query_unit(
         unit.globals = comp.globals
         unit.permissions = comp.permissions
         unit.json_permissions = comp.json_permissions
+        unit.required_permissions = comp.required_permissions
         unit.in_type_args = comp.in_type_args
 
         unit.sql_hash = comp.sql_hash

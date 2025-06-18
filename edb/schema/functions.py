@@ -1255,14 +1255,25 @@ class Function(
 
     used_globals = so.SchemaField(
         so.ObjectSet[s_globals.Global],
-        coerce=True, default=so.DEFAULT_CONSTRUCTOR,
-        inheritable=False)
+        coerce=True,
+        default=so.DEFAULT_CONSTRUCTOR,
+        inheritable=False
+    )
 
     used_permissions = so.SchemaField(
         so.ObjectSet[s_permissions.Permission],
         coerce=True,
         default=so.DEFAULT_CONSTRUCTOR,
-        inheritable=False
+        inheritable=False,
+    )
+
+    required_permissions = so.SchemaField(
+        so.ObjectSet[s_permissions.Permission],
+        coerce=True,
+        default=so.DEFAULT_CONSTRUCTOR,
+        inheritable=False,
+        allow_ddl_set=True,
+        compcoef=0.8,
     )
 
     # A backend_name that is shared between all overloads of the same

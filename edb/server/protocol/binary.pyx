@@ -1012,7 +1012,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         self._last_anon_compiled = None
 
         _dbview.check_capabilities(
-            query_unit_group.capabilities,
+            query_unit_group,
             allow_capabilities,
             errors.DisabledCapabilityError,
             "disabled by the client",

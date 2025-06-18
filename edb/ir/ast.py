@@ -78,6 +78,7 @@ from edb.schema import modules as s_mod
 from edb.schema import name as sn
 from edb.schema import objects as so
 from edb.schema import objtypes as s_objtypes
+from edb.schema import permissions as s_permissions
 from edb.schema import pointers as s_pointers
 from edb.schema import schema as s_schema
 from edb.schema import types as s_types
@@ -802,6 +803,7 @@ class Statement(Command):
     views: dict[sn.Name, s_types.Type]
     params: list[Param]
     globals: list[Global]
+    required_permissions: set[s_permissions.Permission]
     server_param_conversions: list[ServerParamConversion]
     server_param_conversion_params: list[Param]
     cardinality: qltypes.Cardinality

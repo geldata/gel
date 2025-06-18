@@ -193,7 +193,7 @@ async def execute(db, role_name, tenant, queries: list):
                     query_unit_group.append(query_unit)
 
                     dbv.check_capabilities(
-                        query_unit.capabilities,
+                        query_unit,
                         ALLOWED_CAPABILITIES,
                         errors.UnsupportedCapabilityError,
                         "disallowed in notebook",
