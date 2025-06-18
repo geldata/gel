@@ -1169,6 +1169,11 @@ class CreateIndex(
         schema: s_schema.Schema,
         context: sd.CommandContext,
     ) -> None:
+        from . import constraints as s_constraints
+        from . import links as s_links
+        from . import objtypes as s_objtypes
+        from . import properties as s_properties
+
         super().validate_object(schema, context)
 
         referrer_ctx = self.get_referrer_context(context)
@@ -1229,7 +1234,7 @@ class CreateIndex(
 
         # The checks below apply only to concrete indexes.
         subject = referrer_ctx.scls
-        assert isinstance(subject, (s_types.Type, s_pointers.Pointer))
+        assert isinstance(subject, (s_objtypes.ObjectType, s_links.Link))
         assert isinstance(subject, IndexableSubject)
 
         if (
@@ -1251,6 +1256,112 @@ class CreateIndex(
                 context=context,
             )
         )
+
+        # Check for redundant indexes.
+        expr = self.get_resolved_attribute_value(
+            'expr',
+            schema=schema,
+            context=context,
+        )
+
+        # Redundancy if the index is a non-computed link or any property
+        # with an exclusive constraint.
+        if (
+            # Only check original indexes
+            # A constraint added to a derived type with an index is ok.
+            len(self.scls.get_ancestors(schema)) == 0
+            # Check if the index expr is simply a pointer, eg. (.xyz)
+            and (expr_parsed := expr.parse())
+            and isinstance(expr_parsed, qlast.Path)
+            and len(expr_parsed.steps) == 1
+            and isinstance(expr_parsed.steps[0], qlast.Ptr)
+        ):
+            pointer_name = expr_parsed.steps[0]
+            pointer: Optional[s_links.Link | s_properties.Property] = None
+            for subject_pointer in subject.get_pointers(schema).objects(schema):
+                if (
+                    subject_pointer.get_local_name(schema)
+                    == sn.UnqualName(pointer_name.name)
+                ):
+                    assert isinstance(
+                        subject_pointer, (s_links.Link, s_properties.Property)
+                    )
+                    pointer = subject_pointer
+
+            # Check if the pointer is a non-computed link
+            if (
+                isinstance(pointer, s_links.Link)
+                and not pointer.get_computable(schema)
+            ):
+                delta_root = context.top().op
+                if isinstance(delta_root, sd.DeltaRoot):
+                    delta_root.warnings.append(
+                        errors.SchemaDefinitionError(
+                            f"Redundant index on ({expr.text}). "
+                            f"Non-computed links are automatically indexed.",
+                            span=self.span,
+                        )
+                    )
+
+            # Check if the pointer is an exclusive property
+            def _is_exclusive_constraint(
+                constraint: s_constraints.Constraint
+            ) -> bool:
+                return any(
+                    (
+                        not constraint.get_delegated(schema)
+                        and (
+                            constraint_ancestor.get_name(schema)
+                            == sn.QualName('std', 'exclusive')
+                        )
+                    )
+                    for constraint_ancestor in (
+                        constraint.get_ancestors(schema).objects(schema)
+                    )
+                )
+
+            if (
+                isinstance(pointer, s_properties.Property)
+                and (
+                    # Exclusive on pointer
+                    any(
+                        _is_exclusive_constraint(constraint)
+                        for constraint in schema.get_referrers(
+                            pointer,
+                            scls_type=s_constraints.Constraint,
+                            field_name="subject",
+                        )
+                    )
+                    or any(
+                        # Exclusive on object
+                        # Check if the constraint and index expressions match
+                        (
+                            _is_exclusive_constraint(constraint)
+                            and (
+                                constraint_subjectexpr := (
+                                    constraint.get_subjectexpr(schema)
+                                )
+                            )
+                            and constraint_subjectexpr.text == expr.text
+                        )
+                        for constraint in schema.get_referrers(
+                            subject,
+                            scls_type=s_constraints.Constraint,
+                            field_name="subject",
+                        )
+                    )
+                )
+            ):
+                delta_root = context.top().op
+                if isinstance(delta_root, sd.DeltaRoot):
+                    delta_root.warnings.append(
+                        errors.SchemaDefinitionError(
+                            f"Redundant index on ({expr.text}). "
+                            f"Properties with exclusive constraints are "
+                            f"automatically indexed.",
+                            span=self.span,
+                        )
+                    )
 
         # HACK: the old concrete indexes all have names in form __::idx, but
         # this should be the actual name provided. Also the index without name
@@ -1320,11 +1431,6 @@ class CreateIndex(
 
             # Make sure that the concrete index expression type matches the
             # abstract index type.
-            expr = self.get_resolved_attribute_value(
-                'expr',
-                schema=schema,
-                context=context,
-            )
             options = qlcompiler.CompilerOptions(
                 anchors={'__subject__': subject},
                 path_prefix_anchor='__subject__',
