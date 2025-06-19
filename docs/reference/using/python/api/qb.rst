@@ -85,13 +85,13 @@ The Pydantic models can also be used to build up queries for fetching objects fr
 
 .. tabs::
 
-  .. code-block:: python
+  .. code-tab:: python
     :caption: Python
 
     q = default.User
     everyone = db.query(q)
 
-  .. code-block:: edgeql
+  .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
     select User {*}
@@ -102,13 +102,13 @@ We can fetch just one object using ``db.get()`` and adding a ``.filter()`` to th
 
 .. tabs::
 
-  .. code-block:: python
+  .. code-tab:: python
     :caption: Python
 
     q = default.User.filter(name='Alice')
     alice = db.query(q)
 
-  .. code-block:: edgeql
+  .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
     select User {*}
@@ -118,13 +118,13 @@ We can also fetch several objects by using ``db.query()`` and providing a ``.fil
 
 .. tabs::
 
-  .. code-block:: python
+  .. code-tab:: python
     :caption: Python
 
     q = default.Post.filter(body='Hello')
     posts = db.query(q)
 
-  .. code-block:: edgeql
+  .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
     select Post {*}
@@ -134,7 +134,7 @@ We can have more elaborate filters by using ``lambda`` functions where the first
 
 .. tabs::
 
-  .. code-block:: python
+  .. code-tab:: python
     :caption: Python
 
     q = default.User.filter(
@@ -142,7 +142,7 @@ We can have more elaborate filters by using ``lambda`` functions where the first
     )
     users = db.query(q)
 
-  .. code-block:: edgeql
+  .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
     select User {*}
@@ -152,15 +152,15 @@ The expressions used in filters can be built up to follow links:
 
 .. tabs::
 
-  .. code-block:: python
+  .. code-tab:: python
     :caption: Python
 
     q = default.Post.filter(
-      lambda u: u.author.name == 'Alice'
+      lambda p: p.author.name == 'Alice'
     )
     posts = db.query(q)
 
-  .. code-block:: edgeql
+  .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
     select Post {*}
@@ -170,18 +170,18 @@ So far fetching data resulted in flat objects, but we can also include links whe
 
 .. tabs::
 
-  .. code-block:: python
+  .. code-tab:: python
     :caption: Python
 
     q = default.Post.select(
       '*',
       author=True,
     ).filter(
-      lambda u: u.author.name == 'Alice'
+      lambda p: p.author.name == 'Alice'
     )
     posts = db.query(q)
 
-  .. code-block:: edgeql
+  .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
     select Post {
@@ -194,7 +194,7 @@ The ``select()`` method can be used to cherry-pick the specific fields that will
 
 .. tabs::
 
-  .. code-block:: python
+  .. code-tab:: python
     :caption: Python
 
     q = default.Post.select(
@@ -202,11 +202,11 @@ The ``select()`` method can be used to cherry-pick the specific fields that will
       body=True,
       author=True,
     ).filter(
-      lambda u: u.author.name == 'Alice'
+      lambda p: p.author.name == 'Alice'
     )
     posts = db.query(q)
 
-  .. code-block:: edgeql
+  .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
     select Post {
@@ -237,20 +237,20 @@ We can sort the posts in Python (as long as we made sure to either fetch all the
 
 .. tabs::
 
-  .. code-block:: python
+  .. code-tab:: python
     :caption: Python
 
     q = default.Post.select(
       '*',
       author=True,
     ).filter(
-      lambda u: u.author.name == 'Alice'
+      lambda p: p.author.name == 'Alice'
     ).order_by(
       created_at=True
     )
     posts = db.query(q)
 
-  .. code-block:: edgeql
+  .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
     select Post {
@@ -264,21 +264,21 @@ We can also add more nuance to the ordering by controlling the ordering directio
 
 .. tabs::
 
-  .. code-block:: python
+  .. code-tab:: python
     :caption: Python
 
     q = default.Post.select(
       '*',
       author=True,
     ).filter(
-      lambda u: u.author.name == 'Alice'
+      lambda p: p.author.name == 'Alice'
     ).order_by(
       created_at='desc',
       title='asc',
     )
     posts = db.query(q)
 
-  .. code-block:: edgeql
+  .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
     select Post {
@@ -292,7 +292,7 @@ The query builder lets us compose nested queries with nested sub-queries benefit
 
 .. tabs::
 
-  .. code-block:: python
+  .. code-tab:: python
     :caption: Python
 
     q = default.User.select(
@@ -306,7 +306,7 @@ The query builder lets us compose nested queries with nested sub-queries benefit
     )
     user = db.get(q)
 
-  .. code-block:: edgeql
+  .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
     select User {
@@ -317,3 +317,22 @@ The query builder lets us compose nested queries with nested sub-queries benefit
       order by .created_at desc then .title asc,
     }
     filter .name = 'Alice'
+
+Finally, you can delete what you've selected by combining a ``filter()`` with ``delete()``. The order of operations matters here and the ``filter()`` comes first to make sure that you target only specific objects for deletion:
+
+.. tabs::
+
+  .. code-tab:: python
+    :caption: Python
+
+    # delete all posts by Alice
+    q = default.Post.filter(
+      lambda p: p.author.name == 'Alice'
+    ).delete()
+    user = db.query(q)
+
+  .. code-tab:: edgeql
+    :caption: equivalent EdgeQL
+
+    delete Post
+    filter .author.name = 'Alice'
