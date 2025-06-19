@@ -471,10 +471,13 @@ cdef _decode_tuple_args_core(
             raise errors.InputDataError("unsupported array dimensions")
         frb_read(&sub_buf, 4)  # flags
         frb_read(&sub_buf, 4)  # reserved
-        cnt = <uint32_t>hton.unpack_int32(frb_read(&sub_buf, 4))
-        val = hton.unpack_int32(frb_read(&sub_buf, 4)) # bound
-        if val != 1:
-            raise errors.InputDataError("unsupported array bound")
+        if val == 0:
+            cnt = 0
+        else:
+            cnt = <uint32_t>hton.unpack_int32(frb_read(&sub_buf, 4))
+            val = hton.unpack_int32(frb_read(&sub_buf, 4)) # bound
+            if val != 1:
+                raise errors.InputDataError("unsupported array bound")
 
         # For nested arrays, we need to produce an array containing
         # the start/end indexes in the flattened array.
