@@ -271,7 +271,11 @@ class TestServerPermissions(tb.EdgeQLTestCase):
         finally:
             await conn.aclose()
             await self.con.query('''
-                RESET SCHEMA TO initial;
+                DROP FUNCTION test2();
+                DROP FUNCTION test1();
+                DROP PERMISSION default::perm_a;
+                DROP PERMISSION default::perm_b;
+                DROP PERMISSION default::perm_c;
                 DROP ROLE foo;
             ''')
 
