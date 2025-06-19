@@ -6,7 +6,7 @@ FastAPI + Gel
 
 .. py:currentmodule:: gel
 
-The ``gel-python`` package offers a sleek addition to FastAPI. With the built-in tools for schema migration management and automatic reflection into Pydantic models you can quickly integrate into the FastAPI development workflow. The ORM and query-building capability of Gel make building endpoints. So install ``gel`` and ``fastapi`` Python packages, run :gelcmd:`init` to setup the database and let's get started with this primer.
+The ``gel-python`` package offers a sleek addition to FastAPI. With the built-in tools for schema migration management and automatic reflection into Pydantic models you can quickly integrate into the FastAPI development workflow. The ORM and query-building capability of Gel make building endpoints simple. So install ``gel`` and ``fastapi`` Python packages and run :gelcmd:`init` to setup the database and get started.
 
 To initialize a Gel-aware FastAPI project, create the following file:
 
