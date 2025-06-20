@@ -327,4 +327,16 @@ CREATE ABSTRACT ANNOTATION std::lang::py::type;
 CREATE MODULE std::lang::rs;
 CREATE ABSTRACT ANNOTATION std::lang::rs::type;
 '''),
+    # 6.9
+    ('edgeql', '''
+CREATE FUNCTION
+std::__pg_generate_series(
+    `start`: std::int64,
+    stop: std::int64
+) -> SET OF std::int64
+{
+    SET volatility := 'Immutable';
+    USING SQL FUNCTION 'generate_series';
+};
+'''),
 ]
