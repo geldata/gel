@@ -6521,6 +6521,14 @@ aa';
         START TRANSACTION ISOLATION SERIALIZABLE, READ WRITE, NOT DEFERRABLE;
         """
 
+    @tb.must_fail(errors.EdgeQLSyntaxError,
+                  r"Unexpected 'REPEATABLEREAD'",
+                  line=2, col=37)
+    def test_edgeql_syntax_transaction_07(self):
+        """
+        START TRANSACTION ISOLATION REPEATABLEREAD, NOT DEFERRABLE;
+        """
+
     def test_edgeql_syntax_describe_01(self):
         """
         DESCRIBE SCHEMA AS DDL;
