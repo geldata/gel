@@ -63,6 +63,8 @@ __all__ = (
     'Database'
 )
 
+cdef uint64_t PROTO_CAPS = enums.Capability.PROTO_CAPS
+
 cdef DEFAULT_MODALIASES = immutables.Map({None: defines.DEFAULT_MODULE_ALIAS})
 cdef DEFAULT_CONFIG = immutables.Map()
 cdef DEFAULT_GLOBALS = immutables.Map()
@@ -1823,7 +1825,7 @@ cdef class DatabaseConnectionView:
                 "system database is read-only",
             )
 
-        if query_capabilities & ~allowed_capabilities:
+        if (query_capabilities & PROTO_CAPS) & ~allowed_capabilities:
             raise query_capabilities.make_error(
                 allowed_capabilities,
                 error_constructor,
