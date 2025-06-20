@@ -334,30 +334,11 @@ def make_decoder(
 
             sub_expr = mk(typ.typ, idx=inner_idx)
 
-            # For some reason, this is much faster if force the range to
-            # be over int64 instead of int32.
-            lo = qlast.TypeCast(
-                expr=lo,
-                type=qlast.TypeName(
-                    maintype=qlast.ObjectRef(module='__std__', name='int64')
-                ),
-            )
-
             loop = qlast.ForQuery(
                 iterator_alias=inner_idx_alias,
-                # TODO: Using _gen_series would be marginally faster,
-                # but it isn't actually available in distributions
-                # iterator=qlast.FunctionCall(
-                #     func=('__std__', '_gen_series'),
-                #     args=[lo, _plus_const(hi, -1)],
-                # ),
                 iterator=qlast.FunctionCall(
-                    func=('__std__', 'range_unpack'), args=[
-                        qlast.FunctionCall(
-                            func=('__std__', 'range'),
-                            args=[lo, hi],
-                        )
-                    ]
+                    func=('__std__', '__pg_generate_series'),
+                    args=[lo, _plus_const(hi, -1)],
                 ),
                 result=sub_expr,
             )
