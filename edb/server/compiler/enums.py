@@ -36,12 +36,15 @@ TypeTag = ir.TypeTag
 
 class Capability(enum.IntFlag):
 
+    # Capability flags that are part of the protocol.
+    # Can be picked up with the PROTO_CAPS mask.
     MODIFICATIONS     = 1 << 0    # noqa
     SESSION_CONFIG    = 1 << 1    # noqa
     TRANSACTION       = 1 << 2    # noqa
     DDL               = 1 << 3    # noqa
     PERSISTENT_CONFIG = 1 << 4    # noqa
 
+    # Internal only capability flags.
     GLOBAL_DDL        = 1 << 58   # noqa
     BRANCH_CONFIG     = 1 << 59   # noqa
     INSTANCE_CONFIG   = 1 << 60   # noqa
