@@ -858,6 +858,26 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                 CREATE TYPE Widget;
             """)
 
+            # But *not* system wide DDL!
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'cannot execute instance-wide DDL commands: '
+                'role foo does not have permission'
+            ):
+                await conn.execute("""
+                    CREATE SUPERUSER ROLE bar {
+                        SET password := 'secret';
+                    };
+                """)
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'cannot execute instance-wide DDL commands: '
+                'role foo does not have permission'
+            ):
+                await conn.execute("""
+                    CREATE EMPTY BRANCH bar
+                """)
+
         finally:
             await conn.aclose()
             await self.con.query('''
