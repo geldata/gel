@@ -1615,7 +1615,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         if not is_superuser:
             raise errors.DisabledCapabilityError(
                 f'role {_dbview._role_name} does not have permission to '
-                f'perform dump'
+                f'perform restore'
             )
 
         if _dbview.get_state_serializer() is None:
