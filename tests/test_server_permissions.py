@@ -762,6 +762,53 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                 DROP ROLE foo;
             ''')
 
+    async def test_server_permissions_persistent_config_01(self):
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+            };
+        ''')
+
+        conn = await self.connect(
+            user='foo',
+            password='secret',
+        )
+        try:
+            async with self.assertRaisesRegexTx(
+                edgedb.DisabledCapabilityError,
+                'cannot execute instance configuration commands: '
+                'role foo does not have permission'
+            ):
+                await conn.execute('''
+                    CONFIGURE INSTANCE SET apply_access_policies := false
+                ''')
+            async with self.assertRaisesRegexTx(
+                edgedb.DisabledCapabilityError,
+                'cannot execute database branch configuration commands: '
+                'role foo does not have permission'
+            ):
+                await conn.execute('''
+                    CONFIGURE CURRENT BRANCH SET apply_access_policies
+                        := false
+                ''')
+
+            await self.con.query('''
+                ALTER ROLE foo {
+                    SET permissions := sys::perm::branch_config;
+                };
+            ''')
+
+            await conn.execute('''
+                CONFIGURE CURRENT BRANCH SET apply_access_policies
+                    := false
+            ''')
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP ROLE foo;
+            ''')
+
     async def test_server_permissions_ddl_01(self):
         # Non-superuser cannot run ddl commands
 

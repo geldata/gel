@@ -42,6 +42,8 @@ class Capability(enum.IntFlag):
     DDL               = 1 << 3    # noqa
     PERSISTENT_CONFIG = 1 << 4    # noqa
 
+    BRANCH_CONFIG     = 1 << 59   # noqa
+    INSTANCE_CONFIG   = 1 << 60   # noqa
     DESCRIBE          = 1 << 61   # noqa
     ANALYZE           = 1 << 62   # noqa
     ADMINISTER        = 1 << 63   # noqa
@@ -78,6 +80,8 @@ CAPABILITY_TITLES = {
     Capability.ADMINISTER: 'ADMINISTER commands',
     Capability.DESCRIBE: 'DESCRIBE commands',
     Capability.ANALYZE: 'ANALYZE commands',
+    Capability.INSTANCE_CONFIG: 'instance configuration commands',
+    Capability.BRANCH_CONFIG: 'database branch configuration commands',
 }
 
 

@@ -448,4 +448,4 @@ sys::approximate_count(
 CREATE MODULE sys::perm;
 CREATE PERMISSION sys::perm::data_modification;
 CREATE PERMISSION sys::perm::ddl;
-CREATE PERMISSION sys::perm::persistent_config;
+CREATE PERMISSION sys::perm::branch_config;

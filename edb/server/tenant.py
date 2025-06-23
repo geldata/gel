@@ -442,8 +442,8 @@ class Tenant(ha_base.ClusterProtocol):
             else:
                 capability = (
                     compiler_enums.Capability.TRANSACTION
-                    # XXX: Is this what we want???
                     | compiler_enums.Capability.SESSION_CONFIG
+                    | compiler_enums.Capability.PERSISTENT_CONFIG
                 )
 
                 # Non-superuser can be given capabilities via
@@ -452,8 +452,8 @@ class Tenant(ha_base.ClusterProtocol):
                     capability |= compiler_enums.Capability.MODIFICATIONS
                 if 'sys::perm::ddl' in available_permissions:
                     capability |= compiler_enums.Capability.DDL
-                if 'sys::perm::persistent_config' in available_permissions:
-                    capability |= compiler_enums.Capability.PERSISTENT_CONFIG
+                if 'sys::perm::branch_config' in available_permissions:
+                    capability |= compiler_enums.Capability.BRANCH_CONFIG
 
             role_capabilities[name] = capability
 
