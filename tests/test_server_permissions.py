@@ -799,8 +799,7 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
             ''')
 
             await conn.execute('''
-                CONFIGURE CURRENT BRANCH SET apply_access_policies
-                    := false
+                CONFIGURE CURRENT BRANCH RESET apply_access_policies
             ''')
 
         finally:
