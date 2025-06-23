@@ -741,6 +741,54 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                     CREATE TYPE Widget;
                 """)
 
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_ddl_02(self):
+        # Non-superuser with sys::perm::ddl can run ddl commands
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := sys::perm::ddl;
+            };
+        ''')
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
+            await conn.execute("""
+                CREATE TYPE Widget;
+            """)
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP TYPE Widget;
+                DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_admin_01(self):
+        # Non-superuser cannot run administer, describe, and analyze commands
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+            };
+        ''')
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
             with self.assertRaisesRegex(
                 edgedb.DisabledCapabilityError,
                 'cannot execute ADMINISTER commands: '
