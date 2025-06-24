@@ -290,6 +290,10 @@ def eval_FuncCall(
         #       - set_config('bytea_output','hex',false)
         # HACK: asyncpg
         #       - set_config('jit', ...)
+        if ctx.env.required_permissions is None:
+            ctx.env.required_permissions = []
+        ctx.env.required_permissions.append('sys::perm::sql_session_config')
+
         if args := eval_list(expr.args, ctx=ctx):
             name, value, is_local = args
             if isinstance(name, pgast.StringConstant):

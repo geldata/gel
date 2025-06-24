@@ -1043,7 +1043,7 @@ cdef class DatabaseConnectionView:
     def tenant(self):
         return self._db._index._tenant
 
-    def get_permissions(self) -> tuple[Sequence[str]]:
+    def get_permissions(self) -> tuple[bool, Sequence[str]]:
         if role_desc := self.tenant.get_roles().get(self._role_name):
             return (
                 bool(role_desc.get('superuser')),

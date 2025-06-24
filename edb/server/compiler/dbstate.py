@@ -625,6 +625,8 @@ class SQLQueryUnit:
 
     capabilities: enums.Capability = enums.Capability.NONE
 
+    required_permissions: Optional[list[str]] = None
+
     fe_settings: SQLSettings
     """Frontend-only settings effective during translation of this unit."""
 

@@ -2783,6 +2783,7 @@ def compile_sql_as_unit_group(
                 (str(sp.global_name), False) for sp in sql_unit.params
                 if isinstance(sp, dbstate.SQLParamGlobal)
             ] if sql_unit.params else [],
+            required_permissions=sql_unit.required_permissions,
             output_format=(
                 enums.OutputFormat.NONE
                 if (

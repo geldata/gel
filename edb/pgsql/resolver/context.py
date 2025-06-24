@@ -230,7 +230,18 @@ class ContextSwitchMode(enum.Enum):
     LATERAL = enum.auto()
 
 
+@dataclass(kw_only=True)
+class Environment:
+    """Static compilation environment."""
+
+    required_permissions: Optional[list[str]] = None
+
+
 class ResolverContextLevel(compiler.ContextLevel):
+
+    # Compilation environment common for all context levels.
+    env: Environment
+
     schema: s_schema.Schema
     alias_generator: aliases.AliasGenerator
 
@@ -271,6 +282,7 @@ class ResolverContextLevel(compiler.ContextLevel):
             assert schema
             assert options
 
+            self.env = Environment()
             self.schema = schema
             self.options = options
             self.scope = Scope()
@@ -282,6 +294,7 @@ class ResolverContextLevel(compiler.ContextLevel):
             self.query_params = []
 
         else:
+            self.env = prevlevel.env
             self.schema = prevlevel.schema
             self.options = prevlevel.options
             self.alias_generator = prevlevel.alias_generator

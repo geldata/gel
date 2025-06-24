@@ -449,3 +449,4 @@ CREATE MODULE sys::perm;
 CREATE PERMISSION sys::perm::data_modification;
 CREATE PERMISSION sys::perm::ddl;
 CREATE PERMISSION sys::perm::branch_config;
+CREATE PERMISSION sys::perm::sql_session_config;

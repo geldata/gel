@@ -1659,7 +1659,12 @@ class SQLQueryTestCase(BaseQueryTestCase):
         )
 
     @classmethod
-    def create_sql_connection(cls) -> asyncio.Future[asyncpg.Connection]:
+    def create_sql_connection(
+        cls,
+        *,
+        user: str = None,
+        password: str = None,
+    ) -> asyncio.Future[asyncpg.Connection]:
         import asyncpg
         conargs = cls.get_connect_args()
 
@@ -1672,8 +1677,8 @@ class SQLQueryTestCase(BaseQueryTestCase):
         return asyncpg.connect(
             host=conargs['host'],
             port=conargs['port'],
-            user=conargs['user'],
-            password=conargs['password'],
+            user=conargs['user'] if user is None else user,
+            password=conargs['password'] if password is None else password,
             database=cls.con.dbname,
             ssl=tls_context,
         )

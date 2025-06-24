@@ -53,6 +53,8 @@ class ResolvedSQL:
     # query parameters
     params: list[dbstate.SQLParam]
 
+    required_permissions: Optional[list[str]]
+
 
 def resolve(
     query: pgast.Query | pgast.CopyStmt,
@@ -164,6 +166,7 @@ def resolve(
         edgeql_output_format_ast=edgeql_output_format_ast,
         command_complete_tag=command_complete_tag,
         params=ctx.query_params,
+        required_permissions=ctx.env.required_permissions,
     )
 
 

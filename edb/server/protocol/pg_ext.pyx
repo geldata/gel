@@ -30,6 +30,7 @@ import sys
 import time
 import uuid
 from collections import deque
+from typing import Sequence
 
 cimport cython
 import immutables
@@ -1000,6 +1001,9 @@ cdef class PgConnection(frontend.FrontendConnection):
             source = pg_parser.Source.from_string(query_str)
             query_units = await self.compile(source, dbv)
 
+        for qu in query_units:
+            self.check_capabilities(qu)
+
         already_in_implicit_tx = dbv._in_tx_implicit
         metrics.sql_queries.inc(
             len(query_units), self.tenant.get_instance_name()
@@ -1329,6 +1333,33 @@ cdef class PgConnection(frontend.FrontendConnection):
             self.debug_print("extended_query", actions)
         return actions, None
 
+    def check_capabilities(
+        self,
+        query_unit,
+    ):
+        if query_unit.required_permissions:
+            is_superuser, permissions = self.get_permissions()
+            if not is_superuser:
+                for perm in query_unit.required_permissions:
+                    if perm not in permissions:
+                        missing = sorted(
+                            set(query_unit.required_permissions)
+                            - set(permissions)
+                        )
+                        plural = 's' if len(missing) > 1 else ''
+                        raise errors.DisabledCapabilityError(
+                            f'role {self.username} does not have required '
+                            f'permission{plural}: {", ".join(missing)}'
+                        )
+
+    def get_permissions(self) -> tuple[bool, Sequence[str]]:
+        if role_desc := self.tenant.get_roles().get(self.username):
+            return (
+                bool(role_desc.get('superuser')),
+                (role_desc.get('all_permissions') or ())
+            )
+        return False, ()
+
     async def _ensure_ps_locality(
         self,
         dbv: ConnectionView,
@@ -1618,6 +1649,9 @@ cdef class PgConnection(frontend.FrontendConnection):
                 "cannot insert multiple commands into a prepared "
                 "statement",
             )
+
+        for qu in query_units:
+            self.check_capabilities(qu)
 
         return await self._parse_unit(
             stmt_name,

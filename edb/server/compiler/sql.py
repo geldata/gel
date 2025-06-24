@@ -288,6 +288,10 @@ def _compile_sql(
             if not unit.is_local:
                 unit.capabilities |= enums.Capability.SESSION_CONFIG
 
+            if unit.required_permissions is None:
+                unit.required_permissions = []
+            unit.required_permissions.append('sys::perm::sql_session_config')
+
         elif isinstance(stmt, pgast.VariableShowStmt):
             if protocol_version != defines.POSTGRES_PROTOCOL:
                 from edb.pgsql import resolver as pg_resolver
@@ -313,6 +317,10 @@ def _compile_sql(
                     )
                     for name, value in stmt.options.options.items()
                 }
+
+            if unit.required_permissions is None:
+                unit.required_permissions = []
+            unit.required_permissions.append('sys::perm::sql_session_config')
 
         elif isinstance(stmt, (pgast.BeginStmt, pgast.StartStmt)):
             unit.tx_action = dbstate.TxAction.START
@@ -394,6 +402,7 @@ def _compile_sql(
                 source_map=stmt_source.source_map,
             )
             unit.command_complete_tag = dbstate.TagPlain(tag=b"PREPARE")
+            unit.required_permissions = stmt_resolved.required_permissions
             track_stats = True
 
         elif isinstance(stmt, pgast.ExecuteStmt):
@@ -478,6 +487,7 @@ def _compile_sql(
                 unit.cardinality = enums.Cardinality.NO_RESULT
             else:
                 unit.cardinality = enums.Cardinality.MANY
+            unit.required_permissions = stmt_resolved.required_permissions
             track_stats = True
         else:
             from edb.pgsql import resolver as pg_resolver

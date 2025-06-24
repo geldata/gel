@@ -980,3 +980,141 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
             await self.con.query('''
                 DROP ROLE foo;
             ''')
+
+
+class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
+
+    PARALLELISM_GRANULARITY = 'system'
+    TRANSACTION_ISOLATION = False
+
+    async def test_server_permissions_sql_config_01(self):
+        # Non-superuser cannot use SET statements
+
+        import asyncpg
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+            };
+        ''')
+
+        try:
+            conn = await self.create_sql_connection(
+                user='foo',
+                password='secret',
+            )
+
+            with self.assertRaisesRegex(
+                asyncpg.exceptions.InternalServerError,
+                # should be edgedb.DisabledCapabilityError?
+                'role foo does not have required permission: '
+                'sys::perm::sql_session_config'
+            ):
+                await conn.execute("""
+                    SET LOCAL transaction_isolation TO 'serializable'
+                """)
+
+            with self.assertRaisesRegex(
+                asyncpg.exceptions.InternalServerError,
+                # should be edgedb.DisabledCapabilityError?
+                'role foo does not have required permission: '
+                'sys::perm::sql_session_config'
+            ):
+                await conn.execute("""
+                    SET SESSION transaction_isolation TO 'serializable'
+                """)
+
+        finally:
+            await conn.close()
+            await self.con.query('''
+                DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_sql_config_02(self):
+        # Non-superuser cannot use SET statements
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := sys::perm::sql_session_config;
+            };
+        ''')
+
+        try:
+            conn = await self.create_sql_connection(
+                user='foo',
+                password='secret',
+            )
+
+            await conn.execute("""
+                SET LOCAL transaction_isolation TO 'serializable'
+            """)
+
+            await conn.execute("""
+                SET SESSION transaction_isolation TO 'serializable'
+            """)
+
+        finally:
+            await conn.close()
+            await self.con.query('''
+                DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_sql_config_03(self):
+        # Non-superuser cannot use sql_config
+
+        import asyncpg
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+            };
+        ''')
+
+        try:
+            conn = await self.create_sql_connection(
+                user='foo',
+                password='secret',
+            )
+
+            with self.assertRaisesRegex(
+                asyncpg.exceptions.InternalServerError,
+                # should be edgedb.DisabledCapabilityError?
+                'role foo does not have required permission: '
+                'sys::perm::sql_session_config'
+            ):
+                await conn.execute("""
+                    SELECT set_config('bytea_output', 'hex', false)
+                """)
+
+        finally:
+            await conn.close()
+            await self.con.query('''
+                DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_sql_config_04(self):
+        # Non-superuser cannot use sql_config
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := sys::perm::sql_session_config;
+            };
+        ''')
+
+        try:
+            conn = await self.create_sql_connection(
+                user='foo',
+                password='secret',
+            )
+
+            await conn.execute("""
+                SELECT set_config('bytea_output', 'hex', false)
+            """)
+
+        finally:
+            await conn.close()
+            await self.con.query('''
+                DROP ROLE foo;
+            ''')
