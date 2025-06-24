@@ -949,3 +949,15 @@ Fixes
 
 * Increase performance of array/json indexing and json to scalar casts
   (:eql:gh:`#8804`)
+
+6.9
+===
+
+* Fix array-of-tuple parameter decoding with empty arrays from some bindings
+  (:eql:gh:`#8816`)
+
+* Improve performance of array-of-tuple query parameters
+  (:eql:gh:`#8818`)
+
+* Improve some parser error messages
+  (:eql:gh:`#8819`)
