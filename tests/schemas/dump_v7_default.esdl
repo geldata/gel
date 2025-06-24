@@ -15,3 +15,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+
+permission foo;
+permission bar;
+permission baz;
+
+type T {
+  access policy foo allow all using (global foo);
+};
+
+function f() -> int64 {
+  using (count(T));
+  required_permissions := {bar, baz};
+}
+
+function g() -> bool {
+  using (global foo);
+  required_permissions := bar;
+}
