@@ -6978,6 +6978,9 @@ class CreateRole(MetaCommand, RoleMixin, adapts=s_roles.CreateRole):
         permissions: list[str] = list(sorted(
             role.get_permissions(schema) or ()
         ))
+        branches: list[str] = list(sorted(
+            role.get_branches(schema)
+        ))
 
         instance_params = backend_params.instance_params
         tenant_id = instance_params.tenant_id
@@ -7012,6 +7015,7 @@ class CreateRole(MetaCommand, RoleMixin, adapts=s_roles.CreateRole):
                 password_hash=passwd,
                 builtin=role.get_builtin(schema),
                 permissions=permissions,
+                branches=branches,
             ),
         )
         self.pgops.add(dbops.CreateRole(db_role))
@@ -7039,6 +7043,8 @@ class AlterRole(MetaCommand, RoleMixin, adapts=s_roles.AlterRole):
             name=role_name,
             tenant_id=tenant_id,
             builtin=role.get_builtin(schema),
+            permissions=list(sorted(role.get_permissions(schema) or ())),
+            branches=list(sorted(role.get_branches(schema) or ())),
         )
 
         if self.has_attribute_value('password'):
@@ -7055,15 +7061,11 @@ class AlterRole(MetaCommand, RoleMixin, adapts=s_roles.AlterRole):
                 kwargs['password'] = old_passwd
             metadata['password_hash'] = old_passwd
 
-        if self.has_attribute_value('permissions'):
-            permissions = list(sorted(
-                self.get_attribute_value('permissions') or ()
-            ))
-
+        if (
+            self.has_attribute_value('permissions')
+            or self.has_attribute_value('branches')
+        ):
             update_metadata = True
-            metadata['permissions'] = permissions
-        elif old_permissions := role.get_permissions(schema):
-            metadata['permissions'] = list(sorted(old_permissions))
 
         pg_role_name = common.get_role_backend_name(
             role_name, tenant_id=tenant_id)

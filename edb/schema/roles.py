@@ -73,6 +73,15 @@ class Role(
         inheritable=False,
     )
 
+    branches = so.SchemaField(
+        so.MultiPropSet[str],
+        # default=so.MultiPropSet[str]('*'),
+        # default=('*',),
+        coerce=True,
+        allow_ddl_set=True,
+        inheritable=False,
+    )
+
 
 class RoleCommandContext(
         sd.ObjectCommandContext[Role],
@@ -164,6 +173,10 @@ class CreateRole(RoleCommand, inheriting.CreateInheritingObject[Role]):
 
         cmd.set_attribute_value('superuser', astnode.superuser)
         cls._process_role_body(cmd, schema, astnode, context)
+
+        if not cmd.has_attribute_value('branches'):
+            cmd.set_attribute_value('branches', frozenset(['*']))
+
         return cmd
 
     def get_ast_attr_for_field(

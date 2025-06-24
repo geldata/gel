@@ -337,6 +337,7 @@ async def _ensure_edgedb_role(
             name=role_name,
             tenant_id=backend_params.tenant_id,
             builtin=builtin,
+            branches=['*'],
         ),
     )
 
@@ -2077,6 +2078,7 @@ def compile_sys_queries(
             name,
             superuser,
             password,
+            branches,
             all_permissions,
         };
     '''

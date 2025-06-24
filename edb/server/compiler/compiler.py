@@ -3731,6 +3731,7 @@ def _extract_roles(
             name=role_name,
             superuser=role.get_superuser(global_schema),
             password=role.get_password(global_schema),
+            branches=list(sorted(role.get_branches(global_schema))),
         )
 
     # To populate all_permissions, combine the permissions of each role

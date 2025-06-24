@@ -118,6 +118,7 @@ CREATE TYPE sys::Role EXTENDING
     CREATE PROPERTY is_superuser := .superuser;
     CREATE PROPERTY password -> std::str;
     CREATE MULTI PROPERTY permissions -> std::str;
+    CREATE MULTI PROPERTY branches -> std::str;
 };
 
 

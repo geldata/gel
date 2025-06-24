@@ -99,6 +99,7 @@ class RoleDescriptor(TypedDict):
     name: str
     password: str | None
     all_permissions: list[str] | None
+    branches: list[str]
 
 
 class Tenant(ha_base.ClusterProtocol):

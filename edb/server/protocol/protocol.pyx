@@ -962,6 +962,16 @@ cdef class HttpProtocol:
                 else:
                     raise next(iter(auth_errors.values()))
 
+            role = self.tenant.get_roles().get(username)
+            if not role:
+                raise errors.AuthenticationError('authentication failed')
+            branches = role['branches']
+            if '*' not in branches and dbname not in branches:
+                raise errors.AuthenticationError(
+                    f"authentication failed: user does not have permission for "
+                    f"database branch '{dbname}'"
+                )
+
         except Exception as ex:
             if debug.flags.server:
                 markup.dump(ex)

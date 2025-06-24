@@ -3005,6 +3005,14 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
             common.maybe_versioned_schema(permissions[0]), permissions[1]
         )
 
+        branches_ptr = role_obj.getptr(
+            schema, s_name.UnqualName('branches'), type=s_props.Property
+        )
+        branches = _schema_alias_view_name(schema, branches_ptr)
+        branches = (
+            common.maybe_versioned_schema(branches[0]), branches[1]
+        )
+
         super_col = ptr_col_name(schema, role_obj, 'superuser')
         name_col = ptr_col_name(schema, role_obj, 'name')
         pass_col = ptr_col_name(schema, role_obj, 'password')
@@ -3080,6 +3088,23 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
                                 ),
                                 'SET permissions := {{  }}; '
                             ),
+                            NULLIF (
+                                concat(
+                                    'SET branches := {{ ',
+                                    (
+                                        SELECT
+                                            string_agg(
+                                                quote_literal(branches.target),
+                                                ', '
+                                            )
+                                        FROM {q(*branches)} branches
+                                        WHERE branches.source = role.id
+                                    ),
+                                    ' }}; '
+                                ),
+                                'SET branches := {{ ''*'' }}; '
+                            ),
+
                             '}};'
                         ),
                         'ALTER ROLE {qi_superuser} {{ }};'
@@ -3141,6 +3166,24 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
                                     ),
                                     'SET permissions := {{  }}; '
                                 ),
+                                NULLIF (
+                                    concat(
+                                        'SET branches := {{ ',
+                                        (
+                                            SELECT
+                                                string_agg(
+                                                    quote_literal(
+                                                        branches.target),
+                                                    ', '
+                                                )
+                                            FROM {q(*branches)} branches
+                                            WHERE branches.source = role.id
+                                        ),
+                                        ' }}; '
+                                    ),
+                                    'SET branches := {{ ''*'' }}; '
+                                ),
+
                                 '}}'
                             ),
                             ' {{ }}'
@@ -3188,14 +3231,6 @@ class AllRoleMembershipsFunction(trampoline.VersionedFunction):
         member_of = role_obj.getptr(schema, s_name.UnqualName('member_of'))
         members = _schema_alias_view_name(schema, member_of)
         members = (common.maybe_versioned_schema(members[0]), members[1])
-
-        permissions_ptr = role_obj.getptr(
-            schema, s_name.UnqualName('permissions'), type=s_props.Property
-        )
-        permissions = _schema_alias_view_name(schema, permissions_ptr)
-        permissions = (
-            common.maybe_versioned_schema(permissions[0]), permissions[1]
-        )
 
         text = f"""
             WITH RECURSIVE memberships (id, member_of)
@@ -6054,6 +6089,9 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     permissions = Role.getptr(
         schema, s_name.UnqualName('permissions'), type=s_props.Property
     )
+    branches = Role.getptr(
+        schema, s_name.UnqualName('branches'), type=s_props.Property
+    )
 
     superuser = f'''
         a.rolsuper OR EXISTS (
@@ -6232,6 +6270,24 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
             AND
               (d.description)->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
     '''
+    branches_query = f'''
+        SELECT
+            ((d.description)->>'id')::uuid AS source,
+            jsonb_array_elements_text(
+                (d.description)->'branches'
+            )::text as target
+        FROM
+            pg_catalog.pg_roles AS a
+            CROSS JOIN LATERAL (
+                SELECT
+                    edgedb_VER.shobj_metadata(a.oid, 'pg_authid')
+                        AS description
+            ) AS d
+        WHERE
+            (d.description)->>'id' IS NOT NULL
+            AND
+              (d.description)->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
+    '''
 
     objects = {
         Role: view_query,
@@ -6241,6 +6297,7 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         annos: annos_link_query,
         int_annos: int_annos_link_query,
         permissions: permissions_query,
+        branches: branches_query,
     }
 
     views: list[dbops.View] = []
@@ -6271,6 +6328,9 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     )
     permissions = Role.getptr(
         schema, s_name.UnqualName('permissions'), type=s_props.Property
+    )
+    branches = Role.getptr(
+        schema, s_name.UnqualName('branches'), type=s_props.Property
     )
 
     view_query_fields = {
@@ -6377,6 +6437,17 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         WHERE 1 = 0
     '''
 
+    branches_query = f'''
+        SELECT
+            (json->>'id')::uuid AS source,
+            '*'::text as target
+        FROM
+            edgedbinstdata_VER.instdata
+        WHERE
+            key = 'single_role_metadata'
+            AND json->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
+    '''
+
     objects = {
         Role: view_query,
         member_of: member_of_link_query,
@@ -6385,6 +6456,7 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         annos: annos_link_query,
         int_annos: int_annos_link_query,
         permissions: permissions_query,
+        branches: branches_query,
     }
 
     views: list[dbops.View] = []
@@ -8928,11 +9000,16 @@ def get_support_views(
         schema, s_name.UnqualName('member_of'))
     SysRole__permissions = SysRole.getptr(
         schema, s_name.UnqualName('permissions'))
+    SysRole__branches = SysRole.getptr(
+        schema, s_name.UnqualName('branches'))
     sys_alias_views.append(
         _generate_schema_alias_view(schema, SysRole__member_of)
     )
     sys_alias_views.append(
         _generate_schema_alias_view(schema, SysRole__permissions)
+    )
+    sys_alias_views.append(
+        _generate_schema_alias_view(schema, SysRole__branches)
     )
 
     for alias_view in sys_alias_views:

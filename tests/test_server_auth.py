@@ -54,10 +54,11 @@ class TestServerAuth(tb.ConnectedTestCase):
         await self.con.query('''
             CREATE EXTENSION edgeql_http;
         ''')
-        await self.con.query('''
-            CREATE SUPERUSER ROLE foo {
+        await self.con.query(f'''
+            CREATE SUPERUSER ROLE foo {{
                 SET password := 'foo-pass';
-            }
+                SET branches := 'main';
+            }}
         ''')
 
         # bad password
@@ -81,6 +82,22 @@ class TestServerAuth(tb.ConnectedTestCase):
         await conn.aclose()
         body, code = await self._basic_http_request(None, 'foo', 'foo-pass')
         self.assertEqual(code, 200, f"Wrong result: {body}")
+
+        # good password, non-allowed database
+        with self.assertRaisesRegex(
+            edgedb.AuthenticationError,
+            "authentication failed: user does not have permission for "
+            "database branch 'auth_failure'"
+        ):
+            await self.connect(
+                user='foo',
+                password='foo-pass',
+                database='auth_failure',
+            )
+
+        body, code = await self._basic_http_request(
+            None, 'foo', 'foo-pass', db='auth_failure')
+        self.assertEqual(code, 401, f"Wrong result: {body}")
 
         # Force foo to use a JWT so auth fails
         await self.con.query('''
