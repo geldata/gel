@@ -6123,6 +6123,28 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
           permission bar;
        """)
 
+    async def test_edgeql_migration_permissions_03c(self):
+        # Check tracing dependency works
+        await self.migrate(r"""
+          permission foo;
+          permission bar;
+          function test(x: int64) -> int64 {
+              using (1);
+              required_permissions := {foo, bar};
+          };
+       """)
+
+    async def test_edgeql_migration_permissions_03d(self):
+        # Sigh... test using POPULATE MIGRATION also...
+        # Check tracing dependency works
+        await tb.DDLTestCase.migrate(self, r"""
+          permission foo;
+          function test(x: int64) -> int64 {
+              using (x);
+              required_permissions := foo;
+          };
+       """)
+
     async def test_edgeql_migration_index_01(self):
         await self.migrate('''
             type Message {

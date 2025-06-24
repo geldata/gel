@@ -522,7 +522,7 @@ def typeref_to_ast(
     from . import types as s_types
 
     if isinstance(ref, so.ObjectShell):
-        return shell_to_ast(schema, ref)
+        return type_shell_to_ast(schema, ref)
     else:
         t = ref
 
@@ -607,6 +607,34 @@ def shell_to_ast(
     t: so.ObjectShell[so.Object],
     *,
     _name: Optional[str] = None,
+) -> qlast.TypeExpr | qlast.Expr:
+    from . import types as s_types
+
+    if isinstance(t, s_types.TypeShell):
+        return type_shell_to_ast(schema, t, _name=_name)
+    elif isinstance(t, so.ObjectShell):
+        name = t.name
+        if isinstance(name, sn.QualName):
+            qlref = qlast.ObjectRef(
+                module=name.module,
+                name=name.name,
+            )
+        else:
+            qlref = qlast.ObjectRef(
+                module='',
+                name=name.name,
+            )
+        return qlast.Path(steps=[qlref])
+
+    else:
+        raise NotImplementedError(f'cannot represent {t!r} as a type shell')
+
+
+def type_shell_to_ast(
+    schema: s_schema.Schema,
+    t: so.ObjectShell[so.Object],
+    *,
+    _name: Optional[str] = None,
 ) -> qlast.TypeExpr:
     from . import pseudo as s_pseudo
     from . import types as s_types
@@ -629,7 +657,7 @@ def shell_to_ast(
                     name='tuple',
                 ),
                 subtypes=[
-                    shell_to_ast(schema, st, _name=sn)
+                    type_shell_to_ast(schema, st, _name=sn)
                     for sn, st in t.iter_subtypes(schema)
                 ]
             )
@@ -640,7 +668,7 @@ def shell_to_ast(
                     name='tuple',
                 ),
                 subtypes=[
-                    shell_to_ast(schema, st)
+                    type_shell_to_ast(schema, st)
                     for st in t.get_subtypes(schema)
                 ]
             )
@@ -651,7 +679,7 @@ def shell_to_ast(
                 name='array',
             ),
             subtypes=[
-                shell_to_ast(schema, st)
+                type_shell_to_ast(schema, st)
                 for st in t.get_subtypes(schema)
             ]
         )
@@ -662,7 +690,7 @@ def shell_to_ast(
                 name='range',
             ),
             subtypes=[
-                shell_to_ast(schema, st)
+                type_shell_to_ast(schema, st)
                 for st in t.get_subtypes(schema)
             ]
         )
@@ -673,7 +701,7 @@ def shell_to_ast(
                 name='multirange',
             ),
             subtypes=[
-                shell_to_ast(schema, st)
+                type_shell_to_ast(schema, st)
                 for st in t.get_subtypes(schema)
             ]
         )
@@ -714,7 +742,7 @@ def shell_to_ast(
             maintype=qlref,
         )
     else:
-        raise NotImplementedError(f'cannot represent {t!r} as a shell')
+        raise NotImplementedError(f'cannot represent {t!r} as a type shell')
 
     return result
 
