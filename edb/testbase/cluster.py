@@ -362,10 +362,15 @@ class BaseCluster:
         return res.returncode
 
     async def set_test_config(self) -> None:
-        self._admin_query(f'''
-            # Set session_idle_transaction_timeout to 5 minutes.
+        # Set session_idle_transaction_timeout to 5 minutes.
+        self._admin_query('''
             CONFIGURE INSTANCE SET session_idle_transaction_timeout :=
                 <duration>'5 minutes';
+        ''')
+        # And disable session_idle_timeout
+        self._admin_query('''
+            CONFIGURE INSTANCE SET session_idle_timeout :=
+                <duration>'0 seconds';
         ''')
 
     async def set_superuser_password(self, password: str) -> None:
