@@ -27,7 +27,7 @@ from edb.pgsql import ast as pgast
 from edb.pgsql import codegen as pgcodegen
 from edb.schema import schema as s_schema
 
-from edb.server.compiler import dbstate
+from edb.server.compiler import dbstate, enums
 
 from . import dispatch
 from . import context
@@ -53,7 +53,7 @@ class ResolvedSQL:
     # query parameters
     params: list[dbstate.SQLParam]
 
-    required_permissions: Optional[list[str]]
+    capabilities: enums.Capability = enums.Capability.NONE
 
 
 def resolve(
@@ -166,7 +166,7 @@ def resolve(
         edgeql_output_format_ast=edgeql_output_format_ast,
         command_complete_tag=command_complete_tag,
         params=ctx.query_params,
-        required_permissions=ctx.env.required_permissions,
+        capabilities=ctx.env.capabilities,
     )
 
 

@@ -28,7 +28,7 @@ from edb.pgsql import ast as pgast
 from edb.pgsql.compiler import aliases
 
 from edb.common import compiler
-from edb.server.compiler import dbstate
+from edb.server.compiler import dbstate, enums
 
 from edb.schema import schema as s_schema
 from edb.schema import objects as s_objects
@@ -234,7 +234,8 @@ class ContextSwitchMode(enum.Enum):
 class Environment:
     """Static compilation environment."""
 
-    required_permissions: Optional[list[str]] = None
+    # Capabilities required by the query
+    capabilities: enums.Capability = enums.Capability.NONE
 
 
 class ResolverContextLevel(compiler.ContextLevel):

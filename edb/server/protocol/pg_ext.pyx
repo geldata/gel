@@ -46,7 +46,7 @@ cimport edb.pgsql.parser.parser as pg_parser
 from edb.server import args as srvargs
 from edb.server import defines, metrics
 from edb.server import tenant as edbtenant
-from edb.server.compiler import dbstate
+from edb.server.compiler import dbstate, enums
 from edb.server.pgcon import errors as pgerror
 from edb.server.pgcon.pgcon cimport PGAction, PGMessage
 from edb.server.protocol cimport frontend
@@ -1337,20 +1337,22 @@ cdef class PgConnection(frontend.FrontendConnection):
         self,
         query_unit,
     ):
-        if query_unit.required_permissions:
-            is_superuser, permissions = self.get_permissions()
-            if not is_superuser:
-                for perm in query_unit.required_permissions:
-                    if perm not in permissions:
-                        missing = sorted(
-                            set(query_unit.required_permissions)
-                            - set(permissions)
-                        )
-                        plural = 's' if len(missing) > 1 else ''
-                        raise errors.DisabledCapabilityError(
-                            f'role {self.username} does not have required '
-                            f'permission{plural}: {", ".join(missing)}'
-                        )
+        query_capabilities = query_unit.capabilities
+
+        role_capability = self.get_role_capability()
+        if query_capabilities & ~role_capability:
+            raise query_capabilities.make_error(
+                role_capability,
+                errors.DisabledCapabilityError,
+                f"role {self.username} does not have permission",
+            )
+
+    def get_role_capability(self) -> enums.Capability:
+        if capability := self.tenant.get_role_capabilities().get(
+            self.username
+        ):
+            return capability
+        return enums.Capability.NONE
 
     def get_permissions(self) -> tuple[bool, Sequence[str]]:
         if role_desc := self.tenant.get_roles().get(self.username):

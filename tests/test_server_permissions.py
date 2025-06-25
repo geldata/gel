@@ -1006,9 +1006,8 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
 
             with self.assertRaisesRegex(
                 asyncpg.exceptions.InternalServerError,
-                # should be edgedb.DisabledCapabilityError?
-                'role foo does not have required permission: '
-                'sys::perm::sql_session_config'
+                'cannot execute sql session configuration commands: '
+                'role foo does not have permission'
             ):
                 await conn.execute("""
                     SET LOCAL transaction_isolation TO 'serializable'
@@ -1016,9 +1015,8 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
 
             with self.assertRaisesRegex(
                 asyncpg.exceptions.InternalServerError,
-                # should be edgedb.DisabledCapabilityError?
-                'role foo does not have required permission: '
-                'sys::perm::sql_session_config'
+                'cannot execute sql session configuration commands: '
+                'role foo does not have permission'
             ):
                 await conn.execute("""
                     SET SESSION transaction_isolation TO 'serializable'
@@ -1155,9 +1153,8 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
 
             with self.assertRaisesRegex(
                 asyncpg.exceptions.InternalServerError,
-                # should be edgedb.DisabledCapabilityError?
-                'role foo does not have required permission: '
-                'sys::perm::sql_session_config'
+                'cannot execute sql session configuration commands: '
+                'role foo does not have permission'
             ):
                 await conn.execute("""
                     SELECT set_config('bytea_output', 'hex', false)
@@ -1213,8 +1210,8 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
 
             with self.assertRaisesRegex(
                 edgedb.DisabledCapabilityError,
-                'role foo does not have required permission: '
-                'sys::perm::sql_session_config'
+                'cannot execute sql session configuration commands: '
+                'role foo does not have permission'
             ):
                 await conn.query_sql("""
                     SELECT set_config('bytea_output', 'hex', false)
