@@ -535,9 +535,6 @@ def _compile_sql(
             if unit.eql_format_query is not None:
                 unit.eql_format_query = prefix + unit.eql_format_query
 
-        if isinstance(stmt, pgast.DMLQuery):
-            unit.capabilities |= enums.Capability.MODIFICATIONS
-
         if unit.tx_action is not None:
             unit.capabilities |= enums.Capability.TRANSACTION
 

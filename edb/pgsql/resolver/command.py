@@ -51,7 +51,7 @@ from edb.schema import properties as s_properties
 from edb.schema import name as sn
 from edb.schema import types as s_types
 from edb.schema import utils as s_utils
-
+from edb.server.compiler import enums
 
 from . import dispatch
 from . import context
@@ -2206,6 +2206,7 @@ def resolve_DMLQuery(
         _resolve_conflict_update_rel(compiled_dml, subject_name, ctx=ctx)
 
     ctx.ctes_buffer.extend(compiled_dml.output_ctes)
+    ctx.env.capabilities |= enums.Capability.MODIFICATIONS
 
     return _fini_resolve_dml(stmt, compiled_dml, ctx=ctx)
 

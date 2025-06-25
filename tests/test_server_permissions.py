@@ -987,6 +987,108 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
     PARALLELISM_GRANULARITY = 'system'
     TRANSACTION_ISOLATION = False
 
+    async def test_server_permissions_sql_dml_01(self):
+        # Non-superuser cannot use INSERT statements
+
+        import asyncpg
+
+        await self.con.query('''
+            CREATE TYPE Widget {
+                CREATE PROPERTY n -> int64;
+            };
+            INSERT Widget { n := 1 };
+            CREATE ROLE foo {
+                SET password := 'secret';
+            };
+        ''')
+
+        try:
+            conn = await self.create_sql_connection(
+                user='foo',
+                password='secret',
+            )
+
+            with self.assertRaisesRegex(
+                asyncpg.exceptions.InternalServerError,
+                'cannot execute data modification queries: '
+                'role foo does not have permission'
+            ):
+                await conn.execute("""
+                    insert into "Widget" (n) values (2);
+                """)
+
+            with self.assertRaisesRegex(
+                asyncpg.exceptions.InternalServerError,
+                'cannot execute data modification queries: '
+                'role foo does not have permission'
+            ):
+                await conn.execute("""
+                    with X as (
+                        insert into "Widget" (n) values (3)
+                    )
+                    select * from X;
+                """)
+
+            await self.assert_query_result(
+                '''
+                    select Widget.n;
+                ''',
+                [1],
+            )
+
+        finally:
+            await conn.close()
+            await self.con.query('''
+                DROP TYPE Widget;
+                DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_sql_dml_02(self):
+        # Non-superuser can use INSERT statements
+        # with sys::perm::data_modification
+
+        await self.con.query('''
+            CREATE TYPE Widget {
+                CREATE PROPERTY n -> int64;
+            };
+            INSERT Widget { n := 1 };
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := sys::perm::data_modification;
+            };
+        ''')
+
+        try:
+            conn = await self.create_sql_connection(
+                user='foo',
+                password='secret',
+            )
+
+            await conn.execute("""
+                insert into "Widget" (n) values (2);
+            """)
+            await conn.execute("""
+                with X as (
+                    insert into "Widget" (n) values (3)
+                )
+                select * from X;
+            """)
+
+            await self.assert_query_result(
+                '''
+                    select Widget.n;
+                ''',
+                [1, 2, 3],
+                sort=True,
+            )
+
+        finally:
+            await conn.close()
+            await self.con.query('''
+                DROP TYPE Widget;
+                DROP ROLE foo;
+            ''')
+
     async def test_server_permissions_sql_config_01(self):
         # Non-superuser cannot use SET statements
 
