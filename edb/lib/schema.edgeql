@@ -67,6 +67,9 @@ CREATE SCALAR TYPE schema::MigrationGeneratedBy
 CREATE SCALAR TYPE schema::IndexDeferrability
     EXTENDING enum<Prohibited, Permitted, `Required`>;
 
+CREATE SCALAR TYPE schema::SplatStrategy
+    EXTENDING enum<Default, Explicit, Implicit>;
+
 # Base type for all schema entities.
 CREATE ABSTRACT TYPE schema::Object EXTENDING std::BaseObject {
     CREATE REQUIRED PROPERTY name -> std::str;
@@ -298,7 +301,8 @@ CREATE ABSTRACT TYPE schema::Pointer
     CREATE PROPERTY default -> std::str;
     CREATE PROPERTY expr -> std::str;
     CREATE PROPERTY secret -> std::bool;
-    CREATE PROPERTY lazy -> std::bool;
+    CREATE PROPERTY splat_strategy -> schema::SplatStrategy;
+    CREATE PROPERTY linkful -> std::bool;
 };
 
 

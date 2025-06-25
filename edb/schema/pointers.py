@@ -187,25 +187,25 @@ def merge_readonly(
     return current
 
 
-def merge_lazy(
-    ptr: Pointer,
-    bases: list[Pointer],
-    field_name: str,
-    *,
-    ignore_local: bool = False,
-    schema: s_schema.Schema,
-) -> Optional[bool]:
-    """Merge function for pointer laziness."""
+# def merge_lazy(
+#     ptr: Pointer,
+#     bases: list[Pointer],
+#     field_name: str,
+#     *,
+#     ignore_local: bool = False,
+#     schema: s_schema.Schema,
+# ) -> Optional[bool]:
+#     """Merge function for pointer laziness."""
 
-    return utils.merge_reduce(
-        ptr,
-        bases,
-        field_name=field_name,
-        ignore_local=ignore_local,
-        schema=schema,
-        f=operator.and_,
-        type=bool,
-    )
+#     return utils.merge_reduce(
+#         ptr,
+#         bases,
+#         field_name=field_name,
+#         ignore_local=ignore_local,
+#         schema=schema,
+#         f=operator.and_,
+#         type=bool,
+#     )
 
 
 def merge_required(
@@ -480,15 +480,16 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         merge_fn=merge_readonly,
     )
 
-    lazy = so.SchemaField(
-        bool,
+    splat_strategy = so.SchemaField(
+        qltypes.SplatStrategy,
         allow_ddl_set=True,
         describe_visibility=(
             so.DescribeVisibilityPolicy.SHOW_IF_EXPLICIT_OR_DERIVED_NOT_DEFAULT
         ),
+        coerce=True,
         default=False,
         compcoef=0.909,
-        merge_fn=merge_lazy,
+        # merge_fn=merge_splat,
     )
 
     secret = so.SchemaField(
@@ -501,6 +502,12 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         bool,
         default=False,
         compcoef=0.909,
+    )
+
+    linkful = so.SchemaField(
+        bool,
+        default=False,
+        compcoef=0.99,
     )
 
     # For non-derived pointers this is strongly correlated with

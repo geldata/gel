@@ -259,6 +259,12 @@ class RewriteKind(s_enum.StrEnum):
     Insert = 'Insert'
 
 
+class SplatStrategy(s_enum.StrEnum):
+    Default = 'Default'
+    Explicit = 'Explicit'
+    Implicit = 'Implicit'
+
+
 class DescribeLanguage(s_enum.StrEnum):
     DDL = 'DDL'
     SDL = 'SDL'
