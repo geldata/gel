@@ -133,12 +133,6 @@ class Link(
     def is_link_property(self, schema: s_schema.Schema) -> bool:
         return False
 
-    def is_property(self, schema: s_schema.Schema) -> bool:
-        return False
-
-    def scalar(self) -> bool:
-        return False
-
     def has_user_defined_properties(self, schema: s_schema.Schema) -> bool:
         return bool([p for p in self.get_pointers(schema).objects(schema)
                      if not p.is_special_pointer(schema)

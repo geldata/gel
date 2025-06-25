@@ -775,8 +775,15 @@ def _expand_splat(
             continue
         if ptr.get_secret(ctx.env.schema):
             continue
-        # if ptr.get_lazy(ctx.env.schema):
-        #     continue
+        splat_strat = ptr.get_splat_strategy(ctx.env.schema)
+        if (
+            splat_strat == qltypes.SplatStrategy.Explicit
+            or (
+                splat_strat == qltypes.SplatStrategy.Default
+                and ptr.get_linkful(ctx.env.schema)
+            )
+        ):
+            continue
         sname = ptr.get_shortname(ctx.env.schema)
         # Skip any dunder properties; these are injected properties like
         # __tid__ and __tname__, and we want to manage injecting them
@@ -824,8 +831,9 @@ def _expand_splat(
                 continue
             if ptr.get_secret(ctx.env.schema):
                 continue
-            # if ptr.get_lazy(ctx.env.schema):
-            #     continue
+            splat_strat = ptr.get_splat_strategy(ctx.env.schema)
+            if splat_strat == qltypes.SplatStrategy.Explicit:
+                continue
             pn = ptr.get_shortname(ctx.env.schema)
             if (
                 (pn.name.startswith('__') and pn.name.endswith('__'))

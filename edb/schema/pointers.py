@@ -487,7 +487,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
             so.DescribeVisibilityPolicy.SHOW_IF_EXPLICIT_OR_DERIVED_NOT_DEFAULT
         ),
         coerce=True,
-        default=False,
+        default=qltypes.SplatStrategy.Default,
         compcoef=0.909,
         # merge_fn=merge_splat,
     )
@@ -508,6 +508,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         bool,
         default=False,
         compcoef=0.99,
+        inheritable=False,
     )
 
     # For non-derived pointers this is strongly correlated with
@@ -809,8 +810,10 @@ class Pointer(referencing.NamedReferencedInheritingObject,
             'source', 'target', 'id'
         } and (self.is_id_pointer(schema) or self.is_endpoint_pointer(schema))
 
-    def is_property(self, schema: s_schema.Schema) -> bool:
-        raise NotImplementedError
+    @classmethod
+    def is_property(cls, schema: Optional[s_schema.Schema]=None) -> bool:
+        # Property overloads
+        return False
 
     def is_link_property(self, schema: s_schema.Schema) -> bool:
         raise NotImplementedError
@@ -1143,9 +1146,6 @@ class PseudoPointer(s_abc.Pointer):
     ) -> bool:
         raise NotImplementedError
 
-    def scalar(self) -> bool:
-        raise NotImplementedError
-
     def material_type(
         self,
         schema: s_schema.Schema,
@@ -1189,6 +1189,8 @@ class PointerCommandContext(
 class PointerCommandOrFragment(
     referencing.ReferencedObjectCommandBase[Pointer_T]
 ):
+    def is_property_command(self) -> bool:
+        return self.get_schema_metaclass().is_property()
 
     def canonicalize_attributes(
         self,
@@ -1233,6 +1235,12 @@ class PointerCommandOrFragment(
                 expr.parse(), schema, context)
         else:
             inf_target_ref = None
+
+        if (
+            isinstance(self, sd.CreateObject)
+            and not self.is_property_command()
+        ):
+            self.set_attribute_value('linkful', True)
 
         if inf_target_ref is not None:
             span = self.get_attribute_span('target')
@@ -1298,6 +1306,9 @@ class PointerCommandOrFragment(
             if isinstance(result_expr.expr, irast.Pointer):
                 result_expr, _ = irutils.collapse_type_intersection(
                     result_expr)
+
+        if self.is_property_command():
+            self.set_attribute_value('linkful', irutils.is_linkful(orig_expr))
 
         # Process a computable pointer which potentially could be an
         # aliased link that should inherit link properties.
@@ -2201,6 +2212,8 @@ class AlterPointer(
             and not self.is_attribute_inherited('expr')
             and self.get_attribute_value('expr') is None
         ):
+            self.set_attribute_value('linkful', not self.is_property_command())
+
             old_expr = self.get_orig_attribute_value('expr')
             pointer = schema.get(self.classname, type=Pointer)
             if old_expr is None:

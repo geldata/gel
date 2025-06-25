@@ -590,3 +590,10 @@ def collect_schema_types(stmt: irast.Base) -> set[uuid.UUID]:
     visitor = CollectSchemaTypesVisitor()
     visitor.visit(stmt)
     return visitor.types
+
+
+def is_linkful(ir: irast.Base) -> bool:
+    def flt(p: irast.Pointer) -> bool:
+        return typeutils.is_object(p.typeref)
+
+    return bool(ast.find_children(ir, irast.Pointer, flt, terminate_early=True))

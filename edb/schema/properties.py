@@ -128,10 +128,8 @@ class Property(
         # because we create new properties with distinct types.
         return not self.is_endpoint_pointer(schema)
 
-    def is_property(self, schema: s_schema.Schema) -> bool:
-        return True
-
-    def scalar(self) -> bool:
+    @classmethod
+    def is_property(cls, schema: Optional[s_schema.Schema]=None) -> bool:
         return True
 
     def has_user_defined_properties(self, schema: s_schema.Schema) -> bool:

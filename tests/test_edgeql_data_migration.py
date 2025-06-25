@@ -3436,6 +3436,29 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
             }],
         )
 
+    async def test_edgeql_migration_computed_07(self):
+        await self.migrate(r'''
+            type T;
+            type S {
+                multi ts: T;
+                val := count(.ts);
+            };
+        ''', module='default')
+        await self.migrate(r'''
+            type T;
+            type S {
+                multi ts: T;
+                val := 0;
+            };
+        ''', module='default')
+        await self.migrate(r'''
+            type T;
+            type S {
+                multi ts: T;
+                val := count(.ts);
+            };
+        ''', module='default')
+
     async def test_edgeql_migration_reject_prop_01(self):
         await self.migrate('''
             type User {
