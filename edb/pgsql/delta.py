@@ -4043,7 +4043,7 @@ class PointerMetaCommand(
         is_lprop = ptr.is_link_property(schema)
         is_multi = ptr_table and not is_lprop
         is_required = ptr.get_required(schema)
-        is_scalar = ptr.is_property(schema)
+        is_scalar = ptr.is_property()
 
         ref_ctx = self.get_referrer_context_or_die(context)
         ref_op = ref_ctx.op

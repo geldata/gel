@@ -811,7 +811,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         } and (self.is_id_pointer(schema) or self.is_endpoint_pointer(schema))
 
     @classmethod
-    def is_property(cls, schema: Optional[s_schema.Schema]=None) -> bool:
+    def is_property(cls) -> bool:
         # Property overloads
         return False
 
@@ -1860,7 +1860,7 @@ class PointerCommand(
                 s_pointer = schema.get_by_id(pointer.ptrref.id, type=Pointer)
                 card = s_pointer.get_cardinality(schema)
 
-                if s_pointer.is_property(schema) and card.is_multi():
+                if s_pointer.is_property() and card.is_multi():
                     raise errors.SchemaDefinitionError(
                         f"default expression cannot refer to multi properties "
                         "of inserted object",
@@ -1868,7 +1868,7 @@ class PointerCommand(
                         hint="this is a temporary implementation restriction",
                     )
 
-                if not s_pointer.is_property(schema):
+                if not s_pointer.is_property():
                     raise errors.SchemaDefinitionError(
                         f"default expression cannot refer to links "
                         "of inserted object",
@@ -2589,7 +2589,7 @@ class SetPointerType(
                 action=self.get_friendly_description(schema=schema),
             )
 
-            if orig_target is not None and scls.is_property(schema):
+            if orig_target is not None and scls.is_property():
                 if cleanup_op := orig_target.as_type_delete_if_unused(schema):
                     parent_op = self.get_parent_op(context)
                     parent_op.add_caused(cleanup_op)

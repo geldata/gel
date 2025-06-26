@@ -649,7 +649,7 @@ def _trace_item_layout(
                     for pn, p in base_pointers.items(ctx.schema):
                         PointerType = (
                             qltracer.Property
-                            if p.is_property(ctx.schema) else
+                            if p.is_property() else
                             qltracer.Link
                         )
                         base_obj.pointers[pn] = PointerType(

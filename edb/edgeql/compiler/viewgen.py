@@ -995,7 +995,7 @@ def _raise_on_missing(
             if pn.name in next(iter(rewrites.by_type.values())):
                 continue
 
-        if ptrcls.is_property(ctx.env.schema):
+        if ptrcls.is_property():
             # If the target is a sequence, there's no need
             # for an explicit value.
             ptrcls_target = ptrcls.get_target(ctx.env.schema)
@@ -1809,7 +1809,7 @@ def _normalize_view_ptr_expr(
                 ]
 
                 ercls: type[errors.EdgeDBError]
-                if ptrcls.is_property(ctx.env.schema):
+                if ptrcls.is_property():
                     ercls = errors.InvalidPropertyTargetError
                 else:
                     ercls = errors.InvalidLinkTargetError

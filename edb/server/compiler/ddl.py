@@ -1590,7 +1590,7 @@ def administer_reindex(
         })
 
         # For links, collect any single link indexes and any link table indexes
-        if not ptrcls.is_property(schema):
+        if not ptrcls.is_property():
             ptrclses = {ptrcls} | {
                 desc for desc in ptrcls.descendants(schema)
                 if isinstance(
@@ -1714,7 +1714,7 @@ def _identify_administer_tables_and_cols(
                 card.is_multi() or ptrcls.has_user_defined_properties(schema)
             ):
                 vn = ptrcls.get_verbosename(schema, with_parent=True)
-                if ptrcls.is_property(schema):
+                if ptrcls.is_property():
                     raise errors.QueryError(
                         f'{vn} is not a valid argument to vacuum() '
                         f'because it is not a multi property',
