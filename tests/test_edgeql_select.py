@@ -1753,14 +1753,15 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             select Issue { * }
             filter .number = "1"
             ''',
-            tb.bag([
+            [
                 {
                     "number": "1",
                     "name": "Release EdgeDB",
                     "body": "Initial public release of EdgeDB.",
                     "time_estimate": 3000,
+                    "priority": None,
                 },
-            ]),
+            ],
         )
 
     async def test_edgeql_select_splat_02(self):

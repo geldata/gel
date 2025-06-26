@@ -771,8 +771,6 @@ def _expand_splat(
     if intersection is not None:
         path.append(intersection)
     for ptr in pointers.objects(ctx.env.schema):
-        if not isinstance(ptr, s_props.Property):
-            continue
         if ptr.get_secret(ctx.env.schema):
             continue
         splat_strat = ptr.get_splat_strategy(ctx.env.schema)

@@ -82,7 +82,9 @@ type Issue extending Named, Owned, Text {
     }
     required status: Status;
 
-    priority: Priority;
+    priority: Priority {
+      splat_strategy := 'Implicit';
+    }
 
     optional multi watchers: User;
     num_watchers {
