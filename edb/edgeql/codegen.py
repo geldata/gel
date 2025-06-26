@@ -135,7 +135,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         parent: Optional[qlast.Base] = node._parent
         return (
             parent is not None
-            and not isinstance(parent, qlast.DDL)
+            and not isinstance(parent, (qlast.Commands, qlast.DDL))
             # Non-union FOR bodies can't have parens
             and not (
                 isinstance(parent, qlast.ForQuery)
@@ -209,7 +209,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
             self._block_ws(-1, newlines)
 
     def visit_Commands(self, node: qlast.Commands) -> None:
-        self.visit_list(node.commands)
+        self.visit_list(node.commands, separator=';', terminator=';')
 
     def visit_AliasedExpr(self, node: qlast.AliasedExpr) -> None:
         self.write(ident_to_str(node.alias))
