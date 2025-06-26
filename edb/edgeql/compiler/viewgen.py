@@ -47,6 +47,7 @@ from edb.ir import typeutils
 from edb.ir import utils as irutils
 import edb.ir.typeutils as irtypeutils
 
+from edb.schema import futures as s_futures
 from edb.schema import links as s_links
 from edb.schema import name as sn
 from edb.schema import objtypes as s_objtypes
@@ -778,7 +779,13 @@ def _expand_splat(
             splat_strat == qltypes.SplatStrategy.Explicit
             or (
                 splat_strat == qltypes.SplatStrategy.Default
-                and ptr.get_linkful(ctx.env.schema)
+                and (
+                    ptr.get_linkful(ctx.env.schema)
+                    if s_futures.future_enabled(
+                        ctx.env.schema, 'no_linkful_computed_splats'
+                    )
+                    else isinstance(ptr, s_links.Link)
+                )
             )
         ):
             continue

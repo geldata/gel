@@ -2005,6 +2005,24 @@ class TestEdgeQLSelect(tb.QueryTestCase):
         # Make sure the explicit properties aren't included
         self.assertNotIn('tags', res[0])
         self.assertNotIn('related_to', res[0])
+        # num_watchers should be included, without the future!
+        self.assertIn('num_watchers', res[0])
+
+        await self.con.execute('''
+            create future no_linkful_computed_splats
+        ''')
+
+        res = json.loads(await self.con.query_json(
+            r'''
+            select Issue {
+                **,
+            }
+            filter .number = "1"
+            '''
+        ))
+        # With the future, none should exist
+        self.assertNotIn('tags', res[0])
+        self.assertNotIn('related_to', res[0])
         self.assertNotIn('num_watchers', res[0])
 
     async def test_edgeql_select_id_01(self):

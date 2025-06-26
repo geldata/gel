@@ -52,6 +52,7 @@ from . import constraints
 from . import delta as sd
 from . import expr as s_expr
 from . import expraliases as s_expraliases
+from . import futures as s_futures
 from . import inheriting
 from . import name as sn
 from . import objects as so
@@ -3310,3 +3311,15 @@ def get_or_create_intersection_pointer(
         )
 
     return schema, result
+
+
+@s_futures.register_handler('no_linkful_computed_splats')
+def toggle_no_linkful_computed_splats(
+    cmd: s_futures.FutureBehaviorCommand,
+    schema: s_schema.Schema,
+    context: sd.CommandContext,
+    on: bool,
+) -> tuple[s_schema.Schema, sd.Command]:
+    # Nothing to do because splats can't appear in functions
+    group = sd.CommandGroup()
+    return schema, group
