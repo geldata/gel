@@ -107,6 +107,6 @@ QUERIES = [
     }
     ''',
     '''
-    CREATE MIGRATION { ;;; CREATE TYPE Foo ;;; CREATE TYPE Bar ;;; };
+    IF true THEN (SELECT Foo) ELSE (INSERT Foo);
     '''
 ]

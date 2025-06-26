@@ -101,29 +101,148 @@ class ExprStmtAnnoying(Nonterm):
 class ExprStmtSimpleCore(Nonterm):
     val: qlast.Query
 
-    @parsing.inline(0)
-    def reduce_SimpleSelect(self, *kids):
-        pass
+    def reduce_Select(self, *kids):
+        r"%reduce SELECT OptionallyAliasedExpr \
+                  OptFilterClause OptSortClause OptSelectLimit"
 
-    @parsing.inline(0)
-    def reduce_SimpleInsert(self, *kids):
-        pass
+        offset, limit = kids[4].val
 
-    @parsing.inline(0)
-    def reduce_SimpleUpdate(self, *kids):
-        pass
+        if offset is not None or limit is not None:
+            subj = qlast.SelectQuery(
+                result=kids[1].val.expr,
+                result_alias=kids[1].val.alias,
+                where=kids[2].val,
+                orderby=kids[3].val,
+                implicit=True,
+                span=merge_spans((kids[0], kids[3]))
+            )
 
-    @parsing.inline(0)
-    def reduce_SimpleDelete(self, *kids):
-        pass
+            self.val = qlast.SelectQuery(
+                result=subj,
+                offset=offset,
+                limit=limit,
+            )
+        else:
+            self.val = qlast.SelectQuery(
+                result=kids[1].val.expr,
+                result_alias=kids[1].val.alias,
+                where=kids[2].val,
+                orderby=kids[3].val,
+            )
 
-    @parsing.inline(0)
-    def reduce_SimpleFor(self, *kids):
-        pass
+    def reduce_Insert(self, *kids):
+        r'%reduce INSERT Expr OptUnlessConflictClause'
 
-    @parsing.inline(0)
+        subj = kids[1].val
+        unless_conflict = kids[2].val
+
+        if isinstance(subj, qlast.Shape):
+            if not subj.expr:
+                raise errors.EdgeQLSyntaxError(
+                    "insert shape expressions must have a type name",
+                    span=subj.span
+                )
+            subj_path = subj.expr
+            shape = subj.elements
+        else:
+            subj_path = subj
+            shape = []
+
+        if isinstance(subj_path, qlast.Path) and \
+                len(subj_path.steps) == 1 and \
+                isinstance(subj_path.steps[0], qlast.ObjectRef):
+            objtype = subj_path.steps[0]
+        elif isinstance(subj_path, qlast.IfElse):
+            # Insert attempted on something that looks like a conditional
+            # expression. Aside from it being an error, it also seems that
+            # the intent was to insert something conditionally.
+            raise errors.EdgeQLSyntaxError(
+                f"INSERT only works with object types, not conditional "
+                f"expressions",
+                hint=(
+                    f"To resolve this try surrounding the INSERT branch of "
+                    f"the conditional expression with parentheses. This way "
+                    f"the INSERT will be triggered conditionally in one of "
+                    f"the branches."
+                ),
+                span=subj_path.span)
+        else:
+            raise errors.EdgeQLSyntaxError(
+                f"INSERT only works with object types, not arbitrary "
+                f"expressions",
+                hint=(
+                    f"To resolve this try to surround the entire INSERT "
+                    f"statement with parentheses in order to separate it "
+                    f"from the rest of the expression."
+                ),
+                span=subj_path.span)
+
+        self.val = qlast.InsertQuery(
+            subject=objtype,
+            shape=shape,
+            unless_conflict=unless_conflict,
+        )
+
+    def reduce_Update(self, *kids):
+        "%reduce UPDATE Expr OptFilterClause SET Shape"
+        self.val = qlast.UpdateQuery(
+            subject=kids[1].val,
+            where=kids[2].val,
+            shape=kids[4].val,
+        )
+
+    def reduce_Delete(self, *kids):
+        r"%reduce DELETE Expr \
+                  OptFilterClause OptSortClause OptSelectLimit"
+        self.val = qlast.DeleteQuery(
+            subject=kids[1].val,
+            where=kids[2].val,
+            orderby=kids[3].val,
+            offset=kids[4].val[0],
+            limit=kids[4].val[1],
+        )
+
+    def reduce_ForIn(self, *kids):
+        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr UNION Expr"
+        _, optional, iterator_alias, _, iterator, _, body = kids
+        self.val = qlast.ForQuery(
+            optional=optional.val,
+            iterator_alias=iterator_alias.val,
+            iterator=iterator.val,
+            result=body.val,
+        )
+
+    def reduce_ForInStmt(self, *kids):
+        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr ExprStmtSimple"
+        _, optional, iterator_alias, _, iterator, body = kids
+        self.val = qlast.ForQuery(
+            has_union=False,
+            optional=optional.val,
+            iterator_alias=iterator_alias.val,
+            iterator=iterator.val,
+            result=body.val,
+        )
+
     def reduce_InternalGroup(self, *kids):
-        pass
+        r"%reduce FOR GROUP OptionallyAliasedExpr \
+                  UsingClause \
+                  ByClause \
+                  IN Identifier OptGroupingAlias \
+                  UNION OptionallyAliasedExpr \
+                  OptFilterClause OptSortClause \
+        "
+        self.val = qlast.InternalGroupQuery(
+            subject=kids[2].val.expr,
+            subject_alias=kids[2].val.alias,
+            using=kids[3].val,
+            by=kids[4].val,
+            group_alias=kids[6].val,
+            grouping_alias=kids[7].val,
+            result_alias=kids[9].val.alias,
+            result=kids[9].val.expr,
+            where=kids[10].val,
+            orderby=kids[11].val,
+        )
 
 
 class ExprStmtAnnoyingCore(Nonterm):
@@ -267,31 +386,6 @@ class OptionalOptional(Nonterm):
         self.val = False
 
 
-class SimpleFor(Nonterm):
-    val: qlast.ForQuery
-
-    def reduce_ForIn(self, *kids):
-        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr UNION Expr"
-        _, optional, iterator_alias, _, iterator, _, body = kids
-        self.val = qlast.ForQuery(
-            optional=optional.val,
-            iterator_alias=iterator_alias.val,
-            iterator=iterator.val,
-            result=body.val,
-        )
-
-    def reduce_ForInStmt(self, *kids):
-        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr ExprStmtSimple"
-        _, optional, iterator_alias, _, iterator, body = kids
-        self.val = qlast.ForQuery(
-            has_union=False,
-            optional=optional.val,
-            iterator_alias=iterator_alias.val,
-            iterator=iterator.val,
-            result=body.val,
-        )
-
-
 class AnnoyingFor(Nonterm):
     val: qlast.ForQuery
 
@@ -306,39 +400,6 @@ class AnnoyingFor(Nonterm):
             iterator=iterator.val,
             result=body.val,
         )
-
-
-class SimpleSelect(Nonterm):
-    val: qlast.SelectQuery
-
-    def reduce_Select(self, *kids):
-        r"%reduce SELECT OptionallyAliasedExpr \
-                  OptFilterClause OptSortClause OptSelectLimit"
-
-        offset, limit = kids[4].val
-
-        if offset is not None or limit is not None:
-            subj = qlast.SelectQuery(
-                result=kids[1].val.expr,
-                result_alias=kids[1].val.alias,
-                where=kids[2].val,
-                orderby=kids[3].val,
-                implicit=True,
-                span=merge_spans((kids[0], kids[3]))
-            )
-
-            self.val = qlast.SelectQuery(
-                result=subj,
-                offset=offset,
-                limit=limit,
-            )
-        else:
-            self.val = qlast.SelectQuery(
-                result=kids[1].val.expr,
-                result_alias=kids[1].val.alias,
-                where=kids[2].val,
-                orderby=kids[3].val,
-            )
 
 
 class ByClause(Nonterm):
@@ -392,115 +453,6 @@ class OptGroupingAlias(Nonterm):
 
     def reduce_empty(self, *kids):
         self.val = None
-
-
-class InternalGroup(Nonterm):
-    val: qlast.InternalGroupQuery
-
-    def reduce_InternalGroup(self, *kids):
-        r"%reduce FOR GROUP OptionallyAliasedExpr \
-                  UsingClause \
-                  ByClause \
-                  IN Identifier OptGroupingAlias \
-                  UNION OptionallyAliasedExpr \
-                  OptFilterClause OptSortClause \
-        "
-        self.val = qlast.InternalGroupQuery(
-            subject=kids[2].val.expr,
-            subject_alias=kids[2].val.alias,
-            using=kids[3].val,
-            by=kids[4].val,
-            group_alias=kids[6].val,
-            grouping_alias=kids[7].val,
-            result_alias=kids[9].val.alias,
-            result=kids[9].val.expr,
-            where=kids[10].val,
-            orderby=kids[11].val,
-        )
-
-
-class SimpleInsert(Nonterm):
-    val: qlast.InsertQuery
-
-    def reduce_Insert(self, *kids):
-        r'%reduce INSERT Expr OptUnlessConflictClause'
-
-        subj = kids[1].val
-        unless_conflict = kids[2].val
-
-        if isinstance(subj, qlast.Shape):
-            if not subj.expr:
-                raise errors.EdgeQLSyntaxError(
-                    "insert shape expressions must have a type name",
-                    span=subj.span
-                )
-            subj_path = subj.expr
-            shape = subj.elements
-        else:
-            subj_path = subj
-            shape = []
-
-        if isinstance(subj_path, qlast.Path) and \
-                len(subj_path.steps) == 1 and \
-                isinstance(subj_path.steps[0], qlast.ObjectRef):
-            objtype = subj_path.steps[0]
-        elif isinstance(subj_path, qlast.IfElse):
-            # Insert attempted on something that looks like a conditional
-            # expression. Aside from it being an error, it also seems that
-            # the intent was to insert something conditionally.
-            raise errors.EdgeQLSyntaxError(
-                f"INSERT only works with object types, not conditional "
-                f"expressions",
-                hint=(
-                    f"To resolve this try surrounding the INSERT branch of "
-                    f"the conditional expression with parentheses. This way "
-                    f"the INSERT will be triggered conditionally in one of "
-                    f"the branches."
-                ),
-                span=subj_path.span)
-        else:
-            raise errors.EdgeQLSyntaxError(
-                f"INSERT only works with object types, not arbitrary "
-                f"expressions",
-                hint=(
-                    f"To resolve this try to surround the entire INSERT "
-                    f"statement with parentheses in order to separate it "
-                    f"from the rest of the expression."
-                ),
-                span=subj_path.span)
-
-        self.val = qlast.InsertQuery(
-            subject=objtype,
-            shape=shape,
-            unless_conflict=unless_conflict,
-        )
-
-
-class SimpleUpdate(Nonterm):
-    val: qlast.UpdateQuery
-
-    def reduce_Update(self, *kids):
-        "%reduce UPDATE Expr OptFilterClause SET Shape"
-        self.val = qlast.UpdateQuery(
-            subject=kids[1].val,
-            where=kids[2].val,
-            shape=kids[4].val,
-        )
-
-
-class SimpleDelete(Nonterm):
-    val: qlast.DeleteQuery
-
-    def reduce_Delete(self, *kids):
-        r"%reduce DELETE Expr \
-                  OptFilterClause OptSortClause OptSelectLimit"
-        self.val = qlast.DeleteQuery(
-            subject=kids[1].val,
-            where=kids[2].val,
-            orderby=kids[3].val,
-            offset=kids[4].val[0],
-            limit=kids[4].val[1],
-        )
 
 
 WithBlockData = collections.namedtuple(

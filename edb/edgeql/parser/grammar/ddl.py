@@ -392,17 +392,11 @@ def commands_block(parent, *commands, opt=True, production_tpl=ProductionTpl):
 
 
 class NestedQLBlockStmt(Nonterm):
-
-    def reduce_Stmt(self, *kids):
-        self.val = qlast.DDLQuery(query=kids[0].val)
-
-    @parsing.inline(0)
-    def reduce_OptWithDDLStmt(self, *kids):
-        pass
-
-    @parsing.inline(0)
-    def reduce_SetFieldStmt(self, *kids):
-        pass
+    def reduce_Stmt(self, stmt):
+        if isinstance(stmt.val, qlast.Query):
+            self.val = qlast.DDLQuery(query=stmt.val)
+        else:
+            self.val = stmt.val
 
 
 class NestedQLBlock(ProductionTpl):
@@ -1108,12 +1102,6 @@ class CreateExtensionStmt(Nonterm):
 #
 # ALTER EXTENSION
 #
-
-
-commands_block(
-    'AlterExtension',
-    SetFieldStmt,
-)
 
 
 class AlterExtensionStmt(Nonterm):
