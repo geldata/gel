@@ -208,6 +208,9 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
             self.visit(node.limit)
             self._block_ws(-1, newlines)
 
+    def visit_Commands(self, node: qlast.Commands) -> None:
+        self.visit_list(node.commands)
+
     def visit_AliasedExpr(self, node: qlast.AliasedExpr) -> None:
         self.write(ident_to_str(node.alias))
         self.write(' := ')

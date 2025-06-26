@@ -1050,7 +1050,7 @@ class Compiler:
 
     def _reprocess_restore_config(
         self,
-        stmts: list[qlast.Base],
+        stmts: Iterable[qlast.Base],
     ) -> list[qlast.Base]:
         '''Do any rewrites to the restore script needed.
 
@@ -1183,8 +1183,8 @@ class Compiler:
 
         # The state serializer generated below is somehow inappropriate,
         # so it's simply ignored here and the I/O process will do it on its own
-        statements = edgeql.parse_block(ddl_source)
-        statements = self._reprocess_restore_config(statements)
+        commands = edgeql.parse_block(ddl_source)
+        statements = self._reprocess_restore_config(commands)
         units = _try_compile_ast(
             ctx=ctx, source=ddl_source, statements=statements
         ).units
@@ -2852,7 +2852,7 @@ def _try_compile(
 def _try_compile_ast(
     *,
     ctx: CompileContext,
-    statements: list[qlast.Base],
+    statements: Sequence[qlast.Base],
     source: edgeql.Source,
 ) -> dbstate.QueryUnitGroup:
     if ctx.is_testmode():

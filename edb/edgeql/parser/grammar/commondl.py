@@ -550,6 +550,7 @@ class OptUsingBlock(Nonterm):
 
 
 class AccessKind(Nonterm):
+    val: list[qltypes.AccessKind]
 
     def reduce_ALL(self, _):
         self.val = list(qltypes.AccessKind)
@@ -576,7 +577,7 @@ class AccessKind(Nonterm):
 
 class AccessKindList(parsing.ListNonterm, element=AccessKind,
                      separator=tokens.T_COMMA):
-    pass
+    val: list[list[qltypes.AccessKind]]
 
 
 class AccessPolicyAction(Nonterm):
