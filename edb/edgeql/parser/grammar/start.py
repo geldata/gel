@@ -68,7 +68,6 @@ class EdgeQLGrammar(Nonterm):
 class EdgeQLBlock(Nonterm):
     val: qlast.Commands
 
-    @parsing.inline(0)
     def reduce_StatementBlock_OptSemicolons(self, s, _semicolon):
         self.val = qlast.Commands(commands=s.val)
 

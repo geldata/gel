@@ -82,7 +82,7 @@ def parse_block(
     module_aliases: Optional[Mapping[Optional[str], str]] = None,
 ) -> list[qlast.Command]:
     node = parse(tokens.T_STARTBLOCK, source)
-    assert isinstance(node, qlast.Commands)
+    assert isinstance(node, qlast.Commands), node
     if module_aliases:
         for command in node.commands:
             append_module_aliases(command, module_aliases)
