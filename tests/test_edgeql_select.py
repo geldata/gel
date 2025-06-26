@@ -2002,7 +2002,7 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             filter .number = "1"
             '''
         ))
-        # Make sure the lazy properties aren't included
+        # Make sure the explicit properties aren't included
         self.assertNotIn('tags', res[0])
         self.assertNotIn('related_to', res[0])
         self.assertNotIn('num_watchers', res[0])

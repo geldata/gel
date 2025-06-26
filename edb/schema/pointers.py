@@ -187,27 +187,6 @@ def merge_readonly(
     return current
 
 
-# def merge_lazy(
-#     ptr: Pointer,
-#     bases: list[Pointer],
-#     field_name: str,
-#     *,
-#     ignore_local: bool = False,
-#     schema: s_schema.Schema,
-# ) -> Optional[bool]:
-#     """Merge function for pointer laziness."""
-
-#     return utils.merge_reduce(
-#         ptr,
-#         bases,
-#         field_name=field_name,
-#         ignore_local=ignore_local,
-#         schema=schema,
-#         f=operator.and_,
-#         type=bool,
-#     )
-
-
 def merge_required(
     ptr: Pointer,
     bases: list[Pointer],
@@ -489,7 +468,6 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         coerce=True,
         default=qltypes.SplatStrategy.Default,
         compcoef=0.909,
-        # merge_fn=merge_splat,
     )
 
     secret = so.SchemaField(
