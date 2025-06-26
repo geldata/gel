@@ -31,7 +31,7 @@ from edb.tools.edb import edbcommands
 def main():
     qlparser.preload_spec()
 
-    for q in QUERIES[-8:]:
+    for q in QUERIES:
         sdl = q.startswith('sdl')
         if sdl:
             q = q[3:]
@@ -84,8 +84,8 @@ def main():
                 ast = None
             if ast:
                 print('Recovered AST:')
-                if isinstance(ast, list):
-                    for x in ast:
+                if isinstance(ast, qlast.Commands):
+                    for x in ast.commands:
                         assert isinstance(x, qlast.Base)
                         x.dump_edgeql()
                         x.dump()
@@ -98,15 +98,11 @@ def main():
                     print(ast)
 
 
+# place queries you want to test into this array
+# (for SDL grammar, use `sdl` as first 3 chars)
+
 QUERIES = [
-    '''sdl
-    module y {
-        type X {
-            property z:
-        }
-    }
+    '''
+    SELECT 1;
     ''',
-    '''
-    CREATE MIGRATION { ;;; CREATE TYPE Foo ;;; CREATE TYPE Bar ;;; };
-    '''
 ]

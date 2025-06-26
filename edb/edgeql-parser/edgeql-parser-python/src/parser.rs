@@ -153,6 +153,12 @@ pub fn save_spec(spec_json: &Bound<PyString>, dst: &Bound<PyString>) -> PyResult
     Ok(())
 }
 
+#[pyfunction]
+pub fn get_productions(py: Python) -> PyResult<PyObject> {
+    let (_spec, productions) = get_spec()?;
+    Ok(productions.clone_ref(py).into_any())
+}
+
 fn load_productions(py: Python<'_>, spec: &parser::Spec) -> PyResult<PyObject> {
     let grammar_name = "edb.edgeql.parser.grammar.start";
     let grammar_mod = py.import(grammar_name)?;

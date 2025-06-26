@@ -32,6 +32,7 @@ fn _edgeql_parser(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parser::suggest_next_keywords, m)?)?;
     m.add_function(wrap_pyfunction!(parser::preload_spec, m)?)?;
     m.add_function(wrap_pyfunction!(parser::save_spec, m)?)?;
+    m.add_function(wrap_pyfunction!(parser::get_productions, m)?)?;
     m.add_class::<parser::CSTNode>()?;
     m.add_class::<parser::Production>()?;
     m.add_class::<parser::Terminal>()?;
