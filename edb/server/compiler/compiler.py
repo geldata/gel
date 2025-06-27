@@ -2769,6 +2769,17 @@ def compile_sql_as_unit_group(
                 f"{sql_unit.command_complete_tag}"
             )
 
+        globals = []
+        permissions = []
+        for sp in sql_unit.params or ():
+            if not isinstance(sp, dbstate.SQLParamGlobal):
+                continue
+
+            if not sp.is_permission:
+                globals.append((str(sp.global_name), False))
+            else:
+                permissions.append(str(sp.global_name))
+
         unit = dbstate.QueryUnit(
             sql=value_sql,
             introspection_sql=intro_sql,
@@ -2779,10 +2790,8 @@ def compile_sql_as_unit_group(
                 else sql_unit.cardinality
             ),
             capabilities=sql_unit.capabilities,
-            globals=[
-                (str(sp.global_name), False) for sp in sql_unit.params
-                if isinstance(sp, dbstate.SQLParamGlobal)
-            ] if sql_unit.params else [],
+            globals=globals,
+            permissions=permissions,
             output_format=(
                 enums.OutputFormat.NONE
                 if (

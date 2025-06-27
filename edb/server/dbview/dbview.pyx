@@ -1610,6 +1610,8 @@ cdef class DatabaseConnectionView:
         num_injected_params = 0
         if qug.globals is not None:
             num_injected_params += len(qug.globals)
+        if qug.permissions is not None:
+            num_injected_params += len(qug.permissions)
         if first_extra is not None:
             extra_type_oids = source.extra_type_oids()
             all_type_oids = [0] * first_extra + extra_type_oids

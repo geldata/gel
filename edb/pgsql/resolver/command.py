@@ -2738,7 +2738,9 @@ def merge_params(
             )
             ctx.query_params.append(
                 dbstate.SQLParamGlobal(
-                    global_name=glob.global_name, pg_type=pg_type
+                    global_name=glob.global_name,
+                    pg_type=pg_type,
+                    is_permission=glob.is_permission,
                 )
             )
 

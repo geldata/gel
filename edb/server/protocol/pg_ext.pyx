@@ -1062,6 +1062,7 @@ cdef class PgConnection(frontend.FrontendConnection):
                 parse_unit.params,
                 dbv.current_fe_settings(),
                 source,
+                self.get_permissions(),
             )
             actions.append(
                 PGMessage(
@@ -1192,7 +1193,11 @@ cdef class PgConnection(frontend.FrontendConnection):
                         params = stmt.parse_action.query_unit.params
                         fe_settings = dbv.current_fe_settings()
                         data = remap_arguments(
-                            data, params, fe_settings, stmt.source
+                            data,
+                            params,
+                            fe_settings,
+                            stmt.source,
+                            self.get_permissions(),
                         )
                     except Exception as e:
                         # we return here instead of raising the exception
@@ -1833,6 +1838,7 @@ cdef bytes remap_arguments(
     params: list[dbstate.SQLParam] | None,
     fe_settings: dbstate.SQLSettings,
     source: pg_parser.Source,
+    permission_info: tuple[bool, Sequence[str]],
 ):
     cdef:
         int16_t param_format_count
@@ -1840,6 +1846,8 @@ cdef bytes remap_arguments(
         int32_t arg_offset_external
         int16_t param_count_external
         int32_t size
+
+    is_superuser, permissions = permission_info
 
     # The "external" parameters (that are visible to the user)
     # don't include the internal params for globals and extracted constants.
@@ -1913,13 +1921,17 @@ cdef bytes remap_arguments(
                 buf.write_len_prefixed_bytes(extracted_consts[e])
             elif isinstance(param, dbstate.SQLParamGlobal):
                 name = param.global_name
-                setting_name = f'global {name.module}::{name.name}'
-                values = fe_settings.get(setting_name, None)
-
-                if values == None:
-                    buf.write_int32(-1) # NULL
+                if param.is_permission:
+                    buf.write_int32(1)
+                    buf.write_byte(is_superuser or str(name) in permissions)
                 else:
-                    write_arg(buf, param.pg_type, values)
+                    setting_name = f'global {name.module}::{name.name}'
+                    values = fe_settings.get(setting_name, None)
+
+                    if values == None:
+                        buf.write_int32(-1) # NULL
+                    else:
+                        write_arg(buf, param.pg_type, values)
     else:
         buf.write_int16(0)
 

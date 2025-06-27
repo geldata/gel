@@ -715,6 +715,8 @@ class SQLParamGlobal(SQLParam):
 
     pg_type: tuple[str, ...]
 
+    is_permission: bool
+
 
 @dataclasses.dataclass
 class ParsedDatabase:

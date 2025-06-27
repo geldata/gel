@@ -23,6 +23,7 @@ import tempfile
 
 import edgedb
 
+from edb.testbase import connection as tconn
 from edb.testbase import server as server_tb
 from edb.testbase import http as tb
 
@@ -987,6 +988,20 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
     PARALLELISM_GRANULARITY = 'system'
     TRANSACTION_ISOLATION = False
 
+    import asyncpg
+
+    @staticmethod
+    async def query_sql_values(
+        conn: tconn.Connection, query: str, *args, **kwargs
+    ):
+        res = await conn.query_sql(query, *args, **kwargs)
+        return [r.as_dict() for r in res]
+
+    @staticmethod
+    async def sql_con_query_values(conn: asyncpg.Connection, query, *args):
+        res = await conn.fetch(query, *args)
+        return [list(r.values()) for r in res]
+
     async def test_server_permissions_sql_dml_01(self):
         # Non-superuser cannot use INSERT statements
 
@@ -1087,6 +1102,364 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
             await self.con.query('''
                 DROP TYPE Widget;
                 DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_sql_access_policy_01(self):
+        # Non-DML access policies using permissions
+
+        await self.con.query('''
+            CREATE PERMISSION WidgetInserter;
+            CREATE TYPE Widget {
+                CREATE PROPERTY n -> int64;
+                CREATE ACCESS POLICY ap_select ALLOW SELECT USING (
+                    global WidgetInserter
+                );
+                CREATE ACCESS POLICY ap_insert ALLOW INSERT;
+            };
+            INSERT Widget { n := 1 };
+            INSERT Widget { n := 2 };
+            INSERT Widget { n := 3 };
+            CREATE SUPERUSER ROLE Super {
+                SET password := 'secret';
+            };
+            CREATE ROLE WithPerm {
+                SET password := 'secret';
+                SET permissions := {
+                    default::WidgetInserter,
+                };
+            };
+            CREATE ROLE NoPerm {
+                SET password := 'secret';
+            };
+            CONFIGURE CURRENT BRANCH SET cfg::apply_access_policies_pg := true;
+        ''')
+
+        conn_super = None
+        conn_with_perm = None
+        conn_no_perm = None
+
+        try:
+            conn_super = await self.create_sql_connection(
+                user='Super',
+                password='secret',
+            )
+            res = await self.sql_con_query_values(
+                conn_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+            )
+            self.assert_data_shape(
+                res, tb.bag([[1], [2], [3]])
+            )
+
+            conn_with_perm = await self.create_sql_connection(
+                user='WithPerm',
+                password='secret',
+            )
+            res = await self.sql_con_query_values(
+                conn_with_perm,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+            )
+            self.assert_data_shape(
+                res, tb.bag([[1], [2], [3]])
+            )
+
+            conn_no_perm = await self.create_sql_connection(
+                user='NoPerm',
+                password='secret',
+            )
+            res = await self.sql_con_query_values(
+                conn_no_perm,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+            )
+            self.assert_data_shape(
+                res, tb.bag([])
+            )
+
+        finally:
+            if conn_super:
+                await conn_super.close()
+            if conn_with_perm:
+                await conn_with_perm.close()
+            if conn_no_perm:
+                await conn_no_perm.close()
+            await self.con.query('''
+                DROP ROLE Super;
+                DROP ROLE WithPerm;
+                DROP ROLE NoPerm;
+                DROP TYPE Widget;
+                DROP PERMISSION WidgetInserter;
+                CONFIGURE CURRENT BRANCH RESET cfg::apply_access_policies_pg;
+            ''')
+
+    async def test_server_permissions_sql_access_policy_02(self):
+        # DML access policies using permissions
+
+        import asyncpg
+
+        await self.con.query('''
+            CREATE PERMISSION WidgetInserter;
+            CREATE TYPE Widget {
+                CREATE PROPERTY n -> int64;
+                CREATE ACCESS POLICY ap_select ALLOW SELECT;
+                CREATE ACCESS POLICY ap_insert ALLOW INSERT USING (
+                    global WidgetInserter
+                );
+            };
+            INSERT Widget { n := 0 };
+            CREATE SUPERUSER ROLE Super {
+                SET password := 'secret';
+            };
+            CREATE ROLE WithPerm {
+                SET password := 'secret';
+                SET permissions := {
+                    sys::perm::data_modification,
+                    default::WidgetInserter,
+                };
+            };
+            CREATE ROLE NoPerm {
+                SET password := 'secret';
+                SET permissions := {
+                    sys::perm::data_modification,
+                };
+            };
+            CONFIGURE CURRENT BRANCH SET cfg::apply_access_policies_pg := true;
+        ''')
+
+        conn_super = None
+        conn_with_perm = None
+        conn_no_perm = None
+
+        try:
+            conn_super = await self.create_sql_connection(
+                user='Super',
+                password='secret',
+            )
+            await conn_super.execute(
+                'INSERT INTO "Widget" ("n") VALUES (1)'
+            )
+
+            conn_with_perm = await self.create_sql_connection(
+                user='WithPerm',
+                password='secret',
+            )
+            await conn_with_perm.execute(
+                'INSERT INTO "Widget" ("n") VALUES (2)'
+            )
+
+            conn_no_perm = await self.create_sql_connection(
+                user='NoPerm',
+                password='secret',
+            )
+            with self.assertRaisesRegex(
+                asyncpg.exceptions.InsufficientPrivilegeError,
+                'access policy violation on insert of default::Widget'
+            ):
+                await conn_no_perm.execute(
+                    'INSERT INTO "Widget" ("n") VALUES (3)',
+                )
+
+            # Check only inserts with permissions ran
+            await self.assert_query_result(
+                'SELECT Widget { n } ORDER BY .n;',
+                [
+                    {'n': 0},
+                    {'n': 1},
+                    {'n': 2},
+                ],
+            )
+
+        finally:
+            if conn_super:
+                await conn_super.close()
+            if conn_with_perm:
+                await conn_with_perm.close()
+            if conn_no_perm:
+                await conn_no_perm.close()
+            await self.con.query('''
+                DROP ROLE Super;
+                DROP ROLE WithPerm;
+                DROP ROLE NoPerm;
+                DROP TYPE Widget;
+                DROP PERMISSION WidgetInserter;
+                CONFIGURE CURRENT BRANCH RESET cfg::apply_access_policies_pg;
+            ''')
+
+    async def test_server_permissions_sql_access_policy_03(self):
+        # Non-DML access policies using permissions via postgres protocol
+
+        await self.con.query('''
+            CREATE PERMISSION WidgetInserter;
+            CREATE TYPE Widget {
+                CREATE PROPERTY n -> int64;
+                CREATE ACCESS POLICY ap_select ALLOW SELECT USING (
+                    global WidgetInserter
+                );
+                CREATE ACCESS POLICY ap_insert ALLOW INSERT;
+            };
+            INSERT Widget { n := 1 };
+            INSERT Widget { n := 2 };
+            INSERT Widget { n := 3 };
+            CREATE SUPERUSER ROLE Super {
+                SET password := 'secret';
+            };
+            CREATE ROLE WithPerm {
+                SET password := 'secret';
+                SET permissions := {
+                    default::WidgetInserter,
+                };
+            };
+            CREATE ROLE NoPerm {
+                SET password := 'secret';
+            };
+            CONFIGURE CURRENT BRANCH SET cfg::apply_access_policies_pg := true;
+        ''')
+
+        conn_super = None
+        conn_with_perm = None
+        conn_no_perm = None
+
+        try:
+            conn_super = await self.connect(
+                user='Super',
+                password='secret',
+            )
+            res = await self.query_sql_values(
+                conn_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+            )
+            self.assert_data_shape(
+                res, tb.bag([{'n': 1}, {'n': 2}, {'n': 3}])
+            )
+
+            conn_with_perm = await self.connect(
+                user='WithPerm',
+                password='secret',
+            )
+            res = await self.query_sql_values(
+                conn_with_perm,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+            )
+            self.assert_data_shape(
+                res, tb.bag([{'n': 1}, {'n': 2}, {'n': 3}])
+            )
+
+            conn_no_perm = await self.connect(
+                user='NoPerm',
+                password='secret',
+            )
+            res = await self.query_sql_values(
+                conn_no_perm,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+            )
+            self.assert_data_shape(
+                res, tb.bag([])
+            )
+
+        finally:
+            if conn_super:
+                await conn_super.aclose()
+            if conn_with_perm:
+                await conn_with_perm.aclose()
+            if conn_no_perm:
+                await conn_no_perm.aclose()
+            await self.con.query('''
+                DROP ROLE Super;
+                DROP ROLE WithPerm;
+                DROP ROLE NoPerm;
+                DROP TYPE Widget;
+                DROP PERMISSION WidgetInserter;
+                CONFIGURE CURRENT BRANCH RESET cfg::apply_access_policies_pg;
+            ''')
+
+    async def test_server_permissions_sql_access_policy_04(self):
+        # Non-DML access policies using permissions via postgres protocol
+
+        await self.con.query('''
+            CREATE PERMISSION WidgetInserter;
+            CREATE TYPE Widget {
+                CREATE PROPERTY n -> int64;
+                CREATE ACCESS POLICY ap_select ALLOW SELECT;
+                CREATE ACCESS POLICY ap_insert ALLOW INSERT USING (
+                    global WidgetInserter
+                );
+            };
+            INSERT Widget { n := 0 };
+            CREATE SUPERUSER ROLE Super {
+                SET password := 'secret';
+            };
+            CREATE ROLE WithPerm {
+                SET password := 'secret';
+                SET permissions := {
+                    sys::perm::data_modification,
+                    default::WidgetInserter,
+                };
+            };
+            CREATE ROLE NoPerm {
+                SET password := 'secret';
+                SET permissions := {
+                    sys::perm::data_modification,
+                };
+            };
+            CONFIGURE CURRENT BRANCH SET cfg::apply_access_policies_pg := true;
+        ''')
+
+        conn_super = None
+        conn_with_perm = None
+        conn_no_perm = None
+
+        try:
+            conn_super = await self.connect(
+                user='Super',
+                password='secret',
+            )
+            await conn_super.query_sql(
+                'INSERT INTO "Widget" ("n") VALUES (1)'
+            )
+
+            conn_with_perm = await self.connect(
+                user='WithPerm',
+                password='secret',
+            )
+            await conn_with_perm.query_sql(
+                'INSERT INTO "Widget" ("n") VALUES (2)'
+            )
+
+            conn_no_perm = await self.connect(
+                user='NoPerm',
+                password='secret',
+            )
+            with self.assertRaisesRegex(
+                edgedb.AccessPolicyError,
+                'access policy violation on insert of default::Widget'
+            ):
+                await conn_no_perm.query_sql(
+                    'INSERT INTO "Widget" ("n") VALUES (3)',
+                )
+
+            # Check only inserts with permissions ran
+            await self.assert_query_result(
+                'SELECT Widget { n } ORDER BY .n;',
+                [
+                    {'n': 0},
+                    {'n': 1},
+                    {'n': 2},
+                ],
+            )
+
+        finally:
+            if conn_super:
+                await conn_super.aclose()
+            if conn_with_perm:
+                await conn_with_perm.aclose()
+            if conn_no_perm:
+                await conn_no_perm.aclose()
+            await self.con.query('''
+                DROP ROLE Super;
+                DROP ROLE WithPerm;
+                DROP ROLE NoPerm;
+                DROP TYPE Widget;
+                DROP PERMISSION WidgetInserter;
+                CONFIGURE CURRENT BRANCH RESET cfg::apply_access_policies_pg;
             ''')
 
     async def test_server_permissions_sql_config_01(self):
