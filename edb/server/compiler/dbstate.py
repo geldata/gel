@@ -174,6 +174,7 @@ class DDLQuery(BaseQuery):
     db_op_trailer: tuple[bytes, ...] = ()
     ddl_stmt_id: Optional[str] = None
     config_ops: list[config.Operation] = dataclasses.field(default_factory=list)
+    early_non_tx_sql: Optional[tuple[bytes, ...]] = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -250,6 +251,9 @@ class QueryUnit:
     # True if all statements in *sql* can be executed inside a transaction.
     # If False, they will be executed separately.
     is_transactional: bool = True
+
+    # SQL to run *before* the main command, non transactionally
+    early_non_tx_sql: Optional[tuple[bytes, ...]] = None
 
     # Capabilities used in this query
     capabilities: enums.Capability = enums.Capability(0)
