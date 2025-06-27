@@ -1868,7 +1868,6 @@ def _get_index(
     try:
         id = uuid.UUID(id_string)
     except ValueError:
-        # XXX
         raise errors.QueryError("Invalid index id")
 
     user_schema = ctx.state.current_tx().get_user_schema()
@@ -1910,19 +1909,20 @@ def administer_concurrent_index_create(
     statements = block.commands[0].get_statements()
     index_command, comments = statements
 
-    # TODO: Do this using the normal delta mechanism!
-    # Update the schema::Index
-    eql = f'''
-        update schema::Index filter .id = <uuid>"{index.id}"
-        set {{ active := true }}
-    '''
-    update_sql, args = compiler._compile_schema_storage_stmt(
-        ctx, eql, output_format=enums.OutputFormat.NONE
-    )
-    assert not args
-
+    # Update the schema::Index to set `active = true`
     block = pg_dbops.PLTopBlock()
-    block.add_command(update_sql + ' INTO _dummy_text;')
+    context = s_delta.CommandContext()
+    delta_root = s_delta.DeltaRoot()
+    root, alter_index, _ = index.init_delta_branch(
+        schema, context, s_delta.AlterObject
+    )
+    alter_index.set_attribute_value('active', True)
+    delta_root.add(root)
+
+    nschema = delta_root.apply(schema, context)
+
+    # Construct the command
+    compiler.compile_schema_storage_in_delta(ctx, delta_root, block, context)
     block.add_command(comments)
     sql = block.to_string().encode('utf-8')
 
@@ -1931,13 +1931,15 @@ def administer_concurrent_index_create(
         debug.dump_code(index_command, lexer='sql')
         debug.dump_code(sql, lexer='sql')
 
-    return dbstate.MaintenanceQuery(
+    assert isinstance(nschema, s_schema.ChainedSchema)
+    assert isinstance(nschema._top_schema, s_schema.FlatSchema)
+
+    return dbstate.DDLQuery(
         early_non_tx_sql=(index_command.encode('utf-8'),),
         sql=sql,
         is_transactional=False,
-        # Trigger a schema reload from the db, to sync up the 'active' flag.
-        # TODO: XXX: We should not need this! Just use the delta mechanism.
-        reload_schema=True,
+        feature_used_metrics=None,
+        user_schema=nschema._top_schema,
     )
 
 

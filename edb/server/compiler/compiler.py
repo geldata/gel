@@ -3095,6 +3095,7 @@ def _make_query_unit(
         unit.create_db_template = comp.create_db_template
         unit.create_db_mode = comp.create_db_mode
         unit.ddl_stmt_id = comp.ddl_stmt_id
+        unit.early_non_tx_sql = comp.early_non_tx_sql
         if not ctx.dump_restore_mode:
             if comp.user_schema is not None:
                 final_user_schema = comp.user_schema
@@ -3241,8 +3242,6 @@ def _make_query_unit(
 
     elif isinstance(comp, dbstate.MaintenanceQuery):
         unit.sql = comp.sql
-        unit.database_config = comp.reload_schema
-        unit.early_non_tx_sql = comp.early_non_tx_sql
 
     elif isinstance(comp, dbstate.NullQuery):
         pass

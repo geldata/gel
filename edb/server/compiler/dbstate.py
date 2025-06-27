@@ -174,6 +174,7 @@ class DDLQuery(BaseQuery):
     db_op_trailer: tuple[bytes, ...] = ()
     ddl_stmt_id: Optional[str] = None
     config_ops: list[config.Operation] = dataclasses.field(default_factory=list)
+    early_non_tx_sql: Optional[tuple[bytes, ...]] = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -209,8 +210,7 @@ class MigrationControlQuery(BaseQuery):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class MaintenanceQuery(BaseQuery):
-    early_non_tx_sql: Optional[tuple[bytes, ...]] = None
-    reload_schema: bool = False
+    pass
 
 
 @dataclasses.dataclass(frozen=True)
