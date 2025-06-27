@@ -305,7 +305,7 @@ Updating data
     +             filter .id = <uuid>$id
     +             set {{ {', '.join(sets)} }}
     +         )
-    +         select updated { ** }
+    +         select updated {{ ** }}
     +     """, **params)
     +
     +     if not updated_deck:
