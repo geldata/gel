@@ -66,7 +66,7 @@ a Next.js application with API routes and a simple UI to manage your book collec
       # ✔ Would you like to use TypeScript? Yes
       # ✔ Would you like to use ESLint? Yes
       # ✔ Would you like to use Tailwind CSS? Yes
-      # ✔ Would you like to use `src/` directory? Yes
+      # ✔ Would you like to use `src/` directory? No
       # ✔ Would you like to use App Router? Yes
       # ✔ Would you like to use Turbopack for `next dev`? No
       # ✔ Would you like to customize the default import alias (@/*)? No
@@ -145,8 +145,8 @@ Let's edit the :dotgel:`dbschema/default` file that was created during initializ
 
   .. code-block:: bash
 
-      $ gel migration create
-      $ gel migrate
+      $ npx gel migration create
+      $ npx gel migrate
 
 
 3. Install and set up Drizzle
@@ -303,7 +303,7 @@ Next, let's implement the API routes for our book notes application. With Next.j
 
       import { NextResponse } from 'next/server';
       import { db } from '@/src/db';
-      import { books } from '@/drizzle/schema';
+      import { book } from '@/drizzle/schema';
 
       export async function GET() {
         try {
@@ -371,9 +371,9 @@ Next, let's implement the API routes for our book notes application. With Next.j
         const { id } = await params;
         try {
           const requestedBook = await db.query.book.findFirst({
-            where: eq(books.id, id),
+            where: eq(book.id, id),
             with: {
-              note: true,
+              notes: true,
             },
           });
 
@@ -410,7 +410,7 @@ Next, let's implement the API routes for our book notes application. With Next.j
               genre: body.genre,
               readDate: new Date(body.read_date),
             })
-            .where(eq(books.id, id))
+            .where(eq(book.id, id))
             .returning();
 
           if (result.length === 0) {
@@ -551,7 +551,7 @@ Next, let's implement the API routes for our book notes application. With Next.j
         const { id } = await params;
         try {
           const result = await db.delete(note)
-            .where(eq(notes.id, id))
+            .where(eq(note.id, id))
             .returning();
 
           if (result.length === 0) {
