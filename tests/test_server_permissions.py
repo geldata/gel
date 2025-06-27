@@ -1104,6 +1104,106 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
                 DROP ROLE foo;
             ''')
 
+    async def test_server_permissions_sql_dml_03(self):
+        # Non-superuser cannot use INSERT statements via postgres protocol
+
+        await self.con.query('''
+            CREATE TYPE Widget {
+                CREATE PROPERTY n -> int64;
+            };
+            INSERT Widget { n := 1 };
+            CREATE ROLE foo {
+                SET password := 'secret';
+            };
+        ''')
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'cannot execute data modification queries: '
+                'role foo does not have permission'
+            ):
+                await conn.query_sql("""
+                    insert into "Widget" (n) values (2);
+                """)
+
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'cannot execute data modification queries: '
+                'role foo does not have permission'
+            ):
+                await conn.query_sql("""
+                    with X as (
+                        insert into "Widget" (n) values (3)
+                    )
+                    select * from X;
+                """)
+
+            await self.assert_query_result(
+                '''
+                    select Widget.n;
+                ''',
+                [1],
+            )
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP TYPE Widget;
+                DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_sql_dml_04(self):
+        # Non-superuser can use INSERT statements via postgres protocol
+        # with sys::perm::data_modification
+
+        await self.con.query('''
+            CREATE TYPE Widget {
+                CREATE PROPERTY n -> int64;
+            };
+            INSERT Widget { n := 1 };
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := sys::perm::data_modification;
+            };
+        ''')
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
+            await conn.query_sql("""
+                insert into "Widget" (n) values (2);
+            """)
+            await conn.query_sql("""
+                with X as (
+                    insert into "Widget" (n) values (3)
+                )
+                select * from X;
+            """)
+
+            await self.assert_query_result(
+                '''
+                    select Widget.n;
+                ''',
+                [1, 2, 3],
+                sort=True,
+            )
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP TYPE Widget;
+                DROP ROLE foo;
+            ''')
+
     async def test_server_permissions_sql_access_policy_01(self):
         # Non-DML access policies using permissions
 
