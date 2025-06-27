@@ -67,7 +67,6 @@ from edb.pgsql import delta as pg_delta
 from edb.pgsql import dbops as pg_dbops
 
 from . import dbstate
-from . import enums
 from . import compiler
 
 
