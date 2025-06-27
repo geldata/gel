@@ -286,6 +286,13 @@ async def execute(
                 dbv.dbname,
                 close_frontend_conns=query_unit.drop_db_reset_connections,
             )
+
+        if query_unit.early_non_tx_sql:
+            # Sync state non transactionally
+            await be_conn.sql_fetch(b'select 1', state=state)
+            for sql in query_unit.early_non_tx_sql:
+                await be_conn.sql_execute(sql)
+
         if query_unit.system_config:
             # execute_system_config() always sync state in a separate tx,
             # so we don't need to pass down the needs_commit_state here

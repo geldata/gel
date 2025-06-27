@@ -5,19 +5,15 @@ import gel
 def create_concurrent_indexes(db, msg_callback=print):
     '''Actually create all "create concurrently" indexes
 
-    The protocol here is to call `administer concurrent_index_update()`
-    to make sure that the `active` properties match database reality
-    (since concurrent_index_create can't update them atomically),
-    then find all the indexes that need created,
-    create them with `administer concurrent_index_create()`,
-    and then run `administer concurrent_index_update()` again.
+    The protocol here is to find all the indexes that need created,
+    and create them with `administer concurrent_index_create()`.
+    It's possible that the database will shut down after an index
+    creation but before the metadata is updated, in which case
+    we might rerun the command later, which is harmless.
 
     If we stick with this ADMINISTER-based schemed, I figure this code
     would live in the CLI.
     '''
-    db.execute('''
-        administer concurrent_index_update();
-    ''')
     indexes = db.query('''
         select schema::Index {
             id, expr, subject_name := .<indexes[is schema::ObjectType].name
@@ -32,9 +28,6 @@ def create_concurrent_indexes(db, msg_callback=print):
         db.execute(f'''
             administer concurrent_index_create("{index.id}")
         ''')
-    db.execute('''
-        administer concurrent_index_update();
-    ''')
 
 
 def main():

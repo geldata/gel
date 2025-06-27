@@ -1760,8 +1760,6 @@ def _compile_ql_administer(
         res = ddl.administer_remove_pointless_triggers(ctx, ql)
     elif ql.expr.func == 'concurrent_index_create':
         res = ddl.administer_concurrent_index_create(ctx, ql)
-    elif ql.expr.func == 'concurrent_index_update':
-        res = ddl.administer_concurrent_index_update(ctx, ql)
     else:
         raise errors.QueryError(
             'Unknown ADMINISTER function',
@@ -3244,6 +3242,7 @@ def _make_query_unit(
     elif isinstance(comp, dbstate.MaintenanceQuery):
         unit.sql = comp.sql
         unit.database_config = comp.reload_schema
+        unit.early_non_tx_sql = comp.early_non_tx_sql
 
     elif isinstance(comp, dbstate.NullQuery):
         pass

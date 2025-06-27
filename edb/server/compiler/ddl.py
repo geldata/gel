@@ -1904,83 +1904,41 @@ def administer_concurrent_index_create(
     block = pg_dbops.SQLBlock()
     block.set_non_transactional()
     create_index.generate(block)
-    # HACK: just grab the first
-    # where do the comments even get done??
+    # HACK: Separate out the real index command and the comments
+    # (where do the comments even get done??)
     assert isinstance(block.commands[0], pg_dbops.PLBlock)
     statements = block.commands[0].get_statements()
-    command, _ = statements
+    index_command, comments = statements
 
-    return dbstate.MaintenanceQuery(
-        sql=command.encode('utf-8'),
-        is_transactional=False,
+    # TODO: Do this using the normal delta mechanism!
+    # Update the schema::Index
+    eql = f'''
+        update schema::Index filter .id = <uuid>"{index.id}"
+        set {{ active := true }}
+    '''
+    update_sql, args = compiler._compile_schema_storage_stmt(
+        ctx, eql, output_format=enums.OutputFormat.NONE
     )
-
-
-def administer_concurrent_index_update(
-    ctx: compiler.CompileContext,
-    ql: qlast.AdministerStmt,
-) -> dbstate.BaseQuery:
-    user_schema = ctx.state.current_tx().get_user_schema()
-    global_schema = ctx.state.current_tx().get_global_schema()
-    schema = s_schema.ChainedSchema(
-        ctx.compiler_state.std_schema,
-        user_schema,
-        global_schema
-    )
-    delta_context = _new_delta_context(ctx)
+    assert not args
 
     block = pg_dbops.PLTopBlock()
+    block.add_command(update_sql + ' INTO _dummy_text;')
+    block.add_command(comments)
+    sql = block.to_string().encode('utf-8')
 
-    indexes = schema.get_objects(
-        exclude_stdlib=True,
-        type=s_indexes.Index,
-    )
-    for index in indexes:
-        if (
-            not index.get_create_concurrently(schema)
-            or index.get_active(schema)
-        ):
-            continue
-
-        create_index = pg_delta.CreateIndex.create_index(
-            index, schema, delta_context
-        )
-        assert isinstance(create_index, pg_dbops.CreateIndex)
-        index_op = create_index.index
-        condition = pg_dbops.IndexExists(
-            (index_op.table_name[0], index_op.name_in_catalog)
-        )
-
-        # Extract the comments
-        subblock = pg_dbops.SQLBlock()
-        subblock.set_non_transactional()
-        create_index.generate(subblock)
-        # HACK: just grab the comments
-        assert isinstance(subblock.commands[0], pg_dbops.PLBlock)
-        statements = subblock.commands[0].get_statements()
-        _, comments = statements
-
-        # Update the schema::Index
-        eql = f'''
-            update schema::Index filter .id = <uuid>"{index.id}"
-            set {{ active := true }}
-        '''
-        sql, args = compiler._compile_schema_storage_stmt(
-            ctx, eql, output_format=enums.OutputFormat.NONE
-        )
-        assert not args
-        # If the index exists, mark it as active and add the comment
-        # to it.
-        block.add_command(
-            sql + ' INTO _dummy_text;\n' + comments,
-            conditions=[condition],
-        )
+    if debug.flags.delta_execute_ddl:
+        debug.header('ADMINISTER concurrent_index_create(...)')
+        debug.dump_code(index_command, lexer='sql')
+        debug.dump_code(sql, lexer='sql')
 
     return dbstate.MaintenanceQuery(
-        sql=block.to_string().encode('utf-8'),
+        early_non_tx_sql=(index_command.encode('utf-8'),),
+        sql=sql,
+        is_transactional=False,
         # Trigger a schema reload from the db, to sync up the 'active' flag.
+        # TODO: XXX: We should not need this! Just use the delta mechanism.
         reload_schema=True,
-     )
+    )
 
 
 def validate_schema_equivalence(
