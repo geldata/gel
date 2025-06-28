@@ -143,6 +143,8 @@ class ExprStmtAnnoyingCore(Nonterm):
 # instead need to spell it out more explicitly because it doesn't
 # exactly fit.)
 class GenExpr(Nonterm):
+    val: qlast.Expr
+
     @parsing.inline(0)
     def reduce_Expr(self, *kids):
         pass
@@ -1176,12 +1178,16 @@ class OptUnlessConflictClause(Nonterm):
 
 
 class FilterClause(Nonterm):
+    val: qlast.Expr
+
     @parsing.inline(1)
     def reduce_FILTER_Expr(self, *kids):
         pass
 
 
 class OptFilterClause(Nonterm):
+    val: typing.Optional[qlast.Expr]
+
     @parsing.inline(0)
     def reduce_FilterClause(self, *kids):
         pass
@@ -1191,12 +1197,16 @@ class OptFilterClause(Nonterm):
 
 
 class SortClause(Nonterm):
+    val: list[qlast.SortExpr]
+
     @parsing.inline(1)
     def reduce_ORDERBY_OrderbyList(self, *kids):
         pass
 
 
 class OptSortClause(Nonterm):
+    val: list[qlast.SortExpr]
+
     @parsing.inline(0)
     def reduce_SortClause(self, *kids):
         pass
@@ -1206,6 +1216,8 @@ class OptSortClause(Nonterm):
 
 
 class OrderbyExpr(Nonterm):
+    val: qlast.SortExpr
+
     def reduce_Expr_OptDirection_OptNonesOrder(self, *kids):
         self.val = qlast.SortExpr(path=kids[0].val,
                                   direction=kids[1].val,
@@ -1214,10 +1226,12 @@ class OrderbyExpr(Nonterm):
 
 class OrderbyList(ListNonterm, element=OrderbyExpr,
                   separator=tokens.T_THEN):
-    pass
+    val: list[qlast.SortExpr]
 
 
 class OptSelectLimit(Nonterm):
+    val: tuple[typing.Optional[qlast.Expr], typing.Optional[qlast.Expr]]
+
     @parsing.inline(0)
     def reduce_SelectLimit(self, *kids):
         pass
@@ -1227,6 +1241,8 @@ class OptSelectLimit(Nonterm):
 
 
 class SelectLimit(Nonterm):
+    val: tuple[typing.Optional[qlast.Expr], typing.Optional[qlast.Expr]]
+
     def reduce_OffsetClause_LimitClause(self, *kids):
         self.val = (kids[0].val, kids[1].val)
 
@@ -1238,12 +1254,16 @@ class SelectLimit(Nonterm):
 
 
 class OffsetClause(Nonterm):
+    val: qlast.Expr
+
     @parsing.inline(1)
     def reduce_OFFSET_Expr(self, *kids):
         pass
 
 
 class LimitClause(Nonterm):
+    val: qlast.Expr
+
     @parsing.inline(1)
     def reduce_LIMIT_Expr(self, *kids):
         pass
@@ -1296,6 +1316,7 @@ class ParenExpr(Nonterm):
 
 
 class BaseAtomicExpr(Nonterm):
+    val: qlast.Expr
     # { ... } | Constant | '(' Expr ')' | FuncExpr
     # | Tuple | NamedTuple | Collection | Set
     # | '__source__' | '__subject__'
@@ -1399,6 +1420,7 @@ class BaseAtomicExpr(Nonterm):
 
 
 class Expr(Nonterm):
+    val: qlast.Expr
     # BaseAtomicExpr
     # Path | Expr { ... }
 
@@ -1722,10 +1744,12 @@ class OptExprList(Nonterm):
 
 class ExprList(ListNonterm, element=GenExpr, separator=tokens.T_COMMA,
                allow_trailing_separator=True):
-    pass
+    val: list[qlast.Expr]
 
 
 class Constant(Nonterm):
+    val: qlast.Expr
+
     # PARAMETER
     # | BaseNumberConstant
     # | BaseStringConstant
@@ -1804,6 +1828,8 @@ class StringInterpolation(Nonterm):
 
 
 class BaseNumberConstant(Nonterm):
+    val: qlast.Constant
+
     def reduce_ICONST(self, *kids):
         self.val = qlast.Constant(
             value=kids[0].val, kind=qlast.ConstantKind.INTEGER
@@ -1826,18 +1852,22 @@ class BaseNumberConstant(Nonterm):
 
 
 class BaseStringConstant(Nonterm):
+    val: qlast.Constant
 
     def reduce_SCONST(self, token):
         self.val = qlast.Constant.string(value=token.clean_value)
 
 
 class BaseBytesConstant(Nonterm):
+    val: qlast.BaseConstant
 
     def reduce_BCONST(self, bytes_tok):
         self.val = qlast.BytesConstant(value=bytes_tok.clean_value)
 
 
 class BaseBooleanConstant(Nonterm):
+    val: qlast.Constant
+
     def reduce_TRUE(self, *kids):
         self.val = qlast.Constant.boolean(True)
 

@@ -43,6 +43,7 @@ from .config import *  # NOQA
 #   in parser.rs `fn get_token_kind`
 class EdgeQLGrammar(Nonterm):
     "%start"
+
     val: qlast.GrammarEntryPoint
 
     def reduce_STARTBLOCK_EdgeQLBlock_EOI(self, *kids):
@@ -65,14 +66,13 @@ class EdgeQLGrammar(Nonterm):
 
 
 class EdgeQLBlock(Nonterm):
-    val: list[qlast.Command]
+    val: qlast.Commands
 
-    @parsing.inline(0)
-    def reduce_StatementBlock_OptSemicolons(self, _, _semicolon):
-        pass
+    def reduce_StatementBlock_OptSemicolons(self, s, _semicolon):
+        self.val = qlast.Commands(commands=s.val)
 
     def reduce_OptSemicolons(self, _semicolon):
-        self.val = []
+        self.val = qlast.Commands(commands=[])
 
 
 class SingleStatement(Nonterm):
@@ -105,7 +105,7 @@ class SingleStatement(Nonterm):
 class StatementBlock(
     parsing.ListNonterm, element=SingleStatement, separator=commondl.Semicolons
 ):
-    pass
+    val: list[qlast.Command]
 
 
 class SDLDocument(Nonterm):

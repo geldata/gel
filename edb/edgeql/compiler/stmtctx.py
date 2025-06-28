@@ -980,7 +980,7 @@ def throw_on_loose_param(
 
 
 def preprocess_script(
-    stmts: list[qlast.Base], *, ctx: context.ContextLevel
+    stmts: Sequence[qlast.Base], *, ctx: context.ContextLevel
 ) -> irast.ScriptInfo:
     """Extract parameters from all statements in a script.
 
