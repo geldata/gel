@@ -339,7 +339,8 @@ Sets
 
         # Get a set of tuples (<issue name>, <priority>)
         # for all issues.
-        select (Issue.name, Issue.priority.name ?? 'n/a');
+        for issue in Issue
+        select (issue.name, issue.priority.name ?? 'n/a');
 
     Without the coalescing operator, the above query will skip any
     ``Issue`` without priority.
