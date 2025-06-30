@@ -20287,7 +20287,7 @@ async def create_concurrent_indexes(db, msg_callback=print):
             f"with expr ({index.expr})"
         )
         await db.execute(f'''
-            administer concurrent_index_build("{index.id}")
+            administer concurrent_index_build(<uuid>"{index.id}")
         ''')
 
     return len(indexes)

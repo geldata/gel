@@ -1853,14 +1853,23 @@ def _get_index(
     # This is janky, and we shouldn't do it.
     arg = ql.expr.args[0]
     match arg:
-        case qlast.Constant(
-            kind=qlast.ConstantKind.STRING,
-            value=id_string,
+        case qlast.TypeCast(
+            type=qlast.TypeName(
+                maintype=qlast.ObjectRef(
+                    name='uuid',
+                    module='std' | None,
+                ),
+                subtypes=None,
+            ),
+            expr=qlast.Constant(
+                kind=qlast.ConstantKind.STRING,
+                value=id_string,
+            )
         ):
             pass
         case _:
             raise errors.QueryError(
-                f'argument to {ql.expr.func}() must be a string literal',
+                f'argument to {ql.expr.func}() must be a uuid literal',
                 span=arg.span,
             )
 
