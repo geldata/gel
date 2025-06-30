@@ -1882,13 +1882,13 @@ def _get_index(
     return index, schema
 
 
-def administer_concurrent_index_create(
+def administer_concurrent_index_build(
     ctx: compiler.CompileContext,
     ql: qlast.AdministerStmt,
 ) -> dbstate.BaseQuery:
     index, schema = _get_index(ctx, ql)
 
-    if not index.get_create_concurrently(schema):
+    if not index.get_build_concurrently(schema):
         raise errors.QueryError("Index was not created concurrently")
     if index.get_active(schema):
         raise errors.QueryError("Index is already active")
@@ -1926,7 +1926,7 @@ def administer_concurrent_index_create(
     sql = block.to_string().encode('utf-8')
 
     if debug.flags.delta_execute_ddl:
-        debug.header('ADMINISTER concurrent_index_create(...)')
+        debug.header('ADMINISTER concurrent_index_build(...)')
         debug.dump_code(index_command, lexer='sql')
         debug.dump_code(sql, lexer='sql')
 

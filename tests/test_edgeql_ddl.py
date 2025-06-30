@@ -20174,13 +20174,13 @@ class TestDDLNonIsolated(tb.DDLTestCase):
         ''')
         await self.con.execute('''
             alter type T {
-                create index on (.n) { set create_concurrently := true; }
+                create index on (.n) { set build_concurrently := true; }
             };
         ''')
         with self.assertRaisesRegex(edgedb.SchemaDefinitionError, 'not active'):
             await self.con.execute('''
                 alter type T {
-                    alter index on (.n) { set create_concurrently := false; }
+                    alter index on (.n) { set build_concurrently := false; }
                 };
             ''')
 
@@ -20192,7 +20192,7 @@ class TestDDLNonIsolated(tb.DDLTestCase):
 
         await self.con.execute('''
             alter type T {
-                alter index on (.n) { set create_concurrently := false; }
+                alter index on (.n) { set build_concurrently := false; }
             };
         ''')
 
@@ -20201,8 +20201,8 @@ class TestDDLNonIsolated(tb.DDLTestCase):
             create type T {
                 create required property n -> str;
                 create required property s -> int64;
-                create index on (.n) { set create_concurrently := true; };
-                create index on (.s) { set create_concurrently := true; };
+                create index on (.n) { set build_concurrently := true; };
+                create index on (.s) { set build_concurrently := true; };
             };
         ''')
 
@@ -20223,7 +20223,7 @@ class TestDDLNonIsolated(tb.DDLTestCase):
         ''')
         await self.con.execute('''
             alter type T {
-                create index on (.n) { set create_concurrently := true; }
+                create index on (.n) { set build_concurrently := true; }
             };
         ''')
 
@@ -20267,7 +20267,7 @@ async def create_concurrent_indexes(db, msg_callback=print):
     '''Actually create all "create concurrently" indexes
 
     The protocol here is to find all the indexes that need created,
-    and create them with `administer concurrent_index_create()`.
+    and create them with `administer concurrent_index_build()`.
     It's possible that the database will shut down after an index
     creation but before the metadata is updated, in which case
     we might rerun the command later, which is harmless.
@@ -20279,7 +20279,7 @@ async def create_concurrent_indexes(db, msg_callback=print):
         select schema::Index {
             id, expr, subject_name := .<indexes[is schema::ObjectType].name
         }
-        filter .create_concurrently and not .active
+        filter .build_concurrently and not .active
     ''')
     for index in indexes:
         msg_callback(
@@ -20287,7 +20287,7 @@ async def create_concurrent_indexes(db, msg_callback=print):
             f"with expr ({index.expr})"
         )
         await db.execute(f'''
-            administer concurrent_index_create("{index.id}")
+            administer concurrent_index_build("{index.id}")
         ''')
 
     return len(indexes)

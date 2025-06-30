@@ -3540,7 +3540,7 @@ class CreateIndex(IndexCommand, adapts=s_indexes.CreateIndex):
                 'kwargs': sql_kwarg_exprs,
             }
         )
-        concurrently = index.get_create_concurrently(schema)
+        concurrently = index.get_build_concurrently(schema)
         return dbops.CreateIndex(
             pg_index,
             concurrently=concurrently,
@@ -3559,7 +3559,7 @@ class CreateIndex(IndexCommand, adapts=s_indexes.CreateIndex):
             # Don't do anything for abstract indexes
             return schema
 
-        if index.get_create_concurrently(schema):
+        if index.get_build_concurrently(schema):
             return schema
 
         with errors.ensure_span(self.span):

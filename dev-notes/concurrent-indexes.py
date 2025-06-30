@@ -6,7 +6,7 @@ def create_concurrent_indexes(db, msg_callback=print):
     '''Actually create all "create concurrently" indexes
 
     The protocol here is to find all the indexes that need created,
-    and create them with `administer concurrent_index_create()`.
+    and create them with `administer concurrent_index_build()`.
     It's possible that the database will shut down after an index
     creation but before the metadata is updated, in which case
     we might rerun the command later, which is harmless.
@@ -18,7 +18,7 @@ def create_concurrent_indexes(db, msg_callback=print):
         select schema::Index {
             id, expr, subject_name := .<indexes[is schema::ObjectType].name
         }
-        filter .create_concurrently and not .active
+        filter .build_concurrently and not .active
     ''')
     for index in indexes:
         msg_callback(
@@ -26,7 +26,7 @@ def create_concurrent_indexes(db, msg_callback=print):
             f"with expr ({index.expr})"
         )
         db.execute(f'''
-            administer concurrent_index_create("{index.id}")
+            administer concurrent_index_build("{index.id}")
         ''')
 
 

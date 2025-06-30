@@ -342,14 +342,14 @@ class Index(
     )
 
     # Whether the index is created and populated in pg. Relevant if
-    # create_concurrently is true?
+    # build_concurrently is true?
     active = so.SchemaField(
         bool,
         default=True,
     )
 
     # XXX: I am not sure this is what I want to do.
-    create_concurrently = so.SchemaField(
+    build_concurrently = so.SchemaField(
         bool,
         default=False,
         compcoef=0.803,
@@ -1085,7 +1085,7 @@ class CreateIndex(
                     span=astnode.span,
                 )
 
-            if cmd.get_attribute_span('create_concurrently'):
+            if cmd.get_attribute_span('build_concurrently'):
                 cmd.set_attribute_value(
                     'active',
                     False,
@@ -1704,11 +1704,11 @@ class AlterIndex(
 
         vn = self.scls.get_verbosename(schema, with_parent=True)
         if (
-            not self.scls.get_create_concurrently(schema)
+            not self.scls.get_build_concurrently(schema)
             and not self.scls.get_active(schema)
         ):
             raise errors.SchemaDefinitionError(
-                f'{vn} is not active, so create_concurrently may '
+                f'{vn} is not active, so build_concurrently may '
                 f'not be cleared',
                 span=self.span,
             )
