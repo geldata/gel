@@ -988,7 +988,10 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
     PARALLELISM_GRANULARITY = 'system'
     TRANSACTION_ISOLATION = False
 
-    import asyncpg
+    try:
+        import asyncpg
+    except ImportError:
+        pass
 
     @staticmethod
     async def query_sql_values(
