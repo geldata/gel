@@ -9661,9 +9661,9 @@ async def execute_sql_script(
         elif pl_func_line:
             point = ql_parser.offset_of_line(sql_text, pl_func_line)
             text = sql_text
-        assert text
 
         if point is not None:
+            assert text
             span = qlast.Span(
                 None, text, start=point, end=point, context_lines=30
             )
