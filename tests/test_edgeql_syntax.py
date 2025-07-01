@@ -871,7 +871,7 @@ aa';
         SELECT a = b = c;
         """
 
-    def test_edgeql_toplevel_if(self):
+    def test_edgeql_syntax_toplevel_if(self):
         """
         IF true THEN (SELECT Foo) ELSE (INSERT Foo);
         """

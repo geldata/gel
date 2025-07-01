@@ -497,7 +497,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         parenthesize = not (
             isinstance(parent, qlast.SelectQuery)
             and parent.implicit
-            and parent._parent is None  # type: ignore
+            and isinstance(parent._parent, qlast.Commands)  # type: ignore
         )
         if parenthesize:
             self.write('(')
