@@ -2475,6 +2475,48 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         res = await self.squery_values('SELECT * FROM ONLY "Content"')
         self.assertEqual(len(res), 0)
 
+    async def test_sql_query_access_policy_05(self):
+        # access policies on link tables
+
+        res = await self.squery_values('SELECT * FROM "Movie.actors"')
+        self.assertEqual(len(res), 3)
+
+        await self.scon.execute('SET LOCAL apply_access_policies_pg TO true')
+
+        await self.scon.execute(
+            """SET LOCAL "global default::filter_title" TO 'Forrest Gump'"""
+        )
+        res = await self.squery_values('SELECT * FROM "Movie.actors"')
+        self.assertEqual(len(res), 2)
+
+        await self.scon.execute(
+            """SET LOCAL "global default::filter_title" TO 'Halo 3'"""
+        )
+        res = await self.squery_values('SELECT * FROM "Movie.actors"')
+        self.assertEqual(len(res), 0)
+
+    async def test_sql_query_access_policy_06(self):
+        # access policies on multi-property tables
+
+        res = await self.squery_values('SELECT * FROM "Book.chapters"')
+        self.assertEqual(len(res), 4)
+
+        await self.scon.execute('SET LOCAL apply_access_policies_pg TO true')
+
+        await self.scon.execute(
+            """
+            SET LOCAL "global default::filter_title" TO 'Chronicles of Narnia'
+            """
+        )
+        res = await self.squery_values('SELECT * FROM ONLY "Book.chapters"')
+        self.assertEqual(len(res), 4)
+
+        await self.scon.execute(
+            """SET LOCAL "global default::filter_title" TO 'Halo 3'"""
+        )
+        res = await self.squery_values('SELECT * FROM ONLY "Book.chapters"')
+        self.assertEqual(len(res), 0)
+
     async def test_sql_query_subquery_splat_01(self):
         res = await self.squery_values(
             '''

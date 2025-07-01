@@ -234,8 +234,9 @@ PG_TOAST_TABLE: list[
 @dispatch._resolve_relation.register
 def resolve_relation(
     relation: pgast.Relation, *, include_inherited: bool, ctx: Context
-) -> tuple[pgast.Relation, context.Table]:
+) -> tuple[pgast.BaseRelation, context.Table]:
     assert relation.name
+    rel: pgast.BaseRelation
 
     if relation.catalogname and relation.catalogname != 'postgres':
         raise errors.QueryError(
@@ -360,13 +361,12 @@ def resolve_relation(
 
     if ctx.options.apply_access_policies and _has_access_policies(obj, ctx):
         if isinstance(obj, s_objtypes.ObjectType):
-            rel = _compile_read_of_obj_table(
+            rel = _compile_read_of_obj_table(obj, include_inherited, table, ctx)
+        else:
+            assert isinstance(obj, (s_links.Link | s_pointers.Pointer))
+            rel = _compile_read_of_link_table(
                 obj, include_inherited, table, ctx
             )
-        else:
-            # TODO: implement access policy filtering for link and
-            # multi-property tables
-            rel = _relation_of_table(obj, table, ctx)
     else:
         if include_inherited and _has_sub_types(obj, ctx):
             rel = _relation_of_inheritance_cte(obj, ctx)
@@ -380,7 +380,16 @@ def _has_access_policies(
     obj: s_sources.Source | s_properties.Property, ctx: Context
 ):
     if isinstance(obj, s_pointers.Pointer):
-        return False
+        source = obj.get_source(ctx.schema)
+        assert isinstance(source, (s_objtypes.ObjectType, s_links.Link))
+        if isinstance(source, s_objtypes.ObjectType):
+            obj = source
+        elif isinstance(source, s_links.Link):
+            source = source.get_source(ctx.schema)
+            assert isinstance(source, s_objtypes.ObjectType)
+            obj = source
+        else:
+            return False
     assert isinstance(obj, s_objtypes.ObjectType)
 
     policies = obj.get_access_policies(ctx.schema)
@@ -499,7 +508,6 @@ def _construct_column(p: s_pointers.Pointer, ctx: Context) -> context.Column:
             kind = context.ColumnByName(reference_as=dbname)
 
     elif isinstance(p, s_links.Link):
-
         if p.get_computable(ctx.schema):
             col_name = short_name.name + '_id'
             kind = context.ColumnComputable(pointer=p)
@@ -524,7 +532,7 @@ def _construct_system_columns() -> list[context.Column]:
 
 
 def _compile_read_of_obj_table(
-    obj: s_objtypes.ObjectType,
+    obj: s_objtypes.ObjectType | s_links.Link,
     include_inherited: bool,
     table: context.Table,
     ctx: Context,
@@ -578,7 +586,11 @@ def _compile_read_of_obj_table(
     SYSTEM_COLS = {'tableoid', 'xmin', 'cmin', 'xmax', 'cmax', 'ctid'}
 
     # pull all expected columns out of the result rvar
-    obj_id = irast.PathId.from_type(ctx.schema, obj, env=None)
+    obj_id: irast.PathId
+    if isinstance(obj, s_objtypes.ObjectType):
+        obj_id = irast.PathId.from_type(ctx.schema, obj, env=None)
+    else:
+        obj_id = irast.PathId.from_pointer(ctx.schema, obj, env=None)
     for column in table.columns:
         if not isinstance(column.kind, context.ColumnByName):
             continue
@@ -624,3 +636,61 @@ def _compile_read_of_obj_table(
         )
     )
     return pgast.Relation(name=cte_name)
+
+
+def _compile_read_of_link_table(
+    obj: s_links.Link | s_properties.Property,
+    include_inherited: bool,
+    table: context.Table,
+    ctx: Context,
+) -> pgast.BaseRelation:
+    source = obj.get_source(ctx.schema)
+    assert isinstance(source, (s_objtypes.ObjectType, s_links.Link))
+
+    source_table = context.Table(
+        schema_id=source.id,
+        columns=[
+            context.Column(
+                name="id", kind=context.ColumnByName(reference_as="id")
+            )
+        ],
+    )
+    source_rel = _compile_read_of_obj_table(source, True, source_table, ctx)
+    source_table_id = source_table.columns[0].kind
+    assert isinstance(source_table_id, context.ColumnByName)
+
+    schemaname, dbname = pgcommon.get_backend_name(
+        ctx.schema, obj, aspect="table", catenate=False
+    )
+
+    # inner join source table with the link table
+    return pgast.SelectStmt(
+        from_clause=[
+            pgast.JoinExpr(
+                larg=pgast.RelRangeVar(
+                    relation=source_rel, alias=pgast.Alias(aliasname="s")
+                ),
+                joins=[
+                    pgast.JoinClause(
+                        type="INNER",
+                        rarg=pgast.RelRangeVar(
+                            relation=pgast.Relation(
+                                name=dbname, schemaname=schemaname
+                            ),
+                            alias=pgast.Alias(aliasname="l"),
+                        ),
+                        quals=pgast.Expr(
+                            name="=",
+                            lexpr=pgast.ColumnRef(
+                                name=("s", source_table_id.reference_as)
+                            ),
+                            rexpr=pgast.ColumnRef(name=("l", "source")),
+                        ),
+                    ),
+                ],
+            ),
+        ],
+        target_list=[
+            pgast.ResTarget(val=pgast.ColumnRef(name=("l", pgast.Star())))
+        ],
+    )
