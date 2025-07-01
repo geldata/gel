@@ -664,6 +664,17 @@ def _compile_read_of_link_table(
     )
 
     # inner join source table with the link table
+
+    target_list = []
+    for c in table.columns:
+        if not isinstance(c.kind, context.ColumnByName):
+            continue
+        target_list.append(
+            pgast.ResTarget(
+                val=pgast.ColumnRef(name=("l", c.kind.reference_as))
+            )
+        )
+
     return pgast.SelectStmt(
         from_clause=[
             pgast.JoinExpr(
@@ -690,7 +701,5 @@ def _compile_read_of_link_table(
                 ],
             ),
         ],
-        target_list=[
-            pgast.ResTarget(val=pgast.ColumnRef(name=("l", pgast.Star())))
-        ],
+        target_list=target_list,
     )
