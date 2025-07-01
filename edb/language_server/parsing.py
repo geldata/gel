@@ -113,7 +113,7 @@ def parse_and_recover(
     if sdl:
         assert isinstance(ast, qlast.Schema), ast
     else:
-        assert isinstance(ast, list), ast
+        assert isinstance(ast, qlast.Commands), ast
 
     return ast
 
