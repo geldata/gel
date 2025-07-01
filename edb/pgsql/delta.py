@@ -85,6 +85,7 @@ from edb.ir import typeutils as irtyputils
 from edb.ir import utils as irutils
 
 from edb.pgsql import common
+from edb.pgsql import debug as pg_debug
 from edb.pgsql import dbops
 from edb.pgsql import params
 from edb.pgsql import deltafts
@@ -1432,6 +1433,9 @@ class FunctionCommand(MetaCommand):
                 backend_runtime_params=context.backend_runtime_params,
                 versioned_stdlib=context.stdmode,
             )
+
+            pg_debug.dump_ast_and_query(sql_res.ast, compiled_expr.irast)
+
             body = codegen.generate_source(sql_res.ast)
 
         return self.make_function(func, body, schema), replace

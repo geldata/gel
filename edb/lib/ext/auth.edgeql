@@ -543,21 +543,20 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
     {
         set volatility := 'Stable';
         using (
+            for jwt in (
+                ext::auth::_jwt_check_signature(
+                    ext::auth::_jwt_parse(token),
+                    key,
+                    algo,
+                )
+            )
             with
-                # NB: Free-object wrapping to force materialization
-                jwt := {
-                    t := ext::auth::_jwt_check_signature(
-                        ext::auth::_jwt_parse(token),
-                        key,
-                        algo,
-                    ),
-                },
                 validity_range := std::range(
-                    std::to_datetime(<float64>json_get(jwt.t, "nbf")),
-                    std::to_datetime(<float64>json_get(jwt.t, "exp")),
+                    std::to_datetime(<float64>json_get(jwt, "nbf")),
+                    std::to_datetime(<float64>json_get(jwt, "exp")),
                 ),
             select
-                jwt.t
+                jwt
             order by
                 assert(
                     std::contains(
