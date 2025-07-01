@@ -988,11 +988,6 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
     PARALLELISM_GRANULARITY = 'system'
     TRANSACTION_ISOLATION = False
 
-    try:
-        import asyncpg
-    except ImportError:
-        pass
-
     @staticmethod
     async def query_sql_values(
         conn: tconn.Connection, query: str, *args, **kwargs
@@ -1001,7 +996,7 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
         return [r.as_dict() for r in res]
 
     @staticmethod
-    async def sql_con_query_values(conn: asyncpg.Connection, query, *args):
+    async def sql_con_query_values(conn, query, *args):
         res = await conn.fetch(query, *args)
         return [list(r.values()) for r in res]
 
