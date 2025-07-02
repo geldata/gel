@@ -11158,6 +11158,99 @@ type default::Foo {
             }]
         )
 
+    async def test_edgeql_ddl_role_11(self):
+        # Check that sys::perm::superuser cannot be granted
+
+        # CREATE superuser
+        async with self.assertRaisesRegexTx(
+            edgedb.SchemaDefinitionError,
+            r'Permission "sys::perm::superuser" cannot be explicitly granted',
+        ):
+            await self.con.execute('''
+                create superuser role foo_11a {
+                    set permissions := sys::perm::superuser;
+                };
+            ''')
+        async with self.assertRaisesRegexTx(
+            edgedb.SchemaDefinitionError,
+            r'Permission "sys::perm::superuser" cannot be explicitly granted',
+        ):
+            await self.con.execute('''
+                create superuser role foo_11b {
+                    set permissions := { sys::perm::superuser, default::foo };
+                };
+            ''')
+
+        # CREATE non-superuser
+        async with self.assertRaisesRegexTx(
+            edgedb.SchemaDefinitionError,
+            r'Permission "sys::perm::superuser" cannot be explicitly granted',
+        ):
+            await self.con.execute('''
+                create role foo_11c {
+                    set permissions := sys::perm::superuser;
+                };
+            ''')
+        async with self.assertRaisesRegexTx(
+            edgedb.SchemaDefinitionError,
+            r'Permission "sys::perm::superuser" cannot be explicitly granted',
+        ):
+            await self.con.execute('''
+                create role foo_11d {
+                    set permissions := { sys::perm::superuser, default::foo };
+                };
+            ''')
+
+        # Alter superuser
+        self.con.execute('''
+            create superuser role foo_11e {
+                set permissions := default::foo
+            };
+        ''')
+        async with self.assertRaisesRegexTx(
+            edgedb.SchemaDefinitionError,
+            r'Permission "sys::perm::superuser" cannot be explicitly granted',
+        ):
+            await self.con.execute('''
+                alter role foo_11e {
+                    set permissions := sys::perm::superuser;
+                };
+            ''')
+        async with self.assertRaisesRegexTx(
+            edgedb.SchemaDefinitionError,
+            r'Permission "sys::perm::superuser" cannot be explicitly granted',
+        ):
+            await self.con.execute('''
+                alter role foo_11e {
+                    set permissions := { sys::perm::superuser, default::foo };
+                };
+            ''')
+
+        # Non-superuser
+        self.con.execute('''
+            create superuser role foo_11f {
+                set permissions := default::foo
+            };
+        ''')
+        async with self.assertRaisesRegexTx(
+            edgedb.SchemaDefinitionError,
+            r'Permission "sys::perm::superuser" cannot be explicitly granted',
+        ):
+            await self.con.execute('''
+                alter role foo_11f {
+                    set permissions := sys::perm::superuser;
+                };
+            ''')
+        async with self.assertRaisesRegexTx(
+            edgedb.SchemaDefinitionError,
+            r'Permission "sys::perm::superuser" cannot be explicitly granted',
+        ):
+            await self.con.execute('''
+                alter role foo_11f {
+                    set permissions := { sys::perm::superuser, default::foo };
+                };
+            ''')
+
     async def test_edgeql_ddl_role_permission_inheritance_01(self):
         # Check different inheritance trees produce correct permissions
         if not self.has_create_role:

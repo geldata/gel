@@ -157,6 +157,23 @@ class RoleCommand(
                 span=span,
             )
 
+    def _validate_permissions(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+    ) -> None:
+        if (
+            self.has_attribute_value('permissions')
+            and (permissions := self.get_attribute_value('permissions'))
+        ):
+            if 'sys::perm::superuser' in permissions:
+                span = self.get_attribute_span('permissions')
+                raise errors.SchemaDefinitionError(
+                    f'Permission "sys::perm::superuser" '
+                    f'cannot be explicitly granted.',
+                    span=span,
+                )
+
 
 class CreateRole(RoleCommand, inheriting.CreateInheritingObject[Role]):
     astnode = qlast.CreateRole
@@ -199,6 +216,7 @@ class CreateRole(RoleCommand, inheriting.CreateInheritingObject[Role]):
     ) -> None:
         super().validate_create(schema, context)
         self._validate_name(schema, context)
+        self._validate_permissions(schema, context)
 
 
 class RebaseRole(RoleCommand, inheriting.RebaseInheritingObject[Role]):
@@ -284,6 +302,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
     ) -> None:
         super().validate_alter(schema, context)
         self._validate_name(schema, context)
+        self._validate_permissions(schema, context)
 
 
 class DeleteRole(RoleCommand, inheriting.DeleteInheritingObject[Role]):
