@@ -4601,6 +4601,17 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                     },
                 )
 
+    def test_graphql_introspect_01(self):
+        # Issue 8814
+        # Check that schema introspection works with computed globals
+        self.graphql_query(r"""
+            query {
+                __schema {
+                    types { name }
+                }
+            }
+        """)
+
     def test_graphql_func_01(self):
         Q = r'''query { FuncTest { fstr } }'''
 
