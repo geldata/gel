@@ -11202,7 +11202,7 @@ type default::Foo {
             ''')
 
         # Alter superuser
-        self.con.execute('''
+        await self.con.execute('''
             create superuser role foo_11e {
                 set permissions := default::foo
             };
@@ -11227,8 +11227,8 @@ type default::Foo {
             ''')
 
         # Non-superuser
-        self.con.execute('''
-            create superuser role foo_11f {
+        await self.con.execute('''
+            create role foo_11f {
                 set permissions := default::foo
             };
         ''')

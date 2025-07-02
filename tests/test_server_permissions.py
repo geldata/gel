@@ -50,9 +50,12 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
             )
 
             result = await conn.query("""
-                SELECT global default::perm_a;
+                SELECT [
+                    global sys::perm::superuser,
+                    global default::perm_a,
+                ];
             """)
-            self.assert_data_shape(result, [True,])
+            self.assert_data_shape(result, [[True, True],])
 
         finally:
             await conn.aclose()
@@ -81,19 +84,20 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
 
             qry = """
                 SELECT [
+                    global sys::perm::superuser,
                     global default::perm_a,
                     global default::perm_b,
                 ];
             """
             result = await conn.query(qry)
-            self.assert_data_shape(result, [[True, False]])
+            self.assert_data_shape(result, [[False, True, False]])
 
             result, _ = self.edgeql_query(
                 qry,
                 user='foo',
                 password='secret',
             )
-            self.assert_data_shape(result, [[True, False]])
+            self.assert_data_shape(result, [[False, True, False]])
 
         finally:
             await conn.aclose()
@@ -104,7 +108,7 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
             ''')
 
     async def test_server_permissions_role_03(self):
-        # Check that non-superuser has permissions
+        # Check that non-superuser has permissions from base role
 
         await self.con.query('''
             CREATE ROLE base {
@@ -128,12 +132,13 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
 
             result = await conn.query("""
                 SELECT [
+                    global sys::perm::superuser,
                     global default::perm_a,
                     global default::perm_b,
                     global default::perm_c,
                 ];
             """)
-            self.assert_data_shape(result, [[True, True, False,]])
+            self.assert_data_shape(result, [[False, True, True, False,]])
 
         finally:
             await conn.aclose()
@@ -165,11 +170,12 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
 
             result = await conn.query("""
                 SELECT [
+                    global sys::perm::superuser,
                     global default::perm_a,
                     global default::perm_b,
                 ];
             """)
-            self.assert_data_shape(result, [[True, False,]])
+            self.assert_data_shape(result, [[False, True, False,]])
 
             await self.con.query('''
                 ALTER ROLE foo {
@@ -179,11 +185,12 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
 
             result = await conn.query("""
                 SELECT [
+                    global sys::perm::superuser,
                     global default::perm_a,
                     global default::perm_b,
                 ];
             """)
-            self.assert_data_shape(result, [[False, True,]])
+            self.assert_data_shape(result, [[False, False, True,]])
 
         finally:
             await conn.aclose()
@@ -194,7 +201,7 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
             ''')
 
     async def test_server_permissions_role_05(self):
-        # Check that non-superuser has permissions
+        # Check that non-superuser has permissions from ancestor roles
 
         await self.con.query('''
             CREATE ROLE base {
@@ -221,12 +228,13 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
 
             result = await conn.query("""
                 SELECT [
+                    global sys::perm::superuser,
                     global default::perm_a,
                     global default::perm_b,
                     global default::perm_c,
                 ];
             """)
-            self.assert_data_shape(result, [[True, True, False,]])
+            self.assert_data_shape(result, [[False, True, True, False,]])
 
         finally:
             await conn.aclose()
