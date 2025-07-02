@@ -23,6 +23,11 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
 
     create module ext::ai;
 
+    create module ext::ai::perm;
+    create permission ext::ai::perm::provider_call;
+    create permission ext::ai::perm::chat_prompt_read;
+    create permission ext::ai::perm::chat_prompt_write;
+
     create scalar type ext::ai::ProviderAPIStyle
         extending enum<OpenAI, Anthropic, Ollama>;
 
@@ -673,6 +678,7 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         # Needed to pick up the indexes when used in ORDER BY.
         set prefer_subquery_args := true;
         set server_param_conversions := '{"query": ["ai_text_embedding", "object"]}';
+        set required_permissions := { ext::ai::perm::provider_call };
         using sql expression;
     };
 
@@ -696,6 +702,13 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             create annotation std::description :=
                 'Prompt message contenxt.'
         };
+
+        create access policy ap_read allow select using (
+            global ext::ai::perm::chat_prompt_read
+        );
+        create access policy ap_write allow insert, update, delete using (
+            global ext::ai::perm::chat_prompt_write
+        );
     };
 
     create type ext::ai::ChatPrompt extending std::BaseObject {
@@ -710,6 +723,13 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             create annotation std::description :=
                 'Messages in this prompt configuration';
         };
+
+        create access policy ap_read allow select using (
+            global ext::ai::perm::chat_prompt_read
+        );
+        create access policy ap_write allow insert, update, delete using (
+            global ext::ai::perm::chat_prompt_write
+        );
     };
 
     insert ext::ai::ChatPrompt {
