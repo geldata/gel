@@ -18,6 +18,10 @@
 
 CREATE MODULE std::net;
 
+CREATE MODULE std::net::perm;
+CREATE PERMISSION std::net::perm::http_read;
+CREATE PERMISSION std::net::perm::http_write;
+
 CREATE SCALAR TYPE std::net::RequestState EXTENDING std::enum<
     Pending,
     InProgress,
@@ -47,6 +51,13 @@ CREATE TYPE std::net::http::Response EXTENDING std::BaseObject {
     CREATE PROPERTY status: std::int16;
     CREATE PROPERTY headers: std::array<std::tuple<name: std::str, value: std::str>>;
     CREATE PROPERTY body: std::bytes;
+
+    CREATE ACCESS POLICY ap_read allow select using (
+        global std::net::perm::http_read
+    );
+    CREATE ACCESS POLICY ap_write allow insert, update, delete using (
+        global std::net::perm::http_write
+    );
 };
 
 CREATE TYPE std::net::http::ScheduledRequest extending std::BaseObject {
@@ -66,6 +77,13 @@ CREATE TYPE std::net::http::ScheduledRequest extending std::BaseObject {
     };
 
     CREATE INDEX ON ((.state, .updated_at));
+
+    CREATE ACCESS POLICY ap_read allow select using (
+        global std::net::perm::http_read
+    );
+    CREATE ACCESS POLICY ap_write allow insert, update, delete using (
+        global std::net::perm::http_write
+    );
 };
 
 ALTER TYPE std::net::http::Response {
@@ -86,6 +104,7 @@ std::net::http::schedule_request(
 ) -> std::net::http::ScheduledRequest
 {
     SET is_inlined := true;
+    set required_permissions := { std::net::perm::http_write };
     USING ((
         INSERT std::net::http::ScheduledRequest {
             url := url,

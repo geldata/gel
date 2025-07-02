@@ -6777,7 +6777,13 @@ def _generate_sql_information_schema(
         JOIN edgedb_VER."_SchemaModule" sm ON sm.name = at.module_name
         LEFT JOIN pg_type pt ON pt.typname = at.id::text
         WHERE schema_name not in (
-            'cfg', 'sys', 'schema', 'std', 'std::net', 'std::net::http'
+            'cfg',
+            'sys',
+            'schema',
+            'std',
+            'std::net',
+            'std::net::http',
+            'std::net::perm'
         )
         '''
     )
