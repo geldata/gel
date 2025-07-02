@@ -9399,6 +9399,7 @@ async def execute_sql_script(
             text = sql_text
 
         if point is not None:
+            assert text
             span = qlast.Span(
                 'query', text, start=point, end=point, context_lines=30
             )
