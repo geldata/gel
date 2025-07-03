@@ -2241,7 +2241,7 @@ class Shell:
         raise NotImplementedError
 
 
-class ObjectShell(Shell, Generic[Object_T_co]):
+class ObjectShell(Shell, Generic[Object_T_co]):  # noqa: UP046
 
     def __init__(
         self,
