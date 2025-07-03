@@ -109,7 +109,6 @@ DEFAULT_CONSTRUCTOR: Final = DefaultConstructorT.DefaultConstructor
 
 
 T = TypeVar("T")
-Type_T = TypeVar("Type_T", bound=type)
 ObjectContainer_T = TypeVar('ObjectContainer_T', bound='ObjectContainer')
 Object_T = TypeVar("Object_T", bound="Object")
 Object_T_co = TypeVar("Object_T_co", bound="Object", covariant=True)
@@ -522,7 +521,7 @@ class Field[T](struct.ProtoField):
         )
 
 
-class SchemaField(Field[Type_T]):
+class SchemaField[Type_T: type](Field[Type_T]):
 
     __slots__ = ('default', 'hashable', 'allow_ddl_set', 'allow_interpolation',
                  'index', 'get_default_specialized')
@@ -1218,19 +1217,19 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
                 return uuidgen.uuid1mc()
 
     @classmethod
-    def _create_from_id(cls: type[Object_T], id: uuid.UUID) -> Object_T:
+    def _create_from_id(cls: type[Self], id: uuid.UUID) -> Self:
         assert id is not None
         return cls(_private_id=id)
 
     @classmethod
-    def create_in_schema(
-        cls: type[Object_T],
-        schema: s_schema.Schema_T,
+    def create_in_schema[Schema_T: s_schema.Schema](
+        cls: type[Self],
+        schema: Schema_T,
         stable_ids: bool = False,
         *,
         id: Optional[uuid.UUID] = None,
         **data: Any,
-    ) -> tuple[s_schema.Schema_T, Object_T]:
+    ) -> tuple[Schema_T, Self]:
 
         if not cls.is_schema_object:
             raise TypeError(f'{cls.__name__} type cannot be created in schema')
@@ -1346,11 +1345,11 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         return schema.update_obj(self, updates)
 
     def hash_criteria(
-        self: Object_T, schema: s_schema.Schema
+        self: Self, schema: s_schema.Schema
     ) -> frozenset[HashCriterion]:
         cls = type(self)
 
-        sig: list[type[Object_T] | tuple[str, Any]] = [cls]
+        sig: list[type[Self] | tuple[str, Any]] = [cls]
         for f in cls._hashable_fields:
             fn = f.name
             val = self.get_explicit_field_value(schema, fn, default=None)
@@ -1423,7 +1422,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         return False
 
     @classmethod
-    def compare_field_value(
+    def compare_field_value[T](
         cls,
         field: Field[type[T]],
         our_value: T,
@@ -1461,11 +1460,11 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
             return 1.0
 
     @classmethod
-    def compare_obj_field_value(
-        cls: type[Object_T],
+    def compare_obj_field_value[T](
+        cls: type[Self],
         field: Field[type[T]],
-        ours: Object_T,
-        theirs: Object_T,
+        ours: Self,
+        theirs: Self,
         *,
         our_schema: s_schema.Schema,
         their_schema: s_schema.Schema,
@@ -1516,7 +1515,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
 
     @classmethod
     def compare_values(
-        cls: type[Object_T],
+        cls: type[Self],
         ours: Optional[Object_T],
         theirs: Optional[Object_T],
         *,
@@ -1631,9 +1630,9 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         return schema
 
     def as_shell(
-        self: Object_T,
+        self: Self,
         schema: s_schema.Schema,
-    ) -> ObjectShell[Object_T]:
+    ) -> ObjectShell[Self]:
         return ObjectShell(
             name=self.get_name(schema),
             displayname=self.get_displayname(schema),
@@ -1686,7 +1685,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         return cmd
 
     def record_cmd_object_aux_data(
-        self: Object_T,
+        self: Self,
         schema: s_schema.Schema,
         cmd: sd.ObjectCommand[Any],
     ) -> None:
@@ -1697,7 +1696,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
             )
 
     def init_parent_delta_branch(
-        self: Object_T,
+        self: Self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
         *,
@@ -1772,10 +1771,10 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         return root_cmd, self_cmd, ctx_stack
 
     def as_create_delta(
-        self: Object_T,
+        self: Self,
         schema: s_schema.Schema,
         context: ComparisonContext,
-    ) -> sd.CreateObject[Object_T]:
+    ) -> sd.CreateObject[Self]:
         from . import delta as sd
 
         cls = type(self)
@@ -1836,14 +1835,14 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         return delta
 
     def as_alter_delta(
-        self: Object_T,
-        other: Object_T,
+        self: Self,
+        other: Self,
         *,
         self_schema: s_schema.Schema,
         other_schema: s_schema.Schema,
         confidence: float,
         context: ComparisonContext,
-    ) -> sd.ObjectCommand[Object_T]:
+    ) -> sd.ObjectCommand[Self]:
         from . import delta as sd
 
         cls = type(self)
@@ -1943,11 +1942,11 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         return delta
 
     def as_delete_delta(
-        self: Object_T,
+        self: Self,
         *,
         schema: s_schema.Schema,
         context: ComparisonContext,
-    ) -> sd.ObjectCommand[Object_T]:
+    ) -> sd.ObjectCommand[Self]:
         from . import delta as sd
 
         cls = type(self)
@@ -1990,16 +1989,16 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         return delta
 
     def record_simple_field_delta(
-        self: Object_T,
+        self: Self,
         schema: s_schema.Schema,
-        delta: sd.ObjectCommand[Object_T],
+        delta: sd.ObjectCommand[Self],
         context: ComparisonContext,
         *,
         fname: str,
         value: Any,
         orig_value: Any,
         orig_schema: Optional[s_schema.Schema],
-        orig_object: Optional[Object_T],
+        orig_object: Optional[Self],
         from_default: bool = False,
     ) -> None:
         computed_fields = self.get_computed_fields(schema)
@@ -2031,9 +2030,9 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         context.parent_ops.pop()
 
     def record_field_create_delta(
-        self: Object_T,
+        self: Self,
         schema: s_schema.Schema,
-        delta: sd.ObjectCommand[Object_T],
+        delta: sd.ObjectCommand[Self],
         context: ComparisonContext,
         *,
         fname: str,
@@ -2053,16 +2052,16 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         )
 
     def record_field_alter_delta(
-        self: Object_T,
+        self: Self,
         schema: s_schema.Schema,
-        delta: sd.ObjectCommand[Object_T],
+        delta: sd.ObjectCommand[Self],
         context: ComparisonContext,
         *,
         fname: str,
         value: Any,
         orig_value: Any,
         orig_schema: s_schema.Schema,
-        orig_object: Object_T,
+        orig_object: Self,
         confidence: float,
     ) -> None:
         from . import delta as sd
@@ -2103,9 +2102,9 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
             )
 
     def record_field_delete_delta(
-        self: Object_T,
+        self: Self,
         schema: s_schema.Schema,
-        delta: sd.ObjectCommand[Object_T],
+        delta: sd.ObjectCommand[Self],
         context: ComparisonContext,
         fname: str,
         orig_value: Any,
@@ -2310,7 +2309,7 @@ class ObjectCollectionDuplicateNameError(Exception):
 
 # A set of scalars that should be reflected as a multi prop, not as an
 # array.
-class MultiPropSet(
+class MultiPropSet[T](
     checked.FrozenCheckedSet[T],
 ):
     pass
@@ -2352,7 +2351,7 @@ class ObjectCollection[Object_T: "Object"](
                     f'already defined as {cls._registry[name]!r}'
                 )
             else:
-                cls._registry[name] = cls  # type: ignore
+                cls._registry[name] = cls
 
     @classmethod
     def get_subclass(cls, name: str) -> builtins.type[ObjectCollection[Object]]:
@@ -2757,7 +2756,7 @@ class ObjectIndexBase[Key_T, Object_T: Object](
     ) -> tuple[s_schema.Schema, Self]:
         items = dict(self.items(schema))
         for name in names:
-            items.pop(name)  # type: ignore[call-overload]  # mypy bug
+            items.pop(name)
         return (
             schema,
             cast(Self, type(self).create(schema, items.values())),
@@ -3386,7 +3385,7 @@ class InheritingObject(SubclassableObject):
         )
 
     def get_field_alter_delta(
-        self: InheritingObjectT,
+        self: Self,
         old_schema: s_schema.Schema,
         new_schema: s_schema.Schema,
         delta: sd.ObjectCommand[InheritingObjectT],
@@ -3403,7 +3402,7 @@ class InheritingObject(SubclassableObject):
         )
 
     def get_field_delete_delta(
-        self: InheritingObjectT,
+        self: Self,
         schema: s_schema.Schema,
         delta: sd.ObjectCommand[InheritingObjectT],
         fname: str,
@@ -3418,11 +3417,11 @@ class InheritingObject(SubclassableObject):
         )
 
     @classmethod
-    def compare_obj_field_value(
-        cls: type[InheritingObjectT],
+    def compare_obj_field_value[T](
+        cls: type[Self],
         field: Field[type[T]],
-        ours: InheritingObjectT,
-        theirs: InheritingObjectT,
+        ours: Self,
+        theirs: Self,
         *,
         our_schema: s_schema.Schema,
         their_schema: s_schema.Schema,

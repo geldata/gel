@@ -22,14 +22,14 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Optional,
-    TypeVar,
+    cast,
     Iterable,
     Iterator,
     Mapping,
-    cast,
     NoReturn,
+    Optional,
     overload,
+    Self,
     TYPE_CHECKING,
 )
 
@@ -115,47 +115,45 @@ TESTMODE_SOURCES = (
     sn.UnqualName('_testmode'),
 )
 
-Schema_T = TypeVar('Schema_T', bound='Schema')
-
 
 class Schema(abc.ABC):
 
     @abc.abstractmethod
     def add_raw(
-        self: Schema_T,
+        self: Self,
         id: uuid.UUID,
         sclass: type[so.Object],
         data: tuple[Any, ...],
-    ) -> Schema_T:
+    ) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
     def add(
-        self: Schema_T,
+        self: Self,
         id: uuid.UUID,
         sclass: type[so.Object],
         data: tuple[Any, ...],
-    ) -> Schema_T:
+    ) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def discard(self: Schema_T, obj: so.Object) -> Schema_T:
+    def discard(self: Self, obj: so.Object) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def delete(self: Schema_T, obj: so.Object) -> Schema_T:
+    def delete(self: Self, obj: so.Object) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def delist(self: Schema_T, name: sn.Name) -> Schema_T:
+    def delist(self: Self, name: sn.Name) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
     def update_obj(
-        self: Schema_T,
+        self: Self,
         obj: so.Object,
         updates: Mapping[str, Any],
-    ) -> Schema_T:
+    ) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -174,19 +172,19 @@ class Schema(abc.ABC):
 
     @abc.abstractmethod
     def set_obj_field(
-        self: Schema_T,
+        self: Self,
         obj: so.Object,
         field: str,
         value: Any,
-    ) -> Schema_T:
+    ) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
     def unset_obj_field(
-        self: Schema_T,
+        self: Self,
         obj: so.Object,
         field: str,
-    ) -> Schema_T:
+    ) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod

@@ -81,9 +81,9 @@ class Context:
     def is_multi(self, ptr: s_pointers.Pointer) -> bool:
         return ptr.get_cardinality(self.schema).is_multi()
 
-    def get_type(
-        self, ptr: s_pointers.Pointer, *, type: type[s_types.TypeT]
-    ) -> s_types.TypeT:
+    def get_type[TypeT: s_types.Type](
+        self, ptr: s_pointers.Pointer, *, type: type[TypeT]
+    ) -> TypeT:
         rv = ptr.get_target(self.schema)
         if not isinstance(rv, type):
             raise TypeError(f"{ptr!r}.target is not {type:r}")

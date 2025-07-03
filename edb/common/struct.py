@@ -21,13 +21,13 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
+    cast,
     Final,
-    Optional,
-    TypeVar,
     Iterable,
     Iterator,
     Mapping,
-    cast,
+    Optional,
+    Self,
 )
 
 import collections
@@ -105,15 +105,12 @@ class Field[T](ProtoField):
         return self.default is NoDefault
 
 
-StructMeta_T = TypeVar("StructMeta_T", bound="StructMeta")
-
-
 class StructMeta(type):
 
     _fields: dict[str, Field[Any]]
     _sorted_fields: dict[str, Field[Any]]
 
-    def __new__(
+    def __new__[StructMeta_T: StructMeta](
         mcls: type[StructMeta_T],
         name: str,
         bases: tuple[type, ...],
@@ -301,12 +298,10 @@ class Struct(metaclass=StructMeta):
     ) -> Struct_T:
         return self._copy_and_replace(cls)
 
-    def copy[Struct_T: Struct](self: Struct_T) -> Struct_T:
+    def copy(self: Self) -> Self:
         return self.copy_with_class(type(self))
 
-    def replace[Struct_T: Struct](
-        self: Struct_T, **replacements: Any
-    ) -> Struct_T:
+    def replace(self: Self, **replacements: Any) -> Self:
         return self._copy_and_replace(type(self), **replacements)
 
     def items(self) -> Iterator[tuple[str, Any]]:

@@ -18,22 +18,23 @@
 
 from __future__ import annotations
 from typing import (
+    AbstractSet,
     Any,
     Callable,
+    cast,
     ClassVar,
+    Generator,
     Generic,
-    Optional,
-    TypeVar,
-    AbstractSet,
     Hashable,
     Iterable,
     Iterator,
     Mapping,
-    Sequence,
-    Generator,
-    cast,
     NoReturn,
+    Optional,
     overload,
+    Self,
+    Sequence,
+    TypeVar,
 )
 
 import collections
@@ -374,9 +375,6 @@ def sort_by_cross_refs[ObjectT: so.Object](
     return sort_by_cross_refs_key(schema, objs, key=lambda x: x)
 
 
-CommandMeta_T = TypeVar("CommandMeta_T", bound="CommandMeta")
-
-
 class CommandMeta(
     adapter.Adapter,
     struct.MixedStructMeta,
@@ -384,7 +382,7 @@ class CommandMeta(
 
     _astnode_map: dict[type[qlast.DDLOperation], type[Command]] = {}
 
-    def __new__(
+    def __new__[CommandMeta_T: CommandMeta](
         mcls: type[CommandMeta_T],
         name: str,
         bases: tuple[type, ...],
@@ -484,7 +482,7 @@ class Command(
     def dump(self) -> None:
         markup.dump(self)
 
-    def copy(self: Command_T) -> Command_T:
+    def copy(self: Self) -> Self:
         result = super().copy()
         result.before_ops = [op.copy() for op in self.before_ops]
         result.ops = [op.copy() for op in self.ops]

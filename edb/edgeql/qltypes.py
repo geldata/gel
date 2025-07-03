@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import TypeVar, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import enum
 
@@ -26,8 +26,6 @@ from edb.common import enum as s_enum
 
 
 if TYPE_CHECKING:
-    T = TypeVar("T", covariant=True)
-
     from edb.schema import types as s_types
 
 

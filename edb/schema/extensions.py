@@ -172,14 +172,14 @@ class Extension(
     )
 
     @classmethod
-    def create_in_schema(
+    def create_in_schema[Schema_T: s_schema.Schema](
         cls: type[Extension],
-        schema: s_schema.Schema_T,
+        schema: Schema_T,
         stable_ids: bool = False,
         *,
         id: Optional[uuid.UUID] = None,
         **data: Any,
-    ) -> tuple[s_schema.Schema_T, Extension]:
+    ) -> tuple[Schema_T, Extension]:
         name = data['name']
         pkg = data['package']
 

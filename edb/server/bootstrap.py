@@ -239,11 +239,11 @@ async def _execute_block(conn, block: dbops.SQLBlock) -> None:
         await _execute(conn, stmt)
 
 
-def _execute_edgeql_ddl(
-    schema: s_schema.Schema_T,
+def _execute_edgeql_ddl[Schema_T: s_schema.Schema](
+    schema: Schema_T,
     ddltext: str,
     stdmode: bool = True,
-) -> s_schema.Schema_T:
+) -> Schema_T:
     context = sd.CommandContext(stdmode=stdmode)
 
     for ddl_cmd in edgeql.parse_block(ddltext):
