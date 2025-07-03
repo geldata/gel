@@ -6274,7 +6274,10 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         SELECT
             ((d.description)->>'id')::uuid AS source,
             jsonb_array_elements_text(
-                (d.description)->'branches'
+                -- The coalesce is to handle inplace upgrades from versions
+                -- before the field was added. If it is lacking from the dict,
+                -- make it ['*'].
+                coalesce((d.description)->'branches', '["*"]'::jsonb)
             )::text as target
         FROM
             pg_catalog.pg_roles AS a

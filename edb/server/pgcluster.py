@@ -267,6 +267,7 @@ class BaseCluster:
         dbname: str,
         *,
         exclude_schemas: Iterable[str] = (),
+        exclude_tables: Iterable[str] = (),
         include_schemas: Iterable[str] = (),
         include_tables: Iterable[str] = (),
         include_extensions: Iterable[str] = (),
@@ -299,6 +300,7 @@ class BaseCluster:
 
         configs = [
             ('exclude-schema', exclude_schemas),
+            ('exclude-table', exclude_tables),
             ('schema', include_schemas),
             ('table', include_tables),
             ('extension', include_extensions),

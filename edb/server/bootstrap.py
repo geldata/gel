@@ -1295,6 +1295,9 @@ class StdlibBits(NamedTuple):
     global_schema: s_schema.Schema
     #: SQL text of the procedure to initialize `std` in Postgres.
     sqltext: str
+    #: SQL text of the procedure to create all `std` scalars for inplace
+    #: upgrades
+    inplace_upgrade_scalar_text: str
     #: Descriptors of all the needed trampolines
     trampolines: list[trampoline.Trampoline]
     #: A set of ids of all types in std.
@@ -1345,6 +1348,18 @@ def _make_stdlib(
     types: set[uuid.UUID] = set()
     std_plans: list[sd.Command] = []
 
+    specials = []
+
+    def _collect_special(cmd):
+        if isinstance(cmd, dbops.CreateEnum):
+            specials.append(cmd)
+        elif isinstance(cmd, dbops.CommandGroup):
+            for sub in cmd.commands:
+                _collect_special(sub)
+        elif isinstance(cmd, delta_cmds.MetaCommand):
+            for sub in cmd.pgops:
+                _collect_special(sub)
+
     for ddl_cmd in edgeql.parse_block(ddl_text):
         assert isinstance(ddl_cmd, qlast.DDLCommand)
         delta_command = s_ddl.delta_from_ddl(
@@ -1355,6 +1370,7 @@ def _make_stdlib(
         schema, plan, tplan = _process_delta(ctx, delta_command, schema)
         assert isinstance(plan, delta_cmds.DeltaRoot)
         std_plans.append(delta_command)
+        _collect_special(plan)
 
         types.update(plan.new_types)
         plan.generate(current_block)
@@ -1444,11 +1460,28 @@ def _make_stdlib(
         reflection=reflection,
     )
 
+    # Sigh, we need to be able to create all std scalar types that
+    # might get added.
+    #
+    # TODO: Also collect tuple types, and generalize enum handling to
+    # be able to *add* enum fields. (Which will involve some
+    # pl/pgsql??)
+    scalar_block = dbops.PLTopBlock()
+    for cmd in specials:
+        if isinstance(cmd, dbops.CreateEnum):
+            ncmd = dbops.CreateEnum(
+                dbops.Enum(cmd.name, cmd.values),
+                neg_conditions=[dbops.EnumExists(cmd.name)],
+            )
+            ncmd.generate(scalar_block)
+
+    # Got it!
     return StdlibBits(
         stdschema=schema.get_top_schema(),
         reflschema=reflschema.get_top_schema(),
         global_schema=schema.get_global_schema(),
         sqltext=sqltext,
+        inplace_upgrade_scalar_text=scalar_block.to_string(),
         trampolines=trampolines,
         types=types,
         classlayout=reflection.class_layout,
@@ -1632,6 +1665,13 @@ def cleanup_tpldbdump(tpldbdump: bytes) -> bytes:
         flags=re.MULTILINE,
     )
 
+    tpldbdump = re.sub(
+        rb'^CREATE SCHEMA ',
+        rb'CREATE SCHEMA IF NOT EXISTS ',
+        tpldbdump,
+        flags=re.MULTILINE,
+    )
+
     return tpldbdump
 
 
@@ -1653,7 +1693,7 @@ async def _init_stdlib(
     src_hash = _calculate_src_hash()
     cache_dir = _get_cache_dir()
 
-    stdlib = read_data_cache(
+    stdlib: Optional[StdlibBits] = read_data_cache(
         STDLIB_CACHE_FILE_NAME,
         pickled=True,
         src_hash=src_hash,
@@ -1665,8 +1705,6 @@ async def _init_stdlib(
         src_hash=src_hash,
         cache_dir=cache_dir,
     )
-    if args.inplace_upgrade_prepare:
-        tpldbdump = None
 
     tpldbdump, tpldbdump_inplace = None, None
     if tpldbdump_package:
@@ -1776,8 +1814,6 @@ async def _init_stdlib(
 
             tpldbdump += b'\n' + text.encode('utf-8')
 
-            # XXX: TODO: We are going to need to deal with tuple types
-            # in edgedbpub...
             tpldbdump_inplace = await cluster.dump_database(
                 tpl_pg_db_name,
                 include_schemas=[
@@ -1787,7 +1823,10 @@ async def _init_stdlib(
                 ],
                 dump_object_owners=False,
             )
-            tpldbdump_inplace = cleanup_tpldbdump(tpldbdump_inplace)
+            tpldbdump_inplace = (
+                stdlib.inplace_upgrade_scalar_text.encode('utf-8') +
+                cleanup_tpldbdump(tpldbdump_inplace)
+            )
 
             # XXX: BE SMARTER ABOUT THIS, DON'T DO ALL THAT WORK
             if args.inplace_upgrade_prepare:
