@@ -231,7 +231,7 @@ class StdNetTestCase(tb.BaseHttpTest):
         example_request = (
             'POST',
             self.base_url,
-            '/test-post-01',
+            '/test-post-02',
         )
         url = f"{example_request[1]}{example_request[2]}"
         self.mock_server.register_route_handler(*example_request)(
