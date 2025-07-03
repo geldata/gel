@@ -25,7 +25,13 @@ import logging
 import asyncio
 
 from typing import (
-    overload, Any, cast, Optional, TYPE_CHECKING, Callable, Awaitable
+    overload,
+    Any,
+    cast,
+    Optional,
+    TYPE_CHECKING,
+    Callable,
+    Awaitable,
 )
 
 from edb.server import config as edb_config, auth as jwt_auth
@@ -47,7 +53,9 @@ def maybe_get_config_unchecked(db: edbtenant.dbview.Database, key: str) -> Any:
 
 
 @overload
-def maybe_get_config[T](db: Any, key: str, expected_type: type[T]) -> T | None: ...
+def maybe_get_config[T](
+    db: Any, key: str, expected_type: type[T]
+) -> T | None: ...
 
 
 @overload
@@ -107,9 +115,7 @@ def escape_and_truncate(input_str: str | None, max_len: int) -> str | None:
     if input_str is None:
         return None
     trunc = (
-        f"{input_str[:max_len]}..."
-        if len(input_str) > max_len
-        else input_str
+        f"{input_str[:max_len]}..." if len(input_str) > max_len else input_str
     )
     return html.escape(trunc)
 

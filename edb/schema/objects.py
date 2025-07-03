@@ -33,6 +33,7 @@ from typing import (
     Collection,
     NamedTuple,
     cast,
+    Self,
     TYPE_CHECKING,
 )
 
@@ -2598,13 +2599,7 @@ class ObjectCollectionShell[Object_T: "Object"](Shell):
         return f'<{tn} {cn}({items}) at 0x{id(self):x}>'
 
 
-Key_T = TypeVar("Key_T")
-KeyFunction = Callable[["s_schema.Schema", Object_T], Key_T]
-OIBT = TypeVar("OIBT", bound="ObjectIndexBase[Object, Any]")
-
-
-class ObjectIndexBase(
-    Generic[Key_T, Object_T],
+class ObjectIndexBase[Key_T, Object_T: Object](
     ObjectCollection[Object_T],
     container=tuple,
 ):
@@ -2617,12 +2612,12 @@ class ObjectIndexBase(
     # this update is done in RenameReferencedInheritingObject._alter_begin().
 
     __slots__ = ('_ids', '_keys')
-    _key: KeyFunction[Object_T, Key_T]
+    _key: Callable[["s_schema.Schema", Object_T], Key_T]
 
     def __init_subclass__(
         cls,
         *,
-        key: Optional[KeyFunction[Object_T, Key_T]] = None,
+        key: Optional[Callable[["s_schema.Schema", Object_T], Key_T]] = None,
     ) -> None:
         super().__init_subclass__()
         if key is not None:
@@ -2724,8 +2719,8 @@ class ObjectIndexBase(
         return basecoef + (1 - basecoef) * compcoef
 
     def add(
-        self: OIBT, schema: s_schema.Schema, item: Object
-    ) -> tuple[s_schema.Schema, OIBT]:
+        self, schema: s_schema.Schema, item: Object_T
+    ) -> tuple[s_schema.Schema, Self]:
         """Return a copy of this collection containing the given item.
 
         If the item is already present in the collection, an
@@ -2740,8 +2735,8 @@ class ObjectIndexBase(
         return self.update(schema, [item])
 
     def update(
-        self: OIBT, schema: s_schema.Schema, reps: Iterable[Object]
-    ) -> tuple[s_schema.Schema, OIBT]:
+        self, schema: s_schema.Schema, reps: Iterable[Object_T]
+    ) -> tuple[s_schema.Schema, Self]:
         items = dict(self.items(schema))
         keyfunc = type(self)._key
 
@@ -2750,20 +2745,20 @@ class ObjectIndexBase(
 
         return (
             schema,
-            cast(OIBT, type(self).create(schema, items.values())),
+            cast(Self, type(self).create(schema, items.values())),
         )
 
     def delete(
-        self: OIBT,
+        self,
         schema: s_schema.Schema,
         names: Iterable[Key_T],
-    ) -> tuple[s_schema.Schema, OIBT]:
+    ) -> tuple[s_schema.Schema, Self]:
         items = dict(self.items(schema))
         for name in names:
             items.pop(name)  # type: ignore[call-overload]  # mypy bug
         return (
             schema,
-            cast(OIBT, type(self).create(schema, items.values())),
+            cast(Self, type(self).create(schema, items.values())),
         )
 
     def items(
@@ -2865,10 +2860,8 @@ class ObjectIndexByUnqualifiedName(
         return sn.UnqualName(sn.shortname_from_fullname(name).name)
 
 
-class ObjectDict(
-    Generic[Key_T, Object_T],
-    ObjectCollection[Object_T],
-    container=tuple,
+class ObjectDict[Key_T, Object_T: Object](
+    ObjectCollection[Object_T], container=tuple,
 ):
     __slots__ = ('_ids', '_keys')
 
@@ -2994,9 +2987,8 @@ class ObjectDictShell[Key_T, Object_T: "Object"](
         )
 
 
-class ObjectSet(
+class ObjectSet[Object_T: Object](
     ObjectCollection[Object_T],
-    Generic[Object_T],
     container=frozenset,
 ):
 
@@ -3030,9 +3022,8 @@ class ObjectSet(
         return result  # type: ignore
 
 
-class ObjectList(
+class ObjectList[Object_T: Object](
     ObjectCollection[Object_T],
-    Generic[Object_T],
     container=tuple,
 ):
 

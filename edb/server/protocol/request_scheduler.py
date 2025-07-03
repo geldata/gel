@@ -442,6 +442,7 @@ class Result[_T](abc.ABC):
     # Keys should be a subset of service limits.
     limits: dict[str, Limits] = field(default_factory=dict)
 
+    @abc.abstractmethod
     async def finalize(self) -> None:
         """An optional finalize to be run sequentially."""
         pass

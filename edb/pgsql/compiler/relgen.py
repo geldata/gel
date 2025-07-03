@@ -28,9 +28,7 @@ from typing import (
     Iterable,
     Collection,
     NamedTuple,
-    TypeVar,
     cast,
-    Generic,
 )
 
 import dataclasses

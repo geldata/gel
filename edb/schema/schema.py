@@ -22,7 +22,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Generic,
     Optional,
     TypeVar,
     Iterable,
@@ -1610,7 +1609,7 @@ def upgrade_schema(schema: FlatSchema) -> FlatSchema:
     return schema._replace(id_to_data=id_to_data.update(fixes))
 
 
-class SchemaIterator(Generic[so.Object_T]):
+class SchemaIterator[Object_T: so.Object]:
     def __init__(
         self,
         schema: Schema,
@@ -1624,8 +1623,8 @@ class SchemaIterator(Generic[so.Object_T]):
         excluded_modules: Optional[Iterable[sn.Name]],
         included_items: Optional[Iterable[sn.Name]] = None,
         excluded_items: Optional[Iterable[sn.Name]] = None,
-        type: Optional[type[so.Object_T]] = None,
-        extra_filters: Iterable[Callable[[Schema, so.Object_T], bool]] = (),
+        type: Optional[type[Object_T]] = None,
+        extra_filters: Iterable[Callable[[Schema, Object_T], bool]] = (),
     ) -> None:
 
         filters = []
@@ -1692,7 +1691,7 @@ class SchemaIterator(Generic[so.Object_T]):
         self._schema = schema
         self._object_ids = object_ids
 
-    def __iter__(self) -> Iterator[so.Object_T]:
+    def __iter__(self) -> Iterator[Object_T]:
         filters = self._filters
         schema = self._schema
         get_by_id = schema.get_by_id
