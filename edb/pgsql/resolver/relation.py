@@ -363,7 +363,6 @@ def resolve_relation(
         if isinstance(obj, s_objtypes.ObjectType):
             rel = _compile_read_of_obj_table(obj, include_inherited, table, ctx)
         else:
-            # TODO: include_inherited for link tables with access policies
             assert isinstance(obj, (s_links.Link | s_pointers.Pointer))
             rel = _compile_read_of_link_table(
                 obj, include_inherited, table, ctx
