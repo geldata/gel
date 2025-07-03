@@ -1723,9 +1723,6 @@ def get_object_command_class_or_die[Command_T: Command](
     return cmdcls
 
 
-ObjectCommand_T = TypeVar("ObjectCommand_T", bound='ObjectCommand[so.Object]')
-
-
 class ObjectCommand[Object_T: so.Object](Command):
     """Base class for all Object-related commands."""
 
@@ -2513,7 +2510,7 @@ class ObjectCommand[Object_T: so.Object](Command):
         return cls._schema_metaclass
 
     @classmethod
-    def get_other_command_class(
+    def get_other_command_class[ObjectCommand_T: ObjectCommand[so.Object]](
         cls,
         cmdtype: type[ObjectCommand_T],
     ) -> type[ObjectCommand_T]:

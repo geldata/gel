@@ -176,14 +176,16 @@ class Property(
     ) -> bool:
         return not self.is_endpoint_pointer(schema)
 
-    def init_delta_command(
+    def init_delta_command[
+        ObjectCommand_T: sd.ObjectCommand[so.Object]
+    ](
         self,
         schema: s_schema.Schema,
-        cmdtype: type[sd.ObjectCommand_T],
+        cmdtype: type[ObjectCommand_T],
         *,
         classname: Optional[sn.Name] = None,
         **kwargs: Any,
-    ) -> sd.ObjectCommand_T:
+    ) -> ObjectCommand_T:
         delta = super().init_delta_command(
             schema=schema,
             cmdtype=cmdtype,

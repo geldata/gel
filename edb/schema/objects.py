@@ -1660,14 +1660,16 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
 
         return ddl_identity
 
-    def init_delta_command(
-        self: Object_T,
+    def init_delta_command[
+        ObjectCommand_T: sd.ObjectCommand[Object]
+    ](
+        self,
         schema: s_schema.Schema,
-        cmdtype: type[sd.ObjectCommand_T],
+        cmdtype: type[ObjectCommand_T],
         *,
         classname: Optional[sn.Name] = None,
         **kwargs: Any,
-    ) -> sd.ObjectCommand_T:
+    ) -> ObjectCommand_T:
         from . import delta as sd
 
         cls = type(self)
@@ -1716,17 +1718,17 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         root = sd.CommandGroup()
         return root, root, sd.ContextStack(())
 
-    def init_delta_branch(
-        self: Object_T,
+    def init_delta_branch[ObjectCommand_T: sd.ObjectCommand[Object]](
+        self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        cmdtype: type[sd.ObjectCommand_T],
+        cmdtype: type[ObjectCommand_T],
         *,
         classname: Optional[sn.Name] = None,
         referrer: Optional[Object] = None,
         possible_parent: Optional[sd.ObjectCommand[Object]] = None,
         **kwargs: Any,
-    ) -> tuple[sd.Command, sd.ObjectCommand_T, sd.ContextStack]:
+    ) -> tuple[sd.Command, ObjectCommand_T, sd.ContextStack]:
         """Make a command subtree for this object.
 
         This returns a tuple containing:
