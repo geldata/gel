@@ -23,6 +23,7 @@ import collections
 import collections.abc
 import enum
 import typing
+from typing import Self
 import uuid
 
 from edb import errors
@@ -45,7 +46,7 @@ from . import schema as s_schema
 from . import utils
 
 if typing.TYPE_CHECKING:
-    from typing import Any, Iterable, Iterator, Mapping, Optional, Self
+    from typing import Any, Iterable, Iterator, Mapping, Optional
     from typing import AbstractSet, Sequence, Callable
     from edb.common import parsing
 
