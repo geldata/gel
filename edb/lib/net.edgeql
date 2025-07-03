@@ -115,20 +115,22 @@ std::net::http::schedule_request(
 {
     SET is_inlined := true;
     USING ((
-        INSERT std::net::http::ScheduledRequest {
-            url := url,
-            method := method,
-            headers := headers ++ [
-                (
-                    name := "Content-Type",
-                    value := "application/json",
-                ),
-            ],
+        WITH 
+            has_content_type := any(
+                std::array_unpack(headers).0 = 'Content-Type'
+            ),
+            actual_headers := (
+                IF has_content_type
+                THEN headers
+                ELSE headers ++ [
+                    (name := "Content-Type", value := "application/json")
+                ]
+            )
+        select std::net::http::schedule_request(
+            url,
             body := to_bytes(body),
-
-            created_at := std::datetime_of_statement(),
-            updated_at := std::datetime_of_statement(),
-            state := std::net::RequestState.Pending,
-        }
+            headers := actual_headers,
+            method := method,
+        )
     ));
 };
