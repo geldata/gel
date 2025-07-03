@@ -671,12 +671,13 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         )
         self.assertEqual(len(res[0]), 6)
 
+        # there should be no actors in 'Halo 3' book
         res = await self.squery_values(
             '''
             SELECT tableoid, xmin, cmin, xmax, cmax, ctid FROM "Movie.actors"
             '''
         )
-        self.assertEqual(len(res[0]), 6)
+        self.assertEqual(len(res), 0)
 
     async def test_sql_query_34(self):
         # GROUP and ORDER BY aliased column
@@ -1636,7 +1637,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 ["Movie.director", 8192],
                 ["Person", 8192],
                 ["novel", 8192],
-                ["novel.chapters", 0],
+                ["novel.chapters", 8192],
             ],
         )
 
@@ -2499,7 +2500,7 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         # access policies on multi-property tables
 
         res = await self.squery_values('SELECT * FROM "Book.chapters"')
-        self.assertEqual(len(res), 4)
+        self.assertEqual(len(res), 7)
 
         await self.scon.execute('SET LOCAL apply_access_policies_pg TO true')
 
@@ -2508,13 +2509,41 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             SET LOCAL "global default::filter_title" TO 'Chronicles of Narnia'
             """
         )
-        res = await self.squery_values('SELECT * FROM ONLY "Book.chapters"')
+        res = await self.squery_values('SELECT * FROM "Book.chapters"')
         self.assertEqual(len(res), 4)
 
         await self.scon.execute(
             """SET LOCAL "global default::filter_title" TO 'Halo 3'"""
         )
+        res = await self.squery_values('SELECT * FROM "Book.chapters"')
+        self.assertEqual(len(res), 0)
+
+    async def test_sql_query_access_policy_07(self):
+        # access policies on multi-property tables, without inheritance
+
         res = await self.squery_values('SELECT * FROM ONLY "Book.chapters"')
+        self.assertEqual(len(res), 4)  # from Chronicles of Narnia
+
+        await self.scon.execute('SET LOCAL apply_access_policies_pg TO true')
+
+        await self.scon.execute(
+            """
+            SET LOCAL "global default::filter_title" TO 'Hunger Games'
+            """
+        )
+        res = await self.squery_values('SELECT * FROM ONLY "Book.chapters"')
+        self.assertEqual(len(res), 0)  # Hunger Games is a novel, does not count
+        res = await self.squery_values('SELECT * FROM ONLY "novel.chapters"')
+        self.assertEqual(len(res), 3)
+
+        await self.scon.execute(
+            """
+            SET LOCAL "global default::filter_title" TO 'Chronicles of Narnia'
+            """
+        )
+        res = await self.squery_values('SELECT * FROM ONLY "Book.chapters"')
+        self.assertEqual(len(res), 4)
+        res = await self.squery_values('SELECT * FROM ONLY "novel.chapters"')
         self.assertEqual(len(res), 0)
 
     async def test_sql_query_subquery_splat_01(self):

@@ -363,6 +363,7 @@ def resolve_relation(
         if isinstance(obj, s_objtypes.ObjectType):
             rel = _compile_read_of_obj_table(obj, include_inherited, table, ctx)
         else:
+            # TODO: include_inherited for link tables with access policies
             assert isinstance(obj, (s_links.Link | s_pointers.Pointer))
             rel = _compile_read_of_link_table(
                 obj, include_inherited, table, ctx
@@ -644,9 +645,9 @@ def _compile_read_of_link_table(
     table: context.Table,
     ctx: Context,
 ) -> pgast.BaseRelation:
+    # get CTE that will provide source relation, with access policies applied
     source = obj.get_source(ctx.schema)
     assert isinstance(source, (s_objtypes.ObjectType, s_links.Link))
-
     source_table = context.Table(
         schema_id=source.id,
         columns=[
@@ -655,16 +656,23 @@ def _compile_read_of_link_table(
             )
         ],
     )
-    source_rel = _compile_read_of_obj_table(source, True, source_table, ctx)
+    source_rel = _compile_read_of_obj_table(
+        source, include_inherited, source_table, ctx
+    )
     source_table_id = source_table.columns[0].kind
     assert isinstance(source_table_id, context.ColumnByName)
 
-    schemaname, dbname = pgcommon.get_backend_name(
-        ctx.schema, obj, aspect="table", catenate=False
-    )
+    # get name of link table (with inheritance)
+    if obj not in ctx.inheritance_ctes:
+        cte = pgast.CommonTableExpr(
+            name=ctx.alias_generator.get('inh'),
+            query=pginheritance.get_inheritance_view(ctx.schema, obj),
+        )
+        ctx.ctes_buffer.append(cte)
+        ctx.inheritance_ctes[obj] = cte.name
+    link_table_name = ctx.inheritance_ctes[obj]
 
     # inner join source table with the link table
-
     target_list = []
     for c in table.columns:
         if not isinstance(c.kind, context.ColumnByName):
@@ -685,9 +693,7 @@ def _compile_read_of_link_table(
                     pgast.JoinClause(
                         type="INNER",
                         rarg=pgast.RelRangeVar(
-                            relation=pgast.Relation(
-                                name=dbname, schemaname=schemaname
-                            ),
+                            relation=pgast.Relation(name=link_table_name),
                             alias=pgast.Alias(aliasname="l"),
                         ),
                         quals=pgast.Expr(

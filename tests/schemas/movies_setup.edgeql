@@ -46,9 +46,14 @@ insert Movie {
 };
 
 insert novel {
-    title:='Hunger Games',
+    title :='Hunger Games',
     pages := 374,
-    genre:= (select Genre filter .name = 'Fiction' limit 1)
+    genre := (select Genre filter .name = 'Fiction' limit 1),
+    chapters := {
+        'Part 1',
+        'Part 2',
+        'Part 3',
+    },
 };
 
 insert Book {
