@@ -25,6 +25,10 @@ to title case.
   ... set { name := str_trim(str_title(.name)) };
   {default::Hero {id: d476b12e-3e7b-11ec-af13-2717f3dc1d8a}}
 
+.. warning::
+
+  If your queries contains multiple update expressions on the same object, only one of the updates will take effect. If you need to update multiple properties or links on the same object, make sure you aggregate all of the updates into a single update expression. This also holds for when you update sets of objects: if you have multiple update to a set of objects, and certain objects are in both sets, only one update will persist.
+
 Syntax
 ^^^^^^
 
