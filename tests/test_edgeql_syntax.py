@@ -871,9 +871,15 @@ aa';
         SELECT a = b = c;
         """
 
-    def test_edgeql_syntax_toplevel_if(self):
+    def test_edgeql_syntax_toplevel_if_00(self):
         """
         IF true THEN (SELECT Foo) ELSE (INSERT Foo);
+        """
+
+    @unittest.skip('unimplemented')
+    def test_edgeql_syntax_toplevel_if_01(self):
+        """
+        ANALYZE IF true THEN (SELECT Foo) ELSE (INSERT Foo);
         """
 
     def test_edgeql_syntax_required_01(self):
