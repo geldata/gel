@@ -20,6 +20,7 @@
 import edgedb
 
 from edb.testbase import server as tb
+from edb.tools import test
 
 
 class TestIndexes(tb.DDLTestCase):
@@ -430,3 +431,270 @@ class TestIndexes(tb.DDLTestCase):
             };
             """
         )
+
+    async def test_index_12(self):
+        # Index on non-computed link
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Non-computed links are automatically indexed\."
+        ):
+            await self.con.execute("""
+                create type Foo;
+                create type Bar {
+                    create link val -> Foo;
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_13(self):
+        # Index on derived non-computed link
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Non-computed links are automatically indexed\."
+        ):
+            await self.con.execute("""
+                create type Foo;
+                create type Bar {
+                    create link val -> Foo;
+                };
+                create type Baz extending Bar {
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_14(self):
+        # Index on computed link
+        with self.assertNoLogs():
+            await self.con.execute("""
+                create type Foo;
+                create type Bar {
+                    create link _val -> Foo;
+                    create link val := ._val;
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_15(self):
+        # Index on derived computed link
+        with self.assertNoLogs():
+            await self.con.execute("""
+                create type Foo;
+                create type Bar {
+                    create link _val -> Foo;
+                    create link val := ._val;
+                };
+                create type Baz extending Bar {
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_16(self):
+        # Index on non-computed property with property exclusive
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Properties with exclusive constraints are automatically indexed\."
+        ):
+            await self.con.execute("""
+                create type Bar {
+                    create property val -> str {
+                        create constraint exclusive;
+                    };
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_17(self):
+        # Index on derived non-computed property with property exclusive
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Properties with exclusive constraints are automatically indexed\."
+        ):
+            await self.con.execute("""
+                create type Bar {
+                    create property val -> str {
+                        create constraint exclusive;
+                    };
+                };
+                create type Baz extending Bar {
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_18(self):
+        # Index on non-computed property with object exclusive
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Properties with exclusive constraints are automatically indexed\."
+        ):
+            await self.con.execute("""
+                create type Bar {
+                    create property val -> str;
+                    create constraint exclusive on (.val);
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_19(self):
+        # Index on derived non-computed property with object exclusive
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Properties with exclusive constraints are automatically indexed\."
+        ):
+            await self.con.execute("""
+                create type Bar {
+                    create property val -> str;
+                    create constraint exclusive on (.val);
+                };
+                create type Baz extending Bar {
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_20(self):
+        # Index on computed property with property exclusive
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Properties with exclusive constraints are automatically indexed\."
+        ):
+            await self.con.execute("""
+                create type Bar {
+                    create property val {
+                        using ('hello');
+                        create constraint exclusive;
+                    };
+                    create index on (.val);
+                };
+            """)
+
+    @test.skip(
+        "ISE when deriving with type with exclusive constraint "
+        "on computed property. See #8707"
+    )
+    async def test_index_21(self):
+        # Index on derived computed property with property exclusive
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Properties with exclusive constraints are automatically indexed\."
+        ):
+            await self.con.execute("""
+                create type Bar {
+                    create property val {
+                        using ('hello');
+                        create constraint exclusive;
+                    };
+                };
+                create type Baz extending Bar {
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_22(self):
+        # Index on computed property with object exclusive
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Properties with exclusive constraints are automatically indexed\."
+        ):
+            await self.con.execute("""
+                create type Bar {
+                    create property val := 'hello';
+                    create constraint exclusive on (.val);
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_23(self):
+        # Index on derived computed property with object exclusive
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"Redundant index on \(\.val\)\. "
+            r"Properties with exclusive constraints are automatically indexed\."
+        ):
+            await self.con.execute("""
+                create type Bar {
+                    create property val := 'hello';
+                    create constraint exclusive on (.val);
+                };
+                create type Baz extending Bar {
+                    create index on (.val);
+                };
+            """)
+
+    async def test_index_24(self):
+        # Index on non-computed property with delegated property exclusive
+        with self.assertNoLogs():
+            await self.con.execute("""
+                create type Bar {
+                    create property val -> str {
+                        create delegated constraint exclusive;
+                    };
+                    create index on (.val);
+                };
+            """)
+
+        with self.assertNoLogs():
+            await self.con.execute(r"""
+                create type Foo extending Bar;
+            """)
+
+    async def test_index_25(self):
+        # Index on non-computed property with delegated object exclusive
+        with self.assertNoLogs():
+            await self.con.execute("""
+                create type Bar {
+                    create property val -> str;
+                    create delegated constraint exclusive on (.val);
+                    create index on (.val);
+                };
+            """)
+
+        with self.assertNoLogs():
+            await self.con.execute("""
+                create type Foo extending Bar;
+            """)
+
+    @test.skip(
+        "ISE when deriving with type with exclusive constraint "
+        "on computed property. See #8707"
+    )
+    async def test_index_26(self):
+        # Index on computed property with delegated property exclusive
+        with self.assertNoLogs():
+            await self.con.execute("""
+                create type Bar {
+                    create property val {
+                        using ('hello');
+                        create delegated constraint exclusive;
+                    };
+                    create index on (.val);
+                };
+            """)
+
+        with self.assertNoLogs():
+            await self.con.execute("""
+                create type Foo extending Bar;
+            """)
+
+    async def test_index_27(self):
+        # Index on non-computed property with delegated object exclusive
+        with self.assertNoLogs():
+            await self.con.execute("""
+                create type Bar {
+                    create property val := 'hello';
+                    create delegated constraint exclusive on (.val);
+                    create index on (.val);
+                };
+            """)
+
+        with self.assertNoLogs():
+            await self.con.execute("""
+                create type Foo extending Bar;
+            """)
