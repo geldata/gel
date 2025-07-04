@@ -76,10 +76,6 @@ method per view in the scrutinee's class.
 Hopefully Python will add __match__ and we can delete all this code!
 """
 
-from typing import Generic, TypeVar
-
-_T = TypeVar('_T')
-
 
 class NoMatch(Exception):
     pass
@@ -113,7 +109,7 @@ class ViewPatternMeta(type):
         return isinstance(instance, self._targets)
 
 
-class ViewPattern(Generic[_T], metaclass=ViewPatternMeta):
+class ViewPattern[_T](metaclass=ViewPatternMeta):
     __match_args__ = ('result',)
     result: _T
 

@@ -36,7 +36,7 @@ from . import objects as so
 from . import pointers
 from . import referencing
 from . import rewrites as s_rewrites
-from . import sources
+from . import sources as s_sources
 from . import types as s_types
 from . import unknown_pointers
 from . import utils
@@ -105,7 +105,7 @@ def merge_actions(
 
 
 class Link(
-    sources.Source,
+    s_sources.Source,
     pointers.Pointer,
     s_abc.Link,
     qlkind=qltypes.SchemaObjectClass.LINK,
@@ -190,11 +190,15 @@ class Link(
         return sn.QualName('std', 'link')
 
 
-class LinkSourceCommandContext(sources.SourceCommandContext[sources.Source_T]):
+class LinkSourceCommandContext[Source_T: s_sources.Source](
+    s_sources.SourceCommandContext[Source_T]
+):
     pass
 
 
-class LinkSourceCommand(inheriting.InheritingObjectCommand[sources.Source_T]):
+class LinkSourceCommand[Source_T: s_sources.Source](
+    inheriting.InheritingObjectCommand[Source_T]
+):
     pass
 
 
@@ -203,7 +207,7 @@ class LinkCommandContext(
     constraints.ConsistencySubjectCommandContext,
     properties.PropertySourceContext[Link],
     unknown_pointers.UnknownPointerSourceContext[Link],
-    sources.SourceCommandContext[Link],
+    s_sources.SourceCommandContext[Link],
     s_rewrites.RewriteSubjectCommandContext,
 ):
     pass

@@ -21,44 +21,42 @@ from __future__ import annotations
 
 from typing import (
     Any,
-    Generic,
     Optional,
-    TypeVar,
     ContextManager,
+    Self,
 )
 
 import collections
 import re
 
 
-ContextLevel_T = TypeVar('ContextLevel_T', bound='ContextLevel')
-
-
 class ContextLevel:
-    _stack: CompilerContext[ContextLevel]
+    _stack: CompilerContext[Self]
 
-    def __init__(self, prevlevel: Optional[ContextLevel], mode: Any) -> None:
+    def __init__(self, prevlevel: Optional[Self], mode: Any) -> None:
         pass
 
     def on_pop(
-        self: ContextLevel_T,
-        prevlevel: Optional[ContextLevel_T],
+        self: Self,
+        prevlevel: Optional[Self],
     ) -> None:
         pass
 
     def new(
-        self: ContextLevel_T,
+        self: Self,
         mode: Any=None,
-    ) -> CompilerContextManager[ContextLevel_T]:
-        return self._stack.new(mode, self)  # type: ignore
+    ) -> CompilerContextManager[Self]:
+        return self._stack.new(mode, self)
 
     def reenter(
-        self: ContextLevel_T,
-    ) -> CompilerReentryContextManager[ContextLevel_T]:
-        return CompilerReentryContextManager(self._stack, self)  # type: ignore
+        self: Self,
+    ) -> CompilerReentryContextManager[Self]:
+        return CompilerReentryContextManager(self._stack, self)
 
 
-class CompilerContextManager(ContextManager[ContextLevel_T]):
+class CompilerContextManager[ContextLevel_T: ContextLevel](
+    ContextManager[ContextLevel_T]
+):
     def __init__(
         self,
         context: CompilerContext[ContextLevel_T],
@@ -76,7 +74,9 @@ class CompilerContextManager(ContextManager[ContextLevel_T]):
         self.context.pop()
 
 
-class CompilerReentryContextManager(ContextManager[ContextLevel_T]):
+class CompilerReentryContextManager[ContextLevel_T: ContextLevel](
+    ContextManager[ContextLevel_T]
+):
     def __init__(
         self,
         context: CompilerContext[ContextLevel_T],
@@ -92,7 +92,7 @@ class CompilerReentryContextManager(ContextManager[ContextLevel_T]):
         self.context.pop()
 
 
-class CompilerContext(Generic[ContextLevel_T]):
+class CompilerContext[ContextLevel_T: ContextLevel]:
     stack: list[ContextLevel_T]
     ContextLevelClass: type[ContextLevel_T]
     default_mode: Any
@@ -131,7 +131,7 @@ class CompilerContext(Generic[ContextLevel_T]):
                 raise AssertionError(
                     'Calling new() on a context other than the current one')
             level = self.ContextLevelClass(prevlevel, mode)
-        level._stack = self  # type: ignore
+        level._stack = self
         self.stack.append(level)
         return level
 

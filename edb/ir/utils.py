@@ -23,7 +23,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    TypeVar,
     AbstractSet,
     Mapping,
     Sequence,
@@ -532,10 +531,7 @@ def find_set_of_op(
     return next(iter(calls or []), None)
 
 
-ExprT = TypeVar('ExprT', bound=irast.Expr)
-
-
-def is_set_instance(
+def is_set_instance[ExprT: irast.Expr](
     ir: irast.Set,
     typ: type[ExprT],
 ) -> TypeGuard[irast.SetE[ExprT]]:

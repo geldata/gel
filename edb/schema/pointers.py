@@ -19,12 +19,13 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
-    TypeVar,
-    Iterable,
-    Sequence,
     cast,
+    Iterable,
+    Optional,
+    Self,
+    Sequence,
     TYPE_CHECKING,
+    TypeVar,
 )
 
 import collections.abc
@@ -697,14 +698,14 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         return self.set_field_value(schema, 'target', target)
 
     def get_derived(
-        self: Pointer_T,
+        self: Self,
         schema: s_schema.Schema,
         source: s_sources.Source,
         target: s_types.Type,
         *,
         derived_name_base: Optional[sn.Name] = None,
         **kwargs: Any
-    ) -> tuple[s_schema.Schema, Pointer_T]:
+    ) -> tuple[s_schema.Schema, Self]:
         fqname = self.derive_name(
             schema, source, derived_name_base=derived_name_base)
         ptr = schema.get(fqname, default=None)

@@ -323,12 +323,16 @@ class ParametricType:
         )
 
 
-class SingleParametricType(ParametricType, Generic[T]):
+class SingleParametricType(ParametricType, Generic[T]):  # noqa: UP046
+    # We ignore UP046 (Generic[T]) because Python 3.12.2 typing.get_type_hints
+    # has problems with resolving `T` when it is defined using the new syntax.
 
     type: ClassVar[type[T]]  # type: ignore
 
 
-class KeyValueParametricType(ParametricType, Generic[T, V]):
+class KeyValueParametricType(ParametricType, Generic[T, V]):  # noqa: UP046
+    # We ignore UP046 (Generic[T]) because Python 3.12.2 typing.get_type_hints
+    # has problems with resolving `T` when it is defined using the new syntax.
 
     keytype: ClassVar[type[T]]  # type: ignore
     valuetype: ClassVar[type[V]]  # type: ignore

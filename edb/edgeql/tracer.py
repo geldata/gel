@@ -21,7 +21,7 @@ from __future__ import annotations
 
 # Import specific things to avoid name clashes
 from typing import (Generator, Mapping, Optional,
-                    Iterable, Generic, TypeVar, Sequence,
+                    Iterable, TypeVar, Sequence,
                     AbstractSet)
 
 import functools
@@ -124,7 +124,7 @@ TypeLike = Type | s_types.Type
 T = TypeVar('T')
 
 
-class UnqualObjectIndex(Generic[T]):
+class UnqualObjectIndex[T]:
 
     def __init__(self, items: Mapping[sn.UnqualName, T]) -> None:
         self._items = items

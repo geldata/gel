@@ -250,7 +250,7 @@ quote-style = "preserve"
 
 [tool.ruff.lint]
 preview = true
-select = ["E", "F", "W", "B", "UP006", "UP007"]
+select = ["E", "F", "W", "B", "UP006", "UP007" , "UP046", "UP047"]
 ignore = [
     "F541", # f-string without any placeholders
     "B904", # Within an except clause, raise exceptions with raise ... from err

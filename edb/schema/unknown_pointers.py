@@ -39,12 +39,12 @@ from . import delta as sd
 from . import objects as so
 from . import properties as s_props
 from . import pointers
-from . import sources
+from . import sources as s_sources
 from . import schema as s_schema
 
 
-class UnknownPointerSourceContext(
-    sources.SourceCommandContext[sources.Source_T]
+class UnknownPointerSourceContext[Source_T: s_sources.Source](
+    s_sources.SourceCommandContext[Source_T]
 ):
     pass
 

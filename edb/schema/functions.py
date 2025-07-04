@@ -66,8 +66,6 @@ if TYPE_CHECKING:
     from edb.ir import ast as irast
     from . import schema as s_schema
 
-    ParameterLike_T = TypeVar("ParameterLike_T", bound="ParameterLike")
-
 
 FUNC_NAMESPACE = uuidgen.UUID('80cd3b19-bb51-4659-952d-6bb03e3347d7')
 
@@ -105,7 +103,7 @@ def param_as_str(
     return ''.join(ret)
 
 
-def canonical_param_sort(
+def canonical_param_sort[ParameterLike_T: "ParameterLike"](
     schema: s_schema.Schema,
     params: Iterable[ParameterLike_T],
 ) -> tuple[ParameterLike_T, ...]:

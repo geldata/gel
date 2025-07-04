@@ -143,13 +143,13 @@ def ast_objref_to_object_shell(
     )
 
 
-def ast_objref_to_type_shell(
+def ast_objref_to_type_shell[TypeT: s_types.Type](
     ref: qlast.ObjectRef,
     *,
-    metaclass: type[s_types.TypeT],
+    metaclass: type[TypeT],
     modaliases: Mapping[Optional[str], str],
     schema: s_schema.Schema,
-) -> s_types.TypeShell[s_types.TypeT]:
+) -> s_types.TypeShell[TypeT]:
     from . import types as s_types
 
     if metaclass is not s_types.Type:
@@ -397,14 +397,14 @@ def ast_to_type_shell(
     )
 
 
-def type_op_ast_to_type_shell(
+def type_op_ast_to_type_shell[TypeT: s_types.Type](
     node: qlast.TypeOp,
     *,
-    metaclass: type[s_types.TypeT],
+    metaclass: type[TypeT],
     module: Optional[str] = None,
     modaliases: Mapping[Optional[str], str],
     schema: s_schema.Schema,
-) -> s_types.TypeExprShell[s_types.TypeT]:
+) -> s_types.TypeExprShell[TypeT]:
 
     from . import types as s_types
 

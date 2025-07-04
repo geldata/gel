@@ -22,12 +22,10 @@ from typing import (
     Any,
     Callable,
     cast,
-    Generic,
     Hashable,
     Mapping,
     NamedTuple,
     Optional,
-    TypeVar,
     TYPE_CHECKING,
 )
 
@@ -92,14 +90,7 @@ MultiTenantInitArgs = tuple[
     s_refl.SchemaClassLayout,
 ]
 RemoteInitArgsPickle = tuple[bytes, bytes, bytes, bytes]
-InitArgs_T = TypeVar("InitArgs_T")
-InitArgsPickle_T = TypeVar("InitArgsPickle_T")
 PreArgs = tuple[Any, ...]
-BaseWorker_T = TypeVar("BaseWorker_T", bound="BaseWorker")
-Worker_T = TypeVar("Worker_T", bound="Worker")
-AbstractPool_T = TypeVar("AbstractPool_T", bound="AbstractPool")
-BaseLocalPool_T = TypeVar("BaseLocalPool_T", bound="BaseLocalPool")
-TenantStore_T = TypeVar("TenantStore_T")
 
 
 PROCESS_INITIAL_RESPONSE_TIMEOUT: float = 60.0
@@ -334,7 +325,9 @@ class Worker(BaseWorker):
             pass
 
 
-class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
+class AbstractPool[
+    BaseWorker_T: BaseWorker, InitArgs_T, InitArgsPickle_T,
+]:
 
     _loop: asyncio.AbstractEventLoop
     _worker_branch_limit: int
@@ -960,9 +953,8 @@ class AbstractPool(Generic[BaseWorker_T, InitArgs_T, InitArgsPickle_T]):
         return True
 
 
-class BaseLocalPool(
+class BaseLocalPool[Worker_T: Worker, InitArgs_T](
     AbstractPool[Worker_T, InitArgs_T, bytes],
-    Generic[Worker_T, InitArgs_T],
     amsg.ServerProtocol,
     asyncio.SubprocessProtocol,
 ):
@@ -1239,9 +1231,8 @@ class BaseLocalPool(
         return await super().health_check()
 
 
-class FixedPoolImpl(
+class FixedPoolImpl[Worker_T: Worker, InitArgs_T](
     BaseLocalPool[Worker_T, InitArgs_T],
-    Generic[Worker_T, InitArgs_T],
 ):
 
     _template_transport: Optional[asyncio.SubprocessTransport]
@@ -1845,7 +1836,9 @@ class PickledSchema(NamedTuple):
     dropped_dbs: tuple = ()
 
 
-class BaseMultiTenantWorker(Worker, Generic[TenantStore_T, BaseLocalPool_T]):
+class BaseMultiTenantWorker[
+    TenantStore_T, BaseLocalPool_T: BaseLocalPool
+](Worker):
 
     _manager: BaseLocalPool_T
     _cache: collections.OrderedDict[int, TenantStore_T]
@@ -2345,7 +2338,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
             self._release_worker(worker, put_in_front=False)
 
 
-async def create_compiler_pool(
+async def create_compiler_pool[AbstractPool_T: AbstractPool](
     *,
     runstate_dir: str,
     pool_size: int,

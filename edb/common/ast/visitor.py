@@ -20,7 +20,7 @@
 from __future__ import annotations
 
 from typing import (
-    AbstractSet, Any, Callable, Collection, Optional, Iterable, TypeVar
+    AbstractSet, Any, Callable, Collection, Optional, Iterable
 )
 
 from edb.common import typeutils
@@ -32,10 +32,7 @@ class SkipNode(Exception):
     pass
 
 
-_T = TypeVar('_T')
-
-
-def find_children(
+def find_children[_T](
     node: base.AST | Collection[base.AST],
     type: type[_T],
     test_func: Optional[Callable[[_T], bool]] = None,

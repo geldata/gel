@@ -18,22 +18,23 @@
 
 from __future__ import annotations
 from typing import (
+    AbstractSet,
     Any,
     Callable,
+    cast,
     ClassVar,
+    Generator,
     Generic,
-    Optional,
-    TypeVar,
-    AbstractSet,
     Hashable,
     Iterable,
     Iterator,
     Mapping,
-    Sequence,
-    Generator,
-    cast,
     NoReturn,
+    Optional,
     overload,
+    Self,
+    Sequence,
+    TypeVar,
 )
 
 import collections
@@ -367,14 +368,11 @@ def sort_by_cross_refs_key(
     return res
 
 
-def sort_by_cross_refs(
+def sort_by_cross_refs[ObjectT: so.Object](
     schema: s_schema.Schema,
-    objs: Iterable[so.Object_T],
-) -> tuple[so.Object_T, ...]:
+    objs: Iterable[ObjectT],
+) -> tuple[ObjectT, ...]:
     return sort_by_cross_refs_key(schema, objs, key=lambda x: x)
-
-
-CommandMeta_T = TypeVar("CommandMeta_T", bound="CommandMeta")
 
 
 class CommandMeta(
@@ -384,7 +382,7 @@ class CommandMeta(
 
     _astnode_map: dict[type[qlast.DDLOperation], type[Command]] = {}
 
-    def __new__(
+    def __new__[CommandMeta_T: CommandMeta](
         mcls: type[CommandMeta_T],
         name: str,
         bases: tuple[type, ...],
@@ -484,7 +482,7 @@ class Command(
     def dump(self) -> None:
         markup.dump(self)
 
-    def copy(self: Command_T) -> Command_T:
+    def copy(self: Self) -> Self:
         result = super().copy()
         result.before_ops = [op.copy() for op in self.before_ops]
         result.ops = [op.copy() for op in self.ops]
@@ -1212,7 +1210,7 @@ class CommandGroup(Command):
         return schema
 
 
-class CommandContextToken(Generic[Command_T_co]):
+class CommandContextToken(Generic[Command_T_co]):  # noqa: UP046
     original_schema: s_schema.Schema
     op: Command_T_co
     modaliases: Mapping[Optional[str], str]
@@ -1252,7 +1250,7 @@ class CommandContextToken(Generic[Command_T_co]):
         self.slim_links = None
 
 
-class CommandContextWrapper(Generic[Command_T_co]):
+class CommandContextWrapper(Generic[Command_T_co]):  # noqa: UP046
     def __init__(
         self,
         context: CommandContext,
@@ -1702,7 +1700,7 @@ _command_registry: dict[
 ] = {}
 
 
-def get_object_command_class(
+def get_object_command_class[Command_T: Command](
     cmdtype: type[Command_T],
     schema_metaclass: type[so.Object],
 ) -> Optional[type[Command_T]]:
@@ -1712,7 +1710,7 @@ def get_object_command_class(
     )
 
 
-def get_object_command_class_or_die(
+def get_object_command_class_or_die[Command_T: Command](
     cmdtype: type[Command_T],
     schema_metaclass: type[so.Object],
 ) -> type[Command_T]:
@@ -1723,10 +1721,7 @@ def get_object_command_class_or_die(
     return cmdcls
 
 
-ObjectCommand_T = TypeVar("ObjectCommand_T", bound='ObjectCommand[so.Object]')
-
-
-class ObjectCommand(Command, Generic[so.Object_T]):
+class ObjectCommand[Object_T: so.Object](Command):
     """Base class for all Object-related commands."""
 
     #: Full name of the object this command operates on.
@@ -1759,10 +1754,10 @@ class ObjectCommand(Command, Generic[so.Object_T]):
     #: FIXME: Every place this is used is a hack and some are bugs.
     from_expr_propagation = struct.Field(bool, default=False)
 
-    scls: so.Object_T
+    scls: Object_T
     _delta_action: ClassVar[str]
     _schema_metaclass: ClassVar[  # type: ignore
-        Optional[type[so.Object_T]]
+        Optional[type[Object_T]]
     ] = None
     astnode: ClassVar[type[qlast.DDLOperation] | list[type[qlast.DDLOperation]]]
 
@@ -1832,7 +1827,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         schema: s_schema.Schema,
         astnode: qlast.DDLOperation,
         context: CommandContext,
-    ) -> ObjectCommand[so.Object_T]:
+    ) -> ObjectCommand[Object_T]:
         assert isinstance(astnode, qlast.ObjectDDL), 'expected ObjectDDL'
         classname = cls._classname_from_ast(schema, astnode, context)
         return cls(classname=classname)
@@ -2503,17 +2498,17 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         return tuple(f for f in mcls.get_fields().values() if f.ddl_identity)
 
     @classmethod
-    def maybe_get_schema_metaclass(cls) -> Optional[type[so.Object_T]]:
+    def maybe_get_schema_metaclass(cls) -> Optional[type[Object_T]]:
         return cls._schema_metaclass
 
     @classmethod
-    def get_schema_metaclass(cls) -> type[so.Object_T]:
+    def get_schema_metaclass(cls) -> type[Object_T]:
         if cls._schema_metaclass is None:
             raise TypeError(f'schema metaclass not set for {cls}')
         return cls._schema_metaclass
 
     @classmethod
-    def get_other_command_class(
+    def get_other_command_class[ObjectCommand_T: ObjectCommand[so.Object]](
         cls,
         cmdtype: type[ObjectCommand_T],
     ) -> type[ObjectCommand_T]:
@@ -2557,7 +2552,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         *,
         parent_op: Optional[Command] = None,
         schema: Optional[s_schema.Schema] = None,
-        object: Optional[so.Object_T] = None,
+        object: Optional[Object_T] = None,
         object_desc: Optional[str] = None,
     ) -> str:
         if object_desc is not None:
@@ -2565,8 +2560,8 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         else:
             if object is None:
                 object = cast(
-                    so.Object_T,
-                    getattr(self, 'scls', cast(so.Object_T, _dummy_object)),
+                    Object_T,
+                    getattr(self, 'scls', cast(Object_T, _dummy_object)),
                 )
 
             if object is _dummy_object or schema is None:
@@ -2587,9 +2582,9 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         context: CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: so.Object_T | so.NoDefaultT = so.NoDefault,
+        default: Object_T | so.NoDefaultT = so.NoDefault,
         span: Optional[parsing.Span] = None,
-    ) -> so.Object_T:
+    ) -> Object_T:
         ...
 
     @overload
@@ -2601,7 +2596,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         name: Optional[sn.Name] = None,
         default: None = None,
         span: Optional[parsing.Span] = None,
-    ) -> Optional[so.Object_T]:
+    ) -> Optional[Object_T]:
         ...
 
     def get_object(
@@ -2610,9 +2605,9 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         context: CommandContext,
         *,
         name: Optional[sn.Name] = None,
-        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
+        default: Object_T | so.NoDefaultT | None = so.NoDefault,
         span: Optional[parsing.Span] = None,
-    ) -> Optional[so.Object_T]:
+    ) -> Optional[Object_T]:
         metaclass = self.get_schema_metaclass()
         if name is None:
             name = self.classname
@@ -2817,11 +2812,11 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         raise NotImplementedError
 
     def new_context(
-        self: ObjectCommand[so.Object_T],
+        self: ObjectCommand[Object_T],
         schema: s_schema.Schema,
         context: CommandContext,
-        scls: so.Object_T,
-    ) -> CommandContextWrapper[ObjectCommand[so.Object_T]]:
+        scls: Object_T,
+    ) -> CommandContextWrapper[ObjectCommand[Object_T]]:
         ctxcls = type(self).get_context_class()
         assert ctxcls is not None
         return context(
@@ -2835,7 +2830,7 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         *,
         parent_node: Optional[qlast.DDLOperation] = None,
     ) -> Optional[qlast.DDLOperation]:
-        dummy = cast(so.Object_T, _dummy_object)
+        dummy = cast(Object_T, _dummy_object)
 
         context_class = type(self).get_context_class()
         if context_class is not None:
@@ -2915,13 +2910,15 @@ class ObjectCommand(Command, Generic[so.Object_T]):
         return False
 
 
-class ObjectCommandContext(CommandContextToken[ObjectCommand[so.Object_T]]):
+class ObjectCommandContext[Object_T: so.Object](
+    CommandContextToken[ObjectCommand[Object_T]]
+):
 
     def __init__(
         self,
         schema: s_schema.Schema,
-        op: ObjectCommand[so.Object_T],
-        scls: so.Object_T,
+        op: ObjectCommand[Object_T],
+        scls: Object_T,
         *,
         modaliases: Optional[Mapping[Optional[str], str]] = None,
         localnames: AbstractSet[str] = frozenset(),
@@ -3005,7 +3002,7 @@ class ExternalObjectCommand(ObjectCommand[so.ExternalObject_T]):
     pass
 
 
-class CreateObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
+class CreateObject[Object_T: so.Object](ObjectCommand[Object_T]):
     _delta_action = 'create'
 
     # If the command is conditioned with IF NOT EXISTS
@@ -3021,7 +3018,7 @@ class CreateObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
         astnode: qlast.DDLOperation,
         schema: s_schema.Schema,
         context: CommandContext,
-    ) -> type[ObjectCommand[so.Object_T]]:
+    ) -> type[ObjectCommand[Object_T]]:
         assert isinstance(astnode, qlast.CreateObject), "expected CreateObject"
 
         if astnode.sdl_alter_if_exists:
@@ -3029,13 +3026,13 @@ class CreateObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
             dummy_op = cls(
                 classname=sn.QualName('placeholder', 'placeholder'))
             ctxcls = cast(
-                type[ObjectCommandContext[so.Object_T]],
+                type[ObjectCommandContext[Object_T]],
                 cls.get_context_class_or_die(),
             )
             ctx = ctxcls(
                 schema,
                 op=dummy_op,
-                scls=cast(so.Object_T, _dummy_object),
+                scls=cast(Object_T, _dummy_object),
                 modaliases=modaliases,
             )
             with context(ctx):
@@ -3226,7 +3223,7 @@ class CreateObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
 
             schema = self._create_begin(schema, context)
             ctx = context.current()
-            objctx = cast(ObjectCommandContext[so.Object_T], ctx)
+            objctx = cast(ObjectCommandContext[Object_T], ctx)
             objctx.scls = self.scls
             schema = self._create_innards(schema, context)
             schema = self.apply_caused(schema, context)
@@ -3282,7 +3279,7 @@ class CreateExternalObject(
         return schema
 
 
-class AlterObjectOrFragment(ObjectCommand[so.Object_T]):
+class AlterObjectOrFragment[Object_T: so.Object](ObjectCommand[Object_T]):
 
     def canonicalize_attributes(
         self,
@@ -3366,7 +3363,7 @@ class AlterObjectOrFragment(ObjectCommand[so.Object_T]):
                 )
 
 
-class AlterObjectFragment(AlterObjectOrFragment[so.Object_T]):
+class AlterObjectFragment[Object_T: so.Object](AlterObjectOrFragment[Object_T]):
 
     def apply(
         self,
@@ -3376,7 +3373,7 @@ class AlterObjectFragment(AlterObjectOrFragment[so.Object_T]):
         # AlterObjectFragment must be executed in the context
         # of a parent AlterObject command.
         scls = self.get_parent_op(context).scls
-        self.scls = cast(so.Object_T, scls)
+        self.scls = cast(Object_T, scls)
 
         schema = self._alter_begin(schema, context)
         schema = self._alter_innards(schema, context)
@@ -3395,7 +3392,7 @@ class AlterObjectFragment(AlterObjectOrFragment[so.Object_T]):
         return op
 
 
-class RenameObject(AlterObjectFragment[so.Object_T]):
+class RenameObject[Object_T: so.Object](AlterObjectFragment[Object_T]):
     _delta_action = 'rename'
 
     astnode = qlast.Rename
@@ -3490,7 +3487,7 @@ class RenameObject(AlterObjectFragment[so.Object_T]):
         self,
         schema: s_schema.Schema,
         context: CommandContext,
-        scls: so.Object_T,
+        scls: Object_T,
     ) -> None:
         mcls = self.get_schema_metaclass()
 
@@ -3543,7 +3540,7 @@ class RenameObject(AlterObjectFragment[so.Object_T]):
         schema: s_schema.Schema,
         astnode: qlast.DDLOperation,
         context: CommandContext,
-    ) -> RenameObject[so.Object_T]:
+    ) -> RenameObject[Object_T]:
         parent_ctx = context.current()
         parent_op = parent_ctx.op
         assert isinstance(parent_op, ObjectCommand)
@@ -3558,7 +3555,7 @@ class RenameObject(AlterObjectFragment[so.Object_T]):
         schema: s_schema.Schema,
         astnode: qlast.DDLOperation,
         context: CommandContext,
-    ) -> RenameObject[so.Object_T]:
+    ) -> RenameObject[Object_T]:
         assert isinstance(astnode, qlast.Rename)
 
         parent_ctx = context.current()
@@ -3581,7 +3578,7 @@ class RenameObject(AlterObjectFragment[so.Object_T]):
         )
 
 
-class AlterObject(AlterObjectOrFragment[so.Object_T], Generic[so.Object_T]):
+class AlterObject[Object_T: so.Object](AlterObjectOrFragment[Object_T]):
     _delta_action = 'alter'
 
     #: If True, apply the command only if the object exists.
@@ -3658,7 +3655,7 @@ class AlterObject(AlterObjectOrFragment[so.Object_T], Generic[so.Object_T]):
         return schema
 
 
-class DeleteObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
+class DeleteObject[Object_T: so.Object](ObjectCommand[Object_T]):
     _delta_action = 'delete'
 
     #: If True, apply the command only if the object exists.
@@ -3703,7 +3700,7 @@ class DeleteObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
         self,
         schema: s_schema.Schema,
         context: CommandContext,
-        scls: so.Object_T,
+        scls: Object_T,
     ) -> list[Command]:
         mcls = self.get_schema_metaclass()
         commands: list[Command] = []
@@ -3850,9 +3847,9 @@ class DeleteObject(ObjectCommand[so.Object_T], Generic[so.Object_T]):
         return schema
 
 
-class AlterExternalObject(
-    AlterObject[so.ExternalObject_T],
-    ExternalObjectCommand[so.ExternalObject_T],
+class AlterExternalObject[ExternalObject_T: so.ExternalObject](
+    AlterObject[ExternalObject_T],
+    ExternalObjectCommand[ExternalObject_T],
 ):
     def _alter_begin(
         self,
@@ -3885,9 +3882,9 @@ class AlterExternalObject(
         return schema
 
 
-class DeleteExternalObject(
-    DeleteObject[so.ExternalObject_T],
-    ExternalObjectCommand[so.ExternalObject_T],
+class DeleteExternalObject[ExternalObject_T: so.ExternalObject](
+    DeleteObject[ExternalObject_T],
+    ExternalObjectCommand[ExternalObject_T],
 ):
     def _delete_begin(
         self,
@@ -3936,7 +3933,9 @@ special_field_alter_handlers: dict[
 ] = {}
 
 
-class AlterSpecialObjectField(AlterObjectFragment[so.Object_T]):
+class AlterSpecialObjectField[Object_T: so.Object](
+    AlterObjectFragment[Object_T]
+):
     """Base class for AlterObjectFragment implementations for special fields.
 
     When the generic `AlterObjectProperty` handling of field value transitions
@@ -3973,7 +3972,7 @@ class AlterSpecialObjectField(AlterObjectFragment[so.Object_T]):
         handlers[schema_metaclass] = cls  # type: ignore
         cls._field = field
 
-    def clone(self, name: sn.Name) -> AlterSpecialObjectField[so.Object_T]:
+    def clone(self, name: sn.Name) -> AlterSpecialObjectField[Object_T]:
         return struct.Struct.replace(self, classname=name)
 
     @classmethod
@@ -3982,7 +3981,7 @@ class AlterSpecialObjectField(AlterObjectFragment[so.Object_T]):
         schema: s_schema.Schema,
         astnode: qlast.DDLOperation,
         context: CommandContext,
-    ) -> ObjectCommand[so.Object_T]:
+    ) -> ObjectCommand[Object_T]:
         this_op = context.current().op
         assert isinstance(this_op, ObjectCommand)
         return cls(classname=this_op.classname)
@@ -4602,9 +4601,11 @@ def compile_ddl(
     return cmd
 
 
-def get_object_delta_command(
+def get_object_delta_command[
+    Object_T: so.Object, ObjectCommand_T: ObjectCommand[so.Object]
+](
     *,
-    objtype: type[so.Object_T],
+    objtype: type[Object_T],
     cmdtype: type[ObjectCommand_T],
     schema: s_schema.Schema,
     name: sn.Name,

@@ -444,15 +444,15 @@ class AlterAlias(
     astnode = qlast.AlterAlias
 
 
-class DeleteAliasLike(
-    AliasLikeCommand[so.QualifiedObject_T],
-    sd.DeleteObject[so.QualifiedObject_T],
+class DeleteAliasLike[QualifiedObject_T: so.QualifiedObject](
+    AliasLikeCommand[QualifiedObject_T],
+    sd.DeleteObject[QualifiedObject_T],
 ):
     def _canonicalize(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        scls: so.QualifiedObject_T,
+        scls: QualifiedObject_T,
     ) -> list[sd.Command]:
         ops = super()._canonicalize(schema, context, scls)
         if self._is_computable(scls, schema):

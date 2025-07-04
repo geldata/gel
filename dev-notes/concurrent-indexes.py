@@ -2,6 +2,7 @@
 
 import gel
 
+
 def create_concurrent_indexes(db, msg_callback=print):
     '''Actually create all "create concurrently" indexes
 
