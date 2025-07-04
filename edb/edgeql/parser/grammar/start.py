@@ -68,22 +68,22 @@ class EdgeQLGrammar(Nonterm):
 class EdgeQLBlock(Nonterm):
     val: qlast.Commands
 
-    def reduce_StatementBlock_OptSemicolons(self, s, _semicolon):
+    def reduce_StmtList_OptSemicolons(self, s, _semicolon):
         self.val = qlast.Commands(commands=s.val)
 
     def reduce_OptSemicolons(self, _semicolon):
         self.val = qlast.Commands(commands=[])
 
 
-class SingleStatement(Nonterm):
+class SingleStmt(Nonterm):
     val: qlast.Command
 
     @parsing.inline(0)
-    def reduce_Stmt(self, _):
-        # Expressions
+    def reduce_Stmt(self, stmt):
         pass
 
     def reduce_IfThenElseExpr(self, *kids):
+        # TODO: this should not be here, but in ExprStmtSimpleCore instead
         self.val = qlast.SelectQuery(result=kids[0].val, implicit=True)
 
     @parsing.inline(0)
@@ -92,8 +92,11 @@ class SingleStatement(Nonterm):
         pass
 
     @parsing.inline(0)
-    def reduce_SessionStmt(self, _):
-        # Session-local utility commands
+    def reduce_SetStmt(self, *kids):
+        pass
+
+    @parsing.inline(0)
+    def reduce_ResetStmt(self, *kids):
         pass
 
     @parsing.inline(0)
@@ -102,8 +105,8 @@ class SingleStatement(Nonterm):
         pass
 
 
-class StatementBlock(
-    parsing.ListNonterm, element=SingleStatement, separator=commondl.Semicolons
+class StmtList(
+    parsing.ListNonterm, element=SingleStmt, separator=commondl.Semicolons
 ):
     val: list[qlast.Command]
 
