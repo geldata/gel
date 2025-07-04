@@ -39,7 +39,6 @@ from . import annos as s_anno
 from . import casts as s_casts
 from . import delta as sd
 from . import indexes as s_indexes
-from . import modules as s_mod
 from . import name as sn
 from . import objects as so
 from . import schema as s_schema
@@ -872,11 +871,11 @@ class DeleteExtension(
             return (
                 (
                     isinstance(name, sn.QualName)
-                    and name.module.startswith(module_name)
+                    and name.module.startswith(module_name.name)
                 )
                 or (
                     isinstance(name, sn.UnqualName)
-                    and name.name.startswith(module_name)
+                    and name.name.startswith(module_name.name)
                 )
             )
 
