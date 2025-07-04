@@ -34,6 +34,32 @@ from .expressions import *  # NOQA
 from . import tokens
 
 
+class Stmt(Nonterm):
+    val: qlast.Command
+
+    @parsing.inline(0)
+    def reduce_TransactionStmt(self, stmt):
+        pass
+
+    @parsing.inline(0)
+    def reduce_DescribeStmt(self, stmt):
+        # DESCRIBE
+        pass
+
+    @parsing.inline(0)
+    def reduce_AnalyzeStmt(self, stmt):
+        # ANALYZE
+        pass
+
+    @parsing.inline(0)
+    def reduce_AdministerStmt(self, stmt):
+        pass
+
+    @parsing.inline(0)
+    def reduce_ExprStmt(self, stmt):
+        pass
+
+
 class TransactionMode(Nonterm):
 
     def reduce_ISOLATION_SERIALIZABLE(self, *kids):

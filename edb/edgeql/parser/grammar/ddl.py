@@ -68,27 +68,35 @@ class DDLStmt(Nonterm):
         pass
 
     @parsing.inline(0)
-    def reduce_AlterRoleExtending(self, *_):
-        pass
-
-    @parsing.inline(0)
     def reduce_ExtensionPackageStmt(self, *_):
-        pass
-
-    @parsing.inline(0)
-    def reduce_MigrationStmt(self, *_):
         pass
 
     @parsing.inline(0)
     def reduce_OptWithDDLStmt(self, *_):
         pass
 
+    @parsing.inline(0)
+    def reduce_MigrationStmt(self, *_):
+        pass
+
+
+class DDLWithBlock(Nonterm):
+    @parsing.inline(0)
+    def reduce_WithBlock(self, *_):
+        pass
+
 
 class OptWithDDLStmt(Nonterm):
-    def reduce_WithBlock_InnerDDLStmt(self, *kids):
+    def reduce_DDLWithBlock_WithDDLStmt(self, *kids):
         self.val = kids[1].val
         self.val.aliases = kids[0].val.aliases
 
+    @parsing.inline(0)
+    def reduce_WithDDLStmt(self, *_):
+        pass
+
+
+class WithDDLStmt(Nonterm):
     @parsing.inline(0)
     def reduce_InnerDDLStmt(self, *_):
         pass
@@ -383,41 +391,22 @@ def commands_block(parent, *commands, opt=True, production_tpl=ProductionTpl):
         )
 
 
-class GenericCommandsBlock(Nonterm):
-
-    def reduce_Stmt(self, cmd):
-        self.val = [cmd.val]
-
-    @parsing.inline(1)
-    def reduce_LBRACE_StmtList_OptSemicolons_RBRACE(
-        self, lbrace, stmt_list, sc2, rbrace
-    ):
-        self.val = stmt_list.val
-
-    @parsing.inline(2)
-    def reduce_LBRACE_Semicolons_StmtList_OptSemicolons_RBRACE(
-        self, lbrace, sc, stmt_list, sc2, rbrace
-    ):
-        self.val = stmt_list.val
-
-    def reduce_LBRACE_OptSemicolons_RBRACE(self, *_):
-        self.val = []
-
-    def reduce_empty(self, *_):
-        self.val = []
-
-    # def reduce_StmtList_OptSemicolons(self, s, _semicolon):
-    #     self.val = qlast.Commands(commands=s.val)
-    # def reduce_OptSemicolons(self, _semicolon):
-    #     self.val = qlast.Commands(commands=[])
-
-
 class NestedQLBlockStmt(Nonterm):
+    val: qlast.DDLOperation
+
     def reduce_Stmt(self, stmt):
         if isinstance(stmt.val, qlast.Query):
             self.val = qlast.DDLQuery(query=stmt.val)
         else:
             self.val = stmt.val
+
+    @parsing.inline(0)
+    def reduce_OptWithDDLStmt(self, *_):
+        pass
+
+    @parsing.inline(0)
+    def reduce_SetFieldStmt(self, *kids):
+        pass
 
 
 class NestedQLBlock(ProductionTpl):
@@ -747,9 +736,15 @@ class DatabaseStmt(Nonterm):
 #
 
 
+commands_block(
+    'CreateDatabase',
+    SetFieldStmt,
+)
+
+
 class CreateDatabaseStmt(Nonterm):
     def reduce_CREATE_DATABASE_regular(self, *kids):
-        """%reduce CREATE DATABASE DatabaseName GenericCommandsBlock
+        """%reduce CREATE DATABASE DatabaseName OptCreateDatabaseCommandsBlock
         """
         self.val = qlast.CreateDatabase(
             name=kids[2].val,
@@ -762,7 +757,8 @@ class CreateDatabaseStmt(Nonterm):
     # it once we merge Victor's new testing.
     def reduce_CREATE_DATABASE_from_template(self, *kids):
         """%reduce
-            CREATE DATABASE DatabaseName FROM AnyNodeName GenericCommandsBlock
+            CREATE DATABASE DatabaseName FROM AnyNodeName
+            OptCreateDatabaseCommandsBlock
         """
         _, _, _name, _, _template, _commands = kids
         self.val = qlast.CreateDatabase(
@@ -789,8 +785,16 @@ class DropDatabaseStmt(Nonterm):
 # ALTER DATABASE
 #
 
+
+commands_block(
+    'AlterDatabase',
+    RenameStmt,
+    opt=False
+)
+
+
 class AlterDatabaseStmt(Nonterm):
-    def reduce_ALTER_DATABASE_DatabaseName_GenericCommandsBlock(
+    def reduce_ALTER_DATABASE_DatabaseName_AlterDatabaseCommandsBlock(
         self, *kids
     ):
         _, _, name, commands = kids
@@ -803,6 +807,7 @@ class AlterDatabaseStmt(Nonterm):
 #
 # BRANCH
 #
+
 
 class BranchStmt(Nonterm):
 
@@ -892,10 +897,17 @@ class DropBranchStmt(Nonterm):
 #
 
 
+commands_block(
+    'AlterBranch',
+    RenameStmt,
+    opt=False
+)
+
+
 class AlterBranchStmt(Nonterm):
     def reduce_alter_branch(self, *kids):
         """%reduce
-            ALTER BRANCH DatabaseName BranchOptions GenericCommandsBlock
+            ALTER BRANCH DatabaseName BranchOptions AlterBranchCommandsBlock
         """
         _, _, name, options, commands = kids
         self.val = qlast.AlterDatabase(
@@ -951,11 +963,20 @@ class CreateExtensionPackageBodyBlock(NestedQLBlock):
         return ExtensionPackageBody
 
 
+commands_block(
+    'CreateExtensionPackage',
+    NestedQLBlockStmt,
+    opt=True,
+    production_tpl=CreateExtensionPackageBodyBlock,
+)
+
+
 class CreateExtensionPackageStmt(Nonterm):
 
     def reduce_CreateExtensionPackageStmt(self, *kids):
         r"""%reduce CREATE EXTENSIONPACKAGE ShortNodeName
-                    ExtensionVersion GenericCommandsBlock
+                    ExtensionVersion
+                    OptCreateExtensionPackageCommandsBlock
         """
         self.val = qlast.CreateExtensionPackage(
             name=kids[2].val,
@@ -995,6 +1016,14 @@ class CreateExtensionPackageMigrationBodyBlock(NestedQLBlock):
         return ExtensionPackageBody
 
 
+commands_block(
+    'CreateExtensionPackage',
+    NestedQLBlockStmt,
+    opt=True,
+    production_tpl=CreateExtensionPackageBodyBlock,
+)
+
+
 class CreateExtensionPackageMigrationStmt(Nonterm):
 
     def reduce_CreateExtensionPackageMigrationStmt(self, *kids):
@@ -1002,7 +1031,7 @@ class CreateExtensionPackageMigrationStmt(Nonterm):
                     MIGRATION FROM
                     ExtensionVersion TO
                     ExtensionVersion
-                    GenericCommandsBlock
+                    OptCreateExtensionPackageCommandsBlock
         """
         _, _, name, _, _, from_version, _, to_version, block = kids
         self.val = qlast.CreateExtensionPackageMigration(
@@ -1059,11 +1088,17 @@ class ExtensionStmt(Nonterm):
 #
 
 
+commands_block(
+    'CreateExtension',
+    SetFieldStmt,
+)
+
+
 class CreateExtensionStmt(Nonterm):
 
     def reduce_CreateExtensionStmt(self, *kids):
         r"""%reduce CREATE EXTENSION ShortNodeName OptExtensionVersion
-                    GenericCommandsBlock
+                    OptCreateExtensionCommandsBlock
         """
         self.val = qlast.CreateExtension(
             name=kids[2].val,
@@ -1192,6 +1227,12 @@ class OptShortExtending(Nonterm):
         self.val = []
 
 
+commands_block(
+    'CreateRole',
+    SetFieldStmt,
+)
+
+
 class OptSuperuser(Nonterm):
 
     def reduce_SUPERUSER(self, *kids):
@@ -1204,7 +1245,7 @@ class OptSuperuser(Nonterm):
 class CreateRoleStmt(Nonterm):
     def reduce_CreateRoleStmt(self, *kids):
         r"""%reduce CREATE OptSuperuser ROLE ShortNodeName
-                    OptShortExtending OptIfNotExists GenericCommandsBlock
+                    OptShortExtending OptIfNotExists OptCreateRoleCommandsBlock
         """
         self.val = qlast.CreateRole(
             name=kids[3].val,
@@ -1231,8 +1272,18 @@ class AlterRoleExtending(Nonterm):
         )
 
 
+commands_block(
+    'AlterRole',
+    RenameStmt,
+    SetFieldStmt,
+    ResetFieldStmt,
+    AlterRoleExtending,
+    opt=False
+)
+
+
 class AlterRoleStmt(Nonterm):
-    def reduce_ALTER_ROLE_ShortNodeName_GenericCommandsBlock(self, *kids):
+    def reduce_ALTER_ROLE_ShortNodeName_AlterRoleCommandsBlock(self, *kids):
         self.val = qlast.AlterRole(
             name=kids[2].val,
             commands=kids[3].val,
@@ -1728,6 +1779,7 @@ class AlterConcreteIndexStmt(Nonterm, commondl.ProcessIndexMixin):
 commands_block(
     'DropConcreteIndex',
     SetFieldStmt,
+    opt=True,
 )
 
 
@@ -3680,6 +3732,7 @@ class CreateMigrationBodyBlock(NestedQLBlock):
 commands_block(
     'CreateMigration',
     NestedQLBlockStmt,
+    opt=True,
     production_tpl=CreateMigrationBodyBlock,
 )
 
