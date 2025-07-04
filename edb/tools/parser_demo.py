@@ -107,6 +107,13 @@ QUERIES = [
     }
     ''',
     '''
-    IF true THEN (SELECT Foo) ELSE (INSERT Foo);
+    CREATE MIGRATION
+    {
+        set global foo := "test";
+        alter type Foo {
+            create required property name -> str {
+            set default := (global foo);
+        }
+    }; }
     '''
 ]

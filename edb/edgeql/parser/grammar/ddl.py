@@ -392,11 +392,21 @@ def commands_block(parent, *commands, opt=True, production_tpl=ProductionTpl):
 
 
 class NestedQLBlockStmt(Nonterm):
+    val: qlast.DDLOperation
+
     def reduce_Stmt(self, stmt):
         if isinstance(stmt.val, qlast.Query):
             self.val = qlast.DDLQuery(query=stmt.val)
         else:
             self.val = stmt.val
+
+    @parsing.inline(0)
+    def reduce_OptWithDDLStmt(self, *_):
+        pass
+
+    @parsing.inline(0)
+    def reduce_SetFieldStmt(self, *kids):
+        pass
 
 
 class NestedQLBlock(ProductionTpl):
@@ -479,13 +489,6 @@ class NestedQLBlock(ProductionTpl):
         )
         body.text = self._get_text(body)
         self.val = self.result(body=body, fields=[])
-
-
-def nested_ql_block(parent, *commands, opt=True, production_tpl):
-    if not commands:
-        commands = (NestedQLBlockStmt,)
-
-    commands_block(parent, *commands, opt=opt, production_tpl=production_tpl)
 
 
 class UsingStmt(Nonterm):
@@ -960,8 +963,10 @@ class CreateExtensionPackageBodyBlock(NestedQLBlock):
         return ExtensionPackageBody
 
 
-nested_ql_block(
+commands_block(
     'CreateExtensionPackage',
+    NestedQLBlockStmt,
+    opt=True,
     production_tpl=CreateExtensionPackageBodyBlock,
 )
 
@@ -1011,8 +1016,10 @@ class CreateExtensionPackageMigrationBodyBlock(NestedQLBlock):
         return ExtensionPackageBody
 
 
-nested_ql_block(
+commands_block(
     'CreateExtensionPackage',
+    NestedQLBlockStmt,
+    opt=True,
     production_tpl=CreateExtensionPackageBodyBlock,
 )
 
@@ -3722,8 +3729,10 @@ class CreateMigrationBodyBlock(NestedQLBlock):
         return MigrationBody
 
 
-nested_ql_block(
+commands_block(
     'CreateMigration',
+    NestedQLBlockStmt,
+    opt=True,
     production_tpl=CreateMigrationBodyBlock,
 )
 

@@ -75,29 +75,11 @@ class EdgeQLBlock(Nonterm):
         self.val = qlast.Commands(commands=[])
 
 
-class Stmt(Nonterm):
+class SingleStmt(Nonterm):
     val: qlast.Command
 
     @parsing.inline(0)
-    def reduce_TransactionStmt(self, stmt):
-        pass
-
-    @parsing.inline(0)
-    def reduce_DescribeStmt(self, stmt):
-        # DESCRIBE
-        pass
-
-    @parsing.inline(0)
-    def reduce_AnalyzeStmt(self, stmt):
-        # ANALYZE
-        pass
-
-    @parsing.inline(0)
-    def reduce_AdministerStmt(self, stmt):
-        pass
-
-    @parsing.inline(0)
-    def reduce_ExprStmt(self, stmt):
+    def reduce_Stmt(self, stmt):
         pass
 
     def reduce_IfThenElseExpr(self, *kids):
@@ -122,13 +104,9 @@ class Stmt(Nonterm):
         # Configuration commands
         pass
 
-    @parsing.inline(0)
-    def reduce_SetFieldStmt(self, *kids):
-        pass
-
 
 class StmtList(
-    parsing.ListNonterm, element=Stmt, separator=commondl.Semicolons
+    parsing.ListNonterm, element=SingleStmt, separator=commondl.Semicolons
 ):
     val: list[qlast.Command]
 
