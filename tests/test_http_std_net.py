@@ -224,6 +224,82 @@ class StdNetTestCase(tb.BaseHttpTest):
             ("content-type", "application/json"), table_result.response.headers
         )
 
+    async def test_http_std_net_con_schedule_request_post_02(self):
+        # Using json body
+        assert self.mock_server is not None
+
+        example_request = (
+            'POST',
+            self.base_url,
+            '/test-post-02',
+        )
+        url = f"{example_request[1]}{example_request[2]}"
+        self.mock_server.register_route_handler(*example_request)(
+            (
+                json.dumps(
+                    {
+                        "message": "Hello, world!",
+                    }
+                ),
+                200,
+                {"Content-Type": "application/json"},
+            )
+        )
+
+        result = await self.con.query_single(
+            """
+            with
+                nh as module std::net::http,
+                net as module std::net,
+                url := <str>$url,
+                body := to_json(<str>$body),
+                request := (
+                    nh::schedule_request(
+                        url,
+                        method := nh::Method.POST,
+                        headers := [
+                            ("x-test-header", "test-value"),
+                        ],
+                        body := body,
+                    )
+                )
+            select request {*};
+            """,
+            url=url,
+            body='{"data": "Hello, world!"}',
+        )
+
+        requests_for_example = None
+        async for tr in self.try_until_succeeds(
+            delay=2, timeout=120, ignore=(KeyError,)
+        ):
+            async with tr:
+                requests_for_example = self.mock_server.requests[
+                    example_request
+                ]
+
+        assert requests_for_example is not None
+        self.assertEqual(len(requests_for_example), 1)
+        headers = list(requests_for_example[0].headers.items())
+        self.assertIn(("content-type", "application/json"), headers)
+        self.assertIn(("x-test-header", "test-value"), headers)
+        self.assertEqual(
+            requests_for_example[0].body,
+            '{"data": "Hello, world!"}',
+        )
+
+        # Wait for the request to complete
+        table_result = await self._wait_for_request_completion(result.id)
+        self.assertEqual(str(table_result.state), 'Completed')
+        self.assertIsNone(table_result.failure)
+        self.assertEqual(table_result.response.status, 200)
+        self.assertEqual(
+            json.loads(table_result.response.body), {"message": "Hello, world!"}
+        )
+        self.assertIn(
+            ("content-type", "application/json"), table_result.response.headers
+        )
+
     async def test_http_std_net_con_schedule_request_bad_address(self):
         # Test a request to a known-bad address
         bad_url = "http://256.256.256.256"
