@@ -227,6 +227,7 @@ def delta_schemas(
     # TODO: Fix this.
     if not include_derived_types:
         excluded_modules.add(sn.UnqualName('__derived__'))
+        excluded_modules.add(sn.UnqualName('__ext_generated_types__'))
 
     excluded_modules.add(sn.UnqualName('__ext_casts__'))
     excluded_modules.add(sn.UnqualName('__ext_index_matches__'))
