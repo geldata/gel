@@ -362,7 +362,7 @@ class Index(
     )
 
     # If this is a generated AI index, track the created type
-    generated_ai_index_type = so.SchemaField(
+    generated_ai_model_type = so.SchemaField(
         s_types.Type,
         default=None,
     )
@@ -981,6 +981,8 @@ class IndexCommand(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
+        *,
+        is_alter: bool = False,
     ) -> None:
         if context.canonical:
             return
@@ -1005,14 +1007,62 @@ class IndexCommand(
         )
         model_name = embedding_model_expr.as_python_value()
         if ':' in model_name:
-            model_command, model_typeshell = _create_ai_model_type(
-                model_name, schema, context, span=self.span,
+            pschema = schema
+
+            drop_old_model_cmd: Optional[sd.Command] = None
+            if is_alter:
+                drop_old_model_cmd = self._delete_ai_model_type(
+                    self.scls, schema, context)
+                with context.suspend_dep_verification():
+                    pschema = drop_old_model_cmd.apply(pschema, context)
+
+            model_cmd, model_typeshell = _create_ai_model_type(
+                model_name, pschema, context, span=self.span,
             )
-            self.add_prerequisite(model_command)
+            if drop_old_model_cmd:
+                model_cmd.prepend(drop_old_model_cmd)
+
+            self.add_prerequisite(model_cmd)
             self.set_attribute_value(
-                'generated_ai_index_type',
+                'generated_ai_model_type',
                 model_typeshell,
             )
+
+    def _delete_ai_model_type(
+        self,
+        scls: Index,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+    ) -> sd.CommandGroup:
+
+        model_type: Optional[s_types.Type] = (
+            scls.get_generated_ai_model_type(schema)
+        )
+        if not model_type:
+            return sd.DeltaRoot()
+
+        delta = sd.DeltaRoot()
+
+        alter_index = scls.init_delta_command(schema, sd.AlterObject)
+        alter_index.canonical = True
+
+        # Unset generated_ai_model_type, so the types can be dropped
+        alter_index.add(
+            sd.AlterObjectProperty(
+                property='generated_ai_model_type', new_value=None
+            )
+        )
+        delta.add(alter_index)
+
+        drop_model_type = model_type.init_delta_command(
+            schema, sd.DeleteObject, if_exists=True, if_unused=True
+        )
+        subcmds = drop_model_type._canonicalize(schema, context, model_type)
+        drop_model_type.update(subcmds)
+
+        delta.add(drop_model_type)
+
+        return delta
 
     def ast_ignore_field_ownership(self, field: str) -> bool:
         """Whether to force generating an AST even though field isn't owned"""
@@ -1118,7 +1168,7 @@ def _create_ai_model_type(
     *,
     span: Optional[parsing.Span],
 ) -> tuple[
-    Optional[sd.Command],
+    sd.Command,
     so.ObjectShell[s_types.Type],
 ]:
     model_name_parts = model_name.split(':')
@@ -1156,7 +1206,7 @@ def _create_ai_model_type(
             name=model_typename,
             schemaclass=type(model_type),
         )
-        return None, model_typeshell
+        return sd.DeltaRoot(), model_typeshell
 
     else:
         # If the model type does not exist, create it and also add a link
@@ -1641,7 +1691,7 @@ class CreateIndex(
         schema: s_schema.Schema,
         context: sd.CommandContext,
     ) -> s_schema.Schema:
-        self._handle_ai_index_op(schema, context)
+        self._handle_ai_index_op(schema, context, is_alter=False)
 
         schema = super()._create_begin(schema, context)
         referrer_ctx = self.get_referrer_context(context)
@@ -1925,6 +1975,8 @@ class AlterIndexOwned(
         schema: s_schema.Schema,
         context: sd.CommandContext,
     ) -> s_schema.Schema:
+        self._handle_ai_index_op(schema, context, is_alter=True)
+
         schema = super()._alter_begin(schema, context)
         referrer_ctx = self.get_referrer_context(context)
         if (
@@ -2036,6 +2088,13 @@ class DeleteIndex(
         if not context.canonical:
             for param in self.scls.get_params(schema).objects(schema):
                 self.add(param.init_delta_command(schema, sd.DeleteObject))
+        if (
+            not context.canonical
+            and self.scls.get_generated_ai_model_type(schema)
+        ):
+            self.add_caused(
+                self._delete_ai_model_type(self.scls, schema, context)
+            )
         return schema
 
     @classmethod
