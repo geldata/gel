@@ -262,7 +262,9 @@ def _build_select_stmt(n: Node, c: Context) -> pgast.SelectStmt:
         if op == "NONE":
             op = None
     return pgast.SelectStmt(
-        distinct_clause=_maybe(n, c, "distinctClause", _build_distinct),
+        distinct_clause=(
+            _maybe(n, c, "distinctClause", _build_distinct)  # type: ignore
+        ),
         target_list=_maybe_list(n, c, "targetList", _build_res_target) or [],
         from_clause=_maybe_list(n, c, "fromClause", _build_base_range_var)
         or [],
@@ -609,7 +611,7 @@ def _build_base_expr(node: Node, c: Context) -> pgast.BaseExpr:
 
 def _build_distinct(
     nodes: list[Node], c: Context
-) -> list[pgast.BaseExpr]:
+) -> list[pgast.Base]:
     # For some reason, plain DISTINCT is parsed as [{}]
     # In our AST this is represented by [pgast.Star()]
     if len(nodes) == 1 and len(nodes[0]) == 0:
