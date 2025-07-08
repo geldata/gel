@@ -117,7 +117,7 @@ std::net::http::schedule_request(
     USING ((
         WITH 
             has_content_type := any(
-                std::array_unpack(headers).0 = 'Content-Type'
+                std::str_lower(std::array_unpack(headers).0) = 'content-type'
             ),
             actual_headers := (
                 IF has_content_type
