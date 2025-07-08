@@ -1023,10 +1023,11 @@ class IndexCommand(
                 model_cmd.prepend(drop_old_model_cmd)
 
             self.add_prerequisite(model_cmd)
-            self.set_attribute_value(
-                'generated_ai_model_type',
-                model_typeshell,
-            )
+            if model_typeshell:
+                self.set_attribute_value(
+                    'generated_ai_model_type',
+                    model_typeshell,
+                )
 
     def _delete_ai_model_type(
         self,
@@ -1100,16 +1101,17 @@ class EmbeddingModelDesc:
     supports_shortening: bool
 
 
-def _try_load_reference_descs() -> Optional[
-    tuple[
-        Mapping[str, ProviderDesc],
-        Mapping[str, EmbeddingModelDesc],
-    ]
+def _try_load_reference_descs(
+    *,
+    context: sd.CommandContext,
+) -> tuple[
+    dict[str, ProviderDesc],
+    dict[str, EmbeddingModelDesc],
 ]:
-    try:
-        provider_descs: dict[str, ProviderDesc] = {}
-        embedding_model_descs: dict[str, EmbeddingModelDesc] = {}
+    provider_descs: dict[str, ProviderDesc] = {}
+    embedding_model_descs: dict[str, EmbeddingModelDesc] = {}
 
+    try:
         local_reference_path = os.path.join(
             pathlib.Path(__file__).parent.parent,
             'server',
@@ -1133,32 +1135,12 @@ def _try_load_reference_descs() -> Optional[
                         max_output_dimensions=ref["max_output_dimensions"],
                         supports_shortening=ref["supports_shortening"],
                     )
-        return (provider_descs, embedding_model_descs)
 
     except Exception:
         # Ignore failures
-        return None
+        pass
 
-
-def _lookup_embedding_model_description(
-    provider_name: str,
-    model_name: str,
-) -> Optional[tuple[ProviderDesc, EmbeddingModelDesc]]:
-    reference_descs = _try_load_reference_descs()
-
-    if reference_descs is None:
-        return None
-
-    provider_descs, embedding_model_descs = reference_descs
-
-    provider_desc = provider_descs.get(provider_name)
-    model_desc = embedding_model_descs.get(model_name)
-    if provider_desc is None or model_desc is None:
-        return None
-    if provider_name != model_desc.model_provider:
-        return None
-
-    return (provider_desc, model_desc)
+    return (provider_descs, embedding_model_descs)
 
 
 def _create_ai_model_type(
@@ -1169,7 +1151,7 @@ def _create_ai_model_type(
     span: Optional[parsing.Span],
 ) -> tuple[
     sd.Command,
-    so.ObjectShell[s_types.Type],
+    Optional[so.ObjectShell[s_types.Type]],
 ]:
     model_name_parts = model_name.split(':')
     if len(model_name_parts) > 2:
@@ -1178,26 +1160,69 @@ def _create_ai_model_type(
             span=span
         )
 
-    provider_name = model_name_parts[0]
-    model_name = model_name_parts[1]
+    uri_provider_name = model_name_parts[0]
+    uri_model_name = model_name_parts[1]
 
     # Lookup the ai model description
-    provider_model_desc = _lookup_embedding_model_description(
-        provider_name, model_name
+    provider_descs, model_descs = _try_load_reference_descs(
+        context=context
     )
-    if not provider_model_desc:
-        raise errors.SchemaDefinitionError(
-            f"Invalid model uri, unknown provider and model: {model_name}",
-            span=span
-        )
 
-    provider_desc, model_desc = provider_model_desc
+    if uri_model_name not in model_descs:
+        # No match in reference
+        return sd.DeltaRoot(), None
+
+    model_desc = model_descs[uri_model_name]
+
+    resolved_provider_name = (
+        provider_descs[uri_provider_name].name
+        if uri_provider_name in provider_descs else
+        uri_provider_name
+    )
+
+    # First check if a model with a matching name is already in the schema
+    if models := get_defined_ext_ai_embedding_models(schema, uri_model_name):
+        # If there is only 1 model, ensure that the provider name matches
+        if len(models) == 1:
+            model = next(iter(models.values()))
+
+            model_provider_name = model.get_annotation(
+                schema, sn.QualName("ext::ai", "model_provider")
+            )
+            # The URI will specify "openai" instead of "builtin::openai"
+            # We want to show only "openai" in the case of an error here.
+            model_provider_short_name = model_provider_name
+            for provider_short_name, provider_desc in provider_descs.items():
+                if provider_desc.name == model_provider_name:
+                    model_provider_short_name = provider_short_name
+                    break
+
+            if model_provider_name != resolved_provider_name:
+                raise errors.SchemaDefinitionError(
+                    f"An embedding model with the name '{uri_model_name}' "
+                    f"exists but the provider specified by the index "
+                    f"('{uri_provider_name}') differs from the one "
+                    f"specified by the model ('{model_provider_short_name}').",
+                    span=span,
+                )
+
+        elif len(models) > 1:
+            models_dn = [
+                model.get_displayname(schema) for model in models.values()
+            ]
+            raise errors.SchemaDefinitionError(
+                f'expecting only one embedding model to be annotated '
+                f'with ext::ai::model_name={model_name!r}: got multiple: '
+                f'{", ".join(models_dn)}',
+                span=span,
+            )
+
+        return sd.DeltaRoot(), model.as_shell(schema)
 
     # Ensure that a suitable model type exists for the ai index
-
     model_typename = sn.QualName(
         '__ext_generated_types__',
-        f'ai_embedding_{provider_name}_{model_name}'
+        f'ai_embedding_{uri_provider_name}_{uri_model_name}'
     )
 
     if model_type := schema.get(model_typename, None, type=s_types.Type):
@@ -1238,7 +1263,7 @@ def _create_ai_model_type(
                         name='model_provider',
                         module='ext::ai',
                     ),
-                    value=qlast.Constant.string(provider_desc.name),
+                    value=qlast.Constant.string(resolved_provider_name),
                 ),
                 qlast.AlterAnnotationValue(
                     name=qlast.ObjectRef(
