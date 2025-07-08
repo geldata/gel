@@ -1140,6 +1140,40 @@ def _try_load_reference_descs(
         # Ignore failures
         pass
 
+    if context.testmode:
+        embedding_model_descs['with-builtin-provider'] = EmbeddingModelDesc(
+            model_name='with-builtin-provider',
+            model_provider='ollama',
+            max_input_tokens=101,
+            max_batch_tokens=501,
+            max_output_dimensions=11,
+            supports_shortening=True,
+        )
+        embedding_model_descs['with-custom-provider'] = EmbeddingModelDesc(
+            model_name='with-custom-provider',
+            model_provider='test',
+            max_input_tokens=102,
+            max_batch_tokens=502,
+            max_output_dimensions=12,
+            supports_shortening=False,
+        )
+        embedding_model_descs['my-model-1'] = EmbeddingModelDesc(
+            model_name='my-model-1',
+            model_provider='ollama',
+            max_input_tokens=103,
+            max_batch_tokens=503,
+            max_output_dimensions=13,
+            supports_shortening=False,
+        )
+        embedding_model_descs['my-model-2'] = EmbeddingModelDesc(
+            model_name='my-model-2',
+            model_provider='ollama',
+            max_input_tokens=104,
+            max_batch_tokens=504,
+            max_output_dimensions=14,
+            supports_shortening=False,
+        )
+
     return (provider_descs, embedding_model_descs)
 
 
