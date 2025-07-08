@@ -210,7 +210,7 @@ class PropertySourceCommand[Source_T: s_sources.Source](
 
 
 class PropertyCommandContext(
-    pointers.PointerCommandContext[Property],
+    pointers.PointerCommandContext,
     constraints.ConsistencySubjectCommandContext,
     s_rewrites.RewriteCommandContext,
 ):

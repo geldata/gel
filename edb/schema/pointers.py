@@ -25,7 +25,6 @@ from typing import (
     Self,
     Sequence,
     TYPE_CHECKING,
-    TypeVar,
 )
 
 import collections.abc
@@ -416,9 +415,6 @@ def _get_target_name_in_diff(
         assert isinstance(object, Pointer)
         target = object.get_target(schema)
         return not_none(target).get_name(schema)
-
-
-Pointer_T = TypeVar("Pointer_T", bound="Pointer")
 
 
 class Pointer(referencing.NamedReferencedInheritingObject,
@@ -1159,14 +1155,14 @@ class ComputableRef:
 
 
 class PointerCommandContext(
-    sd.ObjectCommandContext[Pointer_T],
+    sd.ObjectCommandContext[Pointer],
     s_anno.AnnotationSubjectCommandContext,
     s_rewrites.RewriteSubjectCommandContext,
 ):
     pass
 
 
-class PointerCommandOrFragment(
+class PointerCommandOrFragment[Pointer_T: Pointer](
     referencing.ReferencedObjectCommandBase[Pointer_T]
 ):
     def is_property_command(self) -> bool:
@@ -1613,7 +1609,7 @@ class PointerCommandOrFragment(
             raise NotImplementedError(f'unhandled field {field.name!r}')
 
 
-class PointerCommand(
+class PointerCommand[Pointer_T: Pointer](
     referencing.NamedReferencedInheritingObjectCommand[Pointer_T],
     constraints.ConsistencySubjectCommand[Pointer_T],
     s_anno.AnnotationSubjectCommand[Pointer_T],
@@ -2053,7 +2049,7 @@ class PointerCommand(
                 self.discard_attribute('expr')
 
 
-class CreatePointer(
+class CreatePointer[Pointer_T: Pointer](
     referencing.CreateReferencedInheritingObject[Pointer_T],
     PointerCommand[Pointer_T],
 ):
@@ -2098,7 +2094,7 @@ class CreatePointer(
         return cmd
 
 
-class AlterPointer(
+class AlterPointer[Pointer_T: Pointer](
     referencing.AlterReferencedInheritingObject[Pointer_T],
     PointerCommand[Pointer_T],
 ):
@@ -2274,7 +2270,7 @@ class AlterPointer(
         )
 
 
-class DeletePointer(
+class DeletePointer[Pointer_T: Pointer](
     referencing.DeleteReferencedInheritingObject[Pointer_T],
     PointerCommand[Pointer_T],
 ):
@@ -2325,7 +2321,7 @@ class DeletePointer(
         return commands
 
 
-class SetPointerType(
+class SetPointerType[Pointer_T: Pointer](
     referencing.ReferencedInheritingObjectCommand[Pointer_T],
     inheriting.AlterInheritingObjectFragment[Pointer_T],
     sd.AlterSpecialObjectField[Pointer_T],
@@ -2628,7 +2624,7 @@ class SetPointerType(
             )
 
 
-class AlterPointerUpperCardinality(
+class AlterPointerUpperCardinality[Pointer_T: Pointer](
     referencing.ReferencedInheritingObjectCommand[Pointer_T],
     inheriting.AlterInheritingObjectFragment[Pointer_T],
     sd.AlterSpecialObjectField[Pointer_T],
@@ -2892,7 +2888,7 @@ class AlterPointerUpperCardinality(
             )
 
 
-class AlterPointerLowerCardinality(
+class AlterPointerLowerCardinality[Pointer_T: Pointer](
     referencing.ReferencedInheritingObjectCommand[Pointer_T],
     inheriting.AlterInheritingObjectFragment[Pointer_T],
     sd.AlterSpecialObjectField[Pointer_T],

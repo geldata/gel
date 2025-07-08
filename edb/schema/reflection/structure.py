@@ -726,6 +726,7 @@ def generate_structure(
 
             ref_ptr = schema_cls.getptr(
                 schema, sn.UnqualName(refdict.attr), type=s_links.Link)
+            assert ref_ptr
             tgt = ref_ptr.get_target(schema)
             assert tgt is not None
             cardinality = ref_ptr.get_cardinality(schema)

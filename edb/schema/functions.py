@@ -447,11 +447,11 @@ class Parameter(
         return param_as_str(schema, self)
 
     @classmethod
-    def compare_field_value(
+    def compare_field_value[T](
         cls,
-        field: so.Field[builtins.type[so.T]],
-        our_value: so.T,
-        their_value: so.T,
+        field: so.Field[builtins.type[T]],
+        our_value: T,
+        their_value: T,
         *,
         our_schema: s_schema.Schema,
         their_schema: s_schema.Schema,

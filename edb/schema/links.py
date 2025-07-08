@@ -203,7 +203,7 @@ class LinkSourceCommand[Source_T: s_sources.Source](
 
 
 class LinkCommandContext(
-    pointers.PointerCommandContext[Link],
+    pointers.PointerCommandContext,
     constraints.ConsistencySubjectCommandContext,
     properties.PropertySourceContext[Link],
     unknown_pointers.UnknownPointerSourceContext[Link],

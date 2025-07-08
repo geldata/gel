@@ -108,7 +108,6 @@ class DefaultConstructorT(enum.Enum):
 DEFAULT_CONSTRUCTOR: Final = DefaultConstructorT.DefaultConstructor
 
 
-T = TypeVar("T")
 ObjectContainer_T = TypeVar('ObjectContainer_T', bound='ObjectContainer')
 Object_T = TypeVar("Object_T", bound="Object")
 Object_T_co = TypeVar("Object_T_co", bound="Object", covariant=True)
@@ -595,7 +594,7 @@ class SchemaField[Type_T: type](Field[Type_T]):
         self,
         instance: Optional[Object],
         owner: type[Object],
-    ) -> Optional[T]:
+    ) -> Optional[Type_T]:
         if instance is not None:
             raise FieldValueNotFoundError(self.name)
         else:
