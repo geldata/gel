@@ -1618,6 +1618,7 @@ def _get_compile_options(
         apply_query_rewrites=(
             not ctx.bootstrap_mode
             and not ctx.schema_reflection_mode
+            and not ctx.dump_restore_mode  # HMMM
             and not bool(
                 _get_config_val(ctx, '__internal_no_apply_query_rewrites'))
         ),
