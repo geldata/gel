@@ -2150,6 +2150,13 @@ class TestSchema(tb.BaseSchemaLoadTest):
         self.assertIsNone(A_tf_d.maybe_get_ptr(schema, 'd_prop2'))
         A_tf_df.getptr(schema, s_name.UnqualName('df_prop'))
 
+    def test_schema_advanced_function_params(self):
+        """
+            type Foo { required value: int64 };
+            type Bar { required value: int64 };
+            function get_value(x: Foo | Bar) -> int64 using (x.value);
+        """
+
     def test_schema_ancestor_propagation_on_sdl_migration(self):
         schema = self.load_schema("""
             type A;
