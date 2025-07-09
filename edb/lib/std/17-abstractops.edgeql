@@ -22,25 +22,41 @@
 # for the benefit of generic expressions (e.g. in abstract constraints).
 
 CREATE ABSTRACT INFIX OPERATOR
-std::`>=` (l: anytype, r: anytype) -> std::bool;
+std::`>=` (l: anytype, r: anytype) -> std::bool {
+    CREATE ANNOTATION std::identifier := 'ge';
+};
 
 CREATE ABSTRACT INFIX OPERATOR
-std::`>` (l: anytype, r: anytype) -> std::bool;
+std::`>` (l: anytype, r: anytype) -> std::bool {
+    CREATE ANNOTATION std::identifier := 'gt';
+};
 
 CREATE ABSTRACT INFIX OPERATOR
-std::`<=` (l: anytype, r: anytype) -> std::bool;
+std::`<=` (l: anytype, r: anytype) -> std::bool {
+    CREATE ANNOTATION std::identifier := 'le';
+};
 
 CREATE ABSTRACT INFIX OPERATOR
-std::`<` (l: anytype, r: anytype) -> std::bool;
+std::`<` (l: anytype, r: anytype) -> std::bool {
+    CREATE ANNOTATION std::identifier := 'lt';
+};
 
 CREATE ABSTRACT INFIX OPERATOR
-std::`=` (l: anytype, r: anytype) -> std::bool;
+std::`=` (l: anytype, r: anytype) -> std::bool {
+    CREATE ANNOTATION std::identifier := 'eq';
+};
 
 CREATE ABSTRACT INFIX OPERATOR
-std::`?=` (l: OPTIONAL anytype, r: OPTIONAL anytype) -> std::bool;
+std::`?=` (l: OPTIONAL anytype, r: OPTIONAL anytype) -> std::bool {
+    CREATE ANNOTATION std::identifier := 'coal_eq';
+};
 
 CREATE ABSTRACT INFIX OPERATOR
-std::`!=` (l: anytype, r: anytype) -> std::bool;
+std::`!=` (l: anytype, r: anytype) -> std::bool {
+    CREATE ANNOTATION std::identifier := 'ne';
+};
 
 CREATE ABSTRACT INFIX OPERATOR
-std::`?!=` (l: OPTIONAL anytype, r: OPTIONAL anytype) -> std::bool;
+std::`?!=` (l: OPTIONAL anytype, r: OPTIONAL anytype) -> std::bool {
+    CREATE ANNOTATION std::identifier := 'coal_neq';
+};
