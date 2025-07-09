@@ -350,12 +350,12 @@ class ExprDependency(Dependency):
 
 class FunctionDependency(ExprDependency):
 
-    params: Mapping[str, s_name.QualName]
+    params: Mapping[str, qlast.TypeExpr]
 
     def __init__(
         self,
         expr: qlast.Expr,
-        params: Mapping[str, s_name.QualName],
+        params: Mapping[str, qlast.TypeExpr],
     ) -> None:
         super().__init__(expr=expr)
         self.params = params
@@ -1089,14 +1089,9 @@ def trace_Function(
     deps.extend(TypeDependency(texpr=param.type) for param in node.params)
     deps.append(TypeDependency(texpr=node.returning))
 
-    params = {}
+    params: dict[str, qlast.TypeExpr] = {}
     for param in node.params:
-        assert isinstance(param.type, qlast.TypeName)
-        if not param.type.subtypes:
-            param_t = ctx.get_ref_name(param.type.maintype)
-            params[param.name] = param_t
-        else:
-            params[param.name] = s_name.QualName('std', 'BaseObject')
+        params[param.name] = param.type
 
     if node.nativecode is not None:
         deps.append(FunctionDependency(expr=node.nativecode, params=params))
@@ -1281,6 +1276,7 @@ def _register_item(
                 deps |= _get_hard_deps(expr.texpr, ctx=ctx)
             elif isinstance(expr, ExprDependency):
                 qlexpr = expr.expr
+                params: Mapping[str, qlast.TypeExpr]
                 if isinstance(expr, FunctionDependency):
                     params = expr.params
                 else:

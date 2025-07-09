@@ -347,7 +347,7 @@ def trace_refs(
     module: str,
     objects: dict[sn.QualName, Optional[ObjectLike]],
     pointers: Mapping[sn.UnqualName, set[sn.QualName]],
-    params: Mapping[str, sn.QualName],
+    params: Mapping[str, qlast.TypeExpr],
     local_modules: AbstractSet[str]
 ) -> tuple[frozenset[sn.QualName], frozenset[sn.QualName]]:
 
@@ -455,7 +455,7 @@ class TracerContext:
         anchors: Mapping[str, sn.QualName],
         path_prefix: Optional[sn.QualName],
         modaliases: dict[Optional[str], str],
-        params: Mapping[str, sn.QualName],
+        params: Mapping[str, qlast.TypeExpr],
         visited: set[s_pointers.Pointer | Pointer],
         local_modules: AbstractSet[str],
     ) -> None:
@@ -476,9 +476,6 @@ class TracerContext:
         # We don't actually expect to handle anything other than
         # ObjectRef here.
         assert isinstance(ref, qlast.ObjectRef)
-
-        if not ref.module and ref.name in self.params:
-            return self.params[ref.name]
 
         return resolve_name(
             ref,
@@ -812,6 +809,10 @@ def trace_Path(
             aname = sn.QualName('__alias__', step.name)
             if not step.module and aname in ctx.objects:
                 tip = ctx.objects[aname]
+
+            elif not step.module and step.name in ctx.params:
+                tip = _resolve_type_expr(ctx.params[step.name], ctx=ctx)
+
             else:
                 refname = ctx.get_ref_name(step)
                 if refname in ctx.objects:
