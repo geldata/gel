@@ -444,7 +444,7 @@ def get_intersection_type[TypeT: s_types.Type](
 
     targets: Sequence[s_types.Type]
     targets = s_utils.simplify_intersection_types(ctx.env.schema, types)
-    ctx.env.schema, intersection = s_utils.ensure_intersection_type(
+    ctx.env.schema, intersection, _ = s_utils.ensure_intersection_type(
         ctx.env.schema, targets, transient=True
     )
 

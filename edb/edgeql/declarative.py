@@ -1515,8 +1515,14 @@ def _resolve_type_expr(
 
     elif isinstance(texpr, qlast.TypeOp):
 
-        if texpr.op == '|':
+        if texpr.op == qlast.TypeOpName.OR:
             return qltracer.UnionType([
+                _resolve_type_expr(texpr.left, ctx=ctx),
+                _resolve_type_expr(texpr.right, ctx=ctx),
+            ])
+
+        if texpr.op == qlast.TypeOpName.AND:
+            return qltracer.IntersectionType([
                 _resolve_type_expr(texpr.left, ctx=ctx),
                 _resolve_type_expr(texpr.right, ctx=ctx),
             ])

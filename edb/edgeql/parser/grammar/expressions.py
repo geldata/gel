@@ -2264,12 +2264,18 @@ class NontrivialTypeExpr(Nonterm):
         pass
 
     def reduce_TypeExpr_PIPE_TypeExpr(self, *kids):
-        self.val = qlast.TypeOp(left=kids[0].val, op='|',
-                                right=kids[2].val)
+        self.val = qlast.TypeOp(
+            left=kids[0].val,
+            op=qlast.TypeOpName.OR,
+            right=kids[2].val,
+        )
 
     def reduce_TypeExpr_AMPER_TypeExpr(self, *kids):
-        self.val = qlast.TypeOp(left=kids[0].val, op='&',
-                                right=kids[2].val)
+        self.val = qlast.TypeOp(
+            left=kids[0].val,
+            op=qlast.TypeOpName.AND,
+            right=kids[2].val,
+        )
 
 
 # This is a type expression without angle brackets, so it
@@ -2308,12 +2314,18 @@ class FullTypeExpr(Nonterm):
         pass
 
     def reduce_FullTypeExpr_PIPE_FullTypeExpr(self, *kids):
-        self.val = qlast.TypeOp(left=kids[0].val, op='|',
-                                right=kids[2].val)
+        self.val = qlast.TypeOp(
+            left=kids[0].val,
+            op=qlast.TypeOpName.OR,
+            right=kids[2].val,
+        )
 
     def reduce_FullTypeExpr_AMPER_FullTypeExpr(self, *kids):
-        self.val = qlast.TypeOp(left=kids[0].val, op='&',
-                                right=kids[2].val)
+        self.val = qlast.TypeOp(
+            left=kids[0].val,
+            op=qlast.TypeOpName.AND,
+            right=kids[2].val,
+        )
 
 
 class Subtype(Nonterm):
