@@ -871,11 +871,17 @@ class DeleteExtension(
             return (
                 (
                     isinstance(name, sn.QualName)
-                    and name.module.startswith(module_name.name)
+                    and (
+                        name.module == module
+                        or name.module.startswith(module + '::')
+                    )
                 )
                 or (
                     isinstance(name, sn.UnqualName)
-                    and name.name.startswith(module_name.name)
+                    and (
+                        name == module_name
+                        or name.name.startswith(module + '::')
+                    )
                 )
             )
 
