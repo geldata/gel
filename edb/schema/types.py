@@ -709,6 +709,9 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
     ) -> sd.Command:
         assert isinstance(self.name, s_name.QualName)
         cmd = CreateUnionType(classname=self.name)
+        for component in self.components:
+            if isinstance(component, TypeExprShell):
+                cmd.add_prerequisite(component.as_create_delta(schema))
         cmd.set_attribute_value('name', self.name)
         cmd.set_attribute_value('components', tuple(self.components))
         cmd.set_attribute_value('is_opaque_union', self.opaque)
@@ -894,6 +897,9 @@ class CreateUnionType(sd.CreateObject[InheritingType], CompoundTypeCommand):
 
         from edb.schema import types as s_types
 
+        for cmd in self.get_prerequisites():
+            schema = cmd.apply(schema, context)
+
         if not context.canonical:
             components: Sequence[s_types.Type] = [
                 c.resolve(schema)
@@ -929,7 +935,67 @@ class CreateUnionType(sd.CreateObject[InheritingType], CompoundTypeCommand):
 
                 self.add(delta)
 
-        for cmd in self.get_subcommands():
+        for cmd in self.get_subcommands(include_prerequisites=False):
+            schema = cmd.apply(schema, context)
+
+        return schema
+
+
+class CreateIntersectionType(
+    sd.CreateObject[InheritingType], CompoundTypeCommand
+):
+
+    def apply(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+    ) -> s_schema.Schema:
+
+        from edb.schema import types as s_types
+
+        for cmd in self.get_prerequisites():
+            schema = cmd.apply(schema, context)
+
+        if not context.canonical:
+            components: Sequence[s_types.Type] = [
+                c.resolve(schema)
+                for c in self.get_attribute_value('components')
+            ]
+
+            try:
+                new_schema, intersection_type, created = (
+                    utils.ensure_intersection_type(
+                        schema,
+                        components,
+                        module=self.classname.module,
+                    )
+                )
+            except errors.SchemaError as e:
+                intersection_name = (
+                    '(' + ' | '.join(sorted(
+                    c.get_displayname(schema)
+                    for c in components
+                    )) + ')'
+                )
+                e.args = (
+                    (
+                        f'cannot create intersection '
+                        f'{intersection_name} {e.args[0]}',
+                    )
+                    + e.args[1:]
+                )
+                e.set_span(self.get_attribute_value('span'))
+                raise e
+
+            if created:
+                delta = intersection_type.as_create_delta(
+                    schema=new_schema,
+                    context=so.ComparisonContext(),
+                )
+
+                self.add(delta)
+
+        for cmd in self.get_subcommands(include_prerequisites=False):
             schema = cmd.apply(schema, context)
 
         return schema
@@ -955,6 +1021,23 @@ class IntersectionTypeShell(TypeExprShell[TypeT_co]):
             schemaclass=schemaclass,
             span=span
         )
+
+    def as_create_delta(
+        self,
+        schema: s_schema.Schema,
+        *,
+        view_name: Optional[s_name.QualName] = None,
+        attrs: Optional[dict[str, Any]] = None,
+    ) -> sd.Command:
+        assert isinstance(self.name, s_name.QualName)
+        cmd = CreateIntersectionType(classname=self.name)
+        for component in self.components:
+            if isinstance(component, TypeExprShell):
+                cmd.add_prerequisite(component.as_create_delta(schema))
+        cmd.set_attribute_value('name', self.name)
+        cmd.set_attribute_value('components', tuple(self.components))
+        cmd.set_attribute_value('span', self.span)
+        return cmd
 
 
 _collection_impls: dict[str, type[Collection]] = {}

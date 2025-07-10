@@ -3700,6 +3700,14 @@ class CreateUnionType(
     pass
 
 
+class CreateIntersectionType(
+    MetaCommand,
+    adapts=s_types.CreateIntersectionType,
+    metaclass=CommandMeta,
+):
+    pass
+
+
 class ObjectTypeMetaCommand(AliasCapableMetaCommand, CompositeMetaCommand):
     def schedule_endpoint_delete_action_update(self, obj, schema, context):
         endpoint_delete_actions = context.get(

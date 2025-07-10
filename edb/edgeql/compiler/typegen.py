@@ -200,7 +200,7 @@ def _ql_typeexpr_get_types(
         return (None, True, [stype])
 
     elif isinstance(ql_t, qlast.TypeOp):
-        if ql_t.op in ['|', '&']:
+        if ql_t.op in [qlast.TypeOpName.OR, qlast.TypeOpName.AND]:
             (left_op, left_leaf, left_types) = (
                 _ql_typeexpr_get_types(ql_t.left, ctx=ctx)
             )

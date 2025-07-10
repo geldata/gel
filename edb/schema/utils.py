@@ -408,7 +408,7 @@ def type_op_ast_to_type_shell[TypeT: s_types.Type](
 
     from . import types as s_types
 
-    if node.op != '|':
+    if node.op not in [qlast.TypeOpName.OR, qlast.TypeOpName.AND]:
         raise errors.UnsupportedFeatureError(
             f'unsupported type expression operator: {node.op}',
             span=node.span,
@@ -438,31 +438,47 @@ def type_op_ast_to_type_shell[TypeT: s_types.Type](
         schema=schema,
     )
 
-    if isinstance(left, s_types.UnionTypeShell):
-        if isinstance(right, s_types.UnionTypeShell):
-            return s_types.UnionTypeShell(
+    CompositeTypeShell = (
+        s_types.UnionTypeShell
+        if node.op == qlast.TypeOpName.OR else
+        s_types.IntersectionTypeShell
+    )
+
+    # Doubled check for s_types.TypeExprShell to reassure mypy
+    if (
+        isinstance(left, CompositeTypeShell)
+        and isinstance(left, s_types.TypeExprShell)
+    ):
+        if (
+            isinstance(right, CompositeTypeShell)
+            and isinstance(right, s_types.TypeExprShell)
+        ):
+            return CompositeTypeShell(
                 components=left.components + right.components,
                 module=module,
                 schemaclass=metaclass,
                 span=node.span,
             )
         else:
-            return s_types.UnionTypeShell(
+            return CompositeTypeShell(
                 components=left.components + (right,),
                 module=module,
                 schemaclass=metaclass,
                 span=node.span,
             )
     else:
-        if isinstance(right, s_types.UnionTypeShell):
-            return s_types.UnionTypeShell(
+        if (
+            isinstance(right, CompositeTypeShell)
+            and isinstance(right, s_types.TypeExprShell)
+        ):
+            return CompositeTypeShell(
                 components=(left,) + right.components,
                 schemaclass=metaclass,
                 module=module,
                 span=node.span,
             )
         else:
-            return s_types.UnionTypeShell(
+            return CompositeTypeShell(
                 components=(left, right),
                 module=module,
                 schemaclass=metaclass,
@@ -567,19 +583,32 @@ def typeref_to_ast(
                 for st in t.get_subtypes(schema)
             ]
         )
-    elif isinstance(t, s_types.Type) and t.is_union_type(schema):
-        object_set = t.get_union_of(schema)
+    elif (
+        isinstance(t, s_types.Type)
+        and (t.is_union_type(schema) or t.is_intersection_type(schema))
+    ):
+        object_set = (
+            t.get_union_of(schema)
+            if t.is_union_type(schema) else
+            t.get_intersection_of(schema)
+        )
         assert object_set is not None
 
         component_objects = tuple(object_set.objects(schema))
-        result = typeref_to_ast(schema, component_objects[0],
-                                disambiguate_std=disambiguate_std)
+        result = typeref_to_ast(
+            schema, component_objects[0], disambiguate_std=disambiguate_std
+        )
         for component_object in component_objects[1:]:
             result = qlast.TypeOp(
                 left=result,
-                op='|',
-                right=typeref_to_ast(schema, component_object,
-                                     disambiguate_std=disambiguate_std),
+                op=(
+                    qlast.TypeOpName.OR
+                    if t.is_union_type(schema) else
+                    qlast.TypeOpName.AND
+                ),
+                right=typeref_to_ast(
+                    schema, component_object, disambiguate_std=disambiguate_std
+                ),
             )
     elif isinstance(t, so.QualifiedObject):
         t_name = t.get_name(schema)
@@ -711,7 +740,16 @@ def type_shell_to_ast(
         for component in components[1:]:
             result = qlast.TypeOp(
                 left=result,
-                op='|',
+                op=qlast.TypeOpName.OR,
+                right=typeref_to_ast(schema, component),
+            )
+    elif isinstance(t, s_types.IntersectionTypeShell):
+        components = t.get_components(schema)
+        result = typeref_to_ast(schema, components[0])
+        for component in components[1:]:
+            result = qlast.TypeOp(
+                left=result,
+                op=qlast.TypeOpName.AND,
                 right=typeref_to_ast(schema, component),
             )
     elif isinstance(t, s_scalars.AnonymousEnumTypeShell):
@@ -1305,12 +1343,12 @@ def ensure_intersection_type(
     *,
     transient: bool = False,
     module: Optional[str] = None,
-) -> tuple[s_schema.Schema, s_types.Type]:
+) -> tuple[s_schema.Schema, s_types.Type, bool]:
 
     from edb.schema import objtypes as s_objtypes
 
     if len(types) == 1:
-        return schema, next(iter(types))
+        return schema, next(iter(types)), False
 
     seen_scalars = False
     seen_objtypes = False
