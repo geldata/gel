@@ -2150,11 +2150,54 @@ class TestSchema(tb.BaseSchemaLoadTest):
         self.assertIsNone(A_tf_d.maybe_get_ptr(schema, 'd_prop2'))
         A_tf_df.getptr(schema, s_name.UnqualName('df_prop'))
 
-    def test_schema_advanced_function_params(self):
+    def test_schema_advanced_function_params_01(self):
         """
-            type Foo { required value: int64 };
-            type Bar { required value: int64 };
-            function get_value(x: Foo | Bar) -> int64 using (x.value);
+            type A { required value: int64 };
+            type B { required value: int64 };
+            function get_value(x: A | B) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_02(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            function get_value(x: A & B) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_03(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A | B) | (C | D)) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_04(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A & B) & (C & D)) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_05(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A & B) | (C & D)) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_06(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A | B) & (C | D)) -> int64 using (x.value);
         """
 
     def test_schema_ancestor_propagation_on_sdl_migration(self):
