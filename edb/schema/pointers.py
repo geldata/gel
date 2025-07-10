@@ -1219,6 +1219,19 @@ class PointerCommandOrFragment[Pointer_T: Pointer](
             self.set_attribute_value('linkful', True)
 
         if inf_target_ref is not None:
+            if inf_target_ref.has_intersection():
+                raise errors.UnsupportedFeatureError(
+                    (
+                        f'unsupported type intersection in schema '
+                        f'{inf_target_ref.get_name(schema).name}'
+                    ),
+                    hint=(
+                        f'Type intersections are currently '
+                        f'unsupported as valid link targets.'
+                    ),
+                    span=self.span,
+                )
+
             span = self.get_attribute_span('target')
             self.set_attribute_value(
                 'target',

@@ -636,12 +636,10 @@ class TypeShell(so.ObjectShell[TypeT_co]):
         view_name: Optional[s_name.QualName] = None,
         attrs: Optional[dict[str, Any]] = None,
     ) -> sd.Command:
-        raise errors.UnsupportedFeatureError(
-            f'unsupported type intersection in schema {str(view_name)}',
-            hint=f'Type intersections are currently '
-                 f'unsupported as valid link targets.',
-            span=self.span,
-        )
+        raise NotImplementedError('unsupported typeshell')
+
+    def has_intersection(self) -> bool:
+        return False
 
 
 class TypeExprShell(TypeShell[TypeT_co]):
@@ -674,6 +672,12 @@ class TypeExprShell(TypeShell[TypeT_co]):
         schema: s_schema.Schema,
     ) -> tuple[TypeShell[TypeT_co], ...]:
         return self.components
+
+    def has_intersection(self) -> bool:
+        return any(
+            c.has_intersection()
+            for c in self.components
+        )
 
 
 class UnionTypeShell(TypeExprShell[TypeT_co]):
@@ -1038,6 +1042,9 @@ class IntersectionTypeShell(TypeExprShell[TypeT_co]):
         cmd.set_attribute_value('components', tuple(self.components))
         cmd.set_attribute_value('span', self.span)
         return cmd
+
+    def has_intersection(self) -> bool:
+        return True
 
 
 _collection_impls: dict[str, type[Collection]] = {}
