@@ -811,7 +811,20 @@ def trace_Path(
                 tip = ctx.objects[aname]
 
             elif not step.module and step.name in ctx.params:
-                tip = _resolve_type_expr(ctx.params[step.name], ctx=ctx)
+                param_type = ctx.params[step.name]
+                if (
+                    isinstance(param_type, qlast.TypeName)
+                    and isinstance(param_type.maintype, qlast.PseudoObjectRef)
+                ):
+                    # Pretend pseudotypes (eg. `anytype`) have a fully
+                    # qualified name.
+                    refname = sn.QualName('std', param_type.maintype.name)
+                    ctx.refs.add(refname)
+
+                    tip = ctx.objects[refname]
+
+                else:
+                    tip = _resolve_type_expr(param_type, ctx=ctx)
 
             else:
                 refname = ctx.get_ref_name(step)
