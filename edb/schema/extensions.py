@@ -869,8 +869,20 @@ class DeleteExtension(
 
         def _name_in_mod(name: sn.Name) -> bool:
             return (
-                (isinstance(name, sn.QualName) and name.module == module)
-                or name == module_name
+                (
+                    isinstance(name, sn.QualName)
+                    and (
+                        name.module == module
+                        or name.module.startswith(module + '::')
+                    )
+                )
+                or (
+                    isinstance(name, sn.UnqualName)
+                    and (
+                        name == module_name
+                        or name.name.startswith(module + '::')
+                    )
+                )
             )
 
         # Clean up the casts separately because we can't keep them in
@@ -911,11 +923,14 @@ class DeleteExtension(
 
         # We handle deleting the module contents in a heavy-handed way:
         # do a schema diff.
+        module_names = [
+            m.get_name(schema)
+            for m in schema.get_modules()
+            if _name_in_mod(m.get_name(schema))
+        ]
         delta = s_ddl.delta_schemas(
             schema, schema,
-            included_modules=[
-                sn.UnqualName(module),
-            ],
+            included_modules=module_names,
             schema_b_filters=[filt],
             include_extensions=True,
             linearize_delta=True,
