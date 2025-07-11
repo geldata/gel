@@ -191,14 +191,45 @@ class Alias(ObjectType):
     pass
 
 
-class UnionType(Type):
+class CompositeType(Type):
 
-    def __init__(self, types: list[Type | UnionType | so.Object]) -> None:
+    types: list[Type | CompositeType | s_types.Type]
+
+    def __init__(
+        self,
+        types: list[Type | CompositeType | s_types.Type],
+    ) -> None:
         self.types = types
+
+
+class UnionType(CompositeType):
+
+    def __init__(
+        self,
+        types: list[Type | CompositeType | s_types.Type],
+    ) -> None:
+        super().__init__(types)
 
     def get_name(self, schema: s_schema.Schema) -> sn.QualName:
         component_ids = sorted(str(t.get_name(schema)) for t in self.types)
         nqname = f"({' | '.join(component_ids)})"
+        return sn.QualName(name=nqname, module='__derived__')
+
+    def is_object_type(self) -> bool:
+        return True
+
+
+class IntersectionType(CompositeType):
+
+    def __init__(
+        self,
+        types: list[Type | CompositeType | s_types.Type],
+    ) -> None:
+        super().__init__(types)
+
+    def get_name(self, schema: s_schema.Schema) -> sn.QualName:
+        component_ids = sorted(str(t.get_name(schema)) for t in self.types)
+        nqname = f"({' & '.join(component_ids)})"
         return sn.QualName(name=nqname, module='__derived__')
 
     def is_object_type(self) -> bool:
@@ -1035,15 +1066,25 @@ def _resolve_type_expr(
 
     elif isinstance(texpr, qlast.TypeOp):
 
-        if texpr.op == '|':
-            return UnionType([
-                _resolve_type_expr(texpr.left, ctx=ctx),
-                _resolve_type_expr(texpr.right, ctx=ctx),
-            ])
+        left = _resolve_type_expr(texpr.left, ctx=ctx)
+        right = _resolve_type_expr(texpr.right, ctx=ctx)
 
+        ThisCompositeType: type[CompositeType] = (
+            UnionType
+            if texpr.op == qlast.TypeOpName.OR else
+            IntersectionType
+        )
+
+        if isinstance(left, ThisCompositeType):
+            if isinstance(right, ThisCompositeType):
+                return ThisCompositeType(left.types + right.types)
+            else:
+                return ThisCompositeType(left.types + [right])
         else:
-            raise NotImplementedError(
-                f'unsupported type operation: {texpr.op}')
+            if isinstance(right, ThisCompositeType):
+                return ThisCompositeType([left] + right.types)
+            else:
+                return ThisCompositeType([left, right])
 
     else:
         raise NotImplementedError(

@@ -352,11 +352,16 @@ class TypeName(TypeExpr):
     dimensions: typing.Optional[list[int]] = None
 
 
+class TypeOpName(s_enum.StrEnum):
+    OR = '|'
+    AND = '&'
+
+
 class TypeOp(TypeExpr):
     __rust_box__ = {'left', 'right'}
 
     left: TypeExpr
-    op: str
+    op: TypeOpName
     right: TypeExpr
 
 

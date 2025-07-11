@@ -2741,8 +2741,11 @@ class AlterScalarType(ScalarTypeMetaCommand, adapts=s_scalars.AlterScalarType):
         for prop, new_typ in props.items():
             try:
                 cmd.add(new_typ.as_create_delta(schema))
-            except errors.UnsupportedFeatureError:
-                pass
+            except NotImplementedError as e:
+                if e.args == ('unsupported typeshell',):
+                    pass
+                else:
+                    raise
 
             if prop.get_default(schema):
                 delta_alter, cmd_alter, _alter_context = prop.init_delta_branch(
@@ -3695,6 +3698,14 @@ class DeleteIndexMatch(IndexMatchCommand, adapts=s_indexes.DeleteIndexMatch):
 class CreateUnionType(
     MetaCommand,
     adapts=s_types.CreateUnionType,
+    metaclass=CommandMeta,
+):
+    pass
+
+
+class CreateIntersectionType(
+    MetaCommand,
+    adapts=s_types.CreateIntersectionType,
     metaclass=CommandMeta,
 ):
     pass
