@@ -43,7 +43,7 @@ def elaboarate_ret_typemod(ret_typemod: qltypes.TypeModifier) -> e.CMMode:
 
 
 def elaborate_fun_def_arg_type(
-    params: list[qlast.FuncParam],
+    params: list[qlast.FuncParamDecl],
     ret_tp: qlast.TypeExpr,
     ret_typemod: qltypes.TypeModifier,
 ) -> e.FunArgRetType:
@@ -55,7 +55,7 @@ def elaborate_fun_def_arg_type(
     params_label_elab = []
     for param in params:
         match param:
-            case qlast.FuncParam(
+            case qlast.FuncParamDecl(
                 name=param_name, type=param_type, typemod=modifier
             ):
                 params_label_elab.append(param_name)
@@ -78,7 +78,7 @@ def elaborate_fun_def_arg_type(
 def process_builtin_fun_def(
     schema: e.DBSchema,
     name: qlast.ObjectRef,
-    params: list[qlast.FuncParam],
+    params: list[qlast.FuncParamDecl],
     ret_tp: qlast.TypeExpr,
     ret_typemod: qltypes.TypeModifier,
 ) -> None:

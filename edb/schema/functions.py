@@ -204,7 +204,7 @@ class ParameterDesc(ParameterLike):
         schema: s_schema.Schema,
         modaliases: Mapping[Optional[str], str],
         num: int,
-        astnode: qlast.FuncParam,
+        astnode: qlast.FuncParamDecl,
     ) -> ParameterDesc:
 
         paramd = None
@@ -338,7 +338,7 @@ def make_func_param(
     typemod: qltypes.TypeModifier = qltypes.TypeModifier.SingletonType,
     kind: qltypes.ParameterKind,
     default: Optional[qlast.Expr] = None,
-) -> qlast.FuncParam:
+) -> qlast.FuncParamDecl:
     # If the param is variadic, strip the array from the type in the schema
     if kind is ft.ParameterKind.VariadicParam:
         assert (
@@ -349,7 +349,7 @@ def make_func_param(
         )
         type = type.subtypes[0]
 
-    return qlast.FuncParam(
+    return qlast.FuncParamDecl(
         name=name,
         type=type,
         typemod=typemod,
@@ -476,7 +476,7 @@ class Parameter(
             context=context,
         )
 
-    def get_ast(self, schema: s_schema.Schema) -> qlast.FuncParam:
+    def get_ast(self, schema: s_schema.Schema) -> qlast.FuncParamDecl:
         default = self.get_default(schema)
         kind = self.get_kind(schema)
 
@@ -735,7 +735,7 @@ class FuncParameterList(so.ObjectList[Parameter], ParameterLikeList):
     ) -> tuple[Parameter, ...]:
         return canonical_param_sort(schema, self.objects(schema))
 
-    def get_ast(self, schema: s_schema.Schema) -> list[qlast.FuncParam]:
+    def get_ast(self, schema: s_schema.Schema) -> list[qlast.FuncParamDecl]:
         result = []
         for param in self.objects(schema):
             result.append(param.get_ast(schema))
@@ -989,7 +989,7 @@ class ParametrizedCommand(sd.ObjectCommand[so.Object_T]):
         cls,
         schema: s_schema.Schema,
         modaliases: Mapping[Optional[str], str],
-        params: list[qlast.FuncParam],
+        params: list[qlast.FuncParamDecl],
         *,
         param_offset: int=0,
     ) -> list[ParameterDesc]:
@@ -1181,8 +1181,8 @@ class CreateCallableObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         node: qlast.DDLOperation,
-    ) -> list[tuple[int, qlast.FuncParam]]:
-        params: list[tuple[int, qlast.FuncParam]] = []
+    ) -> list[tuple[int, qlast.FuncParamDecl]]:
+        params: list[tuple[int, qlast.FuncParamDecl]] = []
         for op in self.get_subcommands(type=ParameterCommand):
             props = op.get_resolved_attributes(schema, context)
             if self._skip_param(props):
@@ -2390,7 +2390,7 @@ def get_params_symtable(
     anchors: dict[str, qlast.Expr] = {}
 
     defaults_mask = qlast.TypeCast(
-        expr=qlast.Parameter(name='__defaults_mask__', is_func_param=True),
+        expr=qlast.FunctionParameter(name='__defaults_mask__'),
         type=qlast.TypeName(
             maintype=qlast.ObjectRef(
                 module='std',
@@ -2405,7 +2405,7 @@ def get_params_symtable(
             p.get_typemod(schema) is not ft.TypeModifier.SingletonType
         )
         anchors[p_shortname] = qlast.TypeCast(
-            expr=qlast.Parameter(name=p_shortname, is_func_param=True),
+            expr=qlast.FunctionParameter(name=p_shortname),
             cardinality_mod=(
                 qlast.CardinalityModifier.Optional if p_is_optional else None
             ),

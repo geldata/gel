@@ -781,7 +781,7 @@ def compile_TypeCast(
 
     ir_expr: irast.Set | irast.Expr
 
-    if isinstance(expr.expr, qlast.Parameter):
+    if isinstance(expr.expr, (qlast.Parameter, qlast.FunctionParameter)):
         if (
             # generic types not explicitly allowed
             not ctx.env.options.allow_generic_type_output and
