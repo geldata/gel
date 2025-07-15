@@ -6,7 +6,7 @@ FastAPI + Gel
 
 .. py:currentmodule:: gel
 
-The ``gel-python`` package offers a sleek addition to FastAPI. With the built-in tools for schema migration management and automatic reflection into Pydantic models you can quickly integrate into the FastAPI development workflow. The ORM and query-building capability of Gel make building endpoints simple. So install ``gel`` and ``fastapi`` Python packages and run :gelcmd:`init` to setup the database and get started.
+The ``gel`` Python package offers a sleek addition to FastAPI. With the built-in tools for schema migration management and automatic reflection into Pydantic models you can quickly integrate into the FastAPI development workflow. The ORM and query-building capability of Gel make building endpoints simple. So install ``gel`` and ``fastapi`` Python packages and run :gelcmd:`init` to setup the database and get started.
 
 To initialize a Gel-aware FastAPI project, create the following file:
 
@@ -237,7 +237,7 @@ We're going to keep the existing endpoints, but we'll need some more models to d
 
   + class BaseUser(default.User.__variants__.Base):
   +     name: default.User.__typeof__.name
-  +     email: default.User.__typeof__.name
+  +     email: default.User.__typeof__.email
   +
   +
     @app.post("/users/")
@@ -288,7 +288,7 @@ We still need to add another endpoint for adding friends as well as the correspo
 
     class BaseUser(default.User.__variants__.Base):
         name: default.User.__typeof__.name
-        email: default.User.__typeof__.name
+        email: default.User.__typeof__.email
 
 
   + class UserWithFriends(BaseUser):
@@ -409,7 +409,7 @@ If we can add a friend, we should also make an endpoint for removing a friend. W
 
     class BaseUser(default.User.__variants__.Base):
         name: default.User.__typeof__.name
-        email: default.User.__typeof__.name
+        email: default.User.__typeof__.email
 
 
     class UserWithFriends(BaseUser):
@@ -514,7 +514,7 @@ Finally, let's add an endpoint for deleting a ``User``. We'll use the query buil
 
     class BaseUser(default.User.__variants__.Base):
         name: default.User.__typeof__.name
-        email: default.User.__typeof__.name
+        email: default.User.__typeof__.email
 
 
     class UserWithFriends(BaseUser):
