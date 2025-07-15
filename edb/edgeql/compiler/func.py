@@ -531,7 +531,7 @@ class ArgumentInliner(ast.NodeTransformer):
 
     def visit_Set(self, node: irast.Set) -> irast.Base:
         if (
-            isinstance(node.expr, irast.Parameter)
+            isinstance(node.expr, irast.FunctionParameter)
             and node.expr.name in self.inline_args
         ):
             arg = self.inline_args[node.expr.name]

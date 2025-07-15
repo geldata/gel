@@ -655,6 +655,16 @@ def trace_Parameter(node: qlast.Parameter, *, ctx: TracerContext) -> None:
 
 
 @trace.register
+def trace_FunctionParameter(
+    node: qlast.FunctionParameter, *, ctx: TracerContext
+) -> None:
+    raise errors.SchemaError(
+        'function parameters are not allowed in schemas',
+        span=node.span,
+    )
+
+
+@trace.register
 def trace_Array(node: qlast.Array, *, ctx: TracerContext) -> None:
     for el in node.elements:
         trace(el, ctx=ctx)
