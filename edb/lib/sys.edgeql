@@ -464,3 +464,14 @@ sys::approximate_count(
     set impl_is_strict := false;
     set required_permissions := { sys::perm::superuser };
 };
+
+ALTER TYPE schema::Permission {
+    CREATE ACCESS POLICY ap_read allow select using (
+        global sys::perm::superuser
+    );
+};
+ALTER TYPE schema::Migration {
+    CREATE ACCESS POLICY ap_read allow select using (
+        global sys::perm::ddl
+    );
+};
