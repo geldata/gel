@@ -465,10 +465,21 @@ sys::approximate_count(
     set required_permissions := { sys::perm::superuser };
 };
 
-# Add permissions to std.
+# Add permissions to schema and std.
 
-# The std module is populated before sys permissions so we need to
+# These modules are populated before sys permissions so we need to
 # add these restrictions here.
+
+ALTER TYPE schema::Permission {
+    CREATE ACCESS POLICY ap_read allow select using (
+        global sys::perm::superuser
+    );
+};
+ALTER TYPE schema::Migration {
+    CREATE ACCESS POLICY ap_read allow select using (
+        global sys::perm::ddl
+    );
+};
 
 ALTER FUNCTION std::sequence_reset(
     seq: schema::ScalarType,

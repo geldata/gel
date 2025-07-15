@@ -2605,7 +2605,9 @@ def _compile_dispatch_ql(
     elif isinstance(ql, qlast.DDLCommand):
         query = ddl.compile_and_apply_ddl_stmt(ctx, ql, source=source)
         capability = enums.Capability.DDL
-        if isinstance(ql, qlast.GlobalObjectCommand):
+        if isinstance(
+            ql, (qlast.GlobalObjectCommand, qlast.PermissionCommand)
+        ):
             capability |= enums.Capability.GLOBAL_DDL
 
         return (query, capability)
