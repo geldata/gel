@@ -511,6 +511,16 @@ def __infer_param(
 
 
 @_infer_multiplicity.register
+def __infer_function_param(
+    ir: irast.FunctionParameter,
+    *,
+    scope_tree: irast.ScopeTreeNode,
+    ctx: inf_ctx.InfCtx,
+) -> inf_ctx.MultiplicityInfo:
+    return UNIQUE
+
+
+@_infer_multiplicity.register
 def __infer_inlined_param(
     ir: irast.InlinedParameterExpr,
     *,

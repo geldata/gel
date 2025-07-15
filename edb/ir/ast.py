@@ -898,10 +898,11 @@ class BytesConstant(BaseConstant):
 
 class ConstantSet(ConstExpr, ImmutableExpr):
 
-    elements: tuple[BaseConstant | Parameter, ...]
+    elements: tuple[BaseConstant | BaseParameter, ...]
 
 
-class Parameter(ImmutableExpr):
+class BaseParameter(ImmutableExpr):
+    __abstract_node__ = True
 
     name: str
     required: bool
@@ -913,6 +914,14 @@ class Parameter(ImmutableExpr):
     @property
     def is_global(self) -> bool:
         return self.is_implicit_global is not None
+
+
+class Parameter(BaseParameter):
+    pass
+
+
+class FunctionParameter(BaseParameter):
+    pass
 
 
 class TupleElement(ImmutableBase):

@@ -810,9 +810,15 @@ def compile_TypeCast(
         else:
             required = True
 
+        parameter_type = (
+            irast.Parameter
+            if isinstance(expr.expr, qlast.Parameter) else
+            irast.FunctionParameter
+        )
+
         typeref = typegen.type_to_typeref(pt, env=ctx.env)
         param = setgen.ensure_set(
-            irast.Parameter(
+            parameter_type(
                 typeref=typeref,
                 name=param_name,
                 required=required,
@@ -1219,7 +1225,7 @@ def try_constant_set(expr: irast.Base) -> Optional[irast.ConstantSet]:
             stack.extend([el.args[1].expr.expr, el.args[0].expr.expr])
         elif el and irutils.is_trivial_select(el):
             stack.append(el.result)
-        elif isinstance(el, (irast.BaseConstant, irast.Parameter)):
+        elif isinstance(el, (irast.BaseConstant, irast.BaseParameter)):
             elements.append(el)
         else:
             return None

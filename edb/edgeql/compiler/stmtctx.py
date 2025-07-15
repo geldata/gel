@@ -763,7 +763,7 @@ def compile_anchor(
     elif isinstance(anchor, qlast.Base):
         step = dispatch.compile(anchor, ctx=ctx)
 
-    elif isinstance(anchor, irast.Parameter):
+    elif isinstance(anchor, (irast.Parameter, irast.FunctionParameter)):
         step = setgen.ensure_set(anchor, ctx=ctx)
 
     elif isinstance(anchor, irast.PathId):

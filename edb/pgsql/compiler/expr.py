@@ -92,7 +92,7 @@ def _compile_set_impl(
 
     is_toplevel = ctx.toplevel_stmt is context.NO_STMT
 
-    if isinstance(ir_set.expr, (irast.BaseConstant, irast.Parameter)):
+    if isinstance(ir_set.expr, (irast.BaseConstant, irast.BaseParameter)):
         # Avoid creating needlessly complicated constructs for
         # constant expressions.  Besides being an optimization,
         # this helps in GROUP BY queries.
@@ -119,6 +119,53 @@ def _compile_set_impl(
 @dispatch.compile.register(irast.Parameter)
 def compile_Parameter(
         expr: irast.Parameter, *,
+        ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
+
+    result: pgast.BaseExpr
+    is_decimal: bool = expr.name.isdecimal()
+
+    params = [p for p in ctx.env.query_params if p.name == expr.name]
+    param = params[0] if params else None
+
+    if not is_decimal and ctx.env.named_param_prefix is not None:
+        result = pgast.ColumnRef(
+            name=ctx.env.named_param_prefix + (expr.name,),
+            nullable=not expr.required,
+        )
+    elif param and param.sub_params:
+        return relgen.process_encoded_param(param, ctx=ctx)
+    else:
+        index = ctx.argmap[expr.name].index
+        result = pgast.ParamRef(number=index, nullable=not expr.required)
+
+    if irtyputils.needs_custom_serialization(expr.typeref):
+        if irtyputils.is_array(expr.typeref):
+            subt = expr.typeref.subtypes[0]
+            el_sql_type = subt.real_base_type.custom_sql_serialization
+            # Arrays of text encoded types need to come in as the custom type
+            result = pgast.TypeCast(
+                arg=result,
+                type_name=pgast.TypeName(name=(f'{el_sql_type}[]',)),
+            )
+        else:
+            el_sql_type = expr.typeref.real_base_type.custom_sql_serialization
+            assert el_sql_type is not None
+            result = pgast.TypeCast(
+                arg=result,
+                type_name=pgast.TypeName(name=(el_sql_type,)),
+            )
+
+    return pgast.TypeCast(
+        arg=result,
+        type_name=pgast.TypeName(
+            name=pg_types.pg_type_from_ir_typeref(expr.typeref)
+        )
+    )
+
+
+@dispatch.compile.register(irast.FunctionParameter)
+def compile_FunctionParameter(
+        expr: irast.FunctionParameter, *,
         ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
 
     result: pgast.BaseExpr
