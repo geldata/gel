@@ -20,6 +20,14 @@
 CREATE MODULE sys;
 
 
+CREATE MODULE sys::perm;
+CREATE PERMISSION sys::perm::superuser;
+CREATE PERMISSION sys::perm::data_modification;
+CREATE PERMISSION sys::perm::ddl;
+CREATE PERMISSION sys::perm::branch_config;
+CREATE PERMISSION sys::perm::sql_session_config;
+
+
 CREATE SCALAR TYPE sys::TransactionIsolation
     EXTENDING enum<RepeatableRead, Serializable>;
 
@@ -119,6 +127,10 @@ CREATE TYPE sys::Role EXTENDING
     CREATE PROPERTY password -> std::str;
     CREATE MULTI PROPERTY permissions -> std::str;
     CREATE MULTI PROPERTY branches -> std::str;
+
+    CREATE ACCESS POLICY ap_read allow select using (
+        global sys::perm::superuser
+    );
 };
 
 
@@ -239,6 +251,10 @@ CREATE TYPE sys::QueryStats EXTENDING sys::ExternalObject {
             ++ "for this query (fields `min_plan_time`, `max_plan_time`, "
             ++ "`min_exec_time` and `max_exec_time`).";
     };
+
+    CREATE ACCESS POLICY ap_read allow select using (
+        global sys::perm::superuser
+    );
 };
 
 
@@ -263,6 +279,7 @@ sys::reset_query_stats(
         ++ 'corresponding reset was actually performed.';
     SET volatility := 'Volatile';
     USING SQL FUNCTION 'edgedb.reset_query_stats';
+    set required_permissions := { sys::perm::superuser };
 };
 
 
@@ -384,6 +401,7 @@ sys::_describe_roles_as_ddl() -> str
     SET volatility := 'Stable';
     SET internal := true;
     USING SQL FUNCTION 'edgedb._describe_roles_as_ddl';
+    set required_permissions := { sys::perm::superuser };
 };
 
 
@@ -395,6 +413,7 @@ sys::_get_all_role_memberships(r: uuid) -> array<uuid>
     SET internal := true;
     USING SQL FUNCTION 'edgedb._all_role_memberships';
     set impl_is_strict := false;
+    set required_permissions := { sys::perm::superuser };
 };
 
 
@@ -443,20 +462,14 @@ sys::approximate_count(
     SET volatility := 'Stable';
     USING SQL FUNCTION 'edgedb.approximate_count';
     set impl_is_strict := false;
+    set required_permissions := { sys::perm::superuser };
 };
-
-
-CREATE MODULE sys::perm;
-CREATE PERMISSION sys::perm::superuser;
-CREATE PERMISSION sys::perm::data_modification;
-CREATE PERMISSION sys::perm::ddl;
-CREATE PERMISSION sys::perm::branch_config;
-CREATE PERMISSION sys::perm::sql_session_config;
 
 # Add permissions to std.
 
 # The std module is populated before sys permissions so we need to
 # add these restrictions here.
+
 ALTER FUNCTION std::sequence_reset(
     seq: schema::ScalarType,
     value: std::int64,
