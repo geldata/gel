@@ -323,7 +323,10 @@ class BytesConstant(BaseConstant):
 
 class Parameter(Expr):
     name: str
-    is_func_param: bool = False
+
+
+class FunctionParameter(Expr):
+    name: str
 
 
 class UnaryOp(Expr):
@@ -365,7 +368,7 @@ class TypeOp(TypeExpr):
     right: TypeExpr
 
 
-class FuncParam(Base):
+class FuncParamDecl(Base):
     name: str
     type: TypeExpr
     typemod: qltypes.TypeModifier = qltypes.TypeModifier.SingletonType
@@ -1236,7 +1239,7 @@ class CreateConstraint(
 ):
     subjectexpr: typing.Optional[Expr]
     abstract: bool = True
-    params: list[FuncParam] = ast.field(factory=list)
+    params: list[FuncParamDecl] = ast.field(factory=list)
 
 
 class AlterConstraint(AlterObject, ConstraintCommand):
@@ -1290,7 +1293,7 @@ class CreateIndex(
     kwargs: dict[str, Expr] = ast.field(factory=dict)
     index_types: list[IndexType]
     code: typing.Optional[IndexCode] = None
-    params: list[FuncParam] = ast.field(factory=list)
+    params: list[FuncParamDecl] = ast.field(factory=list)
 
 
 class AlterIndex(AlterObject, IndexCommand):
@@ -1441,7 +1444,7 @@ class FunctionCode(DDL):
 class FunctionCommand(DDLCommand):
 
     __abstract_node__ = True
-    params: list[FuncParam] = ast.field(factory=list)
+    params: list[FuncParamDecl] = ast.field(factory=list)
 
 
 class CreateFunction(CreateObject, FunctionCommand):
@@ -1474,7 +1477,7 @@ class OperatorCommand(DDLCommand):
 
     __abstract_node__ = True
     kind: qltypes.OperatorKind
-    params: list[FuncParam] = ast.field(factory=list)
+    params: list[FuncParamDecl] = ast.field(factory=list)
 
 
 class CreateOperator(CreateObject, OperatorCommand):

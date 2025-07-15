@@ -1017,9 +1017,7 @@ def preprocess_script(
             mctx.modaliases = modaliases
             target_stype = typegen.ql_typeexpr_to_type(cast.type, ctx=mctx)
 
-        is_func_param = cast.expr.is_func_param
-
-        if ctx.env.options.json_parameters and not cast.expr.is_func_param:
+        if ctx.env.options.json_parameters:
             # Rule check on JSON-input parameters.
             # The actual casting of the the parameter happens in
             if name.isdecimal():
@@ -1049,9 +1047,13 @@ def preprocess_script(
         # This handles processing of tuple arguments, nested arrays, and
         # all json-mode parameters.
         sub_params = tuple_args.create_sub_params(
-            name, required, typeref=target_typeref, pt=target_stype,
-            is_func_param=is_func_param,
-            ctx=ctx)
+            name,
+            required,
+            typeref=target_typeref,
+            pt=target_stype,
+            is_func_param=False,
+            ctx=ctx,
+        )
         params[name] = irast.Param(
             name=name,
             required=required,
