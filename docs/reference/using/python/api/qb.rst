@@ -6,11 +6,11 @@ Query Builder
 
 .. py:currentmodule:: gel
 
-The ``gel-python`` package exposes a command-line tool to generate typesafe Python query builder functions for an existing project instance. The schema is reflected as Pydantic models that can be used to instantiate Gel objects and also to construct queries.
+The ``gel`` Python package exposes a command-line tool to generate typesafe Python query builder functions for an existing project instance. The schema is reflected as Pydantic models that can be used to instantiate Gel objects and also to construct queries. THe following command will run this generator:
 
 .. code-block:: bash
 
-  $ gel-generate-py models
+  $ gel generate py/models
 
 Consider a simple schema for an app where users can post things, comment, and follow friends:
 
@@ -45,7 +45,7 @@ Consider a simple schema for an app where users can post things, comment, and fo
     }
   }
 
-Running the ``gel-generate-py models`` command will create a ``models`` Python package that can now be used to interact with Gel.
+After setting up a Gel project with the above schema we can run the ``gel generate py/models`` command. It will create a ``models`` Python package that can now be used to interact with Gel.
 
 Let's start by creating a few users:
 
@@ -69,16 +69,16 @@ We can also build up nested objects and ``save`` them as a whole structure:
 .. code-block:: python
 
   db.save(
-    default.Post(
-      title='New here',
-      body='Hello',
-      author=alice,
-    ),
-    default.Post(
-      title='First time',
-      body='Hello',
-      author=billie,
-    ),
+      default.Post(
+          title='New here',
+          body='Hello',
+          author=alice,
+      ),
+      default.Post(
+          title='First time',
+          body='Hello',
+          author=billie,
+      ),
   )
 
 The Pydantic models can also be used to build up queries for fetching objects from the database.
@@ -138,7 +138,7 @@ We can have more elaborate filters by using ``lambda`` functions where the first
     :caption: Python
 
     q = default.User.filter(
-      lambda u: std.len(u.name) > 5
+        lambda u: std.len(u.name) > 5
     )
     users = db.query(q)
 
@@ -156,7 +156,7 @@ The expressions used in filters can be built up to follow links:
     :caption: Python
 
     q = default.Post.filter(
-      lambda p: p.author.name == 'Alice'
+        lambda p: p.author.name == 'Alice'
     )
     posts = db.query(q)
 
@@ -174,10 +174,10 @@ So far fetching data resulted in flat objects, but we can also include links whe
     :caption: Python
 
     q = default.Post.select(
-      '*',
-      author=True,
+        '*',
+        author=True,
     ).filter(
-      lambda p: p.author.name == 'Alice'
+        lambda p: p.author.name == 'Alice'
     )
     posts = db.query(q)
 
@@ -198,11 +198,11 @@ The ``select()`` method can be used to cherry-pick the specific fields that will
     :caption: Python
 
     q = default.Post.select(
-      title=True,
-      body=True,
-      author=True,
+        title=True,
+        body=True,
+        author=True,
     ).filter(
-      lambda p: p.author.name == 'Alice'
+        lambda p: p.author.name == 'Alice'
     )
     posts = db.query(q)
 
@@ -224,13 +224,13 @@ The fetched objects can be used to update the data or as references to existing 
   posts[0].body = 'Hello world!'
   # make another post by Alice
   new_post = default.Post(
-    title='Question',
-    body='How do I insert data?',
-    author=posts[0].author,
+      title='Question',
+      body='How do I insert data?',
+      author=posts[0].author,
   )
   db.save(
-    posts[0],
-    new_post,
+      posts[0],
+      new_post,
   )
 
 We can sort the posts in Python (as long as we made sure to either fetch all the properties or explicitly included ``created_at``). However, we can also sort things in Gel and fetch posts in the right order:
@@ -241,12 +241,12 @@ We can sort the posts in Python (as long as we made sure to either fetch all the
     :caption: Python
 
     q = default.Post.select(
-      '*',
-      author=True,
+        '*',
+        author=True,
     ).filter(
-      lambda p: p.author.name == 'Alice'
+        lambda p: p.author.name == 'Alice'
     ).order_by(
-      created_at=True
+        created_at=True
     )
     posts = db.query(q)
 
@@ -268,13 +268,13 @@ We can also add more nuance to the ordering by controlling the ordering directio
     :caption: Python
 
     q = default.Post.select(
-      '*',
-      author=True,
+        '*',
+        author=True,
     ).filter(
-      lambda p: p.author.name == 'Alice'
+        lambda p: p.author.name == 'Alice'
     ).order_by(
-      created_at='desc',
-      title='asc',
+        created_at='desc',
+        title='asc',
     )
     posts = db.query(q)
 
@@ -296,13 +296,13 @@ The query builder lets us compose nested queries with nested sub-queries benefit
     :caption: Python
 
     q = default.User.select(
-      '*',
-      posts=lambda u: u.posts.order_by(
-        created_at='desc',
-        title='asc',
-      ),
+        '*',
+        posts=lambda u: u.posts.order_by(
+            created_at='desc',
+            title='asc',
+        ),
     ).filter(
-      name='Alice'
+        name='Alice'
     )
     user = db.get(q)
 
@@ -318,6 +318,33 @@ The query builder lets us compose nested queries with nested sub-queries benefit
     }
     filter .name = 'Alice'
 
+It's also possible to add some arbitrary computed expression to the data being fetched. However, this new field and type has to be declared first. To do so we can derive a custom type from one of the existing reflected types, e.g. ``default.User`` and we can use the ``std`` types as the field type:
+
+.. tabs::
+
+  .. code-tab:: python
+    :caption: Python
+
+    class MyUser(default.User):
+        name_len: std.int64
+
+    q = MyUser.select(
+        '*',
+        name_len=lambda u: std.len(u.name),
+    ).filter(
+        name='Alice'
+    )
+    user = db.get(q)
+
+  .. code-tab:: edgeql
+    :caption: equivalent EdgeQL
+
+    select User {
+      *,
+      name_len := len(.name),
+    }
+    filter .name = 'Alice'
+
 Finally, you can delete what you've selected by combining a ``filter()`` with ``delete()``. The order of operations matters here and the ``filter()`` comes first to make sure that you target only specific objects for deletion:
 
 .. tabs::
@@ -327,7 +354,7 @@ Finally, you can delete what you've selected by combining a ``filter()`` with ``
 
     # delete all posts by Alice
     q = default.Post.filter(
-      lambda p: p.author.name == 'Alice'
+        lambda p: p.author.name == 'Alice'
     ).delete()
     user = db.query(q)
 

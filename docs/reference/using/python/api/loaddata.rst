@@ -173,7 +173,7 @@ The JSON basically contains teams, each team has members, some members have a cu
   }
 
 
-We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with ``gel-generate-py models``.
+We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with ``gel generate py/models``.
 
 Once the models are in place they can be read and saved to the database with a simple script:
 
@@ -467,9 +467,9 @@ This JSON dump essentially has a lot of redundant information as the objects are
     }
   }
 
-We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with ``gel-generate-py models``.
+We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with ``gel generate py/models``.
 
-Once the models are in place they can be read and saved to the database. Our script will have to keep track of object duplicates, though:
+Once the models are in place they can be read and save to the database. However, our script will have to keep track of object duplicates:
 
 .. code-block:: python
 
@@ -744,7 +744,7 @@ This is the same data as in the previous example, but without all the duplicates
     }
   }
 
-We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with ``gel-generate-py models``.
+We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with ``gel generate py/models``.
 
 Once the models are in place they can be read and saved to the database. We could load all the files and compose the overall object structure and save them all at once, but in general, this approach may not be possible if we're dealing with cross-linked tables. Instead we'll load them one table at a time, ignoring links and then we'll do a separate pass to just link everything together:
 
