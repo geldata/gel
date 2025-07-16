@@ -8,7 +8,7 @@ Modeling the data
 
   The flashcards application has a simple data model, but it's interesting enough to utilize many unique features of the |Gel| schema language.
 
-  Looking at the mock data in the example JSON file ``./deck-edgeql.json``, you can see this structure in the JSON. There is a ``Card`` class that describes a single flashcard, which contains two required string properties: ``front`` and ``back``. Each ``Deck`` object has zero or more ``Card`` objects in a list.
+  Looking at the mock data in the example JSON file ``./deck-edgeql.json``, you can see this structure in the JSON. There is a ``Card`` class that describes a single flashcard, which contains two required string properties: ``front`` and ``back``. Each ``Deck`` object has zero or more ``Card`` objects in a list. Here's what that data model looks like as Pydantic models.
 
   .. code-block:: python
 
@@ -23,11 +23,11 @@ Modeling the data
 
     class DeckBase(BaseModel):
       name: str
-      description: Optional[str] = None
+      description: str | None = None
 
     class Deck(DeckBase):
       id: str
-      cards: List[Card]
+      cards: list[Card]
 
 .. edb:split-section::
 
