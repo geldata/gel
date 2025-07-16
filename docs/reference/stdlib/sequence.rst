@@ -32,10 +32,15 @@ Sequences
         scalar type TicketNo extending sequence;
 
         type Ticket {
-            number: TicketNo {
+            required number: TicketNo {
                 constraint exclusive;
             }
         }
+
+    A property set to a sequence type has an implicit default of calling
+    ``sequence_next``. If you are using this as an auto-incrementing exclusive
+    property, you probably want it to be ``required`` and ensure that you're not
+    setting the property explicitly when inserting objects.
 
     A sequence is bound to the scalar type, not to the property, so
     if multiple properties use the same sequence, they will
