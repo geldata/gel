@@ -91,6 +91,7 @@ The ``models`` generator will generate Pydantic classes and a programmatic query
 
 .. code-block:: python
 
+    import datetime
     from models import User, std
     from gel import create_client
 
