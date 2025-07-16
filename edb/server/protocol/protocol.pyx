@@ -80,7 +80,11 @@ cdef class HttpRequest:
         self.authorization = b''
         self.content_type = b''
         self.forwarded = {}
+        self.cookie_header = b''
         self.cookies = http.cookies.SimpleCookie()
+
+    def load_cookies(self):
+        self.cookies.load(self.cookie_header.decode('ascii'))
 
 
 cdef class HttpResponse:
@@ -264,7 +268,7 @@ cdef class HttpProtocol:
             forwarded_key = name[len(b'x-forwarded-'):]
             self.current_request.forwarded[forwarded_key] = value
         elif name == b'cookie':
-            self.current_request.cookies.load(value.decode('ascii'))
+            self.current_request.cookie_header = value
 
     def on_body(self, body: bytes):
         self.current_request.body += body

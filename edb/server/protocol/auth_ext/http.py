@@ -140,6 +140,14 @@ class Router:
         )
 
         try:
+            try:
+                request.load_cookies()
+            except http.cookies.CookieError as ex:
+                raise errors.InvalidData(
+                    f'invalid cookies header: {ex}, '
+                    f'try clearing cookies and trying again'
+                )
+
             match args:
                 # PKCE token exchange route
                 case ("token",):
