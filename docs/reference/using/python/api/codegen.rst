@@ -16,7 +16,7 @@ The ``gel-python`` package exposes a command-line tool to generate various kinds
   $ uvx gel generate py/queries
   $ uvx gel generate py/models
 
-The ``gel generate`` commands supports the same set of :ref:`connection options <ref_cli_gel_connopts>` as the ``gel`` CLI.
+The :gelcmd:`generate` commands supports the same set of :ref:`connection options <ref_cli_gel_connopts>` as the ``gel`` CLI.
 
 .. code-block::
 
