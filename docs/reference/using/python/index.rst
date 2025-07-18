@@ -13,6 +13,7 @@ Python
    api/codegen
    api/qb
    api/fastapi
+   api/fastapi2
    api/loaddata
    api/advanced
 
