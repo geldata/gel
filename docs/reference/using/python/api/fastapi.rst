@@ -51,7 +51,7 @@ Among the output you should see some messages from |gelcmd|:
   gel   Read more at https://geldata.com/p/localdev
 
 
-It's a bit of a mouthful, but basically it's informing you that the database that was set up by :gelcmd:`init` will now be monitored. More specifically, the schema files (typically found in ``dbschema/default.gel``) will be used to automatically apply migrations when the schema is edited. Every time a migration is about to be applied a backup will be made as well, to make sure that it's easy to revert to a previous state if anything goes wrong.
+It's a bit of a mouthful, but basically it's informing you that the database that was set up by :gelcmd:`init` will now be monitored. More specifically, the schema files (typically found in :dotgel:`dbschema/default`) will be used to automatically apply migrations when the schema is edited. Every time a migration is about to be applied a backup will be made as well, to make sure that it's easy to revert to a previous state if anything goes wrong.
 
 There will also be another message:
 
@@ -63,13 +63,13 @@ There will also be another message:
 
 That's the automatic schema reflection in action. There's not much in the schema at this moment, except for all the standard built-in stuff. But all that still gets reflected into the ``models`` Python package and will be useful for building queries.
 
-Let's start with a simple schema first - just a ``User`` with a name and email:
+Let's start with a simple schema first - just a ``Person`` with a name and email:
 
 .. code-block:: sdl
-  :caption: dbschema/default.gel
+  :caption: :dotgel:`dbschema/default`
 
   module default {
-    type User {
+    type Person {
       required name: str {
         constraint exclusive;
       }
@@ -79,9 +79,9 @@ Let's start with a simple schema first - just a ``User`` with a name and email:
     }
   }
 
-After you save that schema, you can watch the ``fastapi dev`` process pickup that change and update the database as well as the ``models``. Now we'll be able to create some endpoints.
+After you save that schema, you can watch the ``fastapi dev`` process pick up that change and update the database as well as the ``models``. Now we'll be able to create some endpoints.
 
-Let's start with endpoints for creating and listing users:
+Let's start with endpoints for creating and listing people:
 
 .. code-block:: python-diff
   :caption: main.py
@@ -103,35 +103,35 @@ Let's start with endpoints for creating and listing users:
         return await db.query_single("select 'Hello world!'")
   +
   +
-  + class CreateUser(BaseModel):
+  + class CreatePerson(BaseModel):
   +     name: str
   +     email: str
   +
   +
-  + @app.post("/users/")
-  + async def create_user(userdata: CreateUser):
+  + @app.post("/person/")
+  + async def create_person(data: CreatePerson):
   +     db = g.client
-  +     user = default.User(**userdata.model_dump())
-  +     await db.save(user)
-  +     return user.id
+  +     person = default.Person(**data.model_dump())
+  +     await db.save(person)
+  +     return person.id
   +
   +
-  + @app.get("/users/", response_model=list[default.User])
-  + async def get_users():
+  + @app.get("/people/", response_model=list[default.Person])
+  + async def get_people():
   +     db = g.client
-  +     q = default.User.order_by(name=True)
+  +     q = default.Person.order_by(name=True)
   +     return await db.query(q)
 
-In order to create a new user we'll need a simple input model with the ``name`` and ``email`` fields. We can then use that input model to initialize the fields of ``default.User`` reflected Gel model. After that all that's left is to call ``save()`` on our database client, passing the new user we want to save. Finally, we can just return the ``user.id`` since it will be initialized after the model is saved.
+In order to create a new person we'll need a simple input model with the ``name`` and ``email`` fields. We can then use that input model to initialize the fields of ``default.Person`` reflected Gel model. After that all that's left is to call ``save()`` on our database client, passing the new person we want to save. Finally, we can just return the ``person.id`` since it will be initialized after the model is saved.
 
-Listing all existing users is even simpler. We just use the query builder to create a query by starting with the base model we want to fetch: ``default.User``. In this case we're fetching all the data, so we don't need any filters added, but we still probably want to sort the results, so we add an ``order_by(name=True)``. Then we use the database client to run the query, just like we would run a hand-written query. We'll get a bunch of ``default.User`` objects as the response, so we can set ``response_model=list[default.User]``.
+Listing all existing people is even simpler. We just use the query builder to create a query by starting with the base model we want to fetch: ``default.Person``. In this case we're fetching all the data, so we don't need any filters added, but we still probably want to sort the results, so we add an ``order_by(name=True)``. Then we use the database client to run the query, just like we would run a hand-written query. We'll get a bunch of ``default.Person`` objects as the response, so we can set ``response_model=list[default.Person]``.
 
 We can use the built-in FastAPI docs to introspect the endpoints and even try them out.
 
-Set up a few users with the following inputs:
+Set up a few people with the following inputs:
 
 .. code-block:: json
-  :caption: POST http://127.0.0.1:8000/users/
+  :caption: POST http://127.0.0.1:8000/person/
 
   {
     "name": "Alice",
@@ -139,7 +139,7 @@ Set up a few users with the following inputs:
   }
 
 .. code-block:: json
-  :caption: POST http://127.0.0.1:8000/users/
+  :caption: POST http://127.0.0.1:8000/person/
 
   {
     "name": "Billie",
@@ -147,7 +147,7 @@ Set up a few users with the following inputs:
   }
 
 .. code-block:: json
-  :caption: POST http://127.0.0.1:8000/users/
+  :caption: POST http://127.0.0.1:8000/person/
 
   {
     "name": "Cameron",
@@ -155,17 +155,17 @@ Set up a few users with the following inputs:
   }
 
 .. code-block:: json
-  :caption: POST http://127.0.0.1:8000/users/
+  :caption: POST http://127.0.0.1:8000/person/
 
   {
     "name": "Dana",
     "email": "dana@gel.com"
   }
 
-And then we can try out the endpoint listing all users, getting:
+And then we can try out the endpoint listing all people, getting:
 
 .. code-block:: json
-  :caption: GET http://127.0.0.1:8000/users/
+  :caption: GET http://127.0.0.1:8000/people/
 
   [
     {
@@ -190,20 +190,20 @@ And then we can try out the endpoint listing all users, getting:
     }
   ]
 
-Now that we can add and view users let's expand the functionality to create a "friends list". First we're going to need to update our schema (and let the Gel hooks do their migration and reflection magic):
+Now that we can add and view people let's expand the functionality to create a "friends list". First we're going to need to update our schema (and let the Gel hooks do their migration and reflection magic):
 
 .. code-block:: sdl-diff
-  :caption: dbschema/default.gel
+  :caption: :dotgel:`dbschema/default`
 
     module default {
-      type User {
+      type Person {
         required name: str {
           constraint exclusive;
         }
         required email: str {
           constraint exclusive;
         }
-  +     multi friends: User;
+  +     multi friends: Person;
       }
     }
 
@@ -230,33 +230,33 @@ We're going to keep the existing endpoints, but we'll need some more models to d
         return await db.query_single("select 'Hello world!'")
 
 
-    class CreateUser(BaseModel):
+    class CreatePerson(BaseModel):
         name: str
         email: str
 
 
-  + class BaseUser(default.User.__variants__.Base):
-  +     name: default.User.__typeof__.name
-  +     email: default.User.__typeof__.email
+  + class BasePerson(default.Person.__variants__.Base):
+  +     name: default.Person.__typeof__.name
+  +     email: default.Person.__typeof__.email
   +
   +
-    @app.post("/users/")
-    async def create_user(userdata: CreateUser):
+    @app.post("/person/")
+    async def create_person(data: CreatePerson):
         db = g.client
-        user = default.User(**userdata.model_dump())
-        await db.save(user)
-        return user.id
+        person = default.Person(**data.model_dump())
+        await db.save(person)
+        return person.id
 
 
-  - @app.get("/users/", response_model=list[default.User])
-  + @app.get("/users/", response_model=list[BaseUser])
-    async def get_users():
+  - @app.get("/people/", response_model=list[default.Person])
+  + @app.get("/people/", response_model=list[BasePerson])
+    async def get_people():
         db = g.client
-  -     q = default.User.order_by(name=True)
-  +     q = BaseUser.order_by(name=True)
+  -     q = default.Person.order_by(name=True)
+  +     q = BasePerson.order_by(name=True)
         return await db.query(q)
 
-The ``BaseUser`` model is derived from the ``default.User.__variants__.Base`` by only declaring the ``name`` and ``email`` fields. The ``__variants__`` contain several useful model templates. The ``Base`` template just has the ``id`` so that it can be used to declare only the fields we need. In addition to being useful as a Pydantic model that declares the expected output shape, it can also be used as the base model in the query builder (since it's derived from one of the ``__variants__``).
+The ``BasePerson`` model is derived from the ``default.Person.__variants__.Base`` by only declaring the ``name`` and ``email`` fields. The ``__variants__`` contain several useful model templates. The ``Base`` template just has the ``id`` so that it can be used to declare only the fields we need. In addition to being useful as a Pydantic model that declares the expected output shape, it can also be used as the base model in the query builder (since it's derived from one of the ``__variants__``).
 
 We still need to add another endpoint for adding friends as well as the corresponding output model:
 
@@ -281,67 +281,67 @@ We still need to add another endpoint for adding friends as well as the correspo
         return await db.query_single("select 'Hello world!'")
 
 
-    class CreateUser(BaseModel):
+    class CreatePerson(BaseModel):
         name: str
         email: str
 
 
-    class BaseUser(default.User.__variants__.Base):
-        name: default.User.__typeof__.name
-        email: default.User.__typeof__.email
+    class BasePerson(default.Person.__variants__.Base):
+        name: default.Person.__typeof__.name
+        email: default.Person.__typeof__.email
 
 
-  + class UserWithFriends(BaseUser):
-  +     friends: list[BaseUser]
+  + class PersonWithFriends(BasePerson):
+  +     friends: list[BasePerson]
   +
   +
-    @app.post("/users/")
-    async def create_user(userdata: CreateUser):
+    @app.post("/person/")
+    async def create_person(data: CreatePerson):
         db = g.client
-        user = default.User(**userdata.model_dump())
-        await db.save(user)
-        return user.id
+        person = default.Person(**data.model_dump())
+        await db.save(person)
+        return person.id
 
 
-    @app.get("/users/", response_model=list[BaseUser])
-    async def get_users():
+    @app.get("/people/", response_model=list[BasePerson])
+    async def get_people():
         db = g.client
-        q = BaseUser.order_by(name=True)
+        q = BasePerson.order_by(name=True)
         return await db.query(q)
   +
   +
-  + @app.post("/user/{uname}/add_friend", response_model=UserWithFriends)
+  + @app.post("/person/{pname}/add_friend", response_model=PersonWithFriends)
   + async def add_friend(
-  +     uname: str,
+  +     pname: str,
   +     frname: str,
   + ):
   +     db = g.client
-  +     # fetch the main user
-  +     user = await db.get(
-  +         default.User.select(
+  +     # fetch the main person
+  +     person = await db.get(
+  +         default.Person.select(
   +             # fetch all properties
   +             '*',
   +             # also fetch friends (with properties)
   +             friends=True,
   +         ).filter(
-  +             name=uname
+  +             name=pname
   +         )
   +     )
   +     # fetch the friend
   +     friend = await db.get(
-  +         default.User.filter(
+  +         default.Person.filter(
   +             name=frname
   +         )
   +     )
   +     # append the new friend to existing friends
-  +     user.friends.append(friend)
-  +     await db.save(user)
-  +     return user
+  +     person.friends.append(friend)
+  +     await db.save(person)
+  +     return person
 
 We can now try adding a friend to Alice:
 
 .. code-block:: json
-  :caption: POST http://127.0.0.1:8000/user/Alice/add_friend?frname=Billie
+  :caption: POST http://127.0.0.1:8000/person/Alice/add_friend?frname=Billie
 
   {
     "id": "60a49492-4aa1-11f0-8507-4729d6e4bd07",
@@ -352,14 +352,14 @@ We can now try adding a friend to Alice:
         "id": "8ae1bd40-4aa4-11f0-9256-33400a7cef0d",
         "name": "Billie",
         "email": "billie@gel.com"
-      },
+      }
     ]
   }
 
 And another one:
 
 .. code-block:: json
-  :caption: POST http://127.0.0.1:8000/user/Alice/add_friend?frname=Cameron
+  :caption: POST http://127.0.0.1:8000/person/Alice/add_friend?frname=Cameron
 
   {
     "id": "60a49492-4aa1-11f0-8507-4729d6e4bd07",
@@ -402,89 +402,89 @@ If we can add a friend, we should also make an endpoint for removing a friend. W
         return await db.query_single("select 'Hello world!'")
 
 
-    class CreateUser(BaseModel):
+    class CreatePerson(BaseModel):
         name: str
         email: str
 
 
-    class BaseUser(default.User.__variants__.Base):
-        name: default.User.__typeof__.name
-        email: default.User.__typeof__.email
+    class BasePerson(default.Person.__variants__.Base):
+        name: default.Person.__typeof__.name
+        email: default.Person.__typeof__.email
 
 
-    class UserWithFriends(BaseUser):
-        friends: list[BaseUser]
+    class PersonWithFriends(BasePerson):
+        friends: list[BasePerson]
 
 
-    @app.post("/users/")
-    async def create_user(userdata: CreateUser):
+    @app.post("/person/")
+    async def create_person(data: CreatePerson):
         db = g.client
-        user = default.User(**userdata.model_dump())
-        await db.save(user)
-        return user.id
+        person = default.Person(**data.model_dump())
+        await db.save(person)
+        return person.id
 
 
-    @app.get("/users/", response_model=list[BaseUser])
-    async def get_users():
+    @app.get("/people/", response_model=list[BasePerson])
+    async def get_people():
         db = g.client
-        q = BaseUser.order_by(name=True)
+        q = BasePerson.order_by(name=True)
         return await db.query(q)
 
 
-    @app.post("/users/{uname}/add_friend", response_model=UserWithFriends)
+    @app.post("/person/{pname}/add_friend", response_model=PersonWithFriends)
     async def add_friend(
-        uname: str,
+        pname: str,
         frname: str,
     ):
         db = g.client
-        # fetch the main user
-        user = await db.get(
-            default.User.select(
+        # fetch the main person
+        person = await db.get(
+            default.Person.select(
                 '*',
                 friends=True,
             ).filter(
-                name=uname
+                name=pname
             )
         )
         # fetch the friend
         friend = await db.get(
-            default.User.filter(
+            default.Person.filter(
                 name=frname
             )
         )
         # append the new friend to existing friends
-        user.friends.append(friend)
-        await db.save(user)
-        return user
+        person.friends.append(friend)
+        await db.save(person)
+        return person
   +
   +
-  + @app.post("/users/{uname}/remove_friend", response_model=UserWithFriends)
+  + @app.post("/person/{pname}/remove_friend", response_model=PersonWithFriends)
   + async def remove_friend(
-  +     uname: str,
+  +     pname: str,
   +     frname: str,
   + ):
   +     db = g.client
-  +     # fetch the main user
-  +     user = await db.get(
-  +         default.User.select(
+  +     # fetch the main person
+  +     person = await db.get(
+  +         default.Person.select(
   +             # fetch all properties
   +             '*',
   +             # also fetch friends (with properties)
   +             friends=True,
   +         ).filter(
-  +             name=uname
+  +             name=pname
   +         )
   +     )
   +     # find and remove the specified friend
-  +     for f in user.friends:
+  +     for f in person.friends:
   +         if f.name == frname:
-  +             user.friends.remove(f)
+  +             person.friends.remove(f)
   +             break
   +
-  +     await db.save(user)
-  +     return user
+  +     await db.save(person)
+  +     return person
 
-Finally, let's add an endpoint for deleting a ``User``. We'll use the query builder to delete a specific record:
+Finally, let's add an endpoint for deleting a ``Person``. We'll use the query builder to delete a specific record:
 
 .. code-block:: python-diff
   :caption: main.py
@@ -507,97 +507,97 @@ Finally, let's add an endpoint for deleting a ``User``. We'll use the query buil
         return await db.query_single("select 'Hello world!'")
 
 
-    class CreateUser(BaseModel):
+    class CreatePerson(BaseModel):
         name: str
         email: str
 
 
-    class BaseUser(default.User.__variants__.Base):
-        name: default.User.__typeof__.name
-        email: default.User.__typeof__.email
+    class BasePerson(default.Person.__variants__.Base):
+        name: default.Person.__typeof__.name
+        email: default.Person.__typeof__.email
 
 
-    class UserWithFriends(BaseUser):
-        friends: list[BaseUser]
+    class PersonWithFriends(BasePerson):
+        friends: list[BasePerson]
 
 
-    @app.post("/users/")
-    async def create_user(userdata: CreateUser):
+    @app.post("/person/")
+    async def create_person(data: CreatePerson):
         db = g.client
-        user = default.User(**userdata.model_dump())
-        await db.save(user)
-        return user.id
+        person = default.Person(**data.model_dump())
+        await db.save(person)
+        return person.id
 
 
-    @app.get("/users/", response_model=list[BaseUser])
-    async def get_users():
+    @app.get("/people/", response_model=list[BasePerson])
+    async def get_people():
         db = g.client
-        q = BaseUser.order_by(name=True)
+        q = BasePerson.order_by(name=True)
         return await db.query(q)
 
 
-  + @app.delete("/users/{uname}")
-  + async def delete_user(uname: str):
+  + @app.delete("/person/{pname}")
+  + async def delete_person(pname: str):
   +     db = g.client
-  +     q = default.User.filter(name=uname).delete()
+  +     q = default.Person.filter(name=pname).delete()
   +     return await db.query_single(q)
   +
   +
-    @app.post("/users/{uname}/add_friend", response_model=UserWithFriends)
+    @app.post("/person/{pname}/add_friend", response_model=PersonWithFriends)
     async def add_friend(
-        uname: str,
+        pname: str,
         frname: str,
     ):
         db = g.client
-        # fetch the main user
-        user = await db.get(
-            default.User.select(
+        # fetch the main person
+        person = await db.get(
+            default.Person.select(
                 # fetch all properties
                 '*',
                 # also fetch friends (with properties)
                 friends=True,
             ).filter(
-                name=uname
+                name=pname
             )
         )
         # fetch the friend
         friend = await db.get(
-            default.User.filter(
+            default.Person.filter(
                 name=frname
             )
         )
         # append the new friend to existing friends
-        user.friends.append(friend)
-        await db.save(user)
-        return user
+        person.friends.append(friend)
+        await db.save(person)
+        return person
 
 
-    @app.post("/users/{uname}/remove_friend", response_model=UserWithFriends)
+    @app.post("/person/{pname}/remove_friend", response_model=PersonWithFriends)
     async def remove_friend(
-        uname: str,
+        pname: str,
         frname: str,
     ):
         db = g.client
-        # fetch the main user
-        user = await db.get(
-            default.User.select(
+        # fetch the main person
+        person = await db.get(
+            default.Person.select(
                 # fetch all properties
                 '*',
                 # also fetch friends (with properties)
                 friends=True,
             ).filter(
-                name=uname
+                name=pname
             )
         )
         # find and remove the specified friend
-        for f in user.friends:
+        for f in person.friends:
             if f.name == frname:
-                user.friends.remove(f)
+                person.friends.remove(f)
                 break
 
-        await db.save(user)
-        return user
+        await db.save(person)
+        return person
 
 .. note:: Be careful what you delete
 
-  Notice that the order of ``filter()`` before the ``delete()`` matters here. The ``filter()`` comes first to select what you intend to delete. If you reverse the operations, you'll end up creating a query that deletes all users and then *filters the result* of that delete operation to find the matching name.
+  Notice that the order of ``filter()`` before the ``delete()`` matters here. The ``filter()`` comes first to select what you intend to delete. If you reverse the operations, you'll end up creating a query that deletes all people and then *filters the result* of that delete operation to find the matching name.
