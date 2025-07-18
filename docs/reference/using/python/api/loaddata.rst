@@ -148,12 +148,12 @@ The JSON basically contains teams, each team has members, some members have a cu
     }
 
     type Team extending Named {
-      multi members: User {
+      multi members: Person {
         constraint exclusive;
       }
     }
 
-    type User extending Named {
+    type Person extending Named {
       required email: str {
         constraint exclusive;
       }
@@ -161,7 +161,7 @@ The JSON basically contains teams, each team has members, some members have a cu
       dob: cal::local_date;
       about: str;
       custom_settings: CustomSettings {
-        # setting are user-specific
+        # setting are person-specific
         constraint exclusive;
       }
     }
@@ -173,7 +173,7 @@ The JSON basically contains teams, each team has members, some members have a cu
   }
 
 
-We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with ``gel generate py/models``.
+We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with :gelcmd:`generate py/models`.
 
 Once the models are in place they can be read and saved to the database with a simple script:
 
@@ -190,7 +190,7 @@ Once the models are in place they can be read and saved to the database with a s
       if 'members' in result:
           return default.Team(**result)
       elif 'email' in result:
-          return default.User(**result)
+          return default.Person(**result)
       elif 'font_size' in result or 'color_scheme' in result:
           return default.CustomSettings(**result)
       else:
@@ -251,7 +251,7 @@ We can double check that we actually loaded all the data with a query:
 JSON with duplicates
 ====================
 
-The more likely scenario is that the JSON data exported from elsewhere potentially has duplicates (because some records are linked from multiple sources). So consider some data similar to the previous example, but with a few key differences. This time each user can be a member in more than one team. Also instead of ``"custom_settings"`` there are some themes that user can pick from:
+The more likely scenario is that the JSON data exported from elsewhere potentially has duplicates (because some records are linked from multiple sources). So consider some data similar to the previous example, but with a few key differences. This time each person can be a member in more than one team. Also instead of ``"custom_settings"`` there are some themes that a person can pick from:
 
 .. lint-off
 
@@ -448,10 +448,10 @@ This JSON dump essentially has a lot of redundant information as the objects are
     }
 
     type Team extending Named {
-      multi members: User;
+      multi members: Person;
     }
 
-    type User extending Named {
+    type Person extending Named {
       required email: str {
         constraint exclusive;
       }
@@ -467,7 +467,7 @@ This JSON dump essentially has a lot of redundant information as the objects are
     }
   }
 
-We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with ``gel generate py/models``.
+We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with :gelcmd:`generate py/models`.
 
 Once the models are in place they can be read and save to the database. However, our script will have to keep track of object duplicates:
 
@@ -480,7 +480,7 @@ Once the models are in place they can be read and save to the database. However,
 
   # We're going to need some dicts to keep track of existing objects
   teams = dict()
-  users = dict()
+  people = dict()
   themes = dict()
 
 
@@ -493,11 +493,11 @@ Once the models are in place they can be read and save to the database. However,
               teams[team.name] = team
           return team
       elif 'email' in result:
-          user = users.get(result['name'])
-          if user is None:
-              user = default.User(**result)
-              users[user.name] = user
-          return user
+          person = people.get(result['name'])
+          if person is None:
+              person = default.Person(**result)
+              people[person.name] = person
+          return person
       elif 'font_size' in result or 'vibe' in result:
           theme = themes.get(result['name'])
           if theme is None:
@@ -593,7 +593,7 @@ If you're dealing with CSV files, you probably don't have any nested data there,
     ]
 
   .. code-tab:: json
-    :caption: users.json
+    :caption: people.json
 
     [
       {
@@ -713,7 +713,7 @@ If you're dealing with CSV files, you probably don't have any nested data there,
 
 .. lint-on
 
-This is the same data as in the previous example, but without all the duplicates. Themes are referenced by ``id``. Users instead rely on the unique emails as the primary key. We can still use the same schema:
+This is the same data as in the previous example, but without all the duplicates. Themes are referenced by ``id``. Person records instead rely on the unique emails as the primary key. We can still use the same schema:
 
 .. code-block:: sdl
 
@@ -725,10 +725,10 @@ This is the same data as in the previous example, but without all the duplicates
     }
 
     type Team extending Named {
-      multi members: User;
+      multi members: Person;
     }
 
-    type User extending Named {
+    type Person extending Named {
       required email: str {
         constraint exclusive;
       }
@@ -744,7 +744,7 @@ This is the same data as in the previous example, but without all the duplicates
     }
   }
 
-We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with ``gel generate py/models``.
+We can apply our schema to the Gel database with :gelcmd:`migration create` and :gelcmd:`migrate` commands. After that we can generate Pydantic models with :gelcmd:`generate py/models`.
 
 Once the models are in place they can be read and saved to the database. We could load all the files and compose the overall object structure and save them all at once, but in general, this approach may not be possible if we're dealing with cross-linked tables. Instead we'll load them one table at a time, ignoring links and then we'll do a separate pass to just link everything together:
 
@@ -758,7 +758,7 @@ Once the models are in place they can be read and saved to the database. We coul
   db = gel.create_client()
   # We're going to use dicts to load the data
   teams = dict()
-  users = dict()
+  people = dict()
   themes = dict()
 
 
@@ -779,18 +779,18 @@ Once the models are in place they can be read and saved to the database. We coul
       db.save(*data)
 
 
-  def user_hook(result):
-      user = users.get(result['email'])
-      if user is None:
+  def person_hook(result):
+      person = people.get(result['email'])
+      if person is None:
           # ignore theme_id when creating a team
           result.pop('theme_id', None)
-          user = default.User(**result)
-          users[user.email] = user
-      return user
+          person = default.Person(**result)
+          people[person.email] = person
+      return person
 
 
-  with open('users.json', 'rt') as f:
-      data = json.load(f, object_hook=user_hook)
+  with open('people.json', 'rt') as f:
+      data = json.load(f, object_hook=person_hook)
       db.save(*data)
 
 
@@ -813,7 +813,7 @@ Once the models are in place they can be read and saved to the database. We coul
   def team_links(result):
       team = teams[result['id']]
       team.members.extend([
-          users[m] for m in result['members']
+          people[m] for m in result['members']
       ])
       return team
 
@@ -823,16 +823,16 @@ Once the models are in place they can be read and saved to the database. We coul
       db.save(*data)
 
 
-  def user_links(result):
-      user = users[result['email']]
+  def person_links(result):
+      person = people[result['email']]
       theme_id = result.get('theme_id')
       if theme_id is not None:
-          user.theme = themes[theme_id]
-      return user
+          person.theme = themes[theme_id]
+      return person
 
 
-  with open('users.json', 'rt') as f:
-      data = json.load(f, object_hook=user_links)
+  with open('people.json', 'rt') as f:
+      data = json.load(f, object_hook=person_links)
       db.save(*data)
 
 This script is a bit verbose, but it serves as an illustration of the process of loading table data when all the cross-references make it unsafe trying to link it all in one step.
@@ -877,5 +877,4 @@ We can double check that we actually loaded all the data with a query:
       },
   ...
 
-
-.. lint-off
+.. lint-on

@@ -12,24 +12,24 @@ The ``gel`` Python package exposes a command-line tool to generate typesafe Pyth
 
   $ gel generate py/models
 
-Consider a simple schema for an app where users can post things, comment, and follow friends:
+Consider a simple schema for an app where people can post things, comment, and follow friends:
 
 .. code-block:: sdl
-  :caption: dbschema/default.gel
+  :caption: :dotgel:`dbschema/default`
 
   module default {
-    type User {
+    type Person {
       required name: str {
         constraint exclusive;
       }
-      multi link friends: User;
+      multi link friends: Person;
       multi link posts := .<author[is Post];
       multi link comments := .<author[is Comment];
     }
 
     abstract type Text {
       required body: str;
-      author: User;
+      author: Person;
       created_at: datetime {
         default := datetime_current()
       }
@@ -45,9 +45,9 @@ Consider a simple schema for an app where users can post things, comment, and fo
     }
   }
 
-After setting up a Gel project with the above schema we can run the ``gel generate py/models`` command. It will create a ``models`` Python package that can now be used to interact with Gel.
+After setting up a Gel project with the above schema we can run the :gelcmd:`generate py/models` command. It will create a ``models`` Python package that can now be used to interact with Gel.
 
-Let's start by creating a few users:
+Let's start by creating a few people:
 
 .. code-block:: python
 
@@ -56,9 +56,9 @@ Let's start by creating a few users:
 
   db = gel.create_client()
 
-  alice = default.User(name='Alice')
-  billie = default.User(name='Billie')
-  cameron = default.User(name='Cameron')
+  alice = default.Person(name='Alice')
+  billie = default.Person(name='Billie')
+  cameron = default.Person(name='Cameron')
 
   db.save(alice, billie, cameron)
 
@@ -88,13 +88,13 @@ The Pydantic models can also be used to build up queries for fetching objects fr
   .. code-tab:: python
     :caption: Python
 
-    q = default.User
+    q = default.Person
     everyone = db.query(q)
 
   .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
-    select User {*}
+    select Person {*}
 
 Passing the base model to the ``db.query()`` simply results in fetching all objects of the corresponding type from the database.
 
@@ -105,13 +105,13 @@ We can fetch just one object using ``db.get()`` and adding a ``.filter()`` to th
   .. code-tab:: python
     :caption: Python
 
-    q = default.User.filter(name='Alice')
+    q = default.Person.filter(name='Alice')
     alice = db.query(q)
 
   .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
-    select User {*}
+    select Person {*}
     filter .name = 'Alice'
 
 We can also fetch several objects by using ``db.query()`` and providing a ``.filter``:
@@ -137,15 +137,15 @@ We can have more elaborate filters by using ``lambda`` functions where the first
   .. code-tab:: python
     :caption: Python
 
-    q = default.User.filter(
+    q = default.Person.filter(
         lambda u: std.len(u.name) > 5
     )
-    users = db.query(q)
+    people = db.query(q)
 
   .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
-    select User {*}
+    select Person {*}
     filter len(.name) > 5
 
 The expressions used in filters can be built up to follow links:
@@ -216,7 +216,7 @@ The ``select()`` method can be used to cherry-pick the specific fields that will
     }
     filter .author.name = 'Alice'
 
-The fetched objects can be used to update the data or as references to existing objects when creating new data. So the above query fetching ``posts`` can be user to edit the existing post and create a new one by the same user:
+The fetched objects can be used to update the data or as references to existing objects when creating new data. So the above query fetching ``posts`` can be used to edit the existing post and create a new one by the same person:
 
 .. code-block:: python
 
@@ -295,7 +295,7 @@ The query builder lets us compose nested queries with nested sub-queries benefit
   .. code-tab:: python
     :caption: Python
 
-    q = default.User.select(
+    q = default.Person.select(
         '*',
         posts=lambda u: u.posts.order_by(
             created_at='desc',
@@ -304,12 +304,12 @@ The query builder lets us compose nested queries with nested sub-queries benefit
     ).filter(
         name='Alice'
     )
-    user = db.get(q)
+    person = db.get(q)
 
   .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
-    select User {
+    select Person {
       *,
       posts: {
         *,
@@ -318,28 +318,28 @@ The query builder lets us compose nested queries with nested sub-queries benefit
     }
     filter .name = 'Alice'
 
-It's also possible to add some arbitrary computed expression to the data being fetched. However, this new field and type has to be declared first. To do so we can derive a custom type from one of the existing reflected types, e.g. ``default.User`` and we can use the ``std`` types as the field type:
+It's also possible to add some arbitrary computed expression to the data being fetched. However, this new field and type has to be declared first. To do so we can derive a custom type from one of the existing reflected types, e.g. ``default.Person`` and we can use the ``std`` types as the field type:
 
 .. tabs::
 
   .. code-tab:: python
     :caption: Python
 
-    class MyUser(default.User):
+    class MyPerson(default.Person):
         name_len: std.int64
 
-    q = MyUser.select(
+    q = MyPerson.select(
         '*',
         name_len=lambda u: std.len(u.name),
     ).filter(
         name='Alice'
     )
-    user = db.get(q)
+    person = db.get(q)
 
   .. code-tab:: edgeql
     :caption: equivalent EdgeQL
 
-    select User {
+    select Person {
       *,
       name_len := len(.name),
     }
@@ -356,7 +356,7 @@ Finally, you can delete what you've selected by combining a ``filter()`` with ``
     q = default.Post.filter(
         lambda p: p.author.name == 'Alice'
     ).delete()
-    user = db.query(q)
+    person = db.query(q)
 
   .. code-tab:: edgeql
     :caption: equivalent EdgeQL
