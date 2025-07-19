@@ -865,6 +865,7 @@ def _check_server_arg_conversion(
                     converted_required,
                     typeref=converted_typeref,
                     pt=converted_type,
+                    is_func_param=True,
                     ctx=ctx
                 )
 

@@ -264,6 +264,14 @@ def __infer_param(
 
 
 @_infer_volatility_inner.register
+def __infer_function_param(
+    ir: irast.FunctionParameter,
+    env: context.Environment,
+) -> InferredVolatility:
+    return STABLE if ir.is_global else IMMUTABLE
+
+
+@_infer_volatility_inner.register
 def __infer_inlined_param(
     ir: irast.InlinedParameterExpr,
     env: context.Environment,

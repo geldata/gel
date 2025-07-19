@@ -378,7 +378,7 @@ def _evaluate_union(
             val = evaluate(val.expr, schema=schema)
         if isinstance(val, irast.ConstantSet):
             for el in val.elements:
-                if isinstance(el, irast.Parameter):
+                if isinstance(el, irast.BaseParameter):
                     raise UnsupportedExpressionError(
                         f'{el!r} not supported in UNION',
                         span=opcall.span)

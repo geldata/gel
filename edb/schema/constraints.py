@@ -1342,7 +1342,7 @@ class CreateConstraint(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         node: qlast.DDLOperation,
-    ) -> list[tuple[int, qlast.FuncParam]]:
+    ) -> list[tuple[int, qlast.FuncParamDecl]]:
         if isinstance(node, qlast.CreateConstraint):
             return super()._get_params_ast(schema, context, node)
         else:
