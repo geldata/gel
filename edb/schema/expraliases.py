@@ -576,6 +576,7 @@ def _create_alias_types(
                 dict(
                     alias_is_persistent=True,
                     expr_type=s_types.ExprType.Select,
+                    is_schema_generated=True,
                     from_alias=True,
                     from_global=is_global,
                 ),
