@@ -18,6 +18,7 @@
 
 
 import os.path
+import re
 
 from edb.testbase import lang as tb
 
@@ -28,6 +29,7 @@ from edb.edgeql import parser as qlparser
 from edb.pgsql import ast as pgast
 from edb.pgsql import compiler as pg_compiler
 from edb.pgsql import codegen as pg_codegen
+from edb.pgsql import common as pg_common
 
 
 class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
@@ -545,8 +547,13 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
             }
         ''')
 
+        schema_name = pg_common.versioned_schema('edgedbstd')
         table_obj = self.schema.get("std::net::http::ScheduledRequest")
-        count = sql.count(str(table_obj.id))
+        # Search for the table with versioned schema to exclude matches from
+        # access policies.
+        pattern = schema_name + r"\.['\"]" + str(table_obj.id) + r"['\"]"
+        count = len(re.findall(pattern, sql))
+
         # The table should only be referenced once, in the INSERT.
         # If we reference it more than that, we're probably selecting it.
         self.assertEqual(
