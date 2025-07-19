@@ -3192,7 +3192,7 @@ def get_or_create_union_pointer(
             cardinality = qltypes.SchemaCardinality.Many
             break
 
-    required = any(component.get_required(schema) for component in components)
+    required = all(component.get_required(schema) for component in components)
     metacls = type(components[0])
     default_base_name = metacls.get_default_base_name()
     assert default_base_name is not None
@@ -3258,17 +3258,17 @@ def get_or_create_intersection_pointer(
     if len(components) == 1:
         return schema, components[0]
 
-    required = all(component.get_required(schema) for component in components)
+    required = any(component.get_required(schema) for component in components)
     targets: Sequence[s_types.Type]
     targets = list(filter(None, [p.get_target(schema) for p in components]))
     targets = utils.simplify_intersection_types(schema, targets)
     schema, target, _ = utils.ensure_intersection_type(
         schema, targets, module=modname)
 
-    cardinality = qltypes.SchemaCardinality.One
+    cardinality = qltypes.SchemaCardinality.Many
     for component in components:
-        if component.get_cardinality(schema) is qltypes.SchemaCardinality.Many:
-            cardinality = qltypes.SchemaCardinality.Many
+        if component.get_cardinality(schema) is qltypes.SchemaCardinality.One:
+            cardinality = qltypes.SchemaCardinality.One
             break
 
     metacls = type(components[0])

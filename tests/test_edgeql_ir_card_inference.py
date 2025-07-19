@@ -1349,3 +1349,103 @@ class TestEdgeQLCardinalityInference(tb.BaseEdgeQLCompilerTest):
 % OK %
         ONE
         """
+
+    def test_edgeql_ir_card_inference_158(self):
+        """
+        with TypeExpr := Object[is TypeExprA | TypeExprB]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        AT_MOST_ONE
+        """
+
+    def test_edgeql_ir_card_inference_159(self):
+        """
+        with TypeExpr := Object[is TypeExprA | TypeExprC]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        MANY
+        """
+
+    def test_edgeql_ir_card_inference_160(self):
+        """
+        with TypeExpr := Object[is TypeExprA | TypeExprD]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        MANY
+        """
+
+    def test_edgeql_ir_card_inference_161(self):
+        """
+        with TypeExpr := Object[is TypeExprB | TypeExprC]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        MANY
+        """
+
+    def test_edgeql_ir_card_inference_162(self):
+        """
+        with TypeExpr := Object[is TypeExprB | TypeExprD]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        AT_LEAST_ONE
+        """
+
+    def test_edgeql_ir_card_inference_163(self):
+        """
+        with TypeExpr := Object[is TypeExprC | TypeExprD]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        MANY
+        """
+
+    def test_edgeql_ir_card_inference_164(self):
+        """
+        with TypeExpr := Object[is TypeExprA & TypeExprB]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        ONE
+        """
+
+    @tb.must_fail(errors.SchemaError, "different cardinality")
+    def test_edgeql_ir_card_inference_165(self):
+        """
+        with TypeExpr := Object[is TypeExprA & TypeExprC]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        AT_MOST_ONE
+        """
+
+    @tb.must_fail(errors.SchemaError, "different cardinality")
+    def test_edgeql_ir_card_inference_166(self):
+        """
+        with TypeExpr := Object[is TypeExprA & TypeExprD]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        ONE
+        """
+
+    @tb.must_fail(errors.SchemaError, "different cardinality")
+    def test_edgeql_ir_card_inference_167(self):
+        """
+        with TypeExpr := Object[is TypeExprB & TypeExprC]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        ONE
+        """
+
+    @tb.must_fail(errors.SchemaError, "different cardinality")
+    def test_edgeql_ir_card_inference_168(self):
+        """
+        with TypeExpr := Object[is TypeExprB & TypeExprD]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        ONE
+        """
+
+    def test_edgeql_ir_card_inference_169(self):
+        """
+        with TypeExpr := Object[is TypeExprC & TypeExprD]
+        select assert_exists(assert_single(TypeExpr)).val
+% OK %
+        AT_LEAST_ONE
+        """

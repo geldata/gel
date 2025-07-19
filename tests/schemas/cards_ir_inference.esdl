@@ -165,3 +165,16 @@ type Named2Sub extending Named2;
 global Alice := (select User filter .name = 'Alice');
 
 permission GameAdmin;
+
+type TypeExprA {
+    val: str;
+};
+type TypeExprB {
+    required val: str;
+};
+type TypeExprC {
+    multi val: str;
+};
+type TypeExprD {
+    required multi val: str;
+};
