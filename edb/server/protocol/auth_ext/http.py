@@ -138,6 +138,8 @@ class Router:
         )
 
         try:
+            request.load_cookies()
+
             match args:
                 # PKCE token exchange route
                 case ("token",):

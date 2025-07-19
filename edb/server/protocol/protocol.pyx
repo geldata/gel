@@ -50,6 +50,7 @@ from edb.server.dbview cimport dbview
 # can't cimport `protocol.binary` for some reason.
 from edb.server.pgproto.debug cimport PG_DEBUG
 
+from .http import SafeSimpleCookie
 from . import auth
 from . cimport auth_helpers
 from . import edgeql_ext
@@ -80,7 +81,11 @@ cdef class HttpRequest:
         self.authorization = b''
         self.content_type = b''
         self.forwarded = {}
-        self.cookies = http.cookies.SimpleCookie()
+        self.cookie_header = b''
+        self.cookies = SafeSimpleCookie()
+
+    def load_cookies(self):
+        self.cookies.parse(self.cookie_header.decode('ascii'))
 
 
 cdef class HttpResponse:
@@ -264,7 +269,7 @@ cdef class HttpProtocol:
             forwarded_key = name[len(b'x-forwarded-'):]
             self.current_request.forwarded[forwarded_key] = value
         elif name == b'cookie':
-            self.current_request.cookies.load(value.decode('ascii'))
+            self.current_request.cookie_header = value
 
     def on_body(self, body: bytes):
         self.current_request.body += body
