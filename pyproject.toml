@@ -20,8 +20,8 @@ dependencies = [
     'webauthn~=2.0.0',
     'argon2-cffi~=23.1.0',
     'aiosmtplib~=3.0',
-    'tiktoken~=0.7.0',
-    'mistral_common~=1.2.1',
+    'tiktoken~=0.9.0',
+    'mistral_common~=1.9.1',
 
     # pin because newer versions are either broken or require
     # us to update setuptools (in gel-pkg)
@@ -71,7 +71,7 @@ test = [
     'prometheus_client~=0.11.0',
 
     'docutils~=0.17.0',
-    'lxml~=4.9.0',
+    'lxml~=6.0.0',
     'Pygments~=2.10.0',
     'Sphinx~=4.2.0',
     'sphinxcontrib-asyncio~=0.3.0',
@@ -85,7 +85,7 @@ test = [
 
 docs = [
     'docutils~=0.17.0',
-    'lxml~=4.9.0',
+    'lxml~=6.0.0',
     'Pygments~=2.10.0',
     'Sphinx~=4.2.0',
     'sphinxcontrib-asyncio~=0.3.0',
