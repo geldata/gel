@@ -763,7 +763,7 @@ def compile_anchor(
     elif isinstance(anchor, qlast.Base):
         step = dispatch.compile(anchor, ctx=ctx)
 
-    elif isinstance(anchor, (irast.Parameter, irast.FunctionParameter)):
+    elif isinstance(anchor, (irast.QueryParameter, irast.FunctionParameter)):
         step = setgen.ensure_set(anchor, ctx=ctx)
 
     elif isinstance(anchor, irast.PathId):
@@ -953,7 +953,7 @@ def check_params(params: dict[str, irast.Param]) -> None:
 
 
 def throw_on_shaped_param(
-    param: qlast.Parameter, shape: qlast.Shape, ctx: context.ContextLevel
+    param: qlast.QueryParameter, shape: qlast.Shape, ctx: context.ContextLevel
 ) -> None:
     raise errors.QueryError(
         f'cannot apply a shape to the parameter',
@@ -963,7 +963,7 @@ def throw_on_shaped_param(
 
 
 def throw_on_loose_param(
-    param: qlast.Parameter, ctx: context.ContextLevel
+    param: qlast.QueryParameter, ctx: context.ContextLevel
 ) -> None:
     if ctx.env.options.func_params is not None:
         if ctx.env.options.schema_object_context is s_constr.Constraint:
@@ -1009,7 +1009,7 @@ def preprocess_script(
     ]
     params = {}
     for cast, modaliases in casts:
-        assert isinstance(cast.expr, qlast.Parameter)
+        assert isinstance(cast.expr, qlast.QueryParameter)
         name = cast.expr.name
         if name in params:
             continue

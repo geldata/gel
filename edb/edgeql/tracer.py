@@ -647,7 +647,9 @@ def trace_Constant(node: qlast.BaseConstant, *, ctx: TracerContext) -> None:
 
 
 @trace.register
-def trace_Parameter(node: qlast.Parameter, *, ctx: TracerContext) -> None:
+def trace_QueryParameter(
+    node: qlast.QueryParameter, *, ctx: TracerContext
+) -> None:
     raise errors.SchemaError(
         'query parameters are not allowed in schemas',
         span=node.span,

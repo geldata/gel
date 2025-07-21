@@ -321,7 +321,7 @@ class BytesConstant(BaseConstant):
         return BytesConstant(value=s)
 
 
-class Parameter(Expr):
+class QueryParameter(Expr):
     name: str
 
 

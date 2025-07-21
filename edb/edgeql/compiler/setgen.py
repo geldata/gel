@@ -2127,7 +2127,7 @@ def get_global_param_sets(
 
     is_func_param = ctx.env.options.func_params is not None
     parameter_type = (
-        irast.FunctionParameter if is_func_param else irast.Parameter
+        irast.FunctionParameter if is_func_param else irast.QueryParameter
     )
 
     param_set = ensure_set(
@@ -2169,7 +2169,7 @@ def get_func_global_json_arg(*, ctx: context.ContextLevel) -> irast.Set:
 
     is_func_param = ctx.env.options.func_params is not None
     parameter_type = (
-        irast.FunctionParameter if is_func_param else irast.Parameter
+        irast.FunctionParameter if is_func_param else irast.QueryParameter
     )
 
     # If this is because we have json params, not because we're in a

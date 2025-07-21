@@ -42,7 +42,7 @@ class TestTracer(unittest.TestCase):
                     # ignore special internal class
                     and astcls is not qlast.OptionalExpr
                     # ignore query parameters
-                    and not issubclass(astcls, qlast.Parameter)
+                    and not issubclass(astcls, qlast.QueryParameter)
                     # ignore Cursor
                     and not issubclass(astcls, qlast.Cursor)
                     # ignore all config operations

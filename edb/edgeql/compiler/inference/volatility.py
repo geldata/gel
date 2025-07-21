@@ -257,7 +257,7 @@ def __infer_const(
 
 @_infer_volatility_inner.register
 def __infer_param(
-    ir: irast.Parameter,
+    ir: irast.QueryParameter,
     env: context.Environment,
 ) -> InferredVolatility:
     return STABLE if ir.is_global else IMMUTABLE

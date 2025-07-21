@@ -1726,7 +1726,7 @@ class Constant(Nonterm):
     # | BaseBytesConstant
 
     def reduce_PARAMETER(self, param):
-        self.val = qlast.Parameter(name=param.val[1:])
+        self.val = qlast.QueryParameter(name=param.val[1:])
 
     def reduce_PARAMETERANDTYPE(self, param):
         assert param.val.startswith('<lit ')
@@ -1739,7 +1739,7 @@ class Constant(Nonterm):
                 ),
                 span=param.span,
             ),
-            expr=qlast.Parameter(
+            expr=qlast.QueryParameter(
                 name=param_name,
                 span=param.span,
             ),

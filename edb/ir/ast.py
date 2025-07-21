@@ -916,7 +916,7 @@ class BaseParameter(ImmutableExpr):
         return self.is_implicit_global is not None
 
 
-class Parameter(BaseParameter):
+class QueryParameter(BaseParameter):
     pass
 
 

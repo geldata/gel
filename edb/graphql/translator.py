@@ -1725,7 +1725,7 @@ class GraphQLTranslator:
 
         return qlast.TypeCast(
             type=casttype,
-            expr=qlast.Parameter(name=varname),
+            expr=qlast.QueryParameter(name=varname),
             cardinality_mod=(
                 qlast.CardinalityModifier.Optional if optional else None
             ),

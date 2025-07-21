@@ -840,7 +840,7 @@ def __infer_const(
 
 @_infer_cardinality.register
 def __infer_param(
-    ir: irast.Parameter,
+    ir: irast.QueryParameter,
     *,
     scope_tree: irast.ScopeTreeNode,
     ctx: inference_context.InfCtx,

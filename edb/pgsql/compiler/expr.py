@@ -116,9 +116,9 @@ def _compile_set_impl(
         _compile_set(ir_set, ctx=ctx)
 
 
-@dispatch.compile.register(irast.Parameter)
-def compile_Parameter(
-    expr: irast.Parameter,
+@dispatch.compile.register(irast.QueryParameter)
+def compile_QueryParameter(
+    expr: irast.QueryParameter,
     *,
     ctx: context.CompilerContextLevel,
 ) -> pgast.BaseExpr:

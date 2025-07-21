@@ -538,7 +538,7 @@ def can_omit_optional_wrapper(
             ctx=ctx,
         )
 
-    if isinstance(ir_set.expr, irast.Parameter):
+    if isinstance(ir_set.expr, irast.QueryParameter):
         return True
 
     # Our base json casts should all preserve nullity (instead of

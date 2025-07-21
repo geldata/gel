@@ -70,9 +70,9 @@ def get_longest_paths(ir: irast.Base) -> set[irast.Set]:
     return result - parents
 
 
-def get_parameters(ir: irast.Base) -> set[irast.Parameter]:
+def get_parameters(ir: irast.Base) -> set[irast.QueryParameter]:
     """Return all parameters found in *ir*."""
-    return set(ast.find_children(ir, irast.Parameter))
+    return set(ast.find_children(ir, irast.QueryParameter))
 
 
 def is_const(ir: irast.Base) -> bool:

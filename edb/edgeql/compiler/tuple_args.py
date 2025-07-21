@@ -272,7 +272,7 @@ def make_decoder(
     """
     params: list[qlast.Expr] = [
         qlast.TypeCast(
-            expr=qlast.Parameter(name=param.name),
+            expr=qlast.QueryParameter(name=param.name),
             type=_ref_to_ast(param.ir_type, ctx=ctx),
             cardinality_mod=(
                 qlast.CardinalityModifier.Optional if not param.required
