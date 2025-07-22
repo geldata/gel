@@ -2174,7 +2174,7 @@ def get_func_global_json_arg(*, ctx: context.ContextLevel) -> irast.Set:
 
     # If this is because we have json params, not because we're in a
     # function, we need to register it.
-    if bool(ctx.env.options.json_parameters):
+    if ctx.env.options.json_parameters:
         qname = s_name.QualName('__', name)
         ctx.env.query_globals[qname] = irast.Global(
             name=name,
