@@ -660,9 +660,9 @@ def trace_QueryParameter(
 def trace_FunctionParameter(
     node: qlast.FunctionParameter, *, ctx: TracerContext
 ) -> None:
-    raise errors.SchemaError(
-        'function parameters are not allowed in schemas',
-        span=node.span,
+    raise AssertionError(
+        'function parameters are expected to be substituted for paths '
+        'in schemas',
     )
 
 
