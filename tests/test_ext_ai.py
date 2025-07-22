@@ -18,6 +18,7 @@
 
 import json
 import pathlib
+import tempfile
 import unittest
 
 import edgedb
@@ -25,6 +26,7 @@ import edgedb
 from edb.common import assert_data_shape
 
 from edb.schema import indexes as s_indexes
+from edb.server import args
 from edb.server.protocol import ai_ext
 from edb.testbase import http as tb_http
 from edb.testbase import server as tb_server
@@ -1489,8 +1491,56 @@ class TestExtAIDDL(tb_server.DDLTestCase):
     async def _assert_generated_models(
         self,
         model_descs: list[s_indexes.EmbeddingModelDesc],
+        *,
+        con=None,
     ):
-        await self.assert_query_result(
+        if con is None:
+            con = self.con
+
+        expected = [
+            {
+                "name": (
+                    f"__ext_generated_types__::ai_embedding_"
+                    f"{model_desc.model_provider.split(':')[-1]}_"
+                    f"{model_desc.model_name}"
+                ),
+                "annotations": [
+                    {
+                        "name": "ext::ai::model_name",
+                        "@value": model_desc.model_name,
+                    },
+                    {
+                        "name": "ext::ai::model_provider",
+                        "@value": model_desc.model_provider,
+                    },
+                    {
+                        "name": "ext::ai::embedding_model_max_input_tokens",
+                        "@value": str(model_desc.max_input_tokens),
+                    },
+                    {
+                        "name": "ext::ai::embedding_model_max_batch_tokens",
+                        "@value": str(model_desc.max_batch_tokens),
+                    },
+                    {
+                        "name": (
+                            "ext::ai::embedding_model_max_output_dimensions"
+                        ),
+                        "@value": str(model_desc.max_output_dimensions),
+                    },
+                    {
+                        "name": (
+                            "ext::ai::embedding_model_supports_shortening"
+                        ),
+                        "@value": (
+                            str(model_desc.supports_shortening).lower()
+                        ),
+                    },
+                ]
+            }
+            for model_desc in model_descs
+        ]
+
+        res = await con._fetchall_json(
             '''
             select schema::ObjectType {
                 name,
@@ -1499,48 +1549,10 @@ class TestExtAIDDL(tb_server.DDLTestCase):
             filter contains(.name, '__ext_generated_types__')
             order by .name
             ''',
-            [
-                {
-                    "name": (
-                        f"__ext_generated_types__::ai_embedding_"
-                        f"{model_desc.model_provider.split(':')[-1]}_"
-                        f"{model_desc.model_name}"
-                    ),
-                    "annotations": [
-                        {
-                            "name": "ext::ai::model_name",
-                            "@value": model_desc.model_name,
-                        },
-                        {
-                            "name": "ext::ai::model_provider",
-                            "@value": model_desc.model_provider,
-                        },
-                        {
-                            "name": "ext::ai::embedding_model_max_input_tokens",
-                            "@value": str(model_desc.max_input_tokens),
-                        },
-                        {
-                            "name": "ext::ai::embedding_model_max_batch_tokens",
-                            "@value": str(model_desc.max_batch_tokens),
-                        },
-                        {
-                            "name": (
-                                "ext::ai::embedding_model_max_output_dimensions"
-                            ),
-                            "@value": str(model_desc.max_output_dimensions),
-                        },
-                        {
-                            "name": (
-                                "ext::ai::embedding_model_supports_shortening"
-                            ),
-                            "@value": (
-                                str(model_desc.supports_shortening).lower()
-                            ),
-                        },
-                    ]
-                }
-                for model_desc in model_descs
-            ],
+        )
+        actual = json.loads(res)
+        assert_data_shape.assert_data_shape(
+            actual, expected, self.fail,
         )
 
     async def test_ext_ai_ddl_uri_01(self):
@@ -2159,3 +2171,187 @@ class TestExtAIDDL(tb_server.DDLTestCase):
             await self.con.execute("""
                 DROP TYPE NotInReference;
             """)
+
+    async def test_ext_ai_ddl_uri_reference_json_01(self):
+        # Custom model defined by user then added to reference json
+        # New type should not be created
+        with tempfile.TemporaryDirectory() as temp_dir:
+            old_ref_file = (
+                pathlib.Path(__file__).parent
+                / 'ai_reference_files' / 'testing.json'
+            )
+            new_ref_file = (
+                pathlib.Path(__file__).parent
+                / 'ai_reference_files' / 'testing-extra.json'
+            )
+
+            async with tb_server.start_edgedb_server(
+                data_dir=temp_dir,
+                default_auth_method=args.ServerAuthMethod.Trust,
+                extra_args=[f'--ai-reference-file={old_ref_file}'],
+            ) as sd:
+                con = await sd.connect()
+                try:
+                    await con.execute('''
+                        CREATE TYPE Foo {
+                            CREATE PROPERTY content: str;
+                        };
+                        CREATE TYPE Bar {
+                            CREATE PROPERTY content: str;
+                        };
+                        CREATE EXTENSION pgvector;
+                        CREATE EXTENSION ai;
+                        CREATE ABSTRACT TYPE FromReference
+                            EXTENDING ext::ai::EmbeddingModel
+                        {
+                            ALTER ANNOTATION ext::ai::model_name
+                                := "extra-model-1";
+                            ALTER ANNOTATION ext::ai::model_provider
+                                := "builtin::ollama";
+                            ALTER ANNOTATION
+                                ext::ai::embedding_model_max_input_tokens
+                                := "111";
+                            ALTER ANNOTATION
+                                ext::ai::embedding_model_max_batch_tokens
+                                := "511";
+                            ALTER ANNOTATION
+                                ext::ai::embedding_model_max_output_dimensions
+                                := "21";
+                        };
+                    ''')
+
+                    await con.execute("""
+                        ALTER TYPE Foo {
+                            CREATE DEFERRED INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models([], con=con)
+
+                finally:
+                    await con.aclose()
+
+            async with tb_server.start_edgedb_server(
+                data_dir=temp_dir,
+                default_auth_method=args.ServerAuthMethod.Trust,
+                extra_args=[f'--ai-reference-file={new_ref_file}'],
+            ) as sd:
+                con = await sd.connect()
+                try:
+                    await con.execute("""
+                        ALTER TYPE Bar {
+                            CREATE DEFERRED INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models([], con=con)
+
+                    await con.execute("""
+                        ALTER TYPE Foo {
+                            DROP INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models([], con=con)
+
+                    await con.execute("""
+                        ALTER TYPE Bar {
+                            DROP INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models([], con=con)
+
+                finally:
+                    await con.aclose()
+
+    async def test_ext_ai_ddl_uri_reference_json_02(self):
+        # New model added to reference json
+        # New type should be created, but this only succeeds after the json is
+        # updated.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            old_ref_file = (
+                pathlib.Path(__file__).parent
+                / 'ai_reference_files' / 'testing.json'
+            )
+            new_ref_file = (
+                pathlib.Path(__file__).parent
+                / 'ai_reference_files' / 'testing-extra.json'
+            )
+
+            async with tb_server.start_edgedb_server(
+                data_dir=temp_dir,
+                default_auth_method=args.ServerAuthMethod.Trust,
+                extra_args=[f'--ai-reference-file={old_ref_file}'],
+            ) as sd:
+                con = await sd.connect()
+                try:
+                    await con.execute('''
+                        CREATE TYPE Foo {
+                            CREATE PROPERTY content: str;
+                        };
+                        CREATE EXTENSION pgvector;
+                        CREATE EXTENSION ai;
+                    ''')
+
+                    with self.assertRaisesRegex(
+                        edgedb.SchemaDefinitionError,
+                        r"undefined embedding model: no subtype of "
+                        r"ext::ai::EmbeddingModel is annotated as "
+                        r"'extra-model-1'"
+                    ):
+                        await con.execute("""
+                            ALTER TYPE Foo {
+                                CREATE DEFERRED INDEX ext::ai::index(
+                                    embedding_model := 'ollama:extra-model-1'
+                                ) ON (.content);
+                            };
+                        """)
+                    await self._assert_generated_models([], con=con)
+
+                finally:
+                    await con.aclose()
+
+            async with tb_server.start_edgedb_server(
+                data_dir=temp_dir,
+                default_auth_method=args.ServerAuthMethod.Trust,
+                extra_args=[f'--ai-reference-file={new_ref_file}'],
+            ) as sd:
+                con = await sd.connect()
+                try:
+                    await con.execute("""
+                        ALTER TYPE Foo {
+                            CREATE DEFERRED INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models(
+                        [
+                            s_indexes.EmbeddingModelDesc(
+                                model_name='extra-model-1',
+                                model_provider='builtin::ollama',
+                                max_input_tokens=111,
+                                max_batch_tokens=511,
+                                max_output_dimensions=21,
+                                supports_shortening=False,
+                            ),
+                        ],
+                        con=con,
+                    )
+
+                    await con.execute("""
+                        ALTER TYPE Foo {
+                            DROP INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models([], con=con)
+
+                finally:
+                    await con.aclose()
