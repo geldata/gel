@@ -2125,13 +2125,12 @@ def get_global_param_sets(
         None
     )
 
-    is_func_param = ctx.env.options.func_params is not None
-    parameter_type = (
-        irast.FunctionParameter if is_func_param else irast.QueryParameter
-    )
+    # This function is called to compile either a global expr or the global
+    # params for a function call. Both are compiled as QueryParameter.
+    assert ctx.env.options.func_params is None
 
     param_set = ensure_set(
-        parameter_type(
+        irast.QueryParameter(
             name=param.name,
             required=param.required and not bool(default),
             typeref=param.ir_type,
@@ -2145,7 +2144,7 @@ def get_global_param_sets(
         and glob.needs_present_arg(ctx.env.schema)
     ):
         present_set = ensure_set(
-            parameter_type(
+            irast.QueryParameter(
                 name=param.name + "present__",
                 required=True,
                 typeref=typegen.type_to_typeref(
