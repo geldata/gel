@@ -37,6 +37,7 @@ import hmac
 import logging
 import os
 import os.path
+import pathlib
 import pickle
 import random
 import signal
@@ -82,12 +83,14 @@ InitArgs = tuple[
     s_refl.SchemaClassLayout,
     bytes,
     Config,
+    dict[str, pathlib.Path],
 ]
 MultiTenantInitArgs = tuple[
     pgparams.BackendRuntimeParams,
     s_schema.FlatSchema,
     s_schema.FlatSchema,
     s_refl.SchemaClassLayout,
+    dict[str, pathlib.Path],
 ]
 RemoteInitArgsPickle = tuple[bytes, bytes, bytes, bytes]
 PreArgs = tuple[Any, ...]
@@ -133,6 +136,7 @@ class BaseWorker:
     _schema_class_layout: s_refl.SchemaClassLayout
     _global_schema_pickle: bytes
     _system_config: Config
+    _reference_paths: dict[str, pathlib.Path]
     _last_pickled_state: Optional[bytes]
 
     _con: Optional[amsg.HubConnection]
@@ -147,6 +151,7 @@ class BaseWorker:
         schema_class_layout: s_refl.SchemaClassLayout,
         global_schema_pickle: bytes,
         system_config: Config,
+        reference_paths: dict[str, pathlib.Path],
     ) -> None:
         self._dbs = collections.OrderedDict()
         self._backend_runtime_params = backend_runtime_params
@@ -155,6 +160,7 @@ class BaseWorker:
         self._schema_class_layout = schema_class_layout
         self._global_schema_pickle = global_schema_pickle
         self._system_config = system_config
+        self._reference_paths = reference_paths
         self._last_pickled_state = None
 
         self._con = None
@@ -338,6 +344,8 @@ class AbstractPool[
     _dbindex: Optional[dbview.DatabaseIndex] = None
     _last_active_time: float
 
+    _reference_paths: dict[str, pathlib.Path]
+
     def __init__(
         self,
         *,
@@ -356,6 +364,9 @@ class AbstractPool[
         self._schema_class_layout = kwargs["schema_class_layout"]
         self._dbindex = kwargs.get("dbindex")
         self._last_active_time = 0
+        self._reference_paths = {}
+        if ai_reference_file := kwargs.get("ai_reference_file"):
+            self._reference_paths['ai_reference_file'] = ai_reference_file
 
     def _get_init_args(self) -> tuple[InitArgs_T, InitArgsPickle_T]:
         assert self._dbindex is not None
@@ -382,6 +393,7 @@ class AbstractPool[
             self._schema_class_layout,
             global_schema_pickle,
             system_config,
+            self._reference_paths,
         )
 
     async def start(self) -> None:
@@ -1855,6 +1867,7 @@ class BaseMultiTenantWorker[
         std_schema: s_schema.FlatSchema,
         refl_schema: s_schema.FlatSchema,
         schema_class_layout: s_refl.SchemaClassLayout,
+        reference_paths: dict[str, pathlib.Path],
     ):
         super().__init__(
             manager,
@@ -1866,6 +1879,7 @@ class BaseMultiTenantWorker[
             schema_class_layout,
             None,
             None,
+            reference_paths,
         )
         self._cache = collections.OrderedDict()
         self._invalidated_clients = []
@@ -1980,6 +1994,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
             self._std_schema,
             self._refl_schema,
             self._schema_class_layout,
+            self._reference_paths
         )
         return init_args, pickle.dumps(init_args, -1)
 

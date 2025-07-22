@@ -29,6 +29,7 @@ from typing import (
 
 from collections import defaultdict
 import itertools
+import pathlib
 
 from edb import errors
 
@@ -631,6 +632,7 @@ def apply_ddl_script_ex(
         Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
+    reference_paths: Optional[Mapping[str, pathlib.Path]] = None
 ) -> tuple[s_schema.Schema, sd.DeltaRoot]:
 
     delta = sd.DeltaRoot()
@@ -651,6 +653,7 @@ def apply_ddl_script_ex(
             store_migration_sdl=store_migration_sdl,
             schema_object_ids=schema_object_ids,
             compat_ver=compat_ver,
+            reference_paths=reference_paths,
         )
 
         delta.add(cmd)
@@ -670,6 +673,7 @@ def delta_from_ddl(
         Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
+    reference_paths: Optional[Mapping[str, pathlib.Path]] = None
 ) -> sd.DeltaRoot:
     _, cmd = delta_and_schema_from_ddl(
         ddl_stmt,
@@ -680,6 +684,7 @@ def delta_from_ddl(
         store_migration_sdl=store_migration_sdl,
         schema_object_ids=schema_object_ids,
         compat_ver=compat_ver,
+        reference_paths=reference_paths,
     )
     return cmd
 
@@ -697,6 +702,7 @@ def delta_and_schema_from_ddl(
         Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
+    reference_paths: Optional[Mapping[str, pathlib.Path]] = None
 ) -> tuple[s_schema.Schema, sd.DeltaRoot]:
     delta = sd.DeltaRoot()
     context = sd.CommandContext(
@@ -708,6 +714,7 @@ def delta_and_schema_from_ddl(
         store_migration_sdl=store_migration_sdl,
         schema_object_ids=schema_object_ids,
         compat_ver=compat_ver,
+        reference_paths=reference_paths,
     )
 
     with context(sd.DeltaRootContext(schema=schema, op=delta)):

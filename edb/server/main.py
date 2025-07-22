@@ -256,6 +256,7 @@ async def _run_server(
                 srvargs.ReloadTrigger.FileSystemEvent,
             ],
             net_worker_mode=args.net_worker_mode,
+            ai_reference_file=args.ai_reference_file,
         )
         magic_smtp = os.getenv('EDGEDB_MAGIC_SMTP_CONFIG')
         if magic_smtp:

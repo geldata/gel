@@ -355,6 +355,7 @@ def _get_delta_context_args(ctx: compiler.CompileContext) -> dict[str, Any]:
         ) == 'AlwaysStore',
         schema_object_ids=ctx.schema_object_ids,
         compat_ver=ctx.compat_ver,
+        reference_paths=ctx.compiler_state.reference_paths,
     )
 
 

@@ -1125,14 +1125,22 @@ def _try_load_reference_descs(
     embedding_model_descs: dict[str, EmbeddingModelDesc] = {}
 
     try:
-        local_reference_path = os.path.join(
-            pathlib.Path(__file__).parent.parent,
-            'server',
-            'protocol',
-            'ai_reference.json',
-        )
-        with open(local_reference_path) as local_reference_file:
-            local_reference: dict[str, Any] = json.load(local_reference_file)
+        reference_path: str | pathlib.Path
+        if (
+            context.reference_paths
+            and 'ai_reference_file' in context.reference_paths
+        ):
+            reference_path = context.reference_paths['ai_reference_file']
+        else:
+            reference_path = os.path.join(
+                pathlib.Path(__file__).parent.parent,
+                'server',
+                'protocol',
+                'ai_reference.json',
+            )
+
+        with open(reference_path) as reference_file:
+            local_reference: dict[str, Any] = json.load(reference_file)
             if provider_ref := local_reference.get("providers"):
                 for name, ref in provider_ref.items():
                     provider_descs[name] = ProviderDesc(

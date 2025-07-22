@@ -296,6 +296,8 @@ class ServerConfig(NamedTuple):
 
     cors_always_allowed_origins: Optional[str]
 
+    ai_reference_file: Optional[pathlib.Path]
+
 
 class PathPath(click.Path):
     name = 'path'
@@ -1165,6 +1167,17 @@ server_options = typeutils.chain_decorators([
              'worker exceeding this limit will be terminated and recreated. '
              'Each worker is free from this limit in its first 20-30 hours '
              'after spawn to avoid infinite restarts or a thundering herd.',
+    ),
+    click.option(
+        "--ai-reference-file",
+        envvar="GEL_AI_REFERENCE_FILE",
+        metavar="PATH",
+        cls=EnvvarResolver,
+        type=PathPath(),
+        hidden=True,
+        help=(
+            'Path to the ai extension reference file for providers and models.'
+        ),
     ),
 ])
 

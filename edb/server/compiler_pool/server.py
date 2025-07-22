@@ -203,6 +203,7 @@ class MultiSchemaPool(
             self._std_schema,
             self._refl_schema,
             self._schema_class_layout,
+            self._reference_paths,
         )
         return init_args, pickle.dumps(init_args, -1)
 
