@@ -531,6 +531,7 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
 
     def test_graphql_functional_query_17(self):
         # Test unused & null variables
+        # (native proto doesn't allow these...)
         self.assert_graphql_query_result(
             r"""
                 query Person {
@@ -546,6 +547,7 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                 }],
             },
             variables={'name': None},
+            native_variables={},
         )
 
         self.assert_graphql_query_result(
@@ -2112,6 +2114,9 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                     ... on User {
                         age
                     }
+                    ... on Setting {
+                        value
+                    }
                 }
             }
         """, {
@@ -3146,7 +3151,19 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
             }
         """, {
             'User': [],
-        })
+            # HMMMM: Should we allow omiting?
+        }, native_variables=dict(val=None))
+
+        self.assert_graphql_query_result(r"""
+            query($val: Int = 5) {
+                User(filter: {score: {eq: $val}}) {
+                    id,
+                }
+            }
+        """, {
+            'User': [{}],
+            # HMMMM: Should we allow omiting?
+        }, native_variables=dict(val=None))
 
     def test_graphql_functional_variables_04(self):
         self.assert_graphql_query_result(r"""
@@ -3776,6 +3793,7 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
             },
             # JSON can only be passed as a variable.
             variables={"val": {"foo": [1, None, "bar"]}},
+            native_variables={"val": json.dumps({"foo": [1, None, "bar"]})},
         )
 
     def test_graphql_functional_variables_47(self):

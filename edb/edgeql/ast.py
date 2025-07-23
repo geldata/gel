@@ -303,6 +303,23 @@ class Constant(BaseConstant):
     def integer(cls, i: int) -> Constant:
         return Constant(kind=ConstantKind.INTEGER, value=str(i))
 
+    @classmethod
+    def float(cls, f: float) -> Constant:
+        return Constant(kind=ConstantKind.FLOAT, value=str(f))
+
+    @classmethod
+    def make(cls, n: object) -> Constant:
+        if isinstance(n, str):
+            return cls.string(n)
+        elif isinstance(n, bool):
+            return cls.boolean(n)
+        elif isinstance(n, int):
+            return cls.integer(n)
+        elif isinstance(n, float):
+            return cls.float(n)
+        else:
+            raise AssertionError('unsupported constant type')
+
 
 class ConstantKind(s_enum.StrEnum):
     STRING = 'STRING'

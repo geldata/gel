@@ -24,6 +24,7 @@ from typing import (
     Optional,
 )
 
+import asyncio
 import http.server
 import json
 import threading
@@ -330,6 +331,52 @@ class GraphQLTestCase(BaseHttpExtensionTest):
 
         raise ex
 
+    async def _native_graphql_query(
+        self,
+        query,
+        *,
+        # Can/should we support operation_name somehow...
+        variables=None,
+        globals=None,
+    ):
+        # The graphql tests are all synchronous, and our gel
+        # connections need to be async... so we spin up a new
+        # connection and asyncio.run the coro.
+        con = await self.connect()
+        try:
+            # Ahhhhhh. We don't support with_globals on testbase
+            # connections, so....
+            if globals:
+                glob_defs = {
+                    obj.name: obj
+                    for obj in
+                    await con.query('''
+                        select schema::Global {
+                            name, required, tname := .target.name
+                        }
+                    ''')
+                }
+
+                for k, v in globals.items():
+                    glob = glob_defs[k]
+                    # Why do we allow this for the HTTP proto??
+                    # We don't for binary proto stuff.
+                    if v is None and glob.required:
+                        continue
+                    mod = 'required ' if glob.required else ''
+                    await con.execute(
+                        f'set global {k} := <{mod}{glob.tname}><json>$0',
+                        json.dumps(v),
+                    )
+
+            async with server.RollbackChanges(con):
+                return json.loads(await con.query_graphql_json(
+                    query,
+                    **(variables or {}),
+                ))
+        finally:
+            await con.aclose()
+
     def assert_graphql_query_result(
         self,
         query,
@@ -339,10 +386,39 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         sort=None,
         operation_name=None,
         use_http_post=True,
+        native_variables=None,
         variables=None,
         globals=None,
         deprecated_globals=None,
     ):
+        # Try to use the native protocol first!
+        if operation_name is None:
+            try:
+                res = asyncio.run(self._native_graphql_query(
+                    query,
+                    variables=(
+                        native_variables if native_variables is not None
+                        else variables
+                    ),
+                    globals=globals or deprecated_globals,
+                ))
+
+                if sort is not None:
+                    # GQL will always have a single object
+                    # returned. The data is in the top-level fields,
+                    # so that's what needs to be sorted.
+                    for r in res.values():
+                        assert_data_shape.sort_results(r, sort)
+
+                assert_data_shape.assert_data_shape(
+                    res, result, self.fail, message=msg)
+            except gel.UnsupportedFeatureError as e:
+                if 'Default variables are not supported' in str(e):
+                    # Whatever.
+                    pass
+                else:
+                    raise
+
         res = self.graphql_query(
             query,
             operation_name=operation_name,

@@ -54,6 +54,7 @@ def compile_graphql(
     substitutions: Optional[dict[str, tuple[str, int, int]]],
     operation_name: Optional[str] = None,
     variables: Optional[Mapping[str, object]] = None,
+    native_input: bool = False,
 ) -> graphql.TranspiledOperation:
     if tokens is None:
         ast = graphql.parse_text(gql)
@@ -68,4 +69,5 @@ def compile_graphql(
         variables=variables,
         substitutions=substitutions,
         operation_name=operation_name,
+        native_input=native_input,
     )

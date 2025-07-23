@@ -220,6 +220,7 @@ class Param:
     array_type_id: Optional[uuid.UUID]
     outer_idx: Optional[int]
     sub_params: Optional[tuple[list[Optional[uuid.UUID]], tuple[Any, ...]]]
+    typename: str
 
 
 #############################
@@ -466,6 +467,8 @@ class QueryUnitGroup:
     tx_seq_id: int = 0
 
     force_non_normalized: bool = False
+
+    graphql_key_variables: Optional[list[str]] = None
 
     @property
     def units(self) -> list[QueryUnit]:

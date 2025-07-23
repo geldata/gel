@@ -418,8 +418,8 @@ class RollbackException(Exception):
 
 
 class RollbackChanges:
-    def __init__(self, test):
-        self._conn = test.con
+    def __init__(self, con):
+        self._conn = con
 
     async def __aenter__(self):
         self._tx = self._conn.transaction()
@@ -1134,7 +1134,7 @@ class ConnectedTestCase(ClusterTestCase):
                 pass
 
     def _run_and_rollback(self):
-        return RollbackChanges(self)
+        return RollbackChanges(self.con)
 
     async def _run_and_rollback_retrying(self):
         @contextlib.asynccontextmanager

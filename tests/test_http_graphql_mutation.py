@@ -17,6 +17,8 @@
 #
 
 
+import decimal
+import json
 import os
 import unittest  # NOQA
 
@@ -269,6 +271,8 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
             'p_str': 'New ScalarTest04',
             'p_json': {"foo": [1, None, "aardvark"]},
         }
+        ndata = data.copy()
+        ndata['p_json'] = json.dumps(ndata['p_json'])
 
         validation_query = r"""
             query {
@@ -299,11 +303,15 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
                 "insert_ScalarTest": [data]
             },
             variables=data,
+            native_variables=ndata,
         )
 
         self.assert_graphql_query_result(validation_query, {
             "ScalarTest": [data]
         })
+
+        # Native proto can't have extra variables
+        del ndata['p_str']
 
         self.assert_graphql_query_result(
             r"""
@@ -319,6 +327,7 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
                 "delete_ScalarTest": [data]
             },
             variables=data,
+            native_variables=ndata,
         )
 
         # validate that the deletion worked
@@ -851,6 +860,9 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
                 }
             ]
         }
+        ndata = {
+            k: json.dumps(v) if k != 'name' else v for k, v in data.items()
+        }
 
         validation_query = r"""
             query {
@@ -890,7 +902,7 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
             }
         """, {
             "insert_RangeTest": [data]
-        }, variables=data)
+        }, variables=data, native_variables=ndata)
 
         self.assert_graphql_query_result(validation_query, {
             "RangeTest": [data]
@@ -2396,6 +2408,11 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
                 444444444444444444444444444.222222222222222222222222222,
         }
 
+        orig_ndata = orig_data.copy()
+        orig_ndata['p_decimal'] = decimal.Decimal(
+            '123456789123456789123456789.123456789123456789123456789'
+        )
+
         validation_query = rf"""
             query {{
                 ScalarTest(
@@ -2530,7 +2547,7 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
             }
         """, {
             "update_ScalarTest": [orig_data]
-        }, variables=orig_data)
+        }, variables=orig_data, native_variables=orig_ndata)
 
         # validate that the final update worked
         self.assert_graphql_query_result(validation_query, {
@@ -2630,6 +2647,15 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
             'p_json': {"bar": [None, 2, "aardvark"]},
         }
 
+        orig_ndata = {
+            'p_str': 'Hello world',
+            'p_json': json.dumps({"foo": [1, None, "bar"]},)
+        }
+        ndata = {
+            'p_str': 'Update ScalarTest03',
+            'p_json': json.dumps({"bar": [None, 2, "aardvark"]}),
+        }
+
         validation_query = rf"""
             query {{
                 ScalarTest(
@@ -2655,6 +2681,7 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
         for json_val in [data['p_json'], data['p_json']['bar'],
                          True, 123, "hello world", None]:
             data['p_json'] = json_val
+            ndata['p_json'] = json.dumps(json_val)
             self.assert_graphql_query_result(
                 r"""
                     mutation update_ScalarTest(
@@ -2674,7 +2701,8 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
                 """, {
                     "update_ScalarTest": [data]
                 },
-                variables=data
+                variables=data,
+                native_variables=ndata,
             )
 
             self.assert_graphql_query_result(validation_query, {
@@ -2700,7 +2728,8 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
             """, {
                 "update_ScalarTest": [orig_data]
             },
-            variables=orig_data
+            variables=orig_data,
+            native_variables=orig_ndata,
         )
 
         # validate that the final update worked
@@ -3127,6 +3156,7 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
                 }]
             },
             variables=data,
+            native_variables={k: json.dumps(v) for k, v in data.items()},
         )
 
         self.assert_graphql_query_result(
@@ -3148,7 +3178,8 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
                     'p_array_json': ["first", data['el0'], data['el1']],
                 }]
             },
-            variables={"el": "first"}
+            variables={"el": "first"},
+            native_variables={"el": json.dumps("first")},
         )
 
         self.assert_graphql_query_result(
@@ -3170,7 +3201,8 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
                     'p_array_json': ["first", data['el0'], data['el1'], 9999],
                 }]
             },
-            variables={"el": 9999}
+            variables={"el": 9999},
+            native_variables={"el": json.dumps(9999)},
         )
 
         self.assert_graphql_query_result(
@@ -3766,6 +3798,45 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
             }]
         })
 
+        data = {
+            "rval": {
+                "lower": 5.6,
+                "upper": 7.8,
+                "inc_lower": True,
+                "inc_upper": True
+            },
+            "mval": [
+                {
+                    "lower": 0,
+                    "upper": 1.2,
+                    "inc_lower": True,
+                    "inc_upper": False
+                },
+            ],
+            "rdate": {
+                "lower": "2018-12-10",
+                "upper": "2022-10-20",
+                "inc_lower": True,
+                "inc_upper": False
+            },
+            "mdate": [
+                {
+                    "lower": None,
+                    "upper": "2019-02-13",
+                    "inc_lower": True,
+                    "inc_upper": False
+                },
+                {
+                    "lower": "2023-08-29",
+                    "upper": "2026-10-20",
+                    "inc_lower": True,
+                    "inc_upper": False
+                }
+            ]
+        }
+        # Sigh, having to json encode this is nasty!
+        ndata = {k: json.dumps(v) for k, v in data.items()}
+
         self.assert_graphql_query_result(r"""
             mutation update_RangeTest(
                 $rval: RangeOfFloat,
@@ -3827,42 +3898,7 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
                     }
                 ]
             }]
-        }, variables={
-            "rval": {
-                "lower": 5.6,
-                "upper": 7.8,
-                "inc_lower": True,
-                "inc_upper": True
-            },
-            "mval": [
-                {
-                    "lower": 0,
-                    "upper": 1.2,
-                    "inc_lower": True,
-                    "inc_upper": False
-                },
-            ],
-            "rdate": {
-                "lower": "2018-12-10",
-                "upper": "2022-10-20",
-                "inc_lower": True,
-                "inc_upper": False
-            },
-            "mdate": [
-                {
-                    "lower": None,
-                    "upper": "2019-02-13",
-                    "inc_lower": True,
-                    "inc_upper": False
-                },
-                {
-                    "lower": "2023-08-29",
-                    "upper": "2026-10-20",
-                    "inc_lower": True,
-                    "inc_upper": False
-                }
-            ]
-        })
+        }, variables=data, native_variables=ndata)
 
         # Cleanup
         self.assert_graphql_query_result(r"""

@@ -60,6 +60,12 @@ _USER_ERRORS = (
     _graphql_rewrite.NotFoundError,
 )
 
+# key_vars tracks which variables are actually needed for evaluation,
+# since the compiler depends on some
+
+# redirect accounts for the fact that we actually don't always know
+# which the relevant variables are until after compiling
+
 @cython.final
 cdef class CacheRedirect:
     cdef public list key_vars  # List[str],  must be sorted

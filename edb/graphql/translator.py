@@ -98,6 +98,8 @@ class GraphQLTranslatorContext:
         query,
         document_ast,
         operation_name,
+        native_input,
+        parse_only_mode,
     ):
         self.variables = variables
         self.fragments = {}
@@ -111,6 +113,8 @@ class GraphQLTranslatorContext:
         self.query = query
         self.document_ast = document_ast
         self.operation_name = operation_name
+        self.native_input = native_input
+        self.parse_only_mode = parse_only_mode
 
         # only used inside ObjectFieldNode
         self.base_expr = None
@@ -170,9 +174,22 @@ class BookkeepDict(dict):
         self.update(values)
         self.touched = set()
 
+    def __bool__(self):
+        # HACK! And kind of wrong!
+        # But this keeps this from getting replaced by code in graphql-core
+        # that does "raw_variable_values or {}"...
+        return True
+
     def __getitem__(self, key):
         self.touched.add(key)
         return super().__getitem__(key)
+
+    def __contains__(self, key):
+        self.touched.add(key)
+        return super().__contains__(key)
+
+    def keys(self):
+        raise NotImplementedError()
 
     def values(self):
         raise NotImplementedError()
@@ -285,11 +302,25 @@ class GraphQLTranslator:
                     variable_values=vars)
                 for var_name in vars.touched:
                     var = self._context.vars.get(var_name)
+                    # TODO: Why do we track this twice?
                     self._context.vars[var_name] = var._replace(critical=True)
+                    operation.critvars[var_name] = (
+                        self._context.vars[var_name].val
+                    )
 
                 if result.errors:
                     err = result.errors[0]
-                    if isinstance(err, graphql.GraphQLError):
+
+                    if (
+                        self._context.parse_only_mode
+                        and all(
+                            'was not provided' in str(e) for e in result.errors
+                        )
+                    ):
+                        # Don't worry about it.
+                        # And explain why!
+                        assert vars.touched
+                    elif isinstance(err, graphql.GraphQLError):
                         err_loc = (err.locations[0].line,
                                    err.locations[0].column)
                         raise g_errors.GraphQLCoreError(
@@ -298,11 +329,26 @@ class GraphQLTranslator:
                     else:
                         raise err
 
-                name = el.expr.steps[0].name
-                el.compexpr.args[0] = qlast.Constant.string(
-                    json.dumps(result.data[name]))
-                for var in vars.touched:
-                    operation.critvars[var] = self._context.vars[var].val
+                    expr = qlast.FunctionCall(
+                        func='assert_exists',
+                        args=[
+                            qlast.TypeCast(
+                                type=qlast.TypeName(
+                                    maintype=qlast.ObjectRef(name='str')
+                                ),
+                                expr=qlast.Set(elements=[]),
+                            ),
+                        ],
+                        kwargs=dict(message=qlast.Constant.string(
+                            "SERVER BUG: error with graphql introspection"
+                        )),
+                    )
+
+                else:
+                    name = el.expr.steps[0].name
+                    expr = qlast.Constant.string(json.dumps(result.data[name]))
+
+                el.compexpr.args[0] = expr
 
         return translated
 
@@ -408,7 +454,13 @@ class GraphQLTranslator:
 
                 if isinstance(cond, gql_ast.VariableNode):
                     varname = cond.name.value
-                    value = self._context.vars[varname].val
+                    var = self._context.vars[varname]
+                    self._context.vars[varname] = var._replace(critical=True)
+
+                    if self._context.parse_only_mode:
+                        return True
+
+                    value = var.val
 
                     if value is None:
                         raise g_errors.GraphQLValidationError(
@@ -496,6 +548,13 @@ class GraphQLTranslator:
                 loc=self.get_loc(node))
 
         return top
+
+    def _maybe_get_current_type(self):
+        if self._context.path:
+            path = self._context.path[-1]
+            return path[-1].type
+        else:
+            return None
 
     def _get_parent_and_current_type(self):
         path = self._context.path[-1]
@@ -1663,7 +1722,9 @@ class GraphQLTranslator:
         return [Ordering(names=[], direction=direction, nulls=nulls)]
 
     def visit_VariableNode(self, node):
-        varname = node.name.value
+        return self._get_variable(node.name.value)
+
+    def _get_variable(self, varname):
         var = self._context.vars[varname]
         err_msg = (f"Only scalar input variables are allowed. "
                    f"Variable {varname!r} has non-scalar value.")
@@ -1671,17 +1732,16 @@ class GraphQLTranslator:
         vartype = var.defn.type
         optional = True
         # get the type of the value being inserted
-        _, target = self._get_parent_and_current_type()
+        target = self._maybe_get_current_type()
 
         if isinstance(vartype, gql_ast.NonNullTypeNode):
             vartype = vartype.type
             optional = False
 
         if self.is_list_type(vartype):
-            if target.is_multirange:
-                subtype = target.edb_base.get_subtypes(target.edb_schema)[0]
-                st_name = subtype.get_name(target.edb_schema)
-                castname = qlast.ObjectRef(name=str(st_name))
+            if target and target.is_multirange:
+                castname = qlast.ObjectRef(name='json')
+
             else:
                 # So far the only list allowed is a multirange
                 # representation.
@@ -1708,28 +1768,43 @@ class GraphQLTranslator:
 
         casttype = qlast.TypeName(maintype=castname)
 
-        # potentially this is an array
-        if self.is_list_type(vartype):
-            if target.is_multirange:
-                # Wrap the base type into range, the next step will wrap it into
-                # an array.
-                casttype = qlast.TypeName(
-                    maintype=qlast.ObjectRef(name='range'),
-                    subtypes=[casttype],
-                )
+        needs_coalesce = self._context.native_input and var.val is not None
+        optional = optional or needs_coalesce
 
-            casttype = qlast.TypeName(
-                maintype=qlast.ObjectRef(name='array'),
-                subtypes=[casttype]
-            )
-
-        return qlast.TypeCast(
+        val = qlast.TypeCast(
             type=casttype,
             expr=qlast.QueryParameter(name=varname),
             cardinality_mod=(
                 qlast.CardinalityModifier.Optional if optional else None
             ),
         )
+
+        # In HTTP mode, we rely on merging the dict of defaults with
+        # the dict of actual arguments. That would be a pain on the
+        # native protocol, so we inject coalesces instead.
+        #
+        # FIXME: This is actually a little dodgy, since the gel proto
+        # will require passing an explicit None, but in graphql that
+        # should result in null being passed and the default not
+        # used... But in our implementation, that fails, because
+        # the rewriter (I think?) is marking it required?
+        #
+        # Alright, actually for now we are rejecting it.
+        if needs_coalesce:
+            # val = qlast.BinOp(
+            #     left=val,
+            #     op='??',
+            #     # We have to cast because of enums
+            #     right=qlast.TypeCast(
+            #         type=casttype,
+            #         expr=qlast.Constant.make(var.val),
+            #     ),
+            # )
+            raise errors.UnsupportedFeatureError(
+                'Default variables are not supported on the gel protocol'
+            )
+
+        return val
 
     def visit_StringValueNode(self, node):
         return qlast.Constant.string(node.value)
@@ -1930,10 +2005,19 @@ def translate_ast(
     operation_name: Optional[str]=None,
     variables: Optional[Mapping[str, Any]]=None,
     substitutions: Optional[dict[str, tuple[str, int, int]]],
+    native_input: bool = False,
 ) -> TranspiledOperation:
+
+    # If no variables have been provided, and we are in native
+    # protocol mode, that means we need to be tolerant of critical
+    # variables not having values. We'll report out which ones
+    # existed, and then recompile with the variables present.
+    parse_only_mode = native_input and variables is None
 
     if variables is None:
         variables = {}
+
+    # variables = {}
 
     validation_errors = convert_errors(
         graphql.validate(gqlcore.graphql_schema, document_ast),
@@ -1952,11 +2036,17 @@ def translate_ast(
             raise err
 
     context = GraphQLTranslatorContext(
-        gqlcore=gqlcore, query=None,
-        variables=variables, document_ast=document_ast,
-        operation_name=operation_name)
+        gqlcore=gqlcore,
+        query=None,
+        variables=variables,
+        document_ast=document_ast,
+        operation_name=operation_name,
+        native_input=native_input,
+        parse_only_mode=parse_only_mode,
+    )
 
-    edge_forest_map = GraphQLTranslator(context=context).visit(document_ast)
+    translator = GraphQLTranslator(context=context)
+    edge_forest_map = translator.visit(document_ast)
 
     if debug.flags.graphql_compile:
         for opname, op in sorted(edge_forest_map.items()):
@@ -1964,6 +2054,21 @@ def translate_ast(
             print(ql_codegen.generate_source(op.stmt))
 
     op = next(iter(edge_forest_map.values()))
+
+    if native_input and op.critvars:
+        op.stmt.orderby = [
+            qlast.SortExpr(
+                path=qlast.UnaryOp(
+                    op='EXISTS',
+                    operand=qlast.Set(
+                        elements=[
+                            translator._get_variable(vn)
+                            for vn in op.critvars
+                        ]
+                    )
+                )
+            )
+        ]
 
     # generate the specific result
     return TranspiledOperation(

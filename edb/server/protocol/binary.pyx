@@ -86,6 +86,9 @@ from edb.common import debug
 from edb.protocol import messages
 
 
+from edb import _graphql_rewrite
+
+
 include "./consts.pxi"
 
 
@@ -102,6 +105,7 @@ cdef object FMT_BINARY = compiler.OutputFormat.BINARY
 
 cdef object LANG_EDGEQL = compiler.InputLanguage.EDGEQL
 cdef object LANG_SQL = compiler.InputLanguage.SQL
+cdef object LANG_GRAPHQL = compiler.InputLanguage.GRAPHQL
 
 cdef tuple DUMP_VER_MIN = (0, 7)
 cdef tuple DUMP_VER_MAX = edbdef.CURRENT_PROTOCOL
@@ -492,6 +496,9 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 return pgparser.Source.from_string(text)
             else:
                 return pgparser.NormalizedSource.from_string(text)
+        elif lang is LANG_GRAPHQL:
+            # TODO: Support normalization for graphql
+            return pgparser.Source.from_string(text)
         else:
             raise errors.UnsupportedFeatureError(
                 f"unsupported input language: {lang}")
@@ -983,6 +990,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         args = self.buffer.read_len_prefixed_bytes()
         self.buffer.finish_message()
 
+        compiled = None
         if (
             self._last_anon_compiled is not None and
             hash(query_req) == self._last_anon_compiled_hash and
@@ -993,20 +1001,48 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             query_unit_group = compiled.query_unit_group
         else:
             query_unit_group = _dbview.lookup_compiled_query(query_req)
-            if query_unit_group is None:
-                if self.debug:
-                    self.debug_print('EXECUTE /CACHE MISS', query_req.source.text())
 
-                compiled = await self._parse(
-                    query_req, allow_capabilities, tag
+        if query_unit_group is None:
+            if self.debug:
+                self.debug_print('EXECUTE /CACHE MISS', query_req.source.text())
+
+            compiled = await self._parse(query_req, allow_capabilities, tag)
+            query_unit_group = compiled.query_unit_group
+
+        # If this is a graphql request, and the compilation of it
+        # depends on reading the value of some variables (because they
+        # are used in @include or as params to type introspection, for
+        # example) we need to reflect those variables into the
+        # query_req and look it up again, and then maybe compile again.
+        #
+        # What a pain!
+        if query_unit_group.graphql_key_variables:
+            key_vars = _extract_key_vars(query_unit_group, query_req, args)
+            query_req = query_req.__copy__()
+            query_req.set_key_params(key_vars)
+
+            compiled = None
+            query_unit_group = _dbview.lookup_compiled_query(query_req)
+
+        # If we had to do a graphql_key_variables lookup, we might need
+        # to compile again.
+        if query_unit_group is None:
+            if self.debug:
+                self.debug_print(
+                    'EXECUTE /CACHE MISS (graphql nonsense)',
+                    query_req.source.text(),
                 )
-                query_unit_group = compiled.query_unit_group
-                if self._cancelled:
-                    raise ConnectionAbortedError
-            else:
+
+            compiled = await self._parse(query_req, allow_capabilities, tag)
+            query_unit_group = compiled.query_unit_group
+        else:
+            if not compiled:
                 compiled = _dbview.as_compiled(query_req, query_unit_group)
 
         compiled.tag = tag
+
+        if self._cancelled:
+            raise ConnectionAbortedError
 
         self._query_count += 1
 
@@ -2004,3 +2040,63 @@ async def run_script(
             raise exc
     finally:
         conn.close()
+
+
+cdef _extract_key_vars(
+    qug: dbstate.QueryUnitGroup,
+    query_req: rpc.CompilationRequest,
+    args: bytes
+):
+    cdef:
+        FRBuffer in_buf
+        char *p
+        int32_t recv_args
+        int32_t decl_args
+        ssize_t in_len
+
+    frb_init(
+        &in_buf,
+        cpython.PyBytes_AS_STRING(args),
+        cpython.Py_SIZE(args))
+
+    keys = qug.graphql_key_variables
+    assert qug.in_type_args
+
+    decl_args = len(qug.in_type_args)
+    recv_args = hton.unpack_int32(frb_read(&in_buf, 4))
+    if recv_args != decl_args:
+        raise errors.InputDataError(
+            f"invalid argument count, "
+            f"expected: {decl_args}, got: {recv_args}")
+
+    vals = {}
+
+    for param in qug.in_type_args:
+        frb_read(&in_buf, 4)  # reserved
+        needed = param.name in keys
+
+        in_len = hton.unpack_int32(frb_read(&in_buf, 4))
+        if not needed:
+            if in_len > 0:
+                frb_read(&in_buf, in_len)
+            continue
+
+        if in_len < 0:
+            val = None
+        else:
+            p = frb_read(&in_buf, in_len)
+
+            # Very hacky and minimal decoding support.
+            if param.typename == 'std::str':
+                val = cpython.PyUnicode_DecodeUTF8(p, in_len, NULL)
+            elif param.typename == 'std::bool':
+                val = p[0] != 0
+            else:
+                raise AssertionError(
+                    f'unsupported type for graphql introspection: '
+                    f'{param.typename}'
+                )
+
+        vals[param.name] = val
+
+    return vals

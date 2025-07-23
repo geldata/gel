@@ -53,6 +53,7 @@ from edb.server import instdata
 
 from edb import edgeql
 from edb.common import debug
+from edb import graphql
 from edb.common import turbo_uuid
 from edb.common import verutils
 from edb.common import uuidgen
@@ -684,6 +685,12 @@ class Compiler:
         match request.input_language:
             case enums.InputLanguage.EDGEQL:
                 unit_group = compile(ctx=ctx, source=request.source)
+            case enums.InputLanguage.GRAPHQL:
+                unit_group = compile_graphql(
+                    ctx=ctx,
+                    source=request.source,
+                    variables=request.key_params,
+                )
             case enums.InputLanguage.SQL:
                 unit_group = compile_sql_as_unit_group(
                     ctx=ctx, source=request.source)
@@ -792,6 +799,12 @@ class Compiler:
         match request.input_language:
             case enums.InputLanguage.EDGEQL:
                 unit_group = compile(ctx=ctx, source=request.source)
+            case enums.InputLanguage.GRAPHQL:
+                unit_group = compile_graphql(
+                    ctx=ctx,
+                    source=request.source,
+                    variables=request.key_params,
+                )
             case enums.InputLanguage.SQL:
                 unit_group = compile_sql_as_unit_group(
                     ctx=ctx, source=request.source)
@@ -847,6 +860,7 @@ class Compiler:
                         array_type_id=array_type_id,
                         outer_idx=None,  # no script support for SQL
                         sub_params=None,  # no tuple args support for SQL
+                        typename=str(param_type.get_name(schema)),
                     )
                 )
 
@@ -2666,6 +2680,42 @@ def _compile_dispatch_ql(
         return (query, caps)
 
 
+def compile_graphql(
+    *,
+    ctx: CompileContext,
+    source: edgeql.Source,
+    variables: Optional[Mapping[str, object]],
+) -> dbstate.QueryUnitGroup:
+    current_tx = ctx.state.current_tx()
+
+    gql_op = graphql.compile_graphql(
+        ctx.compiler_state.std_schema,
+        current_tx.get_user_schema(),
+        current_tx.get_global_schema(),
+        current_tx.get_database_config(),
+        current_tx.get_system_config(),
+        source.text(),
+        tokens=None,
+        substitutions=None,
+        variables=variables,
+        native_input=True,
+    )
+    source = edgeql.Source.from_string(
+        edgeql.generate_source(gql_op.edgeql_ast, pretty=True),
+    )
+
+    qug = compile(ctx=ctx, source=source)
+    if gql_op.cache_deps_vars:
+        qug.graphql_key_variables = sorted(gql_op.cache_deps_vars)
+
+    # No warnings in graphql, yet
+    for qu in qug:
+        qu.warnings = ()
+    qug.warnings = None
+
+    return qug
+
+
 def compile(
     *,
     ctx: CompileContext,
@@ -3362,6 +3412,7 @@ def _extract_params(
             array_type_id=array_tid,
             outer_idx=outer_mapping[param.name] if outer_mapping else None,
             sub_params=sub_params,
+            typename=str(schema_type.get_name(schema)),
         )
 
     return oparams, in_type_args  # type: ignore[return-value]

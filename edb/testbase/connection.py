@@ -222,7 +222,33 @@ class RawTransaction(BaseTransaction):
             self._managed = False
 
 
-class Iteration(BaseTransaction, abstract.AsyncIOExecutor):
+class _Executor(abstract.AsyncIOExecutor):
+    # TODO: Remove this, once we land this in gel-python and update
+    # our bindings.
+    async def query_graphql_json(
+        self, query, *args: typing.Any, **kwargs: typing.Any
+    ) -> str:
+        return await self._query(
+            abstract.QueryContext(
+                query=abstract.QueryWithArgs(
+                    query,
+                    # None,
+                    args,
+                    kwargs,
+                    input_language=ord('G'),
+                ),
+                cache=self._get_query_cache(),
+                query_options=abstract._query_single_json_opts,
+                retry_options=self._get_retry_options(),
+                state=self._get_state(),
+                # transaction_options=self._get_active_tx_options(),
+                warning_handler=self._get_warning_handler(),
+                annotations=self._get_annotations(),
+            )
+        )
+
+
+class Iteration(BaseTransaction, _Executor):
     def __init__(self, retry, connection, iteration):
         super().__init__(connection)
         self._options = retry._options.transaction_options
@@ -343,7 +369,7 @@ class Retry:
         return iteration
 
 
-class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
+class Connection(options._OptionsMixin, _Executor):
 
     _top_xact: RawTransaction | None = None
 

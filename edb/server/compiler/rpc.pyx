@@ -20,6 +20,7 @@ from typing import (
     Mapping,
 )
 
+import json
 import pickle
 import hashlib
 import uuid
@@ -48,6 +49,7 @@ cdef object IN_FMT_JSON = enums.InputFormat.JSON
 cdef object IN_LANG_EDGEQL = enums.InputLanguage.EDGEQL
 cdef object IN_LANG_SQL = enums.InputLanguage.SQL
 cdef object IN_LANG_SQL_PARAMS = enums.InputLanguage.SQL_PARAMS
+cdef object IN_LANG_GRAPHQL = enums.InputLanguage.GRAPHQL
 
 cdef char MASK_JSON_PARAMETERS  = 1 << 0
 cdef char MASK_EXPECT_ONE       = 1 << 1
@@ -90,6 +92,8 @@ cdef char serialize_input_language(val):
         return b'S'
     elif val is IN_LANG_SQL_PARAMS:
         return b'P'
+    elif val is IN_LANG_GRAPHQL:
+        return b'G'
     else:
         raise errors.BinaryProtocolError(f'unknown input language {val!r}')
 
@@ -101,6 +105,8 @@ cdef deserialize_input_language(char lang):
         return IN_LANG_SQL
     elif lang == b'P':
         return IN_LANG_SQL_PARAMS
+    elif lang == b'G':
+        return IN_LANG_GRAPHQL
     else:
         raise errors.BinaryProtocolError(
             f'unknown input language {lang.to_bytes(1, "big")!r}')
@@ -165,6 +171,7 @@ cdef class CompilationRequest:
         system_config: Mapping[str, config.SettingValue] | None = None,
         role_name: str = defines.EDGEDB_SUPERUSER,
         branch_name: str = defines.EDGEDB_SUPERUSER_DB,
+        key_params: Mapping[str, object] | None = None,
     ):
         self.serializer = compilation_config_serializer
         self.source = source
@@ -184,6 +191,7 @@ cdef class CompilationRequest:
         self.system_config = system_config
         self.role_name = role_name
         self.branch_name = branch_name
+        self.key_params = key_params
 
         self.serialized_cache = None
         self.cache_key = None
@@ -210,6 +218,7 @@ cdef class CompilationRequest:
             system_config=self.system_config,
             role_name=self.role_name,
             branch_name=self.branch_name,
+            key_params=self.key_params,
         )
         rv.serialized_cache = self.serialized_cache
         rv.cache_key = self.cache_key
@@ -241,6 +250,12 @@ cdef class CompilationRequest:
 
     def set_schema_version(self, version: uuid.UUID) -> CompilationRequest:
         self.schema_version = version
+        self.serialized_cache = None
+        self.cache_key = None
+        return self
+
+    def set_key_params(self, key_params) -> CompilationRequest:
+        self.key_params = key_params
         self.serialized_cache = None
         self.cache_key = None
         return self
@@ -297,7 +312,8 @@ cdef class CompilationRequest:
             self.inline_typenames == other.inline_typenames and
             self.inline_objectids == other.inline_objectids and
             self.role_name == other.role_name and
-            self.branch_name == other.branch_name
+            self.branch_name == other.branch_name and
+            self.key_params == other.key_params
         )
 
 
@@ -370,6 +386,7 @@ cdef _deserialize_comp_req_v1(
     #      * 1 byte, 0 if the name is None
     #      * else, C-String as the name
     #      * C-String as the alias
+    # * Key parameter values: int32-length prefixed json object, -1 if None
     # * Session config type descriptor
     #   * 16 bytes type ID
     #   * int32-length-prefixed serialized type descriptor
@@ -413,6 +430,12 @@ cdef _deserialize_comp_req_v1(
     else:
         modaliases = None
 
+    key_params_str = buf.read_len_prefixed_utf8()
+    if key_params_str:
+        key_params = immutables.Map(json.loads(key_params_str))
+    else:
+        key_params = None
+
     serializer = compilation_config_serializer
     type_id = uuidgen.from_bytes(buf.read_bytes(16))
     if type_id == serializer.type_id:
@@ -451,6 +474,8 @@ cdef _deserialize_comp_req_v1(
         source = pgparser.deserialize(serialized_source)
     elif input_language is enums.InputLanguage.SQL_PARAMS:
         source = SQLParamsSource.deserialize(serialized_source)
+    elif input_language is enums.InputLanguage.GRAPHQL:
+        source = pgparser.deserialize(serialized_source)
     else:
         raise AssertionError(
             f"unexpected source language in serialized "
@@ -474,6 +499,7 @@ cdef _deserialize_comp_req_v1(
         session_config=session_config,
         role_name=role_name,
         branch_name=branch_name,
+        key_params=key_params,
     )
 
     return req
@@ -516,6 +542,12 @@ cdef _serialize_comp_req(req: CompilationRequest):
                 out.write_byte(1)
                 out.write_str(k, "utf-8")
             out.write_str(v, "utf-8")
+
+    if req.key_params is None:
+        key_params_str = b''
+    else:
+        key_params_str = json.dumps(req.key_params).encode('utf-8')
+    out.write_len_prefixed_bytes(key_params_str)
 
     type_id, desc = req.serializer.describe()
     out.write_bytes(type_id.bytes)

@@ -108,6 +108,7 @@ class InputLanguage(strenum.StrEnum):
     EDGEQL = 'EDGEQL'
     SQL = 'SQL'
     SQL_PARAMS = 'SQL_PARAMS'
+    GRAPHQL = 'GRAPHQL'
 
 
 def cardinality_from_ir_value(card: ir.Cardinality) -> Cardinality:
