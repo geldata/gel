@@ -2017,8 +2017,6 @@ def translate_ast(
     if variables is None:
         variables = {}
 
-    # variables = {}
-
     validation_errors = convert_errors(
         graphql.validate(gqlcore.graphql_schema, document_ast),
         substitutions=substitutions)
