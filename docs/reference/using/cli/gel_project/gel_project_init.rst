@@ -71,7 +71,7 @@ Options
 
 :cli:synopsis:`--non-interactive`
     Run in non-interactive mode (accepting all defaults). This is the default
-    behavior, so you do not need to normally specify this
+    behavior, so you do not need to normally specify this.
 
 :cli:synopsis:`--project-dir=<project-dir>`
     The project directory can be specified explicitly. Defaults to the
