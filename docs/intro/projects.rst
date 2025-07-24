@@ -45,24 +45,25 @@ and connect to its linked instance with no additional configuration.
 Initializing
 ^^^^^^^^^^^^
 
-To initialize a project, create a new directory and run :gelcmd:`project init`
-inside it. You'll see something like this:
+To initialize a project, create a new directory and run :gelcmd:`project init` inside it. You'll see something like this:
 
 .. code-block:: bash
 
   $ gel project init
-  No `gel.toml` found in this repo or above.
-  Do you want to initialize a new project? [Y/n]
-  > Y
-  Specify the name of Gel instance to use with this project
-  [default: my_instance]:
-  > my_instance
+  No `gel.toml` (or `edgedb.toml`) found in `/projects/my_instance` or above
+  Initializing new project...
   Checking Gel versions...
-  Specify the version of Gel to use with this project [default: x.x]:
-  > # (left blank for default)
-  ...
-  Successfully installed x.x+cc4f3b5
-  Initializing Gel instance...
+  ┌─────────────────────┬────────────────────────────────┐
+  │ Project directory   │ /projects/my_instance          │
+  │ Project config      │ /projects/my_instance/gel.toml │
+  │ Schema dir (empty)  │ /projects/my_instance/dbschema │
+  │ Installation method │ portable package               │
+  │ Version             │ x.x+xxxxxxx                    │
+  │ Instance name       │ my_instance                    │
+  │ Branch              │ main                           │
+  └─────────────────────┴────────────────────────────────┘
+  Version x.x+xxxxxxx is already downloaded
+  Initializing Gel instance 'my_instance'...
   Applying migrations...
   Everything is up to date. Revision initial
   Project initialized.
@@ -78,7 +79,7 @@ This command does a couple important things.
    .. code-block:: toml
 
      [instance]
-     server-version = "6.0"
+     server-version = "6.9"
 
 3. If no ``dbschema`` directory exists, it will be created, along with an
    empty :dotgel:`default` file which will contain your schema. If a
@@ -134,12 +135,7 @@ linked instance without additional configuration.
 Using remote instances
 ^^^^^^^^^^^^^^^^^^^^^^
 
-You may want to initialize a project that points to a remote Gel instance.
-This is totally a valid case and Gel fully supports it! Before running
-:gelcmd:`project init`, you just need to create an alias for the remote
-instance using :gelcmd:`instance link`, like so:
-
-.. lint-off
+If you want to initialize a project that points to an existing remote Gel instance, first create an alias for the remote instance using :gelcmd:`instance link`, like so:
 
 .. code-block:: bash
 
@@ -161,20 +157,17 @@ instance using :gelcmd:`instance link`, like so:
   Successfully linked to remote instance. To connect run:
     gel -I staging_db
 
-.. lint-on
+After receiving the necessary connection information, this command links the remote instance to a local alias ``"staging_db"``. You can now use this as instance name in CLI commands including in :gelcmd:`project init`. To set this linked remote instance as your project instance, you can use the new name in the interactive mode:
 
-After receiving the necessary connection information, this command links the
-remote instance to a local alias ``"staging_db"``. You can use this as
-instance name in CLI commands.
+.. code-block:: bash
 
-.. code-block::
+  $ gel project init --interactive
 
-  $ gel -I staging_db
-  gel>
+Or via the `--server-instance` command line option:
 
-To initialize a project that uses the remote instance, provide this alias when
-prompted for an instance name during the :gelcmd:`project init` workflow.
+.. code-block:: bash
 
+  $ gel project init --server-instance staging_db
 
 Unlinking
 ^^^^^^^^^
