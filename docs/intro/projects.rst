@@ -109,7 +109,15 @@ executed against the project-linked instance. For instance, you can simply run
 .. code-block:: bash
 
   $ gel
-  Gel x.x+cc4f3b5 (repl x.x+da2788e)
+                      ▄██▄
+    ▄▄▄▄▄      ▄▄▄    ████
+  ▄███████▄ ▄███████▄ ████
+  ▀███████▀ ▀███▀▀▀▀▀ ████
+    ▀▀▀▀▀      ▀▀▀     ▀▀
+   ▀▄▄▄▄▄▀
+     ▀▀▀
+
+  Gel x.x+xxxxxxx (repl x.x+xxxxxxx)
   Type \help for help, \quit to quit.
   my_instance:main> select "Hello world!";
 
@@ -125,7 +133,15 @@ with the ``-I`` flag.
     Hint: Run `gel project init` or use any of `-H`, `-P`, `-I` arguments to
     specify connection parameters. See `--help` for details
   $ gel -I my_instance
-  Gel x.x+cc4f3b5 (repl x.x+da2788e)
+                      ▄██▄
+    ▄▄▄▄▄      ▄▄▄    ████
+  ▄███████▄ ▄███████▄ ████
+  ▀███████▀ ▀███▀▀▀▀▀ ████
+    ▀▀▀▀▀      ▀▀▀     ▀▀
+   ▀▄▄▄▄▄▀
+     ▀▀▀
+
+  Gel x.x+xxxxxxx (repl x.x+xxxxxxx)
   Type \help for help, \quit to quit.
   my_instance:main>
 
@@ -163,7 +179,7 @@ After receiving the necessary connection information, this command links the rem
 
   $ gel project init --interactive
 
-or via the `--server-instance` command line option:
+or via the ``--server-instance`` command line option:
 
 .. code-block:: bash
 
