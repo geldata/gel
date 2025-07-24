@@ -82,7 +82,7 @@ Options
     project.
 
 :cli:synopsis:`--server-version=<server-version>`
-    Specifies the Gel server instance to be associated with the project
+    Specifies the Gel server instance to be associated with the project.
 
     By default, when you specify a version, the CLI will use the latest release
     in the major version specified. This command, for example, will install the
