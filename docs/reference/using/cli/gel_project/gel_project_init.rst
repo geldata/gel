@@ -15,11 +15,19 @@ Setup a new project.
 Description
 ===========
 
-This command sets up a new project, creating an instance, a schema directory,
-and an :ref:`gel.toml <ref_reference_gel_toml>` file. It can also be used
-to convert an existing directory to a project directory, connecting the
-existing instance to the project. Typically this tool will prompt for specific
-details about how the project should be setup.
+A "project" is:
+
+- A set of files, notably |geltoml|, the schema directory, and any migrations.
+- A running Gel server instance, either a local, Gel Cloud, or remote instance.
+- A set of credentials that link together this particular directory on your
+  local machine, to a Gel server instance.
+
+This :gelcmd:`project init` command will:
+
+- **A directory with no |geltoml|**: Create a new instance, or link to an existing
+  one, create the |geltoml|, create a schema directory, and run any migrations.
+- **A directory with |geltoml|**: Create a new instance, or link to an existing one,
+  and run any migrations.
 
 
 Gel Cloud
