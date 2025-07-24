@@ -163,7 +163,7 @@ After receiving the necessary connection information, this command links the rem
 
   $ gel project init --interactive
 
-Or via the `--server-instance` command line option:
+or via the `--server-instance` command line option:
 
 .. code-block:: bash
 
