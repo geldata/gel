@@ -36,6 +36,8 @@ from edb.schema import expr as s_expr
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
 
+from edb.ir import typeutils as irtyputils
+
 from . import astutils
 from . import context
 from . import dispatch
@@ -109,6 +111,9 @@ def has_own_policies(
     return any(
         has_own_policies(stype=child, skip_from=stype, ctx=ctx)
         for child in stype.children(schema)
+        if not irtyputils.is_excluded_cfg_view(
+            child, ancestor=stype, schema=schema
+        )
     )
 
 
@@ -404,6 +409,9 @@ def try_type_rewrite(
     children_have_policies = not skip_subtypes and any(
         has_own_policies(stype=child, skip_from=stype, ctx=ctx)
         for child in stype.children(schema)
+        if not irtyputils.is_excluded_cfg_view(
+            child, ancestor=stype, schema=schema
+        )
     )
 
     pols = get_access_policies(stype, ctx=ctx)
@@ -419,6 +427,8 @@ def try_type_rewrite(
             for child in stype.children(schema)
             for x in [child, *child.descendants(schema)]
         ]
+
+        # Children overlap
         child_descs = set(all_child_descs)
         if len(child_descs) != len(all_child_descs):
             children_overlap = True
@@ -471,6 +481,17 @@ def try_type_rewrite(
             stype.children(schema)
             if not children_overlap
             else stype.descendants(schema)
+        )
+        # We need to explicitly exclude cfg views to prevent them from
+        # from showing up in type rewrites. Normally this happens in
+        # inheritance.get_inheritance_view, but needs to happen here
+        # when descendants are expanded.
+        children = frozenset(
+            child
+            for child in children
+            if not irtyputils.is_excluded_cfg_view(
+                child, ancestor=stype, schema=schema
+            )
         )
         sets += [
             # We need to wrap it in a type override so that unioning
