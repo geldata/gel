@@ -1056,8 +1056,11 @@ class GraphQLTranslator:
                     # being updated (so that SELECT can be applied if needed)
                     with self._update_path_for_insert_field(field):
                         _, target = self._get_parent_and_current_type()
-                        shapeop, value = self._visit_update_op(
+                        res = self._visit_update_op(
                             field.value, eqlpath, target)
+                        if res is None:
+                            continue
+                        shapeop, value = res
 
                         result.append(
                             qlast.ShapeElement(
@@ -1771,13 +1774,26 @@ class GraphQLTranslator:
         needs_coalesce = self._context.native_input and var.val is not None
         optional = optional or needs_coalesce
 
-        val = qlast.TypeCast(
-            type=casttype,
-            expr=qlast.QueryParameter(name=varname),
-            cardinality_mod=(
-                qlast.CardinalityModifier.Optional if optional else None
-            ),
-        )
+        casts = [casttype]
+        # Currently, whe using the native protocol we pass in
+        # extracted arguments as JSON instead of native encodings.
+        # We probably should be able to do better, since we do this right
+        # on the edgeql extraction side, but I didn't want to bother
+        # with integrating the extractors to share the code.
+        if self._context.native_input and varname.startswith('__edb_arg_'):
+            casts.append(
+                qlast.TypeName(maintype=qlast.ObjectRef(name='json'))
+            )
+
+        val = qlast.QueryParameter(name=varname)
+        for ct in reversed(casts):
+            val = qlast.TypeCast(
+                type=ct,
+                expr=val,
+                cardinality_mod=(
+                    qlast.CardinalityModifier.Optional if optional else None
+                ),
+            )
 
         # In HTTP mode, we rely on merging the dict of defaults with
         # the dict of actual arguments. That would be a pain on the
@@ -2005,6 +2021,7 @@ def translate_ast(
     operation_name: Optional[str]=None,
     variables: Optional[Mapping[str, Any]]=None,
     substitutions: Optional[dict[str, tuple[str, int, int]]],
+    extracted_variables: Optional[Mapping[str, Any]],
     native_input: bool = False,
 ) -> TranspiledOperation:
 
@@ -2016,6 +2033,17 @@ def translate_ast(
 
     if variables is None:
         variables = {}
+
+    # The normalizer tries to handle default variables on its own,
+    # which we still don't support in native mode.
+    # Detect what it does and reject it.
+    if (
+        native_input
+        and len(extracted_variables or ()) > len(substitutions or ())
+    ):
+        raise errors.UnsupportedFeatureError(
+            'Default variables are not supported on the gel protocol'
+        )
 
     validation_errors = convert_errors(
         graphql.validate(gqlcore.graphql_schema, document_ast),

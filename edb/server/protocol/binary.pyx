@@ -42,8 +42,10 @@ import immutables
 from edb import buildmeta
 from edb import edgeql
 from edb.edgeql import qltypes
+from edb.graphql import tokenizer as gql_tokenizer
 
 from edb.pgsql import parser as pgparser
+from edb.graphql import tokenizer as gql_tokenizer
 
 from edb.server.pgproto cimport hton
 from edb.server.pgproto.pgproto cimport (
@@ -497,8 +499,13 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             else:
                 return pgparser.NormalizedSource.from_string(text)
         elif lang is LANG_GRAPHQL:
-            # TODO: Support normalization for graphql
-            return pgparser.Source.from_string(text)
+            if debug.flags.edgeql_disable_normalization:
+                return gql_tokenizer.Source.from_string(text)
+            else:
+                try:
+                    return gql_tokenizer.NormalizedSource.from_string(text)
+                except Exception:
+                    return gql_tokenizer.Source.from_string(text)
         else:
             raise errors.UnsupportedFeatureError(
                 f"unsupported input language: {lang}")
@@ -2060,10 +2067,13 @@ cdef _extract_key_vars(
         cpython.Py_SIZE(args))
 
     keys = qug.graphql_key_variables
-    assert qug.in_type_args
 
-    decl_args = len(qug.in_type_args)
-    recv_args = hton.unpack_int32(frb_read(&in_buf, 4))
+    in_type_args = qug.in_type_args or ()
+    decl_args = len(in_type_args)
+    if args:
+        recv_args = hton.unpack_int32(frb_read(&in_buf, 4))
+    else:
+        recv_args = 0
     if recv_args != decl_args:
         raise errors.InputDataError(
             f"invalid argument count, "
@@ -2071,7 +2081,7 @@ cdef _extract_key_vars(
 
     vals = {}
 
-    for param in qug.in_type_args:
+    for param in in_type_args:
         frb_read(&in_buf, 4)  # reserved
         needed = param.name in keys
 
@@ -2098,5 +2108,11 @@ cdef _extract_key_vars(
                 )
 
         vals[param.name] = val
+
+    # Extracted arguments come from the NormalizedSource.
+    query_vars = query_req.source.variables()
+    for name in keys:
+        if name.startswith('__edb_arg_'):
+            vals[name] = query_vars[name]
 
     return vals

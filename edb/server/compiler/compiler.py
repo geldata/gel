@@ -2683,7 +2683,7 @@ def _compile_dispatch_ql(
 def compile_graphql(
     *,
     ctx: CompileContext,
-    source: edgeql.Source,
+    source: graphql.Source,
     variables: Optional[Mapping[str, object]],
 ) -> dbstate.QueryUnitGroup:
     current_tx = ctx.state.current_tx()
@@ -2695,16 +2695,17 @@ def compile_graphql(
         current_tx.get_database_config(),
         current_tx.get_system_config(),
         source.text(),
-        tokens=None,
-        substitutions=None,
+        tokens=source.tokens(),
+        substitutions=source.substitutions(),
+        extracted_variables=source.variables(),
         variables=variables,
         native_input=True,
     )
-    source = edgeql.Source.from_string(
+    eql_source = edgeql.Source.from_string(
         edgeql.generate_source(gql_op.edgeql_ast, pretty=True),
     )
 
-    qug = compile(ctx=ctx, source=source)
+    qug = compile(ctx=ctx, source=eql_source)
     if gql_op.cache_deps_vars:
         qug.graphql_key_variables = sorted(gql_op.cache_deps_vars)
 

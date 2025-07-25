@@ -16,7 +16,7 @@ use edb_graphql_parser::visitor::Visit;
 use crate::py_token::{PyToken, PyTokenKind};
 use crate::token_vec::TokenVec;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Value {
     Str(String),
     Int32(i32),
@@ -26,7 +26,7 @@ pub enum Value {
     Boolean(bool),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Variable {
     pub value: Value,
     pub token: PyToken,
@@ -41,13 +41,14 @@ pub enum Error {
     Query(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Entry {
     pub key: String,
     pub variables: Vec<Variable>,
     pub defaults: BTreeMap<String, Variable>,
     pub tokens: Vec<PyToken>,
     pub end_pos: Pos,
+    pub num_variables: usize,
 }
 
 pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
@@ -270,6 +271,7 @@ pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
         defaults,
         tokens,
         end_pos,
+        num_variables: oper.variable_definitions.len(),
     })
 }
 

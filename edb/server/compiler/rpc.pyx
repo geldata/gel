@@ -32,6 +32,7 @@ from edb import edgeql, errors
 from edb.common import uuidgen
 from edb.edgeql import qltypes
 from edb.edgeql import tokenizer
+from edb.graphql import tokenizer as gql_tokenizer
 from edb.server import config, defines
 from edb.server.pgproto.pgproto cimport WriteBuffer, ReadBuffer
 from edb.pgsql import parser as pgparser
@@ -475,7 +476,7 @@ cdef _deserialize_comp_req_v1(
     elif input_language is enums.InputLanguage.SQL_PARAMS:
         source = SQLParamsSource.deserialize(serialized_source)
     elif input_language is enums.InputLanguage.GRAPHQL:
-        source = pgparser.deserialize(serialized_source)
+        source = gql_tokenizer.deserialize(serialized_source, query_text)
     else:
         raise AssertionError(
             f"unexpected source language in serialized "

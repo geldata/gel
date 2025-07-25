@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use crate::py_exception::LexingError;
 use crate::rewrite::Error;
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize, serde::Deserialize)]
 pub enum PyTokenKind {
     Sof,
     Eof,
@@ -32,7 +32,7 @@ pub enum PyTokenKind {
     BlockString,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PyToken {
     pub kind: PyTokenKind,
     pub value: Cow<'static, str>,

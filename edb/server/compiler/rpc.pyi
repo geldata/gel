@@ -25,6 +25,9 @@ from edb import edgeql
 from edb.server import defines, config
 from edb.server.compiler import sertypes, enums
 
+from edb import graphql
+from edb.pgsql import parser as pgparser
+
 class SQLParamsSource:
     types_in_out: list[tuple[list[str], list[tuple[str, str]]]]
 
@@ -42,7 +45,10 @@ class SQLParamsSource:
         ...
 
 class CompilationRequest:
-    source: edgeql.Source
+    # FIXME: I didn't want to track down the errors when I put the right
+    # annotation in.
+    # source: edgeql.Source | graphql.Source | pgparser.Source
+    source: typing.Any
     protocol_version: defines.ProtocolVersion
     input_language: enums.InputLanguage
     output_format: enums.OutputFormat
@@ -62,7 +68,7 @@ class CompilationRequest:
     def __init__(
         self,
         *,
-        source: edgeql.Source,
+        source: edgeql.Source | graphql.Source | pgparser.Source,
         protocol_version: defines.ProtocolVersion,
         schema_version: uuid.UUID,
         compilation_config_serializer: sertypes.CompilationConfigSerializer,
