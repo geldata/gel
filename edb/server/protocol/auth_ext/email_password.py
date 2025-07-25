@@ -35,6 +35,7 @@ ph = argon2.PasswordHasher()
 class EmailPasswordProviderConfig:
     name: str
     require_verification: bool
+    verification_method: str
 
 
 class Client(local.Client):
@@ -255,6 +256,7 @@ set {
                 return EmailPasswordProviderConfig(
                     name=cfg.name,
                     require_verification=cfg.require_verification,
+                    verification_method=cfg.verification_method,
                 )
 
         raise errors.MissingConfiguration(

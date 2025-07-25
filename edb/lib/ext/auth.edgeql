@@ -139,6 +139,32 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         };
     };
 
+    create type ext::auth::OneTimeCode extending ext::auth::Auditable {
+        create required property code_hash: std::bytes {
+            create constraint exclusive;
+            create annotation std::description :=
+                "The securely hashed one-time code.";
+        };
+        create required property expires_at: std::datetime {
+            create annotation std::description :=
+                "The date and time when the code expires.";
+        };
+
+        create required link factor: ext::auth::Factor {
+            on target delete delete source;
+        };
+
+        create property max_attempts: int16 {
+            set default := 5;
+        };
+        create property attempts: int16 {
+            set default := 0;
+        };
+        create property remaining_attempts := (.max_attempts - .attempts);
+    };
+
+    create scalar type ext::auth::VerificationMethod extending std::enum<Link, Code>;
+
     create abstract type ext::auth::ProviderConfig
         extending cfg::ConfigObject {
         create required property name: std::str {
@@ -280,6 +306,10 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         create required property require_verification: std::bool {
             set default := true;
         };
+
+        create required property verification_method: ext::auth::VerificationMethod {
+            set default := ext::auth::VerificationMethod.Link;
+        };
     };
 
     create type ext::auth::WebAuthnProviderConfig
@@ -299,6 +329,10 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         create required property require_verification: std::bool {
             set default := true;
         };
+
+        create required property verification_method: ext::auth::VerificationMethod {
+            set default := ext::auth::VerificationMethod.Link;
+        };
     };
 
     create type ext::auth::MagicLinkProviderConfig
@@ -312,6 +346,10 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
             set default := <std::duration>'10 minutes';
             create annotation std::description :=
                 "The time after which a magic link token expires.";
+        };
+
+        create required property verification_method: ext::auth::VerificationMethod {
+            set default := ext::auth::VerificationMethod.Link;
         };
     };
 
