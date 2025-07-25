@@ -268,7 +268,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
 
         self.new_lines = 1
         self._write_keywords('SET ')
-        self._visit_shape(node.shape)
+        self._visit_shape(node.shape, always_emit_braces=True)
 
         if parenthesise:
             self.write(')')
@@ -585,8 +585,12 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
             self.write(' ')
         self._visit_shape(node.elements)
 
-    def _visit_shape(self, shape: Sequence[qlast.ShapeElement]) -> None:
-        if shape:
+    def _visit_shape(
+        self,
+        shape: Sequence[qlast.ShapeElement],
+        always_emit_braces: bool=False,
+    ) -> None:
+        if shape or always_emit_braces:
             self.write('{')
             self._block_ws(1)
             self.visit_list(shape)
