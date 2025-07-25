@@ -62,6 +62,7 @@ from . import (
     magic_link,
     webhook,
     jwt,
+    otc,
 )
 from .data import EmailFactor
 
@@ -753,65 +754,129 @@ class Router:
     ) -> None:
         data = self._get_data_from_request(request)
 
-        _check_keyset(data, {"verification_token", "provider"})
+        # Check for OTC mode (email + code) vs Link mode (verification_token)
+        verification_token = data.get("verification_token")
+        email = data.get("email")
+        code = data.get("code")
+        provider = data.get("provider")
 
-        token = jwt.VerificationToken.verify(
-            data["verification_token"],
-            self.signing_key,
-        )
+        if not provider:
+            raise errors.InvalidData('Missing "provider" in verify request')
 
-        try:
-            email_factor = await self._try_verify_email(
-                provider=data["provider"],
-                identity_id=token.subject,
+        if verification_token:
+            # Link mode verification
+            token = jwt.VerificationToken.verify(
+                verification_token,
+                self.signing_key,
             )
-            await self._maybe_send_webhook(
-                webhook.EmailVerified(
-                    event_id=str(uuid.uuid4()),
-                    timestamp=datetime.datetime.now(datetime.timezone.utc),
+
+            try:
+                email_factor = await self._try_verify_email(
+                    provider=provider,
                     identity_id=token.subject,
-                    email_factor_id=email_factor.id,
                 )
-            )
-        except errors.VerificationTokenExpired:
-            response.status = http.HTTPStatus.FORBIDDEN
-            response.content_type = b"application/json"
-            error_message = (
-                "The 'iat' claim in verification token is older than 24 hours"
-            )
-            logger.error(f"Verification token expired: {error_message}")
-            response.body = json.dumps({"message": error_message}).encode()
-            return
+                await self._maybe_send_webhook(
+                    webhook.EmailVerified(
+                        event_id=str(uuid.uuid4()),
+                        timestamp=datetime.datetime.now(datetime.timezone.utc),
+                        identity_id=token.subject,
+                        email_factor_id=email_factor.id,
+                    )
+                )
+            except errors.VerificationTokenExpired:
+                response.status = http.HTTPStatus.FORBIDDEN
+                response.content_type = b"application/json"
+                error_message = (
+                    "The 'iat' claim in verification token is older than 24 hours"
+                )
+                logger.error(f"Verification token expired: {error_message}")
+                response.body = json.dumps({"message": error_message}).encode()
+                return
 
-        logger.info(
-            f"Email verified: identity_id={token.subject}, "
-            f"email_factor_id={email_factor.id}, "
-            f"email={email_factor.email}"
-        )
-        match (token.maybe_challenge, token.maybe_redirect_to):
-            case (str(challenge), str(redirect_to)):
-                await pkce.create(self.db, challenge)
-                code = await pkce.link_identity_challenge(
-                    self.db, token.subject, challenge
+            logger.info(
+                f"Email verified via token: identity_id={token.subject}, "
+                f"email_factor_id={email_factor.id}, "
+                f"email={email_factor.email}"
+            )
+            match (token.maybe_challenge, token.maybe_redirect_to):
+                case (str(challenge), str(redirect_to)):
+                    await pkce.create(self.db, challenge)
+                    code = await pkce.link_identity_challenge(
+                        self.db, token.subject, challenge
+                    )
+                    return self._try_redirect(
+                        response,
+                        util.join_url_params(redirect_to, {"code": code}),
+                    )
+                case (str(challenge), _):
+                    await pkce.create(self.db, challenge)
+                    code = await pkce.link_identity_challenge(
+                        self.db, token.subject, challenge
+                    )
+                    response.status = http.HTTPStatus.OK
+                    response.content_type = b"application/json"
+                    response.body = json.dumps({"code": code}).encode()
+                    return
+                case (_, str(redirect_to)):
+                    return self._try_redirect(response, redirect_to)
+                case (_, _):
+                    response.status = http.HTTPStatus.NO_CONTENT
+                    return
+
+        elif email and code:
+            # OTC mode verification
+            if provider != "builtin::local_emailpassword":
+                raise errors.InvalidData("OTC verification only supported for email+password provider")
+
+            try:
+                email_password_client = email_password.Client(db=self.db)
+                email_factor = await email_password_client.get_email_factor_by_email(email)
+                if email_factor is None:
+                    raise errors.NoIdentityFound("Invalid email")
+
+                # Verify the OTC using the mega query
+                otc_id = await otc.verify(self.db, str(email_factor.id), code)
+                logger.info(f"OTC verified successfully: otc_id={otc_id}, email={email}")
+
+                # Mark email as verified
+                verified_email_factor = await self._try_verify_email(
+                    provider=provider,
+                    identity_id=email_factor.identity.id,
                 )
-                return self._try_redirect(
-                    response,
-                    util.join_url_params(redirect_to, {"code": code}),
+
+                await self._maybe_send_webhook(
+                    webhook.EmailVerified(
+                        event_id=str(uuid.uuid4()),
+                        timestamp=datetime.datetime.now(datetime.timezone.utc),
+                        identity_id=email_factor.identity.id,
+                        email_factor_id=email_factor.id,
+                    )
                 )
-            case (str(challenge), _):
-                await pkce.create(self.db, challenge)
-                code = await pkce.link_identity_challenge(
-                    self.db, token.subject, challenge
+
+                logger.info(
+                    f"Email verified via OTC: identity_id={email_factor.identity.id}, "
+                    f"email_factor_id={email_factor.id}, "
+                    f"email={email}"
                 )
+
                 response.status = http.HTTPStatus.OK
                 response.content_type = b"application/json"
-                response.body = json.dumps({"code": code}).encode()
+                response.body = json.dumps({"status": "verified"}).encode()
                 return
-            case (_, str(redirect_to)):
-                return self._try_redirect(response, redirect_to)
-            case (_, _):
-                response.status = http.HTTPStatus.NO_CONTENT
+
+            except Exception as ex:
+                response.status = http.HTTPStatus.BAD_REQUEST
+                response.content_type = b"application/json"
+                response.body = json.dumps({
+                    "error": str(ex),
+                    "error_code": "verification_failed"
+                }).encode()
                 return
+
+        else:
+            raise errors.InvalidData(
+                'Must provide either "verification_token" (Link mode) or "email" + "code" (OTC mode)'
+            )
 
     async def handle_resend_verification_email(
         self,
@@ -1192,15 +1257,40 @@ class Router:
                 f"Sending magic link: identity_id={email_factor.identity.id}, "
                 f"email={email}"
             )
-            await magic_link_client.send_magic_link(
-                email=email,
-                link_url=link_url,
-                redirect_on_failure=allowed_redirect_on_failure.url,
-                token=magic_link_token,
-            )
+
+            # Check verification method and branch accordingly
+            if magic_link_client.provider.verification_method == "Code":
+                # OTC flow: create code and send OTC email
+                code, otc_id = await otc.create(
+                    self.db,
+                    str(email_factor.id),
+                    datetime.timedelta(minutes=10)
+                )
+                await auth_emails.send_one_time_code_email(
+                    db=self.db,
+                    tenant=self.tenant,
+                    to_addr=email,
+                    code=code,
+                    test_mode=self.test_mode,
+                )
+                logger.info(
+                    f"Sent OTC email: identity_id={email_factor.identity.id}, "
+                    f"email={email}, otc_id={otc_id}"
+                )
+                redirect_url_path = "/ui/code-sent"
+            else:
+                # Link flow: send magic link (existing behavior)
+                await magic_link_client.send_magic_link(
+                    email=email,
+                    link_url=link_url,
+                    redirect_on_failure=allowed_redirect_on_failure.url,
+                    token=magic_link_token,
+                )
+                redirect_url_path = "/ui/magic-link-sent"
 
             return_data = {
                 "email_sent": email,
+                "redirect_url": f"{self.base_path}{redirect_url_path}",
             }
 
             if request_accepts_json:
@@ -1318,19 +1408,43 @@ class Router:
                         magic_link_url=link_url,
                     )
                 )
-                await magic_link_client.send_magic_link(
-                    email=email,
-                    token=magic_link_token,
-                    link_url=link_url,
-                    redirect_on_failure=redirect_on_failure,
-                )
-                logger.info(
-                    "Sent magic link email: "
-                    f"identity_id={identity_id}, email={email}"
-                )
+                # Check verification method and branch accordingly
+                if magic_link_client.provider.verification_method == "Code":
+                    # OTC flow: create code and send OTC email
+                    code, otc_id = await otc.create(
+                        self.db,
+                        str(email_factor.id),
+                        datetime.timedelta(minutes=10)
+                    )
+                    await auth_emails.send_one_time_code_email(
+                        db=self.db,
+                        tenant=self.tenant,
+                        to_addr=email,
+                        code=code,
+                        test_mode=self.test_mode,
+                    )
+                    logger.info(
+                        f"Sent OTC email: identity_id={identity_id}, "
+                        f"email={email}, otc_id={otc_id}"
+                    )
+                    redirect_url_path = "/ui/code-sent"
+                else:
+                    # Link flow: send magic link (existing behavior)
+                    await magic_link_client.send_magic_link(
+                        email=email,
+                        token=magic_link_token,
+                        link_url=link_url,
+                        redirect_on_failure=redirect_on_failure,
+                    )
+                    logger.info(
+                        "Sent magic link email: "
+                        f"identity_id={identity_id}, email={email}"
+                    )
+                    redirect_url_path = "/ui/magic-link-sent"
 
             return_data = {
                 "email_sent": email,
+                "redirect_url": f"{self.base_path}{redirect_url_path}",
             }
 
             if allowed_redirect_to:
@@ -1373,49 +1487,122 @@ class Router:
         query = urllib.parse.parse_qs(
             request.url.query.decode("ascii") if request.url.query else ""
         )
-        token_str = _get_search_param(query, "token")
 
-        try:
-            token = jwt.MagicLinkToken.verify(token_str, self.signing_key)
-            await pkce.create(self.db, token.challenge)
-            code = await pkce.link_identity_challenge(
-                self.db, token.subject, token.challenge
-            )
-            local_client = magic_link.Client(
-                db=self.db,
-                tenant=self.tenant,
-                test_mode=self.test_mode,
-                issuer=self.base_path,
-                signing_key=self.signing_key,
-            )
-            await local_client.verify_email(
-                token.subject, datetime.datetime.now(datetime.timezone.utc)
-            )
+        token_str = _maybe_get_search_param(query, "token")
 
-            return self._try_redirect(
-                response,
-                util.join_url_params(token.callback_url, {"code": code}),
-            )
-
-        except Exception as ex:
-            redirect_on_failure = _maybe_get_search_param(
-                query, "redirect_on_failure"
-            )
-            if redirect_on_failure is None:
-                raise ex
-            else:
-                error_message = str(ex)
-                logger.error(
-                    f"Error authenticating magic link: error={error_message}, "
-                    f"token={token}"
+        if token_str:
+            try:
+                token = jwt.MagicLinkToken.verify(token_str, self.signing_key)
+                await pkce.create(self.db, token.challenge)
+                code = await pkce.link_identity_challenge(
+                    self.db, token.subject, token.challenge
                 )
-                redirect_url = util.join_url_params(
-                    redirect_on_failure,
-                    {
-                        "error": error_message,
-                    },
+                local_client = magic_link.Client(
+                    db=self.db,
+                    tenant=self.tenant,
+                    test_mode=self.test_mode,
+                    issuer=self.base_path,
+                    signing_key=self.signing_key,
                 )
-                return self._try_redirect(response, redirect_url)
+                await local_client.verify_email(
+                    token.subject, datetime.datetime.now(datetime.timezone.utc)
+                )
+
+                return self._try_redirect(
+                    response,
+                    util.join_url_params(token.callback_url, {"code": code}),
+                )
+
+            except Exception as ex:
+                redirect_on_failure = _maybe_get_search_param(
+                    query, "redirect_on_failure"
+                )
+                if redirect_on_failure is None:
+                    raise ex
+                else:
+                    error_message = str(ex)
+                    logger.error(
+                        f"Error authenticating magic link: error={error_message}, "
+                        f"token={token_str}"
+                    )
+                    redirect_url = util.join_url_params(
+                        redirect_on_failure,
+                        {
+                            "error": error_message,
+                        },
+                    )
+                    return self._try_redirect(response, redirect_url)
+        else:
+            try:
+                email = _get_search_param(query, "email")
+                code_str = _get_search_param(query, "code")
+                challenge = _get_search_param(query, "challenge")
+                callback_url = _get_search_param(query, "callback_url")
+
+                if not self._is_url_allowed(callback_url):
+                    raise errors.InvalidData(
+                        "Callback URL does not match any allowed URLs.",
+                    )
+
+                magic_link_client = magic_link.Client(
+                    db=self.db,
+                    tenant=self.tenant,
+                    test_mode=self.test_mode,
+                    issuer=self.base_path,
+                    signing_key=self.signing_key,
+                )
+
+                # Get email factor for this email
+                email_factor = await magic_link_client.get_email_factor_by_email(email)
+                if email_factor is None:
+                    raise errors.NoIdentityFound("Invalid email")
+
+                # Verify the OTC using the mega query
+                otc_id = await otc.verify(self.db, str(email_factor.id), code_str)
+                logger.info(f"OTC verified successfully: otc_id={otc_id}, email={email}")
+
+                # Create PKCE challenge and link identity
+                await pkce.create(self.db, challenge)
+                auth_code = await pkce.link_identity_challenge(
+                    self.db, email_factor.identity.id, challenge
+                )
+
+                # Mark email as verified
+                await magic_link_client.verify_email(
+                    email_factor.identity.id, datetime.datetime.now(datetime.timezone.utc)
+                )
+
+                return self._try_redirect(
+                    response,
+                    util.join_url_params(callback_url, {"code": auth_code}),
+                )
+
+            except Exception as ex:
+                redirect_on_failure = _maybe_get_search_param(
+                    query, "redirect_on_failure"
+                )
+                if redirect_on_failure is None:
+                    # For OTC flow, return 400 error with JSON response
+                    response.status = http.HTTPStatus.BAD_REQUEST
+                    response.content_type = b"application/json"
+                    response.body = json.dumps({
+                        "error": str(ex),
+                        "error_code": "verification_failed"
+                    }).encode()
+                    return
+                else:
+                    error_message = str(ex)
+                    logger.error(
+                        f"Error authenticating OTC: error={error_message}, "
+                        f"email={_maybe_get_search_param(query, 'email')}"
+                    )
+                    redirect_url = util.join_url_params(
+                        redirect_on_failure,
+                        {
+                            "error": error_message,
+                        },
+                    )
+                    return self._try_redirect(response, redirect_url)
 
     async def handle_webauthn_register_options(
         self,
@@ -2206,6 +2393,29 @@ class Router:
         provider: str,
         to_addr: str,
     ) -> None:
+        # Check verification method for email+password provider
+        if provider == "builtin::local_emailpassword":
+            email_password_client = email_password.Client(db=self.db)
+            if email_password_client.config.verification_method == "Code":
+                # OTC flow: get email factor and create OTC
+                email_factor = await email_password_client.get_email_factor_by_email(to_addr)
+                if email_factor is not None:
+                    code, otc_id = await otc.create(
+                        self.db,
+                        str(email_factor.id),
+                        datetime.timedelta(minutes=10)
+                    )
+                    await auth_emails.send_one_time_code_email(
+                        db=self.db,
+                        tenant=self.tenant,
+                        to_addr=to_addr,
+                        code=code,
+                        test_mode=self.test_mode,
+                    )
+                    logger.info(f"Sent OTC verification email: email={to_addr}, otc_id={otc_id}")
+                    return
+
+        # Default Link flow for all other cases
         await auth_emails.send_verification_email(
             db=self.db,
             tenant=self.tenant,

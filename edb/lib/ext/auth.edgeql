@@ -153,14 +153,28 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         create required link factor: ext::auth::Factor {
             on target delete delete source;
         };
+    };
 
-        create property max_attempts: int16 {
-            set default := 5;
+    create scalar type ext::auth::AuthenticationAttemptType extending std::enum<
+        SignIn,
+        EmailVerification,
+        PasswordReset,
+        MagicLink,
+        OneTimeCode
+    >;
+
+    create type ext::auth::AuthenticationAttempt extending ext::auth::Auditable {
+        create required link factor: ext::auth::Factor {
+            on target delete delete source;
         };
-        create property attempts: int16 {
-            set default := 0;
+        create required property attempt_type: ext::auth::AuthenticationAttemptType {
+            create annotation std::description :=
+                "The type of authentication attempt being made.";
         };
-        create property remaining_attempts := (.max_attempts - .attempts);
+        create required property successful: std::bool {
+            create annotation std::description :=
+                "Whether this authentication attempt was successful.";
+        };
     };
 
     create scalar type ext::auth::VerificationMethod extending std::enum<Link, Code>;

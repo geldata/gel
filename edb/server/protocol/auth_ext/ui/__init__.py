@@ -1229,3 +1229,112 @@ your account:
         subtype="html",
     )
     return msg
+
+
+def render_one_time_code_email(
+    *,
+    to_addr: str,
+    code: str,
+    app_name: Optional[str] = None,
+    logo_url: Optional[str] = None,
+    dark_logo_url: Optional[str] = None,
+    brand_color: Optional[str] = render.DEFAULT_BRAND_COLOR,
+) -> email.message.EmailMessage:
+    brand_color = brand_color or render.DEFAULT_BRAND_COLOR
+    msg = email.message.EmailMessage()
+    msg["To"] = to_addr
+    msg["Subject"] = f"One-Time Code{f' for {app_name}' if app_name else ''}"
+    plain_text_content = f"""
+Your one-time verification code{f' for {app_name}' if app_name else ''} is:
+
+{code}
+
+This code will expire in 10 minutes. If you didn't request this code, you can safely ignore this email.
+        """
+    html_content = f"""
+<tr>
+  <td
+    align="left"
+    style="
+      font-size: 0px;
+      padding: 10px 25px;
+      padding-top: 50px;
+      word-break: break-word;
+    "
+  >
+    <div
+      style="
+        font-family:
+          open Sans Helvetica,
+          Arial,
+          sans-serif;
+        font-size: 16px;
+        line-height: 1;
+        text-align: left;
+        color: #000000;
+      "
+    >
+      Your one-time verification code{f' for {app_name}' if app_name else ''} is:
+    </div>
+  </td>
+</tr>
+<tr>
+  <td
+    align="center"
+    style="font-size: 0px; padding: 20px 25px; word-break: break-word"
+  >
+    <div
+      style="
+        font-family:
+          open Sans Helvetica,
+          Arial,
+          sans-serif;
+        font-size: 48px;
+        font-weight: bold;
+        line-height: 1;
+        text-align: center;
+        color: #{brand_color};
+        background-color: #f8f9fa;
+        border: 2px solid #{brand_color};
+        border-radius: 8px;
+        padding: 20px;
+        letter-spacing: 8px;
+        margin: 10px 0;
+      "
+    >
+      {code}
+    </div>
+  </td>
+</tr>
+<tr>
+  <td
+    align="left"
+    style="font-size: 0px; padding: 10px 25px; word-break: break-word"
+  >
+    <div
+      style="
+        font-family:
+          open Sans Helvetica,
+          Arial,
+          sans-serif;
+        font-size: 14px;
+        line-height: 1.4;
+        text-align: left;
+        color: #666666;
+      "
+    >
+      This code will expire in 10 minutes. If you didn't request this code, you can safely ignore this email.
+    </div>
+  </td>
+</tr>
+    """
+    msg.set_content(plain_text_content, subtype="plain")
+    msg.set_content(
+        render.base_default_email(
+            content=html_content,
+            app_name=app_name,
+            logo_url=logo_url,
+        ),
+        subtype="html",
+    )
+    return msg

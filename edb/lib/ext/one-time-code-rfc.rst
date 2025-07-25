@@ -133,7 +133,7 @@ The default value will be ``Link`` to ensure full backwards compatibility.
 Schema
 ------
 
-To manage the state of an in-progress OTC authentication, a new transient type will be introduced.
+To manage the state of an in-progress OTC authentication and track authentication attempts, two new types will be introduced.
 
 .. code-block:: esdl
 
@@ -151,14 +151,28 @@ To manage the state of an in-progress OTC authentication, a new transient type w
         create required link factor: ext::auth::Factor {
             on target delete delete source;
         };
+    };
 
-        create property max_attempts: int16 {
-            default := 5;
+    create scalar type ext::auth::AuthenticationAttemptType extending std::enum<
+        SignIn,
+        EmailVerification,
+        PasswordReset,
+        MagicLink,
+        OneTimeCode
+    >;
+
+    create type ext::auth::AuthenticationAttempt extending ext::auth::Auditable {
+        create required link factor: ext::auth::Factor {
+            on target delete delete source;
         };
-        create property attempts: int16 {
-            default := 0;
+        create required property attempt_type: ext::auth::AuthenticationAttemptType {
+            create annotation std::description :=
+                "The type of authentication attempt being made.";
         };
-        create property remaining_attempts := (.max_attempts - .attempts);
+        create required property successful: std::bool {
+            create annotation std::description :=
+                "Whether this authentication attempt was successful.";
+        };
     };
 
 The ``OneTimeCode`` object will be created when the flow is initiated and deleted immediately upon successful verification. We can also delete all expired ``OneTimeCode`` objects when the server makes a verification attempt to avoid needing a separate cleanup job. That means you could have a situation where you've only created a single ``OneTimeCode`` object, it expires and the user never verifies it, and it never gets deleted, but is still invalid, so the only cost is the storage of the object itself.
@@ -230,6 +244,10 @@ The checklist in the design discussion translates into **ten concrete work-items
 * **Introduce ``ext::auth::OneTimeCode`` transient type** exactly as specified in the *Schema* paragraph.  Remember:
   * ``on target delete delete source`` ensures cleanup when the underlying factor vanishes.
   * ``code_hash`` must be ``exclusive`` to prevent race conditions during brute-force attempts.
+* **Add ``ext::auth::AuthenticationAttemptType`` enum** and ``ext::auth::AuthenticationAttempt`` type for event-based rate limiting:
+  * Extends ``Auditable`` to get ``created_at`` timestamps for time-window calculations.
+  * Links to ``Factor`` with cascade delete to prevent orphaned attempts.
+  * Records both successful and failed attempts for comprehensive audit trail.
 
 2. Python config bindings (server/protocol/auth_ext)
 ----------------------------------------------------
@@ -245,8 +263,10 @@ Create ``auth_ext/otc.py`` encapsulating reusable logic:
 * ``generate_code()`` – six-digit numeric, leading-zeros preserved.
 * ``hash_code()`` – ``sha256`` digest **hex**; short and constant-time comparisons to mitigate timing attacks.
 * ``create(db, factor_id, ttl)`` – insert ``OneTimeCode`` object.
-* ``verify(db, factor_id, code)`` – select ``OneTimeCode`` object by comparing ``code_hash`` using pgcrypto → check expiry, increment ``attempts`` and delete on success or max attempts.
-* ``cleanup_expired(db)`` – opportunistic purge called before each verification attempt (no cron job required).
+* ``verify(db, factor_id, code)`` – **single mega query** that atomically handles: cleanup expired codes → check rate limits → find OneTimeCode → validate expiry → delete code on success → record authentication attempt → return result.
+* ``cleanup_old_attempts(db)`` – maintenance function to remove old authentication attempts (for scheduled jobs).
+
+**Key Innovation**: The ``verify()`` function uses EdgeQL's composition capabilities to perform all operations in a single atomic query, eliminating race conditions and dramatically improving performance (6 queries → 1 query).
 
 4. Email templates & delivery (ui/email.py)
 -------------------------------------------
@@ -302,8 +322,11 @@ Create ``auth_ext/otc.py`` encapsulating reusable logic:
 Edge Cases & Subtleties
 -----------------------
 
-* **Race conditions during verify** – always use a single query when verifying the ``OneTimeCode`` object to prevent concurrent verifications reusing the same code.
-* **Brute-force window** – six digits => 1e6 space; ensure ``attempts`` cap + short ``expires_at`` (≤10 min) protects.
+* **Atomic operations** – The mega query approach ensures all verification operations (cleanup, rate limiting, validation, deletion, audit logging) happen atomically in a single database transaction, eliminating race conditions and partial state issues. Performance improved 6x (6 queries → 1 query).
+* **Brute-force protection** – ``AuthenticationAttempt`` events are recorded for all verification attempts (successful and failed), enabling time-window-based rate limiting. Default policy: 5 failed attempts in 10 minutes triggers rate limiting. Six digits => 1e6 space; rate limiting + short ``expires_at`` (≤10 min) provides robust protection.
+* **Rate limiting flexibility** – event-based approach enables sophisticated policies (e.g., progressive penalties, success resets penalties) and different time windows per attempt type without schema changes.
+* **Attempt tracking scope** – attempts are tracked per (Factor, AttemptType) combination with configurable time windows, allowing independent rate limiting for different authentication methods.
+* **Natural cleanup** – ``AuthenticationAttempt`` records older than the longest policy window (e.g., 24 hours) can be safely deleted, preventing unbounded storage growth.
 * **Email aliasing** – treat email comparison case-insensitively to avoid duplicate factors (aligns with existing behaviour).
 * **Clock skew** – server time used for expiry; verification checks must allow no skew because link/PKCE already relies on server truth.
 

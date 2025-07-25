@@ -112,6 +112,22 @@ class ExtAuthTestCase(BaseHttpExtensionTest):
     def get_extension_path(cls):
         return "ext/auth"
 
+    def generate_pkce_pair(self) -> tuple[str, str]:
+        """Generate a PKCE verifier and its corresponding challenge.
+
+        Returns:
+            (verifier, challenge): tuple of str
+        """
+        import os
+        import base64
+        import hashlib
+
+        verifier = base64.urlsafe_b64encode(os.urandom(43)).rstrip(b'=')
+        challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(verifier).digest()
+        ).rstrip(b'=')
+        return verifier.decode(), challenge.decode()
+
 
 class EdgeQLTestCase(BaseHttpExtensionTest):
     EXTENSIONS = ["edgeql_http"]
