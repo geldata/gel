@@ -17,6 +17,7 @@
 #
 
 
+import json
 import os.path
 
 import edgedb
@@ -1752,14 +1753,15 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             select Issue { * }
             filter .number = "1"
             ''',
-            tb.bag([
+            [
                 {
                     "number": "1",
                     "name": "Release EdgeDB",
                     "body": "Initial public release of EdgeDB.",
                     "time_estimate": 3000,
+                    "priority": None,
                 },
-            ]),
+            ],
         )
 
     async def test_edgeql_select_splat_02(self):
@@ -1890,7 +1892,6 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 "due_date": None,
                 "number": None,
                 "start_date": None,
-                "tags": None,
                 "time_estimate": None,
             },
             {
@@ -1900,7 +1901,6 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 "due_date": None,
                 "number": "1",
                 "start_date": str,
-                "tags": None,
                 "time_estimate": 3000,
             },
         ]
@@ -1992,6 +1992,38 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 {'x': {'a': 1, '@a': 2}}
             ]),
         )
+
+    async def test_edgeql_select_splat_07(self):
+        res = json.loads(await self.con.query_json(
+            r'''
+            select Issue {
+                **,
+            }
+            filter .number = "1"
+            '''
+        ))
+        # Make sure the explicit properties aren't included
+        self.assertNotIn('tags', res[0])
+        self.assertNotIn('related_to', res[0])
+        # num_watchers should be included, without the future!
+        self.assertIn('num_watchers', res[0])
+
+        await self.con.execute('''
+            create future no_linkful_computed_splats
+        ''')
+
+        res = json.loads(await self.con.query_json(
+            r'''
+            select Issue {
+                **,
+            }
+            filter .number = "1"
+            '''
+        ))
+        # With the future, none should exist
+        self.assertNotIn('tags', res[0])
+        self.assertNotIn('related_to', res[0])
+        self.assertNotIn('num_watchers', res[0])
 
     async def test_edgeql_select_id_01(self):
         # allow assigning id to a computed (#4781)
@@ -8430,6 +8462,93 @@ class TestEdgeQLSelect(tb.QueryTestCase):
         """, __typenames__=True)
         for row in res:
             self.assertEqual(row.__tname__, "default::User")
+
+    async def test_edgeql_select_tid_position_01(self):
+        res = await self.con._fetchall("""
+            SELECT Issue {
+              *, lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        # dir(val) returns them sorted by name, but __dataclass_fields__ has
+        # them in protocol order!
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    async def test_edgeql_select_tid_position_02(self):
+        # Test that __tid__ comes first even in some weird situations
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *, lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        # dir(val) returns them sorted by name, but __dataclass_fields__ has
+        # them in protocol order!
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    async def test_edgeql_select_tid_position_03(self):
+        # Well, actually, __tname__ comes first.
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *, lol := 1, sigh := 2,
+            };
+        """, __typeids__=True, __typenames__=True)
+        val = res[0]
+        # dir(val) returns them sorted by name, but __dataclass_fields__ has
+        # them in protocol order!
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tname__')
+        self.assertEqual(ptrs[1], '__tid__')
+
+    async def test_edgeql_select_tid_position_04(self):
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *,
+              owner := issue.owner { *, test := 3 },
+              lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        owner = val.owner
+        ptrs = list(owner.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    async def test_edgeql_select_tid_position_05(self):
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              **,
+              lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        owner = val.owner
+        ptrs = list(owner.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    @test.xerror("a linkprop related ISE!")
+    async def test_edgeql_select_tid_position_06(self):
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *,
+              owner := (for owner in issue.owner select owner { * }),
+              lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        owner = val.owner
+        ptrs = list(owner.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
 
     async def test_edgeql_select_paths_01(self):
         # This is OK because Issue.id is a property, not a link

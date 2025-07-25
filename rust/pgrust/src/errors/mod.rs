@@ -4,7 +4,7 @@ use std::{collections::HashMap, str::FromStr};
 
 pub mod edgedb;
 
-use crate::protocol::postgres::data::{ErrorResponse, NoticeResponse};
+use gel_pg_protocol::protocol::{ErrorResponse, NoticeResponse};
 
 #[macro_export]
 macro_rules! pg_error_class {

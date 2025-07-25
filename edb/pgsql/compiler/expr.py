@@ -92,7 +92,7 @@ def _compile_set_impl(
 
     is_toplevel = ctx.toplevel_stmt is context.NO_STMT
 
-    if isinstance(ir_set.expr, (irast.BaseConstant, irast.Parameter)):
+    if isinstance(ir_set.expr, (irast.BaseConstant, irast.BaseParameter)):
         # Avoid creating needlessly complicated constructs for
         # constant expressions.  Besides being an optimization,
         # this helps in GROUP BY queries.
@@ -116,23 +116,19 @@ def _compile_set_impl(
         _compile_set(ir_set, ctx=ctx)
 
 
-@dispatch.compile.register(irast.Parameter)
-def compile_Parameter(
-        expr: irast.Parameter, *,
-        ctx: context.CompilerContextLevel) -> pgast.BaseExpr:
+@dispatch.compile.register(irast.QueryParameter)
+def compile_QueryParameter(
+    expr: irast.QueryParameter,
+    *,
+    ctx: context.CompilerContextLevel,
+) -> pgast.BaseExpr:
 
     result: pgast.BaseExpr
-    is_decimal: bool = expr.name.isdecimal()
 
     params = [p for p in ctx.env.query_params if p.name == expr.name]
     param = params[0] if params else None
 
-    if not is_decimal and ctx.env.named_param_prefix is not None:
-        result = pgast.ColumnRef(
-            name=ctx.env.named_param_prefix + (expr.name,),
-            nullable=not expr.required,
-        )
-    elif param and param.sub_params:
+    if param and param.sub_params:
         return relgen.process_encoded_param(param, ctx=ctx)
     else:
         index = ctx.argmap[expr.name].index
@@ -154,6 +150,34 @@ def compile_Parameter(
                 arg=result,
                 type_name=pgast.TypeName(name=(el_sql_type,)),
             )
+
+    return pgast.TypeCast(
+        arg=result,
+        type_name=pgast.TypeName(
+            name=pg_types.pg_type_from_ir_typeref(expr.typeref)
+        )
+    )
+
+
+@dispatch.compile.register(irast.FunctionParameter)
+def compile_FunctionParameter(
+    expr: irast.FunctionParameter,
+    *,
+    ctx: context.CompilerContextLevel,
+) -> pgast.BaseExpr:
+
+    result: pgast.BaseExpr
+
+    if ctx.env.named_param_prefix is not None:
+        # When compiling functions
+        result = pgast.ColumnRef(
+            name=ctx.env.named_param_prefix + (expr.name,),
+            nullable=not expr.required,
+        )
+    else:
+        # Other things such as constraints
+        index = ctx.argmap[expr.name].index
+        result = pgast.ParamRef(number=index, nullable=not expr.required)
 
     return pgast.TypeCast(
         arg=result,

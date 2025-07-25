@@ -144,6 +144,16 @@ Sets
         ... select A filter A in B;
         {2, 4}
 
+    If your left operand is an empty set, the result will be an empty set, which you will need to handle in your conditional logic, typically with the :eql:op:`coalesce` operator:
+
+    .. code-block:: edgeql-repl
+
+      db> select (<bool>{} in {true, true, false});
+      {}
+
+      db> select (<bool>{} in {true, true, false}) ?? false;
+      {false}
+
 
 ----------
 
@@ -329,7 +339,8 @@ Sets
 
         # Get a set of tuples (<issue name>, <priority>)
         # for all issues.
-        select (Issue.name, Issue.priority.name ?? 'n/a');
+        for issue in Issue
+        select (issue.name, issue.priority.name ?? 'n/a');
 
     Without the coalescing operator, the above query will skip any
     ``Issue`` without priority.

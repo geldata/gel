@@ -55,6 +55,7 @@ from . import expr as s_expr
 from . import globals as s_globals
 from . import name as sn
 from . import objects as so
+from . import permissions as s_permissions
 from . import referencing
 from . import types as s_types
 from . import utils
@@ -64,8 +65,6 @@ if TYPE_CHECKING:
     from edb.edgeql.compiler import context as qlcontext
     from edb.ir import ast as irast
     from . import schema as s_schema
-
-    ParameterLike_T = TypeVar("ParameterLike_T", bound="ParameterLike")
 
 
 FUNC_NAMESPACE = uuidgen.UUID('80cd3b19-bb51-4659-952d-6bb03e3347d7')
@@ -104,7 +103,7 @@ def param_as_str(
     return ''.join(ret)
 
 
-def canonical_param_sort(
+def canonical_param_sort[ParameterLike_T: "ParameterLike"](
     schema: s_schema.Schema,
     params: Iterable[ParameterLike_T],
 ) -> tuple[ParameterLike_T, ...]:
@@ -205,7 +204,7 @@ class ParameterDesc(ParameterLike):
         schema: s_schema.Schema,
         modaliases: Mapping[Optional[str], str],
         num: int,
-        astnode: qlast.FuncParam,
+        astnode: qlast.FuncParamDecl,
     ) -> ParameterDesc:
 
         paramd = None
@@ -339,7 +338,7 @@ def make_func_param(
     typemod: qltypes.TypeModifier = qltypes.TypeModifier.SingletonType,
     kind: qltypes.ParameterKind,
     default: Optional[qlast.Expr] = None,
-) -> qlast.FuncParam:
+) -> qlast.FuncParamDecl:
     # If the param is variadic, strip the array from the type in the schema
     if kind is ft.ParameterKind.VariadicParam:
         assert (
@@ -350,7 +349,7 @@ def make_func_param(
         )
         type = type.subtypes[0]
 
-    return qlast.FuncParam(
+    return qlast.FuncParamDecl(
         name=name,
         type=type,
         typemod=typemod,
@@ -448,11 +447,11 @@ class Parameter(
         return param_as_str(schema, self)
 
     @classmethod
-    def compare_field_value(
+    def compare_field_value[T](
         cls,
-        field: so.Field[builtins.type[so.T]],
-        our_value: so.T,
-        their_value: so.T,
+        field: so.Field[builtins.type[T]],
+        our_value: T,
+        their_value: T,
         *,
         our_schema: s_schema.Schema,
         their_schema: s_schema.Schema,
@@ -477,7 +476,7 @@ class Parameter(
             context=context,
         )
 
-    def get_ast(self, schema: s_schema.Schema) -> qlast.FuncParam:
+    def get_ast(self, schema: s_schema.Schema) -> qlast.FuncParamDecl:
         default = self.get_default(schema)
         kind = self.get_kind(schema)
 
@@ -736,7 +735,7 @@ class FuncParameterList(so.ObjectList[Parameter], ParameterLikeList):
     ) -> tuple[Parameter, ...]:
         return canonical_param_sort(schema, self.objects(schema))
 
-    def get_ast(self, schema: s_schema.Schema) -> list[qlast.FuncParam]:
+    def get_ast(self, schema: s_schema.Schema) -> list[qlast.FuncParamDecl]:
         result = []
         for param in self.objects(schema):
             result.append(param.get_ast(schema))
@@ -990,7 +989,7 @@ class ParametrizedCommand(sd.ObjectCommand[so.Object_T]):
         cls,
         schema: s_schema.Schema,
         modaliases: Mapping[Optional[str], str],
-        params: list[qlast.FuncParam],
+        params: list[qlast.FuncParamDecl],
         *,
         param_offset: int=0,
     ) -> list[ParameterDesc]:
@@ -1012,7 +1011,7 @@ class ParametrizedCommand(sd.ObjectCommand[so.Object_T]):
             # Some Callables, like the concrete constraints,
             # have no params in their AST.
             return []
-        assert isinstance(astnode, qlast.CallableObjectCommandTuple)
+        assert isinstance(astnode, qlast.CallableObjectCommand)
         return cls._get_param_desc_from_params_ast(
             schema, modaliases, astnode.params, param_offset=param_offset)
 
@@ -1182,8 +1181,8 @@ class CreateCallableObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         node: qlast.DDLOperation,
-    ) -> list[tuple[int, qlast.FuncParam]]:
-        params: list[tuple[int, qlast.FuncParam]] = []
+    ) -> list[tuple[int, qlast.FuncParamDecl]]:
+        params: list[tuple[int, qlast.FuncParamDecl]] = []
         for op in self.get_subcommands(type=ParameterCommand):
             props = op.get_resolved_attributes(schema, context)
             if self._skip_param(props):
@@ -1214,7 +1213,7 @@ class CreateCallableObject(
     ) -> None:
         super()._apply_fields_ast(schema, context, node)
         params = self._get_params_ast(schema, context, node)
-        if isinstance(node, qlast.CallableObjectCommandTuple):
+        if isinstance(node, qlast.CallableObjectCommand):
             node.params = [p[1] for p in params]
 
 
@@ -1254,8 +1253,26 @@ class Function(
 
     used_globals = so.SchemaField(
         so.ObjectSet[s_globals.Global],
-        coerce=True, default=so.DEFAULT_CONSTRUCTOR,
-        inheritable=False)
+        coerce=True,
+        default=so.DEFAULT_CONSTRUCTOR,
+        inheritable=False
+    )
+
+    used_permissions = so.SchemaField(
+        so.ObjectSet[s_permissions.Permission],
+        coerce=True,
+        default=so.DEFAULT_CONSTRUCTOR,
+        inheritable=False,
+    )
+
+    required_permissions = so.SchemaField(
+        so.ObjectSet[s_permissions.Permission],
+        coerce=True,
+        default=so.DEFAULT_CONSTRUCTOR,
+        inheritable=False,
+        allow_ddl_set=True,
+        compcoef=0.8,
+    )
 
     # A backend_name that is shared between all overloads of the same
     # function, to make them independent from the actual name.
@@ -1713,9 +1730,19 @@ class FunctionCommand(
                     span=body.parse().span,
                 )
 
-        globs = {schema.get(glob.global_name, type=s_globals.Global)
-                 for glob in ir.globals}
+        globs = {
+            schema.get(glob.global_name, type=s_globals.Global)
+            for glob in ir.globals
+            if not glob.is_permission
+        }
         self.set_attribute_value('used_globals', globs)
+
+        permissions = {
+            schema.get(glob.global_name, type=s_permissions.Permission)
+            for glob in ir.globals
+            if glob.is_permission
+        }
+        self.set_attribute_value('used_permissions', permissions)
 
         return expr
 
@@ -2349,7 +2376,7 @@ class DeleteFunction(DeleteCallableObject[Function], FunctionCommand):
 
         params.sort(key=lambda e: e[0])
 
-        assert isinstance(node, qlast.CallableObjectCommandTuple)
+        assert isinstance(node, qlast.CallableObjectCommand)
         node.params = [p[1] for p in params]
 
 
@@ -2363,7 +2390,7 @@ def get_params_symtable(
     anchors: dict[str, qlast.Expr] = {}
 
     defaults_mask = qlast.TypeCast(
-        expr=qlast.Parameter(name='__defaults_mask__'),
+        expr=qlast.FunctionParameter(name='__defaults_mask__'),
         type=qlast.TypeName(
             maintype=qlast.ObjectRef(
                 module='std',
@@ -2378,7 +2405,7 @@ def get_params_symtable(
             p.get_typemod(schema) is not ft.TypeModifier.SingletonType
         )
         anchors[p_shortname] = qlast.TypeCast(
-            expr=qlast.Parameter(name=p_shortname),
+            expr=qlast.FunctionParameter(name=p_shortname),
             cardinality_mod=(
                 qlast.CardinalityModifier.Optional if p_is_optional else None
             ),
@@ -2647,6 +2674,11 @@ def get_compiler_options(
             inlining_context.env.options.func_params
             if inlining_context is not None else
             params
+        ),
+        json_parameters=(
+            inlining_context.env.options.json_parameters
+            if inlining_context is not None else
+            False
         ),
         apply_query_rewrites=not context.stdmode,
         track_schema_ref_exprs=track_schema_ref_exprs,

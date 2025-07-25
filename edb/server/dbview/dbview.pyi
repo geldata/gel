@@ -213,6 +213,7 @@ class DatabaseIndex:
         *,
         query_cache: bool,
         protocol_version: tuple[int, int],
+        role_name: str,
     ) -> DatabaseConnectionView:
         ...
 

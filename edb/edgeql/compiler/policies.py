@@ -417,7 +417,7 @@ def try_type_rewrite(
         all_child_descs = [
             x
             for child in stype.children(schema)
-            for x in child.descendants(schema)
+            for x in [child, *child.descendants(schema)]
         ]
         child_descs = set(all_child_descs)
         if len(child_descs) != len(all_child_descs):

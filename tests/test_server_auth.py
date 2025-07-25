@@ -54,10 +54,11 @@ class TestServerAuth(tb.ConnectedTestCase):
         await self.con.query('''
             CREATE EXTENSION edgeql_http;
         ''')
-        await self.con.query('''
-            CREATE SUPERUSER ROLE foo {
+        await self.con.query(f'''
+            CREATE SUPERUSER ROLE foo {{
                 SET password := 'foo-pass';
-            }
+                SET branches := 'main';
+            }}
         ''')
 
         # bad password
@@ -81,6 +82,22 @@ class TestServerAuth(tb.ConnectedTestCase):
         await conn.aclose()
         body, code = await self._basic_http_request(None, 'foo', 'foo-pass')
         self.assertEqual(code, 200, f"Wrong result: {body}")
+
+        # good password, non-allowed database
+        with self.assertRaisesRegex(
+            edgedb.AuthenticationError,
+            "authentication failed: user does not have permission for "
+            "database branch 'auth_failure'"
+        ):
+            await self.connect(
+                user='foo',
+                password='foo-pass',
+                database='auth_failure',
+            )
+
+        body, code = await self._basic_http_request(
+            None, 'foo', 'foo-pass', db='auth_failure')
+        self.assertEqual(code, 401, f"Wrong result: {body}")
 
         # Force foo to use a JWT so auth fails
         await self.con.query('''
@@ -267,6 +284,104 @@ class TestServerAuth(tb.ConnectedTestCase):
             await self.con.query('''
                 DROP ROLE bar;
             ''')
+
+    async def test_server_auth_permissions_consistency_01(self):
+        # Check that changing password doesn't impact permissions
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := custom::bar
+            }
+        ''')  # noqa
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+            await conn.aclose()
+
+            await self.con.query('''
+                ALTER ROLE foo {
+                    SET password := 'super secret';
+                }
+            ''')  # noqa
+
+            await self.assert_query_result(
+                r"""
+                    SELECT sys::Role {
+                        name,
+                        permissions,
+                    }
+                    FILTER .name = 'foo'
+                    ORDER BY .name
+                """,
+                [
+                    {
+                        'name': 'foo',
+                        'permissions': ['custom::bar'],
+                    },
+                ],
+            )
+
+            conn = await self.connect(
+                user='foo',
+                password='super secret',
+            )
+            await conn.aclose()
+
+        finally:
+            await self.con.query("DROP ROLE foo")
+
+    async def test_server_auth_permissions_consistency_02(self):
+        # Check that changing permissions doesn't impact password
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := custom::bar
+            }
+        ''')  # noqa
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+            await conn.aclose()
+
+            await self.con.query('''
+                ALTER ROLE foo {
+                    SET permissions := custom::baz;
+                }
+            ''')  # noqa
+
+            await self.assert_query_result(
+                r"""
+                    SELECT sys::Role {
+                        name,
+                        permissions,
+                    }
+                    FILTER .name = 'foo'
+                    ORDER BY .name
+                """,
+                [
+                    {
+                        'name': 'foo',
+                        'permissions': ['custom::baz'],
+                    },
+                ],
+            )
+
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+            await conn.aclose()
+
+        finally:
+            await self.con.query("DROP ROLE foo")
 
     async def test_long_role_name(self):
         with self.assertRaisesRegex(

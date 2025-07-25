@@ -57,6 +57,7 @@ class CompilationRequest:
 
     modaliases: immutables.Map[str | None, str] | None
     session_config: immutables.Map[str, config.SettingValue] | None
+    key_params: typing.Mapping[str, object] | None = None
 
     def __init__(
         self,
@@ -79,22 +80,8 @@ class CompilationRequest:
         system_config: typing.Mapping[str, config.SettingValue] | None = None,
         role_name: str = defines.EDGEDB_SUPERUSER,
         branch_name: str = defines.EDGEDB_SUPERUSER_DB,
+        key_params: typing.Mapping[str, object] | None = None,
     ):
-        ...
-
-    def update(
-        self,
-        source: edgeql.Source,
-        protocol_version: defines.ProtocolVersion,
-        *,
-        output_format: enums.OutputFormat = enums.OutputFormat.BINARY,
-        input_format: enums.InputFormat = enums.InputFormat.BINARY,
-        expect_one: bool = False,
-        implicit_limit: int = 0,
-        inline_typeids: bool = False,
-        inline_typenames: bool = False,
-        inline_objectids: bool = True,
-    ) -> CompilationRequest:
         ...
 
     def set_modaliases(

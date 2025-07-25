@@ -22,15 +22,14 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Generic,
-    Optional,
-    TypeVar,
+    cast,
     Iterable,
     Iterator,
     Mapping,
-    cast,
     NoReturn,
+    Optional,
     overload,
+    Self,
     TYPE_CHECKING,
 )
 
@@ -74,13 +73,21 @@ STD_MODULES = (
     sn.UnqualName('schema'),
     sn.UnqualName('std::math'),
     sn.UnqualName('sys'),
+    sn.UnqualName('sys::perm'),
     sn.UnqualName('cfg'),
+    sn.UnqualName('cfg::perm'),
     sn.UnqualName('std::cal'),
     sn.UnqualName('std::net'),
     sn.UnqualName('std::net::http'),
+    sn.UnqualName('std::net::perm'),
     sn.UnqualName('std::pg'),
     sn.UnqualName('std::_test'),
     sn.UnqualName('std::fts'),
+    sn.UnqualName('std::lang'),
+    sn.UnqualName('std::lang::go'),
+    sn.UnqualName('std::lang::js'),
+    sn.UnqualName('std::lang::py'),
+    sn.UnqualName('std::lang::rs'),
     EXT_MODULE,
     sn.UnqualName('std::enc'),
 )
@@ -109,47 +116,45 @@ TESTMODE_SOURCES = (
     sn.UnqualName('_testmode'),
 )
 
-Schema_T = TypeVar('Schema_T', bound='Schema')
-
 
 class Schema(abc.ABC):
 
     @abc.abstractmethod
     def add_raw(
-        self: Schema_T,
+        self: Self,
         id: uuid.UUID,
         sclass: type[so.Object],
         data: tuple[Any, ...],
-    ) -> Schema_T:
+    ) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
     def add(
-        self: Schema_T,
+        self: Self,
         id: uuid.UUID,
         sclass: type[so.Object],
         data: tuple[Any, ...],
-    ) -> Schema_T:
+    ) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def discard(self: Schema_T, obj: so.Object) -> Schema_T:
+    def discard(self: Self, obj: so.Object) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def delete(self: Schema_T, obj: so.Object) -> Schema_T:
+    def delete(self: Self, obj: so.Object) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def delist(self: Schema_T, name: sn.Name) -> Schema_T:
+    def delist(self: Self, name: sn.Name) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
     def update_obj(
-        self: Schema_T,
+        self: Self,
         obj: so.Object,
         updates: Mapping[str, Any],
-    ) -> Schema_T:
+    ) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -168,19 +173,19 @@ class Schema(abc.ABC):
 
     @abc.abstractmethod
     def set_obj_field(
-        self: Schema_T,
+        self: Self,
         obj: so.Object,
         field: str,
         value: Any,
-    ) -> Schema_T:
+    ) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
     def unset_obj_field(
-        self: Schema_T,
+        self: Self,
         obj: so.Object,
         field: str,
-    ) -> Schema_T:
+    ) -> Self:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -513,6 +518,61 @@ class Schema(abc.ABC):
     @abc.abstractmethod
     def get_last_migration(self) -> Optional[s_migrations.Migration]:
         raise NotImplementedError
+
+    @staticmethod
+    def raise_wrong_type(
+        name: str | sn.Name,
+        actual_type: type[so.Object_T],
+        expected_type: type[so.Object_T],
+        span: Optional[parsing.Span],
+    ) -> NoReturn:
+        refname = str(name)
+
+        actual_type_name = actual_type.get_schema_class_displayname()
+        expected_type_name = expected_type.get_schema_class_displayname()
+        raise errors.InvalidReferenceError(
+            f'{refname!r} exists, but is {english.add_a(actual_type_name)}, '
+            f'not {english.add_a(expected_type_name)}',
+            span=span,
+        )
+
+    @staticmethod
+    def raise_bad_reference(
+        name: str | sn.Name,
+        *,
+        label: Optional[str] = None,
+        module_aliases: Optional[Mapping[Optional[str], str]] = None,
+        span: Optional[parsing.Span] = None,
+        type: Optional[type[so.Object]] = None,
+    ) -> NoReturn:
+        refname = str(name)
+
+        if label is None:
+            if type is not None:
+                label = type.get_schema_class_displayname()
+            else:
+                label = 'schema item'
+
+        if type is not None:
+            if issubclass(type, so.QualifiedObject):
+                if not sn.is_qualified(refname):
+                    if module_aliases is not None:
+                        default_module = module_aliases.get(None)
+                        if default_module is not None:
+                            refname = type.get_displayname_static(
+                                sn.QualName(default_module, refname),
+                            )
+                else:
+                    refname = type.get_displayname_static(
+                        sn.QualName.from_string(refname))
+            else:
+                refname = type.get_displayname_static(
+                    sn.UnqualName.from_string(refname))
+
+        raise errors.InvalidReferenceError(
+            f'{label} {refname!r} does not exist',
+            span=span,
+        )
 
 
 class FlatSchema(Schema):
@@ -1169,7 +1229,7 @@ class FlatSchema(Schema):
                 funcs,
             )
         else:
-            return self._raise_bad_reference(
+            return Schema.raise_bad_reference(
                 name=name,
                 module_aliases=module_aliases,
                 type=s_func.Function,
@@ -1197,7 +1257,7 @@ class FlatSchema(Schema):
                 funcs,
             )
         else:
-            return self._raise_bad_reference(
+            return Schema.raise_bad_reference(
                 name=name,
                 module_aliases=module_aliases,
                 type=s_oper.Operator,
@@ -1377,7 +1437,7 @@ class FlatSchema(Schema):
         elif default is not so.NoDefault:
             return default
         else:
-            self._raise_bad_reference(name, type=objtype)
+            Schema.raise_bad_reference(name, type=objtype)
 
     def _get(
         self,
@@ -1414,62 +1474,17 @@ class FlatSchema(Schema):
             # We do our own type check, instead of using get_by_id's, so
             # we can produce a user-facing error message.
             if obj and type is not None and not isinstance(obj, type):
-                refname = str(name)
-                got_name = obj.__class__.get_schema_class_displayname()
-                exp_name = type.get_schema_class_displayname()
-                raise errors.InvalidReferenceError(
-                    f'{refname!r} exists, but is {english.add_a(got_name)}, '
-                    f'not {english.add_a(exp_name)}',
-                    span=span,
-                )
+                Schema.raise_wrong_type(name, obj.__class__, type, span)
 
             return obj  # type: ignore
         else:
-            self._raise_bad_reference(
+            Schema.raise_bad_reference(
                 name=name,
                 label=label,
                 module_aliases=module_aliases,
                 span=span,
                 type=type,
             )
-
-    def _raise_bad_reference(
-        self,
-        name: str | sn.Name,
-        *,
-        label: Optional[str] = None,
-        module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        span: Optional[parsing.Span] = None,
-        type: Optional[type[so.Object]] = None,
-    ) -> NoReturn:
-        refname = str(name)
-
-        if label is None:
-            if type is not None:
-                label = type.get_schema_class_displayname()
-            else:
-                label = 'schema item'
-
-        if type is not None:
-            if issubclass(type, so.QualifiedObject):
-                if not sn.is_qualified(refname):
-                    if module_aliases is not None:
-                        default_module = module_aliases.get(None)
-                        if default_module is not None:
-                            refname = type.get_displayname_static(
-                                sn.QualName(default_module, refname),
-                            )
-                else:
-                    refname = type.get_displayname_static(
-                        sn.QualName.from_string(refname))
-            else:
-                refname = type.get_displayname_static(
-                    sn.UnqualName.from_string(refname))
-
-        raise errors.InvalidReferenceError(
-            f'{label} {refname!r} does not exist',
-            span=span,
-        )
 
     def has_object(self, object_id: uuid.UUID) -> bool:
         return object_id in self._id_to_type
@@ -1593,7 +1608,7 @@ def upgrade_schema(schema: FlatSchema) -> FlatSchema:
     return schema._replace(id_to_data=id_to_data.update(fixes))
 
 
-class SchemaIterator(Generic[so.Object_T]):
+class SchemaIterator[Object_T: so.Object]:
     def __init__(
         self,
         schema: Schema,
@@ -1607,8 +1622,8 @@ class SchemaIterator(Generic[so.Object_T]):
         excluded_modules: Optional[Iterable[sn.Name]],
         included_items: Optional[Iterable[sn.Name]] = None,
         excluded_items: Optional[Iterable[sn.Name]] = None,
-        type: Optional[type[so.Object_T]] = None,
-        extra_filters: Iterable[Callable[[Schema, so.Object_T], bool]] = (),
+        type: Optional[type[Object_T]] = None,
+        extra_filters: Iterable[Callable[[Schema, Object_T], bool]] = (),
     ) -> None:
 
         filters = []
@@ -1675,7 +1690,7 @@ class SchemaIterator(Generic[so.Object_T]):
         self._schema = schema
         self._object_ids = object_ids
 
-    def __iter__(self) -> Iterator[so.Object_T]:
+    def __iter__(self) -> Iterator[Object_T]:
         filters = self._filters
         schema = self._schema
         get_by_id = schema.get_by_id

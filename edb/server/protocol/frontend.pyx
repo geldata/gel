@@ -644,6 +644,16 @@ cdef class FrontendConnection(AbstractFrontendConnection):
             else:
                 raise next(iter(auth_errors.values()))
 
+        role = self.tenant.get_roles().get(user)
+        if not role:
+            raise errors.AuthenticationError('authentication failed')
+        branches = role['branches']
+        if '*' not in branches and database not in branches:
+            raise errors.AuthenticationError(
+                f"authentication failed: user does not have permission for "
+                f"database branch '{database}'"
+            )
+
     cdef WriteBuffer _make_authentication_sasl_initial(self, list methods):
         raise NotImplementedError
 

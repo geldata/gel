@@ -60,7 +60,7 @@ def get_definition(
                 return []
             ql_ast = ql_ast_res.ok
 
-            if isinstance(ql_ast, list):
+            if isinstance(ql_ast, qlast.Commands):
                 return (
                     _get_definition_in_ql(ls, document, ql_ast, position) or []
                 )
@@ -79,12 +79,12 @@ def get_definition(
 def _get_definition_in_ql(
     ls: ls_server.GelLanguageServer,
     document: pygls.workspace.TextDocument,
-    ql_ast: list[qlast.Base],
+    ql_ast: qlast.Commands,
     position: int,
 ) -> lsp_types.Location | None:
     # compile the whole doc
     # TODO: search ql ast before compiling all stmts
-    _, ir_stmts = ls_server.compile_ql(ls, document, ql_ast)
+    _, ir_stmts = ls_server.compile_ql(ls, document, ql_ast.commands)
 
     # find the ir node at the position
     node_path = None

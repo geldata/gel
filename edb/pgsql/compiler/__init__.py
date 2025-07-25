@@ -82,6 +82,7 @@ def compile_ir_to_sql_tree(
             ],
         ]
     ] = None,
+    json_parameters: bool = False,
     backend_runtime_params: Optional[pgparams.BackendRuntimeParams]=None,
     cache_as_function: bool = False,
     alias_generator: Optional[aliases.AliasGenerator] = None,
@@ -123,6 +124,15 @@ def compile_ir_to_sql_tree(
                 type_rewrites = ir_expr.type_rewrites
         else:
             scope_tree = irast.new_scope_tree()
+
+        # In JSON parameters mode, keep only the synthetic globals
+        if json_parameters:
+            query_globals = [
+                g for g in query_globals if g.global_name.module == '__'
+            ]
+        # Ensure permissions are after globals, since they are injected
+        # after other globals.
+        query_globals.sort(key=lambda g: g.is_permission)
 
         scope_tree_nodes = {
             node.unique_id: node for node in scope_tree.descendants
@@ -167,7 +177,10 @@ def compile_ir_to_sql_tree(
         if external_rels:
             ctx.external_rels = external_rels
         clauses.populate_argmap(
-            query_params, query_globals, server_param_conversion_params, ctx=ctx
+            query_params,
+            query_globals,
+            server_param_conversion_params,
+            ctx=ctx,
         )
 
         qtree = dispatch.compile(ir_expr, ctx=ctx)

@@ -132,7 +132,7 @@ generate_tls_cert = secretkey.generate_tls_cert
 
 
 class CustomSNI_HTTPSConnection(http.client.HTTPSConnection):
-    def __init__(self, *args, server_hostname=None, **kwargs):
+    def __init__(self, *args, server_hostname=..., **kwargs):
         super().__init__(*args, **kwargs)
         self.server_hostname = server_hostname
 
@@ -141,7 +141,7 @@ class CustomSNI_HTTPSConnection(http.client.HTTPSConnection):
 
         if self._tunnel_host:
             server_hostname = self._tunnel_host
-        elif self.server_hostname is not None:
+        elif self.server_hostname is not ...:
             server_hostname = self.server_hostname
         else:
             server_hostname = self.host
@@ -418,8 +418,8 @@ class RollbackException(Exception):
 
 
 class RollbackChanges:
-    def __init__(self, test):
-        self._conn = test.con
+    def __init__(self, con):
+        self._conn = con
 
     async def __aenter__(self):
         self._tx = self._conn.transaction()
@@ -440,9 +440,9 @@ class TestCaseWithHttpClient(TestCase):
         cls,
         server,
         keep_alive=True,
-        server_hostname=None,
         client_cert_file=None,
         client_key_file=None,
+        **kwargs,
     ):
         conn_args = server.get_connect_args()
         tls_context = ssl.create_default_context(
@@ -460,8 +460,8 @@ class TestCaseWithHttpClient(TestCase):
         con = ConCls(
             conn_args["host"],
             conn_args["port"],
-            server_hostname=server_hostname,
             context=tls_context,
+            **kwargs,
         )
         con.connect()
         try:
@@ -724,12 +724,17 @@ def _fetch_server_info(host: str, port: int) -> dict[str, Any]:
 
 
 def _call_system_api(
-    host: str, port: int, path: str, return_json=True, sslctx=None
+    host: str,
+    port: int,
+    path: str,
+    return_json=True,
+    sslctx=None,
+    **kwargs,
 ):
     if sslctx is None:
-        con = http.client.HTTPConnection(host, port)
+        con = http.client.HTTPConnection(host, port, **kwargs)
     else:
-        con = http.client.HTTPSConnection(host, port, context=sslctx)
+        con = CustomSNI_HTTPSConnection(host, port, context=sslctx, **kwargs)
     con.connect()
     try:
         con.request(
@@ -850,8 +855,8 @@ class ClusterTestCase(TestCaseWithHttpClient):
         cls,
         *,
         cluster=None,
-        database=edgedb_defines.EDGEDB_SUPERUSER_DB,
-        user=edgedb_defines.EDGEDB_SUPERUSER,
+        database=None,
+        user=None,
         password=None,
         secret_key=None,
     ):
@@ -859,6 +864,10 @@ class ClusterTestCase(TestCaseWithHttpClient):
             password = "test"
         if cluster is None:
             cluster = cls.cluster
+        if database is None:
+            database = edgedb_defines.EDGEDB_SUPERUSER_DB
+        if user is None:
+            user = edgedb_defines.EDGEDB_SUPERUSER
         conargs = cluster.get_connect_args().copy()
         conargs.update(dict(user=user,
                             password=password,
@@ -867,9 +876,7 @@ class ClusterTestCase(TestCaseWithHttpClient):
         return conargs
 
     @classmethod
-    def make_auth_header(
-        cls, user=edgedb_defines.EDGEDB_SUPERUSER, password=None
-    ):
+    def make_auth_header(cls, user=None, password=None):
         # urllib *does* have actual support for basic auth but it is so much
         # more annoying than just doing it yourself...
         conargs = cls.get_connect_args(user=user, password=password)
@@ -924,18 +931,18 @@ class ClusterTestCase(TestCaseWithHttpClient):
         cls,
         server=None,
         keep_alive=True,
-        server_hostname=None,
         client_cert_file=None,
         client_key_file=None,
+        **kwargs,
     ):
         if server is None:
             server = cls
         with super().http_con(
             server,
             keep_alive=keep_alive,
-            server_hostname=server_hostname,
             client_cert_file=client_cert_file,
             client_key_file=client_key_file,
+            **kwargs,
         ) as http_con:
             yield http_con
 
@@ -1080,8 +1087,8 @@ class ConnectedTestCase(ClusterTestCase):
         cls,
         *,
         cluster=None,
-        database=edgedb_defines.EDGEDB_SUPERUSER_DB,
-        user=edgedb_defines.EDGEDB_SUPERUSER,
+        database=None,
+        user=None,
         password=None,
         secret_key=None,
     ) -> tconn.Connection:
@@ -1127,7 +1134,7 @@ class ConnectedTestCase(ClusterTestCase):
                 pass
 
     def _run_and_rollback(self):
-        return RollbackChanges(self)
+        return RollbackChanges(self.con)
 
     async def _run_and_rollback_retrying(self):
         @contextlib.asynccontextmanager
@@ -1381,7 +1388,9 @@ class DatabaseTestCase(ConnectedTestCase):
         # Only open an extra admin connection if necessary.
         if class_set_up == 'run':
             script = f'CREATE DATABASE {dbname};'
-            admin_conn = await cls.connect()
+            admin_conn = await cls.connect(
+                database=edgedb_defines.EDGEDB_SUPERUSER_DB
+            )
             await admin_conn.execute(script)
             await admin_conn.aclose()
 
@@ -1389,7 +1398,9 @@ class DatabaseTestCase(ConnectedTestCase):
             dbname = edgedb_defines.EDGEDB_SUPERUSER_DB
 
         elif cls.uses_database_copies():
-            admin_conn = await cls.connect()
+            admin_conn = await cls.connect(
+                database=edgedb_defines.EDGEDB_SUPERUSER_DB
+            )
 
             base_db_name, _, _ = dbname.rpartition('_')
 
@@ -1451,11 +1462,25 @@ class DatabaseTestCase(ConnectedTestCase):
 
             elif class_set_up == 'run' or cls.uses_database_copies():
                 dbname = qlquote.quote_ident(cls.get_database_name())
-                admin_conn = await cls.connect()
+                admin_conn = await cls.connect(
+                    database=edgedb_defines.EDGEDB_SUPERUSER_DB
+                )
                 try:
                     await drop_db(admin_conn, dbname)
                 finally:
                     await admin_conn.aclose()
+
+    @classmethod
+    def get_connect_args(
+        cls,
+        *,
+        database=None,
+        **kwargs,
+    ):
+        return super().get_connect_args(
+            database=database or cls.get_database_name(),
+            **kwargs,
+        )
 
     @classmethod
     def get_database_name(cls):
@@ -1634,7 +1659,12 @@ class SQLQueryTestCase(BaseQueryTestCase):
         )
 
     @classmethod
-    def create_sql_connection(cls) -> asyncio.Future[asyncpg.Connection]:
+    def create_sql_connection(
+        cls,
+        *,
+        user: str = None,
+        password: str = None,
+    ) -> asyncio.Future[asyncpg.Connection]:
         import asyncpg
         conargs = cls.get_connect_args()
 
@@ -1647,8 +1677,8 @@ class SQLQueryTestCase(BaseQueryTestCase):
         return asyncpg.connect(
             host=conargs['host'],
             port=conargs['port'],
-            user=conargs['user'],
-            password=conargs['password'],
+            user=conargs['user'] if user is None else user,
+            password=conargs['password'] if password is None else password,
             database=cls.con.dbname,
             ssl=tls_context,
         )
@@ -2322,8 +2352,10 @@ class _EdgeDBServerData(NamedTuple):
     def fetch_server_info(self) -> dict[str, Any]:
         return _fetch_server_info(self.host, self.port)
 
-    def call_system_api(self, path: str):
-        return _call_system_api(self.host, self.port, path)
+    def call_system_api(self, path: str, **kwargs):
+        args = dict(host=self.host, port=self.port, path=path)
+        args.update(kwargs)
+        return _call_system_api(**args)
 
     async def connect(self, **kwargs: Any) -> tconn.Connection:
         conn_args = self.get_connect_args(**kwargs)

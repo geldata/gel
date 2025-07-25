@@ -22,7 +22,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    TypeVar,
     Iterable,
     Mapping,
     Awaitable,
@@ -106,10 +105,6 @@ class ClusterMode(enum.IntEnum):
     single_database = 3
 
 
-_T = TypeVar("_T")
-_T_Schema = TypeVar("_T_Schema", bound=s_schema.Schema)
-
-
 # A simple connection proxy that reconnects and retries queries
 # on connection errors.  Helps defeat flaky connections and/or
 # flaky Postgres servers (Digital Ocean managed instances are
@@ -154,10 +149,10 @@ class PGConnectionProxy:
         )
         self.terminate()
 
-    async def _retry_conn_errors(
+    async def _retry_conn_errors[T](
         self,
-        task: Callable[[], Awaitable[_T]],
-    ) -> _T:
+        task: Callable[[], Awaitable[T]],
+    ) -> T:
         rloop = retryloop.RetryLoop(
             backoff=retryloop.exp_backoff(),
             timeout=5.0,
@@ -244,11 +239,11 @@ async def _execute_block(conn, block: dbops.SQLBlock) -> None:
         await _execute(conn, stmt)
 
 
-def _execute_edgeql_ddl(
-    schema: s_schema.Schema_T,
+def _execute_edgeql_ddl[Schema_T: s_schema.Schema](
+    schema: Schema_T,
     ddltext: str,
     stdmode: bool = True,
-) -> s_schema.Schema_T:
+) -> Schema_T:
     context = sd.CommandContext(stdmode=stdmode)
 
     for ddl_cmd in edgeql.parse_block(ddltext):
@@ -337,6 +332,7 @@ async def _ensure_edgedb_role(
             name=role_name,
             tenant_id=backend_params.tenant_id,
             builtin=builtin,
+            branches=['*'],
         ),
     )
 
@@ -554,12 +550,12 @@ async def _store_static_json_cache(
     await _execute(ctx.conn, text)
 
 
-def _process_delta_params(
-    delta, schema: _T_Schema, params,
+def _process_delta_params[Schema_T: s_schema.Schema](
+    delta, schema: Schema_T, params,
     stdmode: bool=True,
     **kwargs,
 ) -> tuple[
-    _T_Schema,
+    Schema_T,
     delta_cmds.MetaCommand,
     delta_cmds.CreateTrampolines,
 ]:
@@ -582,7 +578,7 @@ def _process_delta_params(
         **kwargs,
     )
     schema = cast(
-        _T_Schema,
+        Schema_T,
         sd.apply(delta, schema=schema, context=context),
     )
 
@@ -704,7 +700,7 @@ def prepare_repair_patch(
     res = edbcompiler.repair_schema(compilerctx)
     if not res:
         return ""
-    sql, _, _ = res
+    sql, _ = res
 
     return sql.decode('utf-8')
 
@@ -984,7 +980,9 @@ def prepare_patch(
         # in the public schema and to discover the new introspection
         # query.
         reflection = s_refl.generate_structure(
-            reflschema, make_funcs=False,
+            reflschema,
+            make_funcs=False,
+            patch_level=patches.get_patch_level(num),
         )
 
         reflschema, plan, tplan = _process_delta_params(
@@ -1292,6 +1290,9 @@ class StdlibBits(NamedTuple):
     global_schema: s_schema.Schema
     #: SQL text of the procedure to initialize `std` in Postgres.
     sqltext: str
+    #: SQL text of the procedure to create all `std` scalars for inplace
+    #: upgrades
+    inplace_upgrade_scalar_text: str
     #: Descriptors of all the needed trampolines
     trampolines: list[trampoline.Trampoline]
     #: A set of ids of all types in std.
@@ -1342,6 +1343,18 @@ def _make_stdlib(
     types: set[uuid.UUID] = set()
     std_plans: list[sd.Command] = []
 
+    specials = []
+
+    def _collect_special(cmd):
+        if isinstance(cmd, dbops.CreateEnum):
+            specials.append(cmd)
+        elif isinstance(cmd, dbops.CommandGroup):
+            for sub in cmd.commands:
+                _collect_special(sub)
+        elif isinstance(cmd, delta_cmds.MetaCommand):
+            for sub in cmd.pgops:
+                _collect_special(sub)
+
     for ddl_cmd in edgeql.parse_block(ddl_text):
         assert isinstance(ddl_cmd, qlast.DDLCommand)
         delta_command = s_ddl.delta_from_ddl(
@@ -1352,6 +1365,7 @@ def _make_stdlib(
         schema, plan, tplan = _process_delta(ctx, delta_command, schema)
         assert isinstance(plan, delta_cmds.DeltaRoot)
         std_plans.append(delta_command)
+        _collect_special(plan)
 
         types.update(plan.new_types)
         plan.generate(current_block)
@@ -1441,11 +1455,28 @@ def _make_stdlib(
         reflection=reflection,
     )
 
+    # Sigh, we need to be able to create all std scalar types that
+    # might get added.
+    #
+    # TODO: Also collect tuple types, and generalize enum handling to
+    # be able to *add* enum fields. (Which will involve some
+    # pl/pgsql??)
+    scalar_block = dbops.PLTopBlock()
+    for cmd in specials:
+        if isinstance(cmd, dbops.CreateEnum):
+            ncmd = dbops.CreateEnum(
+                dbops.Enum(cmd.name, cmd.values),
+                neg_conditions=[dbops.EnumExists(cmd.name)],
+            )
+            ncmd.generate(scalar_block)
+
+    # Got it!
     return StdlibBits(
         stdschema=schema.get_top_schema(),
         reflschema=reflschema.get_top_schema(),
         global_schema=schema.get_global_schema(),
         sqltext=sqltext,
+        inplace_upgrade_scalar_text=scalar_block.to_string(),
         trampolines=trampolines,
         types=types,
         classlayout=reflection.class_layout,
@@ -1629,6 +1660,13 @@ def cleanup_tpldbdump(tpldbdump: bytes) -> bytes:
         flags=re.MULTILINE,
     )
 
+    tpldbdump = re.sub(
+        rb'^CREATE SCHEMA ',
+        rb'CREATE SCHEMA IF NOT EXISTS ',
+        tpldbdump,
+        flags=re.MULTILINE,
+    )
+
     return tpldbdump
 
 
@@ -1650,7 +1688,7 @@ async def _init_stdlib(
     src_hash = _calculate_src_hash()
     cache_dir = _get_cache_dir()
 
-    stdlib = read_data_cache(
+    stdlib: Optional[StdlibBits] = read_data_cache(
         STDLIB_CACHE_FILE_NAME,
         pickled=True,
         src_hash=src_hash,
@@ -1662,8 +1700,6 @@ async def _init_stdlib(
         src_hash=src_hash,
         cache_dir=cache_dir,
     )
-    if args.inplace_upgrade_prepare:
-        tpldbdump = None
 
     tpldbdump, tpldbdump_inplace = None, None
     if tpldbdump_package:
@@ -1773,8 +1809,6 @@ async def _init_stdlib(
 
             tpldbdump += b'\n' + text.encode('utf-8')
 
-            # XXX: TODO: We are going to need to deal with tuple types
-            # in edgedbpub...
             tpldbdump_inplace = await cluster.dump_database(
                 tpl_pg_db_name,
                 include_schemas=[
@@ -1784,7 +1818,10 @@ async def _init_stdlib(
                 ],
                 dump_object_owners=False,
             )
-            tpldbdump_inplace = cleanup_tpldbdump(tpldbdump_inplace)
+            tpldbdump_inplace = (
+                stdlib.inplace_upgrade_scalar_text.encode('utf-8') +
+                cleanup_tpldbdump(tpldbdump_inplace)
+            )
 
             # XXX: BE SMARTER ABOUT THIS, DON'T DO ALL THAT WORK
             if args.inplace_upgrade_prepare:
@@ -2075,6 +2112,8 @@ def compile_sys_queries(
             name,
             superuser,
             password,
+            branches,
+            all_permissions,
         };
     '''
     _, sql = compile_bootstrap_script(

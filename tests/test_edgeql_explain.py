@@ -1242,7 +1242,7 @@ class TestEdgeQLExplain(tb.QueryTestCase):
 
     async def test_edgeql_explain_insert_01(self):
         # Use an ad-hoc connection to avoid TRANSACTION_ISOLATION
-        con = await self.connect(database=self.con.dbname)
+        con = await self.connect()
         try:
             res = await self.explain('''
                 insert User { name := 'Fantix' }

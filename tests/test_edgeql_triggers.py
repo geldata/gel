@@ -24,7 +24,7 @@ import edgedb
 from edb.testbase import server as tb
 
 
-class TestTriggers(tb.QueryTestCase):
+class TestTriggers(tb.DDLTestCase):
     '''The scope of the tests is testing various modes of Object creation.'''
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
@@ -1480,3 +1480,48 @@ class TestTriggers(tb.QueryTestCase):
                   users += (select User filter .name="Bob")
                 }
             ''')
+
+    async def test_edgeql_triggers_double_01(self):
+        # Issue #7803
+        await self.con.execute('''
+            create type Foo {
+                create required property total: int64;
+
+                # ----> This trigger causes the error
+                create trigger update_after_update after update for each
+                do (
+                    assert(true)
+                );
+            };
+
+            create type FooEntry {
+                create required link foo: Foo;
+                create required property value: int64;
+
+                create trigger update_foo after insert for each
+                    do (
+                        update __new__.foo
+                            set {
+                                total := __new__.value
+                            }
+                    );
+            };
+        ''')
+
+        await self.con.execute('''
+            INSERT Foo { total := -1 }
+        ''')
+        await self.con.execute('''
+            INSERT default::FooEntry {
+              foo := (
+                select Foo limit 1
+              ),
+              value := <std::int64>99
+            };
+        ''')
+        await self.assert_query_result(
+            '''
+            select Foo { total }
+            ''',
+            [{'total': 99}],
+        )

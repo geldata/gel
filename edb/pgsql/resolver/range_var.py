@@ -111,7 +111,12 @@ def _resolve_RelRangeVar(
         )
     ]
 
-    rel = pgast.RelRangeVar(relation=relation, alias=alias)
+    rel: pgast.BaseRangeVar
+    if isinstance(relation, pgast.Relation):
+        rel = pgast.RelRangeVar(relation=relation, alias=alias)
+    else:
+        assert isinstance(relation, pgast.Query)
+        rel = pgast.RangeSubselect(subquery=relation, alias=alias)
     return (rel, table)
 
 
@@ -163,13 +168,12 @@ def _resolve_JoinExpr(
     *,
     ctx: Context,
 ) -> pgast.BaseRangeVar:
-
     larg = resolve_BaseRangeVar(range_var.larg, ctx=ctx)
     ltable = ctx.scope.tables[len(ctx.scope.tables) - 1]
 
-    assert (
-        len(range_var.joins) == 1
-    ), "pg resolver should always produce non-flattened joins"
+    assert len(range_var.joins) == 1, (
+        "pg resolver should always produce non-flattened joins"
+    )
     join = range_var.joins[0]
 
     rarg = resolve_BaseRangeVar(join.rarg, ctx=ctx)
@@ -298,7 +302,6 @@ def _resolve_RangeFunction(
     ctx: Context,
 ) -> tuple[pgast.BaseRangeVar, context.Table]:
     with ctx.lateral() if range_var.lateral else ctx.child() as subctx:
-
         functions: list[pgast.BaseExpr] = []
         col_names = []
         for function in range_var.functions:

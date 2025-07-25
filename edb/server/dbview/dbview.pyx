@@ -17,7 +17,7 @@
 #
 
 from typing import (
-    Optional,
+    Optional, Sequence
 )
 
 import asyncio
@@ -62,6 +62,8 @@ __all__ = (
     'SideEffects',
     'Database'
 )
+
+cdef uint64_t PROTO_CAPS = enums.Capability.PROTO_CAPS
 
 cdef DEFAULT_MODALIASES = immutables.Map({None: defines.DEFAULT_MODULE_ALIAS})
 cdef DEFAULT_CONFIG = immutables.Map()
@@ -496,9 +498,12 @@ cdef class Database:
             rv = None
         return rv
 
-    cdef _new_view(self, query_cache, protocol_version):
+    cdef _new_view(self, query_cache, protocol_version, role_name):
         view = DatabaseConnectionView(
-            self, query_cache=query_cache, protocol_version=protocol_version
+            self,
+            query_cache=query_cache,
+            protocol_version=protocol_version,
+            role_name=role_name,
         )
         self._views.add(view)
         return view
@@ -601,7 +606,9 @@ cdef class Database:
 
 cdef class DatabaseConnectionView:
 
-    def __init__(self, db: Database, *, query_cache, protocol_version):
+    def __init__(
+        self, db: Database, *, query_cache, protocol_version, role_name: str
+    ):
         self._db = db
 
         self._query_cache_enabled = query_cache
@@ -613,6 +620,7 @@ cdef class DatabaseConnectionView:
         self._session_state_db_cache = None
         self._session_state_cache = None
         self._state_serializer = None
+        self._role_name = role_name
 
         if db.name == defines.EDGEDB_SYSTEM_DB:
             # Make system database read-only.
@@ -955,6 +963,21 @@ cdef class DatabaseConnectionView:
         aliases = dict(state.get('aliases', []))
         aliases[None] = state.get('module', defines.DEFAULT_MODULE_ALIAS)
         aliases = immutables.Map(aliases)
+
+        is_superuser, permissions = self.get_permissions()
+        if not is_superuser:
+            settings = self.get_config_spec()
+            for k in state.get('config', ()):
+                setting = settings[k]
+                if setting.session_restricted and not (
+                    setting.session_permission
+                    and setting.session_permission in permissions
+                ):
+                    raise errors.DisabledCapabilityError(
+                        f'role {self._role_name} does not have permission to '
+                        f'configure session config variable {k}'
+                    )
+
         session_config = immutables.Map({
             k: config.SettingValue(
                 name=k,
@@ -1019,6 +1042,21 @@ cdef class DatabaseConnectionView:
     @property
     def tenant(self):
         return self._db._index._tenant
+
+    def get_permissions(self) -> tuple[bool, Sequence[str]]:
+        if role_desc := self.tenant.get_roles().get(self._role_name):
+            return (
+                bool(role_desc.get('superuser')),
+                (role_desc.get('all_permissions') or ())
+            )
+        return False, ()
+
+    def get_role_capability(self) -> enums.Capability:
+        if capability := self.tenant.get_role_capabilities().get(
+            self._role_name
+        ):
+            return capability
+        return enums.Capability.NONE
 
     cpdef in_tx(self):
         return self._in_tx
@@ -1333,6 +1371,19 @@ cdef class DatabaseConnectionView:
                     op.apply(settings, self.get_database_config()),
                 )
             elif op.scope is config.ConfigScope.SESSION:
+                is_superuser, permissions = self.get_permissions()
+                if not is_superuser:
+                    setting = op.get_setting(settings)
+                    if setting.session_restricted and not (
+                        setting.session_permission
+                        and setting.session_permission in permissions
+                    ):
+                        raise errors.DisabledCapabilityError(
+                            f'role {self._role_name} does not have permission '
+                            f'to configure session config variable '
+                            f'{setting.name}'
+                        )
+
                 self.set_session_config(
                     op.apply(settings, self.get_session_config()),
                 )
@@ -1434,7 +1485,7 @@ cdef class DatabaseConnectionView:
                     raise
 
             self.check_capabilities(
-                query_unit_group.capabilities,
+                query_unit_group,
                 allow_capabilities,
                 errors.DisabledCapabilityError,
                 "disabled by the client",
@@ -1559,6 +1610,8 @@ cdef class DatabaseConnectionView:
         num_injected_params = 0
         if qug.globals is not None:
             num_injected_params += len(qug.globals)
+        if qug.permissions is not None:
+            num_injected_params += len(qug.permissions)
         if first_extra is not None:
             extra_type_oids = source.extra_type_oids()
             all_type_oids = [0] * first_extra + extra_type_oids
@@ -1758,12 +1811,14 @@ cdef class DatabaseConnectionView:
 
     cdef check_capabilities(
         self,
-        query_capabilities,
+        query_unit,
         allowed_capabilities,
         error_constructor,
         reason,
         unsafe_isolation_dangers,
     ):
+        query_capabilities = query_unit.capabilities
+
         if query_capabilities & ~self._capability_mask:
             # _capability_mask is currently only used for system database
             raise query_capabilities.make_error(
@@ -1772,11 +1827,19 @@ cdef class DatabaseConnectionView:
                 "system database is read-only",
             )
 
-        if query_capabilities & ~allowed_capabilities:
+        if (query_capabilities & PROTO_CAPS) & ~allowed_capabilities:
             raise query_capabilities.make_error(
                 allowed_capabilities,
                 error_constructor,
                 reason,
+            )
+
+        role_capability = self.get_role_capability()
+        if query_capabilities & ~role_capability:
+            raise query_capabilities.make_error(
+                role_capability,
+                error_constructor,
+                f"role {self._role_name} does not have permission",
             )
 
         if self.tenant.is_readonly():
@@ -1790,6 +1853,21 @@ cdef class DatabaseConnectionView:
                     errors.DisabledCapabilityError,
                     msg,
                 )
+
+        if query_unit.required_permissions:
+            is_superuser, permissions = self.get_permissions()
+            if not is_superuser:
+                for perm in query_unit.required_permissions:
+                    if perm not in permissions:
+                        missing = sorted(
+                            set(query_unit.required_permissions)
+                            - set(permissions)
+                        )
+                        plural = 's' if len(missing) > 1 else ''
+                        raise errors.DisabledCapabilityError(
+                            f'role {self._role_name} does not have required '
+                            f'permission{plural}: {", ".join(missing)}'
+                        )
 
         has_write = query_capabilities & enums.Capability.WRITE
         if has_write and unsafe_isolation_dangers:
@@ -2052,9 +2130,18 @@ cdef class DatabaseIndex:
             await self._server._after_system_config_reset(
                 op.setting_name)
 
-    def new_view(self, dbname: str, *, query_cache: bool, protocol_version):
+    def new_view(
+        self,
+        dbname: str,
+        *,
+        query_cache: bool,
+        protocol_version,
+        role_name: str,
+    ):
         db = self.get_db(dbname)
-        return (<Database>db)._new_view(query_cache, protocol_version)
+        return (<Database>db)._new_view(
+            query_cache, protocol_version, role_name
+        )
 
     def remove_view(self, view: DatabaseConnectionView):
         db = self.get_db(view.dbname)

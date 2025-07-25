@@ -20,20 +20,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import (
     Final,
-    Generic,
     Iterable,
     Literal,
     Optional,
     Sequence,
-    TypeVar,
 )
 
 import abc
 import asyncio
 import copy
 import random
-
-_T = TypeVar('_T')
 
 
 @dataclass
@@ -122,7 +118,7 @@ def _default_delay_time() -> Timer:
 
 
 @dataclass
-class Scheduler(abc.ABC, Generic[_T]):
+class Scheduler[_T](abc.ABC):
     """A scheduler for requests to an asynchronous service.
 
     A Scheduler both generates requests and tracks when the service can be
@@ -389,7 +385,7 @@ class Limits:
         return self
 
 
-class Request(abc.ABC, Generic[_T]):
+class Request[_T](abc.ABC):
     """Represents an async request"""
 
     params: Params[_T]
@@ -414,7 +410,7 @@ class Request(abc.ABC, Generic[_T]):
         return result
 
 
-class Params(abc.ABC, Generic[_T]):
+class Params[_T](abc.ABC):
     """The parameters of an async request.
 
     These are used to generate requests.
@@ -437,7 +433,7 @@ class Params(abc.ABC, Generic[_T]):
 
 
 @dataclass(frozen=True)
-class Result(abc.ABC, Generic[_T]):
+class Result[_T](abc.ABC):
     """The result of an async request."""
 
     data: _T | Error
@@ -446,6 +442,7 @@ class Result(abc.ABC, Generic[_T]):
     # Keys should be a subset of service limits.
     limits: dict[str, Limits] = field(default_factory=dict)
 
+    @abc.abstractmethod
     async def finalize(self) -> None:
         """An optional finalize to be run sequentially."""
         pass
@@ -462,7 +459,7 @@ class Error:
     retry: bool
 
 
-async def execute_no_sleep(
+async def execute_no_sleep[_T](
     params: Sequence[Params[_T]],
     *,
     service: Service,
@@ -659,7 +656,7 @@ async def execute_no_sleep(
     return report
 
 
-async def _execute_specified(
+async def _execute_specified[_T](
     params: Sequence[Params[_T]],
     indexes: Iterable[int],
 ) -> dict[int, Result[_T]]:
@@ -683,7 +680,7 @@ async def _execute_specified(
     return results
 
 
-def _get_limit_base_delays(
+def _get_limit_base_delays[_T](
     params: Sequence[Params[_T]],
     limits: dict[str, Limits],
     request_indexes: Sequence[int],

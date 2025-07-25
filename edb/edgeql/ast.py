@@ -101,7 +101,7 @@ class Base(ast.AST):
 
 class GrammarEntryPoint(Base):
     """Mixin denoting nodes that are entry points for EdgeQL grammar"""
-    __mixin_node__ = True
+    __abstract_node__ = True
 
 
 class OptionValue(Base):
@@ -303,6 +303,23 @@ class Constant(BaseConstant):
     def integer(cls, i: int) -> Constant:
         return Constant(kind=ConstantKind.INTEGER, value=str(i))
 
+    @classmethod
+    def float(cls, f: float) -> Constant:
+        return Constant(kind=ConstantKind.FLOAT, value=str(f))
+
+    @classmethod
+    def make(cls, n: object) -> Constant:
+        if isinstance(n, str):
+            return cls.string(n)
+        elif isinstance(n, bool):
+            return cls.boolean(n)
+        elif isinstance(n, int):
+            return cls.integer(n)
+        elif isinstance(n, float):
+            return cls.float(n)
+        else:
+            raise AssertionError('unsupported constant type')
+
 
 class ConstantKind(s_enum.StrEnum):
     STRING = 'STRING'
@@ -321,7 +338,11 @@ class BytesConstant(BaseConstant):
         return BytesConstant(value=s)
 
 
-class Parameter(Expr):
+class QueryParameter(Expr):
+    name: str
+
+
+class FunctionParameter(Expr):
     name: str
 
 
@@ -351,15 +372,20 @@ class TypeName(TypeExpr):
     dimensions: typing.Optional[list[int]] = None
 
 
+class TypeOpName(s_enum.StrEnum):
+    OR = '|'
+    AND = '&'
+
+
 class TypeOp(TypeExpr):
     __rust_box__ = {'left', 'right'}
 
     left: TypeExpr
-    op: str
+    op: TypeOpName
     right: TypeExpr
 
 
-class FuncParam(Base):
+class FuncParamDecl(Base):
     name: str
     type: TypeExpr
     typemod: qltypes.TypeModifier = qltypes.TypeModifier.SingletonType
@@ -448,8 +474,7 @@ class Set(Expr):
 # Statements
 #
 
-
-class Command(GrammarEntryPoint, Base):
+class Command(Base):
     """
     A top-level node that is evaluated by our server and
     cannot be a part of a sub expression.
@@ -457,6 +482,10 @@ class Command(GrammarEntryPoint, Base):
 
     __abstract_node__ = True
     aliases: typing.Optional[list[Alias]] = None
+
+
+class Commands(GrammarEntryPoint, Base):
+    commands: list[Command]
 
 
 class SessionSetAliasDecl(Command):
@@ -480,12 +509,6 @@ SessionCommand = (
     | SessionResetAliasDecl
     | SessionResetModule
     | SessionResetAllAliases
-)
-SessionCommand_tuple = (
-    SessionSetAliasDecl,
-    SessionResetAliasDecl,
-    SessionResetModule,
-    SessionResetAllAliases
 )
 
 
@@ -531,7 +554,7 @@ class Shape(Expr):
     allow_factoring: bool = False
 
 
-class Query(Expr, GrammarEntryPoint):
+class Query(Expr, GrammarEntryPoint, Command):
     __abstract_node__ = True
 
     aliases: typing.Optional[list[Alias]] = None
@@ -688,7 +711,7 @@ class ReleaseSavepoint(Transaction):
 
 class DDL(Base):
     '''A mixin denoting DDL nodes.'''
-    __mixin_node__ = True
+    __abstract_node__ = True
 
 
 class Position(DDL):
@@ -1172,6 +1195,23 @@ class SetGlobalType(SetField):
     reset_value: bool = False
 
 
+class PermissionCommand(ObjectDDL):
+
+    __abstract_node__ = True
+
+
+class CreatePermission(CreateObject, PermissionCommand):
+    pass
+
+
+class AlterPermission(AlterObject, PermissionCommand):
+    pass
+
+
+class DropPermission(DropObject, PermissionCommand):
+    pass
+
+
 class LinkCommand(ObjectDDL):
 
     __abstract_node__ = True
@@ -1216,7 +1256,7 @@ class CreateConstraint(
 ):
     subjectexpr: typing.Optional[Expr]
     abstract: bool = True
-    params: list[FuncParam] = ast.field(factory=list)
+    params: list[FuncParamDecl] = ast.field(factory=list)
 
 
 class AlterConstraint(AlterObject, ConstraintCommand):
@@ -1270,7 +1310,7 @@ class CreateIndex(
     kwargs: dict[str, Expr] = ast.field(factory=dict)
     index_types: list[IndexType]
     code: typing.Optional[IndexCode] = None
-    params: list[FuncParam] = ast.field(factory=list)
+    params: list[FuncParamDecl] = ast.field(factory=list)
 
 
 class AlterIndex(AlterObject, IndexCommand):
@@ -1421,7 +1461,7 @@ class FunctionCode(DDL):
 class FunctionCommand(DDLCommand):
 
     __abstract_node__ = True
-    params: list[FuncParam] = ast.field(factory=list)
+    params: list[FuncParamDecl] = ast.field(factory=list)
 
 
 class CreateFunction(CreateObject, FunctionCommand):
@@ -1454,7 +1494,7 @@ class OperatorCommand(DDLCommand):
 
     __abstract_node__ = True
     kind: qltypes.OperatorKind
-    params: list[FuncParam] = ast.field(factory=list)
+    params: list[FuncParamDecl] = ast.field(factory=list)
 
 
 class CreateOperator(CreateObject, OperatorCommand):
@@ -1572,7 +1612,7 @@ class AdministerStmt(Command):
 class SDL(Base):
     '''A mixin denoting SDL nodes.'''
 
-    __mixin_node__ = True
+    __abstract_node__ = True
 
 
 class ModuleDeclaration(SDL):
@@ -1649,24 +1689,9 @@ BasedOn = (
     | CreateRole
     | CreateConcretePointer
 )
-# TODO: this is required because mypy does support `instanceof(x, A | B)`
-BasedOnTuple = (
-    AlterAddInherit,
-    AlterDropInherit,
-    CreateExtendingObject,
-    CreateRole,
-    CreateConcretePointer,
-)
 
 CallableObjectCommand = (
     CreateConstraint | CreateIndex | FunctionCommand | OperatorCommand
-)
-# TODO: this is required because mypy does support `instanceof(x, A | B)`
-CallableObjectCommandTuple = (
-    CreateConstraint,
-    CreateIndex,
-    FunctionCommand,
-    OperatorCommand,
 )
 
 # A node that can have a WITH block

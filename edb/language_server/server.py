@@ -114,8 +114,8 @@ def document_updated(ls: GelLanguageServer, doc_uri: str, *, compile: bool):
                 diagnostic_set.extend(document, ast_res.err)
 
             # compile
-            if compile and isinstance(ast_res.ok, list):
-                diag, _ = compile_ql(ls, document, ast_res.ok)
+            if compile and isinstance(ast_res.ok, qlast.Commands):
+                diag, _ = compile_ql(ls, document, ast_res.ok.commands)
                 diagnostic_set.merge(diag)
         else:
             ls.show_message_log(f'Unknown file type: {doc_uri}')
@@ -130,7 +130,7 @@ def document_updated(ls: GelLanguageServer, doc_uri: str, *, compile: bool):
 def compile_ql(
     ls: GelLanguageServer,
     doc: pygls.workspace.TextDocument,
-    stmts: list[qlast.Base],
+    stmts: list[qlast.Command],
 ) -> tuple[ls_utils.DiagnosticsSet, list[irast.Statement]]:
     from . import schema as ls_schema
 

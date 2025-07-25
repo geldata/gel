@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    TypeVar,
     Mapping,
     cast,
     Iterable,
@@ -59,10 +58,7 @@ if TYPE_CHECKING:
     from edb.schema import schema as s_schema
 
 
-T = TypeVar('T')
-
-
-def _assert_not_none(value: Optional[T]) -> T:
+def _assert_not_none[T](value: Optional[T]) -> T:
     if value is None:
         raise TypeError("A value is expected")
     return value
@@ -1035,7 +1031,7 @@ class CreateConstraint(
         *,
         param_offset: int=0
     ) -> list[s_func.ParameterDesc]:
-        if not isinstance(astnode, qlast.CallableObjectCommandTuple):
+        if not isinstance(astnode, qlast.CallableObjectCommand):
             # Concrete constraint.
             return []
 
@@ -1346,7 +1342,7 @@ class CreateConstraint(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         node: qlast.DDLOperation,
-    ) -> list[tuple[int, qlast.FuncParam]]:
+    ) -> list[tuple[int, qlast.FuncParamDecl]]:
         if isinstance(node, qlast.CreateConstraint):
             return super()._get_params_ast(schema, context, node)
         else:

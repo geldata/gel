@@ -86,10 +86,15 @@ from edb.common import debug
 from edb.protocol import messages
 
 
+from edb import _graphql_rewrite
+
+
 include "./consts.pxi"
 
 
 cdef bytes EMPTY_TUPLE_UUID = s_obj.get_known_type_id('empty-tuple').bytes
+
+cdef uint64_t PROTO_CAPS = enums.Capability.PROTO_CAPS
 
 cdef object CARD_NO_RESULT = compiler.Cardinality.NO_RESULT
 cdef object CARD_AT_MOST_ONE = compiler.Cardinality.AT_MOST_ONE
@@ -100,6 +105,7 @@ cdef object FMT_BINARY = compiler.OutputFormat.BINARY
 
 cdef object LANG_EDGEQL = compiler.InputLanguage.EDGEQL
 cdef object LANG_SQL = compiler.InputLanguage.SQL
+cdef object LANG_GRAPHQL = compiler.InputLanguage.GRAPHQL
 
 cdef tuple DUMP_VER_MIN = (0, 7)
 cdef tuple DUMP_VER_MAX = edbdef.CURRENT_PROTOCOL
@@ -269,10 +275,14 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 f'database {database!r} does not accept connections'
             )
 
-        await self._start_connection(database)
-
         self.dbname = database
         self.username = user
+        # In the tunneled HTTP endpoint, auth gets done after we have
+        # set up a dbview, so we need to update it..
+        if self._dbview:
+            self._dbview._role_name = user
+
+        await self._start_connection(database)
 
         if self._transport_proto is srvargs.ServerConnTransport.HTTP:
             return
@@ -365,6 +375,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             dbname=database,
             query_cache=self.query_cache_enabled,
             protocol_version=self.protocol_version,
+            role_name=self.username,
         )
         assert type(dbv) is dbview.DatabaseConnectionView
         self._dbview = <dbview.DatabaseConnectionView>dbv
@@ -485,6 +496,9 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 return pgparser.Source.from_string(text)
             else:
                 return pgparser.NormalizedSource.from_string(text)
+        elif lang is LANG_GRAPHQL:
+            # TODO: Support normalization for graphql
+            return pgparser.Source.from_string(text)
         else:
             raise errors.UnsupportedFeatureError(
                 f"unsupported input language: {lang}")
@@ -707,7 +721,9 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             msg.write_len_prefixed_bytes(b'unsafe_isolation_dangers')
             msg.write_len_prefixed_bytes(dangers)
 
-        msg.write_int64(<int64_t><uint64_t>query.query_unit_group.capabilities)
+        msg.write_int64(
+            <int64_t><uint64_t>query.query_unit_group.capabilities & PROTO_CAPS
+        )
         msg.write_byte(self.render_cardinality(query.query_unit_group))
 
         in_data = query.query_unit_group.in_type_data
@@ -741,7 +757,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
 
         msg = WriteBuffer.new_message(b'C')
         msg.write_int16(0)  # no annotations
-        msg.write_int64(<int64_t><uint64_t>capabilities)
+        msg.write_int64(<int64_t><uint64_t>capabilities & PROTO_CAPS)
         msg.write_len_prefixed_bytes(status)
 
         msg.write_bytes(state_tid.bytes)
@@ -821,7 +837,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             bytes query
             dbview.DatabaseConnectionView _dbview
 
-        allow_capabilities = <uint64_t>self.buffer.read_int64()
+        allow_capabilities = PROTO_CAPS & <uint64_t>self.buffer.read_int64()
         compilation_flags = <uint64_t>self.buffer.read_int64()
         implicit_limit = self.buffer.read_int64()
 
@@ -974,6 +990,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         args = self.buffer.read_len_prefixed_bytes()
         self.buffer.finish_message()
 
+        compiled = None
         if (
             self._last_anon_compiled is not None and
             hash(query_req) == self._last_anon_compiled_hash and
@@ -984,20 +1001,48 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             query_unit_group = compiled.query_unit_group
         else:
             query_unit_group = _dbview.lookup_compiled_query(query_req)
-            if query_unit_group is None:
-                if self.debug:
-                    self.debug_print('EXECUTE /CACHE MISS', query_req.source.text())
 
-                compiled = await self._parse(
-                    query_req, allow_capabilities, tag
+        if query_unit_group is None:
+            if self.debug:
+                self.debug_print('EXECUTE /CACHE MISS', query_req.source.text())
+
+            compiled = await self._parse(query_req, allow_capabilities, tag)
+            query_unit_group = compiled.query_unit_group
+
+        # If this is a graphql request, and the compilation of it
+        # depends on reading the value of some variables (because they
+        # are used in @include or as params to type introspection, for
+        # example) we need to reflect those variables into the
+        # query_req and look it up again, and then maybe compile again.
+        #
+        # What a pain!
+        if query_unit_group.graphql_key_variables:
+            key_vars = _extract_key_vars(query_unit_group, query_req, args)
+            query_req = query_req.__copy__()
+            query_req.set_key_params(key_vars)
+
+            compiled = None
+            query_unit_group = _dbview.lookup_compiled_query(query_req)
+
+        # If we had to do a graphql_key_variables lookup, we might need
+        # to compile again.
+        if query_unit_group is None:
+            if self.debug:
+                self.debug_print(
+                    'EXECUTE /CACHE MISS (graphql nonsense)',
+                    query_req.source.text(),
                 )
-                query_unit_group = compiled.query_unit_group
-                if self._cancelled:
-                    raise ConnectionAbortedError
-            else:
+
+            compiled = await self._parse(query_req, allow_capabilities, tag)
+            query_unit_group = compiled.query_unit_group
+        else:
+            if not compiled:
                 compiled = _dbview.as_compiled(query_req, query_unit_group)
 
         compiled.tag = tag
+
+        if self._cancelled:
+            raise ConnectionAbortedError
 
         self._query_count += 1
 
@@ -1007,7 +1052,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         self._last_anon_compiled = None
 
         _dbview.check_capabilities(
-            query_unit_group.capabilities,
+            query_unit_group,
             allow_capabilities,
             errors.DisabledCapabilityError,
             "disabled by the client",
@@ -1396,6 +1441,13 @@ cdef class EdgeConnection(frontend.FrontendConnection):
                 'DUMP must not be executed while in transaction'
             )
 
+        is_superuser, _ = _dbview.get_permissions()
+        if not is_superuser:
+            raise errors.DisabledCapabilityError(
+                f'role {_dbview._role_name} does not have permission to '
+                f'perform dump'
+            )
+
         server = self.server
         compiler_pool = server.get_compiler_pool()
 
@@ -1595,6 +1647,13 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             raise errors.ProtocolError(
                 'RESTORE must not be executed while in transaction'
             )
+        is_superuser, _ = _dbview.get_permissions()
+        if not is_superuser:
+            raise errors.DisabledCapabilityError(
+                f'role {_dbview._role_name} does not have permission to '
+                f'perform restore'
+            )
+
         if _dbview.get_state_serializer() is None:
             await _dbview.reload_state_serializer()
 
@@ -1896,6 +1955,11 @@ async def eval_buffer(
         raise RuntimeError(
             'cannot process the request, the server is shutting down')
 
+    # HACK: In the tunneled protocol we don't have the username when
+    # we create the dbview, so put in an empty username. It will be
+    # filled in once auth is called.
+    proto.username = ''
+
     try:
         await proto._start_connection(database)
         proto.data_received(data)
@@ -1947,6 +2011,7 @@ async def run_script(
         dbview.CompiledQuery compiled
         dbview.DatabaseConnectionView _dbview
     conn = new_edge_connection(server, tenant)
+    conn.username = user
     await conn._start_connection(database)
     try:
         _dbview = conn.get_dbview()
@@ -1975,3 +2040,63 @@ async def run_script(
             raise exc
     finally:
         conn.close()
+
+
+cdef _extract_key_vars(
+    qug: dbstate.QueryUnitGroup,
+    query_req: rpc.CompilationRequest,
+    args: bytes
+):
+    cdef:
+        FRBuffer in_buf
+        char *p
+        int32_t recv_args
+        int32_t decl_args
+        ssize_t in_len
+
+    frb_init(
+        &in_buf,
+        cpython.PyBytes_AS_STRING(args),
+        cpython.Py_SIZE(args))
+
+    keys = qug.graphql_key_variables
+    assert qug.in_type_args
+
+    decl_args = len(qug.in_type_args)
+    recv_args = hton.unpack_int32(frb_read(&in_buf, 4))
+    if recv_args != decl_args:
+        raise errors.InputDataError(
+            f"invalid argument count, "
+            f"expected: {decl_args}, got: {recv_args}")
+
+    vals = {}
+
+    for param in qug.in_type_args:
+        frb_read(&in_buf, 4)  # reserved
+        needed = param.name in keys
+
+        in_len = hton.unpack_int32(frb_read(&in_buf, 4))
+        if not needed:
+            if in_len > 0:
+                frb_read(&in_buf, in_len)
+            continue
+
+        if in_len < 0:
+            val = None
+        else:
+            p = frb_read(&in_buf, in_len)
+
+            # Very hacky and minimal decoding support.
+            if param.typename == 'std::str':
+                val = cpython.PyUnicode_DecodeUTF8(p, in_len, NULL)
+            elif param.typename == 'std::bool':
+                val = p[0] != 0
+            else:
+                raise AssertionError(
+                    f'unsupported type for graphql introspection: '
+                    f'{param.typename}'
+                )
+
+        vals[param.name] = val
+
+    return vals

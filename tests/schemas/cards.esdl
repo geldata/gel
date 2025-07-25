@@ -186,3 +186,5 @@ global GlobalCardsByCost := array_agg((
             (select Card filter .cost = cost)
         )
 ));
+
+permission GameAdmin;

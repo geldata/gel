@@ -2529,6 +2529,7 @@ async def handle_request(
     request: protocol.HttpRequest,
     response: protocol.HttpResponse,
     db: dbview.Database,
+    role_name: str,
     args: list[str],
     tenant: srv_tenant.Tenant,
 ) -> None:
@@ -2552,9 +2553,13 @@ async def handle_request(
 
     try:
         if args[0] == "rag":
-            await _handle_rag_request(protocol, request, response, db, tenant)
+            await _handle_rag_request(
+                protocol, request, response, db, role_name, tenant
+            )
         elif args[0] == "embeddings":
-            await _handle_embeddings_request(request, response, db, tenant)
+            await _handle_embeddings_request(
+                request, response, db, role_name, tenant
+            )
         else:
             response.body = b'Unknown path'
             response.status = http.HTTPStatus.NOT_FOUND
@@ -2579,6 +2584,7 @@ async def _handle_rag_request(
     request: protocol.HttpRequest,
     response: protocol.HttpResponse,
     db: dbview.Database,
+    role_name: str,
     tenant: srv_tenant.Tenant,
 ) -> None:
     try:
@@ -2613,7 +2619,7 @@ async def _handle_rag_request(
         if ctx_globals is not None and not isinstance(ctx_globals, dict):
             raise TypeError('"globals" must be a JSON object')
 
-        model = body.get('model')
+        model = cast(str, body.get('model'))
         if not model:
             raise TypeError(
                 'missing required "model" in request')
@@ -2779,19 +2785,37 @@ async def _handle_rag_request(
     except Exception as ex:
         raise BadRequestError(ex.args[0])
 
-    provider_name = await _get_model_provider(
-        db,
-        base_model_type="ext::ai::TextGenerationModel",
-        model_name=model,
-    )
+    provider_name: str
+    model_name: str
+    try_builtin = False
+    if ':' in model:
+        parts = model.split(':')
+        if len(parts) > 2:
+            raise BadRequestError(
+                f"Invalid model uri, ':' used more than once: {model}"
+            )
+        provider_name = parts[0]
+        model_name = parts[1]
+        try_builtin = True
 
-    chat_provider = _get_provider_config(db, provider_name)
+    else:
+        provider_name = await _get_model_provider(
+            db,
+            base_model_type="ext::ai::TextGenerationModel",
+            model_name=model,
+        )
+        model_name = model
+
+    chat_provider = _get_provider_config(
+        db, provider_name, try_builtin=try_builtin
+    )
 
     vector_provider, vector_query = await _generate_embeddings_for_type(
         db,
         http_client,
         ctx_query,
         content=query,
+        role_name=role_name,
     )
 
     ctx_query = f"""
@@ -2818,6 +2842,7 @@ async def _handle_rag_request(
         query=ctx_query,
         variables=ctx_variables,
         globals_=ctx_globals,
+        role_name=role_name,
     )
     if len(context) == 0:
         raise BadRequestError(
@@ -2846,6 +2871,7 @@ async def _handle_rag_request(
 
         prompts = await _edgeql_query_json(
             db=db,
+            role_name=role_name,
             query=prompt_query,
             variables=prompt_variables,
         )
@@ -2886,7 +2912,7 @@ async def _handle_rag_request(
         response=response,
         provider=chat_provider,
         http_client=http_client,
-        model_name=model,
+        model_name=model_name,
         messages=messages,
         stream=stream,
         temperature=body.get("temperature"),
@@ -2906,6 +2932,7 @@ async def _handle_embeddings_request(
     request: protocol.HttpRequest,
     response: protocol.HttpResponse,
     db: dbview.Database,
+    role_name: str,
     tenant: srv_tenant.Tenant,
 ) -> None:
     try:
@@ -3006,6 +3033,7 @@ async def _edgeql_query_json(
     *,
     db: dbview.Database,
     query: str,
+    role_name: str | None,
     variables: Optional[dict[str, Any]] = None,
     globals_: Optional[dict[str, Any]] = None,
 ) -> list[Any]:
@@ -3063,24 +3091,46 @@ async def _db_error(
 def _get_provider_config(
     db: dbview.Database,
     provider_name: str,
+    try_builtin: bool = False,
 ) -> ProviderConfig:
+    """Try to return a provider config with a matching name.
+    Otherwise, raise an error.
+
+    Checks if there is a builtin provider with a matching name.
+
+    eg. "openai" -> ProviderConfig(name="builtin::openai", ...)
+    """
+
     cfg = db.lookup_config("ext::ai::Config::providers")
 
+    def _create_provider_config(db_cfg: Any) -> ProviderConfig:
+        cfg = cast(ProviderConfig, db_cfg)
+        return ProviderConfig(
+            name=cfg.name,
+            display_name=cfg.display_name,
+            api_url=cfg.api_url,
+            client_id=cfg.client_id,
+            secret=cfg.secret,
+            api_style=cfg.api_style,
+        )
+
+    # try builtin prefix
+    builtin_prefix = "builtin::"
+    if try_builtin and not provider_name.startswith(builtin_prefix):
+        builtin_name = builtin_prefix + provider_name
+
+        for provider in cfg:
+            if provider.name == builtin_name:
+                return _create_provider_config(provider)
+
+    # try unmodified name
     for provider in cfg:
         if provider.name == provider_name:
-            provider = cast(ProviderConfig, provider)
-            return ProviderConfig(
-                name=provider.name,
-                display_name=provider.display_name,
-                api_url=provider.api_url,
-                client_id=provider.client_id,
-                secret=provider.secret,
-                api_style=provider.api_style,
-            )
-    else:
-        raise ConfigurationError(
-            f"provider {provider_name!r} has not been configured"
-        )
+            return _create_provider_config(provider)
+
+    raise ConfigurationError(
+        f"provider {provider_name!r} has not been configured"
+    )
 
 
 async def _get_model_annotation_as_json(
@@ -3091,6 +3141,7 @@ async def _get_model_annotation_as_json(
 ) -> Any:
     models = await _edgeql_query_json(
         db=db,
+        role_name=None,
         query="""
         WITH
             base_model_type := <str>$base_model_type,
@@ -3160,12 +3211,14 @@ async def _generate_embeddings_for_type(
     http_client: http.HttpClient,
     type_query: str,
     content: str,
+    role_name: str,
 ) -> tuple[ProviderConfig, bytes]:
     type_desc = await execute.describe(
         db,
         f"SELECT ({type_query})",
         allow_capabilities=compiler.Capability.NONE,
         query_tag='gel/ai',
+        role_name=role_name,
     )
     if (
         not isinstance(type_desc, sertypes.ShapeDesc)
@@ -3477,6 +3530,7 @@ async def get_ai_index_for_type(
                 .ancestors.name = 'ext::ai::index'
             """,
             variables={"type_id": str(type_id)},
+            role_name=None,
         )
         if len(indexes) == 0:
             raise errors.InvalidReferenceError(

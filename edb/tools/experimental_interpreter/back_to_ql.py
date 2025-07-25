@@ -408,7 +408,7 @@ def reverse_elab(ir_expr: Expr) -> qlast.Expr:
         case e.ParameterExpr(name=name, tp=tp, is_required=is_required):
             return qlast.TypeCast(
                 type=reverse_elab_type_name(tp),
-                expr=qlast.Parameter(name=name),
+                expr=qlast.QueryParameter(name=name),
                 cardinality_mod=(
                     qlast.CardinalityModifier.Required
                     if is_required

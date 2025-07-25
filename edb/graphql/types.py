@@ -405,6 +405,15 @@ class GQLCoreSchema:
     def graphql_schema(self) -> GraphQLSchema:
         return self._gql_schema
 
+    def _get_type_gql_name(self, type: s_types.Type) -> str:
+        if type.get_from_global(self.edb_schema):
+            # The names of global types are mangled so use shortname instead
+            typename = type.get_shortname(self.edb_schema)
+        else:
+            typename = type.get_name(self.edb_schema)
+        assert isinstance(typename, s_name.QualName)
+        return self.get_gql_name(typename)
+
     @classmethod
     def get_gql_name(cls, name: s_name.QualName) -> str:
         module, shortname = name.module, name.name
@@ -492,7 +501,7 @@ class GQLCoreSchema:
             isinstance(edb_target, s_scalars.ScalarType)
             and edb_target.is_enum(self.edb_schema)
         ):
-            name = self.get_gql_name(edb_target.get_name(self.edb_schema))
+            name = self._get_type_gql_name(edb_target)
 
             if name in self._gql_enums:
                 target = self._gql_enums.get(name)
@@ -656,7 +665,8 @@ class GQLCoreSchema:
                 # exposed as a top-level mutation option.
                 if name in TOP_LEVEL_TYPES or gqltype.name.startswith('_edb'):
                     continue
-                gname = self.get_gql_name(name)
+                edb_type = self.edb_schema.get(name, type=s_types.Type)
+                gname = self._get_type_gql_name(edb_type)
                 fields[f'delete_{gname}'] = GraphQLField(
                     GraphQLList(GraphQLNonNull(gqltype)),
                     args=self._get_query_args(name),
@@ -677,7 +687,8 @@ class GQLCoreSchema:
                     gqliface.name.startswith('_edb') or
                         f'Update{name}' not in self._gql_inobjtypes):
                     continue
-                gname = self.get_gql_name(name)
+                edb_type = self.edb_schema.get(name, type=s_types.Type)
+                gname = self._get_type_gql_name(edb_type)
                 args = self._get_update_args(name)
                 if args:
                     # If there are no args, there's nothing to update.
@@ -782,7 +793,7 @@ class GQLCoreSchema:
             if isinstance(edb_target, s_objtypes.ObjectType):
                 t_name = edb_target.get_name(self.edb_schema)
                 gql_name = self.get_input_name(
-                    'NestedFilter', self.get_gql_name(t_name))
+                    'NestedFilter', self._get_type_gql_name(edb_target))
 
                 intype = self._gql_inobjtypes.get(gql_name)
                 if intype is None:
@@ -1104,7 +1115,7 @@ class GQLCoreSchema:
         nitype = GraphQLInputObjectType(
             name=self.get_input_name(
                 f'UpdateOp_{fname}_',
-                self.get_gql_name(typename),
+                self._get_type_gql_name(edb_base),
             ),
             fields=fields,
         )
@@ -1120,7 +1131,7 @@ class GQLCoreSchema:
         name = f'NestedUpdate{typename}'
         nitype = GraphQLInputObjectType(
             name=self.get_input_name(
-                'NestedUpdate', self.get_gql_name(typename)),
+                'NestedUpdate', self._get_type_gql_name(edb_base)),
             fields={
                 'filter': GraphQLInputField(
                     self._gql_inobjtypes[str(typename)]),
@@ -1168,7 +1179,7 @@ class GQLCoreSchema:
 
         nitype = GraphQLInputObjectType(
             name=self.get_input_name(
-                'NestedInsert', self.get_gql_name(typename)),
+                'NestedInsert', self._get_type_gql_name(edb_base)),
             fields=fields,
         )
 
@@ -1204,7 +1215,7 @@ class GQLCoreSchema:
             enum_values = st.get_enum_values(self.edb_schema)
             if enum_values is not None:
                 t_name = st.get_name(self.edb_schema)
-                gql_name = self.get_gql_name(t_name)
+                gql_name = self._get_type_gql_name(st)
                 enum_type = GraphQLEnumType(
                     gql_name,
                     values={key: GraphQLEnumValue() for key in enum_values},
@@ -1383,7 +1394,7 @@ class GQLCoreSchema:
         # interfaces
         for t in interface_types:
             t_name = t.get_name(self.edb_schema)
-            gql_name = self.get_gql_name(t_name)
+            gql_name = self._get_type_gql_name(t)
 
             if t_name in HIDDEN_TYPES:
                 continue
@@ -1470,7 +1481,7 @@ class GQLCoreSchema:
         for t in obj_types:
             interfaces = []
             t_name = t.get_name(self.edb_schema)
-            gql_name = self.get_gql_name(t_name)
+            gql_name = self._get_type_gql_name(t)
 
             if t_name in HIDDEN_TYPES:
                 continue

@@ -37,6 +37,7 @@ async def describe(
     allow_capabilities: compiler.Capability = (
         compiler.Capability.MODIFICATIONS),
     query_tag: str | None = None,
+    role_name: str,
 ) -> sertypes.TypeDesc:
     ...
 
@@ -52,6 +53,7 @@ async def parse_execute_json(
     use_metrics: bool = True,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
     query_tag: str | None = None,
+    role_name: str | None = None,
 ) -> bytes:
     ...
 

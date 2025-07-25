@@ -1710,10 +1710,29 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             drop type T
         ''')
 
-    async def test_edgeql_policies_set_global_01(self):
+    async def test_edgeql_policies_diamond_02(self):
         # Verify that selecting a type with overlapping children and
         # access policies in at least one child works
 
+        await self.con.execute('''
+            create type A;
+            create type B extending A;
+            create type C extending B, A { create access policy ok allow all; };
+            insert C;
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select A
+            ''',
+            [{}]
+        )
+
+        await self.con.execute('''
+            drop type C
+        ''')
+
+    async def test_edgeql_policies_set_global_01(self):
         await self.con.execute('''
             create global cur: uuid;
             create type T {

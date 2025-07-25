@@ -765,15 +765,14 @@ class EQLFunctionDirective(BaseEQLDirective):
             return fullname
 
         from edb.edgeql import parser as edgeql_parser
-        from edb.edgeql.parser import grammar as edgeql_grammar
         from edb.edgeql import ast as ql_ast
         from edb.edgeql import codegen as ql_gen
         from edb.edgeql import qltypes
 
         try:
-            astnode = edgeql_parser.parse(
-                edgeql_grammar.tokens.T_STARTBLOCK,
-                f'create function {sig} using SQL function "xxx";')[0]
+            astnode = edgeql_parser.parse_block(
+                f'create function {sig} using SQL function "xxx";'
+            )[0]
         except Exception as ex:
             raise self.error(
                 f'could not parse function signature {sig!r}: '
@@ -842,13 +841,11 @@ class EQLConstraintDirective(BaseEQLDirective):
             return fullname
 
         from edb.edgeql import parser as edgeql_parser
-        from edb.edgeql.parser import grammar as edgeql_grammar
         from edb.edgeql import ast as ql_ast
         from edb.edgeql import codegen as ql_gen
 
         try:
-            astnode = edgeql_parser.parse(
-                edgeql_grammar.tokens.T_STARTBLOCK,
+            astnode = edgeql_parser.parse_block(
                 f'create abstract constraint {sig};'
             )[0]
         except Exception as ex:

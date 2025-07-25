@@ -193,6 +193,7 @@ Bytes
 .. TODO: Function signatures except the first need to be revealed only for v5+
 
 .. eql:function:: std::to_bytes(s: str) -> bytes
+                  std::to_bytes(j: json) -> bytes
                   std::to_bytes(val: int16, endian: Endian) -> bytes
                   std::to_bytes(val: int32, endian: Endian) -> bytes
                   std::to_bytes(val: int64, endian: Endian) -> bytes
@@ -210,6 +211,13 @@ Bytes
 
         db> select to_bytes('テキスト');
         {b'\xe3\x83\x86\xe3\x82\xad\xe3\x82\xb9\xe3\x83\x88'}
+
+    The json values get converted as strings using UTF-8 encoding:
+
+    .. code-block:: edgeql-repl
+
+        db> select to_bytes(to_json('{"a": 1}'));
+        {b'{"a": 1}'}
 
     The integer values can be encoded as big-endian (most significant bit
     comes first) byte strings:

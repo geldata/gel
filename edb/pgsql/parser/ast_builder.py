@@ -22,7 +22,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    TypeVar,
     Sequence,
     cast,
 )
@@ -43,9 +42,6 @@ class Context:
 
 # Node = bool | str | int | float | List[Any] | dict[str, Any]
 Node = Any
-T = TypeVar("T")
-U = TypeVar("U")
-Builder = Callable[[Node, Context], T]
 
 
 def build_stmts(
@@ -73,8 +69,8 @@ def build_stmts(
     return res
 
 
-def _maybe(
-    node: Node, ctx: Context, name: str, builder: Builder
+def _maybe[T](
+    node: Node, ctx: Context, name: str, builder: Callable[[Node, Context], T]
 ) -> Optional[T]:
     if name in node:
         return builder(node[name], ctx)
@@ -85,11 +81,11 @@ def _ident(t: Any) -> Any:
     return t
 
 
-def _list(
+def _list[T, U](
     node: Node,
     ctx: Context,
     name: str,
-    builder: Builder,
+    builder: Callable[[Node, Context], T],
     mapper: Callable[[T], U] = _ident,
     *,
     unwrap: Optional[str] = None,
@@ -102,11 +98,11 @@ def _list(
         return [mapper(builder(n, ctx)) for n in node.get(name, [])]
 
 
-def _maybe_list(
+def _maybe_list[T, U](
     node: Node,
     ctx: Context,
     name: str,
-    builder: Builder,
+    builder: Callable[[Node, Context], T],
     mapper: Callable[[T], U] = _ident,
     *,
     unwrap: Optional[str] = None,
@@ -118,12 +114,12 @@ def _maybe_list(
     )
 
 
-def _enum(
+def _enum[T](
     _ty: type[T],
     node: Node,
     ctx: Context,
-    builders: dict[str, Builder],
-    fallbacks: Sequence[Builder] = (),
+    builders: dict[str, Callable[[Node, Context], T]],
+    fallbacks: Sequence[Callable[[Node, Context], T]] = (),
 ) -> T:
     outer_fallback = ctx.has_fallback
     ctx.has_fallback = False
@@ -266,7 +262,9 @@ def _build_select_stmt(n: Node, c: Context) -> pgast.SelectStmt:
         if op == "NONE":
             op = None
     return pgast.SelectStmt(
-        distinct_clause=_maybe(n, c, "distinctClause", _build_distinct),
+        distinct_clause=(
+            _maybe(n, c, "distinctClause", _build_distinct)  # type: ignore
+        ),
         target_list=_maybe_list(n, c, "targetList", _build_res_target) or [],
         from_clause=_maybe_list(n, c, "fromClause", _build_base_range_var)
         or [],
@@ -290,13 +288,16 @@ def _build_select_stmt(n: Node, c: Context) -> pgast.SelectStmt:
 
 
 def _build_insert_stmt(n: Node, c: Context) -> pgast.InsertStmt:
+    select_stmt = _maybe(n, c, "selectStmt", _build_stmt)
+    assert select_stmt is None or isinstance(select_stmt, pgast.Query)
+
     return pgast.InsertStmt(
         relation=_build_rel_range_var(n["relation"], c),
         returning_list=(
             _maybe_list(n, c, "returningList", _build_res_target) or []
         ),
         cols=_maybe_list(n, c, "cols", _build_insert_target),
-        select_stmt=_maybe(n, c, "selectStmt", _build_stmt),
+        select_stmt=select_stmt,
         on_conflict=_maybe(n, c, "onConflictClause", _build_on_conflict),
         ctes=_maybe(n, c, "withClause", _build_ctes),
     )
@@ -599,7 +600,7 @@ def _build_base_expr(node: Node, c: Context) -> pgast.BaseExpr:
             "RowExpr": _build_row_expr,
             "SubLink": _build_sub_link,
             "ParamRef": _build_param_ref,
-            "SetToDefault": _build_keyword("DEFAULT"),
+            "SetToDefault": _build_keyword("DEFAULT"),  # type: ignore
             "SQLValueFunction": _build_sql_value_function,
             "CollateClause": _build_collate_clause,
             "MinMaxExpr": _build_min_max_expr,
@@ -608,7 +609,9 @@ def _build_base_expr(node: Node, c: Context) -> pgast.BaseExpr:
     )
 
 
-def _build_distinct(nodes: list[Node], c: Context) -> list[pgast.Base]:
+def _build_distinct(
+    nodes: list[Node], c: Context
+) -> list[pgast.Base]:
     # For some reason, plain DISTINCT is parsed as [{}]
     # In our AST this is represented by [pgast.Star()]
     if len(nodes) == 1 and len(nodes[0]) == 0:
@@ -671,7 +674,7 @@ def _build_cte(n: Node, c: Context) -> pgast.CommonTableExpr:
     )
 
 
-def _build_keyword(name: str) -> Builder[pgast.Keyword]:
+def _build_keyword(name: str) -> Callable[[Node, Context], pgast.Keyword]:
     return lambda n, c: pgast.Keyword(name=name, span=_build_span(n, c))
 
 
@@ -688,7 +691,6 @@ def _build_collate_clause(n: Node, c: Context) -> pgast.CollateClause:
 
 
 def _build_min_max_expr(n: Node, c: Context) -> pgast.MinMaxExpr:
-
     if n['op'] == 'IS_GREATEST':
         op = 'GREATEST'
     elif n['op'] == 'IS_LEAST':

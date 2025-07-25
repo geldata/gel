@@ -22,11 +22,9 @@ from typing import (
     Any,
     Callable,
     ClassVar,
-    Generic,
     Mapping,
     Optional,
     Self,
-    TypeVar,
     TYPE_CHECKING,
 )
 
@@ -573,13 +571,9 @@ def maybe_get_python_type_for_scalar_type_name(name: str) -> Optional[type]:
     return typemap.get(name)
 
 
-E = TypeVar("E", bound=enum.StrEnum)
-
-
-class EnumScalarType(
+class EnumScalarType[E: enum.StrEnum](
     ScalarType,
     parametric.SingleParametricType[E],
-    Generic[E],
 ):
     """Configuration value represented by a custom string enum type that
     supports arbitrary value mapping to backend (Postgres) configuration

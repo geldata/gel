@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
+
+import asyncio
 import http
 import json
 
@@ -26,10 +28,6 @@ from edb import errors
 from edb.common import debug
 from edb.common import markup
 
-from edb.server import compiler
-from edb.server import defines as edbdef
-
-from . import execute
 
 if TYPE_CHECKING:
     from edb.server import tenant as edbtenant, server as edbserver
@@ -133,43 +131,58 @@ def _response_ok(response: protocol.HttpResponse, message: bytes) -> None:
     _response(response, http.HTTPStatus.OK, message, False)
 
 
-async def _ping(tenant: edbtenant.Tenant) -> bytes:
-    if tenant.get_backend_runtime_params().has_create_database:
-        dbname = edbdef.EDGEDB_SYSTEM_DB
+async def _ping(
+    response: protocol.HttpResponse, tenant: edbtenant.Tenant
+) -> None:
+    try:
+        async with asyncio.TaskGroup() as tg:
+            ping_backend = tg.create_task(tenant.ping_backend())
+            ping_compiler = tg.create_task(
+                tenant.server.get_compiler_pool().health_check()
+            )
+    except *TimeoutError:
+        if isinstance(ping_backend.exception(), TimeoutError):
+            who = "the backend"
+        else:
+            who = "the compiler pool"
+        _response_error(
+            response,
+            http.HTTPStatus.SERVICE_UNAVAILABLE,
+            f"{who} health check timed out",
+            errors.AvailabilityError,
+        )
     else:
-        dbname = tenant.default_database
-
-    return await execute.parse_execute_json(
-        tenant.get_db(dbname=dbname),
-        query="SELECT 'OK'",
-        output_format=compiler.OutputFormat.JSON_ELEMENTS,
-        # Disable query cache because we need to ensure that the compiled
-        # pool is healthy.
-        query_cache_enabled=False,
-        cached_globally=True,
-        use_metrics=False,
-        query_tag='gel/system',
-    )
+        if not ping_backend.result():
+            _response_error(
+                response,
+                http.HTTPStatus.SERVICE_UNAVAILABLE,
+                "this server is not ready to accept connections",
+                errors.BackendUnavailableError,
+            )
+        elif not ping_compiler.result():
+            _response_error(
+                response,
+                http.HTTPStatus.SERVICE_UNAVAILABLE,
+                "The compiler pool is not ready",
+                errors.AvailabilityError,
+            )
+        else:
+            _response_ok(response, b'"OK"')
 
 
 async def handle_compiler_query(
     server: edbserver.BaseServer,
     response: protocol.HttpResponse,
 ) -> None:
-    try:
-        # This is just testing if the RPC to the compiler is healthy
-        await server.get_compiler_pool().make_compilation_config_serializer()
-    except Exception as ex:
-        if debug.flags.server:
-            markup.dump(ex)
+    if await server.get_compiler_pool().health_check():
+        _response_ok(response, b'"OK"')
+    else:
         _response_error(
             response,
-            http.HTTPStatus.INTERNAL_SERVER_ERROR,
-            str(ex),
-            errors.InternalServerError,
+            http.HTTPStatus.SERVICE_UNAVAILABLE,
+            "The compiler pool is not ready",
+            errors.AvailabilityError,
         )
-    else:
-        _response_ok(response, b'"OK"')
 
 
 async def handle_liveness_query(
@@ -177,7 +190,7 @@ async def handle_liveness_query(
     response: protocol.HttpResponse,
     tenant: edbtenant.Tenant,
 ) -> None:
-    _response_ok(response, await _ping(tenant))
+    await _ping(response, tenant)
 
 
 async def handle_readiness_query(
@@ -193,4 +206,4 @@ async def handle_readiness_query(
             errors.AccessError,
         )
     else:
-        _response_ok(response, await _ping(tenant))
+        await _ping(response, tenant)

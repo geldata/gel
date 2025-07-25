@@ -125,8 +125,9 @@ class AccessPolicyCommandContext(
     pass
 
 
-class AccessPolicySourceCommandContext(
-        s_sources.SourceCommandContext[s_sources.Source_T]):
+class AccessPolicySourceCommandContext[Source_T: s_sources.Source](
+    s_sources.SourceCommandContext[Source_T]
+):
     pass
 
 

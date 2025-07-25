@@ -34,18 +34,18 @@ from .. import tokenizer as qltokenizer
 SPEC_LOADED = False
 
 
-def append_module_aliases(tree, aliases):
-    modaliases = []
+def append_module_aliases(
+    command: qlast.Command, aliases: Mapping[Optional[str], str]
+):
+    modaliases: list[qlast.Alias] = []
     for alias, module in aliases.items():
         decl = qlast.ModuleAliasDecl(module=module, alias=alias)
         modaliases.append(decl)
 
-    if not tree.aliases:
-        tree.aliases = modaliases
+    if not command.aliases:
+        command.aliases = modaliases
     else:
-        tree.aliases = modaliases + tree.aliases
-
-    return tree
+        command.aliases = modaliases + command.aliases
 
 
 def parse_fragment(
@@ -80,12 +80,13 @@ def parse_query(
 def parse_block(
     source: qltokenizer.Source | str,
     module_aliases: Optional[Mapping[Optional[str], str]] = None,
-) -> list[qlast.Base]:
-    trees = parse(tokens.T_STARTBLOCK, source)
+) -> list[qlast.Command]:
+    node = parse(tokens.T_STARTBLOCK, source)
+    assert isinstance(node, qlast.Commands), node
     if module_aliases:
-        for tree in trees:
-            append_module_aliases(tree, module_aliases)
-    return trees
+        for command in node.commands:
+            append_module_aliases(command, module_aliases)
+    return node.commands
 
 
 def parse_migration_body_block(
@@ -138,9 +139,8 @@ def parse(
         # - original order.
         errs = result.errors
         unexpected = [e for e in errs if e[0].startswith('Unexpected')]
-        if (
-            len(unexpected) == 1
-            and unexpected[0][0].startswith('Unexpected keyword')
+        if len(unexpected) == 1 and unexpected[0][0].startswith(
+            'Unexpected keyword'
         ):
             error = unexpected[0]
         else:
@@ -162,7 +162,7 @@ def parse(
             position=position,
             hint=hint,
             details=details,
-            span=parsing_span
+            span=parsing_span,
         )
 
     assert isinstance(result.out, rust_parser.CSTNode)
@@ -209,9 +209,7 @@ def _cst_to_ast(
                     end=terminal.end,
                 )
                 result.append(
-                    parsing.Token(
-                        terminal.text, terminal.value, span
-                    )
+                    parsing.Token(terminal.text, terminal.value, span)
                 )
 
             elif production := node.production:

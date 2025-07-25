@@ -78,6 +78,7 @@ from edb.schema import modules as s_mod
 from edb.schema import name as sn
 from edb.schema import objects as so
 from edb.schema import objtypes as s_objtypes
+from edb.schema import permissions as s_permissions
 from edb.schema import pointers as s_pointers
 from edb.schema import schema as s_schema
 from edb.schema import types as s_types
@@ -476,6 +477,8 @@ class Pointer(Expr):
     anchor: typing.Optional[str] = None
     show_as_anchor: typing.Optional[str] = None
 
+    is_mutation: bool = False
+
     @property
     def is_inbound(self) -> bool:
         return self.direction == s_pointers.PointerDirection.Inbound
@@ -551,7 +554,7 @@ T_expr_co = typing.TypeVar('T_expr_co', covariant=True, bound=Expr)
 # of expression it holds. Most code uses the Set alias below, which
 # instantiates it with Expr.
 # irutils.is_set_instance can be used to refine the type.
-class SetE(Base, typing.Generic[T_expr_co]):
+class SetE(Base, typing.Generic[T_expr_co]):  # noqa: UP046
     '''A somewhat overloaded metadata container for expressions.
 
     Its primary purpose is to be the holder for expression metadata
@@ -689,6 +692,8 @@ class ParamTransType:
 
 @dataclasses.dataclass(eq=False)
 class ParamScalar(ParamTransType):
+    cast_to: typing.Optional[TypeRef] = None
+
     def flatten(self) -> tuple[typing.Any, ...]:
         return (int(qltypes.TypeTag.SCALAR), self.idx)
 
@@ -723,6 +728,13 @@ class Global(Param):
 
     This is needed when a global has a default but also is optional,
     and so we need to distinguish "unset" and "set to {}".
+    """
+
+    is_permission: bool
+    """Whether this global comes from a Permission.
+
+    Permissions are injected directly by the server based on the connection
+    role.
     """
 
 
@@ -791,6 +803,7 @@ class Statement(Command):
     views: dict[sn.Name, s_types.Type]
     params: list[Param]
     globals: list[Global]
+    required_permissions: set[s_permissions.Permission]
     server_param_conversions: list[ServerParamConversion]
     server_param_conversion_params: list[Param]
     cardinality: qltypes.Cardinality
@@ -885,10 +898,11 @@ class BytesConstant(BaseConstant):
 
 class ConstantSet(ConstExpr, ImmutableExpr):
 
-    elements: tuple[BaseConstant | Parameter, ...]
+    elements: tuple[BaseConstant | BaseParameter, ...]
 
 
-class Parameter(ImmutableExpr):
+class BaseParameter(ImmutableExpr):
+    __abstract_node__ = True
 
     name: str
     required: bool
@@ -900,6 +914,14 @@ class Parameter(ImmutableExpr):
     @property
     def is_global(self) -> bool:
         return self.is_implicit_global is not None
+
+
+class QueryParameter(BaseParameter):
+    pass
+
+
+class FunctionParameter(BaseParameter):
+    pass
 
 
 class TupleElement(ImmutableBase):

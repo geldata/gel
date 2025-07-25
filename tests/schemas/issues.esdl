@@ -82,9 +82,14 @@ type Issue extending Named, Owned, Text {
     }
     required status: Status;
 
-    priority: Priority;
+    priority: Priority {
+      splat_strategy := 'Implicit';
+    }
 
     optional multi watchers: User;
+    num_watchers {
+      using (count(.watchers));
+    }
 
     optional time_estimate: int64;
 
@@ -97,13 +102,17 @@ type Issue extending Named, Owned, Text {
     }
     due_date: datetime;
 
-    multi related_to: Issue;
+    multi related_to: Issue {
+        splat_strategy := 'Explicit';
+    }
 
     multi references: File | URL | Publication {
         list_order: int64;
     };
 
-    tags: array<str>;
+    tags: array<str> {
+        splat_strategy := 'Explicit';
+    }
 
     index fts::index on ((
         fts::with_options(.name, language := fts::Language.eng),

@@ -30,6 +30,7 @@ from edb.pgsql import common
 
 from edb.server import defines
 from edb.server.pgcon import errors as pgerror
+from edb.server.compiler import enums
 from edb.server.compiler.sql import DisableNormalization
 
 from . import context
@@ -290,6 +291,8 @@ def eval_FuncCall(
         #       - set_config('bytea_output','hex',false)
         # HACK: asyncpg
         #       - set_config('jit', ...)
+        ctx.env.capabilities |= enums.Capability.SQL_SESSION_CONFIG
+
         if args := eval_list(expr.args, ctx=ctx):
             name, value, is_local = args
             if isinstance(name, pgast.StringConstant):

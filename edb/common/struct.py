@@ -21,14 +21,13 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
+    cast,
     Final,
-    Generic,
-    Optional,
-    TypeVar,
     Iterable,
     Iterator,
     Mapping,
-    cast,
+    Optional,
+    Self,
 )
 
 import collections
@@ -48,10 +47,7 @@ class NoDefaultT(enum.Enum):
 NoDefault: Final = NoDefaultT.NoDefault
 
 
-T = TypeVar("T")
-
-
-class Field(ProtoField, Generic[T]):
+class Field[T](ProtoField):
     """``Field`` objects: attributes of :class:`Struct`."""
 
     __slots__ = ('name', 'type', 'default', 'coerce', 'formatters',
@@ -109,15 +105,12 @@ class Field(ProtoField, Generic[T]):
         return self.default is NoDefault
 
 
-StructMeta_T = TypeVar("StructMeta_T", bound="StructMeta")
-
-
 class StructMeta(type):
 
     _fields: dict[str, Field[Any]]
     _sorted_fields: dict[str, Field[Any]]
 
-    def __new__(
+    def __new__[StructMeta_T: StructMeta](
         mcls: type[StructMeta_T],
         name: str,
         bases: tuple[type, ...],
@@ -193,9 +186,6 @@ class StructMeta(type):
     def get_ownfields(cls) -> dict[str, Field[Any]]:
         return getattr(  # type: ignore
             cls, '{}.{}_fields'.format(cls.__module__, cls.__name__))
-
-
-Struct_T = TypeVar("Struct_T", bound="Struct")
 
 
 class Struct(metaclass=StructMeta):
@@ -293,7 +283,7 @@ class Struct(metaclass=StructMeta):
             if formatter_obj:
                 yield (name, formatter_obj(getattr(self, name)))
 
-    def _copy_and_replace(
+    def _copy_and_replace[Struct_T: Struct](
         self,
         cls: type[Struct_T],
         **replacements: Any,
@@ -303,13 +293,15 @@ class Struct(metaclass=StructMeta):
             args.update(replacements)
         return cls(**args)
 
-    def copy_with_class(self, cls: type[Struct_T]) -> Struct_T:
+    def copy_with_class[Struct_T: Struct](
+        self, cls: type[Struct_T]
+    ) -> Struct_T:
         return self._copy_and_replace(cls)
 
-    def copy(self: Struct_T) -> Struct_T:
+    def copy(self: Self) -> Self:
         return self.copy_with_class(type(self))
 
-    def replace(self: Struct_T, **replacements: Any) -> Struct_T:
+    def replace(self: Self, **replacements: Any) -> Self:
         return self._copy_and_replace(type(self), **replacements)
 
     def items(self) -> Iterator[tuple[str, Any]]:
@@ -367,7 +359,7 @@ class Struct(metaclass=StructMeta):
                 else '', self.__class__.__module__, self.__class__.__name__)
             raise TypeError(msg)
 
-    def _getdefault(
+    def _getdefault[T](
         self,
         field_name: str,
         field: Field[T],
@@ -432,7 +424,7 @@ class RTStruct(Struct):
                 raise ValueError(f'cannot assign to frozen field {name!r}')
         super().__setattr__(name, value)
 
-    def _check_field_type(self, field: Field[T], name: str, value: Any) -> T:
+    def _check_field_type[T](self, field: Field[T], name: str, value: Any) -> T:
         if (field.type and value is not None and
                 not isinstance(value, field.type)):
             if field.coerce:

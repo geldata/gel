@@ -58,7 +58,7 @@ def get_completion(
     if can_be_ident:
         ql_ast = ls_parsing.parse_and_recover(document)
         ls.show_message_log(f'ql_ast = {ql_ast}')
-        if isinstance(ql_ast, list):
+        if isinstance(ql_ast, qlast.Commands):
             items = (
                 _get_completion_in_ql(ls, document, ql_ast, target.offset)
             ) + items
@@ -73,13 +73,13 @@ def get_completion(
 def _get_completion_in_ql(
     ls: ls_server.GelLanguageServer,
     document: pygls.workspace.TextDocument,
-    ql_stmts: list[qlast.Base],
+    ql_stmts: qlast.Commands,
     target: int,
 ) -> list[lsp_types.CompletionItem]:
     # replace the expr under the cursor with qlast.Cursor
-    if not ql_stmts:
+    if not ql_stmts.commands:
         return []
-    for ql_stmt in ql_stmts:
+    for ql_stmt in ql_stmts.commands:
         replaced = replace_by_source_position(ql_stmt, qlast.Cursor(), target)
         if replaced:
             break

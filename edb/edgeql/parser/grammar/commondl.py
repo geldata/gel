@@ -258,7 +258,7 @@ class FuncDeclArg(Nonterm):
         r"""%reduce OptParameterKind FuncDeclArgName COLON \
                 OptTypeQualifier FullTypeExpr OptDefault \
         """
-        self.val = qlast.FuncParam(
+        self.val = qlast.FuncParamDecl(
             kind=kind.val,
             name=name.val,
             typemod=typemod.val,
@@ -550,6 +550,7 @@ class OptUsingBlock(Nonterm):
 
 
 class AccessKind(Nonterm):
+    val: list[qltypes.AccessKind]
 
     def reduce_ALL(self, _):
         self.val = list(qltypes.AccessKind)
@@ -576,7 +577,7 @@ class AccessKind(Nonterm):
 
 class AccessKindList(parsing.ListNonterm, element=AccessKind,
                      separator=tokens.T_COMMA):
-    pass
+    val: list[list[qltypes.AccessKind]]
 
 
 class AccessPolicyAction(Nonterm):
@@ -678,7 +679,7 @@ class IndexArg(Nonterm):
                 f'index parameters have to be NAMED ONLY',
                 span=kind.span)
 
-        self.val = qlast.FuncParam(
+        self.val = qlast.FuncParamDecl(
             kind=kind.val,
             name=name.val,
             typemod=typemod.val,
@@ -734,7 +735,7 @@ class ProcessIndexMixin(ProcessFunctionParamsMixin):
     def _process_arguments(self, arguments):
         kwargs = {}
         for argval in arguments:
-            if isinstance(argval, qlast.FuncParam):
+            if isinstance(argval, qlast.FuncParamDecl):
                 raise EdgeQLSyntaxError(
                     f"unexpected new parameter definition `{argval.name}`",
                     span=argval.span)

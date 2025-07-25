@@ -742,7 +742,7 @@ def _check_server_arg_conversion(
                 return None
 
             is_param_query_parameter = (
-                isinstance(arg[1].expr, irast.Parameter)
+                isinstance(arg[1].expr, irast.QueryParameter)
                 and not arg[1].expr.is_global
             )
             is_param_ir_constant = isinstance(arg[1].expr, irast.BaseConstant)
@@ -807,7 +807,7 @@ def _check_server_arg_conversion(
                     hashlib.sha1(constant_expr.value.encode()).hexdigest()
                 )
                 query_param_name = f'const_{value_hash}'
-            elif isinstance(arg[1].expr, irast.Parameter):
+            elif isinstance(arg[1].expr, irast.QueryParameter):
                 query_param_name = arg[1].expr.name
             else:
                 raise RuntimeError('Server param conversion has no parameter')
@@ -829,14 +829,14 @@ def _check_server_arg_conversion(
 
             converted_param_name = f'{query_param_name}~{conversion_name}'
             converted_required = (
-                isinstance(arg[1].expr, irast.Parameter)
+                isinstance(arg[1].expr, irast.QueryParameter)
                 and arg[1].expr.required
             )
             converted_typeref = typegen.type_to_typeref(
                 converted_type, ctx.env
             )
             conversion_set: irast.Set = setgen.ensure_set(
-                irast.Parameter(
+                irast.QueryParameter(
                     name=converted_param_name,
                     required=converted_required,
                     typeref=converted_typeref,
@@ -865,6 +865,7 @@ def _check_server_arg_conversion(
                     converted_required,
                     typeref=converted_typeref,
                     pt=converted_type,
+                    is_func_param=True,
                     ctx=ctx
                 )
 

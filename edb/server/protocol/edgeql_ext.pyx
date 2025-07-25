@@ -47,6 +47,7 @@ async def handle_request(
     object request,
     object response,
     dbview.Database db,
+    str role_name,
     list args,
     object tenant,
 ):
@@ -126,6 +127,7 @@ async def handle_request(
         result = await execute.parse_execute_json(
             db,
             query,
+            role_name=role_name,
             variables=variables or {},
             globals_=globals_,
         )

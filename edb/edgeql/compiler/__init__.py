@@ -130,9 +130,9 @@ from typing import (
     Any,
     Callable,
     Optional,
-    TypeVar,
     AbstractSet,
     Mapping,
+    Sequence,
     cast,
     overload,
     TYPE_CHECKING,
@@ -177,10 +177,8 @@ else:
 #: Compiler modules lazy-load guard.
 _LOADED = False
 
-Tf = TypeVar('Tf', bound=Callable[..., Any])
 
-
-def compiler_entrypoint(func: Tf) -> Tf:
+def compiler_entrypoint[Tf: Callable[..., Any]](func: Tf) -> Tf:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         if not _LOADED:
@@ -351,6 +349,7 @@ def compile_ast_fragment_to_ir(
         views={},
         params=[],
         globals=[],
+        required_permissions=set(),
         server_param_conversions=[],
         server_param_conversion_params=[],
         # These values are nonsensical, but ideally the caller does not care
@@ -372,7 +371,7 @@ def compile_ast_fragment_to_ir(
 
 @compiler_entrypoint
 def preprocess_script(
-    stmts: list[qlast.Base],
+    stmts: Sequence[qlast.Base],
     schema: s_schema.Schema,
     *,
     options: CompilerOptions,

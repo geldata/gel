@@ -693,7 +693,7 @@ class DeleteStmt(DMLQuery):
 class SelectStmt(Query):
 
     # List of DISTINCT ON expressions, empty list for DISTINCT ALL
-    distinct_clause: typing.Optional[list[OutputVar]] = None
+    distinct_clause: typing.Optional[typing.Sequence[OutputVar | Star]] = None
     # The FROM clause
     from_clause: list[BaseRangeVar] = ast.field(factory=list)
     # The WHERE clause

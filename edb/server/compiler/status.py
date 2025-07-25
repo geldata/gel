@@ -68,6 +68,8 @@ def get_schema_class(ql: qlast.ObjectDDL) -> qltypes.SchemaObjectClass:
             return osc.ALIAS
         case qlast.GlobalCommand():
             return osc.GLOBAL
+        case qlast.PermissionCommand():
+            return osc.PERMISSION
         case qlast.LinkCommand():
             return osc.LINK
         case qlast.IndexCommand():
@@ -103,6 +105,7 @@ def get_schema_class(ql: qlast.ObjectDDL) -> qltypes.SchemaObjectClass:
         case qlast.ConstraintCommand():
             return osc.CONSTRAINT
         case qlast.AccessPolicyCommand():
+            # Why is this duplicate here?
             return osc.ACCESS_POLICY
 
         case _:

@@ -148,7 +148,7 @@ class TestServerConcurrentTransactions(tb.QueryTestCase):
         )
 
     async def execute_concurrent_txs(self, f1, f2, options=None):
-        con2 = await self.connect(database=self.get_database_name())
+        con2 = await self.connect()
         self.addCleanup(con2.aclose)
 
         barrier = Barrier(2)

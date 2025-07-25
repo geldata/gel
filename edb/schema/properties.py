@@ -35,7 +35,7 @@ from . import objects as so
 from . import pointers
 from . import referencing
 from . import rewrites as s_rewrites
-from . import sources
+from . import sources as s_sources
 from . import types as s_types
 from . import utils
 from . import expr as s_expr
@@ -128,10 +128,8 @@ class Property(
         # because we create new properties with distinct types.
         return not self.is_endpoint_pointer(schema)
 
-    def is_property(self, schema: s_schema.Schema) -> bool:
-        return True
-
-    def scalar(self) -> bool:
+    @classmethod
+    def is_property(cls, schema: Optional[s_schema.Schema]=None) -> bool:
         return True
 
     def has_user_defined_properties(self, schema: s_schema.Schema) -> bool:
@@ -178,14 +176,16 @@ class Property(
     ) -> bool:
         return not self.is_endpoint_pointer(schema)
 
-    def init_delta_command(
+    def init_delta_command[
+        ObjectCommand_T: sd.ObjectCommand[so.Object]
+    ](
         self,
         schema: s_schema.Schema,
-        cmdtype: type[sd.ObjectCommand_T],
+        cmdtype: type[ObjectCommand_T],
         *,
         classname: Optional[sn.Name] = None,
         **kwargs: Any,
-    ) -> sd.ObjectCommand_T:
+    ) -> ObjectCommand_T:
         delta = super().init_delta_command(
             schema=schema,
             cmdtype=cmdtype,
@@ -197,18 +197,20 @@ class Property(
         return delta  # type: ignore
 
 
-class PropertySourceContext(sources.SourceCommandContext[sources.Source_T]):
+class PropertySourceContext[Source_T: s_sources.Source](
+    s_sources.SourceCommandContext[Source_T]
+):
     pass
 
 
-class PropertySourceCommand(
-    inheriting.InheritingObjectCommand[sources.Source_T],
+class PropertySourceCommand[Source_T: s_sources.Source](
+    inheriting.InheritingObjectCommand[Source_T],
 ):
     pass
 
 
 class PropertyCommandContext(
-    pointers.PointerCommandContext[Property],
+    pointers.PointerCommandContext,
     constraints.ConsistencySubjectCommandContext,
     s_rewrites.RewriteCommandContext,
 ):
@@ -240,12 +242,7 @@ class PropertyCommand(
             scls.is_link_property(schema)
             and not scls.is_pure_computable(schema)
         ):
-            # link properties cannot be required or multi
-            if self.get_attribute_value('required'):
-                raise errors.InvalidPropertyDefinitionError(
-                    'link properties cannot be required',
-                    span=self.span,
-                )
+            # link properties cannot be multi
             if (self.get_attribute_value('cardinality')
                     is qltypes.SchemaCardinality.Many):
                 raise errors.InvalidPropertyDefinitionError(

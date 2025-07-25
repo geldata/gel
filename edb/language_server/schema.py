@@ -209,7 +209,7 @@ def _parse_schema(
             if isinstance(res.ok, qlast.Schema):
                 sdl.declarations.extend(res.ok.declarations)
             else:
-                # TODO: complain that .esdl contains non-SDL syntax
+                # TODO: complain that .gel contains non-SDL syntax
                 pass
     ls.state.schema_sdl = sdl
     return diagnostics

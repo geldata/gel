@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    TypeVar,
     Hashable,
     Iterable,
     Iterator,
@@ -32,10 +31,7 @@ import collections
 import collections.abc
 
 
-K = TypeVar("K", bound=Hashable)
-
-
-class OrderedSet(MutableSet[K]):
+class OrderedSet[K: Hashable](MutableSet[K]):
 
     map: dict[K, None]
 

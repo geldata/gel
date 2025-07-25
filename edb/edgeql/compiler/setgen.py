@@ -55,6 +55,7 @@ from edb.schema import indexes as s_indexes
 from edb.schema import links as s_links
 from edb.schema import name as s_name
 from edb.schema import objtypes as s_objtypes
+from edb.schema import permissions as s_permissions
 from edb.schema import pointers as s_pointers
 from edb.schema import pseudo as s_pseudo
 from edb.schema import scalars as s_scalars
@@ -2069,39 +2070,67 @@ def should_materialize_type(
 
 
 def get_global_param(
-    glob: s_globals.Global, *, ctx: context.ContextLevel
+    glob: s_globals.Global | s_permissions.Permission,
+    *,
+    ctx: context.ContextLevel
 ) -> irast.Global:
     name = glob.get_name(ctx.env.schema)
 
     if name not in ctx.env.query_globals:
         param_name = f'__edb_global_{len(ctx.env.query_globals)}__'
 
-        target = glob.get_target(ctx.env.schema)
-        target_typeref = typegen.type_to_typeref(target, env=ctx.env)
+        if isinstance(glob, s_globals.Global):
+            # Globals
+            target = glob.get_target(ctx.env.schema)
+            target_typeref = typegen.type_to_typeref(target, env=ctx.env)
 
-        ctx.env.query_globals[name] = irast.Global(
-            name=param_name,
-            required=False,
-            schema_type=target,
-            ir_type=target_typeref,
-            global_name=name,
-            has_present_arg=glob.needs_present_arg(ctx.env.schema),
-        )
+            ctx.env.query_globals[name] = irast.Global(
+                name=param_name,
+                required=False,
+                schema_type=target,
+                ir_type=target_typeref,
+                global_name=name,
+                has_present_arg=glob.needs_present_arg(ctx.env.schema),
+                is_permission=False,
+            )
+
+        else:
+            # Permissions
+            target = ctx.env.schema.get('std::bool', type=s_types.Type)
+            target_typeref = typegen.type_to_typeref(target, env=ctx.env)
+
+            ctx.env.query_globals[name] = irast.Global(
+                name=param_name,
+                required=True,
+                schema_type=target,
+                ir_type=target_typeref,
+                global_name=name,
+                has_present_arg=False,
+                is_permission=True,
+            )
 
     return ctx.env.query_globals[name]
 
 
 def get_global_param_sets(
-    glob: s_globals.Global,
+    glob: s_globals.Global | s_permissions.Permission,
     *,
     ctx: context.ContextLevel,
     is_implicit_global: bool = False,
 ) -> tuple[irast.Set, Optional[irast.Set]]:
     param = get_global_param(glob, ctx=ctx)
-    default = glob.get_default(ctx.env.schema)
+    default = (
+        glob.get_default(ctx.env.schema)
+        if isinstance(glob, s_globals.Global) else
+        None
+    )
+
+    # This function is called to compile either a global expr or the global
+    # params for a function call. Both are compiled as QueryParameter.
+    assert ctx.env.options.func_params is None
 
     param_set = ensure_set(
-        irast.Parameter(
+        irast.QueryParameter(
             name=param.name,
             required=param.required and not bool(default),
             typeref=param.ir_type,
@@ -2109,14 +2138,19 @@ def get_global_param_sets(
         ),
         ctx=ctx,
     )
-    if glob.needs_present_arg(ctx.env.schema):
+
+    if (
+        isinstance(glob, s_globals.Global)
+        and glob.needs_present_arg(ctx.env.schema)
+    ):
         present_set = ensure_set(
-            irast.Parameter(
+            irast.QueryParameter(
                 name=param.name + "present__",
                 required=True,
                 typeref=typegen.type_to_typeref(
                     ctx.env.schema.get('std::bool', type=s_types.Type),
-                    env=ctx.env),
+                    env=ctx.env,
+                ),
                 is_implicit_global=is_implicit_global,
             ),
             ctx=ctx,
@@ -2132,6 +2166,11 @@ def get_func_global_json_arg(*, ctx: context.ContextLevel) -> irast.Set:
     json_typeref = typegen.type_to_typeref(json_type, env=ctx.env)
     name = '__edb_json_globals__'
 
+    is_func_param = ctx.env.options.func_params is not None
+    parameter_type = (
+        irast.FunctionParameter if is_func_param else irast.QueryParameter
+    )
+
     # If this is because we have json params, not because we're in a
     # function, we need to register it.
     if ctx.env.options.json_parameters:
@@ -2143,10 +2182,11 @@ def get_func_global_json_arg(*, ctx: context.ContextLevel) -> irast.Set:
             ir_type=json_typeref,
             global_name=qname,
             has_present_arg=False,
+            is_permission=False,
         )
 
     return ensure_set(
-        irast.Parameter(
+        parameter_type(
             name=name,
             required=True,
             typeref=json_typeref,
@@ -2156,15 +2196,14 @@ def get_func_global_json_arg(*, ctx: context.ContextLevel) -> irast.Set:
 
 
 def get_func_global_param_sets(
-    glob: s_globals.Global,
+    glob: s_globals.Global | s_permissions.Permission,
     *,
     ctx: context.ContextLevel,
 ) -> tuple[qlast.Expr, Optional[qlast.Expr]]:
     # NB: updates ctx anchors
 
-    if ctx.env.options.func_params is not None:
-        # Make sure that we properly track the globals we use in functions
-        get_global_param(glob, ctx=ctx)
+    # Make sure that we properly track the globals we use in functions
+    get_global_param(glob, ctx=ctx)
 
     with ctx.new() as subctx:
         name = str(glob.get_name(ctx.env.schema))
@@ -2178,11 +2217,20 @@ def get_func_global_param_sets(
             ],
         )
 
-        target = glob.get_target(ctx.env.schema)
+        if isinstance(glob, s_globals.Global):
+            target = glob.get_target(ctx.env.schema)
+
+        else:
+            # Permissions
+            target = ctx.env.schema.get('std::bool', type=s_types.Type)
+
         type = typegen.type_to_ql_typeref(target, ctx=ctx)
         main_set = qlast.TypeCast(expr=glob_anchor, type=type)
 
-        if glob.needs_present_arg(ctx.env.schema):
+        if (
+            isinstance(glob, s_globals.Global)
+            and glob.needs_present_arg(ctx.env.schema)
+        ):
             present_set = qlast.UnaryOp(
                 op='EXISTS',
                 operand=glob_anchor,
@@ -2194,7 +2242,7 @@ def get_func_global_param_sets(
 
 
 def get_globals_as_json(
-    globs: Sequence[s_globals.Global],
+    globs: Sequence[s_globals.Global | s_permissions.Permission],
     *,
     ctx: context.ContextLevel,
     span: Optional[qlast.Span],

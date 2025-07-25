@@ -23,12 +23,11 @@ import collections.abc
 import functools
 
 
-from typing import TypeVar, Callable, Optional
+from typing import Callable, Optional
 from types import MethodType
 
 
 class LRUMapping(collections.abc.MutableMapping):
-
     # We use an OrderedDict for LRU implementation.  Operations:
     #
     # * We use a simple `__setitem__` to push a new entry:
@@ -50,7 +49,8 @@ class LRUMapping(collections.abc.MutableMapping):
     def __init__(self, *, maxsize):
         if maxsize <= 0:
             raise ValueError(
-                f'maxsize is expected to be greater than 0, got {maxsize}')
+                f'maxsize is expected to be greater than 0, got {maxsize}'
+            )
 
         self._dict = collections.OrderedDict()
         self._maxsize = maxsize
@@ -82,9 +82,6 @@ class LRUMapping(collections.abc.MutableMapping):
         return iter(self._dict)
 
 
-Tf = TypeVar('Tf', bound=Callable)
-
-
 class _NoPickle:
     def __init__(self, obj):
         self.obj = obj
@@ -99,7 +96,9 @@ class _NoPickle:
         self.obj = None
 
 
-def lru_method_cache(maxsize: int | None=128) -> Callable[[Tf], Tf]:
+def lru_method_cache[Tf: Callable](
+    maxsize: int | None = 128,
+) -> Callable[[Tf], Tf]:
     """A version of lru_cache for methods that shouldn't leak memory.
 
     Basically the idea is that we generate a per-object lru-cached
@@ -109,6 +108,7 @@ def lru_method_cache(maxsize: int | None=128) -> Callable[[Tf], Tf]:
     doesn't work, we wrap it in a _NoPickle object that doesn't pickle
     its contents.
     """
+
     def transformer(f: Tf) -> Tf:
         key = f'__{f.__name__}_cached'
 
@@ -127,11 +127,11 @@ def lru_method_cache(maxsize: int | None=128) -> Callable[[Tf], Tf]:
     return transformer
 
 
-def method_cache(f: Tf) -> Tf:
+def method_cache[Tf: Callable](f: Tf) -> Tf:
     return lru_method_cache(None)(f)
 
 
-def clear_method_cache(method: Tf) -> None:
+def clear_method_cache[Tf](method: Tf) -> None:
     assert isinstance(method, MethodType)
     key = f'__{method.__func__.__name__}_cached'
     _m: Optional[_NoPickle] = getattr(method.__self__, key, None)
@@ -142,12 +142,15 @@ def clear_method_cache(method: Tf) -> None:
 _LRU_CACHES: list[functools._lru_cache_wrapper] = []
 
 
-def per_job_lru_cache(maxsize: int | None=128) -> Callable[[Tf], Tf]:
+def per_job_lru_cache[Tf: Callable](
+    maxsize: int | None = 128,
+) -> Callable[[Tf], Tf]:
     """A version of lru_cache that can be cleared en masse.
 
     All the caches will be tracked and calling clear_lru_caches()
     will clear them all.
     """
+
     def transformer(f: Tf) -> Tf:
         wrapped = functools.lru_cache(maxsize)(f)
         _LRU_CACHES.append(wrapped)

@@ -101,8 +101,8 @@ def elab(node: qlast.Base) -> Expr:
     return elab_not_implemented(node)
 
 
-@elab.register(qlast.Parameter)
-def elab_Parameter(node: qlast.Parameter) -> None:
+@elab.register(qlast.QueryParameter)
+def elab_QueryParameter(node: qlast.QueryParameter) -> None:
     raise errors.QueryError("missing a type cast", span=node.span)
 
 
@@ -617,7 +617,7 @@ def elab_single_type_expr(typedef: qlast.TypeExpr) -> Tp:
 
 @elab.register(qlast.TypeCast)
 def elab_TypeCast(qle: qlast.TypeCast) -> TypeCastExpr | e.ParameterExpr:
-    if isinstance(qle.expr, qlast.Parameter):
+    if isinstance(qle.expr, qlast.QueryParameter):
         if qle.cardinality_mod == qlast.CardinalityModifier.Optional:
             is_required = False
         else:
