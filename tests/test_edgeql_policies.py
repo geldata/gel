@@ -1684,7 +1684,7 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             always_typenames=True,
         )
 
-    async def test_edgeql_policies_diamond_01(self):
+    async def test_edgeql_policies_inheritance_01(self):
         # Verify that selecting a type with overlapping children and
         # access policies in at least one child works
 
@@ -1710,7 +1710,7 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             drop type T
         ''')
 
-    async def test_edgeql_policies_diamond_02(self):
+    async def test_edgeql_policies_inheritance_02(self):
         # Verify that selecting a type with overlapping children and
         # access policies in at least one child works
 
@@ -1726,6 +1726,43 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             select A
             ''',
             [{}]
+        )
+
+        await self.con.execute('''
+            drop type C
+        ''')
+
+    async def test_edgeql_policies_inheritance_03(self):
+        # Verify that selecting a type with access policies within an indirect
+        # descendant works
+
+        await self.con.execute('''
+            create required global flag: bool {
+                set default := true;
+            };
+            create type A;
+            create type B extending A;
+            create type C extending B {
+                create access policy ok allow all using(global flag);
+            };
+            insert C;
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select A
+            ''',
+            [{}]
+        )
+
+        await self.con.execute('''
+            set global flag := false;
+        ''')
+        await self.assert_query_result(
+            r'''
+            select A
+            ''',
+            []
         )
 
         await self.con.execute('''
