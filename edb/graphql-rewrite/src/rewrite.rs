@@ -384,10 +384,7 @@ fn push_var_definition(args: &mut Vec<PyToken>, var_name: &str, var_type: &'stat
     });
 }
 
-fn visit_directives<'x>(
-    value_positions: &mut HashSet<usize>,
-    oper: &'x Operation<'x, &'x str>,
-) {
+fn visit_directives<'x>(value_positions: &mut HashSet<usize>, oper: &'x Operation<'x, &'x str>) {
     for dir in oper.selection_set.visit::<Directive<_>>() {
         if dir.name == "include" || dir.name == "skip" {
             for arg in &dir.arguments {
