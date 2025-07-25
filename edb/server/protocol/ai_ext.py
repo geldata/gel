@@ -281,9 +281,13 @@ def get_model_tokenizer(
         return None
 
 
-@dataclass
-class ProviderConfig:
+@dataclass(kw_only=True, frozen=True)
+class ProviderDesc:
     name: str
+
+
+@dataclass(kw_only=True, frozen=True)
+class ProviderConfig(ProviderDesc):
     display_name: str
     api_url: str
     client_id: str
@@ -312,6 +316,20 @@ class ProviderConfig:
                     for entry_result in decoded_result["data"]
                 ],
             )
+
+
+@dataclass(kw_only=True, frozen=True)
+class EmbeddingModelDesc:
+    model_name: str
+    max_input_tokens: int
+    max_batch_tokens: int
+    max_output_dimensions: int
+    supports_shortening: bool
+
+
+@dataclass(kw_only=True, frozen=True)
+class SchemaEmbeddingModelDesc(EmbeddingModelDesc):
+    provider_name: str
 
 
 def start_extension(
@@ -775,25 +793,7 @@ async def _generate_embeddings_params(
         logger.error(f"{task_name}: {e}")
         return None
 
-    model_max_input_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_input_tokens",
-        )
-        for model_name in provider_models
-    }
-
-    model_max_batch_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_batch_tokens",
-        )
-        for model_name in provider_models
-    }
+    model_descs = await _get_embedding_model_desc(db, provider_models)
 
     model_pending_entries: dict[str, list[PendingEmbedding]] = {}
 
@@ -834,8 +834,8 @@ async def _generate_embeddings_params(
             batches, excluded_indexes = batch_texts(
                 part_texts,
                 get_model_tokenizer(provider_name, model_name),
-                model_max_input_tokens[model_name],
-                model_max_batch_tokens[model_name]
+                model_descs[model_name].max_input_tokens,
+                model_descs[model_name].max_batch_tokens,
             )
 
             if excluded_indexes:
@@ -3145,15 +3145,63 @@ async def _get_model_provider(
     return cast(str, provider)
 
 
-async def _get_model_annotation_as_int(
+async def _get_embedding_model_desc(
     db: dbview.Database,
-    base_model_type: str,
-    model_name: str,
-    annotation_name: str,
-) -> int:
-    value = await _get_model_annotation_as_json(
-        db, base_model_type, model_name, annotation_name)
-    return int(value)
+    model_names: list[str],
+) -> dict[str, SchemaEmbeddingModelDesc]:
+    models = await _edgeql_query_json(
+        db=db,
+        role_name=None,
+        query="""
+        WITH
+            Parent := (
+                SELECT schema::ObjectType
+                FILTER .name = 'ext::ai::EmbeddingModel'
+            ),
+            Models := Parent.<ancestors[IS schema::ObjectType],
+        SELECT
+            Models {
+                annotations: {
+                    name,
+                    @value,
+                }
+            }
+        FILTER
+            (FOR ann in Models.annotations UNION (
+                ann.name = "ext::ai::model_name"
+                AND contains(<array<str>>$model_names, ann@value)
+            ))
+        """,
+        variables={
+            "model_names": model_names,
+        },
+    )
+
+    model_annotations = [
+        {
+            annotation['name']: annotation['@value']
+            for annotation in model['annotations']
+        }
+        for model in models
+    ]
+
+    return {
+        model['ext::ai::model_name']: SchemaEmbeddingModelDesc(
+            model_name=model['ext::ai::model_name'],
+            provider_name=model['ext::ai::model_name'],
+            max_input_tokens=model['ext::ai::model_provider'],
+            max_batch_tokens=int(
+                model['ext::ai::embedding_model_max_batch_tokens']
+            ),
+            max_output_dimensions=int(
+                model['ext::ai::embedding_model_max_output_dimensions']
+            ),
+            supports_shortening=bool(
+                model['ext::ai::embedding_model_supports_shortening']
+            ),
+        )
+        for model in model_annotations
+    }
 
 
 async def _generate_embeddings_for_type(
@@ -3261,24 +3309,8 @@ async def generate_embeddings_for_texts(
         ai_index.model: ai_index.provider
         for ai_index in type_ai_indexes.values()
     }
-    model_max_input_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_input_tokens",
-        )
-        for model_name in model_providers.keys()
-    }
-    model_max_batch_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_batch_tokens",
-        )
-        for model_name in model_providers.keys()
-    }
+
+    model_descs = await _get_embedding_model_desc(db, list(model_providers.keys()))
 
     provider_configs = {
         provider: _get_provider_config(db=db, provider_name=provider)
@@ -3325,8 +3357,8 @@ async def generate_embeddings_for_texts(
         provider = model_providers[model_name]
 
         tokenizer = get_model_tokenizer(provider, model_name)
-        max_input_tokens = model_max_input_tokens[model_name]
-        max_batch_tokens = model_max_batch_tokens[model_name]
+        max_input_tokens = model_descs[model_name].max_input_tokens
+        max_batch_tokens = model_descs[model_name].max_batch_tokens
 
         texts = [
             (
