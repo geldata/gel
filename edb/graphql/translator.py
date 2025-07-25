@@ -59,7 +59,7 @@ ARG_TYPES = {
 }
 
 REWRITE_TYPE_ERROR = re.compile(
-    r"Variable '\$(?P<var_name>_edb_arg__\d+)' of type"
+    r"Variable '\$(?P<var_name>__edb_arg_\d+)' of type"
     r" '(?P<used>\w+)!'"
     r" used in position expecting type '(?P<expected>[^']+)'"
 )

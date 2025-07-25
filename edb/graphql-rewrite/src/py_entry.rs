@@ -32,7 +32,7 @@ pub fn convert_entry(py: Python<'_>, entry: rewrite::Entry) -> PyResult<Entry> {
     let vars = PyDict::new(py);
     let substitutions = PyDict::new(py);
     for (idx, var) in entry.variables.iter().enumerate() {
-        let s = format!("_edb_arg__{}", idx).into_pyobject(py)?;
+        let s = format!("__edb_arg_{}", idx).into_pyobject(py)?;
 
         vars.set_item(&s, value_to_py(py, &var.value, &decimal_cls)?)?;
         substitutions.set_item(

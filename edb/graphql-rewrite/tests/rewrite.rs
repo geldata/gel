@@ -22,8 +22,8 @@ fn test_no_args() {
     assert_eq!(
         entry.key,
         "\
-        query($_edb_arg__0:String!){\
-            object(filter:{field:{eq:$_edb_arg__0}}){\
+        query($__edb_arg_0:String!){\
+            object(filter:{field:{eq:$__edb_arg_0}}){\
                 field\
             }\
         }\
@@ -63,8 +63,8 @@ fn test_no_query() {
     assert_eq!(
         entry.key,
         "\
-        query($_edb_arg__0:String!){\
-            object(filter:{field:{eq:$_edb_arg__0}}){\
+        query($__edb_arg_0:String!){\
+            object(filter:{field:{eq:$__edb_arg_0}}){\
                 field\
             }\
         }\
@@ -104,8 +104,8 @@ fn test_no_name() {
     assert_eq!(
         entry.key,
         "\
-        query($x:String $_edb_arg__0:String!){\
-            object(filter:{field:{eq:$_edb_arg__0}}y:$x){\
+        query($x:String $__edb_arg_0:String!){\
+            object(filter:{field:{eq:$__edb_arg_0}}y:$x){\
                 field\
             }\
         }\
@@ -145,8 +145,8 @@ fn test_name_args() {
     assert_eq!(
         entry.key,
         "\
-        query Hello($x:String $y:String!$_edb_arg__0:String!){\
-            object(filter:{field:{eq:$_edb_arg__0}}x:$x y:$y){\
+        query Hello($x:String $y:String!$__edb_arg_0:String!){\
+            object(filter:{field:{eq:$__edb_arg_0}}x:$x y:$y){\
                 field\
             }\
         }\
@@ -186,8 +186,8 @@ fn test_name() {
     assert_eq!(
         entry.key,
         "\
-        query Hello($_edb_arg__0:String!){\
-            object(filter:{field:{eq:$_edb_arg__0}}){\
+        query Hello($__edb_arg_0:String!){\
+            object(filter:{field:{eq:$__edb_arg_0}}){\
                 field\
             }\
         }\
@@ -227,8 +227,8 @@ fn test_default_name() {
     assert_eq!(
         entry.key,
         "\
-        query Hello($_edb_arg__0:String!){\
-            object(filter:{field:{eq:$_edb_arg__0}}){\
+        query Hello($__edb_arg_0:String!){\
+            object(filter:{field:{eq:$__edb_arg_0}}){\
                 field\
             }\
         }\
@@ -278,8 +278,8 @@ fn test_other() {
                 field\
             }\
         }\
-        query Hello($_edb_arg__0:String!){\
-            object(filter:{field:{eq:$_edb_arg__0}}){\
+        query Hello($__edb_arg_0:String!){\
+            object(filter:{field:{eq:$__edb_arg_0}}){\
                 field\
             }\
         }\
@@ -319,8 +319,8 @@ fn test_defaults() {
     assert_eq!(
         entry.key,
         "\
-        query Hello($x:String!$y:String!$_edb_arg__0:String!){\
-            object(filter:{field:{eq:$_edb_arg__0}}x:$x y:$y){\
+        query Hello($x:String!$y:String!$__edb_arg_0:String!){\
+            object(filter:{field:{eq:$__edb_arg_0}}x:$x y:$y){\
                 field\
             }\
         }\
@@ -378,8 +378,8 @@ fn test_int32() {
     assert_eq!(
         entry.key,
         "\
-        query($_edb_arg__0:Int!){\
-            object(filter:{field:{eq:$_edb_arg__0}}){\
+        query($__edb_arg_0:Int!){\
+            object(filter:{field:{eq:$__edb_arg_0}}){\
                 field\
             }\
         }\
@@ -419,8 +419,8 @@ fn test_int64() {
     assert_eq!(
         entry.key,
         "\
-        query($_edb_arg__0:Int64!){\
-            object(filter:{field:{eq:$_edb_arg__0}}){\
+        query($__edb_arg_0:Int64!){\
+            object(filter:{field:{eq:$__edb_arg_0}}){\
                 field\
             }\
         }\
@@ -460,8 +460,8 @@ fn test_bigint() {
     assert_eq!(
         entry.key,
         "\
-        query($_edb_arg__0:Bigint!){\
-            object(filter:{field:{eq:$_edb_arg__0}}){\
+        query($__edb_arg_0:Bigint!){\
+            object(filter:{field:{eq:$__edb_arg_0}}){\
                 field\
             }\
         }\
@@ -501,8 +501,8 @@ fn test_first_1() {
     assert_eq!(
         entry.key,
         "\
-        query($_edb_arg__0:Int!){\
-            object(filter:{field:{eq:$_edb_arg__0}}first:1){\
+        query($__edb_arg_0:Int!){\
+            object(filter:{field:{eq:$__edb_arg_0}}first:1){\
                 field\
             }\
         }\
@@ -542,8 +542,8 @@ fn test_first_2() {
     assert_eq!(
         entry.key,
         "\
-        query($_edb_arg__0:Int!$_edb_arg__1:Int!){\
-            object(filter:{field:{eq:$_edb_arg__0}}first:$_edb_arg__1){\
+        query($__edb_arg_0:Int!$__edb_arg_1:Int!){\
+            object(filter:{field:{eq:$__edb_arg_0}}first:$__edb_arg_1){\
                 field\
             }\
         }\
@@ -657,8 +657,8 @@ fn test_float() {
     assert_eq!(
         entry.key,
         "\
-        query($_edb_arg__0:Decimal!){\
-            object(filter:{field:{eq:$_edb_arg__0}}){\
+        query($__edb_arg_0:Decimal!){\
+            object(filter:{field:{eq:$__edb_arg_0}}){\
                 field\
             }\
         }\
@@ -817,10 +817,10 @@ fn test_include_skip() {
     assert_eq!(
         entry.key,
         "\
-        query Hello($x:Boolean!$_edb_arg__0:Boolean!){\
+        query Hello($x:Boolean!$__edb_arg_0:Boolean!){\
             object{\
                 hello@include(if:$x)\
-                world@skip(if:$_edb_arg__0)\
+                world@skip(if:$__edb_arg_0)\
             }\
         }\
     "

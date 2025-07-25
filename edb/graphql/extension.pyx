@@ -281,9 +281,9 @@ async def _execute(
 
     if variables:
         for var_name in variables:
-            if var_name.startswith('_edb_arg__'):
+            if var_name.startswith('__edb_arg_'):
                 raise errors.QueryError(
-                    f"Variables starting with '_edb_arg__' are prohibited")
+                    f"Variables starting with '__edb_arg_' are prohibited")
 
     query_cache_enabled = not debug.flags.disable_qcache
 

@@ -90,9 +90,9 @@ pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
     visit_directives(&mut value_positions, oper);
 
     for var in &oper.variable_definitions {
-        if var.name.starts_with("_edb_arg__") {
+        if var.name.starts_with("__edb_arg_") {
             return Err(Error::Query(
-                "Variables starting with '_edb_arg__' are prohibited".into(),
+                "Variables starting with '__edb_arg_' are prohibited".into(),
             ));
         }
         if let Some(ref dvalue) = var.default_value {
@@ -156,7 +156,7 @@ pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
     for (token, pos) in src_tokens.drain_to(oper.selection_set.span.1.token) {
         match token.kind {
             StringValue | BlockString => {
-                let var_name = format!("_edb_arg__{}", variables.len());
+                let var_name = format!("__edb_arg_{}", variables.len());
                 tmp.push(PyToken {
                     kind: P::Dollar,
                     value: "$".into(),
@@ -188,7 +188,7 @@ pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
                     tmp.push(PyToken::new(&(*token, *pos))?);
                     continue;
                 }
-                let var_name = format!("_edb_arg__{}", variables.len());
+                let var_name = format!("__edb_arg_{}", variables.len());
                 tmp.push(PyToken {
                     kind: P::Dollar,
                     value: "$".into(),
@@ -216,7 +216,7 @@ pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
                 continue;
             }
             FloatValue => {
-                let var_name = format!("_edb_arg__{}", variables.len());
+                let var_name = format!("__edb_arg_{}", variables.len());
                 tmp.push(PyToken {
                     kind: P::Dollar,
                     value: "$".into(),
@@ -235,7 +235,7 @@ pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
                 continue;
             }
             Name if token.value == "true" || token.value == "false" => {
-                let var_name = format!("_edb_arg__{}", variables.len());
+                let var_name = format!("__edb_arg_{}", variables.len());
                 tmp.push(PyToken {
                     kind: P::Dollar,
                     value: "$".into(),
