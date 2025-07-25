@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyInt, PyList, PyString, PyType};
+use pyo3::types::{PyDict, PyInt, PyString, PyType};
 
 use edb_graphql_parser::position::Pos;
 
@@ -10,8 +10,6 @@ use crate::rewrite::{self, Value};
 pub struct Entry {
     #[pyo3(get)]
     key: PyObject,
-    #[pyo3(get)]
-    key_vars: PyObject,
     #[pyo3(get)]
     variables: PyObject,
     #[pyo3(get)]
@@ -49,10 +47,8 @@ pub fn convert_entry(py: Python<'_>, entry: rewrite::Entry) -> PyResult<Entry> {
     for (name, var) in &entry.defaults {
         vars.set_item(name, value_to_py(py, &var.value, &decimal_cls)?)?
     }
-    let key_vars = PyList::new(py, entry.key_vars)?;
     Ok(Entry {
         key: PyString::new(py, &entry.key).into(),
-        key_vars: key_vars.into(),
         variables: vars.into_pyobject(py)?.into(),
         substitutions: substitutions.into(),
         _tokens: entry.tokens,

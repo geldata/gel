@@ -3551,31 +3551,32 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                 variables={'name': 11})
 
     def test_graphql_functional_variables_34(self):
+        q = r"""
+            query($val: Boolean!, $min_age: Int64!) {
+                User(filter: {age: {gt: $min_age}}) {
+                    name @include(if: $val),
+                    age
+                }
+            }
+        """
+
         # Test multiple requests to make sure that caching works correctly
         for _ in range(2):
+            self.assert_graphql_query_result(
+                q,
+                {'User': [{'age': 27}]},
+                variables={'val': False, 'min_age': 26}
+            )
+
             for _ in range(2):
                 self.assert_graphql_query_result(
-                    r"""
-                        query($val: Boolean!, $min_age: Int64!) {
-                            User(filter: {age: {gt: $min_age}}) {
-                                name @include(if: $val),
-                                age
-                            }
-                        }
-                    """,
+                    q,
                     {'User': [{'age': 27, 'name': 'Alice'}]},
                     variables={'val': True, 'min_age': 26}
                 )
 
             self.assert_graphql_query_result(
-                r"""
-                    query($val: Boolean!, $min_age: Int64!) {
-                        User(filter: {age: {gt: $min_age}}) {
-                            name @include(if: $val),
-                            age
-                        }
-                    }
-                """,
+                q,
                 {'User': [{'age': 27}]},
                 variables={'val': False, 'min_age': 26}
             )

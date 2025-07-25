@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use combine::stream::{Positioned, StreamOnce};
 
@@ -44,7 +44,6 @@ pub enum Error {
 #[derive(Debug)]
 pub struct Entry {
     pub key: String,
-    pub key_vars: BTreeSet<String>,
     pub variables: Vec<Variable>,
     pub defaults: BTreeMap<String, Variable>,
     pub tokens: Vec<PyToken>,
@@ -86,10 +85,9 @@ pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
 
     let mut variables = Vec::new();
     let mut defaults = BTreeMap::new();
-    let mut key_vars = BTreeSet::new();
     let mut value_positions = HashSet::new();
 
-    visit_directives(&mut key_vars, &mut value_positions, oper);
+    visit_directives(&mut value_positions, oper);
 
     for var in &oper.variable_definitions {
         if var.name.starts_with("_edb_arg__") {
@@ -238,9 +236,6 @@ pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
             }
             Name if token.value == "true" || token.value == "false" => {
                 let var_name = format!("_edb_arg__{}", variables.len());
-                if value_positions.contains(&pos.token) {
-                    key_vars.insert(var_name.clone());
-                }
                 tmp.push(PyToken {
                     kind: P::Dollar,
                     value: "$".into(),
@@ -271,7 +266,6 @@ pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
 
     Ok(Entry {
         key: join_tokens(&tokens),
-        key_vars,
         variables,
         defaults,
         tokens,
@@ -391,7 +385,6 @@ fn push_var_definition(args: &mut Vec<PyToken>, var_name: &str, var_type: &'stat
 }
 
 fn visit_directives<'x>(
-    key_vars: &mut BTreeSet<String>,
     value_positions: &mut HashSet<usize>,
     oper: &'x Operation<'x, &'x str>,
 ) {
@@ -399,9 +392,6 @@ fn visit_directives<'x>(
         if dir.name == "include" || dir.name == "skip" {
             for arg in &dir.arguments {
                 match arg.value {
-                    GqlValue::Variable(vname) => {
-                        key_vars.insert(vname.to_string());
-                    }
                     GqlValue::Boolean(_) => {
                         value_positions.insert(arg.value_position.token);
                     }
