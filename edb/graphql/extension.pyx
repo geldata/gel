@@ -294,10 +294,6 @@ async def _execute(
 
     try:
         rewritten = _graphql_rewrite.rewrite(operation_name, query)
-
-        vars = rewritten.variables.copy()
-        if variables:
-            vars.update(variables)
     except _graphql_rewrite.QueryError as e:
         raise errors.QueryError(e.args[0])
     except Exception as e:
@@ -311,6 +307,9 @@ async def _execute(
         vars = variables.copy() if variables else {}
     else:
         prepared_query = rewritten.key
+        vars = rewritten.variables.copy()
+        if variables:
+            vars.update(variables)
 
         if debug.flags.graphql_compile:
             debug.header('GraphQL optimized query')
