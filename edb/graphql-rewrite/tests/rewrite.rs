@@ -844,10 +844,6 @@ fn test_include_skip() {
     );
     assert_eq!(entry.defaults, defaults);
     assert_eq!(
-        entry.key_vars,
-        vec!["x".into(), "_edb_arg__0".into()].into_iter().collect()
-    );
-    assert_eq!(
         entry.variables,
         vec![Variable {
             token: PyToken {

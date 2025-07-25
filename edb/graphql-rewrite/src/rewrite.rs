@@ -388,11 +388,8 @@ fn visit_directives<'x>(value_positions: &mut HashSet<usize>, oper: &'x Operatio
     for dir in oper.selection_set.visit::<Directive<_>>() {
         if dir.name == "include" || dir.name == "skip" {
             for arg in &dir.arguments {
-                match arg.value {
-                    GqlValue::Boolean(_) => {
-                        value_positions.insert(arg.value_position.token);
-                    }
-                    _ => {}
+                if let GqlValue::Boolean(_) = arg.value {
+                    value_positions.insert(arg.value_position.token);
                 }
             }
         }
