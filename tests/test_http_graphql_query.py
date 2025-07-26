@@ -2470,7 +2470,7 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
             ]
         })
 
-    def test_graphql_functional_directives_03(self):
+    def test_graphql_functional_directives_03a(self):
         self.assert_graphql_query_result(r"""
             query {
                 User(order: {name: {dir: ASC}}) {
@@ -2489,6 +2489,22 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                 {"groups": [{"name": "upgraded"}]},
                 {"groups": [{"name": "basic"}]},
             ]
+        })
+
+    def test_graphql_functional_directives_03b(self):
+        self.assert_graphql_query_result(r"""
+            query {
+                User(filter: {name: {eq: "John"}}) {
+                    name,
+
+                    groups(filter: {name: {eq: "basic"}}) @skip(if: true) {
+                        id @skip(if: true), @include(if: false)
+                        name @skip(if: false), @include(if: true)
+                    }
+                }
+            }
+        """, {
+            "User": [{'name': 'John'}],
         })
 
     def test_graphql_functional_directives_04(self):
