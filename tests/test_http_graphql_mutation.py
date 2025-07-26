@@ -3954,6 +3954,33 @@ class TestGraphQLMutation(tb.GraphQLTestCase):
             "User": [orig_data]
         })
 
+        # N.B: clear: false -- shouldn't do anything!
+        self.assert_graphql_query_result(r"""
+            mutation update_User {
+                update_User(
+                    data: {
+                        groups: {
+                            clear: false
+                        }
+                    },
+                    filter: {
+                        name: {eq: "John"}
+                    }
+                ) {
+                    name
+                    groups(order: {name: {dir: ASC}}) {
+                        name
+                    }
+                }
+            }
+        """, {
+            "update_User": [orig_data]
+        })
+
+        self.assert_graphql_query_result(validation_query, {
+            "User": [orig_data]
+        })
+
         self.assert_graphql_query_result(r"""
             mutation update_User {
                 update_User(

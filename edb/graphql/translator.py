@@ -42,6 +42,8 @@ from edb import errors
 
 from edb.common import debug
 from edb.common import typeutils
+from edb.common.ast import visitor
+
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import codegen as ql_codegen
@@ -447,6 +449,7 @@ class GraphQLTranslator:
         return query
 
     def _should_include(self, directives):
+        # First mark *everything* as critical
         for directive in directives:
             if directive.name.value in ('include', 'skip'):
                 cond = [a.value for a in directive.arguments
@@ -457,9 +460,19 @@ class GraphQLTranslator:
                     var = self._context.vars[varname]
                     self._context.vars[varname] = var._replace(critical=True)
 
-                    if self._context.parse_only_mode:
-                        return True
+        # In parse_only_mode we are done
+        if self._context.parse_only_mode:
+            return True
 
+        # Otherwise actually evaluate it
+        for directive in directives:
+            if directive.name.value in ('include', 'skip'):
+                cond = [a.value for a in directive.arguments
+                        if a.name.value == 'if'][0]
+
+                if isinstance(cond, gql_ast.VariableNode):
+                    varname = cond.name.value
+                    var = self._context.vars[varname]
                     value = var.val
 
                     if value is None:
@@ -493,6 +506,23 @@ class GraphQLTranslator:
             else:
                 val = convert_default(node.default_value, varname)
                 variables[varname] = Var(val=val, defn=node, critical=False)
+
+                # In HTTP mode, we rely on merging the dict of defaults with
+                # the dict of actual arguments.
+                #
+                # FIXME: This is actually a little dodgy, since the gel proto
+                # will require passing an explicit None, but in graphql that
+                # should result in null being passed and the default not
+                # used... But in our implementation, that fails, because
+                # the rewriter (I think?) is marking it required?
+                #
+                # Alright, actually for now we are rejecting it.
+                if self._context.native_input:
+                    raise errors.UnsupportedFeatureError(
+                        'Default variables are not supported on the '
+                        'gel protocol'
+                    )
+
         else:
             # we have the variable, but we still need to update the defn field
             variables[varname] = Var(
@@ -502,10 +532,10 @@ class GraphQLTranslator:
         elements = []
 
         for sel in node.selections:
+            spec = self.visit(sel)
             if not self._should_include(sel.directives):
                 continue
 
-            spec = self.visit(sel)
             if spec is not None:
                 elements.append(spec)
 
@@ -1056,8 +1086,11 @@ class GraphQLTranslator:
                     # being updated (so that SELECT can be applied if needed)
                     with self._update_path_for_insert_field(field):
                         _, target = self._get_parent_and_current_type()
-                        shapeop, value = self._visit_update_op(
+                        res = self._visit_update_op(
                             field.value, eqlpath, target)
+                        if res is None:
+                            continue
+                        shapeop, value = res
 
                         result.append(
                             qlast.ShapeElement(
@@ -1768,40 +1801,25 @@ class GraphQLTranslator:
 
         casttype = qlast.TypeName(maintype=castname)
 
-        needs_coalesce = self._context.native_input and var.val is not None
-        optional = optional or needs_coalesce
+        casts = [casttype]
+        # Currently, whe using the native protocol we pass in
+        # extracted arguments as JSON instead of native encodings.
+        # We probably should be able to do better, since we do this right
+        # on the edgeql extraction side, but I didn't want to bother
+        # with integrating the extractors to share the code.
+        if self._context.native_input and varname.startswith('__edb_arg_'):
+            casts.append(
+                qlast.TypeName(maintype=qlast.ObjectRef(name='json'))
+            )
 
-        val = qlast.TypeCast(
-            type=casttype,
-            expr=qlast.QueryParameter(name=varname),
-            cardinality_mod=(
-                qlast.CardinalityModifier.Optional if optional else None
-            ),
-        )
-
-        # In HTTP mode, we rely on merging the dict of defaults with
-        # the dict of actual arguments. That would be a pain on the
-        # native protocol, so we inject coalesces instead.
-        #
-        # FIXME: This is actually a little dodgy, since the gel proto
-        # will require passing an explicit None, but in graphql that
-        # should result in null being passed and the default not
-        # used... But in our implementation, that fails, because
-        # the rewriter (I think?) is marking it required?
-        #
-        # Alright, actually for now we are rejecting it.
-        if needs_coalesce:
-            # val = qlast.BinOp(
-            #     left=val,
-            #     op='??',
-            #     # We have to cast because of enums
-            #     right=qlast.TypeCast(
-            #         type=casttype,
-            #         expr=qlast.Constant.make(var.val),
-            #     ),
-            # )
-            raise errors.UnsupportedFeatureError(
-                'Default variables are not supported on the gel protocol'
+        val = qlast.QueryParameter(name=varname)
+        for ct in reversed(casts):
+            val = qlast.TypeCast(
+                type=ct,
+                expr=val,
+                cardinality_mod=(
+                    qlast.CardinalityModifier.Optional if optional else None
+                ),
             )
 
         return val
@@ -2005,6 +2023,7 @@ def translate_ast(
     operation_name: Optional[str]=None,
     variables: Optional[Mapping[str, Any]]=None,
     substitutions: Optional[dict[str, tuple[str, int, int]]],
+    extracted_variables: Optional[Mapping[str, Any]],
     native_input: bool = False,
 ) -> TranspiledOperation:
 
@@ -2016,6 +2035,17 @@ def translate_ast(
 
     if variables is None:
         variables = {}
+
+    # The normalizer tries to handle default variables on its own,
+    # which we still don't support in native mode.
+    # Detect what it does and reject it.
+    if (
+        native_input
+        and len(extracted_variables or ()) > len(substitutions or ())
+    ):
+        raise errors.UnsupportedFeatureError(
+            'Default variables are not supported on the gel protocol'
+        )
 
     validation_errors = convert_errors(
         graphql.validate(gqlcore.graphql_schema, document_ast),
@@ -2053,20 +2083,22 @@ def translate_ast(
 
     op = next(iter(edge_forest_map.values()))
 
-    if native_input and op.critvars:
-        op.stmt.orderby = [
-            qlast.SortExpr(
-                path=qlast.UnaryOp(
-                    op='EXISTS',
-                    operand=qlast.Set(
-                        elements=[
-                            translator._get_variable(vn)
-                            for vn in op.critvars
-                        ]
-                    )
+    if native_input:
+        used_vars = {
+            p.name
+            for p in visitor.find_children(op.stmt, qlast.QueryParameter)
+        }
+        unused_vars = op.vars.keys() - used_vars
+
+        if unused_vars:
+            op.stmt.orderby = [
+                qlast.Tuple(
+                    elements=[
+                        translator._get_variable(vn)
+                        for vn in sorted(unused_vars)
+                    ]
                 )
-            )
-        ]
+            ]
 
     # generate the specific result
     return TranspiledOperation(

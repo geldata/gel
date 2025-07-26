@@ -22,6 +22,7 @@ from __future__ import annotations
 from .compiler import compile_graphql
 from .translator import translate_ast, parse_text, parse_tokens
 from .translator import TranspiledOperation
+from .tokenizer import Source, NormalizedSource
 from .types import GQLCoreSchema
 
 from . import _patch_core
@@ -30,5 +31,5 @@ _patch_core.patch_graphql_core()
 
 __all__ = (
     'translate_ast', 'parse_text', 'parse_tokens', 'GQLCoreSchema',
-    'compile_graphql', 'TranspiledOperation'
+    'compile_graphql', 'TranspiledOperation', 'Source', 'NormalizedSource'
 )

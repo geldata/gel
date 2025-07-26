@@ -693,11 +693,12 @@ dependencies = [
 [[package]]
 name = "edb-graphql-parser"
 version = "0.3.0"
-source = "git+https://github.com/edgedb/graphql-parser#49f0e0144fac00750db6c448b7050d054e609701"
+source = "git+https://github.com/edgedb/graphql-parser#96f4d0fe5c0cc6bc6640f7f7089fda59c96b52cf"
 dependencies = [
  "combine 3.8.1",
  "num-bigint 0.2.6",
  "num-traits",
+ "serde",
  "thiserror 1.0.69",
 ]
 
@@ -1252,12 +1253,14 @@ checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
 name = "graphql-rewrite"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "combine 3.8.1",
  "edb-graphql-parser",
  "num-bigint 0.4.6",
  "num-traits",
  "pretty_assertions",
  "pyo3",
+ "serde",
  "thiserror 2.0.12",
 ]
 
