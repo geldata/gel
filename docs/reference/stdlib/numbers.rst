@@ -614,7 +614,7 @@ Definitions
                   std::bit_and(l: int32, r: int32) -> int32
                   std::bit_and(l: int64, r: int64) -> int64
 
-    Bitwise AND operator for 2 intergers.
+    Bitwise AND operator for 2 integers.
 
     .. code-block:: edgeql-repl
 
@@ -629,7 +629,7 @@ Definitions
                   std::bit_or(l: int32, r: int32) -> int32
                   std::bit_or(l: int64, r: int64) -> int64
 
-    Bitwise OR operator for 2 intergers.
+    Bitwise OR operator for 2 integers.
 
     .. code-block:: edgeql-repl
 
@@ -644,7 +644,7 @@ Definitions
                   std::bit_xor(l: int32, r: int32) -> int32
                   std::bit_xor(l: int64, r: int64) -> int64
 
-    Bitwise exclusive OR operator for 2 intergers.
+    Bitwise exclusive OR operator for 2 integers.
 
     .. code-block:: edgeql-repl
 
@@ -659,7 +659,7 @@ Definitions
                   std::bit_not(r: int32) -> int32
                   std::bit_not(r: int64) -> int64
 
-    Bitwise negation operator for 2 intergers.
+    Bitwise negation operator for 2 integers.
 
     Bitwise negation for integers ends up similar to mathematical negation
     because typically the signed integers use "two's complement"
@@ -681,7 +681,7 @@ Definitions
                   std::bit_lshift(val: int32, n: int64) -> int32
                   std::bit_lshift(val: int64, n: int64) -> int64
 
-    Bitwise left-shift operator for intergers.
+    Bitwise left-shift operator for integers.
 
     The integer *val* is shifted by *n* bits to the left. The rightmost added
     bits are all ``0``. Shifting an integer by a number of bits greater than
@@ -728,7 +728,7 @@ Definitions
                   std::bit_rshift(val: int32, n: int64) -> int32
                   std::bit_rshift(val: int64, n: int64) -> int64
 
-    Bitwise arithemtic right-shift operator for intergers.
+    Bitwise arithemtic right-shift operator for integers.
 
     The integer *val* is shifted by *n* bits to the right. In the arithmetic
     right-shift, the sign is preserved. This means that the leftmost added bits
