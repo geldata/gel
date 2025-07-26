@@ -102,6 +102,9 @@ class TestSQLQuery(tb.SQLQueryTestCase):
 
         create module Dup;
         create type Dup::Movie;
+
+        CREATE ROLE User_A { SET password := 'secret'; };
+        CREATE ROLE User_B { SET password := 'secret'; };
         ''',
         os.path.join(
             os.path.dirname(__file__), 'schemas', 'movies_setup.edgeql'
@@ -3243,6 +3246,31 @@ class TestSQLQuery(tb.SQLQueryTestCase):
                 select
                   limit from x
             ''')
+
+    async def test_sql_query_current_user_01(self):
+        conn_A = None
+        conn_B = None
+
+        try:
+            conn_A = await self.create_sql_connection(
+                user='User_A',
+                password='secret',
+            )
+            res = [list(r.values()) for r in await conn_A.fetch('SELECT CURRENT_USER')]
+            self.assert_data_shape(res, [['User_A']])
+
+            conn_B = await self.create_sql_connection(
+                user='User_B',
+                password='secret',
+            )
+            res = [list(r.values()) for r in await conn_B.fetch('SELECT CURRENT_USER')]
+            self.assert_data_shape(res, [['User_B']])
+
+        finally:
+            if conn_A:
+                await conn_A.close()
+            if conn_B:
+                await conn_B.close()
 
 
 class TestSQLQueryNonTransactional(tb.SQLQueryTestCase):

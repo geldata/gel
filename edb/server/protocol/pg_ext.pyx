@@ -30,7 +30,7 @@ import sys
 import time
 import uuid
 from collections import deque
-from typing import Sequence
+from typing import Optional, Sequence
 
 cimport cython
 import immutables
@@ -1736,8 +1736,21 @@ cdef class PgConnection(frontend.FrontendConnection):
         if self.debug:
             self.debug_print("Compile", source.text())
 
+        # Settings which may affect the final compiled source
+        apply_access_policy = (
+            self.database.db_config.get('apply_access_policies_pg', None)
+        )
+        is_superuser = self.tenant.get_roles()[self.username]['superuser']
         fe_settings = dbv.current_fe_settings()
-        key = compute_cache_key(source, fe_settings)
+
+        key = compute_cache_key(
+            source,
+            fe_settings,
+            self.dbname,
+            self.username,
+            is_superuser,
+            apply_access_policy,
+        )
 
         ignore_cache |= self._disable_cache
 
@@ -1766,6 +1779,7 @@ cdef class PgConnection(frontend.FrontendConnection):
                 self.sql_prepared_stmts_map,
                 self.dbname,
                 self.username,
+                is_superuser,
                 client_id=self.tenant.client_id,
                 client_name=self.tenant.get_instance_name(),
             )
@@ -1823,13 +1837,25 @@ cdef class PgConnection(frontend.FrontendConnection):
 
 
 def compute_cache_key(
-    source: pg_parser.Source, fe_settings: dbstate.SQLSettings
+    source: pg_parser.Source,
+    fe_settings: dbstate.SQLSettings,
+    dbname: str,
+    username: str,
+    is_superuser: bool,
+    apply_access_policy: Optional[bool],
 ) -> bytes:
     h = hashlib.blake2b(source.cache_key())
+    def update(val):
+        h.update(hash(val).to_bytes(8, signed=True))
+
     for key, value in fe_settings.items():
         if key.startswith('global '):
             continue
-        h.update(hash(value).to_bytes(8, signed=True))
+        update(value)
+    update(dbname)
+    update(username)
+    update(is_superuser)
+    update(apply_access_policy if apply_access_policy is not None else -1)
     return h.digest()
 
 
