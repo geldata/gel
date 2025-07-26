@@ -550,6 +550,7 @@ class Compiler:
         prepared_stmt_map: Mapping[str, str],
         current_database: str,
         current_user: str,
+        is_superuser: bool,
     ) -> list[dbstate.SQLQueryUnit]:
         state = dbstate.CompilerConnectionState(
             user_schema=user_schema,
@@ -579,6 +580,7 @@ class Compiler:
             prepared_stmt_map=prepared_stmt_map,
             current_database=current_database,
             current_user=current_user,
+            is_superuser=is_superuser,
             allow_user_specified_id=allow_user_specified_id,
             apply_access_policies=apply_access_policies_pg,
             disambiguate_column_names=False,
