@@ -447,6 +447,7 @@ class GraphQLTranslator:
         return query
 
     def _should_include(self, directives):
+        # First mark *everything* as critical
         for directive in directives:
             if directive.name.value in ('include', 'skip'):
                 cond = [a.value for a in directive.arguments
@@ -457,9 +458,19 @@ class GraphQLTranslator:
                     var = self._context.vars[varname]
                     self._context.vars[varname] = var._replace(critical=True)
 
-                    if self._context.parse_only_mode:
-                        return True
+        # In parse_only_mode we are done
+        if self._context.parse_only_mode:
+            return True
 
+        # Otherwise actually evaluate it
+        for directive in directives:
+            if directive.name.value in ('include', 'skip'):
+                cond = [a.value for a in directive.arguments
+                        if a.name.value == 'if'][0]
+
+                if isinstance(cond, gql_ast.VariableNode):
+                    varname = cond.name.value
+                    var = self._context.vars[varname]
                     value = var.val
 
                     if value is None:
@@ -502,10 +513,10 @@ class GraphQLTranslator:
         elements = []
 
         for sel in node.selections:
+            spec = self.visit(sel)
             if not self._should_include(sel.directives):
                 continue
 
-            spec = self.visit(sel)
             if spec is not None:
                 elements.append(spec)
 
