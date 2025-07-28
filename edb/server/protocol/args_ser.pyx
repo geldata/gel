@@ -565,12 +565,8 @@ cdef _inject_globals(
     out_buf: WriteBuffer,
 ):
     if globals := query_unit_or_group.globals:
-        state_globals = dbv.get_globals()
         for (name, has_present_arg) in globals:
-            val = None
-            entry = state_globals.get(name)
-            if entry:
-                val = entry.value
+            val, is_present = dbv.get_global_value(name)
             if val is not None:
                 out_buf.write_int32(len(val))
                 out_buf.write_bytes(val)
@@ -578,7 +574,7 @@ cdef _inject_globals(
                 out_buf.write_int32(-1)
             if has_present_arg:
                 out_buf.write_int32(1)
-                present = b'\x01' if entry is not None else b'\x00'
+                present = b'\x01' if is_present else b'\x00'
                 out_buf.write_bytes(present)
 
     if permissions := query_unit_or_group.permissions:

@@ -1057,10 +1057,11 @@ async def execute_json(
     tx_isolation: edbdef.TxIsolationLevel | None = None,
     query_req: Optional[rpc.CompilationRequest] = None,
 ) -> bytes:
+    if globals_ is None:
+        globals_ = {}
+
     if compiled.query_unit_group.json_permissions:
         # Inject any required permissions into the globals json.
-        if globals_ is None:
-            globals_ = {}
 
         superuser, available_permissions = dbv.get_permissions()
 
@@ -1073,6 +1074,14 @@ async def execute_json(
             globals_[permission] = (
                 superuser or permission in available_permissions
             )
+
+    # TODO: only when needed? in a less dodgy way??
+    for k, v in dbv._sys_globals.items():
+        if k in globals_:
+            raise RuntimeError(
+                f"System global '{k}' cannot be explicitly specified"
+            )
+        globals_[k] = v
 
     dbv.set_globals(immutables.Map({
         "__::__edb_json_globals__": config.SettingValue(

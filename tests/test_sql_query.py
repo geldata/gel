@@ -1683,6 +1683,17 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         )
         self.assertEqual(res1, res2)
 
+    async def test_sql_query_static_eval_09(self):
+        # we do no error checking on globals in SQL, but make sure
+        # system ones aren't overridden
+        await self.squery_values('''
+            SET LOCAL "global sys::current_role" TO hello;
+        ''')
+        await self.assert_sql_query_result(
+            'select current_user as cur;',
+            [{'cur': 'admin'}],
+        )
+
     async def test_sql_native_query_static_eval_01(self):
         await self.assert_sql_query_result(
             'select current_schemas(false);',

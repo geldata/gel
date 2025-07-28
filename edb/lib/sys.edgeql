@@ -465,6 +465,10 @@ sys::approximate_count(
     set required_permissions := { sys::perm::superuser };
 };
 
+CREATE REQUIRED GLOBAL sys::current_role -> str {
+    SET default := '';
+};
+
 # Add permissions to schema and std.
 
 # These modules are populated before sys permissions so we need to

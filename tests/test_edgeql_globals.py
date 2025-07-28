@@ -435,7 +435,17 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             )
 
     async def test_edgeql_globals_14(self):
-        with self.assertRaisesRegex(
+        async with self.assertRaisesRegexTx(
+            edgedb.ConfigurationError,
+            "system global 'sys::current_role' may not be explicitly specified"
+        ):
+            await self.con.execute(
+                '''
+                set global sys::current_role := 'yay!'
+                ''',
+            )
+
+        async with self.assertRaisesRegexTx(
             edgedb.ConfigurationError,
             "global 'def_cur_user_excited' is computed from an expression "
             "and cannot be modified",
@@ -582,6 +592,24 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
                 await scon.query_single(
                     f'select {{ imaginary := global imaginary }}'
                 )
+        finally:
+            await con.aclose()
+
+    async def test_edgeql_globals_client_05(self):
+        con = edgedb.create_async_client(
+            **self.get_connect_args()
+        )
+        try:
+            globs = {
+                'sys::current_role': 'lol'
+            }
+            scon = con.with_globals(**globs)
+            with self.assertRaisesRegex(
+                edgedb.QueryArgumentError,
+                r"got {'sys::current_role'}, "
+                r"extra {'sys::current_role'}",
+            ):
+                await scon.query_single('select global sys::current_role')
         finally:
             await con.aclose()
 

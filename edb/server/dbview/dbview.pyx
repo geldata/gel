@@ -622,6 +622,12 @@ cdef class DatabaseConnectionView:
         self._state_serializer = None
         self._role_name = role_name
 
+        # N.B: If we add anything that is not a string, we'll need to
+        # adjust get_global_value to encode differently.
+        self._sys_globals = {
+            'sys::current_role': self._role_name,
+        }
+
         if db.name == defines.EDGEDB_SYSTEM_DB:
             # Make system database read-only.
             self._capability_mask = <uint64_t>(
@@ -723,6 +729,17 @@ cdef class DatabaseConnectionView:
             return self._in_tx_globals
         else:
             return self._globals
+
+    cpdef get_global_value(self, k):
+        if k in self._sys_globals:
+            # N.B: Currently only strings
+            return self._sys_globals[k].encode('utf-8'), True
+        else:
+            entry = self.get_globals().get(k)
+            if entry:
+                return entry.value, True
+            else:
+                return None, False
 
     cdef get_state_serializer(self):
         if self._in_tx:

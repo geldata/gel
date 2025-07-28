@@ -1787,7 +1787,9 @@ class StateSerializerFactory:
 
         globals_shape = []
         global_reps = {}
-        for g in ctx.schema.get_objects(type=s_globals.Global):
+        # Only look at user_schema for globals, since system defined ones
+        # are only set by the system.
+        for g in user_schema.get_objects(type=s_globals.Global):
             if g.is_computable(ctx.schema):
                 continue
             name = str(g.get_name(ctx.schema))

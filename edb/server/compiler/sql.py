@@ -72,7 +72,6 @@ def compile_sql(
     tx_state: dbstate.SQLTransactionState,
     prepared_stmt_map: Mapping[str, str],
     current_database: str,
-    current_user: str,
     allow_user_specified_id: Optional[bool],
     apply_access_policies: Optional[bool],
     include_edgeql_io_format_alternative: bool = False,
@@ -92,7 +91,6 @@ def compile_sql(
             tx_state=tx_state,
             prepared_stmt_map=prepared_stmt_map,
             current_database=current_database,
-            current_user=current_user,
             allow_user_specified_id=allow_user_specified_id,
             apply_access_policies=apply_access_policies,
             include_edgeql_io_format_alternative=(
@@ -200,7 +198,6 @@ def _compile_sql(
     tx_state: dbstate.SQLTransactionState,
     prepared_stmt_map: Mapping[str, str],
     current_database: str,
-    current_user: str,
     allow_user_specified_id: Optional[bool],
     apply_access_policies: Optional[bool],
     include_edgeql_io_format_alternative: bool = False,
@@ -214,7 +211,6 @@ def _compile_sql(
     opts = ResolverOptionsPartial(
         query_str=query_str,
         current_database=current_database,
-        current_user=current_user,
         allow_user_specified_id=allow_user_specified_id,
         apply_access_policies=apply_access_policies,
         include_edgeql_io_format_alternative=(
@@ -648,7 +644,6 @@ def _compile_show_command(stmt: pgast.VariableShowStmt) -> pgast.Query:
 
 @dataclasses.dataclass(kw_only=True, eq=False, repr=False)
 class ResolverOptionsPartial:
-    current_user: str
     current_database: str
     query_str: str
     allow_user_specified_id: Optional[bool]
@@ -695,7 +690,6 @@ def resolve_query(
         apply_access_policies = False
 
     options = pg_resolver.Options(
-        current_user=opts.current_user,
         current_database=opts.current_database,
         current_query=opts.query_str,
         search_path=search_path,

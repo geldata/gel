@@ -57,6 +57,11 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
             """)
             self.assert_data_shape(result, [[True, True],])
 
+            result = await conn.query("""
+                SELECT global sys::current_role;
+            """)
+            self.assert_data_shape(result, ['foo'])
+
         finally:
             await conn.aclose()
             await self.con.query('''

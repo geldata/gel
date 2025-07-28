@@ -289,3 +289,13 @@ class TestHttpPermissions(tb_http.EdgeQLTestCase):
                     'param': 1,
                 },
             )
+
+    def test_http_permissions_05(self):
+        # Permission within function that also has an argument
+        for use_http_post in [True, False]:
+            self.assert_edgeql_query_result(
+                f'select global sys::current_role',
+                # Tests run as superuser
+                ['admin'],
+                use_http_post=use_http_post,
+            )

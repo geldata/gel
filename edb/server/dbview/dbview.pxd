@@ -187,6 +187,8 @@ cdef class DatabaseConnectionView:
         object _last_comp_state
         int _last_comp_state_id
 
+        dict _sys_globals
+
         object __weakref__
 
     cdef _reset_tx_state(self)
@@ -232,6 +234,7 @@ cdef class DatabaseConnectionView:
 
     cpdef get_globals(self)
     cpdef set_globals(self, new_globals)
+    cpdef get_global_value(self, k)
 
     cdef get_state_serializer(self)
     cdef set_state_serializer(self, new_serializer)

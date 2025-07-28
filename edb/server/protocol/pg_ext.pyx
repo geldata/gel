@@ -1063,6 +1063,7 @@ cdef class PgConnection(frontend.FrontendConnection):
                 dbv.current_fe_settings(),
                 source,
                 self.get_permissions(),
+                self.username,
             )
             actions.append(
                 PGMessage(
@@ -1198,6 +1199,7 @@ cdef class PgConnection(frontend.FrontendConnection):
                             fe_settings,
                             stmt.source,
                             self.get_permissions(),
+                            self.username,
                         )
                     except Exception as e:
                         # we return here instead of raising the exception
@@ -1839,6 +1841,7 @@ cdef bytes remap_arguments(
     fe_settings: dbstate.SQLSettings,
     source: pg_parser.Source,
     permission_info: tuple[bool, Sequence[str]],
+    username: str,  # HACK
 ):
     cdef:
         int16_t param_format_count
@@ -1924,6 +1927,8 @@ cdef bytes remap_arguments(
                 if param.is_permission:
                     buf.write_int32(1)
                     buf.write_byte(is_superuser or str(name) in permissions)
+                elif name.module == 'sys' and name.name == 'current_role':
+                    write_arg(buf, param.pg_type, (username,))
                 else:
                     setting_name = f'global {name.module}::{name.name}'
                     values = fe_settings.get(setting_name, None)
