@@ -550,6 +550,7 @@ class Compiler:
         prepared_stmt_map: Mapping[str, str],
         current_database: str,
         current_user: str,
+        default_apply_access_policy: bool,
     ) -> list[dbstate.SQLQueryUnit]:
         state = dbstate.CompilerConnectionState(
             user_schema=user_schema,
@@ -569,7 +570,7 @@ class Compiler:
 
         setting = database_config.get('apply_access_policies_pg', None)
         apply_access_policies_pg = None
-        if setting and setting.value:
+        if setting:
             apply_access_policies_pg = sql.is_setting_truthy(setting.value)
 
         return sql.compile_sql(
@@ -580,6 +581,7 @@ class Compiler:
             current_database=current_database,
             allow_user_specified_id=allow_user_specified_id,
             apply_access_policies=apply_access_policies_pg,
+            default_apply_access_policy=default_apply_access_policy,
             disambiguate_column_names=False,
             backend_runtime_params=self.state.backend_runtime_params,
             protocol_version=defines.POSTGRES_PROTOCOL,

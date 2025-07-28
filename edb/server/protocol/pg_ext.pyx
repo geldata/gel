@@ -30,7 +30,7 @@ import sys
 import time
 import uuid
 from collections import deque
-from typing import Sequence
+from typing import Optional, Sequence
 
 cimport cython
 import immutables
@@ -1738,12 +1738,25 @@ cdef class PgConnection(frontend.FrontendConnection):
         if self.debug:
             self.debug_print("Compile", source.text())
 
+        # Settings which may affect the final compiled source
+        apply_access_policy = (
+            self.database.db_config.get('apply_access_policies_pg', None)
+        )
+        default_apply_access_policy = (
+            self.tenant.get_default_apply_access_policy_pg(self.username)
+        )
         fe_settings = dbv.current_fe_settings()
-        key = compute_cache_key(source, fe_settings)
+
+        key = compute_cache_key(
+            source,
+            fe_settings,
+            apply_access_policy,
+            default_apply_access_policy,
+        )
 
         ignore_cache |= self._disable_cache
 
-        result: List[dbstate.SQLQueryUnit]
+        result: list[dbstate.SQLQueryUnit]
         if not ignore_cache:
             result = self.database.lookup_compiled_sql(key)
             if result is not None:
@@ -1768,6 +1781,7 @@ cdef class PgConnection(frontend.FrontendConnection):
                 self.sql_prepared_stmts_map,
                 self.dbname,
                 self.username,
+                default_apply_access_policy,
                 client_id=self.tenant.client_id,
                 client_name=self.tenant.get_instance_name(),
             )
@@ -1825,13 +1839,21 @@ cdef class PgConnection(frontend.FrontendConnection):
 
 
 def compute_cache_key(
-    source: pg_parser.Source, fe_settings: dbstate.SQLSettings
+    source: pg_parser.Source,
+    fe_settings: dbstate.SQLSettings,
+    apply_access_policy: Optional[bool],
+    default_apply_access_policy: bool,
 ) -> bytes:
     h = hashlib.blake2b(source.cache_key())
+    def update(val):
+        h.update(hash(val).to_bytes(8, signed=True))
+
     for key, value in fe_settings.items():
         if key.startswith('global '):
             continue
-        h.update(hash(value).to_bytes(8, signed=True))
+        update(value)
+    update(apply_access_policy if apply_access_policy is not None else -1)
+    update(default_apply_access_policy)
     return h.digest()
 
 
