@@ -901,6 +901,9 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             raise
 
         cfg_ser = self.server.compilation_config_serializer
+        default_apply_access_policy_pg = (
+            self.tenant.get_default_apply_access_policy_pg(self.username)
+        )
         rv = rpc.CompilationRequest(
             source=self._tokenize(query, lang),
             protocol_version=self.protocol_version,
@@ -919,6 +922,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             system_config=_dbview.get_compilation_system_config(),
             role_name=self.username,
             branch_name=self.dbname,
+            default_apply_access_policy_pg=default_apply_access_policy_pg,
         )
         return rv, allow_capabilities
 
@@ -1599,6 +1603,9 @@ cdef class EdgeConnection(frontend.FrontendConnection):
         cdef dbview.DatabaseConnectionView _dbview = self.get_dbview()
 
         cfg_ser = self.server.compilation_config_serializer
+        default_apply_access_policy_pg = (
+            self.tenant.get_default_apply_access_policy_pg(self.username)
+        )
         query_req = rpc.CompilationRequest(
             source=edgeql.Source.from_string(eql),
             protocol_version=self.protocol_version,
@@ -1606,6 +1613,7 @@ cdef class EdgeConnection(frontend.FrontendConnection):
             compilation_config_serializer=cfg_ser,
             role_name=self.username,
             branch_name=self.dbname,
+            default_apply_access_policy_pg=default_apply_access_policy_pg,
         )
 
         compiled = await _dbview.parse(query_req)
@@ -2016,6 +2024,9 @@ async def run_script(
     try:
         _dbview = conn.get_dbview()
         cfg_ser = server.compilation_config_serializer
+        default_apply_access_policy_pg = (
+            tenant.get_default_apply_access_policy_pg(user)
+        )
         compiled = await _dbview.parse(
             rpc.CompilationRequest(
                 source=edgeql.Source.from_string(script),
@@ -2025,6 +2036,7 @@ async def run_script(
                 output_format=FMT_NONE,
                 role_name=user,
                 branch_name=database,
+                default_apply_access_policy_pg=default_apply_access_policy_pg,
             ),
         )
         compiled.tag = "gel/startup-script"

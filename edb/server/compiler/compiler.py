@@ -156,6 +156,7 @@ class CompileContext:
     notebook: bool = False
     branch_name: Optional[str] = None
     role_name: Optional[str] = None
+    default_apply_access_policy_pg: bool = True
     cache_key: Optional[uuid.UUID] = None
 
     def get_cache_mode(self) -> config.QueryCacheMode:
@@ -680,6 +681,9 @@ class Compiler:
             protocol_version=request.protocol_version,
             role_name=request.role_name,
             branch_name=request.branch_name,
+            default_apply_access_policy_pg=(
+                request.default_apply_access_policy_pg
+            ),
             cache_key=request.get_cache_key(),
         )
 
@@ -794,6 +798,9 @@ class Compiler:
             protocol_version=request.protocol_version,
             json_parameters=request.input_format is enums.InputFormat.JSON,
             expect_rollback=expect_rollback,
+            default_apply_access_policy_pg=(
+                request.default_apply_access_policy_pg
+            ),
             cache_key=request.get_cache_key(),
         )
 
@@ -2793,6 +2800,7 @@ def compile_sql_as_unit_group(
         tx_state=sql_tx_state,
         prepared_stmt_map={},
         current_database=ctx.branch_name or "<unknown>",
+        default_apply_access_policy=ctx.default_apply_access_policy_pg,
         allow_user_specified_id=allow_user_specified_id,
         apply_access_policies=apply_access_policies,
         include_edgeql_io_format_alternative=True,

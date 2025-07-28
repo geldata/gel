@@ -54,6 +54,7 @@ class CompilationRequest:
     inline_objectids: bool
     role_name: str
     branch_name: str
+    default_apply_access_policy_pg: bool
 
     modaliases: immutables.Map[str | None, str] | None
     session_config: immutables.Map[str, config.SettingValue] | None
@@ -81,6 +82,7 @@ class CompilationRequest:
         role_name: str = defines.EDGEDB_SUPERUSER,
         branch_name: str = defines.EDGEDB_SUPERUSER_DB,
         key_params: typing.Mapping[str, object] | None = None,
+        default_apply_access_policy_pg: bool = True,
     ):
         ...
 
