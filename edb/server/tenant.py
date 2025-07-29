@@ -140,6 +140,7 @@ class Tenant(ha_base.ClusterProtocol):
     _config_file: pathlib.Path | None
 
     _extensions_dirs: tuple[pathlib.Path, ...]
+    _extension_refs: immutables.Map[str, Any]
 
     # A set of databases that should not accept new connections.
     _block_new_connections: set[str]
@@ -183,6 +184,7 @@ class Tenant(ha_base.ClusterProtocol):
         self._sidechannel_email_configs = []
 
         self._extensions_dirs = extensions_dir
+        self._extension_refs = immutables.Map()
 
         # Never use `self.__sys_pgcon` directly; get it via
         # `async with self.use_sys_pgcon()`.
@@ -354,6 +356,10 @@ class Tenant(ha_base.ClusterProtocol):
     @property
     def tenant_id(self) -> str:
         return self._tenant_id
+
+    @property
+    def extension_refs(self) -> immutables.Map[str, Any]:
+        return self._extension_refs
 
     @property
     def suggested_client_pool_size(self) -> int:
@@ -1287,6 +1293,27 @@ class Tenant(ha_base.ClusterProtocol):
 
         return extensions
 
+    async def fetch_extension_refs(
+        self, conn: pgcon.PGConnection
+    ) -> None:
+        from edb.pgsql import trampoline
+
+        extension_refs = await conn.sql_fetch(
+            trampoline.fixup_query("""
+                SELECT key, json::json FROM edgedbinstdata_VER.instdata
+                WHERE starts_with(key, 'ext_ref_');
+            """).encode('utf-8')
+        )
+        if extension_refs:
+            self._extension_refs = immutables.Map({
+                ext_name.decode()[8:]: json.loads(
+                    ref_data, object_hook=immutables.Map
+                )
+                for ext_name, ref_data in extension_refs
+            })
+        else:
+            self._extension_refs = immutables.Map()
+
     async def _debug_introspect(
         self,
         conn: pgcon.PGConnection,
@@ -1406,6 +1433,7 @@ class Tenant(ha_base.ClusterProtocol):
         db_config_json = await self._server.introspect_db_config(conn)
 
         extensions = await self._introspect_extensions(conn)
+        await self.fetch_extension_refs(conn)
 
         query_cache: list[tuple[bytes, ...]] | None = None
         if (

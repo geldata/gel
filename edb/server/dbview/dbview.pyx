@@ -1040,6 +1040,10 @@ cdef class DatabaseConnectionView:
         def __get__(self):
             return self._db.reflection_cache
 
+    property extension_refs:
+        def __get__(self):
+            return self.tenant._extension_refs
+
     property dbver:
         def __get__(self):
             if self._in_tx and self._in_tx_dbver:
@@ -1339,6 +1343,7 @@ cdef class DatabaseConnectionView:
                             user_schema,
                             self.get_global_schema_pickle(),
                             self.reflection_cache,
+                            self.extension_refs,
                             database_config,
                             system_config,
                             query_req.serialize(),
@@ -1786,6 +1791,7 @@ cdef class DatabaseConnectionView:
                     self.get_user_schema_pickle(),
                     self.get_global_schema_pickle(),
                     self.reflection_cache,
+                    self.extension_refs,
                     self.get_database_config(),
                     self.get_compilation_system_config(),
                     query_req.serialize(),

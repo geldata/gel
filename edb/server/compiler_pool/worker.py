@@ -88,6 +88,7 @@ def __sync__(
     evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
+    extension_refs: Optional[bytes],
     global_schema: Optional[bytes],
     database_config: Optional[bytes],
     system_config: Optional[bytes],
@@ -107,14 +108,17 @@ def __sync__(
         if db is None:
             assert user_schema is not None
             assert reflection_cache is not None
+            assert extension_refs is not None
             assert database_config is not None
             user_schema_unpacked = pickle.loads(user_schema)
             reflection_cache_unpacked = pickle.loads(reflection_cache)
+            extension_refs_unpacked = pickle.loads(extension_refs)
             database_config_unpacked = pickle.loads(database_config)
             db = state.DatabaseState(
                 dbname,
                 user_schema_unpacked,
                 reflection_cache_unpacked,
+                extension_refs_unpacked,
                 database_config_unpacked,
             )
             DBS = DBS.set(dbname, db)
@@ -125,6 +129,8 @@ def __sync__(
                 updates['user_schema'] = pickle.loads(user_schema)
             if reflection_cache is not None:
                 updates['reflection_cache'] = pickle.loads(reflection_cache)
+            if extension_refs is not None:
+                updates['extension_refs'] = pickle.loads(extension_refs)
             if database_config is not None:
                 updates['database_config'] = pickle.loads(database_config)
 
@@ -150,6 +156,7 @@ def compile(
     evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
+    extension_refs: Optional[bytes],
     global_schema: Optional[bytes],
     database_config: Optional[bytes],
     system_config: Optional[bytes],
@@ -161,6 +168,7 @@ def compile(
         evicted_dbs,
         user_schema,
         reflection_cache,
+        extension_refs,
         global_schema,
         database_config,
         system_config,
@@ -170,6 +178,7 @@ def compile(
         db.user_schema,
         GLOBAL_SCHEMA,
         db.reflection_cache,
+        db.extension_refs,
         db.database_config,
         INSTANCE_CONFIG,
         *compile_args,
@@ -227,6 +236,7 @@ def compile_notebook(
     evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
+    extension_refs: Optional[bytes],
     global_schema: Optional[bytes],
     database_config: Optional[bytes],
     system_config: Optional[bytes],
@@ -238,6 +248,7 @@ def compile_notebook(
         evicted_dbs,
         user_schema,
         reflection_cache,
+        extension_refs,
         global_schema,
         database_config,
         system_config,
@@ -247,6 +258,7 @@ def compile_notebook(
         db.user_schema,
         GLOBAL_SCHEMA,
         db.reflection_cache,
+        db.extension_refs,
         db.database_config,
         INSTANCE_CONFIG,
         *compile_args,
@@ -259,6 +271,7 @@ def compile_graphql(
     evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
+    extension_refs: Optional[bytes],
     global_schema: Optional[bytes],
     database_config: Optional[bytes],
     system_config: Optional[bytes],
@@ -270,6 +283,7 @@ def compile_graphql(
         evicted_dbs,
         user_schema,
         reflection_cache,
+        extension_refs,
         global_schema,
         database_config,
         system_config,
@@ -310,6 +324,7 @@ def compile_graphql(
         user_schema=db.user_schema,
         global_schema=GLOBAL_SCHEMA,
         reflection_cache=db.reflection_cache,
+        extension_refs=db.extension_refs,
         database_config=db.database_config,
         system_config=INSTANCE_CONFIG,
         request=request,
@@ -323,6 +338,7 @@ def compile_sql(
     evicted_dbs: list[str],
     user_schema: Optional[bytes],
     reflection_cache: Optional[bytes],
+    extension_refs: Optional[bytes],
     global_schema: Optional[bytes],
     database_config: Optional[bytes],
     system_config: Optional[bytes],
@@ -334,6 +350,7 @@ def compile_sql(
         evicted_dbs,
         user_schema,
         reflection_cache,
+        extension_refs,
         global_schema,
         database_config,
         system_config,
@@ -343,6 +360,7 @@ def compile_sql(
         db.user_schema,
         GLOBAL_SCHEMA,
         db.reflection_cache,
+        db.extension_refs,
         db.database_config,
         INSTANCE_CONFIG,
         *compile_args,

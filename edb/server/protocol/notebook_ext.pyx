@@ -166,6 +166,7 @@ async def execute(db, role_name, tenant, queries: list):
         dbv.get_user_schema_pickle(),
         dbv.get_global_schema_pickle(),
         dbv.reflection_cache,
+        dbv.extension_refs,
         dbv.get_database_config(),
         dbv.get_compilation_system_config(),
         queries,

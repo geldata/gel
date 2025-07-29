@@ -7492,12 +7492,24 @@ class CreateExtension(ExtensionCommand, adapts=s_exts.CreateExtension):
         # ext_schema = backend_params.instance_params.ext_schema
 
         package = self.scls.get_package(schema)
+        assert isinstance(package, s_exts.ExtensionPackage)
 
         for ext_spec in package.get_sql_extensions(schema):
             self._create_extension(ext_spec)
 
         if script := package.get_sql_setup_script(schema):
             self.pgops.add(dbops.Query(script))
+
+        package_name = package.get_displayname(schema)
+        if package_name == 'ai':
+            self.pgops.add(
+                dbops.Query(textwrap.dedent(trampoline.fixup_query(f'''\
+                    INSERT INTO edgedbinstdata_VER.instdata (key, json)
+                    VALUES
+                        ('ext_ref_{package_name}', '{{}}'::jsonb)
+                    ON CONFLICT (key) DO NOTHING;
+                ''')))
+            )
 
         return schema
 
@@ -7620,6 +7632,17 @@ class DeleteExtension(ExtensionCommand, adapts=s_exts.DeleteExtension):
                         schema=ext,
                     ),
                 )
+            )
+
+        package_name = package.get_displayname(schema)
+        if package_name == 'ai':
+            self.pgops.add(
+                dbops.Query(textwrap.dedent(trampoline.fixup_query(f'''\
+                    DELETE FROM
+                        edgedbinstdata_VER.instdata
+                    WHERE
+                        key = 'ext_ref_{package_name}';
+                ''')))
             )
 
         return schema

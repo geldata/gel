@@ -37,6 +37,8 @@ import contextvars
 import itertools
 import json
 import logging
+import os
+import pathlib
 import uuid
 
 import tiktoken
@@ -359,6 +361,7 @@ async def _ext_ai_index_builder_controller_loop(
     holding_lock = False
 
     await db.introspection()
+    await _ext_ai_update_instdata_ref(tenant, dbname)
     naptime_cfg = db.lookup_config("ext::ai::Config::indexer_naptime")
     naptime = naptime_cfg.to_microseconds() / 1000000
 
@@ -428,6 +431,36 @@ async def _ext_ai_index_builder_controller_loop(
 
     finally:
         logger.info(f"stopped {task_name}")
+
+
+async def _ext_ai_update_instdata_ref(
+    tenant: srv_tenant.Tenant,
+    dbname: str,
+) -> None:
+    from edb.pgsql import trampoline
+    from edb.pgsql import common as pg_common
+
+    local_reference_path = os.path.join(
+        pathlib.Path(__file__).parent,
+        'ai_reference.json',
+    )
+    with open(local_reference_path) as local_reference_file:
+        ref_data: dict[str, Any] = json.load(local_reference_file)
+
+    ref_data_json = pg_common.quote_literal(json.dumps(ref_data))
+
+    async with tenant.with_pgcon(dbname) as pgconn:
+        await pgconn.sql_fetch(
+            trampoline.fixup_query(f"""
+                UPDATE
+                    edgedbinstdata_VER.instdata
+                SET
+                    json = {ref_data_json}::jsonb
+                WHERE
+                    key = 'ext_ref_ai';
+            """).encode('utf-8')
+        )
+        await tenant.fetch_extension_refs(pgconn)
 
 
 async def _ext_ai_fetch_active_models(
