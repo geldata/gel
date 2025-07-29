@@ -331,6 +331,49 @@ def success_message(message: str) -> str:
     '''
 
 
+def code_input_form(
+    *,
+    action: str,
+    email: str,
+    provider: str,
+    redirect_to: str,
+    redirect_on_failure: str,
+    label: str = "Enter verification code",
+    button_text: str = "Verify Code",
+    additional_fields: str = "",
+    challenge: Optional[str] = None,
+) -> str:
+    """Renders a 6-digit code input form with auto-formatting and mobile keyboard support."""
+    challenge_field = f'<input type="hidden" name="challenge" value="{challenge}" />' if challenge else ""
+
+    return f'''
+    <form id="code-form" method="POST" action="{action}" novalidate>
+        <input type="hidden" name="email" value="{html.escape(email)}" />
+        <input type="hidden" name="provider" value="{provider}" />
+        <input type="hidden" name="redirect_to" value="{redirect_to}" />
+        <input type="hidden" name="redirect_on_failure" value="{redirect_on_failure}" />
+        {challenge_field}
+        {additional_fields}
+
+        <label for="code-input-1">{label}</label>
+        <div id="code-input-container" class="code-input-container">
+            <input id="code-input-1" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="one-time-code" />
+            <input id="code-input-2" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="one-time-code" />
+            <input id="code-input-3" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="one-time-code" />
+            <input id="code-input-4" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="one-time-code" />
+            <input id="code-input-5" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="one-time-code" />
+            <input id="code-input-6" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" autocomplete="one-time-code" />
+        </div>
+
+        <input id="code-hidden-input" type="hidden" name="code" value="" />
+
+        {button(button_text)}
+    </form>
+
+    <script type="module" src="_static/code-input.js"></script>
+    '''
+
+
 def base_default_email(
     *,
     content: str,

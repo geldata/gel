@@ -464,3 +464,67 @@ a.field-note:hover {
     border-color: #a1433d;
   }
 }
+
+/* Code Input Styles */
+.code-input-container {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.code-input-container input {
+  width: 48px;
+  height: 56px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 600;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #212529;
+  transition: all 0.2s ease;
+}
+
+.code-input-container input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px var(--accent-focus-color);
+  background: #ffffff;
+}
+
+.code-input-container input:valid {
+  border-color: #198754;
+}
+
+/* Dark theme adjustments for code input */
+@media (prefers-color-scheme: dark) {
+  .code-input-container input {
+    border-color: #495057;
+    background: #343a40;
+    color: #dee2e6;
+  }
+
+  .code-input-container input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px var(--accent-focus-dark-color);
+    background: #343a40;
+  }
+
+  .code-input-container input:valid {
+    border-color: #25a3ff;
+  }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 480px) {
+  .code-input-container {
+    gap: 6px;
+  }
+
+  .code-input-container input {
+    width: 40px;
+    height: 48px;
+    font-size: 20px;
+  }
+}

@@ -1017,42 +1017,67 @@ class Router:
                 )
                 identity_id = email_factor.identity.id
 
-                new_reset_token = jwt.ResetToken(
-                    subject=identity_id,
-                    secret=secret,
-                    challenge=data["challenge"],
-                ).sign(self.signing_key)
-
-                reset_token_params = {"reset_token": new_reset_token}
-                reset_url = util.join_url_params(
-                    data['reset_url'], reset_token_params
-                )
-                await self._maybe_send_webhook(
-                    webhook.PasswordResetRequested(
-                        event_id=str(uuid.uuid4()),
-                        timestamp=datetime.datetime.now(datetime.timezone.utc),
-                        identity_id=identity_id,
-                        reset_token=new_reset_token,
-                        email_factor_id=email_factor.id,
+                # Check verification method and branch accordingly
+                if email_password_client.config.verification_method == "Code":
+                    # OTC flow: create code and send OTC email
+                    code, otc_id = await otc.create(
+                        self.db,
+                        str(email_factor.id),
+                        datetime.timedelta(minutes=10)
                     )
-                )
+                    await auth_emails.send_password_reset_code_email(
+                        db=self.db,
+                        tenant=self.tenant,
+                        to_addr=email,
+                        code=code,
+                        test_mode=self.test_mode,
+                    )
+                    logger.info(
+                        f"Sent OTC password reset email: email={email}, otc_id={otc_id}"
+                    )
+                    redirect_url_path = f"/ui/reset-password?code&email={urllib.parse.quote(email)}"
+                else:
+                    # Link flow: create token and send link email (existing behavior)
+                    new_reset_token = jwt.ResetToken(
+                        subject=identity_id,
+                        secret=secret,
+                        challenge=data["challenge"],
+                    ).sign(self.signing_key)
 
-                await auth_emails.send_password_reset_email(
-                    db=self.db,
-                    tenant=self.tenant,
-                    to_addr=email,
-                    reset_url=reset_url,
-                    test_mode=self.test_mode,
-                )
+                    reset_token_params = {"reset_token": new_reset_token}
+                    reset_url = util.join_url_params(
+                        data['reset_url'], reset_token_params
+                    )
+                    await self._maybe_send_webhook(
+                        webhook.PasswordResetRequested(
+                            event_id=str(uuid.uuid4()),
+                            timestamp=datetime.datetime.now(datetime.timezone.utc),
+                            identity_id=identity_id,
+                            reset_token=new_reset_token,
+                            email_factor_id=email_factor.id,
+                        )
+                    )
+
+                    await auth_emails.send_password_reset_email(
+                        db=self.db,
+                        tenant=self.tenant,
+                        to_addr=email,
+                        reset_url=reset_url,
+                        test_mode=self.test_mode,
+                    )
+                    redirect_url_path = "/ui/reset-password"
+
             except errors.NoIdentityFound:
                 logger.debug(
                     f"Failed to find identity for send reset email: "
                     f"email={email}"
                 )
                 await auth_emails.send_fake_email(self.tenant)
+                redirect_url_path = "/ui/reset-password"
 
             return_data = {
                 "email_sent": email,
+                "redirect_url": f"{self.base_path}{redirect_url_path}",
             }
 
             if allowed_redirect_to:
@@ -1104,32 +1129,77 @@ class Router:
     ) -> None:
         data = self._get_data_from_request(request)
 
-        _check_keyset(data, {"provider", "reset_token", "password"})
-        reset_token = data['reset_token']
-        password = data['password']
-        email_password_client = email_password.Client(db=self.db)
+        # Check for OTC mode (email + code + password) vs Token mode (reset_token + password)
+        reset_token = data.get('reset_token')
+        email = data.get('email')
+        code = data.get('code')
+        password = data.get('password')
+        provider = data.get('provider')
+
+        if not password:
+            raise errors.InvalidData('Missing "password" in reset request')
+
+        if not provider:
+            raise errors.InvalidData('Missing "provider" in reset request')
 
         allowed_redirect_to = self._maybe_make_allowed_url(
             data.get("redirect_to")
         )
 
-        try:
-            token = jwt.ResetToken.verify(
-                reset_token,
-                self.signing_key,
-            )
+        email_password_client = email_password.Client(db=self.db)
 
-            await email_password_client.update_password(
-                token.subject, token.secret, password
-            )
-            await pkce.create(self.db, token.challenge)
-            code = await pkce.link_identity_challenge(
-                self.db, token.subject, token.challenge
-            )
-            response_dict = {"code": code}
-            logger.info(
-                f"Reset password: identity_id={token.subject}, pkce_id={code}"
-            )
+        try:
+            if reset_token:
+                # Token-based password reset (existing flow)
+                token = jwt.ResetToken.verify(
+                    reset_token,
+                    self.signing_key,
+                )
+
+                await email_password_client.update_password(
+                    token.subject, token.secret, password
+                )
+                await pkce.create(self.db, token.challenge)
+                code = await pkce.link_identity_challenge(
+                    self.db, token.subject, token.challenge
+                )
+                response_dict = {"code": code}
+                logger.info(
+                    f"Reset password via token: identity_id={token.subject}, pkce_id={code}"
+                )
+
+            elif email and code:
+                # OTC-based password reset (new flow)
+                if provider != "builtin::local_emailpassword":
+                    raise errors.InvalidData("OTC password reset only supported for email+password provider")
+
+                # Get email factor
+                email_factor = await email_password_client.get_email_factor_by_email(email)
+                if email_factor is None:
+                    raise errors.NoIdentityFound("Invalid email")
+
+                # Verify the OTC using the mega query
+                otc_id = await otc.verify(self.db, str(email_factor.id), code)
+                logger.info(f"OTC verified for password reset: otc_id={otc_id}, email={email}")
+
+                # Update password - we need to get the secret first
+                try:
+                    _, secret = await email_password_client.get_email_factor_and_secret(email)
+                    await email_password_client.update_password(
+                        email_factor.identity.id, secret, password
+                    )
+                except Exception as ex:
+                    raise errors.InvalidData(f"Failed to reset password: {str(ex)}")
+
+                response_dict = {"status": "password_reset"}
+                logger.info(
+                    f"Reset password via OTC: identity_id={email_factor.identity.id}, email={email}"
+                )
+
+            else:
+                raise errors.InvalidData(
+                    'Must provide either "reset_token" (Token mode) or "email" + "code" (OTC mode)'
+                )
 
             if allowed_redirect_to:
                 return self._do_redirect(
@@ -1142,6 +1212,7 @@ class Router:
                 response.status = http.HTTPStatus.OK
                 response.content_type = b"application/json"
                 response.body = json.dumps(response_dict).encode()
+
         except Exception as ex:
             redirect_on_failure = data.get(
                 "redirect_on_failure", data.get("redirect_to")
@@ -1150,13 +1221,14 @@ class Router:
                 error_message = str(ex)
                 logger.error(
                     f"Error resetting password: error={error_message}, "
-                    f"reset_token={reset_token}"
+                    f"reset_token={reset_token}, email={email}"
                 )
                 redirect_url = util.join_url_params(
                     redirect_on_failure,
                     {
                         "error": error_message,
                         "reset_token": reset_token,
+                        "email": email,
                     },
                 )
                 return self._try_redirect(response, redirect_url)
@@ -2026,8 +2098,35 @@ class Router:
                 request.url.query.decode("ascii") if request.url.query else ""
             )
 
+            # Check if this is a code flow (OTC) or token flow
+            is_code_flow = "code" in query
+            maybe_email = _maybe_get_search_param(query, "email")
+            error_message = _maybe_get_search_param(query, "error")
             reset_token = _maybe_get_search_param(query, 'reset_token')
 
+            if is_code_flow and maybe_email:
+                # Code flow - show code input form for password reset
+                app_details_config = self._get_app_details_config()
+                response.status = http.HTTPStatus.OK
+                response.content_type = b'text/html'
+                response.body = ui.render_reset_password_page(
+                    base_path=self.base_path,
+                    provider_name=password_provider.name,
+                    is_valid=True,  # Code flow is always valid to show the form
+                    redirect_to=ui_config.redirect_to,
+                    challenge=challenge,
+                    reset_token=None,
+                    error_message=error_message,
+                    is_code_flow=True,
+                    email=maybe_email,
+                    app_name=app_details_config.app_name,
+                    logo_url=app_details_config.logo_url,
+                    dark_logo_url=app_details_config.dark_logo_url,
+                    brand_color=app_details_config.brand_color,
+                )
+                return
+
+            # Token flow (existing logic)
             if reset_token is not None:
                 try:
                     token = jwt.ResetToken.verify(reset_token, self.signing_key)
@@ -2057,7 +2156,9 @@ class Router:
                 redirect_to=ui_config.redirect_to,
                 reset_token=reset_token,
                 challenge=challenge,
-                error_message=_maybe_get_search_param(query, 'error'),
+                error_message=error_message,
+                is_code_flow=False,
+                email=None,
                 app_name=app_details_config.app_name,
                 logo_url=app_details_config.logo_url,
                 dark_logo_url=app_details_config.dark_logo_url,
@@ -2076,13 +2177,45 @@ class Router:
             response.body = b'Auth UI not enabled'
             return
 
-        is_valid = True
-        maybe_pkce_code: str | None = None
-        redirect_to = ui_config.redirect_to_on_signup or ui_config.redirect_to
-
         query = urllib.parse.parse_qs(
             request.url.query.decode("ascii") if request.url.query else ""
         )
+
+        # Check if this is a code flow (OTC) or link flow
+        is_code_flow = "code" in query
+        maybe_email = _maybe_get_search_param(query, "email")
+        maybe_provider = _maybe_get_search_param(query, "provider")
+        maybe_challenge = _maybe_get_search_param(query, "challenge")
+        error_message = _maybe_get_search_param(query, "error")
+
+        if is_code_flow:
+            # Code flow - show code input form
+            if not maybe_email or not maybe_provider:
+                error_messages.append("Missing email or provider for code verification.")
+                is_code_flow = False
+
+            app_details_config = self._get_app_details_config()
+            response.status = http.HTTPStatus.OK
+            response.content_type = b'text/html'
+            response.body = ui.render_verify_page(
+                base_path=self.base_path,
+                email=maybe_email,
+                provider=maybe_provider,
+                is_code_flow=is_code_flow,
+                error_message=error_message,
+                challenge=maybe_challenge,
+                redirect_to=ui_config.redirect_to_on_signup or ui_config.redirect_to,
+                app_name=app_details_config.app_name,
+                logo_url=app_details_config.logo_url,
+                dark_logo_url=app_details_config.dark_logo_url,
+                brand_color=app_details_config.brand_color,
+            )
+            return
+
+        # Link flow (existing logic)
+        is_valid = True
+        maybe_pkce_code: str | None = None
+        redirect_to = ui_config.redirect_to_on_signup or ui_config.redirect_to
 
         maybe_provider_name = _maybe_get_search_param(query, "provider")
         maybe_verification_token = _maybe_get_search_param(
@@ -2245,8 +2378,17 @@ class Router:
         response: protocol.HttpResponse,
     ) -> None:
         """
-        Success page for when a magic link is sent
+        Success page for when a magic link is sent or code input form for OTC flow
         """
+        query = urllib.parse.parse_qs(
+            request.url.query.decode("ascii") if request.url.query else ""
+        )
+
+        # Check if this is a code flow (OTC) or link flow
+        is_code_flow = "code" in query
+        maybe_email = _maybe_get_search_param(query, "email")
+        maybe_challenge = _maybe_get_search_param(query, "challenge")
+        error_message = _maybe_get_search_param(query, "error")
 
         app_details = self._get_app_details_config()
         response.status = http.HTTPStatus.OK
@@ -2256,6 +2398,11 @@ class Router:
             logo_url=app_details.logo_url,
             dark_logo_url=app_details.dark_logo_url,
             brand_color=app_details.brand_color,
+            is_code_flow=is_code_flow,
+            email=maybe_email,
+            base_path=self.base_path if is_code_flow else None,
+            challenge=maybe_challenge,
+            error_message=error_message,
         )
 
     def _get_webhook_config(self) -> list[config.WebhookConfig]:

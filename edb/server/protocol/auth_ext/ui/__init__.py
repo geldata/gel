@@ -141,6 +141,10 @@ def render_signin_page(
                     redirect_to}" />
                 <input type="hidden" name="redirect_on_failure" value="{
                     base_path}/ui/signin?selected_tab=webauthn" />
+                <input type="hidden" name="provider" value="{
+                    webauthn_provider.name}" />
+                <input type="hidden" name="callback_url" value="{
+                    redirect_to}" />
                 {base_email_factor_form}
                 {render.button("Sign In", id="webauthn-signin")}
             </form>
@@ -159,16 +163,20 @@ def render_signin_page(
                     base_path}/ui/magic-link-sent" />
                 <input type="hidden" name="redirect_on_failure" value="{
                     base_path}/ui/signin?selected_tab=magic_link" />
-                <input type="hidden" name="provider"
-                    value="{magic_link_provider.name}" />
+                <input type="hidden" name="provider" value="{
+                    magic_link_provider.name}" />
                 <input type="hidden" name="callback_url" value="{
                     redirect_to}" />
                 {base_email_factor_form}
-                {render.button("Email sign in link", id="magic-link-signin")}
+                {render.button("Email Sign In Link", id="magic-link-signin")}
             </form>
         """
             if magic_link_provider
             else None
+        ),
+        magic_link_verification_method=(
+            getattr(magic_link_provider, 'verification_method', 'Link')
+            if magic_link_provider else 'Link'
         ),
     )
 
@@ -214,6 +222,7 @@ def render_email_factor_form(
     password_form: Optional[str],
     webauthn_form: Optional[str],
     magic_link_form: Optional[str],
+    magic_link_verification_method: str = "Link",  # New parameter for dynamic labels
 ) -> Optional[str]:
     if (
         password_form is None
@@ -230,6 +239,10 @@ def render_email_factor_form(
         case (None, None, _):
             return magic_link_form
 
+    # Dynamic magic link tab label based on verification method
+    magic_link_tab_label = get_magic_link_tab_label(magic_link_verification_method)
+    magic_link_button_text = get_magic_link_button_text(magic_link_verification_method)
+
     if base_email_factor_form is None or (
         webauthn_form is not None and magic_link_form is not None
     ):
@@ -245,7 +258,7 @@ def render_email_factor_form(
                 else None
             ),
             (
-                ('Email Link', magic_link_form, selected_tab == 'magic_link')
+                (magic_link_tab_label, magic_link_form, selected_tab == 'magic_link')
                 if magic_link_form
                 else None
             ),
@@ -265,7 +278,7 @@ def render_email_factor_form(
     slider_content = [
         f'''
             {render.button("Sign In", id="webauthn-signin") if webauthn_form
-                else render.button("Email sign in link", id="magic-link-signin")
+                else render.button(magic_link_button_text, id="magic-link-signin")
             }
             {render.button("Sign in with password", id="show-password-form",
                     secondary=True, type="button")}
@@ -317,11 +330,11 @@ def render_signup_page(
     oauth_providers = []
     for p in providers:
         if p.name == 'builtin::local_emailpassword':
-            password_provider = p
+            password_provider = cast(auth_config.EmailPasswordProviderConfig, p)
         elif p.name == 'builtin::local_webauthn':
-            webauthn_provider = p
+            webauthn_provider = cast(auth_config.WebAuthnProviderConfig, p)
         elif p.name == 'builtin::local_magic_link':
-            magic_link_provider = p
+            magic_link_provider = cast(auth_config.MagicLinkProviderConfig, p)
         elif p.name.startswith('builtin::oauth_') or hasattr(p, "issuer_url"):
             oauth_providers.append(cast(auth_config.OAuthProviderConfig, p))
 
@@ -399,6 +412,10 @@ def render_signup_page(
         """
             if magic_link_provider
             else None
+        ),
+        magic_link_verification_method=(
+            getattr(magic_link_provider, 'verification_method', 'Link')
+            if magic_link_provider else 'Link'
         ),
     )
 
@@ -497,6 +514,9 @@ def render_reset_password_page(
     challenge: Optional[str] = None,
     reset_token: Optional[str] = None,
     error_message: Optional[str] = None,
+    # Code flow parameters
+    is_code_flow: bool = False,
+    email: Optional[str] = None,
     # config
     app_name: Optional[str] = None,
     logo_url: Optional[str] = None,
@@ -517,7 +537,28 @@ def render_reset_password_page(
             </a>''',
             False,
         )
+    elif is_code_flow and email:
+        # Code-based password reset flow
+        content = f'''
+            {render.error_message(error_message)}
+            <p>We've sent a 6-digit reset code to <strong>{html.escape(email)}</strong></p>
+            {render.code_input_form(
+                action="../reset-password",
+                email=email,
+                provider=provider_name,
+                redirect_to=redirect_to,
+                redirect_on_failure=f"{base_path}/ui/reset-password?code&email={html.escape(email)}",
+                label="Enter reset code",
+                button_text="Reset Password",
+                additional_fields='''
+                    <label for="password">New Password</label>
+                    <input id="password" name="password" type="password" required />
+                ''',
+                challenge=challenge,
+            )}
+        '''
     else:
+        # Token-based password reset flow (existing)
         content = f'''
         {render.error_message(error_message)}
 
@@ -531,7 +572,7 @@ def render_reset_password_page(
           <label for="password">New Password</label>
           <input id="password" name="password" type="password" />
 
-          {render.button('Sign In')}
+          {render.button('Reset Password')}
         </form>'''
 
     return render.base_page(
@@ -626,6 +667,78 @@ def render_email_verification_expired_page(
     )
 
 
+def get_verification_method_label(verification_method: str) -> str:
+    """Get user-friendly label for verification method."""
+    return "Email Code" if verification_method == "Code" else "Email Link"
+
+
+def get_send_button_text(verification_method: str) -> str:
+    """Get button text for sending verification."""
+    return "Send Code" if verification_method == "Code" else "Send Link"
+
+
+def get_magic_link_tab_label(verification_method: str) -> str:
+    """Get tab label for magic link authentication based on verification method."""
+    return "Email Code" if verification_method == "Code" else "Email Link"
+
+
+def get_magic_link_button_text(verification_method: str) -> str:
+    """Get button text for magic link authentication based on verification method."""
+    return "Email sign in code" if verification_method == "Code" else "Email sign in link"
+
+
+def render_verify_page(
+    *,
+    base_path: str,
+    email: Optional[str] = None,
+    provider: Optional[str] = None,
+    is_code_flow: bool = False,
+    error_message: Optional[str] = None,
+    challenge: Optional[str] = None,
+    # config
+    redirect_to: str,
+    app_name: Optional[str] = None,
+    logo_url: Optional[str] = None,
+    dark_logo_url: Optional[str] = None,
+    brand_color: Optional[str] = None,
+) -> bytes:
+    """Renders verification page that handles both link and code flows."""
+
+    if is_code_flow and email and provider:
+        # Show code input form
+        content = f'''
+            {render.error_message(error_message)}
+            <p>We've sent a 6-digit verification code to <strong>{html.escape(email)}</strong></p>
+            {render.code_input_form(
+                action="../verify",
+                email=email,
+                provider=provider,
+                redirect_to=redirect_to,
+                redirect_on_failure=f"{base_path}/ui/verify?code&email={html.escape(email)}&provider={provider}",
+                label="Enter verification code",
+                button_text="Verify Email",
+                challenge=challenge,
+            )}
+        '''
+    else:
+        # Show generic verification message (for link flow or when no code params)
+        content = render.success_message(
+            "A verification link has been sent to your email. Please check your email and click the link to verify your account."
+        )
+
+    return render.base_page(
+        title=f'Verify email{f" for {app_name}" if app_name else ""}',
+        logo_url=logo_url,
+        dark_logo_url=dark_logo_url,
+        brand_color=brand_color,
+        cleanup_search_params=['error'],
+        content=f'''
+            {render.title('Verify email', join='for', app_name=app_name)}
+            {content}
+        ''',
+    )
+
+
 def render_resend_verification_done_page(
     *,
     is_valid: bool,
@@ -677,18 +790,47 @@ def render_magic_link_sent_page(
     logo_url: Optional[str] = None,
     dark_logo_url: Optional[str] = None,
     brand_color: Optional[str] = None,
+    # Code flow parameters
+    is_code_flow: bool = False,
+    email: Optional[str] = None,
+    base_path: Optional[str] = None,
+    challenge: Optional[str] = None,
+    error_message: Optional[str] = None,
 ) -> bytes:
-    content = render.success_message(
-        "A sign in link has been sent to your email. Please check your email."
-    )
+    if is_code_flow and email and base_path:
+        # Show code input form
+        content = f'''
+            {render.error_message(error_message)}
+            <p>We've sent a 6-digit sign-in code to <strong>{html.escape(email)}</strong></p>
+            {render.code_input_form(
+                action="../magic-link/authenticate",
+                email=email,
+                provider="builtin::local_magic_link",
+                redirect_to=f"{base_path}/ui/magic-link-sent",  # This will be updated by the actual redirect_to
+                redirect_on_failure=f"{base_path}/ui/magic-link-sent?code&email={html.escape(email)}",
+                label="Enter sign-in code",
+                button_text="Sign In",
+                challenge=challenge,
+            )}
+        '''
+        title = f'Sign in code sent{f" for {app_name}" if app_name else ""}'
+        page_title = 'Sign in code sent'
+    else:
+        # Show traditional link sent message
+        content = render.success_message(
+            "A sign in link has been sent to your email. Please check your email."
+        )
+        title = f'Sign in link sent{f" for {app_name}" if app_name else ""}'
+        page_title = 'Sign in link sent'
+
     return render.base_page(
-        title=(f'Sign in link sent{f" for {app_name}" if app_name else ""}'),
+        title=title,
         logo_url=logo_url,
         dark_logo_url=dark_logo_url,
         brand_color=brand_color,
         cleanup_search_params=['error'],
         content=f'''
-            {render.title('Sign in link sent', join='for', app_name=app_name)}
+            {render.title(page_title, join='for', app_name=app_name)}
             {content}
         ''',
     )
@@ -1110,7 +1252,7 @@ email address:
 def render_magic_link_email(
     *,
     to_addr: str,
-    link: str,
+    magic_url: str,
     app_name: Optional[str] = None,
     logo_url: Optional[str] = None,
     dark_logo_url: Optional[str] = None,
@@ -1119,29 +1261,36 @@ def render_magic_link_email(
     brand_color = brand_color or render.DEFAULT_BRAND_COLOR
     msg = email.message.EmailMessage()
     msg["To"] = to_addr
-    msg["Subject"] = "Sign in link"
+    msg["Subject"] = f"Sign in{f' to {app_name}' if app_name else ''}"
     plain_text_content = f"""
-Please paste the following URL into your browser address bar to be signed into
-your account:
+Please click the link below to sign in{f' to {app_name}' if app_name else ''}:
 
-{link}
+{magic_url}
         """
     html_content = f"""
 <tr>
   <td
     align="left"
-    style="font-size: 0px; padding: 10px 25px; word-break: break-word"
+    style="
+      font-size: 0px;
+      padding: 10px 25px;
+      padding-top: 50px;
+      word-break: break-word;
+    "
   >
     <div
       style="
-        font-family: open Sans Helvetica, Arial, sans-serif;
+        font-family:
+          open Sans Helvetica,
+          Arial,
+          sans-serif;
         font-size: 16px;
         line-height: 1;
         text-align: left;
         color: #000000;
       "
     >
-      Sign into your {app_name or ""} account by clicking the button below:
+      Click the button below to sign in{f' to {app_name}' if app_name else ''}:
     </div>
   </td>
 </tr>
@@ -1149,7 +1298,11 @@ your account:
   <td
     align="center"
     vertical-align="middle"
-    style="font-size: 0px; padding: 10px 25px; word-break: break-word"
+    style="
+      font-size: 0px;
+      padding: 10px 25px;
+      word-break: break-word;
+    "
   >
     <table
       border="0"
@@ -1173,7 +1326,7 @@ your account:
           valign="middle"
         >
           <a
-            href="{link}"
+            href="{magic_url}"
             style="
               display: inline-block;
               background: #{brand_color};
@@ -1201,7 +1354,11 @@ your account:
 <tr>
   <td
     align="left"
-    style="font-size: 0px; padding: 10px 25px; word-break: break-word"
+    style="
+      font-size: 0px;
+      padding: 10px 25px;
+      word-break: break-word;
+    "
   >
     <div
       style="
@@ -1212,15 +1369,16 @@ your account:
         color: #000000;
       "
     >
-      In case the button didn't work, please paste the following URL into your
-      browser address bar:
-      <p style="word-break: break-all">{link}</p>
+      In case the button didn't work, please paste the following URL
+      into your browser address bar:
+      <p style="word-break: break-all">{magic_url}</p>
     </div>
   </td>
 </tr>
-    """
+    """  # noqa: E501
+
     msg.set_content(plain_text_content, subtype="plain")
-    msg.set_content(
+    msg.add_alternative(
         render.base_default_email(
             content=html_content,
             app_name=app_name,
@@ -1240,16 +1398,17 @@ def render_one_time_code_email(
     dark_logo_url: Optional[str] = None,
     brand_color: Optional[str] = render.DEFAULT_BRAND_COLOR,
 ) -> email.message.EmailMessage:
+    """Renders an email containing a one-time verification code."""
     brand_color = brand_color or render.DEFAULT_BRAND_COLOR
     msg = email.message.EmailMessage()
     msg["To"] = to_addr
-    msg["Subject"] = f"One-Time Code{f' for {app_name}' if app_name else ''}"
+    msg["Subject"] = f"Your verification code{f' for {app_name}' if app_name else ''}"
     plain_text_content = f"""
-Your one-time verification code{f' for {app_name}' if app_name else ''} is:
+Your verification code{f' for {app_name}' if app_name else ''} is:
 
 {code}
 
-This code will expire in 10 minutes. If you didn't request this code, you can safely ignore this email.
+This code will expire in 10 minutes.
         """
     html_content = f"""
 <tr>
@@ -1274,32 +1433,33 @@ This code will expire in 10 minutes. If you didn't request this code, you can sa
         color: #000000;
       "
     >
-      Your one-time verification code{f' for {app_name}' if app_name else ''} is:
+      Your verification code{f' for {app_name}' if app_name else ''} is:
     </div>
   </td>
 </tr>
 <tr>
   <td
     align="center"
-    style="font-size: 0px; padding: 20px 25px; word-break: break-word"
+    vertical-align="middle"
+    style="
+      font-size: 0px;
+      padding: 20px 25px;
+      word-break: break-word;
+    "
   >
     <div
       style="
-        font-family:
-          open Sans Helvetica,
-          Arial,
-          sans-serif;
-        font-size: 48px;
+        font-family: open Sans Helvetica, Arial, sans-serif;
+        font-size: 32px;
         font-weight: bold;
         line-height: 1;
         text-align: center;
         color: #{brand_color};
-        background-color: #f8f9fa;
+        letter-spacing: 8px;
+        padding: 20px;
         border: 2px solid #{brand_color};
         border-radius: 8px;
-        padding: 20px;
-        letter-spacing: 8px;
-        margin: 10px 0;
+        background: #f8f9fa;
       "
     >
       {code}
@@ -1309,7 +1469,70 @@ This code will expire in 10 minutes. If you didn't request this code, you can sa
 <tr>
   <td
     align="left"
-    style="font-size: 0px; padding: 10px 25px; word-break: break-word"
+    style="
+      font-size: 0px;
+      padding: 10px 25px;
+      word-break: break-word;
+    "
+  >
+    <div
+      style="
+        font-family: open Sans Helvetica, Arial, sans-serif;
+        font-size: 16px;
+        line-height: 1;
+        text-align: left;
+        color: #000000;
+      "
+    >
+      This code will expire in 10 minutes for your security.
+    </div>
+  </td>
+</tr>
+    """  # noqa: E501
+
+    msg.set_content(plain_text_content, subtype="plain")
+    msg.add_alternative(
+        render.base_default_email(
+            content=html_content,
+            app_name=app_name,
+            logo_url=logo_url,
+        ),
+        subtype="html",
+    )
+    return msg
+
+
+def render_password_reset_code_email(
+    *,
+    to_addr: str,
+    code: str,
+    app_name: Optional[str] = None,
+    logo_url: Optional[str] = None,
+    dark_logo_url: Optional[str] = None,
+    brand_color: Optional[str] = render.DEFAULT_BRAND_COLOR,
+) -> email.message.EmailMessage:
+    """Renders an email containing a one-time code for password reset."""
+    brand_color = brand_color or render.DEFAULT_BRAND_COLOR
+    msg = email.message.EmailMessage()
+    msg["To"] = to_addr
+    msg["Subject"] = f"Password reset code{f' for {app_name}' if app_name else ''}"
+    plain_text_content = f"""
+Your password reset code{f' for {app_name}' if app_name else ''} is:
+
+{code}
+
+This code will expire in 10 minutes. If you didn't request a password reset, you can safely ignore this email.
+        """
+    html_content = f"""
+<tr>
+  <td
+    align="left"
+    style="
+      font-size: 0px;
+      padding: 10px 25px;
+      padding-top: 50px;
+      word-break: break-word;
+    "
   >
     <div
       style="
@@ -1317,19 +1540,71 @@ This code will expire in 10 minutes. If you didn't request this code, you can sa
           open Sans Helvetica,
           Arial,
           sans-serif;
-        font-size: 14px;
-        line-height: 1.4;
+        font-size: 16px;
+        line-height: 1;
         text-align: left;
-        color: #666666;
+        color: #000000;
       "
     >
-      This code will expire in 10 minutes. If you didn't request this code, you can safely ignore this email.
+      Your password reset code{f' for {app_name}' if app_name else ''} is:
     </div>
   </td>
 </tr>
-    """
+<tr>
+  <td
+    align="center"
+    vertical-align="middle"
+    style="
+      font-size: 0px;
+      padding: 20px 25px;
+      word-break: break-word;
+    "
+  >
+    <div
+      style="
+        font-family: open Sans Helvetica, Arial, sans-serif;
+        font-size: 32px;
+        font-weight: bold;
+        line-height: 1;
+        text-align: center;
+        color: #{brand_color};
+        letter-spacing: 8px;
+        padding: 20px;
+        border: 2px solid #{brand_color};
+        border-radius: 8px;
+        background: #f8f9fa;
+      "
+    >
+      {code}
+    </div>
+  </td>
+</tr>
+<tr>
+  <td
+    align="left"
+    style="
+      font-size: 0px;
+      padding: 10px 25px;
+      word-break: break-word;
+    "
+  >
+    <div
+      style="
+        font-family: open Sans Helvetica, Arial, sans-serif;
+        font-size: 16px;
+        line-height: 1;
+        text-align: left;
+        color: #000000;
+      "
+    >
+      This code will expire in 10 minutes for your security. If you didn't request a password reset, you can safely ignore this email.
+    </div>
+  </td>
+</tr>
+    """  # noqa: E501
+
     msg.set_content(plain_text_content, subtype="plain")
-    msg.set_content(
+    msg.add_alternative(
         render.base_default_email(
             content=html_content,
             app_name=app_name,

@@ -29,7 +29,7 @@ This forces users to ensure they open the link on the same device where they sta
 Multi-factor authentication
 ---------------------------
 
-You might want to trigger a one-time code authentication flow as part of a multi-factor authentication flow. For example, you might want to send a code to a user's email as part of a two-factor authentication flow, or securing a sensitive action. This would be implemented by the developer as having /both/ a primary factor (like Email+Password or OAuth), and a secondary factor (like Magic Link with code verification).
+You might want to trigger a one-time code authentication flow as part of a multi-factor authentication flow. For example, you might want to send a code to a user's email as part of a two-factor authentication flow, or securing a sensitive action. This would be implemented by the developer as having /both/ a primary factor (like Email+Password or OAuth), and a secondary factor (like Magic Link or WebAuthn with code verification).
 
 .. code-block:: esdl
 
@@ -50,7 +50,7 @@ You might want to trigger a one-time code authentication flow as part of a multi
 Invite codes
 ------------
 
-You might have an authentication setup where an admin user will invite other users to join a team or organization. This would be implemented by the developer as having /both/ a primary factor (like Email+Password or OAuth), and a secondary factor (like Magic Link with code verification), but the admin would only set up the secondary factor and when the user accepts the invite, they link a primary factor to the same user.
+You might have an authentication setup where an admin user will invite other users to join a team or organization. This would be implemented by the developer as having /both/ a primary factor (like Email+Password or OAuth), and a secondary factor (like Magic Link or WebAuthn with code verification), but the admin would only set up the secondary factor and when the user accepts the invite, they link a primary factor to the same user.
 
 .. code-block:: esdl
 
@@ -82,7 +82,7 @@ And some pseudo-code:
 High-Level Proposal
 ===================
 
-We will introduce a new method for email+password email verification and magic link called ``Code``. This will be a configurable alternative to the existing ``Link`` method.
+We will introduce a new method for email+password email verification, magic link, and WebAuthn called ``Code``. This will be a configurable alternative to the existing ``Link`` method.
 
 The core of this proposal is to **decouple the PKCE session from the authentication initiation step**. When the ``Code`` method is enabled:
 
@@ -120,6 +120,19 @@ And for the magic link provider, we will add a new property to the provider conf
 .. code-block:: esdl
 
     create type ext::auth::MagicLinkProviderConfig
+        extending ext::auth::ProviderConfig {
+        # ... existing properties ...
+
+        create required property verification_method: ext::auth::VerificationMethod {
+            set default := ext::auth::VerificationMethod.Link;
+        };
+    };
+
+And for the WebAuthn provider, we will add a new property to the provider config to allow the developer to select the verification method.
+
+.. code-block:: esdl
+
+    create type ext::auth::WebAuthnProviderConfig
         extending ext::auth::ProviderConfig {
         # ... existing properties ...
 
@@ -240,7 +253,7 @@ The checklist in the design discussion translates into **ten concrete work-items
 1. Schema migration (RFC § Schema)
 ----------------------------------
 
-* **Add ``ext::auth::VerificationMethod`` enum** and the new ``verification_method`` property on ``EmailPasswordProviderConfig``, ``WebAuthnProviderConfig``, and ``MagicLinkProviderConfig`` (default: ``Link``).
+* **Add ``ext::auth::VerificationMethod`` enum** and the new ``verification_method`` property on ``EmailPasswordProviderConfig``, ``MagicLinkProviderConfig``, and ``WebAuthnProviderConfig`` (default: ``Link``).
 * **Introduce ``ext::auth::OneTimeCode`` transient type** exactly as specified in the *Schema* paragraph.  Remember:
   * ``on target delete delete source`` ensures cleanup when the underlying factor vanishes.
   * ``code_hash`` must be ``exclusive`` to prevent race conditions during brute-force attempts.
@@ -272,7 +285,9 @@ Create ``auth_ext/otc.py`` encapsulating reusable logic:
 -------------------------------------------
 
 * Render function ``render_one_time_code_email`` mirroring *render_magic_link_email*, but with the *code* bolded.
+* Render function ``render_password_reset_code_email`` for password reset flows using OTC.
 * Delivery wrapper ``send_one_time_code_email`` with same SMTP + webhook error handling semantics as existing helpers.
+* Delivery wrapper ``send_password_reset_code_email`` for password reset code delivery.
 
 5. Magic-link flow adjustments (http.py & magic_link.py)
 --------------------------------------------------------
@@ -299,9 +314,14 @@ Create ``auth_ext/otc.py`` encapsulating reusable logic:
 
 **Core Components:**
 
-* **Code Input Page** (``render_code_input_page``): New route */ui/code-sent* containing the 6-digit code input form with proper styling, validation, and PKCE handling.
 * **Code Input Component**: Styled 6-digit numeric input with auto-formatting ("12 34 56"), mobile numeric keypad, auto-submit on completion, and proper error states.
 * **JavaScript Enhancements**: Code input formatting, auto-focus management, form validation, and submission handling in ``_static/code-input.js``.
+
+**Updated pages:**
+
+* **/ui/verify**: Look for the new ``code`` query parameter and show the code input form with the appropriate form action based on the ``provider`` query parameter.
+* **/ui/reset-password**: Look for the new ``code`` query parameter and show the code input form.
+* **/ui/magic-link-sent**: Look for the new ``code`` parameter and show the code input form.
 
 **Dynamic Flow Routing:**
 
@@ -309,23 +329,23 @@ All authentication flows that send verification emails must check ``verification
 
 * **Magic Link Sign-In/Sign-Up** (``handle_magic_link_email``, ``handle_magic_link_register``):
   * ``Link`` → redirect to */ui/magic-link-sent* (informational page)
-  * ``Code`` → redirect to */ui/code-sent* (code input form)
+  * ``Code`` → redirect to */ui/magic-link-sent?code* (code input form)
 
 * **Email+Password Registration** (``handle_register``):
-  * ``Link`` → redirect to verification notice page
-  * ``Code`` → redirect to */ui/code-sent* (code input form)
+  * ``Link`` → redirect to redirect_to_on_signup or redirect_to
+  * ``Code`` → redirect to */ui/verify?code&provider=builtin::local_emailpassword* (code input form)
 
 * **WebAuthn Registration** (``handle_webauthn_register``):
-  * ``Link`` → redirect to verification notice page
-  * ``Code`` → redirect to */ui/code-sent* (code input form)
+  * ``Link`` → redirect to redirect_to_on_signup or redirect_to
+  * ``Code`` → redirect to */ui/verify?code&provider=builtin::local_webauthn* (code input form)
 
 * **Password Reset** (``handle_send_reset_email``):
   * ``Link`` → redirect to password reset sent page
-  * ``Code`` → redirect to */ui/code-sent* (code input form for reset verification)
+  * ``Code`` → redirect to */ui/reset-password?code* (code input form for reset verification)
 
 * **Resend Verification** (``handle_resend_verification``):
   * ``Link`` → redirect to verification resent page
-  * ``Code`` → redirect to */ui/code-sent* (code input form)
+  * ``Code`` → redirect to */ui/verify?code&provider=builtin::local_emailpassword* (code input form)
 
 **Dynamic UI Labels:**
 
@@ -338,17 +358,9 @@ All authentication flows that send verification emails must check ``verification
 
 * **Magic Link Authenticate** (``handle_magic_link_authenticate``): Accept both ``token`` param (link) OR ``email`` + ``code`` params (otc)
 * **Email Verify** (``handle_verify``): Accept both ``verification_token`` (link) OR ``email`` + ``code`` params (otc)
-* **Password Reset** (``handle_reset_password``): Accept both ``reset_token`` (link) OR ``email`` + ``code`` + ``new_password`` params (otc)
+* **Password Reset** (``handle_reset_password``): Accept both ``reset_token`` + ``password`` (link) OR ``email`` + ``code`` + ``password`` params (otc)
 
-8. Tests (tests/test_http_ext_auth.py)
---------------------------------------
-
-* Duplicate magic-link integration tests but with ``verification_method=Code``.
-* Include cross-device scenario: initiation on client A, verification on client B (no pre-existing cookie).
-* Edge test: max_attempts overflow → expect ``401`` with *Attempts exceeded*.
-* Expiry test: artificially set ``expires_at`` in the past; expect ``401`` *Expired*.
-
-9. Webhooks & observability
+8. Webhooks & observability
 ---------------------------
 
 * Emit the same events as the Link path so downstream consumers remain compatible (RFC § Webhook Compatibility).
