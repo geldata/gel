@@ -42,7 +42,7 @@ if [ "$SAVE_TARBALLS" = 1 ]; then
 fi
 
 
-PORT=12346
+PORT=$(( $RANDOM + 2000 ))
 edb server -D "$DIR" -P $PORT &
 SPID=$!
 stop_server() {
