@@ -94,6 +94,7 @@ cdef class Database:
         readonly object db_config
         readonly bytes user_schema_pickle
         readonly object reflection_cache
+        readonly object extension_refs
         readonly object backend_ids
         readonly object backend_oid_to_id
         readonly object extensions

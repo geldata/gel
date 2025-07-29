@@ -1761,6 +1761,7 @@ cdef class PgConnection(frontend.FrontendConnection):
                 self.database.user_schema_pickle,
                 self.database._index._global_schema_pickle,
                 self.database.reflection_cache,
+                self.tenant.extension_refs,
                 self.database.db_config,
                 self.database._index.get_compilation_system_config(),
                 source,
