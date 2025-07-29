@@ -31,8 +31,17 @@ class TestEdgeQLSelect(tb.QueryTestCase):
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 
-    SETUP = os.path.join(os.path.dirname(__file__), 'schemas',
-                         'issues_setup.edgeql')
+    SETUP = [
+        os.path.join(os.path.dirname(__file__), 'schemas',
+                     'issues_setup.edgeql'),
+        # Used by patch/upgrade testing
+        # We create it here to avoid some terrible slowdowns
+        '''
+        create function all_objects() -> SET OF BaseObject {
+            USING (BaseObject)
+        };
+        ''',
+    ]
 
     async def test_edgeql_select_unique_01(self):
         await self.assert_query_result(

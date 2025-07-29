@@ -33,9 +33,6 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
 
     SETUP = [
         '''
-            # Dropping all_objects() is no longer required for correctness,
-            # but it does still speed things up a lot.
-            drop function all_objects();
             create future warn_old_scoping;
         ''',
         os.path.join(os.path.dirname(__file__), 'schemas',
