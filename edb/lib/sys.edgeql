@@ -474,11 +474,6 @@ CREATE REQUIRED GLOBAL sys::current_role -> str {
 # These modules are populated before sys permissions so we need to
 # add these restrictions here.
 
-ALTER TYPE schema::Permission {
-    CREATE ACCESS POLICY ap_read allow select using (
-        global sys::perm::superuser
-    );
-};
 ALTER TYPE schema::Migration {
     CREATE ACCESS POLICY ap_read allow select using (
         global sys::perm::ddl
