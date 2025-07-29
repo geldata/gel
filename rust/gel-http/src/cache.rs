@@ -12,17 +12,17 @@ use std::{
 pub enum CacheBefore {
     /// The cache is stale or missing, so we need to make a request. Note that CachedItem
     /// may contain a stale cache item and must be returned in `after_request`.
-    Request(http::Request<Vec<u8>>, Cacheditem),
+    Request(http::Request<Vec<u8>>, CachedItem),
     /// The cache is fresh, so we can return the response
     Response(http::Response<Bytes>),
 }
 
 #[derive(Debug)]
-pub struct Cacheditem {
+pub struct CachedItem {
     maybe_item: Option<(Arc<CachePolicy>, Bytes)>,
 }
 
-impl Cacheditem {
+impl CachedItem {
     fn none() -> Self {
         Self { maybe_item: None }
     }
@@ -133,7 +133,7 @@ impl Cache {
 
         // Only cache GET requests
         if !allow_cache || method != Method::GET {
-            return CacheBefore::Request(req, Cacheditem::none());
+            return CacheBefore::Request(req, CachedItem::none());
         }
 
         let now = SystemTime::now();
@@ -149,11 +149,11 @@ impl Cache {
                     *req.uri_mut() = request.uri;
                     *req.headers_mut() = request.headers;
                     *req.method_mut() = request.method;
-                    CacheBefore::Request(req, Cacheditem::some(policy.clone(), body.clone()))
+                    CacheBefore::Request(req, CachedItem::some(policy.clone(), body.clone()))
                 }
             }
         } else {
-            CacheBefore::Request(req, Cacheditem::none())
+            CacheBefore::Request(req, CachedItem::none())
         }
     }
 
@@ -164,7 +164,7 @@ impl Cache {
         uri: Uri,
         headers: HeaderMap,
         res: &mut http::Response<Bytes>,
-        cached_item: Cacheditem,
+        cached_item: CachedItem,
     ) {
         // Only cache GET requests
         if !allow_cache || method != Method::GET {
