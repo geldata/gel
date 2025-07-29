@@ -86,7 +86,7 @@ impl Cache {
             },
             cache: Arc::new(Mutex::new(CacheItems::new(
                 NonZero::new(100).unwrap(),
-                1024 * 1024,
+                10 * 1024 * 1024,
             ))),
         }
     }
