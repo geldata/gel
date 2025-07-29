@@ -297,9 +297,48 @@ Create ``auth_ext/otc.py`` encapsulating reusable logic:
 7. UI/UX additions (ui/__init__.py + JS)
 ----------------------------------------
 
-* Tab names: “Email Code” vs “Email Link” decided at runtime.
-* New route */ui/code-sent* – mirrors the existing *magic-link-sent* page.
-* New form for entering six-digit code.
+**Core Components:**
+
+* **Code Input Page** (``render_code_input_page``): New route */ui/code-sent* containing the 6-digit code input form with proper styling, validation, and PKCE handling.
+* **Code Input Component**: Styled 6-digit numeric input with auto-formatting ("12 34 56"), mobile numeric keypad, auto-submit on completion, and proper error states.
+* **JavaScript Enhancements**: Code input formatting, auto-focus management, form validation, and submission handling in ``_static/code-input.js``.
+
+**Dynamic Flow Routing:**
+
+All authentication flows that send verification emails must check ``verification_method`` and route appropriately:
+
+* **Magic Link Sign-In/Sign-Up** (``handle_magic_link_email``, ``handle_magic_link_register``):
+  * ``Link`` → redirect to */ui/magic-link-sent* (informational page)
+  * ``Code`` → redirect to */ui/code-sent* (code input form)
+
+* **Email+Password Registration** (``handle_register``):
+  * ``Link`` → redirect to verification notice page
+  * ``Code`` → redirect to */ui/code-sent* (code input form)
+
+* **WebAuthn Registration** (``handle_webauthn_register``):
+  * ``Link`` → redirect to verification notice page
+  * ``Code`` → redirect to */ui/code-sent* (code input form)
+
+* **Password Reset** (``handle_send_reset_email``):
+  * ``Link`` → redirect to password reset sent page
+  * ``Code`` → redirect to */ui/code-sent* (code input form for reset verification)
+
+* **Resend Verification** (``handle_resend_verification``):
+  * ``Link`` → redirect to verification resent page
+  * ``Code`` → redirect to */ui/code-sent* (code input form)
+
+**Dynamic UI Labels:**
+
+* Tab names: "Email Code" vs "Email Link" decided at runtime based on ``provider.verification_method``
+* Button text: "Send Code" vs "Send Link"
+* Form actions: point to appropriate verification endpoints
+* Success messages: "Code sent" vs "Link sent"
+
+**Verification Endpoints:**
+
+* **Magic Link Authenticate** (``handle_magic_link_authenticate``): Accept both ``token`` param (link) OR ``email`` + ``code`` params (otc)
+* **Email Verify** (``handle_verify``): Accept both ``verification_token`` (link) OR ``email`` + ``code`` params (otc)
+* **Password Reset** (``handle_reset_password``): Accept both ``reset_token`` (link) OR ``email`` + ``code`` + ``new_password`` params (otc)
 
 8. Tests (tests/test_http_ext_auth.py)
 --------------------------------------
