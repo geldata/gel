@@ -396,7 +396,7 @@ dependencies = [
  "pyo3",
  "pyo3_util",
  "rand",
- "rstest",
+ "rstest 0.26.1",
  "scopeguard",
  "serde",
  "serde-pickle",
@@ -907,16 +907,17 @@ dependencies = [
 name = "gel-http"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "eventsource-stream",
  "futures",
  "http",
  "http-body-util",
  "http-cache-semantics",
- "lru 0.13.0",
+ "lru 0.16.0",
  "pyo3",
  "pyo3_util",
  "reqwest",
- "rstest",
+ "rstest 0.26.1",
  "scopeguard",
  "tokio",
  "tracing",
@@ -935,7 +936,7 @@ dependencies = [
  "pretty_assertions",
  "rand",
  "roaring",
- "rstest",
+ "rstest 0.23.0",
  "sha2",
  "thiserror 2.0.3",
  "tracing",
@@ -1456,9 +1457,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.13.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "227748d55f2f0ab4735d87fd623798cb6b664512fe979705f829c9f81c934465"
+checksum = "86ea4e65087ff52f3862caff188d489f1fab49a0cb09e01b2e3f1a617b10aaed"
 dependencies = [
  "hashbrown 0.15.2",
 ]
@@ -1792,7 +1793,7 @@ dependencies = [
  "pretty_assertions",
  "pyo3",
  "rand",
- "rstest",
+ "rstest 0.26.1",
  "scopeguard",
  "serde",
  "serde_derive",
@@ -2252,8 +2253,19 @@ checksum = "0a2c585be59b6b5dd66a9d2084aa1d8bd52fbdb806eafdeffb52791147862035"
 dependencies = [
  "futures",
  "futures-timer",
- "rstest_macros",
+ "rstest_macros 0.23.0",
  "rustc_version",
+]
+
+[[package]]
+name = "rstest"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5a3193c063baaa2a95a33f03035c8a72b83d97a54916055ba22d35ed3839d49"
+dependencies = [
+ "futures-timer",
+ "futures-util",
+ "rstest_macros 0.26.1",
 ]
 
 [[package]]
@@ -2261,6 +2273,24 @@ name = "rstest_macros"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "825ea780781b15345a146be27eaefb05085e337e869bff01b4306a4fd4a9ad5a"
+dependencies = [
+ "cfg-if",
+ "glob",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "relative-path",
+ "rustc_version",
+ "syn",
+ "unicode-ident",
+]
+
+[[package]]
+name = "rstest_macros"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c845311f0ff7951c5506121a9ad75aec44d083c31583b2ea5a30bcb0b0abba0"
 dependencies = [
  "cfg-if",
  "glob",
