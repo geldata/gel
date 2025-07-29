@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use eventsource_stream::Eventsource;
 use futures::TryStreamExt;
 use http::{HeaderMap, HeaderName, HeaderValue, Uri};
@@ -40,7 +41,7 @@ type RpcPipe = RustChannel<PythonToRustMessage, RustToPythonMessage>;
 
 #[derive(Debug)]
 enum RustToPythonMessage {
-    Response(PythonConnId, (u16, Vec<u8>, HashMap<String, String>)),
+    Response(PythonConnId, (u16, Bytes, HashMap<String, String>)),
     SSEStart(PythonConnId, (u16, HashMap<String, String>)),
     SSEEvent(PythonConnId, eventsource_stream::Event),
     SSEEnd(PythonConnId),
@@ -100,19 +101,20 @@ impl<'py> FromPyObject<'py> for PythonToRustMessage {
 /// If this is likely a stream, returns the `Stream` variant.
 /// Otherwise, returns the `Bytes` variant.
 enum MaybeResponse {
-    Bytes(Vec<u8>),
+    Bytes(Bytes),
     Stream(reqwest::Body),
 }
 
 impl MaybeResponse {
-    async fn try_into_bytes(self) -> Result<Vec<u8>, String> {
+    async fn try_into_bytes(self) -> Result<Bytes, String> {
         match self {
             MaybeResponse::Bytes(bytes) => Ok(bytes),
             MaybeResponse::Stream(body) => Ok(http_body_util::BodyExt::collect(body)
                 .await
                 .map_err(|e| format!("Failed to read response body: {e:?}"))?
                 .to_bytes()
-                .to_vec()),
+                .to_vec()
+                .into()),
         }
     }
 }
@@ -131,8 +133,9 @@ async fn request(
         Method::from_bytes(method.as_bytes()).map_err(|e| format!("Invalid HTTP method: {e:?}"))?;
     let uri = Uri::from_str(&url).map_err(|e| format!("Invalid URL: {e:?}"))?;
 
-    let req = match cache.before_request(allow_cache, &method, &uri, &headers, body) {
-        CacheBefore::Request(req) => req,
+    let (req, cached_item) = match cache.before_request(allow_cache, &method, &uri, &headers, body)
+    {
+        CacheBefore::Request(req, cached_item) => (req, cached_item),
         CacheBefore::Response(resp) => {
             return Ok(resp.map(MaybeResponse::Bytes));
         }
@@ -161,10 +164,10 @@ async fn request(
             .await
             .map_err(|e| format!("Failed to read response body: {e:?}"))?
             .to_bytes();
-        http::Response::from_parts(parts, bytes.to_vec())
+        http::Response::from_parts(parts, bytes)
     };
 
-    cache.after_request(allow_cache, method, uri, headers, &mut resp);
+    cache.after_request(allow_cache, method, uri, headers, &mut resp, cached_item);
 
     Ok(resp.map(MaybeResponse::Bytes))
 }
@@ -188,7 +191,7 @@ async fn request_bytes(
     headers: Vec<(String, String)>,
     allow_cache: bool,
     cache: Cache,
-) -> Result<(http::StatusCode, Vec<u8>, HashMap<String, String>), String> {
+) -> Result<(http::StatusCode, Bytes, HashMap<String, String>), String> {
     let (parts, body) = request(client, url, method, body, headers, allow_cache, cache)
         .await?
         .into_parts();
