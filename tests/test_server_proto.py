@@ -2464,6 +2464,7 @@ class TestServerProtoMigration(tb.QueryTestCase):
 
         await self.con.execute(f'''
             START MIGRATION TO {{
+                using future simple_scoping;
                 module default {{
                     type {typename} {{
                         required property foo -> str;
@@ -3399,14 +3400,8 @@ class TestServerProtoDDL(tb.DDLTestCase):
 
     async def test_server_proto_backend_tid_propagation_03(self):
         try:
-            await self.con.execute('''
-                START MIGRATION TO {
-                    module default {
-                        scalar type tid_prop_03 extending str;
-                    }
-                };
-                POPULATE MIGRATION;
-                COMMIT MIGRATION;
+            await self.migrate('''
+                scalar type tid_prop_03 extending str;
             ''')
 
             result = await self.con.query_single('''
@@ -3946,14 +3941,14 @@ class TestServerCapabilities(tb.QueryTestCase):
             edgedb.DisabledCapabilityError, "disabled by the client"
         ):
             await self.con._fetchall(
-                'START MIGRATION TO {}',
+                'START MIGRATION TO { using future simple_scoping;}',
                 __allow_capabilities__=caps,
             )
 
     async def test_server_capabilities_07(self):
         caps = enums.Capability.ALL & ~enums.Capability.TRANSACTION
         await self.con._fetchall(
-            'START MIGRATION TO {};'
+            'START MIGRATION TO { using future simple_scoping; };'
             'POPULATE MIGRATION;'
             'ABORT MIGRATION;',
             __allow_capabilities__=caps,

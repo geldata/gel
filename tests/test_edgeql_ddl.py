@@ -10535,13 +10535,9 @@ type default::Foo {
 
         try:
             async with self.con.transaction():
-                await self.con.execute(r"""
-                    START MIGRATION TO {
-                        type Status extending test_other::UniquelyNamed;
-                    };
-                    POPULATE MIGRATION;
-                    COMMIT MIGRATION;
-                """)
+                await self.migrate(r"""
+                    type Status extending test_other::UniquelyNamed;
+                """, module=None)
 
             await self.con.execute("""
                 DROP TYPE Status;
@@ -14629,18 +14625,13 @@ type default::Foo {
             await self.con.execute('drop type Player;')
 
     async def test_edgeql_ddl_unicode_01(self):
-        await self.con.execute(r"""
-            # setup delta
-            START MIGRATION TO {
-                module default {
-                    type Пример {
-                        required property номер -> int16;
-                    };
-                };
+        await self.migrate(r"""
+            type Пример {
+                required property номер -> int16;
             };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
+        """)
 
+        await self.con.execute("""
             INSERT Пример {
                 номер := 987
             };
@@ -18138,16 +18129,12 @@ CREATE MIGRATION m14i24uhm6przo3bpl2lqndphuomfrtq3qdjaqdg6fza7h6m7tlbra
             };
         ''')
 
-        await self.con.execute(r'''
-            START MIGRATION TO {
-                TYPE default::Foo {
-                    PROPERTY foo: std::str;
-                };
-                ALIAS default::FooAlias := default::Foo;
+        await self.migrate(r'''
+            TYPE default::Foo {
+                PROPERTY foo: std::str;
             };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        ''')
+            ALIAS default::FooAlias := default::Foo;
+        ''', module=None)
 
     async def test_edgeql_ddl_adjust_computed_13(self):
         await self.con.execute(r'''
@@ -18899,6 +18886,40 @@ DDLStatement);
         await self.con.execute("""
             drop future simple_scoping;
         """)
+
+    async def test_edgeql_ddl_scoping_future_03(self):
+        async with self.assertRaisesRegexTx(
+            edgedb.QueryError,
+            "Schema does not have 'using future simple_scoping'"
+        ):
+            await self.con.execute("""
+                start migration to {
+                    module default {
+                        type T;
+                    }
+                 }
+            """)
+
+        async with self._run_and_rollback():
+            await self.con.execute("""
+                start migration to {
+                    using future simple_scoping;
+                    module default {
+                        type T;
+                    }
+                 }
+            """)
+
+        # We are also OK with warn_old_scoping
+        async with self._run_and_rollback():
+            await self.con.execute("""
+                start migration to {
+                    using future warn_old_scoping;
+                    module default {
+                        type T;
+                    }
+                 }
+            """)
 
     async def test_edgeql_ddl_no_volatile_computable_01(self):
         async with self.assertRaisesRegexTx(

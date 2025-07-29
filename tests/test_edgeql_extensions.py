@@ -90,16 +90,12 @@ class TestDDLExtensions(tb.DDLTestCase):
             json_only=True,
         )
 
-        await self.con.execute("""
-            START MIGRATION TO {
-                using extension ltree version '2.0';
-                module default {
-                    type Foo { property x -> ext::ltree::ltree };
-                }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+        await self.migrate("""
+            using extension ltree version '2.0';
+            module default {
+                type Foo { property x -> ext::ltree::ltree };
+            }
+        """, module=None)
 
         await self.assert_query_result(
             '''
@@ -358,19 +354,15 @@ class TestDDLExtensions(tb.DDLTestCase):
             ''')
 
     async def _extension_test_02b(self):
-        await self.con.execute(r"""
-            START MIGRATION TO {
-                using extension varchar version "1.0";
-                module default {
-                    scalar type vc5 extending ext::varchar::varchar<5>;
-                    type X {
-                        foo: vc5;
-                    };
-                }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+        await self.migrate(r"""
+            using extension varchar version "1.0";
+            module default {
+                scalar type vc5 extending ext::varchar::varchar<5>;
+                type X {
+                    foo: vc5;
+                };
+            }
+        """, module=None)
 
         await self.con.execute('''
             insert X { foo := <vc5>"0123456789" }
@@ -386,25 +378,14 @@ class TestDDLExtensions(tb.DDLTestCase):
 
         # Try dropping everything that uses it but not the extension
         async with self._run_and_rollback():
-            await self.con.execute(r"""
-                START MIGRATION TO {
-                    using extension varchar version "1.0";
-                    module default {
-                    }
-                };
-                POPULATE MIGRATION;
-                COMMIT MIGRATION;
-            """)
-
-        # Try dropping everything including the extension
-        await self.con.execute(r"""
-            START MIGRATION TO {
+            await self.migrate(r"""
+                using extension varchar version "1.0";
                 module default {
                 }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+            """, module=None)
+
+        # Try dropping everything including the extension
+        await self.migrate('')
 
     async def test_edgeql_extensions_02(self):
         # Make an extension that wraps some of varchar
@@ -998,16 +979,12 @@ class TestDDLExtensions(tb.DDLTestCase):
             ''')
 
     async def _extension_test_06b(self):
-        await self.con.execute(r"""
-            START MIGRATION TO {
-                using extension bar version "2.0";
-                module default {
-                    function lol() -> str using (ext::bar::fubar())
-                }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+        await self.migrate(r"""
+            using extension bar version "2.0";
+            module default {
+                function lol() -> str using (ext::bar::fubar())
+            }
+        """, module=None)
 
         await self.assert_query_result(
             'select lol()',
@@ -1016,53 +993,34 @@ class TestDDLExtensions(tb.DDLTestCase):
 
         # Try dropping everything that uses it but not the extension
         async with self._run_and_rollback():
-            await self.con.execute(r"""
-                START MIGRATION TO {
-                    using extension bar version "2.0";
-                    module default {
-                    }
-                };
-                POPULATE MIGRATION;
-                COMMIT MIGRATION;
-            """)
+            await self.migrate(r"""
+                using extension bar version "2.0";
+                module default {
+                }
+            """, module=None)
 
         # Try dropping it but adding bar
         async with self._run_and_rollback():
-            await self.con.execute(r"""
-                START MIGRATION TO {
-                    using extension bar version "2.0";
-                    module default {
-                    }
-                };
-                POPULATE MIGRATION;
-                COMMIT MIGRATION;
-            """)
-
-        # Try dropping everything including the extension
-        await self.con.execute(r"""
-            START MIGRATION TO {
+            await self.migrate(r"""
+                using extension bar version "2.0";
                 module default {
                 }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+            """, module=None)
+
+        # Try dropping everything including the extension
+        await self.migrate('')
 
         # Try it explicitly specifying an old version. Note
         # that we don't *yet* support upgrading between extension
         # versions; you need to drop it and recreate everything, which
         # obviously is not great.
 
-        await self.con.execute(r"""
-            START MIGRATION TO {
-                using extension bar version '1.0';
-                module default {
-                    function lol() -> str using (ext::bar::fubar())
-                }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+        await self.migrate(r"""
+            using extension bar version '1.0';
+            module default {
+                function lol() -> str using (ext::bar::fubar())
+            }
+        """, module=None)
 
         await self.assert_query_result(
             'select lol()',
@@ -1070,30 +1028,19 @@ class TestDDLExtensions(tb.DDLTestCase):
         )
 
         # Try dropping everything including the extension
-        await self.con.execute(r"""
-            START MIGRATION TO {
-                module default {
-                }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+        await self.migrate('')
 
         with self.assertRaisesRegex(
             edgedb.SchemaError,
             "cannot install extension 'foo' version 2.0: "
             "version 1.0 is already installed"
         ):
-            await self.con.execute(r"""
-                START MIGRATION TO {
-                    using extension bar version '1.0';
-                    using extension foo version '2.0';
-                    module default {
-                    }
-                };
-                POPULATE MIGRATION;
-                COMMIT MIGRATION;
-            """)
+            await self.migrate(r"""
+                using extension bar version '1.0';
+                using extension foo version '2.0';
+                module default {
+                }
+            """, module=None)
 
     async def test_edgeql_extensions_06(self):
         # Make an extension with dependencies
@@ -1138,32 +1085,24 @@ class TestDDLExtensions(tb.DDLTestCase):
             ''')
 
     async def _extension_test_07(self):
-        await self.con.execute(r"""
-            START MIGRATION TO {
-                using extension asdf version "1.0";
-                module default {
-                    function lol() -> int64 using (ext::asdf::getver())
-                }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+        await self.migrate(r"""
+            using extension asdf version "1.0";
+            module default {
+                function lol() -> int64 using (ext::asdf::getver())
+            }
+        """, module=None)
 
         await self.assert_query_result(
             'select lol()',
             [1],
         )
 
-        await self.con.execute(r"""
-            START MIGRATION TO {
-                using extension asdf version "3.0";
-                module default {
-                    function lol() -> int64 using (ext::asdf::getver())
-                }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+        await self.migrate(r"""
+            using extension asdf version "3.0";
+            module default {
+                function lol() -> int64 using (ext::asdf::getver())
+            }
+        """, module=None)
 
         await self.assert_query_result(
             'select lol()',
@@ -1226,16 +1165,12 @@ class TestDDLExtensions(tb.DDLTestCase):
             ''')
 
     async def _extension_test_08(self):
-        await self.con.execute(r"""
-            START MIGRATION TO {
-                using extension bar version "1.0";
-                module default {
-                    function lol() -> str using (ext::bar::fubar())
-                }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+        await self.migrate(r"""
+            using extension bar version "1.0";
+            module default {
+                function lol() -> str using (ext::bar::fubar())
+            }
+        """, module=None)
 
         await self.assert_query_result(
             'select lol()',
@@ -1252,16 +1187,12 @@ class TestDDLExtensions(tb.DDLTestCase):
             """)
 
         # Migration should work, though, since it will create the dependency.
-        await self.con.execute(r"""
-            START MIGRATION TO {
-                using extension bar version "2.0";
-                module default {
-                    function lol() -> str using (ext::bar::fubar())
-                }
-            };
-            POPULATE MIGRATION;
-            COMMIT MIGRATION;
-        """)
+        await self.migrate(r"""
+            using extension bar version "2.0";
+            module default {
+                function lol() -> str using (ext::bar::fubar())
+            }
+        """, module=None)
         await self.assert_query_result(
             'select lol()',
             ['foobar'],

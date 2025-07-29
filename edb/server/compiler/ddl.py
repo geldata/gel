@@ -45,6 +45,7 @@ from edb.schema import database as s_db
 from edb.schema import ddl as s_ddl
 from edb.schema import delta as s_delta
 from edb.schema import expraliases as s_expraliases
+from edb.schema import futures as s_futures
 from edb.schema import functions as s_func
 from edb.schema import globals as s_globals
 from edb.schema import indexes as s_indexes
@@ -533,6 +534,20 @@ def _start_migration(
             base_schema=base_schema,
             testmode=ctx.is_testmode(),
         )
+
+        if not (
+            s_futures.future_enabled(target_schema, 'simple_scoping')
+            or s_futures.future_enabled(target_schema, 'warn_old_scoping')
+        ):
+            warnings += (
+                errors.DeprecatedScopingError(
+                    f"\nSchema does not have 'using future simple_scoping'.\n"
+                    f"Non-simple_scoping will be removed in Gel 8.0.\n"
+                    f"See https://docs.geldata.com/reference/edgeql/"
+                    f"path_resolution\n"
+                ),
+            )
+
         query = dataclasses.replace(query, warnings=tuple(warnings))
 
     current_tx.update_migration_state(
