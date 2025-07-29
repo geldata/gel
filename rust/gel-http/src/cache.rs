@@ -50,6 +50,9 @@ impl<T> CacheItems<T> {
     }
 
     fn insert(&mut self, uri: Uri, policy: T, body: Bytes) {
+        if self.items.is_empty() {
+            debug_assert!(self.byte_size == 0);
+        }
         let body_len = body.len();
         if let Some((_, old_body)) = self.items.push(uri, (policy, body)) {
             self.byte_size = self.byte_size.saturating_sub(old_body.1.len());
@@ -64,8 +67,13 @@ impl<T> CacheItems<T> {
         }
     }
 
-    fn get_mut(&mut self, uri: &Uri) -> Option<&mut (T, Bytes)> {
-        self.items.get_mut(uri)
+    fn get(&mut self, uri: &Uri) -> Option<&(T, Bytes)> {
+        self.items.get(uri)
+    }
+
+    fn get_mut(&mut self, uri: &Uri) -> Option<(&mut T, &Bytes)> {
+        let entry = self.items.get_mut(uri)?;
+        Some((&mut entry.0, &entry.1))
     }
 }
 
@@ -94,7 +102,7 @@ impl Cache {
     #[cfg(test)]
     pub fn get_cache_body(&self, url: &Uri) -> Option<(bool, Vec<u8>)> {
         let mut cache = self.cache.lock().unwrap();
-        let entry = cache.get_mut(url);
+        let entry = cache.get(url);
         if let Some((policy, body)) = entry {
             let state = policy.is_stale(SystemTime::now());
             // NOTE: inefficient, for testing only
@@ -105,7 +113,9 @@ impl Cache {
 
     #[cfg(test)]
     pub fn clear(&self) {
-        self.cache.lock().unwrap().items.clear();
+        let mut cache = self.cache.lock().unwrap();
+        cache.items.clear();
+        cache.byte_size = 0;
     }
 
     pub fn before_request(
@@ -128,7 +138,7 @@ impl Cache {
 
         let now = SystemTime::now();
         let mut cache = self.cache.lock().unwrap();
-        if let Some((policy, body)) = cache.get_mut(url) {
+        if let Some((policy, body)) = cache.get(url) {
             match policy.before_request(&req, now) {
                 BeforeRequest::Fresh(parts) => {
                     // Fresh response from cache
@@ -178,23 +188,18 @@ impl Cache {
                     body.clone_into(res.body_mut());
 
                     // TODO: Can new_policy.is_storable() be false?
-                    if let Some(entry) = entry {
-                        entry.0 = Arc::new(new_policy);
+                    if let Some((old_policy, _)) = entry {
+                        *old_policy = Arc::new(new_policy);
                     } else {
                         cache.insert(uri, Arc::new(new_policy), body);
                     }
                     parts
                 }
                 AfterResponse::Modified(new_policy, parts) => {
-                    // Modified, update the cache, but not the body
+                    // Modified, update the cache, but not the response body
 
                     // TODO: Can new_policy.is_storable() be false?
-                    if let Some(entry) = entry {
-                        entry.0 = Arc::new(new_policy);
-                        res.body().clone_into(&mut entry.1);
-                    } else {
-                        cache.insert(uri, Arc::new(new_policy), res.body().clone());
-                    }
+                    cache.insert(uri, Arc::new(new_policy), res.body().clone());
                     parts
                 }
             };
