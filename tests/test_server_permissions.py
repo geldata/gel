@@ -1835,3 +1835,57 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
             await self.con.query('''
                 DROP ROLE foo;
             ''')
+
+
+class TestServerPermissionsGraphql(tb.GraphQLTestCase):
+
+    PARALLELISM_GRANULARITY = 'system'
+    TRANSACTION_ISOLATION = False
+
+    async def test_server_permissions_graphql_01(self):
+        # Check that non-superuser has permissions
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := default::perm_a;
+            };
+            CREATE PERMISSION default::perm_a;
+            CREATE PERMISSION default::perm_b;
+
+            CREATE ALIAS GraphqlIsNotAQueryLanguage := {
+                perm_a := global perm_a,
+                perm_b := global perm_b,
+                role := global sys::current_role,
+            }
+        ''')
+
+        try:
+            qry = '''
+                query {
+                    GraphqlIsNotAQueryLanguage {
+                        perm_a
+                        perm_b
+                        role
+                    }
+                }
+            '''
+            result = self.graphql_query(
+                qry, user='foo', password='secret'
+            )
+            self.assert_data_shape(
+                result,
+                dict(GraphqlIsNotAQueryLanguage=[dict(
+                    perm_a=True,
+                    perm_b=False,
+                    role='foo',
+                )]),
+            )
+
+        finally:
+            await self.con.query('''
+                DROP ROLE foo;
+                DROP ALIAS GraphqlIsNotAQueryLanguage;
+                DROP PERMISSION default::perm_a;
+                DROP PERMISSION default::perm_b;
+            ''')

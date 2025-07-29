@@ -431,6 +431,7 @@ class TestServerAuth(tb.ConnectedTestCase):
         proto='edgeql',
         client_cert_file=None,
         client_key_file=None,
+        query=None,
     ):
         with self.http_con(
             server,
@@ -444,12 +445,15 @@ class TestServerAuth(tb.ConnectedTestCase):
             elif password is not None:
                 headers['Authorization'] = self.make_auth_header(
                     username, password)
+            # ... the graphql ones will produce an error, but that's
+            # still a 200
+            if query is None:
+                query = 'select 1'
+
             return self.http_con_request(
                 con,
                 path=f'/db/{db}/{proto}',
-                # ... the graphql ones will produce an error, but that's
-                # still a 200
-                params=dict(query='select 1'),
+                params=dict(query=query),
                 headers=headers,
             )
 

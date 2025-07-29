@@ -221,6 +221,9 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         variables=None,
         globals=None,
         deprecated_globals=None,
+
+        user=None,
+        password=None,
     ):
         def inner():
             return self._graphql_query(
@@ -230,6 +233,8 @@ class GraphQLTestCase(BaseHttpExtensionTest):
                 variables=variables,
                 globals=globals,
                 deprecated_globals=deprecated_globals,
+                user=user,
+                password=password,
             )
         return self._retry_operation(inner)
 
@@ -258,6 +263,8 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         variables=None,
         globals=None,
         deprecated_globals=None,
+        user=None,
+        password=None,
     ):
         req_data = {"query": query}
 
@@ -277,7 +284,9 @@ class GraphQLTestCase(BaseHttpExtensionTest):
 
             req = urllib.request.Request(self.http_addr, method="POST")
             req.add_header("Content-Type", "application/json")
-            req.add_header("Authorization", self.make_auth_header())
+            req.add_header(
+                "Authorization", self.make_auth_header(user, password)
+            )
             response = urllib.request.urlopen(
                 req, json.dumps(req_data).encode(), context=self.tls_context
             )
@@ -295,7 +304,9 @@ class GraphQLTestCase(BaseHttpExtensionTest):
             req = urllib.request.Request(
                 f"{self.http_addr}/?{urllib.parse.urlencode(req_data)}",
             )
-            req.add_header("Authorization", self.make_auth_header())
+            req.add_header(
+                "Authorization", self.make_auth_header(user, password)
+            )
             response = urllib.request.urlopen(
                 req,
                 context=self.tls_context,
