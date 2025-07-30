@@ -838,6 +838,13 @@ class Router:
                 otc_id = await otc.verify(self.db, str(email_factor.id), code)
                 logger.info(f"OTC verified successfully: otc_id={otc_id}, email={email}")
 
+                # Send webhook and increment metrics for successful OTC verification
+                await self._handle_otc_verified(
+                    identity_id=str(email_factor.identity.id),
+                    email_factor_id=str(email_factor.id),
+                    otc_id=str(otc_id),
+                )
+
                 # Mark email as verified
                 verified_email_factor = await self._try_verify_email(
                     provider=provider,
@@ -865,6 +872,21 @@ class Router:
                 return
 
             except Exception as ex:
+                # Determine failure reason for metrics
+                failure_reason = "unknown"
+                error_msg = str(ex)
+                if "Maximum verification attempts exceeded" in error_msg:
+                    failure_reason = "rate_limited"
+                elif "Invalid code" in error_msg:
+                    failure_reason = "invalid_code"
+                elif "Code has expired" in error_msg:
+                    failure_reason = "expired"
+                elif "Verification failed" in error_msg:
+                    failure_reason = "verification_failed"
+
+                # Track failure metrics
+                self._handle_otc_failed(failure_reason)
+
                 response.status = http.HTTPStatus.BAD_REQUEST
                 response.content_type = b"application/json"
                 response.body = json.dumps({
@@ -1032,6 +1054,15 @@ class Router:
                         code=code,
                         test_mode=self.test_mode,
                     )
+
+                    # Send webhook and increment metrics for OTC initiation
+                    await self._handle_otc_initiated(
+                        identity_id=identity_id,
+                        email_factor_id=str(email_factor.id),
+                        otc_id=str(otc_id),
+                        one_time_code=code,
+                    )
+
                     logger.info(
                         f"Sent OTC password reset email: email={email}, otc_id={otc_id}"
                     )
@@ -1179,8 +1210,34 @@ class Router:
                     raise errors.NoIdentityFound("Invalid email")
 
                 # Verify the OTC using the mega query
-                otc_id = await otc.verify(self.db, str(email_factor.id), code)
-                logger.info(f"OTC verified for password reset: otc_id={otc_id}, email={email}")
+                try:
+                    otc_id = await otc.verify(self.db, str(email_factor.id), code)
+                    logger.info(f"OTC verified for password reset: otc_id={otc_id}, email={email}")
+
+                    # Send webhook and increment metrics for successful OTC verification
+                    await self._handle_otc_verified(
+                        identity_id=email_factor.identity.id,
+                        email_factor_id=str(email_factor.id),
+                        otc_id=str(otc_id),
+                    )
+                except Exception as ex:
+                    # Determine failure reason for metrics
+                    failure_reason = "unknown"
+                    error_msg = str(ex)
+                    if "Maximum verification attempts exceeded" in error_msg:
+                        failure_reason = "rate_limited"
+                    elif "Invalid code" in error_msg:
+                        failure_reason = "invalid_code"
+                    elif "Code has expired" in error_msg:
+                        failure_reason = "expired"
+                    elif "Verification failed" in error_msg:
+                        failure_reason = "verification_failed"
+
+                    # Track failure metrics
+                    self._handle_otc_failed(failure_reason)
+
+                    # Re-raise the exception to preserve existing behavior
+                    raise
 
                 # Update password - we need to get the secret first
                 try:
@@ -1345,6 +1402,15 @@ class Router:
                     code=code,
                     test_mode=self.test_mode,
                 )
+
+                # Send webhook and increment metrics for OTC initiation
+                await self._handle_otc_initiated(
+                    identity_id=str(email_factor.identity.id),
+                    email_factor_id=str(email_factor.id),
+                    otc_id=str(otc_id),
+                    one_time_code=code,
+                )
+
                 logger.info(
                     f"Sent OTC email: identity_id={email_factor.identity.id}, "
                     f"email={email}, otc_id={otc_id}"
@@ -1495,6 +1561,15 @@ class Router:
                         code=code,
                         test_mode=self.test_mode,
                     )
+
+                    # Send webhook and increment metrics for OTC initiation
+                    await self._handle_otc_initiated(
+                        identity_id=str(identity_id),
+                        email_factor_id=str(email_factor.id),
+                        otc_id=str(otc_id),
+                        one_time_code=code,
+                    )
+
                     logger.info(
                         f"Sent OTC email: identity_id={identity_id}, "
                         f"email={email}, otc_id={otc_id}"
@@ -1630,8 +1705,34 @@ class Router:
                     raise errors.NoIdentityFound("Invalid email")
 
                 # Verify the OTC using the mega query
-                otc_id = await otc.verify(self.db, str(email_factor.id), code_str)
-                logger.info(f"OTC verified successfully: otc_id={otc_id}, email={email}")
+                try:
+                    otc_id = await otc.verify(self.db, str(email_factor.id), code_str)
+                    logger.info(f"OTC verified successfully: otc_id={otc_id}, email={email}")
+
+                    # Send webhook and increment metrics for successful OTC verification
+                    await self._handle_otc_verified(
+                        identity_id=str(email_factor.identity.id),
+                        email_factor_id=str(email_factor.id),
+                        otc_id=str(otc_id),
+                    )
+                except Exception as ex:
+                    # Determine failure reason for metrics
+                    failure_reason = "unknown"
+                    error_msg = str(ex)
+                    if "Maximum verification attempts exceeded" in error_msg:
+                        failure_reason = "rate_limited"
+                    elif "Invalid code" in error_msg:
+                        failure_reason = "invalid_code"
+                    elif "Code has expired" in error_msg:
+                        failure_reason = "expired"
+                    elif "Verification failed" in error_msg:
+                        failure_reason = "verification_failed"
+
+                    # Track failure metrics
+                    self._handle_otc_failed(failure_reason)
+
+                    # Re-raise the exception to preserve existing behavior
+                    raise
 
                 # Create PKCE challenge and link identity
                 await pkce.create(self.db, challenge)
@@ -2435,6 +2536,61 @@ class Router:
                     f"to {webhook_config.url} for event {event!r}"
                 )
 
+    async def _handle_otc_initiated(
+        self,
+        identity_id: str,
+        email_factor_id: str,
+        otc_id: str,
+        one_time_code: str
+    ) -> None:
+        """Handle OTC creation: send webhook and increment metrics."""
+        # Increment metrics
+        metrics.otc_initiated_total.inc(1.0, self.tenant.get_instance_name())
+
+        # Send webhook
+        await self._maybe_send_webhook(
+            webhook.OneTimeCodeRequested(
+                event_id=str(uuid.uuid4()),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
+                identity_id=identity_id,
+                email_factor_id=email_factor_id,
+                otc_id=str(otc_id),
+                one_time_code=one_time_code,
+            )
+        )
+
+        logger.info(f"OTC initiated: identity_id={identity_id}, otc_id={otc_id}")
+
+    async def _handle_otc_verified(
+        self,
+        identity_id: str,
+        email_factor_id: str,
+        otc_id: str
+    ) -> None:
+        """Handle successful OTC verification: send webhook and increment metrics."""
+        # Increment metrics
+        metrics.otc_verified_total.inc(1.0, self.tenant.get_instance_name())
+
+        # Send webhook
+        await self._maybe_send_webhook(
+            webhook.OneTimeCodeVerified(
+                event_id=str(uuid.uuid4()),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
+                identity_id=identity_id,
+                email_factor_id=email_factor_id,
+                otc_id=str(otc_id),
+            )
+        )
+
+        logger.info(f"OTC verified: identity_id={identity_id}, otc_id={otc_id}")
+
+    def _handle_otc_failed(self, reason: str) -> None:
+        """Handle failed OTC verification: increment metrics."""
+        # Increment metrics
+        metrics.otc_failed_total.inc(1.0, self.tenant.get_instance_name(), reason)
+
+        logger.info(f"OTC verification failed: reason={reason}")
+
     def _get_callback_url(self) -> str:
         return f"{self.base_path}/callback"
 
@@ -2559,6 +2715,15 @@ class Router:
                         code=code,
                         test_mode=self.test_mode,
                     )
+
+                    # Send webhook and increment metrics for OTC initiation
+                    await self._handle_otc_initiated(
+                        identity_id=email_factor.identity.id,
+                        email_factor_id=str(email_factor.id),
+                        otc_id=str(otc_id),
+                        one_time_code=code,
+                    )
+
                     logger.info(f"Sent OTC verification email: email={to_addr}, otc_id={otc_id}")
                     return
 

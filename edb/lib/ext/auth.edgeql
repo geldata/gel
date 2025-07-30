@@ -428,6 +428,8 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         EmailVerificationRequested,
         PasswordResetRequested,
         MagicLinkRequested,
+        OneTimeCodeRequested,
+        OneTimeCodeVerified,
     >;
 
     create type ext::auth::WebhookConfig extending cfg::ConfigObject {

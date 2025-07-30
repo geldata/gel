@@ -450,6 +450,36 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             };
         """)
 
+        # Set up webhook configuration to test OTC webhook events
+        base_url = self.mock_net_server.get_base_url().rstrip("/")
+        webhook_url = f"{base_url}/otc-webhook"
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::WebhookConfig {
+                url := <str>$url,
+                events := {
+                    ext::auth::WebhookEvent.OneTimeCodeRequested,
+                    ext::auth::WebhookEvent.OneTimeCodeVerified,
+                    ext::auth::WebhookEvent.IdentityCreated,
+                    ext::auth::WebhookEvent.EmailFactorCreated,
+                },
+            };
+            """,
+            url=webhook_url,
+        )
+
+        webhook_request = (
+            "POST",
+            base_url,
+            "/otc-webhook",
+        )
+        self.mock_net_server.register_route_handler(*webhook_request)(
+            ("", 204)
+        )
+
+        await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
+
         try:
             email = f"{uuid.uuid4()}@example.com"
             verifier, challenge = self.generate_pkce_pair()
@@ -557,7 +587,74 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 )
                 token_data = json.loads(token_body)
                 self.assertIn("auth_token", token_data)
+
+                # Step 5: Test OTC webhook events were sent
+                async for tr in self.try_until_succeeds(
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
+                ):
+                    async with tr:
+                        requests_for_webhook = self.mock_net_server.requests[
+                            webhook_request
+                        ]
+                        # Should have 4 webhook events: IdentityCreated, EmailFactorCreated,
+                        # OneTimeCodeRequested, OneTimeCodeVerified
+                        self.assertEqual(len(requests_for_webhook), 4)
+
+                # Parse and validate webhook events
+                event_types: dict[str, dict | None] = {
+                    "IdentityCreated": None,
+                    "EmailFactorCreated": None,
+                    "OneTimeCodeRequested": None,
+                    "OneTimeCodeVerified": None,
+                }
+
+                for request in requests_for_webhook:
+                    assert request.body is not None
+                    event_data = json.loads(request.body)
+                    event_type = event_data["event_type"]
+                    self.assertIn(event_type, event_types)
+                    event_types[event_type] = event_data
+
+                # Verify all expected events were received
+                self.assertTrue(
+                    all(value is not None for value in event_types.values())
+                )
+
+                                # Validate OneTimeCodeRequested event
+                otc_requested = cast(dict, event_types["OneTimeCodeRequested"])
+                self.assertIn("identity_id", otc_requested)
+                self.assertIn("email_factor_id", otc_requested)
+                self.assertIn("otc_id", otc_requested)
+                self.assertIn("one_time_code", otc_requested)
+                self.assertIn("event_id", otc_requested)
+                self.assertIn("timestamp", otc_requested)
+                # Verify the code is a 6-digit string
+                self.assertEqual(len(otc_requested["one_time_code"]), 6)
+                self.assertTrue(otc_requested["one_time_code"].isdigit())
+
+                # Validate OneTimeCodeVerified event
+                otc_verified = cast(dict, event_types["OneTimeCodeVerified"])
+                self.assertIn("identity_id", otc_verified)
+                self.assertIn("email_factor_id", otc_verified)
+                self.assertIn("otc_id", otc_verified)
+                self.assertIn("event_id", otc_verified)
+                self.assertIn("timestamp", otc_verified)
+
+                # Verify the OTC events have the same identity and factor IDs
+                self.assertEqual(
+                    otc_requested["identity_id"],
+                    otc_verified["identity_id"]
+                )
+                self.assertEqual(
+                    otc_requested["email_factor_id"],
+                    otc_verified["email_factor_id"]
+                )
+
         finally:
+            # Clean up webhook config
+            await self.con.query(
+                "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
+            )
             # Restore original Magic Link provider config
             await self.con.query("""
                 CONFIGURE CURRENT DATABASE
@@ -694,108 +791,210 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             };
         """)
 
+        # Set up webhook configuration to test OTC webhook events
+        base_url = self.mock_net_server.get_base_url().rstrip("/")
+        webhook_url = f"{base_url}/email-otc-webhook"
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::WebhookConfig {
+                url := <str>$url,
+                events := {
+                    ext::auth::WebhookEvent.OneTimeCodeRequested,
+                    ext::auth::WebhookEvent.OneTimeCodeVerified,
+                    ext::auth::WebhookEvent.IdentityCreated,
+                    ext::auth::WebhookEvent.EmailFactorCreated,
+                    ext::auth::WebhookEvent.EmailVerified,
+                },
+            };
+            """,
+            url=webhook_url,
+        )
+
+        webhook_request = (
+            "POST",
+            base_url,
+            "/email-otc-webhook",
+        )
+        self.mock_net_server.register_route_handler(*webhook_request)(
+            ("", 204)
+        )
+
+        await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
+
         email = f"{uuid.uuid4()}@example.com"
         password = "test_password_otc_123"
         verifier, challenge = self.generate_pkce_pair()
 
-        with self.http_con() as http_con:
-            # Step 1: Register (should send OTC email, not verification link)
-            form_data = {
-                "provider": "builtin::local_emailpassword",
-                "email": email,
-                "password": password,
-                "challenge": challenge,
-            }
-            form_data_encoded = urllib.parse.urlencode(form_data).encode()
+        try:
+            with self.http_con() as http_con:
+                # Step 1: Register (should send OTC email, not verification link)
+                form_data = {
+                    "provider": "builtin::local_emailpassword",
+                    "email": email,
+                    "password": password,
+                    "challenge": challenge,
+                }
+                form_data_encoded = urllib.parse.urlencode(form_data).encode()
 
-            body, headers, status = self.http_con_request(
-                http_con,
-                method="POST",
-                path="register",
-                body=form_data_encoded,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                body, headers, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="register",
+                    body=form_data_encoded,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+
+                self.assertEqual(status, 201, body)
+
+                # Step 2: Get the OTC from verification email
+                file_name_hash = hashlib.sha256(
+                    f"{SENDER}{email}".encode()
+                ).hexdigest()
+                test_file = os.environ.get(
+                    "EDGEDB_TEST_EMAIL_FILE",
+                    f"/tmp/edb-test-email-{file_name_hash}.pickle",
+                )
+                with open(test_file, "rb") as f:
+                    email_args = pickle.load(f)
+
+                msg = cast(EmailMessage, email_args["message"])
+                html_content = (
+                    msg.get_body(('html',)).get_payload(decode=True).decode('utf-8')
+                )
+
+                # Extract the 6-digit code from email
+                code_match = re.search(r'(?:^|\s)(\d{6})(?:\s|$)', html_content)
+                self.assertIsNotNone(
+                    code_match, "No 6-digit code found in verification email"
+                )
+                otc_code = code_match.group(1)
+
+                # Step 3: Verify email with the code
+                verify_body, verify_headers, verify_status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="verify",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_emailpassword",
+                            "email": email,
+                            "code": otc_code,
+                            "challenge": challenge,
+                        }
+                    ).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+
+                self.assertEqual(verify_status, 200, verify_body)
+
+                # Should return successful verification response
+                verify_data = json.loads(verify_body)
+                self.assertEqual(verify_data.get("status"), "verified")
+
+                # Step 4: Now should be able to authenticate with email+password
+                auth_body, auth_headers, auth_status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="authenticate",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_emailpassword",
+                            "email": email,
+                            "password": password,
+                            "challenge": challenge,
+                        }
+                    ).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+
+                self.assertEqual(auth_status, 200, auth_body)
+                auth_data = json.loads(auth_body)
+                code = auth_data.get("code")
+
+                # Step 5: Exchange auth code for token
+                token_body, token_headers, token_status = self.http_con_request(
+                    http_con,
+                    params={
+                        "code": code,
+                        "verifier": verifier,
+                    },
+                    method="GET",
+                    path="token",
+                )
+                self.assertEqual(token_status, 200, token_body)
+                token_data = json.loads(token_body)
+                self.assertIn("auth_token", token_data)
+
+                # Step 6: Test webhook events were sent
+                async for tr in self.try_until_succeeds(
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
+                ):
+                    async with tr:
+                        requests_for_webhook = self.mock_net_server.requests[
+                            webhook_request
+                        ]
+                        # Should have 5 webhook events: IdentityCreated, EmailFactorCreated,
+                        # OneTimeCodeRequested, OneTimeCodeVerified, EmailVerified
+                        self.assertEqual(len(requests_for_webhook), 5)
+
+                # Parse and validate webhook events
+                event_types: dict[str, dict | None] = {
+                    "IdentityCreated": None,
+                    "EmailFactorCreated": None,
+                    "OneTimeCodeRequested": None,
+                    "OneTimeCodeVerified": None,
+                    "EmailVerified": None,
+                }
+
+                for request in requests_for_webhook:
+                    assert request.body is not None
+                    event_data = json.loads(request.body)
+                    event_type = event_data["event_type"]
+                    self.assertIn(event_type, event_types)
+                    event_types[event_type] = event_data
+
+                # Verify all expected events were received
+                self.assertTrue(
+                    all(value is not None for value in event_types.values())
+                )
+
+                # Validate OneTimeCodeRequested event structure
+                otc_requested = cast(dict, event_types["OneTimeCodeRequested"])
+                self.assertIn("identity_id", otc_requested)
+                self.assertIn("email_factor_id", otc_requested)
+                self.assertIn("otc_id", otc_requested)
+                self.assertIn("one_time_code", otc_requested)
+                # Verify the code is a 6-digit string
+                self.assertEqual(len(otc_requested["one_time_code"]), 6)
+                self.assertTrue(otc_requested["one_time_code"].isdigit())
+
+                # Validate OneTimeCodeVerified event structure
+                otc_verified = cast(dict, event_types["OneTimeCodeVerified"])
+                self.assertIn("identity_id", otc_verified)
+                self.assertIn("email_factor_id", otc_verified)
+                self.assertIn("otc_id", otc_verified)
+
+                # Validate EmailVerified event (should be sent after OTC verification)
+                email_verified = cast(dict, event_types["EmailVerified"])
+                self.assertIn("identity_id", email_verified)
+                self.assertIn("email_factor_id", email_verified)
+
+                # Verify the events reference the same identity
+                self.assertEqual(
+                    otc_requested["identity_id"],
+                    otc_verified["identity_id"]
+                )
+                self.assertEqual(
+                    otc_verified["identity_id"],
+                    email_verified["identity_id"]
+                )
+
+        finally:
+            # Clean up webhook config
+            await self.con.query(
+                "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
             )
-
-            self.assertEqual(status, 201, body)
-
-            # Step 2: Get the OTC from verification email
-            file_name_hash = hashlib.sha256(
-                f"{SENDER}{email}".encode()
-            ).hexdigest()
-            test_file = os.environ.get(
-                "EDGEDB_TEST_EMAIL_FILE",
-                f"/tmp/edb-test-email-{file_name_hash}.pickle",
-            )
-            with open(test_file, "rb") as f:
-                email_args = pickle.load(f)
-
-            msg = cast(EmailMessage, email_args["message"])
-            html_content = (
-                msg.get_body(('html',)).get_payload(decode=True).decode('utf-8')
-            )
-
-            # Extract the 6-digit code from email
-            code_match = re.search(r'(?:^|\s)(\d{6})(?:\s|$)', html_content)
-            self.assertIsNotNone(
-                code_match, "No 6-digit code found in verification email"
-            )
-            otc_code = code_match.group(1)
-
-            # Step 3: Verify email with the code
-            verify_body, verify_headers, verify_status = self.http_con_request(
-                http_con,
-                method="POST",
-                path="verify",
-                body=json.dumps(
-                    {
-                        "provider": "builtin::local_emailpassword",
-                        "email": email,
-                        "code": otc_code,
-                        "challenge": challenge,
-                    }
-                ).encode(),
-                headers={"Content-Type": "application/json"},
-            )
-
-            self.assertEqual(verify_status, 200, verify_body)
-
-            # Should return successful verification response
-            verify_data = json.loads(verify_body)
-            self.assertEqual(verify_data.get("status"), "verified")
-
-            # Step 4: Now should be able to authenticate with email+password
-            auth_body, auth_headers, auth_status = self.http_con_request(
-                http_con,
-                method="POST",
-                path="authenticate",
-                body=json.dumps(
-                    {
-                        "provider": "builtin::local_emailpassword",
-                        "email": email,
-                        "password": password,
-                        "challenge": challenge,
-                    }
-                ).encode(),
-                headers={"Content-Type": "application/json"},
-            )
-
-            self.assertEqual(auth_status, 200, auth_body)
-            auth_data = json.loads(auth_body)
-            code = auth_data.get("code")
-
-            # Step 5: Exchange auth code for token
-            token_body, token_headers, token_status = self.http_con_request(
-                http_con,
-                params={
-                    "code": code,
-                    "verifier": verifier,
-                },
-                method="GET",
-                path="token",
-            )
-            self.assertEqual(token_status, 200, token_body)
-            token_data = json.loads(token_body)
-            self.assertIn("auth_token", token_data)
 
     async def test_http_ext_auth_otc_email_password_01(self):
         """Test Email+Password OTC verification with invalid code.
@@ -856,6 +1055,132 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             self.assertEqual(verify_status, 400, verify_body)
             verify_data = json.loads(verify_body)
             self.assertIn("error", verify_data)
+
+    async def test_http_ext_auth_otc_webhook_failure_events(self):
+        """Test that webhook events are properly sent/not sent during OTC failures.
+
+        Verifies that OneTimeCodeRequested is sent during registration, but
+        OneTimeCodeVerified is NOT sent when verification fails with invalid codes.
+        This ensures webhook consistency and proper failure handling.
+        """
+
+        # Configure for OTC
+        await self.con.query("""
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::EmailPasswordProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::EmailPasswordProviderConfig {
+                require_verification := true,
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """)
+
+        # Set up webhook configuration
+        base_url = self.mock_net_server.get_base_url().rstrip("/")
+        webhook_url = f"{base_url}/failure-webhook"
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::WebhookConfig {
+                url := <str>$url,
+                events := {
+                    ext::auth::WebhookEvent.OneTimeCodeRequested,
+                    ext::auth::WebhookEvent.OneTimeCodeVerified,
+                    ext::auth::WebhookEvent.IdentityCreated,
+                    ext::auth::WebhookEvent.EmailFactorCreated,
+                },
+            };
+            """,
+            url=webhook_url,
+        )
+
+        webhook_request = (
+            "POST",
+            base_url,
+            "/failure-webhook",
+        )
+        self.mock_net_server.register_route_handler(*webhook_request)(
+            ("", 204)
+        )
+
+        await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
+
+        email = f"{uuid.uuid4()}@example.com"
+        password = "test_password_failure"
+
+        try:
+            with self.http_con() as http_con:
+                # Step 1: Register (should send OneTimeCodeRequested)
+                form_data = {
+                    "provider": "builtin::local_emailpassword",
+                    "email": email,
+                    "password": password,
+                    "challenge": str(uuid.uuid4()),
+                }
+                form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+                body, headers, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="register",
+                    body=form_data_encoded,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+                self.assertEqual(status, 201, body)
+
+                # Step 2: Try to verify with invalid code (should NOT send OneTimeCodeVerified)
+                verify_body, verify_headers, verify_status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="verify",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_emailpassword",
+                            "email": email,
+                            "code": "000000",  # Invalid code
+                        }
+                    ).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+                self.assertEqual(verify_status, 400, verify_body)
+
+                # Step 3: Verify webhook events
+                async for tr in self.try_until_succeeds(
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
+                ):
+                    async with tr:
+                        requests_for_webhook = self.mock_net_server.requests[
+                            webhook_request
+                        ]
+                        # Should have 3 webhook events: IdentityCreated, EmailFactorCreated,
+                        # OneTimeCodeRequested (but NOT OneTimeCodeVerified)
+                        self.assertEqual(len(requests_for_webhook), 3)
+
+                # Parse and validate webhook events
+                received_event_types = set()
+                for request in requests_for_webhook:
+                    assert request.body is not None
+                    event_data = json.loads(request.body)
+                    event_type = event_data["event_type"]
+                    received_event_types.add(event_type)
+
+                # Verify expected events were received
+                expected_events = {
+                    "IdentityCreated",
+                    "EmailFactorCreated",
+                    "OneTimeCodeRequested"
+                }
+                self.assertEqual(received_event_types, expected_events)
+
+                # Verify OneTimeCodeVerified was NOT sent
+                self.assertNotIn("OneTimeCodeVerified", received_event_types)
+
+        finally:
+            # Clean up webhook config
+            await self.con.query(
+                "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
+            )
 
     async def test_http_ext_auth_otc_email_password_02(self):
         """Test that Email+Password still works with verification_method=Link (default).

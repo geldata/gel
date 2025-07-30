@@ -307,6 +307,24 @@ auth_provider_token_validation_errors = registry.new_labeled_counter(
     labels=("provider",),
 )
 
+otc_initiated_total = registry.new_labeled_counter(
+    "otc_initiated_total",
+    "Number of one-time codes initiated.",
+    labels=("tenant",),
+)
+
+otc_verified_total = registry.new_labeled_counter(
+    "otc_verified_total",
+    "Number of one-time codes successfully verified.",
+    labels=("tenant",),
+)
+
+otc_failed_total = registry.new_labeled_counter(
+    "otc_failed_total",
+    "Number of one-time code verification failures.",
+    labels=("tenant", "reason"),
+)
+
 mt_tenants_total = registry.new_gauge(
     'mt_tenants_current',
     'Total number of currently-registered tenants.',

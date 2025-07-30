@@ -26,6 +26,7 @@ import datetime
 import json
 import hmac
 import hashlib
+import uuid
 
 from edb.server.protocol import execute
 
@@ -188,10 +189,51 @@ class MagicLinkRequested(Event, HasIdentity, HasEmailFactor):
         )
 
 
-class DateTimeEncoder(json.JSONEncoder):
+@dataclasses.dataclass
+class OneTimeCodeRequested(Event, HasIdentity, HasEmailFactor):
+    event_type: typing.Literal["OneTimeCodeRequested"] = dataclasses.field(
+        default="OneTimeCodeRequested",
+        init=False,
+    )
+    otc_id: str
+    one_time_code: str
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"timestamp={self.timestamp}, "
+            f"event_id={self.event_id}, "
+            f"identity_id={self.identity_id}, "
+            f"email_factor_id={self.email_factor_id}"
+            ")"
+        )
+
+
+@dataclasses.dataclass
+class OneTimeCodeVerified(Event, HasIdentity, HasEmailFactor):
+    event_type: typing.Literal["OneTimeCodeVerified"] = dataclasses.field(
+        default="OneTimeCodeVerified",
+        init=False,
+    )
+    otc_id: str
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"timestamp={self.timestamp}, "
+            f"event_id={self.event_id}, "
+            f"identity_id={self.identity_id}, "
+            f"email_factor_id={self.email_factor_id}"
+            ")"
+        )
+
+
+class WebhookEncoder(json.JSONEncoder):
     def default(self, obj: typing.Any) -> typing.Any:
         if isinstance(obj, datetime.datetime):
             return obj.isoformat()
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
         return super().default(obj)
 
 
@@ -202,7 +244,7 @@ async def send(
     event: Event,
 ) -> str:
     body = json.dumps(
-        dataclasses.asdict(event), cls=DateTimeEncoder
+        dataclasses.asdict(event), cls=WebhookEncoder
     ).encode()
     headers = [("Content-Type", "application/json")]
     if secret:
