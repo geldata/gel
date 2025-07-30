@@ -308,6 +308,21 @@ def raise_self_insert_error(
     )
 
 
+def raise_invalid_property_reference(
+    source: s_obj.Object,
+    span: Optional[qlast.Span],
+    *,
+    ctx: context.ContextLevel,
+) -> NoReturn:
+    if isinstance(source, s_types.Type):
+        source = schemactx.get_material_type(source, ctx=ctx)
+    raise errors.InvalidReferenceError(
+        f"invalid property reference on an expression of primitive type "
+        f"'{source.get_displayname(ctx.env.schema)}'",
+        span=span,
+    )
+
+
 def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
     """Create an ir.Set representing the given EdgeQL path expression."""
     anchors = ctx.anchors
@@ -862,8 +877,7 @@ def resolve_ptr_with_intersections(
 
     if not isinstance(near_endpoint, s_sources.Source):
         # Reference to a property on non-object
-        msg = 'invalid property reference on a primitive type expression'
-        raise errors.InvalidReferenceError(msg, span=span)
+        raise_invalid_property_reference(near_endpoint, span, ctx=ctx)
 
     ptr: Optional[s_pointers.Pointer] = None
 
@@ -1245,9 +1259,8 @@ def compile_enum_path(
         )
 
     if nsteps > 2:
-        raise errors.QueryError(
-            f"invalid property reference on a primitive type expression",
-            span=expr.steps[2].span,
+        raise_invalid_property_reference(
+            source, span=expr.steps[2].span, ctx=ctx
         )
 
     if ptr_name not in enum_values:

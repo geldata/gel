@@ -6622,9 +6622,11 @@ class TestEdgeQLSelect(tb.QueryTestCase):
         ])
 
     async def test_edgeql_partial_06(self):
-        with self.assertRaisesRegex(edgedb.QueryError,
-                                    'invalid property reference on a '
-                                    'primitive type expression'):
+        with self.assertRaisesRegex(
+            edgedb.QueryError,
+            "invalid property reference on an expression of primitive type "
+            "'default::issue_num_t'"
+        ):
             await self.con.execute('''
                 SELECT Issue.number FILTER .number > '1';
             ''')
