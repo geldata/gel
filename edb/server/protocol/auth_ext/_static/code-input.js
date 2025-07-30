@@ -53,7 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateHiddenInput();
 
         // Focus the next empty input or the last one
-        const nextEmpty = inputs.findIndex(inp => inp.value === "");
+        const nextEmpty = inputs.findIndex((inp) => inp.value === "");
         if (nextEmpty !== -1) {
           inputs[nextEmpty].focus();
         } else {
@@ -77,4 +77,5 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   inputs[0].focus();
+  updateHiddenInput();
 });

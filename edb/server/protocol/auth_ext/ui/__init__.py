@@ -19,12 +19,15 @@
 from __future__ import annotations
 from typing import cast, Optional
 
+import logging
 import html
 import email.message
 
 from edb.server.protocol.auth_ext import config as auth_config
 
 from . import components as render
+
+logger = logging.getLogger(__name__)
 
 
 def render_signin_page(
@@ -53,7 +56,11 @@ def render_signin_page(
         elif p.name == 'builtin::local_webauthn':
             webauthn_provider = p
         elif p.name == 'builtin::local_magic_link':
-            magic_link_provider = p
+            magic_link_provider = auth_config.MagicLinkProviderConfig(
+                name="builtin::local_magic_link",
+                token_time_to_live=p.token_time_to_live,
+                verification_method=p.verification_method,
+            )
         elif p.name.startswith('builtin::oauth_') or hasattr(p, "issuer_url"):
             oauth_providers.append(cast(auth_config.OAuthProviderConfig, p))
 
@@ -87,28 +94,38 @@ def render_signin_page(
         password_input=password_input,
         selected_tab=selected_tab,
         single_form_fields=f'''
-            {render.hidden_input(
+            {
+            render.hidden_input(
                 name='redirect_to',
                 value=(
-                    redirect_to if webauthn_provider
+                    redirect_to
+                    if webauthn_provider
                     else (base_path + '/ui/magic-link-sent')
                 ),
-                secondary_value=redirect_to
-            )}
-            {render.hidden_input(
+                secondary_value=redirect_to,
+            )
+        }
+            {
+            render.hidden_input(
                 name='redirect_on_failure',
                 value=f'{base_path}/ui/signin',
-                secondary_value=f'{base_path}/ui/signin?selected_tab=password'
-            )}
-            {render.hidden_input(
+                secondary_value=f'{base_path}/ui/signin?selected_tab=password',
+            )
+        }
+            {
+            render.hidden_input(
                 name='provider',
                 value=magic_link_provider.name if magic_link_provider else '',
                 secondary_value=(
-                    password_provider.name if password_provider else '')
-            )}
-            {render.hidden_input(
-                name='callback_url', value=redirect_to
-            ) if magic_link_provider else ''}
+                    password_provider.name if password_provider else ''
+                ),
+            )
+        }
+            {
+            render.hidden_input(name='callback_url', value=redirect_to)
+            if magic_link_provider
+            else ''
+        }
         ''',
         password_form=(
             f"""
@@ -117,12 +134,13 @@ def render_signin_page(
                 action="../authenticate"
                 novalidate
             >
-                <input type="hidden" name="redirect_to" value="{
-                    redirect_to}" />
+                <input type="hidden" name="redirect_to" value="{redirect_to}" />
                 <input type="hidden" name="redirect_on_failure" value="{
-                    base_path}/ui/signin?selected_tab=password" />
+                base_path
+            }/ui/signin?selected_tab=password" />
                 <input type="hidden" name="provider" value="{
-                    password_provider.name}" />
+                password_provider.name
+            }" />
                 {base_email_factor_form}
                 {password_input}
                 {render.button("Sign In", id="password-signin")}
@@ -137,14 +155,16 @@ def render_signin_page(
                 id="email-factor"
                 novalidate
             >
-                <input type="hidden" name="redirect_to" value="{
-                    redirect_to}" />
+                <input type="hidden" name="redirect_to" value="{redirect_to}" />
                 <input type="hidden" name="redirect_on_failure" value="{
-                    base_path}/ui/signin?selected_tab=webauthn" />
+                base_path
+            }/ui/signin?selected_tab=webauthn" />
                 <input type="hidden" name="provider" value="{
-                    webauthn_provider.name}" />
+                webauthn_provider.name
+            }" />
                 <input type="hidden" name="callback_url" value="{
-                    redirect_to}" />
+                redirect_to
+            }" />
                 {base_email_factor_form}
                 {render.button("Sign In", id="webauthn-signin")}
             </form>
@@ -160,23 +180,35 @@ def render_signin_page(
                 novalidate
             >
                 <input type="hidden" name="redirect_to" value="{
-                    base_path}/ui/magic-link-sent" />
+                base_path
+            }/ui/magic-link-sent" />
                 <input type="hidden" name="redirect_on_failure" value="{
-                    base_path}/ui/signin?selected_tab=magic_link" />
+                base_path
+            }/ui/signin?selected_tab=magic_link" />
                 <input type="hidden" name="provider" value="{
-                    magic_link_provider.name}" />
+                magic_link_provider.name
+            }" />
                 <input type="hidden" name="callback_url" value="{
-                    redirect_to}" />
+                redirect_to
+            }" />
                 {base_email_factor_form}
-                {render.button("Email Sign In Link", id="magic-link-signin")}
+                {
+                render.button(
+                    get_magic_link_button_text(
+                        magic_link_provider.verification_method
+                    ),
+                    id="magic-link-signin",
+                )
+            }
             </form>
         """
             if magic_link_provider
             else None
         ),
         magic_link_verification_method=(
-            getattr(magic_link_provider, 'verification_method', 'Link')
-            if magic_link_provider else 'Link'
+            magic_link_provider.verification_method
+            if magic_link_provider
+            else 'Link'
         ),
     )
 
@@ -204,9 +236,11 @@ def render_signin_page(
           {render.title('Sign in', app_name=app_name)}
           {render.error_message(error_message)}
           {oauth_buttons}
-          {render.divider
-           if email_factor_form and len(oauth_providers) > 0
-           else ''}
+          {
+            render.divider
+            if email_factor_form and len(oauth_providers) > 0
+            else ''
+        }
           {email_factor_form or ''}
           {render.script('webauthn-authenticate') if webauthn_provider else ''}
         ''',
@@ -240,8 +274,12 @@ def render_email_factor_form(
             return magic_link_form
 
     # Dynamic magic link tab label based on verification method
-    magic_link_tab_label = get_magic_link_tab_label(magic_link_verification_method)
-    magic_link_button_text = get_magic_link_button_text(magic_link_verification_method)
+    magic_link_tab_label = get_magic_link_tab_label(
+        magic_link_verification_method
+    )
+    magic_link_button_text = get_magic_link_button_text(
+        magic_link_verification_method
+    )
 
     if base_email_factor_form is None or (
         webauthn_form is not None and magic_link_form is not None
@@ -258,7 +296,11 @@ def render_email_factor_form(
                 else None
             ),
             (
-                (magic_link_tab_label, magic_link_form, selected_tab == 'magic_link')
+                (
+                    magic_link_tab_label,
+                    magic_link_form,
+                    selected_tab == 'magic_link',
+                )
                 if magic_link_form
                 else None
             ),
@@ -277,17 +319,28 @@ def render_email_factor_form(
 
     slider_content = [
         f'''
-            {render.button("Sign In", id="webauthn-signin") if webauthn_form
-                else render.button(magic_link_button_text, id="magic-link-signin")
-            }
-            {render.button("Sign in with password", id="show-password-form",
-                    secondary=True, type="button")}
+            {
+            render.button("Sign In", id="webauthn-signin")
+            if webauthn_form
+            else render.button(magic_link_button_text, id="magic-link-signin")
+        }
+            {
+            render.button(
+                "Sign in with password",
+                id="show-password-form",
+                secondary=True,
+                type="button",
+            )
+        }
         ''',
         f'''
             {password_input}
             <div class="button-group">
-                {render.button(None, id="hide-password-form",
-                        secondary=True, type="button")}
+                {
+            render.button(
+                None, id="hide-password-form", secondary=True, type="button"
+            )
+        }
                 {render.button("Sign in with password", id="password-signin")}
             </div>
         ''',
@@ -295,15 +348,16 @@ def render_email_factor_form(
 
     return f"""
     <form id="email-factor" method="post" {
-            'action="../magic-link/email"'
-            if magic_link_form else ''
-        } data-secondary-action="../authenticate" novalidate>
+        'action="../magic-link/email"' if magic_link_form else ''
+    } data-secondary-action="../authenticate" novalidate>
         {single_form_fields}
         {base_email_factor_form}
-        {render.tabs_content(
+        {
+        render.tabs_content(
             slider_content,
-            selected_tab=(1 if selected_tab == 'password' else 0)
-        )}
+            selected_tab=(1 if selected_tab == 'password' else 0),
+        )
+    }
     </form>
     """
 
@@ -334,9 +388,15 @@ def render_signup_page(
         elif p.name == 'builtin::local_webauthn':
             webauthn_provider = cast(auth_config.WebAuthnProviderConfig, p)
         elif p.name == 'builtin::local_magic_link':
-            magic_link_provider = cast(auth_config.MagicLinkProviderConfig, p)
+            magic_link_provider = auth_config.MagicLinkProviderConfig(
+                name="builtin::local_magic_link",
+                token_time_to_live=p.token_time_to_live,
+                verification_method=p.verification_method,
+            )
         elif p.name.startswith('builtin::oauth_') or hasattr(p, "issuer_url"):
             oauth_providers.append(cast(auth_config.OAuthProviderConfig, p))
+
+    logger.info(f"magic_link_provider: {magic_link_provider}")
 
     base_email_factor_form = f"""
       <input type="hidden" name="challenge" value="{challenge}" />
@@ -355,13 +415,21 @@ def render_signup_page(
                 novalidate
             >
                 <input type="hidden" name="redirect_to" value="{
-                    redirect_to_on_signup or redirect_to}" />
+                get_email_password_signup_redirect_url(
+                    password_provider.verification_method,
+                    base_path,
+                    redirect_to_on_signup or redirect_to,
+                )
+            }" />
                 <input type="hidden" name="redirect_on_failure" value="{
-                    base_path}/ui/signup?selected_tab=password" />
+                base_path
+            }/ui/signup?selected_tab=password" />
                 <input type="hidden" name="provider" value="{
-                    password_provider.name}" />
+                password_provider.name
+            }" />
                 <input type="hidden" name="verify_url" value="{
-                    base_path}/ui/verify" />
+                base_path
+            }/ui/verify" />
                 {base_email_factor_form}
                 <label for="password">Password</label>
                 <input id="password" name="password" type="password" />
@@ -378,11 +446,18 @@ def render_signup_page(
                 novalidate
             >
                 <input type="hidden" name="redirect_to" value="{
-                    redirect_to_on_signup or redirect_to}" />
+                get_webauthn_signup_redirect_url(
+                    webauthn_provider.verification_method,
+                    base_path,
+                    redirect_to_on_signup or redirect_to,
+                )
+            }" />
                 <input type="hidden" name="redirect_on_failure" value="{
-                    base_path}/ui/signup?selected_tab=webauthn" />
+                base_path
+            }/ui/signup?selected_tab=webauthn" />
                 <input type="hidden" name="verify_url" value="{
-                    base_path}/ui/verify" />
+                base_path
+            }/ui/verify" />
                 {base_email_factor_form}
                 {render.button("Sign Up", id="webauthn-signup")}
             </form>
@@ -398,24 +473,33 @@ def render_signup_page(
                 novalidate
             >
                 <input type="hidden" name="redirect_to" value="{
-                    base_path}/ui/magic-link-sent" />
+                base_path
+            }/ui/magic-link-sent" />
                 <input type="hidden" name="redirect_on_failure" value="{
-                    base_path}/ui/signup?selected_tab=magic_link" />
+                base_path
+            }/ui/signup?selected_tab=magic_link" />
                 <input type="hidden" name="provider" value="{
-                    magic_link_provider.name}" />
+                magic_link_provider.name
+            }" />
                 <input type="hidden" name="callback_url" value="{
-                    redirect_to_on_signup or redirect_to}" />
+                redirect_to_on_signup or redirect_to
+            }" />
                 {base_email_factor_form}
-                {render.button("Sign Up with Email Link",
-                               id="magic-link-signup")}
+                {
+                render.button(
+                    f"Sign Up with {get_magic_link_tab_label(magic_link_provider.verification_method)}",
+                    id="magic-link-signup",
+                )
+            }
             </form>
         """
             if magic_link_provider
             else None
         ),
         magic_link_verification_method=(
-            getattr(magic_link_provider, 'verification_method', 'Link')
-            if magic_link_provider else 'Link'
+            magic_link_provider.verification_method
+            if magic_link_provider
+            else 'Link'
         ),
     )
 
@@ -443,9 +527,11 @@ def render_signup_page(
             {render.title('Sign up', app_name=app_name)}
             {render.error_message(error_message)}
             {oauth_buttons}
-            {render.divider
-             if email_factor_form and len(oauth_providers) > 0
-             else ''}
+            {
+            render.divider
+            if email_factor_form and len(oauth_providers) > 0
+            else ''
+        }
             {email_factor_form or ''}
             {render.script('webauthn-register') if webauthn_provider else ''}
         ''',
@@ -478,11 +564,14 @@ def render_forgot_password_page(
           <input type="hidden" name="provider" value="{provider_name}" />
           <input type="hidden" name="challenge" value="{challenge}" />
           <input type="hidden" name="redirect_on_failure" value="{
-            base_path}/ui/forgot-password?challenge={challenge}" />
+            base_path
+        }/ui/forgot-password?challenge={challenge}" />
           <input type="hidden" name="redirect_to" value="{
-            base_path}/ui/forgot-password?challenge={challenge}" />
+            base_path
+        }/ui/forgot-password?challenge={challenge}" />
           <input type="hidden" name="reset_url" value="{
-              base_path}/ui/reset-password" />
+            base_path
+        }/ui/reset-password" />
 
           <label for="email">Email</label>
           <input id="email" name="email" type="email" value="{email or ''}" />
@@ -541,13 +630,16 @@ def render_reset_password_page(
         # Code-based password reset flow
         content = f'''
             {render.error_message(error_message)}
-            <p>We've sent a 6-digit reset code to <strong>{html.escape(email)}</strong></p>
-            {render.code_input_form(
+            <p>We've sent a 6-digit reset code to <strong>{
+            html.escape(email)
+        }</strong></p>
+            {
+            render.code_input_form(
                 action="../reset-password",
                 email=email,
                 provider=provider_name,
                 redirect_to=redirect_to,
-                redirect_on_failure=f"{base_path}/ui/reset-password?code&email={html.escape(email)}",
+                redirect_on_failure=f"{base_path}/ui/reset-password?code=true&email={html.escape(email)}",
                 label="Enter reset code",
                 button_text="Reset Password",
                 additional_fields='''
@@ -555,7 +647,8 @@ def render_reset_password_page(
                     <input id="password" name="password" type="password" required />
                 ''',
                 challenge=challenge,
-            )}
+            )
+        }
         '''
     else:
         # Token-based password reset flow (existing)
@@ -566,7 +659,8 @@ def render_reset_password_page(
           <input type="hidden" name="provider" value="{provider_name}" />
           <input type="hidden" name="reset_token" value="{reset_token}" />
           <input type="hidden" name="redirect_on_failure" value="{
-            base_path}/ui/reset-password" />
+            base_path
+        }/ui/reset-password" />
           <input type="hidden" name="redirect_to" value="{redirect_to}" />
 
           <label for="password">New Password</label>
@@ -611,9 +705,14 @@ def render_email_verification_page(
         )
         content = f'''
             {messages}
-            {(f'<a href="{resend_url}">Try sending another verification'
-              'email</a>')
-             if resend_url else ''}
+            {
+            (
+                f'<a href="{resend_url}">Try sending another verification'
+                'email</a>'
+            )
+            if resend_url
+            else ''
+        }
             '''
     else:
         content = '''
@@ -660,8 +759,9 @@ def render_email_verification_expired_page(
         brand_color=brand_color,
         cleanup_search_params=['error'],
         content=f'''
-            {render.title('Verification expired', join='for',
-                          app_name=app_name)}
+            {
+            render.title('Verification expired', join='for', app_name=app_name)
+        }
             {content}
         ''',
     )
@@ -684,7 +784,43 @@ def get_magic_link_tab_label(verification_method: str) -> str:
 
 def get_magic_link_button_text(verification_method: str) -> str:
     """Get button text for magic link authentication based on verification method."""
-    return "Email sign in code" if verification_method == "Code" else "Email sign in link"
+    return (
+        "Email sign in code"
+        if verification_method == "Code"
+        else "Email sign in link"
+    )
+
+
+def get_email_password_signup_redirect_url(
+    verification_method: str, base_path: str, fallback_redirect: str
+) -> str:
+    """Get redirect URL for email+password signup based on verification method."""
+    if verification_method == "Code":
+        return f"{base_path}/ui/verify?code=true&provider=builtin::local_emailpassword"
+    else:
+        return fallback_redirect
+
+
+def get_webauthn_signup_redirect_url(
+    verification_method: str, base_path: str, fallback_redirect: str
+) -> str:
+    """Get redirect URL for WebAuthn signup based on verification method."""
+    if verification_method == "Code":
+        return (
+            f"{base_path}/ui/verify?code=true&provider=builtin::local_webauthn"
+        )
+    else:
+        return fallback_redirect
+
+
+def get_password_reset_redirect_url(
+    verification_method: str, base_path: str, challenge: str
+) -> str:
+    """Get redirect URL for password reset based on verification method."""
+    if verification_method == "Code":
+        return f"{base_path}/ui/reset-password"
+    else:
+        return f"{base_path}/ui/forgot-password?challenge={challenge}"
 
 
 def render_verify_page(
@@ -708,17 +844,21 @@ def render_verify_page(
         # Show code input form
         content = f'''
             {render.error_message(error_message)}
-            <p>We've sent a 6-digit verification code to <strong>{html.escape(email)}</strong></p>
-            {render.code_input_form(
+            <p>We've sent a 6-digit verification code to <strong>{
+            html.escape(email)
+        }</strong></p>
+            {
+            render.code_input_form(
                 action="../verify",
                 email=email,
                 provider=provider,
                 redirect_to=redirect_to,
-                redirect_on_failure=f"{base_path}/ui/verify?code&email={html.escape(email)}&provider={provider}",
+                redirect_on_failure=f"{base_path}/ui/verify?code=true&email={html.escape(email)}&provider={provider}",
                 label="Enter verification code",
                 button_text="Verify Email",
                 challenge=challenge,
-            )}
+            )
+        }
         '''
     else:
         # Show generic verification message (for link flow or when no code params)
@@ -777,8 +917,11 @@ def render_resend_verification_done_page(
         brand_color=brand_color,
         cleanup_search_params=['error'],
         content=f'''
-            {render.title('Email verification resent', join='for',
-                          app_name=app_name)}
+            {
+            render.title(
+                'Email verification resent', join='for', app_name=app_name
+            )
+        }
             {content}
         ''',
     )
@@ -795,23 +938,31 @@ def render_magic_link_sent_page(
     email: Optional[str] = None,
     base_path: Optional[str] = None,
     challenge: Optional[str] = None,
+    callback_url: Optional[str] = None,
     error_message: Optional[str] = None,
 ) -> bytes:
     if is_code_flow and email and base_path:
         # Show code input form
         content = f'''
             {render.error_message(error_message)}
-            <p>We've sent a 6-digit sign-in code to <strong>{html.escape(email)}</strong></p>
-            {render.code_input_form(
+            <p>We've sent a 6-digit sign-in code to <strong>{
+            html.escape(email)
+        }</strong></p>
+            {
+            render.code_input_form(
                 action="../magic-link/authenticate",
                 email=email,
                 provider="builtin::local_magic_link",
                 redirect_to=f"{base_path}/ui/magic-link-sent",  # This will be updated by the actual redirect_to
-                redirect_on_failure=f"{base_path}/ui/magic-link-sent?code&email={html.escape(email)}",
+                redirect_on_failure=f"{base_path}/ui/magic-link-sent?code=true&email={html.escape(email)}",
                 label="Enter sign-in code",
                 button_text="Sign In",
                 challenge=challenge,
-            )}
+                additional_fields=f'<input type="hidden" name="callback_url" value="{html.escape(callback_url or "")}" />'
+                if callback_url
+                else "",
+            )
+        }
         '''
         title = f'Sign in code sent{f" for {app_name}" if app_name else ""}'
         page_title = 'Sign in code sent'
@@ -1402,7 +1553,9 @@ def render_one_time_code_email(
     brand_color = brand_color or render.DEFAULT_BRAND_COLOR
     msg = email.message.EmailMessage()
     msg["To"] = to_addr
-    msg["Subject"] = f"Your verification code{f' for {app_name}' if app_name else ''}"
+    msg["Subject"] = (
+        f"Your verification code{f' for {app_name}' if app_name else ''}"
+    )
     plain_text_content = f"""
 Your verification code{f' for {app_name}' if app_name else ''} is:
 
@@ -1515,7 +1668,9 @@ def render_password_reset_code_email(
     brand_color = brand_color or render.DEFAULT_BRAND_COLOR
     msg = email.message.EmailMessage()
     msg["To"] = to_addr
-    msg["Subject"] = f"Password reset code{f' for {app_name}' if app_name else ''}"
+    msg["Subject"] = (
+        f"Password reset code{f' for {app_name}' if app_name else ''}"
+    )
     plain_text_content = f"""
 Your password reset code{f' for {app_name}' if app_name else ''} is:
 

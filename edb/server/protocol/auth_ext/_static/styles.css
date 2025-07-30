@@ -474,8 +474,9 @@ a.field-note:hover {
 }
 
 .code-input-container input {
-  width: 48px;
-  height: 56px;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 48px;
   text-align: center;
   font-size: 24px;
   font-weight: 600;
@@ -518,13 +519,8 @@ a.field-note:hover {
 
 /* Mobile responsive adjustments */
 @media (max-width: 480px) {
-  .code-input-container {
-    gap: 6px;
-  }
-
   .code-input-container input {
-    width: 40px;
-    height: 48px;
+    height: 40px;
     font-size: 20px;
   }
 }

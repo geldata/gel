@@ -73,8 +73,8 @@ def base_page(
     )
 
     if (
-        brand_color is None or
-        util.hex_color_regexp.fullmatch(brand_color) is None
+        brand_color is None
+        or util.hex_color_regexp.fullmatch(brand_color) is None
     ):
         brand_color = DEFAULT_BRAND_COLOR
 
@@ -119,7 +119,7 @@ def oauth_buttons(
     redirect_to_on_signup: Optional[str],
     oauth_providers: list[auth_config.OAuthProviderConfig],
     label_prefix: str,
-    collapsed: bool
+    collapsed: bool,
 ) -> str:
     if len(oauth_providers) == 0:
         return ''
@@ -180,7 +180,7 @@ def button(
     *,
     id: Optional[str] = None,
     secondary: Optional[bool] = False,
-    type: Optional[str] = 'submit'
+    type: Optional[str] = 'submit',
 ) -> str:
     classes = []
     if secondary:
@@ -240,7 +240,8 @@ def tabs_content(sections: list[str], selected_tab: int) -> str:
 
     style = (
         f'style="transform: translateX({-100 * selected_tab}%)"'
-        if selected_tab > 0 else ''
+        if selected_tab > 0
+        else ''
     )
     return f'''
         <div id="slider-container" class="slider-container" {style}>
@@ -277,8 +278,8 @@ def hidden_input(
     *, name: str, value: str, secondary_value: Optional[str] = None
 ) -> str:
     return f'''<input type="hidden" name="{name}" value="{value}" {
-        f'data-secondary-value="{secondary_value}"'
-        if secondary_value else ''} />'''
+        f'data-secondary-value="{secondary_value}"' if secondary_value else ''
+    } />'''
 
 
 def bottom_note(message: str, *, link: str, href: str) -> str:
@@ -344,7 +345,11 @@ def code_input_form(
     challenge: Optional[str] = None,
 ) -> str:
     """Renders a 6-digit code input form with auto-formatting and mobile keyboard support."""
-    challenge_field = f'<input type="hidden" name="challenge" value="{challenge}" />' if challenge else ""
+    challenge_field = (
+        f'<input type="hidden" name="challenge" value="{challenge}" />'
+        if challenge
+        else ""
+    )
 
     return f'''
     <form id="code-form" method="POST" action="{action}" novalidate>
@@ -380,7 +385,8 @@ def base_default_email(
     app_name: Optional[str],
     logo_url: Optional[str],
 ) -> str:
-    logo_html = f"""
+    logo_html = (
+        f"""
       <!--[if mso | IE]><table align="center" border="0" cellpadding="0" cellspacing="0" class="" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
       <div style="margin: 0px auto; max-width: 600px">
         <table
@@ -480,7 +486,10 @@ def base_default_email(
         </table>
       </div>
       <!--[if mso | IE]></td></tr></table><table align="center" border="0" cellpadding="0" cellspacing="0" class="" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
-""" if logo_url else ""  # noqa: E501
+"""
+        if logo_url
+        else ""
+    )  # noqa: E501
 
     return f"""
 <!doctype html>

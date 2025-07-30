@@ -384,7 +384,7 @@ class Router:
 
         if state is None:
             raise errors.InvalidData(
-                "Provider did not include the 'state' parameter in " "callback"
+                "Provider did not include the 'state' parameter in callback"
             )
 
         if error is not None:
@@ -410,7 +410,7 @@ class Router:
 
         if code is None:
             raise errors.InvalidData(
-                "Provider did not include the 'code' parameter in " "callback"
+                "Provider did not include the 'code' parameter in callback"
             )
 
         try:
@@ -492,7 +492,7 @@ class Router:
             )
         if verifier_size > 128:
             raise errors.InvalidData(
-                "Verifier must be shorter than 128 " "characters long"
+                "Verifier must be shorter than 128 characters long"
             )
         try:
             pkce_object = await pkce.get_by_id(self.db, code)
@@ -786,9 +786,7 @@ class Router:
             except errors.VerificationTokenExpired:
                 response.status = http.HTTPStatus.FORBIDDEN
                 response.content_type = b"application/json"
-                error_message = (
-                    "The 'iat' claim in verification token is older than 24 hours"
-                )
+                error_message = "The 'iat' claim in verification token is older than 24 hours"
                 logger.error(f"Verification token expired: {error_message}")
                 response.body = json.dumps({"message": error_message}).encode()
                 return
@@ -824,19 +822,27 @@ class Router:
                     return
 
         elif email and code:
-            # OTC mode verification
+            # OTC mode verification - validate required fields
+            _check_keyset(data, {"email", "code", "provider"})
+
             if provider != "builtin::local_emailpassword":
-                raise errors.InvalidData("OTC verification only supported for email+password provider")
+                raise errors.InvalidData(
+                    "OTC verification only supported for email+password provider"
+                )
 
             try:
                 email_password_client = email_password.Client(db=self.db)
-                email_factor = await email_password_client.get_email_factor_by_email(email)
+                email_factor = (
+                    await email_password_client.get_email_factor_by_email(email)
+                )
                 if email_factor is None:
                     raise errors.NoIdentityFound("Invalid email")
 
                 # Verify the OTC using the mega query
                 otc_id = await otc.verify(self.db, str(email_factor.id), code)
-                logger.info(f"OTC verified successfully: otc_id={otc_id}, email={email}")
+                logger.info(
+                    f"OTC verified successfully: otc_id={otc_id}, email={email}"
+                )
 
                 # Send webhook and increment metrics for successful OTC verification
                 await self._handle_otc_verified(
@@ -889,10 +895,9 @@ class Router:
 
                 response.status = http.HTTPStatus.BAD_REQUEST
                 response.content_type = b"application/json"
-                response.body = json.dumps({
-                    "error": str(ex),
-                    "error_code": "verification_failed"
-                }).encode()
+                response.body = json.dumps(
+                    {"error": str(ex), "error_code": "verification_failed"}
+                ).encode()
                 return
 
         else:
@@ -1045,7 +1050,7 @@ class Router:
                     code, otc_id = await otc.create(
                         self.db,
                         str(email_factor.id),
-                        datetime.timedelta(minutes=10)
+                        datetime.timedelta(minutes=10),
                     )
                     await auth_emails.send_password_reset_code_email(
                         db=self.db,
@@ -1066,7 +1071,7 @@ class Router:
                     logger.info(
                         f"Sent OTC password reset email: email={email}, otc_id={otc_id}"
                     )
-                    redirect_url_path = f"/ui/reset-password?code&email={urllib.parse.quote(email)}"
+                    redirect_url_path = f"/ui/reset-password?code=true&email={urllib.parse.quote(email)}"
                 else:
                     # Link flow: create token and send link email (existing behavior)
                     new_reset_token = jwt.ResetToken(
@@ -1082,7 +1087,9 @@ class Router:
                     await self._maybe_send_webhook(
                         webhook.PasswordResetRequested(
                             event_id=str(uuid.uuid4()),
-                            timestamp=datetime.datetime.now(datetime.timezone.utc),
+                            timestamp=datetime.datetime.now(
+                                datetime.timezone.utc
+                            ),
                             identity_id=identity_id,
                             reset_token=new_reset_token,
                             email_factor_id=email_factor.id,
@@ -1106,19 +1113,18 @@ class Router:
                 await auth_emails.send_fake_email(self.tenant)
                 redirect_url_path = "/ui/reset-password"
 
-            return_data = {
-                "email_sent": email,
-                "redirect_url": f"{self.base_path}{redirect_url_path}",
-            }
-
+            # For password reset flows, redirect directly to the appropriate page
             if allowed_redirect_to:
+                final_redirect_url = f"{self.base_path}{redirect_url_path}"
                 return self._do_redirect(
                     response,
-                    allowed_redirect_to.map(
-                        lambda u: util.join_url_params(u, return_data)
-                    ),
+                    self._make_allowed_url(final_redirect_url),
                 )
             else:
+                return_data = {
+                    "email_sent": email,
+                    "redirect_url": f"{self.base_path}{redirect_url_path}",
+                }
                 response.status = http.HTTPStatus.OK
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
@@ -1200,19 +1206,29 @@ class Router:
                 )
 
             elif email and code:
-                # OTC-based password reset (new flow)
+                # OTC-based password reset (new flow) - validate required fields
+                _check_keyset(data, {"email", "code", "provider", "password"})
+
                 if provider != "builtin::local_emailpassword":
-                    raise errors.InvalidData("OTC password reset only supported for email+password provider")
+                    raise errors.InvalidData(
+                        "OTC password reset only supported for email+password provider"
+                    )
 
                 # Get email factor
-                email_factor = await email_password_client.get_email_factor_by_email(email)
+                email_factor = (
+                    await email_password_client.get_email_factor_by_email(email)
+                )
                 if email_factor is None:
                     raise errors.NoIdentityFound("Invalid email")
 
                 # Verify the OTC using the mega query
                 try:
-                    otc_id = await otc.verify(self.db, str(email_factor.id), code)
-                    logger.info(f"OTC verified for password reset: otc_id={otc_id}, email={email}")
+                    otc_id = await otc.verify(
+                        self.db, str(email_factor.id), code
+                    )
+                    logger.info(
+                        f"OTC verified for password reset: otc_id={otc_id}, email={email}"
+                    )
 
                     # Send webhook and increment metrics for successful OTC verification
                     await self._handle_otc_verified(
@@ -1241,12 +1257,19 @@ class Router:
 
                 # Update password - we need to get the secret first
                 try:
-                    _, secret = await email_password_client.get_email_factor_and_secret(email)
+                    (
+                        _,
+                        secret,
+                    ) = await email_password_client.get_email_factor_and_secret(
+                        email
+                    )
                     await email_password_client.update_password(
                         email_factor.identity.id, secret, password
                     )
                 except Exception as ex:
-                    raise errors.InvalidData(f"Failed to reset password: {str(ex)}")
+                    raise errors.InvalidData(
+                        f"Failed to reset password: {str(ex)}"
+                    )
 
                 response_dict = {"status": "password_reset"}
                 logger.info(
@@ -1393,7 +1416,7 @@ class Router:
                 code, otc_id = await otc.create(
                     self.db,
                     str(email_factor.id),
-                    datetime.timedelta(minutes=10)
+                    datetime.timedelta(minutes=10),
                 )
                 await auth_emails.send_one_time_code_email(
                     db=self.db,
@@ -1415,7 +1438,11 @@ class Router:
                     f"Sent OTC email: identity_id={email_factor.identity.id}, "
                     f"email={email}, otc_id={otc_id}"
                 )
-                redirect_url_path = "/ui/code-sent"
+                redirect_url_path = (
+                    f"/ui/magic-link-sent?code=true&email={urllib.parse.quote(email)}"
+                    f"&challenge={urllib.parse.quote(challenge)}"
+                    f"&callback_url={urllib.parse.quote(callback_url)}"
+                )
             else:
                 # Link flow: send magic link (existing behavior)
                 await magic_link_client.send_magic_link(
@@ -1436,11 +1463,11 @@ class Router:
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
             elif allowed_redirect_to:
+                # For Magic Link flows, redirect directly to the appropriate page
+                final_redirect_url = f"{self.base_path}{redirect_url_path}"
                 return self._do_redirect(
                     response,
-                    allowed_redirect_to.map(
-                        lambda u: util.join_url_params(u, return_data)
-                    ),
+                    self._make_allowed_url(final_redirect_url),
                 )
             else:
                 # This should not happen since we check earlier for this case
@@ -1552,7 +1579,7 @@ class Router:
                     code, otc_id = await otc.create(
                         self.db,
                         str(email_factor.id),
-                        datetime.timedelta(minutes=10)
+                        datetime.timedelta(minutes=10),
                     )
                     await auth_emails.send_one_time_code_email(
                         db=self.db,
@@ -1574,7 +1601,11 @@ class Router:
                         f"Sent OTC email: identity_id={identity_id}, "
                         f"email={email}, otc_id={otc_id}"
                     )
-                    redirect_url_path = "/ui/code-sent"
+                    redirect_url_path = (
+                        f"/ui/magic-link-sent?code=true&email={urllib.parse.quote(email)}"
+                        f"&challenge={urllib.parse.quote(challenge)}"
+                        f"&callback_url={urllib.parse.quote(callback_url)}"
+                    )
                 else:
                     # Link flow: send magic link (existing behavior)
                     await magic_link_client.send_magic_link(
@@ -1589,19 +1620,18 @@ class Router:
                     )
                     redirect_url_path = "/ui/magic-link-sent"
 
-            return_data = {
-                "email_sent": email,
-                "redirect_url": f"{self.base_path}{redirect_url_path}",
-            }
-
+            # For Magic Link flows, redirect directly to the appropriate page
             if allowed_redirect_to:
+                final_redirect_url = f"{self.base_path}{redirect_url_path}"
                 return self._do_redirect(
                     response,
-                    allowed_redirect_to.map(
-                        lambda u: util.join_url_params(u, return_data)
-                    ),
+                    self._make_allowed_url(final_redirect_url),
                 )
             else:
+                return_data = {
+                    "email_sent": email,
+                    "redirect_url": f"{self.base_path}{redirect_url_path}",
+                }
                 response.status = http.HTTPStatus.OK
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
@@ -1681,10 +1711,17 @@ class Router:
                     return self._try_redirect(response, redirect_url)
         else:
             try:
-                email = _get_search_param(query, "email")
-                code_str = _get_search_param(query, "code")
-                challenge = _get_search_param(query, "challenge")
-                callback_url = _get_search_param(query, "callback_url")
+                data = self._get_data_from_request(request)
+
+                # Validate that all required fields are present
+                _check_keyset(
+                    data, {"email", "code", "challenge", "callback_url"}
+                )
+
+                email = data["email"]
+                code_str = data["code"]
+                challenge = data["challenge"]
+                callback_url = data["callback_url"]
 
                 if not self._is_url_allowed(callback_url):
                     raise errors.InvalidData(
@@ -1700,14 +1737,20 @@ class Router:
                 )
 
                 # Get email factor for this email
-                email_factor = await magic_link_client.get_email_factor_by_email(email)
+                email_factor = (
+                    await magic_link_client.get_email_factor_by_email(email)
+                )
                 if email_factor is None:
                     raise errors.NoIdentityFound("Invalid email")
 
                 # Verify the OTC using the mega query
                 try:
-                    otc_id = await otc.verify(self.db, str(email_factor.id), code_str)
-                    logger.info(f"OTC verified successfully: otc_id={otc_id}, email={email}")
+                    otc_id = await otc.verify(
+                        self.db, str(email_factor.id), code_str
+                    )
+                    logger.info(
+                        f"OTC verified successfully: otc_id={otc_id}, email={email}"
+                    )
 
                     # Send webhook and increment metrics for successful OTC verification
                     await self._handle_otc_verified(
@@ -1742,7 +1785,8 @@ class Router:
 
                 # Mark email as verified
                 await magic_link_client.verify_email(
-                    email_factor.identity.id, datetime.datetime.now(datetime.timezone.utc)
+                    email_factor.identity.id,
+                    datetime.datetime.now(datetime.timezone.utc),
                 )
 
                 return self._try_redirect(
@@ -1758,10 +1802,9 @@ class Router:
                     # For OTC flow, return 400 error with JSON response
                     response.status = http.HTTPStatus.BAD_REQUEST
                     response.content_type = b"application/json"
-                    response.body = json.dumps({
-                        "error": str(ex),
-                        "error_code": "verification_failed"
-                    }).encode()
+                    response.body = json.dumps(
+                        {"error": str(ex), "error_code": "verification_failed"}
+                    ).encode()
                     return
                 else:
                     error_message = str(ex)
@@ -1789,10 +1832,11 @@ class Router:
         webauthn_client = webauthn.Client(self.db)
 
         try:
-            (user_handle, registration_options) = (
-                await webauthn_client.create_registration_options_for_email(
-                    email=email,
-                )
+            (
+                user_handle,
+                registration_options,
+            ) = await webauthn_client.create_registration_options_for_email(
+                email=email,
             )
         except Exception as e:
             raise errors.WebAuthnRegistrationFailed(
@@ -1960,10 +2004,11 @@ class Router:
         webauthn_client = webauthn.Client(self.db)
 
         try:
-            (_, registration_options) = (
-                await webauthn_client.create_authentication_options_for_email(
-                    email=email, webauthn_provider=webauthn_provider
-                )
+            (
+                _,
+                registration_options,
+            ) = await webauthn_client.create_authentication_options_for_email(
+                email=email, webauthn_provider=webauthn_provider
             )
         except Exception as e:
             raise errors.WebAuthnAuthenticationFailed(
@@ -2292,7 +2337,9 @@ class Router:
         if is_code_flow:
             # Code flow - show code input form
             if not maybe_email or not maybe_provider:
-                error_messages.append("Missing email or provider for code verification.")
+                error_messages.append(
+                    "Missing email or provider for code verification."
+                )
                 is_code_flow = False
 
             app_details_config = self._get_app_details_config()
@@ -2305,7 +2352,8 @@ class Router:
                 is_code_flow=is_code_flow,
                 error_message=error_message,
                 challenge=maybe_challenge,
-                redirect_to=ui_config.redirect_to_on_signup or ui_config.redirect_to,
+                redirect_to=ui_config.redirect_to_on_signup
+                or ui_config.redirect_to,
                 app_name=app_details_config.app_name,
                 logo_url=app_details_config.logo_url,
                 dark_logo_url=app_details_config.dark_logo_url,
@@ -2489,6 +2537,7 @@ class Router:
         is_code_flow = "code" in query
         maybe_email = _maybe_get_search_param(query, "email")
         maybe_challenge = _maybe_get_search_param(query, "challenge")
+        maybe_callback_url = _maybe_get_search_param(query, "callback_url")
         error_message = _maybe_get_search_param(query, "error")
 
         app_details = self._get_app_details_config()
@@ -2503,6 +2552,7 @@ class Router:
             email=maybe_email,
             base_path=self.base_path if is_code_flow else None,
             challenge=maybe_challenge,
+            callback_url=maybe_callback_url,
             error_message=error_message,
         )
 
@@ -2541,7 +2591,7 @@ class Router:
         identity_id: str,
         email_factor_id: str,
         otc_id: str,
-        one_time_code: str
+        one_time_code: str,
     ) -> None:
         """Handle OTC creation: send webhook and increment metrics."""
         # Increment metrics
@@ -2559,13 +2609,12 @@ class Router:
             )
         )
 
-        logger.info(f"OTC initiated: identity_id={identity_id}, otc_id={otc_id}")
+        logger.info(
+            f"OTC initiated: identity_id={identity_id}, otc_id={otc_id}"
+        )
 
     async def _handle_otc_verified(
-        self,
-        identity_id: str,
-        email_factor_id: str,
-        otc_id: str
+        self, identity_id: str, email_factor_id: str, otc_id: str
     ) -> None:
         """Handle successful OTC verification: send webhook and increment metrics."""
         # Increment metrics
@@ -2587,7 +2636,9 @@ class Router:
     def _handle_otc_failed(self, reason: str) -> None:
         """Handle failed OTC verification: increment metrics."""
         # Increment metrics
-        metrics.otc_failed_total.inc(1.0, self.tenant.get_instance_name(), reason)
+        metrics.otc_failed_total.inc(
+            1.0, self.tenant.get_instance_name(), reason
+        )
 
         logger.info(f"OTC verification failed: reason={reason}")
 
@@ -2701,12 +2752,16 @@ class Router:
             email_password_client = email_password.Client(db=self.db)
             if email_password_client.config.verification_method == "Code":
                 # OTC flow: get email factor and create OTC
-                email_factor = await email_password_client.get_email_factor_by_email(to_addr)
+                email_factor = (
+                    await email_password_client.get_email_factor_by_email(
+                        to_addr
+                    )
+                )
                 if email_factor is not None:
                     code, otc_id = await otc.create(
                         self.db,
                         str(email_factor.id),
-                        datetime.timedelta(minutes=10)
+                        datetime.timedelta(minutes=10),
                     )
                     await auth_emails.send_one_time_code_email(
                         db=self.db,
@@ -2724,7 +2779,9 @@ class Router:
                         one_time_code=code,
                     )
 
-                    logger.info(f"Sent OTC verification email: email={to_addr}, otc_id={otc_id}")
+                    logger.info(
+                        f"Sent OTC verification email: email={to_addr}, otc_id={otc_id}"
+                    )
                     return
 
         # Default Link flow for all other cases
