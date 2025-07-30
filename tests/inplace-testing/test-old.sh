@@ -25,6 +25,10 @@ DIR=$(realpath "$1")
 SERVER_INSTALL=$(realpath "$2")
 shift 2
 
+# Force bootstrapping of the server
+TMPDIR=$(mktemp -d)
+edb server --bootstrap-only --data-dir $TMPDIR/bootstrap || (rm -rf $TMPDIR && false)
+
 # Setup the test database
 (cd / && GEL_SERVER_SECURITY=insecure_dev_mode $SERVER_INSTALL/bin/python3  -m edb.tools --no-devmode inittestdb --tests-dir $SERVER_INSTALL/share/tests -k test_dump --data-dir "$DIR")
 

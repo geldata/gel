@@ -1704,6 +1704,10 @@ async def _init_stdlib(
     tpldbdump, tpldbdump_inplace = None, None
     if tpldbdump_package:
         tpldbdump, tpldbdump_inplace = tpldbdump_package
+    else:
+        assert not args.inplace_upgrade_prepare, (
+            "Gel must have a valid bootstrap cache to use inplace upgrade"
+        )
 
     stdlib_was_none = stdlib is None
     if stdlib is None:
@@ -1750,9 +1754,8 @@ async def _init_stdlib(
         assert bootstrap_commands is not None
         block = dbops.PLTopBlock()
 
-        if not args.inplace_upgrade_prepare:
-            fixed_bootstrap_commands = metaschema.get_fixed_bootstrap_commands()
-            fixed_bootstrap_commands.generate(block)
+        fixed_bootstrap_commands = metaschema.get_fixed_bootstrap_commands()
+        fixed_bootstrap_commands.generate(block)
 
         bootstrap_commands.generate(block)
         await _execute_block(conn, block)
@@ -1822,10 +1825,6 @@ async def _init_stdlib(
                 stdlib.inplace_upgrade_scalar_text.encode('utf-8') +
                 cleanup_tpldbdump(tpldbdump_inplace)
             )
-
-            # XXX: BE SMARTER ABOUT THIS, DON'T DO ALL THAT WORK
-            if args.inplace_upgrade_prepare:
-                tpldbdump = None
 
             buildmeta.write_data_cache(
                 (tpldbdump, tpldbdump_inplace),
