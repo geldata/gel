@@ -202,13 +202,19 @@ async def _collect_upgrade_patches(
 
     cmds: list[qlast.Command] = []
 
-    # TODO: specifically look at 6.x!!
-    jnum = json.loads(await ctx.conn.sql_fetch_val(
-        f"""
-        SELECT json::json FROM edgedbinstdata.instdata
-        WHERE key = 'num_patches'
-        """.encode('utf-8'),
-    ))
+    # If that table doesn't exist, we aren't upgrading from 6.x, so
+    # don't worry. (Which means, at this point, a 7.x -> dev/nightly
+    # upgrade.)
+    try:
+        res = await ctx.conn.sql_fetch_val(
+            f"""
+            SELECT json::json FROM edgedbinstdata_v6_2f20b3fed0.instdata
+            WHERE key = 'num_patches'
+            """.encode('utf-8'),
+        )
+    except pgcon.BackendError:
+        return []
+    jnum = json.loads(res)
     for kind, patch in patches_6x.PATCHES[jnum:]:
 
         if not kind.startswith('edgeql+user_ext'):
@@ -292,10 +298,7 @@ async def _apply_ddl_schema_storage(
         debug.header('Patch Script')
         debug.dump_code(patch, lexer='sql')
 
-    try:
-        await ctx.conn.sql_execute(patch.encode('utf-8'))
-    except Exception:
-        raise
+    await ctx.conn.sql_execute(patch.encode('utf-8'))
 
     assert isinstance(schema, s_schema.ChainedSchema)
     return schema, fixup_ddl
