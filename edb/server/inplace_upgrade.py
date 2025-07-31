@@ -492,6 +492,7 @@ async def _get_namespaces(
 
 async def _finalize_one(
     ctx: bootstrap.BootstrapContext,
+    database: str,
 ) -> None:
     conn = ctx.conn
 
@@ -510,6 +511,14 @@ async def _finalize_one(
     await conn.sql_execute(trampoline_query)
     if fixup_query:
         await conn.sql_execute(fixup_query)
+
+    # For the template database (which is upgraded *last*, after all
+    # others have succeeded), run the commands to update the global
+    # schema. (To populate the extension packages.)
+    if database == edbdef.EDGEDB_TEMPLATE_DB:
+        global_schema_update_query = await instdata.get_instdata(
+            conn, 'global_schema_update_query', 'text')
+        await conn.sql_execute(global_schema_update_query)
 
     namespaces = await _get_namespaces(ctx.conn)
 
@@ -703,7 +712,7 @@ async def _finalize_all(
                 if database == inject_failure_on:
                     raise AssertionError(f'failure injected on {database}')
 
-                await _finalize_one(subctx)
+                await _finalize_one(subctx, database)
                 await conn.sql_execute(final_command)
                 if finish_message:
                     logger.info(f"{finish_message} database '{database}'")
@@ -726,8 +735,6 @@ async def _finalize_all(
     # many connections.
     await go("Testing pivot of", None, b'ROLLBACK')
     await go("Pivoting", "Finished pivoting", b'COMMIT', inject_failure)
-
-    # TODO: update the global schema
 
 
 async def inplace_upgrade(
