@@ -1,5 +1,5 @@
 <% from "build.inc.yml" import workflow -%>
-name: Build Test and Publish Nightly Packages
+name: 'ls: Build and Publish Nightly Packages'
 
 on:
   schedule:
@@ -11,4 +11,4 @@ on:
       - nightly
 
 jobs:
-  <<- workflow(targets, publications, subdist="nightly") ->>
+  <<- workflow(package, targets, publications, subdist="nightly") ->>

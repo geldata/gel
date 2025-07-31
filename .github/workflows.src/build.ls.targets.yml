@@ -3,6 +3,11 @@ publications:
     suffix: ""
     server: sftp://uploader@package-upload.edgedb.net:22/
 
+package:
+  name: edgedbpkg.edgedb_ls:EdgeDBLanguageServer
+  tests:
+    files: "test_language_server.py"
+
 targets:
   linux:
     - name: linux-x86_64

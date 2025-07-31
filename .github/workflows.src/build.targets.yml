@@ -3,6 +3,9 @@ publications:
       suffix: ""
       server: sftp://uploader@package-upload.edgedb.net:22/
 
+package:
+    name: "edgedbpkg.edgedb:Gel"
+
 targets:
     linux:
         - name: debian-buster-x86_64
@@ -137,6 +140,11 @@ targets:
           platform_version: x86_64
           family: generic
           runs_on: [macos-13]
+          # Run fewer tests on x86_64, since the test runner is very slow.
+          test:
+            files: >
+              test_dump*.py test_backend_*.py test_database.py
+              test_server_*.py test_edgeql_ddl.py test_session.py
         - name: macos-aarch64
           arch: aarch64
           platform: macos

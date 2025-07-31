@@ -1,13 +1,8 @@
-name: Build Test and Publish Nightly Packages
+name: Package Build Dry Run
 
 on:
-  schedule:
-    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs: {}
-  push:
-    branches:
-      - nightly
 
 jobs:
   prep:
@@ -612,7 +607,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-buster@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -637,7 +632,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-buster@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -662,7 +657,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-bullseye@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -687,7 +682,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-bullseye@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -712,7 +707,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-bookworm@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -737,7 +732,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/debian-bookworm@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -762,7 +757,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-focal@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -787,7 +782,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-focal@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -812,7 +807,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-jammy@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -837,7 +832,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-jammy@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -862,7 +857,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-noble@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -887,7 +882,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-noble@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -912,7 +907,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/centos-8@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -937,7 +932,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/centos-8@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -962,7 +957,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/rockylinux-9@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -987,7 +982,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/rockylinux-9@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -1012,7 +1007,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/linux-x86_64@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -1038,7 +1033,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/linux-aarch64@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -1064,7 +1059,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/linuxmusl-x86_64@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -1091,7 +1086,7 @@ jobs:
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/linuxmusl-aarch64@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -1169,7 +1164,7 @@ jobs:
 
     - name: Build
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -1250,7 +1245,7 @@ jobs:
 
     - name: Build
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         PKG_SUBDIST: "nightly"
@@ -1286,6 +1281,9 @@ jobs:
         PKG_PLATFORM: "debian"
         PKG_PLATFORM_VERSION: "buster"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1307,6 +1305,9 @@ jobs:
         PKG_PLATFORM: "debian"
         PKG_PLATFORM_VERSION: "buster"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1328,6 +1329,9 @@ jobs:
         PKG_PLATFORM: "debian"
         PKG_PLATFORM_VERSION: "bullseye"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1349,6 +1353,9 @@ jobs:
         PKG_PLATFORM: "debian"
         PKG_PLATFORM_VERSION: "bullseye"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1370,6 +1377,9 @@ jobs:
         PKG_PLATFORM: "debian"
         PKG_PLATFORM_VERSION: "bookworm"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1391,6 +1401,9 @@ jobs:
         PKG_PLATFORM: "debian"
         PKG_PLATFORM_VERSION: "bookworm"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1412,6 +1425,9 @@ jobs:
         PKG_PLATFORM: "ubuntu"
         PKG_PLATFORM_VERSION: "focal"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1433,6 +1449,9 @@ jobs:
         PKG_PLATFORM: "ubuntu"
         PKG_PLATFORM_VERSION: "focal"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1454,6 +1473,9 @@ jobs:
         PKG_PLATFORM: "ubuntu"
         PKG_PLATFORM_VERSION: "jammy"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1475,6 +1497,9 @@ jobs:
         PKG_PLATFORM: "ubuntu"
         PKG_PLATFORM_VERSION: "jammy"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1496,6 +1521,9 @@ jobs:
         PKG_PLATFORM: "ubuntu"
         PKG_PLATFORM_VERSION: "noble"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1517,6 +1545,9 @@ jobs:
         PKG_PLATFORM: "ubuntu"
         PKG_PLATFORM_VERSION: "noble"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1538,6 +1569,9 @@ jobs:
         PKG_PLATFORM: "centos"
         PKG_PLATFORM_VERSION: "8"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1559,6 +1593,9 @@ jobs:
         PKG_PLATFORM: "centos"
         PKG_PLATFORM_VERSION: "8"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1580,6 +1617,9 @@ jobs:
         PKG_PLATFORM: "rockylinux"
         PKG_PLATFORM_VERSION: "9"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1601,6 +1641,9 @@ jobs:
         PKG_PLATFORM: "rockylinux"
         PKG_PLATFORM_VERSION: "9"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1622,6 +1665,9 @@ jobs:
         PKG_PLATFORM: "linux"
         PKG_PLATFORM_VERSION: "x86_64"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1643,6 +1689,9 @@ jobs:
         PKG_PLATFORM: "linux"
         PKG_PLATFORM_VERSION: "aarch64"
         PKG_PLATFORM_LIBC: ""
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1664,6 +1713,9 @@ jobs:
         PKG_PLATFORM: "linux"
         PKG_PLATFORM_VERSION: "x86_64"
         PKG_PLATFORM_LIBC: "musl"
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1685,6 +1737,9 @@ jobs:
         PKG_PLATFORM: "linux"
         PKG_PLATFORM_VERSION: "aarch64"
         PKG_PLATFORM_LIBC: "musl"
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: 0
@@ -1710,8 +1765,10 @@ jobs:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "macos"
         PKG_PLATFORM_VERSION: "x86_64"
-        # Run fewer tests on x86_64, since the test runner is very slow.
-        PKG_TEST_FILES: "test_dump*.py test_backend_*.py test_database.py test_server_*.py test_edgeql_ddl.py test_session.py"
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " test_dump*.py test_backend_*.py test_database.py test_server_*.py test_edgeql_ddl.py test_session.py
+"
       run: |
         # Bump shmmax and shmall to avoid test failures.
         sudo sysctl -w kern.sysv.shmmax=12582912
@@ -1739,1210 +1796,11 @@ jobs:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "macos"
         PKG_PLATFORM_VERSION: "aarch64"
+        PKG_TEST_SELECT: ""
+        PKG_TEST_EXCLUDE: ""
+        PKG_TEST_FILES: " "
       run: |
         edgedb-pkg/integration/macos/test.sh
-
-  publish-debian-buster-x86_64:
-    needs: [test-debian-buster-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-buster-x86_64
-        path: artifacts/debian-buster
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "buster"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-debian-buster-x86_64:
-    needs: [publish-debian-buster-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-buster-x86_64
-        path: artifacts/debian-buster
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: debian-buster
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/debian-buster@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "buster"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-debian-buster-aarch64:
-    needs: [test-debian-buster-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-buster-aarch64
-        path: artifacts/debian-buster
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "buster"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-debian-buster-aarch64:
-    needs: [publish-debian-buster-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-buster-aarch64
-        path: artifacts/debian-buster
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: debian-buster
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/debian-buster@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "buster"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-debian-bullseye-x86_64:
-    needs: [test-debian-bullseye-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-bullseye-x86_64
-        path: artifacts/debian-bullseye
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "bullseye"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-debian-bullseye-x86_64:
-    needs: [publish-debian-bullseye-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-bullseye-x86_64
-        path: artifacts/debian-bullseye
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: debian-bullseye
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/debian-bullseye@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "bullseye"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-debian-bullseye-aarch64:
-    needs: [test-debian-bullseye-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-bullseye-aarch64
-        path: artifacts/debian-bullseye
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "bullseye"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-debian-bullseye-aarch64:
-    needs: [publish-debian-bullseye-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-bullseye-aarch64
-        path: artifacts/debian-bullseye
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: debian-bullseye
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/debian-bullseye@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "bullseye"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-debian-bookworm-x86_64:
-    needs: [test-debian-bookworm-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-bookworm-x86_64
-        path: artifacts/debian-bookworm
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "bookworm"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-debian-bookworm-x86_64:
-    needs: [publish-debian-bookworm-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-bookworm-x86_64
-        path: artifacts/debian-bookworm
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: debian-bookworm
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/debian-bookworm@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "bookworm"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-debian-bookworm-aarch64:
-    needs: [test-debian-bookworm-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-bookworm-aarch64
-        path: artifacts/debian-bookworm
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "bookworm"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-debian-bookworm-aarch64:
-    needs: [publish-debian-bookworm-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-debian-bookworm-aarch64
-        path: artifacts/debian-bookworm
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: debian-bookworm
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/debian-bookworm@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "debian"
-        PKG_PLATFORM_VERSION: "bookworm"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-ubuntu-focal-x86_64:
-    needs: [test-ubuntu-focal-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-focal-x86_64
-        path: artifacts/ubuntu-focal
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "focal"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-ubuntu-focal-x86_64:
-    needs: [publish-ubuntu-focal-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-focal-x86_64
-        path: artifacts/ubuntu-focal
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: ubuntu-focal
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/ubuntu-focal@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "focal"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-ubuntu-focal-aarch64:
-    needs: [test-ubuntu-focal-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-focal-aarch64
-        path: artifacts/ubuntu-focal
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "focal"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-ubuntu-focal-aarch64:
-    needs: [publish-ubuntu-focal-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-focal-aarch64
-        path: artifacts/ubuntu-focal
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: ubuntu-focal
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/ubuntu-focal@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "focal"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-ubuntu-jammy-x86_64:
-    needs: [test-ubuntu-jammy-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-jammy-x86_64
-        path: artifacts/ubuntu-jammy
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "jammy"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-ubuntu-jammy-x86_64:
-    needs: [publish-ubuntu-jammy-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-jammy-x86_64
-        path: artifacts/ubuntu-jammy
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: ubuntu-jammy
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/ubuntu-jammy@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "jammy"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-ubuntu-jammy-aarch64:
-    needs: [test-ubuntu-jammy-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-jammy-aarch64
-        path: artifacts/ubuntu-jammy
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "jammy"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-ubuntu-jammy-aarch64:
-    needs: [publish-ubuntu-jammy-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-jammy-aarch64
-        path: artifacts/ubuntu-jammy
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: ubuntu-jammy
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/ubuntu-jammy@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "jammy"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-ubuntu-noble-x86_64:
-    needs: [test-ubuntu-noble-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-noble-x86_64
-        path: artifacts/ubuntu-noble
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "noble"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-ubuntu-noble-x86_64:
-    needs: [publish-ubuntu-noble-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-noble-x86_64
-        path: artifacts/ubuntu-noble
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: ubuntu-noble
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/ubuntu-noble@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "noble"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-ubuntu-noble-aarch64:
-    needs: [test-ubuntu-noble-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-noble-aarch64
-        path: artifacts/ubuntu-noble
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "noble"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-ubuntu-noble-aarch64:
-    needs: [publish-ubuntu-noble-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-ubuntu-noble-aarch64
-        path: artifacts/ubuntu-noble
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: ubuntu-noble
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/ubuntu-noble@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "ubuntu"
-        PKG_PLATFORM_VERSION: "noble"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-centos-8-x86_64:
-    needs: [test-centos-8-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-centos-8-x86_64
-        path: artifacts/centos-8
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "centos"
-        PKG_PLATFORM_VERSION: "8"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-centos-8-x86_64:
-    needs: [publish-centos-8-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-centos-8-x86_64
-        path: artifacts/centos-8
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: centos-8
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/centos-8@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "centos"
-        PKG_PLATFORM_VERSION: "8"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-centos-8-aarch64:
-    needs: [test-centos-8-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-centos-8-aarch64
-        path: artifacts/centos-8
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "centos"
-        PKG_PLATFORM_VERSION: "8"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-centos-8-aarch64:
-    needs: [publish-centos-8-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-centos-8-aarch64
-        path: artifacts/centos-8
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: centos-8
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/centos-8@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "centos"
-        PKG_PLATFORM_VERSION: "8"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-rockylinux-9-x86_64:
-    needs: [test-rockylinux-9-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-rockylinux-9-x86_64
-        path: artifacts/rockylinux-9
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "rockylinux"
-        PKG_PLATFORM_VERSION: "9"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-rockylinux-9-x86_64:
-    needs: [publish-rockylinux-9-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-rockylinux-9-x86_64
-        path: artifacts/rockylinux-9
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: rockylinux-9
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/rockylinux-9@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "rockylinux"
-        PKG_PLATFORM_VERSION: "9"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-rockylinux-9-aarch64:
-    needs: [test-rockylinux-9-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-rockylinux-9-aarch64
-        path: artifacts/rockylinux-9
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "rockylinux"
-        PKG_PLATFORM_VERSION: "9"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-rockylinux-9-aarch64:
-    needs: [publish-rockylinux-9-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-rockylinux-9-aarch64
-        path: artifacts/rockylinux-9
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: rockylinux-9
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/rockylinux-9@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "rockylinux"
-        PKG_PLATFORM_VERSION: "9"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-linux-x86_64:
-    needs: [test-linux-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-linux-x86_64
-        path: artifacts/linux-x86_64
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "linux"
-        PKG_PLATFORM_VERSION: "x86_64"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-linux-x86_64:
-    needs: [publish-linux-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-linux-x86_64
-        path: artifacts/linux-x86_64
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: linux-x86_64
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/linux-x86_64@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "linux"
-        PKG_PLATFORM_VERSION: "x86_64"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-linux-aarch64:
-    needs: [test-linux-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-linux-aarch64
-        path: artifacts/linux-aarch64
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "linux"
-        PKG_PLATFORM_VERSION: "aarch64"
-        PKG_PLATFORM_LIBC: ""
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-linux-aarch64:
-    needs: [publish-linux-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-linux-aarch64
-        path: artifacts/linux-aarch64
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: linux-aarch64
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/linux-aarch64@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "linux"
-        PKG_PLATFORM_VERSION: "aarch64"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-linuxmusl-x86_64:
-    needs: [test-linuxmusl-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-linuxmusl-x86_64
-        path: artifacts/linuxmusl-x86_64
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "linux"
-        PKG_PLATFORM_VERSION: "x86_64"
-        PKG_PLATFORM_LIBC: "musl"
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-linuxmusl-x86_64:
-    needs: [publish-linuxmusl-x86_64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'x64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-linuxmusl-x86_64
-        path: artifacts/linuxmusl-x86_64
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: linuxmusl-x86_64
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/linuxmusl-x86_64@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "linux"
-        PKG_PLATFORM_VERSION: "x86_64"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-linuxmusl-aarch64:
-    needs: [test-linuxmusl-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-linuxmusl-aarch64
-        path: artifacts/linuxmusl-aarch64
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "linux"
-        PKG_PLATFORM_VERSION: "aarch64"
-        PKG_PLATFORM_LIBC: "musl"
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  check-published-linuxmusl-aarch64:
-    needs: [publish-linuxmusl-aarch64]
-    runs-on: ['package-builder', 'self-hosted', 'linux', 'arm64']
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-linuxmusl-aarch64
-        path: artifacts/linuxmusl-aarch64
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: linuxmusl-aarch64
-
-    - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/linuxmusl-aarch64@master
-      env:
-        PKG_NAME: "${{ steps.describe.outputs.name }}"
-        PKG_SUBDIST: "nightly"
-        PACKAGE_SERVER: sftp://uploader@package-upload.edgedb.net:22/
-        PKG_PLATFORM: "linux"
-        PKG_PLATFORM_VERSION: "aarch64"
-        PKG_INSTALL_REF: "${{ steps.describe.outputs.install-ref }}"
-        PKG_VERSION_SLOT: "${{ steps.describe.outputs.version-slot }}"
-
-    outputs:
-      version-slot: ${{ steps.describe.outputs.version-slot }}
-      version-core: ${{ steps.describe.outputs.version-core }}
-      catalog-version: ${{ steps.describe.outputs.catalog-version }}
-
-  publish-macos-x86_64:
-    needs: [test-macos-x86_64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-macos-x86_64
-        path: artifacts/macos-x86_64
-
-    - uses: actions/checkout@v4
-      with:
-        repository: edgedb/edgedb-pkg
-        ref: master
-        path: edgedb-pkg
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: macos-x86_64
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PKG_PLATFORM: "macos"
-        PKG_PLATFORM_VERSION: "x86_64"
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  publish-macos-aarch64:
-    needs: [test-macos-aarch64]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-      with:
-        name: builds-macos-aarch64
-        path: artifacts/macos-aarch64
-
-    - uses: actions/checkout@v4
-      with:
-        repository: edgedb/edgedb-pkg
-        ref: master
-        path: edgedb-pkg
-
-    - name: Describe
-      id: describe
-      uses: edgedb/edgedb-pkg/integration/actions/describe-artifact@master
-      with:
-        target: macos-aarch64
-
-    - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
-      env:
-        PKG_SUBDIST: "nightly"
-        PKG_PLATFORM: "macos"
-        PKG_PLATFORM_VERSION: "aarch64"
-        PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
-
-  publish-docker:
-    needs:
-      - check-published-debian-bookworm-x86_64
-      - check-published-debian-bookworm-aarch64
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        repository: geldata/gel-docker
-        ref: master
-        path: dockerfile
-
-    - name: Login to Docker Hub
-      uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-      with:
-        registry: ghcr.io
-        username: "edgedb-ci"
-        password: ${{ secrets.GITHUB_CI_BOT_TOKEN }}
-
-    - env:
-        VERSION_SLOT: "${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }}"
-        VERSION_CORE: "${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }}"
-        CATALOG_VERSION: "${{ needs.check-published-debian-bookworm-x86_64.outputs.catalog-version }}"
-        PKG_SUBDIST: "nightly"
-      id: tags
-      run: |
-        set -e
-
-        url='https://registry.hub.docker.com/v2/repositories/geldata/gel/tags?page_size=100'
-        repo_tags=$(
-          while [ -n "$url" ]; do
-            resp=$(curl -L -s "$url")
-            url=$(echo "$resp" | jq -r ".next")
-            if [ "$url" = "null" ] || [ -z "$url" ]; then
-              break
-            fi
-            echo "$resp" | jq -r '."results"[]["name"]'
-          done | grep "^[[:digit:]]\+.*" | grep -v "alpha\|beta\|rc" || :
-        )
-
-        tags=()
-
-        if [ "$PKG_SUBDIST" = "nightly" ]; then
-          tags+=(
-            "nightly"
-            "nightly_${VERSION_SLOT}_cv${CATALOG_VERSION}"
-          )
-        else
-          tags+=( "$VERSION_CORE" )
-
-          top=$(printf "%s\n%s\n" "$VERSION_CORE" "$repo_tags" \
-                | grep "^${VERSION_SLOT}[\.-]" \
-                | sort --version-sort --reverse | head -n 1)
-          if [ "$top" == "$VERSION_CORE" ]; then
-            tags+=( "$VERSION_SLOT" )
-          fi
-
-          if [ -z "$PKG_SUBDIST" ]; then
-            top=$(printf "%s\n%s\n" "$VERSION_CORE" "$repo_tags" \
-                  | sort --version-sort --reverse | head -n 1)
-            if [ "$top" == "$VERSION_CORE" ]; then
-              tags+=( "latest" )
-            fi
-          fi
-        fi
-
-        fq_tags=()
-        images=("geldata/gel" "ghcr.io/geldata/gel")
-
-        for image in "${images[@]}"; do
-          fq_tags+=("${tags[@]/#/${image}:}")
-        done
-
-        IFS=,
-        echo "tags=${fq_tags[*]}" >> $GITHUB_OUTPUT
-
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
-
-    - name: Build and Publish Docker Image
-      uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.10.0
-      with:
-        push: true
-        provenance: mode=max
-        tags: "${{ steps.tags.outputs.tags }}"
-        context: dockerfile
-        build-args: |
-          version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-slot }}
-          exact_version=${{ needs.check-published-debian-bookworm-x86_64.outputs.version-core }}
-          subdist=nightly
-        platforms: linux/amd64,linux/arm64
 
   workflow-notifications:
     if: failure() && github.event_name != 'pull_request'
@@ -2952,91 +1810,48 @@ jobs:
       - prep
       - build-debian-buster-x86_64
       - test-debian-buster-x86_64
-      - publish-debian-buster-x86_64
-      - check-published-debian-buster-x86_64
       - build-debian-buster-aarch64
       - test-debian-buster-aarch64
-      - publish-debian-buster-aarch64
-      - check-published-debian-buster-aarch64
       - build-debian-bullseye-x86_64
       - test-debian-bullseye-x86_64
-      - publish-debian-bullseye-x86_64
-      - check-published-debian-bullseye-x86_64
       - build-debian-bullseye-aarch64
       - test-debian-bullseye-aarch64
-      - publish-debian-bullseye-aarch64
-      - check-published-debian-bullseye-aarch64
       - build-debian-bookworm-x86_64
       - test-debian-bookworm-x86_64
-      - publish-debian-bookworm-x86_64
-      - check-published-debian-bookworm-x86_64
       - build-debian-bookworm-aarch64
       - test-debian-bookworm-aarch64
-      - publish-debian-bookworm-aarch64
-      - check-published-debian-bookworm-aarch64
       - build-ubuntu-focal-x86_64
       - test-ubuntu-focal-x86_64
-      - publish-ubuntu-focal-x86_64
-      - check-published-ubuntu-focal-x86_64
       - build-ubuntu-focal-aarch64
       - test-ubuntu-focal-aarch64
-      - publish-ubuntu-focal-aarch64
-      - check-published-ubuntu-focal-aarch64
       - build-ubuntu-jammy-x86_64
       - test-ubuntu-jammy-x86_64
-      - publish-ubuntu-jammy-x86_64
-      - check-published-ubuntu-jammy-x86_64
       - build-ubuntu-jammy-aarch64
       - test-ubuntu-jammy-aarch64
-      - publish-ubuntu-jammy-aarch64
-      - check-published-ubuntu-jammy-aarch64
       - build-ubuntu-noble-x86_64
       - test-ubuntu-noble-x86_64
-      - publish-ubuntu-noble-x86_64
-      - check-published-ubuntu-noble-x86_64
       - build-ubuntu-noble-aarch64
       - test-ubuntu-noble-aarch64
-      - publish-ubuntu-noble-aarch64
-      - check-published-ubuntu-noble-aarch64
       - build-centos-8-x86_64
       - test-centos-8-x86_64
-      - publish-centos-8-x86_64
-      - check-published-centos-8-x86_64
       - build-centos-8-aarch64
       - test-centos-8-aarch64
-      - publish-centos-8-aarch64
-      - check-published-centos-8-aarch64
       - build-rockylinux-9-x86_64
       - test-rockylinux-9-x86_64
-      - publish-rockylinux-9-x86_64
-      - check-published-rockylinux-9-x86_64
       - build-rockylinux-9-aarch64
       - test-rockylinux-9-aarch64
-      - publish-rockylinux-9-aarch64
-      - check-published-rockylinux-9-aarch64
       - build-linux-x86_64
       - test-linux-x86_64
-      - publish-linux-x86_64
-      - check-published-linux-x86_64
       - build-linux-aarch64
       - test-linux-aarch64
-      - publish-linux-aarch64
-      - check-published-linux-aarch64
       - build-linuxmusl-x86_64
       - test-linuxmusl-x86_64
-      - publish-linuxmusl-x86_64
-      - check-published-linuxmusl-x86_64
       - build-linuxmusl-aarch64
       - test-linuxmusl-aarch64
-      - publish-linuxmusl-aarch64
-      - check-published-linuxmusl-aarch64
       - build-macos-x86_64
       - test-macos-x86_64
-      - publish-macos-x86_64
       - build-macos-aarch64
       - test-macos-aarch64
-      - publish-macos-aarch64
-      - publish-docker
     runs-on: ubuntu-latest
     permissions:
       actions: 'read'

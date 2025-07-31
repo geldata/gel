@@ -1,4 +1,4 @@
-<% macro workflow(targets, publications, subdist="", publish_all=False) %>
+<% macro workflow(package, targets, publications, subdist="", publish_all=False) %>
   prep:
     runs-on: ubuntu-latest
 <% if subdist == "nightly" %>
@@ -70,7 +70,7 @@
     - name: Build
       uses: edgedb/edgedb-pkg/integration/linux/build/<< plat_id >>@master
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "<< package.name >>"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         <%- if subdist != "" %>
@@ -161,7 +161,7 @@
 
     - name: Build
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "<< package.name >>"
         SRC_REF: "${{ github.sha }}"
         <%- if subdist != "nightly" %>
         BUILD_IS_RELEASE: "true"
@@ -210,6 +210,9 @@
         PKG_PLATFORM: "<< tgt.platform >>"
         PKG_PLATFORM_VERSION: "<< tgt.platform_version >>"
         PKG_PLATFORM_LIBC: "<< tgt.platform_libc >>"
+        PKG_TEST_SELECT: "<< package.test.select >>"
+        PKG_TEST_EXCLUDE: "<< package.test.exclude >>"
+        PKG_TEST_FILES: "<< package.test.files >> << tgt.test.files >>"
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: << 0 if tgt.runs_on and 'self-hosted' in tgt.runs_on else 1 >>
@@ -241,10 +244,9 @@
         <%- endif %>
         PKG_PLATFORM: "<< tgt.platform >>"
         PKG_PLATFORM_VERSION: "<< tgt.platform_version >>"
-        <%- if tgt.platform_version == "x86_64" %>
-        # Run fewer tests on x86_64, since the test runner is very slow.
-        PKG_TEST_FILES: "test_dump*.py test_backend_*.py test_database.py test_server_*.py test_edgeql_ddl.py test_session.py"
-        <%- endif %>
+        PKG_TEST_SELECT: "<< package.test.select >>"
+        PKG_TEST_EXCLUDE: "<< package.test.exclude >>"
+        PKG_TEST_FILES: "<< package.test.files >> << tgt.test.files >>"
       run: |
         <%- if tgt.platform_version == "x86_64" %>
         # Bump shmmax and shmall to avoid test failures.
