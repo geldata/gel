@@ -19,15 +19,12 @@
 from __future__ import annotations
 from typing import cast, Optional
 
-import logging
 import html
 import email.message
 
 from edb.server.protocol.auth_ext import config as auth_config
 
 from . import components as render
-
-logger = logging.getLogger(__name__)
 
 
 def render_signin_page(
@@ -324,8 +321,6 @@ def render_signup_page(
             magic_link_provider = cast(auth_config.MagicLinkProviderConfig, p)
         elif p.name.startswith('builtin::oauth_') or hasattr(p, "issuer_url"):
             oauth_providers.append(cast(auth_config.OAuthProviderConfig, p))
-
-    logger.info(f"magic_link_provider: {magic_link_provider}")
 
     base_email_factor_form = render.render_base_email_form(
         challenge=challenge, email=email
