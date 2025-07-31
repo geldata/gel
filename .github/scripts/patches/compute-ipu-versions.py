@@ -46,7 +46,10 @@ if not versions:
     versions = prerelease_versions
 
 versions.sort(key=lambda x: x[0])
-if len(versions) > 1:
+if len(versions) > 3:
+    # We want to try 6.0 and 6.2
+    versions = [versions[0], versions[2], versions[-1]]
+elif len(versions) > 1:
     versions = [versions[0], versions[-1]]
 
 matrix = {
