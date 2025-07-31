@@ -398,16 +398,20 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         )
 
         with self.http_con() as http_con:
+            form_data = {
+                "email": "test_otc_expired@example.com",
+                "code": "123456",
+                "challenge": "test_challenge_expired",
+                "callback_url": "https://example.com/app/auth/callback",
+            }
+            form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
             auth_body, auth_headers, auth_status = self.http_con_request(
                 http_con,
-                params={
-                    "email": "test_otc_expired@example.com",
-                    "code": "123456",
-                    "challenge": "test_challenge_expired",
-                    "callback_url": "https://example.com/app/auth/callback",
-                },
-                method="GET",
+                method="POST",
                 path="magic-link/authenticate",
+                body=form_data_encoded,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
         self.assertEqual(
             auth_status, 400, f"Expected 400, got {auth_status}: {auth_body}"
@@ -502,7 +506,7 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
 
                 response_data = json.loads(body)
                 self.assertIn(
-                    "code-sent", response_data.get("redirect_url", "")
+                    "code=true", response_data.get("redirect_url", "")
                 )
 
                 file_name_hash = hashlib.sha256(
@@ -528,16 +532,20 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 otc_code = code_match.group(1)
                 self.assertEqual(len(otc_code), 6)
 
+                form_data = {
+                    "email": email,
+                    "code": otc_code,
+                    "challenge": challenge,
+                    "callback_url": callback_url,
+                }
+                form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
                 auth_body, auth_headers, auth_status = self.http_con_request(
                     http_con,
-                    params={
-                        "email": email,
-                        "code": otc_code,
-                        "challenge": challenge,
-                        "callback_url": callback_url,
-                    },
-                    method="GET",
+                    method="POST",
                     path="magic-link/authenticate",
+                    body=form_data_encoded,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
                 )
 
                 self.assertEqual(auth_status, 302, auth_body)
@@ -699,17 +707,21 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         otc_code = code_match.group(1)
 
         with self.http_con() as http_con_device_b:
+            form_data = {
+                "email": email,
+                "code": otc_code,
+                "callback_url": callback_url,
+                "redirect_on_failure": error_url,
+                "challenge": pkce_device_b[1],
+            }
+            form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
             auth_body, auth_headers, auth_status = self.http_con_request(
                 http_con_device_b,
-                params={
-                    "email": email,
-                    "code": otc_code,
-                    "callback_url": callback_url,
-                    "redirect_on_failure": error_url,
-                    "challenge": pkce_device_b[1],
-                },
-                method="GET",
+                method="POST",
                 path="magic-link/authenticate",
+                body=form_data_encoded,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
             self.assertEqual(auth_status, 302, auth_body)
@@ -1294,16 +1306,20 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             )
             self.assertEqual(expired_count, 4)
 
+            form_data = {
+                "email": email,
+                "code": "999999",
+                "challenge": challenge,
+                "callback_url": callback_url,
+            }
+            form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
             self.http_con_request(
                 http_con,
-                params={
-                    "email": email,
-                    "code": "999999",
-                    "challenge": challenge,
-                    "callback_url": callback_url,
-                },
-                method="GET",
+                method="POST",
                 path="magic-link/authenticate",
+                body=form_data_encoded,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
             remaining_count = await self.con.query_single(
@@ -1363,34 +1379,42 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             self.assertEqual(register_status, 200, register_body)
 
             for i in range(5):
+                form_data = {
+                    "email": email,
+                    "code": f"00000{i}",
+                    "challenge": challenge,
+                    "callback_url": callback_url,
+                }
+                form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
                 body, headers, status = self.http_con_request(
                     http_con,
-                    params={
-                        "email": email,
-                        "code": f"00000{i}",
-                        "challenge": challenge,
-                        "callback_url": callback_url,
-                    },
-                    method="GET",
+                    method="POST",
                     path="magic-link/authenticate",
+                    body=form_data_encoded,
                     headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
                         "Accept": "application/json",
                     },
                 )
                 self.assertEqual(status, 400, body)
                 self.assertIn("invalid code", body.decode().lower())
 
+            form_data = {
+                "email": email,
+                "code": "000006",
+                "challenge": challenge,
+                "callback_url": callback_url,
+            }
+            form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
             body, headers, status = self.http_con_request(
                 http_con,
-                params={
-                    "email": email,
-                    "code": "000006",
-                    "challenge": challenge,
-                    "callback_url": callback_url,
-                },
-                method="GET",
+                method="POST",
                 path="magic-link/authenticate",
+                body=form_data_encoded,
                 headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
                     "Accept": "application/json",
                 },
             )
