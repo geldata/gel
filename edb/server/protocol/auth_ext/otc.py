@@ -32,16 +32,11 @@ logger = logging.getLogger(__name__)
 
 
 def generate_code() -> str:
-    """Generate a six-digit numeric code with leading zeros preserved."""
     return f"{secrets.randbelow(1000000):06d}"
 
 
 def hash_code(code: str) -> bytes:
-    """Hash a code using SHA256 and return digest as bytes for constant-time comparison."""
-    hashed = hashlib.sha256(code.encode('utf-8')).digest()
-    import base64
-    logger.debug(f"Hashing code: {code} to {base64.b64encode(hashed).decode('ascii')}")  # TODO: remove!!!
-    return hashed
+    return hashlib.sha256(code.encode('utf-8')).digest()
 
 
 async def create(
@@ -124,48 +119,52 @@ with
     now := datetime_current(),
     window_start := now - <duration>'10 minutes',
 
-    # Step 1: Cleanup expired codes (side effect)
+    # Cleanup expired codes (side effect)
     cleanup_count := count(
         delete ext::auth::OneTimeCode filter .expires_at < now
     ),
 
-    # Step 2: Check rate limits
+    # Check rate limits
     failed_attempts := (
         select count(
             select ext::auth::AuthenticationAttempt
             filter .factor = FACTOR
-               and .attempt_type = ext::auth::AuthenticationAttemptType.OneTimeCode
+               and .attempt_type =
+                   ext::auth::AuthenticationAttemptType.OneTimeCode
                and .successful = false
                and .created_at > window_start
         )
     ),
 
-    # Step 3: Find the OTC
+    # Find the OTC
     otc := (
         select ext::auth::OneTimeCode
         filter .factor = FACTOR and .code_hash = code_hash
         limit 1
     ),
 
-    # Step 4: Determine the outcome
     is_rate_limited := failed_attempts >= 5,
     is_code_found := (exists otc) ?? false,
     is_code_expired := (otc.expires_at < now) ?? false,
-    is_code_valid := (is_code_found and not is_code_expired and not is_rate_limited) ?? false,
+    is_code_valid := (
+        (is_code_found and not is_code_expired and not is_rate_limited)
+        ?? false
+    ),
 
-    # Step 5: Delete OTC if valid (side effect)
+    # Delete OTC if valid (side effect)
     deleted_otc := (
         delete ext::auth::OneTimeCode
         filter .id = otc.id and is_code_valid
     ),
 
-    # Step 6: Record attempt (side effect)
+    # Record attempt (side effect)
     recorded_attempt := (
         if (exists FACTOR)
         then (
             insert ext::auth::AuthenticationAttempt {
                 factor := FACTOR,
-                attempt_type := ext::auth::AuthenticationAttemptType.OneTimeCode,
+                attempt_type :=
+                    ext::auth::AuthenticationAttemptType.OneTimeCode,
                 successful := is_code_valid,
             }
         )
@@ -192,23 +191,16 @@ select {
     result_json = json.loads(r.decode())
     result = result_json[0]
 
-    # Handle different failure modes with specific error messages
     if result["rate_limited"]:
         raise errors.NoIdentityFound("Maximum verification attempts exceeded")
     elif not result["code_found"]:
-        all_codes = await execute.parse_execute_json(
-            db=db,
-            query="""\
-            select ext::auth::OneTimeCode { ** }
-            """,
-        )
         raise errors.NoIdentityFound("Invalid code")
     elif result["code_expired"]:
         raise errors.NoIdentityFound("Code has expired")
     elif not result["success"]:
         raise errors.NoIdentityFound("Verification failed")
 
-    return result["otc_id"]
+    return str(result["otc_id"])
 
 
 async def cleanup_old_attempts(db: Any, retention_hours: int = 24) -> int:

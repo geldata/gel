@@ -21,7 +21,6 @@ import contextvars
 import urllib.parse
 import uuid
 import json
-import base64
 import datetime
 import argon2
 import os
@@ -34,7 +33,7 @@ from email.message import EmailMessage
 
 from edgedb import ConstraintViolationError
 from edb.testbase import http as tb
-from edb.server.protocol.auth_ext import jwt as auth_jwt, otc, errors
+from edb.server.protocol.auth_ext import jwt as auth_jwt, otc
 
 ph = argon2.PasswordHasher()
 
@@ -112,7 +111,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         CONFIGURE CURRENT DATABASE
         INSERT ext::auth::MagicLinkProviderConfig {{}};
 
-        # Pure testing code:
         CREATE TYPE TestUser;
         ALTER TYPE TestUser {{
             CREATE REQUIRED LINK identity: ext::auth::Identity {{
@@ -190,7 +188,7 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     [is ext::auth::OAuthProviderConfig].additional_scope,
                 } filter .name = <str>$0
             )
-            """,
+            """,  # noqa: E501
             fqn,
         )
 
@@ -223,36 +221,35 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
     def maybe_get_auth_token(self, headers: dict[str, str]) -> Optional[str]:
         return self.maybe_get_cookie_value(headers, "edgedb-session")
 
-    async def test_http_ext_auth_otc_00(self):
+    async def test_http_auth_ext_otc_00(self):
         """Test that the schema migration additions work correctly.
 
-        This test verifies that the new OneTimeCode and AuthenticationAttempt types
-        can be created and function properly. It tests the verification_method property
-        on provider configs, ensures OneTimeCode constraints work (code_hash exclusivity),
-        and validates that AuthenticationAttempts track events correctly in an event-based
-        design that allows multiple attempts per factor.
+        This test verifies that the new OneTimeCode and AuthenticationAttempt
+        types can be created and function properly. It tests the
+        verification_method property on provider configs, ensures OneTimeCode
+        constraints work (code_hash exclusivity), and validates that
+        AuthenticationAttempts track events correctly in an event-based design
+        that allows multiple attempts per factor.
         """
 
-        # Test that EmailPasswordProviderConfig has verification_method property with Link default
         email_config = await self.get_builtin_provider_config_by_name(
             "local_emailpassword"
         )
         self.assertEqual(str(email_config.verification_method), 'Link')
 
-        # Test that MagicLinkProviderConfig has verification_method property with Link default
         magic_link_config = await self.get_builtin_provider_config_by_name(
             "local_magic_link"
         )
         self.assertEqual(str(magic_link_config.verification_method), 'Link')
 
-        # Test that OneTimeCode and AuthenticationAttempt types exist and can be created
-        # First create a test factor to link to
-        result = await self.con.query_single("""
+        result = await self.con.query_single(
+            """
             INSERT ext::auth::LocalIdentity {
                 issuer := "test",
                 subject := "test_user_123",
             };
-        """)
+        """
+        )
 
         identity_id = result.id
 
@@ -266,7 +263,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             identity_id=identity_id,
         )
 
-        # Now create a OneTimeCode
         expires_at = utcnow() + datetime.timedelta(minutes=10)
         otc = await self.con.query_single(
             """
@@ -289,14 +285,14 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         expected_hash = hashlib.sha256(b"test_hash_123").digest()
         self.assertEqual(otc.code_hash, expected_hash)
 
-        # Test that AuthenticationAttempt can be created and tracks attempt events properly
         auth_attempt = await self.con.query_single(
             """
             with
                 ATTEMPT := (
                     INSERT ext::auth::AuthenticationAttempt {
                         factor := <ext::auth::Factor><uuid>$factor_id,
-                        attempt_type := ext::auth::AuthenticationAttemptType.OneTimeCode,
+                        attempt_type :=
+                            ext::auth::AuthenticationAttemptType.OneTimeCode,
                         successful := false,
                     }
                 ),
@@ -310,13 +306,13 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         self.assertIsNotNone(auth_attempt.created_at)
         self.assertIsNotNone(auth_attempt.modified_at)
 
-        # Test that the OneTimeCode constraint works (code_hash should be exclusive)
         with self.assertRaises(ConstraintViolationError):
             await self.con.query(
                 """
                 with
                     plaintext_code := b"test_hash_123",
-                    code_hash := ext::pgcrypto::digest(plaintext_code, 'sha256'),
+                    code_hash :=
+                        ext::pgcrypto::digest(plaintext_code, 'sha256'),
                     ONE_TIME_CODE := (
                         INSERT ext::auth::OneTimeCode {
                             code_hash := code_hash,
@@ -330,14 +326,14 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 factor_id=email_factor.id,
             )
 
-        # Test that multiple AuthenticationAttempts can be created (event-based design)
-        auth_attempt2 = await self.con.query_single(
+        await self.con.query_single(
             """
             with
                 ATTEMPT := (
                     INSERT ext::auth::AuthenticationAttempt {
                         factor := <ext::auth::Factor><uuid>$factor_id,
-                        attempt_type := ext::auth::AuthenticationAttemptType.OneTimeCode,
+                        attempt_type :=
+                            ext::auth::AuthenticationAttemptType.OneTimeCode,
                         successful := true,
                     }
                 ),
@@ -346,7 +342,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             factor_id=email_factor.id,
         )
 
-        # Both attempts should exist (event-based allows multiple)
         all_attempts = await self.con.query(
             """
             SELECT ext::auth::AuthenticationAttempt { * }
@@ -357,25 +352,24 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         )
 
         self.assertEqual(len(all_attempts), 2)
-        self.assertFalse(all_attempts[0].successful)  # First attempt was failed
-        self.assertTrue(
-            all_attempts[1].successful
-        )  # Second attempt was successful
+        self.assertFalse(all_attempts[0].successful)
+        self.assertTrue(all_attempts[1].successful)
 
-    async def test_http_ext_auth_otc_06(self):
+    async def test_http_auth_ext_otc_06(self):
         """Test verification with expired code.
 
         Validates that expired OTCs are properly rejected and cleaned up during
-        verification attempts. This tests the TTL enforcement and ensures expired
-        codes cannot be used for authentication, maintaining security.
+        verification attempts. This tests the TTL enforcement and ensures
+        expired codes cannot be used for authentication, maintaining security.
         """
-        # Create test factor
-        identity = await self.con.query_single("""
+        identity = await self.con.query_single(
+            """
             INSERT ext::auth::LocalIdentity {
                 issuer := "test",
                 subject := "test_user_otc_expired",
             };
-        """)
+        """
+        )
 
         email_factor = await self.con.query_single(
             """
@@ -387,7 +381,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             identity_id=identity.id,
         )
 
-        # Create an OTC that's already expired
         expired_time = utcnow() - datetime.timedelta(minutes=5)
         code_hash = otc.hash_code("123456")
 
@@ -404,7 +397,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             expires_at=expired_time,
         )
 
-        # Try to verify the expired code via HTTP (should return 400 with error)
         with self.http_con() as http_con:
             auth_body, auth_headers, auth_status = self.http_con_request(
                 http_con,
@@ -423,24 +415,25 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         error_data = json.loads(auth_body)
         self.assertEqual(error_data.get("error"), "Code has expired")
 
-        # Code should be deleted by the mega query
         deleted_otc = await self.con.query_single(
             "SELECT ext::auth::OneTimeCode { ** } FILTER .id = <uuid>$otc_id",
             otc_id=expired_otc.id,
         )
         self.assertIsNone(deleted_otc)
 
-    async def test_http_ext_auth_otc_magic_link_00(self):
-        """Test complete Magic Link OTC flow: register -> email with code -> authenticate.
+    async def test_http_auth_ext_otc_magic_link_00(self):
+        """Test complete Magic Link OTC flow: register -> email with code ->
+        authenticate.
 
-        Tests the full Magic Link authentication flow when configured for OTC mode.
-        Validates that registration sends an email with a 6-digit code instead of
-        a magic link, the code can be extracted and used for authentication, and
-        the complete PKCE flow works with the OTC verification method.
+        Tests the full Magic Link authentication flow when configured for OTC
+        mode. Validates that registration sends an email with a 6-digit code
+        instead of a magic link, the code can be extracted and used for
+        authentication, and the complete PKCE flow works with the OTC
+        verification method.
         """
 
-        # Configure Magic Link provider to use Code verification
-        await self.con.query("""
+        await self.con.query(
+            """
             CONFIGURE CURRENT DATABASE
             RESET ext::auth::MagicLinkProviderConfig;
 
@@ -448,9 +441,9 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             INSERT ext::auth::MagicLinkProviderConfig {
                 verification_method := ext::auth::VerificationMethod.Code,
             };
-        """)
+        """
+        )
 
-        # Set up webhook configuration to test OTC webhook events
         base_url = self.mock_net_server.get_base_url().rstrip("/")
         webhook_url = f"{base_url}/otc-webhook"
         await self.con.query(
@@ -474,9 +467,7 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             base_url,
             "/otc-webhook",
         )
-        self.mock_net_server.register_route_handler(*webhook_request)(
-            ("", 204)
-        )
+        self.mock_net_server.register_route_handler(*webhook_request)(("", 204))
 
         await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
 
@@ -487,7 +478,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             error_url = "https://example.com/app/auth/error"
 
             with self.http_con() as http_con:
-                # Step 1: Register (should send OTC email, not magic link)
                 body, headers, status = self.http_con_request(
                     http_con,
                     method="POST",
@@ -510,13 +500,11 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     status, 200, f"POST /magic-link/register: {status} {body}"
                 )
 
-                # Should redirect to code-sent page, not magic-link-sent
                 response_data = json.loads(body)
                 self.assertIn(
                     "code-sent", response_data.get("redirect_url", "")
                 )
 
-                # Step 2: Get the OTC from email
                 file_name_hash = hashlib.sha256(
                     f"{SENDER}{email}".encode()
                 ).hexdigest()
@@ -533,7 +521,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     'utf-8'
                 )
 
-                # Extract the 6-digit code from email
                 code_match = re.search(r'(?:^|\s)(\d{6})(?:\s|$)', html_content)
                 self.assertIsNotNone(
                     code_match, "No 6-digit code found in email"
@@ -541,7 +528,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 otc_code = code_match.group(1)
                 self.assertEqual(len(otc_code), 6)
 
-                # Step 3: Authenticate with the code (includes PKCE challenge)
                 auth_body, auth_headers, auth_status = self.http_con_request(
                     http_con,
                     params={
@@ -554,21 +540,16 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     path="magic-link/authenticate",
                 )
 
-                self.assertEqual(
-                    auth_status, 302, auth_body
-                )  # Should redirect with auth code
+                self.assertEqual(auth_status, 302, auth_body)
 
-                # Should redirect to callback_url with auth code
                 location = auth_headers.get("location", "")
                 self.assertTrue(location.startswith(callback_url))
 
-                # Parse auth code from redirect
                 parsed_url = urllib.parse.urlparse(location)
                 query_params = urllib.parse.parse_qs(parsed_url.query)
                 auth_code = query_params.get("code", [None])[0]
                 self.assertIsNotNone(auth_code)
 
-                # Step 4: Exchange auth code for token
                 token_body, token_headers, token_status = self.http_con_request(
                     http_con,
                     params={
@@ -588,7 +569,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 token_data = json.loads(token_body)
                 self.assertIn("auth_token", token_data)
 
-                # Step 5: Test OTC webhook events were sent
                 async for tr in self.try_until_succeeds(
                     delay=2, timeout=120, ignore=(KeyError, AssertionError)
                 ):
@@ -596,11 +576,8 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                         requests_for_webhook = self.mock_net_server.requests[
                             webhook_request
                         ]
-                        # Should have 4 webhook events: IdentityCreated, EmailFactorCreated,
-                        # OneTimeCodeRequested, OneTimeCodeVerified
                         self.assertEqual(len(requests_for_webhook), 4)
 
-                # Parse and validate webhook events
                 event_types: dict[str, dict | None] = {
                     "IdentityCreated": None,
                     "EmailFactorCreated": None,
@@ -615,12 +592,10 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     self.assertIn(event_type, event_types)
                     event_types[event_type] = event_data
 
-                # Verify all expected events were received
                 self.assertTrue(
                     all(value is not None for value in event_types.values())
                 )
 
-                                # Validate OneTimeCodeRequested event
                 otc_requested = cast(dict, event_types["OneTimeCodeRequested"])
                 self.assertIn("identity_id", otc_requested)
                 self.assertIn("email_factor_id", otc_requested)
@@ -628,11 +603,9 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 self.assertIn("one_time_code", otc_requested)
                 self.assertIn("event_id", otc_requested)
                 self.assertIn("timestamp", otc_requested)
-                # Verify the code is a 6-digit string
                 self.assertEqual(len(otc_requested["one_time_code"]), 6)
                 self.assertTrue(otc_requested["one_time_code"].isdigit())
 
-                # Validate OneTimeCodeVerified event
                 otc_verified = cast(dict, event_types["OneTimeCodeVerified"])
                 self.assertIn("identity_id", otc_verified)
                 self.assertIn("email_factor_id", otc_verified)
@@ -640,31 +613,30 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 self.assertIn("event_id", otc_verified)
                 self.assertIn("timestamp", otc_verified)
 
-                # Verify the OTC events have the same identity and factor IDs
                 self.assertEqual(
-                    otc_requested["identity_id"],
-                    otc_verified["identity_id"]
+                    otc_requested["identity_id"], otc_verified["identity_id"]
                 )
                 self.assertEqual(
                     otc_requested["email_factor_id"],
-                    otc_verified["email_factor_id"]
+                    otc_verified["email_factor_id"],
                 )
 
         finally:
-            # Clean up webhook config
             await self.con.query(
                 "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
             )
-            # Restore original Magic Link provider config
-            await self.con.query("""
+            await self.con.query(
+                """
                 CONFIGURE CURRENT DATABASE
                 RESET ext::auth::MagicLinkProviderConfig;
                 CONFIGURE CURRENT DATABASE
                 INSERT ext::auth::MagicLinkProviderConfig {};
-            """)
+            """
+            )
 
-    async def test_http_ext_auth_otc_magic_link_01(self):
-        """Test Magic Link OTC cross-device: initiate on device A, verify on device B.
+    async def test_http_auth_ext_otc_magic_link_01(self):
+        """Test Magic Link OTC cross-device: initiate on device A, verify on
+        device B.
 
         Tests the cross-device authentication scenario where a user initiates
         authentication on one device but completes verification on another. This
@@ -672,8 +644,8 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         challenges work correctly across different sessions.
         """
 
-        # Configure for OTC
-        await self.con.query("""
+        await self.con.query(
+            """
             CONFIGURE CURRENT DATABASE
             RESET ext::auth::MagicLinkProviderConfig;
 
@@ -681,7 +653,8 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             INSERT ext::auth::MagicLinkProviderConfig {
                 verification_method := ext::auth::VerificationMethod.Code,
             };
-        """)
+        """
+        )
 
         email = f"{uuid.uuid4()}@example.com"
         callback_url = "https://example.com/app/auth/callback"
@@ -689,7 +662,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         pkce_device_a = self.generate_pkce_pair()
         pkce_device_b = self.generate_pkce_pair()
 
-        # Device A: Initiate flow
         with self.http_con() as http_con_device_a:
             body, headers, status = self.http_con_request(
                 http_con_device_a,
@@ -711,7 +683,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             )
             self.assertEqual(status, 200, body)
 
-        # Get OTC from email
         file_name_hash = hashlib.sha256(f"{SENDER}{email}".encode()).hexdigest()
         test_file = os.environ.get(
             "EDGEDB_TEST_EMAIL_FILE",
@@ -727,7 +698,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         code_match = re.search(r'(?:^|\s)(\d{6})(?:\s|$)', html_content)
         otc_code = code_match.group(1)
 
-        # Device B: Verify with new PKCE challenge
         with self.http_con() as http_con_device_b:
             auth_body, auth_headers, auth_status = self.http_con_request(
                 http_con_device_b,
@@ -744,14 +714,12 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
 
             self.assertEqual(auth_status, 302, auth_body)
 
-            # Should successfully redirect with auth code
             location = auth_headers.get("location", "")
             self.assertTrue(
                 location.startswith(callback_url),
                 f"Expected callback_url: {callback_url}, got: {location}",
             )
 
-            # Verify can exchange for token using Device B's verifier
             parsed_url = urllib.parse.urlparse(location)
             query_params = urllib.parse.parse_qs(parsed_url.query)
             auth_code = query_params.get("code", [None])[0]
@@ -770,17 +738,18 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             token_data = json.loads(token_body)
             self.assertIn("auth_token", token_data)
 
-    async def test_http_ext_auth_otc_email_password_00(self):
+    async def test_http_auth_ext_otc_email_password_00(self):
         """Test Email+Password OTC flow: register -> email with code -> verify.
 
-        Tests the complete Email+Password registration and verification flow when
-        configured for OTC mode. Validates that registration sends verification
-        codes instead of links, codes can be extracted and used for verification,
-        and successful verification allows subsequent authentication.
+        Tests the complete Email+Password registration and verification flow
+        when configured for OTC mode. Validates that registration sends
+        verification codes instead of links, codes can be extracted and used for
+        verification, and successful verification allows subsequent
+        authentication.
         """
 
-        # Configure Email+Password provider to use Code verification
-        await self.con.query("""
+        await self.con.query(
+            """
             CONFIGURE CURRENT DATABASE
             RESET ext::auth::EmailPasswordProviderConfig;
 
@@ -789,9 +758,9 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 require_verification := true,
                 verification_method := ext::auth::VerificationMethod.Code,
             };
-        """)
+        """
+        )
 
-        # Set up webhook configuration to test OTC webhook events
         base_url = self.mock_net_server.get_base_url().rstrip("/")
         webhook_url = f"{base_url}/email-otc-webhook"
         await self.con.query(
@@ -816,9 +785,7 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             base_url,
             "/email-otc-webhook",
         )
-        self.mock_net_server.register_route_handler(*webhook_request)(
-            ("", 204)
-        )
+        self.mock_net_server.register_route_handler(*webhook_request)(("", 204))
 
         await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
 
@@ -828,7 +795,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
 
         try:
             with self.http_con() as http_con:
-                # Step 1: Register (should send OTC email, not verification link)
                 form_data = {
                     "provider": "builtin::local_emailpassword",
                     "email": email,
@@ -842,12 +808,13 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     method="POST",
                     path="register",
                     body=form_data_encoded,
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
                 )
 
                 self.assertEqual(status, 201, body)
 
-                # Step 2: Get the OTC from verification email
                 file_name_hash = hashlib.sha256(
                     f"{SENDER}{email}".encode()
                 ).hexdigest()
@@ -860,39 +827,39 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
 
                 msg = cast(EmailMessage, email_args["message"])
                 html_content = (
-                    msg.get_body(('html',)).get_payload(decode=True).decode('utf-8')
+                    msg.get_body(('html',))
+                    .get_payload(decode=True)
+                    .decode('utf-8')
                 )
 
-                # Extract the 6-digit code from email
                 code_match = re.search(r'(?:^|\s)(\d{6})(?:\s|$)', html_content)
                 self.assertIsNotNone(
                     code_match, "No 6-digit code found in verification email"
                 )
                 otc_code = code_match.group(1)
 
-                # Step 3: Verify email with the code
-                verify_body, verify_headers, verify_status = self.http_con_request(
-                    http_con,
-                    method="POST",
-                    path="verify",
-                    body=json.dumps(
-                        {
-                            "provider": "builtin::local_emailpassword",
-                            "email": email,
-                            "code": otc_code,
-                            "challenge": challenge,
-                        }
-                    ).encode(),
-                    headers={"Content-Type": "application/json"},
+                verify_body, verify_headers, verify_status = (
+                    self.http_con_request(
+                        http_con,
+                        method="POST",
+                        path="verify",
+                        body=json.dumps(
+                            {
+                                "provider": "builtin::local_emailpassword",
+                                "email": email,
+                                "code": otc_code,
+                                "challenge": challenge,
+                            }
+                        ).encode(),
+                        headers={"Content-Type": "application/json"},
+                    )
                 )
 
                 self.assertEqual(verify_status, 200, verify_body)
 
-                # Should return successful verification response
                 verify_data = json.loads(verify_body)
                 self.assertEqual(verify_data.get("status"), "verified")
 
-                # Step 4: Now should be able to authenticate with email+password
                 auth_body, auth_headers, auth_status = self.http_con_request(
                     http_con,
                     method="POST",
@@ -912,7 +879,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 auth_data = json.loads(auth_body)
                 code = auth_data.get("code")
 
-                # Step 5: Exchange auth code for token
                 token_body, token_headers, token_status = self.http_con_request(
                     http_con,
                     params={
@@ -926,7 +892,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 token_data = json.loads(token_body)
                 self.assertIn("auth_token", token_data)
 
-                # Step 6: Test webhook events were sent
                 async for tr in self.try_until_succeeds(
                     delay=2, timeout=120, ignore=(KeyError, AssertionError)
                 ):
@@ -934,11 +899,8 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                         requests_for_webhook = self.mock_net_server.requests[
                             webhook_request
                         ]
-                        # Should have 5 webhook events: IdentityCreated, EmailFactorCreated,
-                        # OneTimeCodeRequested, OneTimeCodeVerified, EmailVerified
                         self.assertEqual(len(requests_for_webhook), 5)
 
-                # Parse and validate webhook events
                 event_types: dict[str, dict | None] = {
                     "IdentityCreated": None,
                     "EmailFactorCreated": None,
@@ -954,49 +916,40 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     self.assertIn(event_type, event_types)
                     event_types[event_type] = event_data
 
-                # Verify all expected events were received
                 self.assertTrue(
                     all(value is not None for value in event_types.values())
                 )
 
-                # Validate OneTimeCodeRequested event structure
                 otc_requested = cast(dict, event_types["OneTimeCodeRequested"])
                 self.assertIn("identity_id", otc_requested)
                 self.assertIn("email_factor_id", otc_requested)
                 self.assertIn("otc_id", otc_requested)
                 self.assertIn("one_time_code", otc_requested)
-                # Verify the code is a 6-digit string
                 self.assertEqual(len(otc_requested["one_time_code"]), 6)
                 self.assertTrue(otc_requested["one_time_code"].isdigit())
 
-                # Validate OneTimeCodeVerified event structure
                 otc_verified = cast(dict, event_types["OneTimeCodeVerified"])
                 self.assertIn("identity_id", otc_verified)
                 self.assertIn("email_factor_id", otc_verified)
                 self.assertIn("otc_id", otc_verified)
 
-                # Validate EmailVerified event (should be sent after OTC verification)
                 email_verified = cast(dict, event_types["EmailVerified"])
                 self.assertIn("identity_id", email_verified)
                 self.assertIn("email_factor_id", email_verified)
 
-                # Verify the events reference the same identity
                 self.assertEqual(
-                    otc_requested["identity_id"],
-                    otc_verified["identity_id"]
+                    otc_requested["identity_id"], otc_verified["identity_id"]
                 )
                 self.assertEqual(
-                    otc_verified["identity_id"],
-                    email_verified["identity_id"]
+                    otc_verified["identity_id"], email_verified["identity_id"]
                 )
 
         finally:
-            # Clean up webhook config
             await self.con.query(
                 "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
             )
 
-    async def test_http_ext_auth_otc_email_password_01(self):
+    async def test_http_auth_ext_otc_email_password_01(self):
         """Test Email+Password OTC verification with invalid code.
 
         Ensures that Email+Password verification properly rejects invalid codes
@@ -1004,8 +957,8 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         of preventing unauthorized account verification through invalid codes.
         """
 
-        # Configure for OTC
-        await self.con.query("""
+        await self.con.query(
+            """
             CONFIGURE CURRENT DATABASE
             RESET ext::auth::EmailPasswordProviderConfig;
 
@@ -1014,13 +967,13 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 require_verification := true,
                 verification_method := ext::auth::VerificationMethod.Code,
             };
-        """)
+        """
+        )
 
         email = f"{uuid.uuid4()}@example.com"
         password = "test_password_invalid"
 
         with self.http_con() as http_con:
-            # Register to create factor
             form_data = {
                 "provider": "builtin::local_emailpassword",
                 "email": email,
@@ -1037,7 +990,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
-            # Try to verify with invalid code
             verify_body, verify_headers, verify_status = self.http_con_request(
                 http_con,
                 method="POST",
@@ -1046,7 +998,7 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     {
                         "provider": "builtin::local_emailpassword",
                         "email": email,
-                        "code": "000000",  # Invalid code
+                        "code": "000000",
                     }
                 ).encode(),
                 headers={"Content-Type": "application/json"},
@@ -1056,16 +1008,17 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             verify_data = json.loads(verify_body)
             self.assertIn("error", verify_data)
 
-    async def test_http_ext_auth_otc_webhook_failure_events(self):
-        """Test that webhook events are properly sent/not sent during OTC failures.
+    async def test_http_auth_ext_otc_webhook_failure_events(self):
+        """Test that webhook events are properly sent/not sent during OTC
+        failures.
 
         Verifies that OneTimeCodeRequested is sent during registration, but
-        OneTimeCodeVerified is NOT sent when verification fails with invalid codes.
-        This ensures webhook consistency and proper failure handling.
+        OneTimeCodeVerified is NOT sent when verification fails with invalid
+        codes. This ensures webhook consistency and proper failure handling.
         """
 
-        # Configure for OTC
-        await self.con.query("""
+        await self.con.query(
+            """
             CONFIGURE CURRENT DATABASE
             RESET ext::auth::EmailPasswordProviderConfig;
 
@@ -1074,9 +1027,9 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 require_verification := true,
                 verification_method := ext::auth::VerificationMethod.Code,
             };
-        """)
+        """
+        )
 
-        # Set up webhook configuration
         base_url = self.mock_net_server.get_base_url().rstrip("/")
         webhook_url = f"{base_url}/failure-webhook"
         await self.con.query(
@@ -1100,9 +1053,7 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             base_url,
             "/failure-webhook",
         )
-        self.mock_net_server.register_route_handler(*webhook_request)(
-            ("", 204)
-        )
+        self.mock_net_server.register_route_handler(*webhook_request)(("", 204))
 
         await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
 
@@ -1111,7 +1062,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
 
         try:
             with self.http_con() as http_con:
-                # Step 1: Register (should send OneTimeCodeRequested)
                 form_data = {
                     "provider": "builtin::local_emailpassword",
                     "email": email,
@@ -1125,27 +1075,29 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     method="POST",
                     path="register",
                     body=form_data_encoded,
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
                 )
                 self.assertEqual(status, 201, body)
 
-                # Step 2: Try to verify with invalid code (should NOT send OneTimeCodeVerified)
-                verify_body, verify_headers, verify_status = self.http_con_request(
-                    http_con,
-                    method="POST",
-                    path="verify",
-                    body=json.dumps(
-                        {
-                            "provider": "builtin::local_emailpassword",
-                            "email": email,
-                            "code": "000000",  # Invalid code
-                        }
-                    ).encode(),
-                    headers={"Content-Type": "application/json"},
+                verify_body, verify_headers, verify_status = (
+                    self.http_con_request(
+                        http_con,
+                        method="POST",
+                        path="verify",
+                        body=json.dumps(
+                            {
+                                "provider": "builtin::local_emailpassword",
+                                "email": email,
+                                "code": "000000",
+                            }
+                        ).encode(),
+                        headers={"Content-Type": "application/json"},
+                    )
                 )
                 self.assertEqual(verify_status, 400, verify_body)
 
-                # Step 3: Verify webhook events
                 async for tr in self.try_until_succeeds(
                     delay=2, timeout=120, ignore=(KeyError, AssertionError)
                 ):
@@ -1153,11 +1105,8 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                         requests_for_webhook = self.mock_net_server.requests[
                             webhook_request
                         ]
-                        # Should have 3 webhook events: IdentityCreated, EmailFactorCreated,
-                        # OneTimeCodeRequested (but NOT OneTimeCodeVerified)
                         self.assertEqual(len(requests_for_webhook), 3)
 
-                # Parse and validate webhook events
                 received_event_types = set()
                 for request in requests_for_webhook:
                     assert request.body is not None
@@ -1165,34 +1114,32 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     event_type = event_data["event_type"]
                     received_event_types.add(event_type)
 
-                # Verify expected events were received
                 expected_events = {
                     "IdentityCreated",
                     "EmailFactorCreated",
-                    "OneTimeCodeRequested"
+                    "OneTimeCodeRequested",
                 }
                 self.assertEqual(received_event_types, expected_events)
 
-                # Verify OneTimeCodeVerified was NOT sent
                 self.assertNotIn("OneTimeCodeVerified", received_event_types)
 
         finally:
-            # Clean up webhook config
             await self.con.query(
                 "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
             )
 
-    async def test_http_ext_auth_otc_email_password_02(self):
-        """Test that Email+Password still works with verification_method=Link (default).
+    async def test_http_auth_ext_otc_email_password_02(self):
+        """Test that Email+Password still works with verification_method=Link
 
-        Validates backward compatibility by ensuring Email+Password authentication
-        continues to work with traditional link-based verification. This ensures
-        that existing implementations using verification links continue to function
-        without modification when the OTC feature is added.
+        Validates backward compatibility by ensuring Email+Password
+        authentication continues to work with traditional link-based
+        verification. This ensures that existing implementations using
+        verification links continue to function without modification when the
+        OTC feature is added.
         """
 
-        # Ensure Email+Password provider uses Link mode (default)
-        await self.con.query("""
+        await self.con.query(
+            """
             CONFIGURE CURRENT DATABASE
             RESET ext::auth::EmailPasswordProviderConfig;
 
@@ -1201,13 +1148,13 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 require_verification := true,
                 verification_method := ext::auth::VerificationMethod.Link,
             };
-        """)
+        """
+        )
 
         email = f"{uuid.uuid4()}@example.com"
         password = "test_password_link_mode"
 
         with self.http_con() as http_con:
-            # Register (should send traditional verification link)
             form_data = {
                 "provider": "builtin::local_emailpassword",
                 "email": email,
@@ -1226,7 +1173,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
 
             self.assertEqual(status, 201, body)
 
-            # Get traditional verification link from email
             file_name_hash = hashlib.sha256(
                 f"{SENDER}{email}".encode()
             ).hexdigest()
@@ -1242,7 +1188,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 msg.get_body(('html',)).get_payload(decode=True).decode('utf-8')
             )
 
-            # Should contain verification link with token, not OTC
             link_match = re.search(
                 r'<p style="word-break: break-all">([^<]+)', html_content
             )
@@ -1256,23 +1201,23 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             )[0]
             self.assertIsNotNone(verification_token)
 
-            # Should NOT contain 6-digit code
             code_match = re.search(r'(?:^|\s)(\d{6})(?:\s|$)', html_content)
             self.assertIsNone(
                 code_match, "Unexpected OTC found in Link mode email"
             )
 
-    async def test_http_ext_auth_otc_12(self):
-        """Test that expired OTCs are cleaned up during any verification attempt.
+    async def test_http_auth_ext_otc_12(self):
+        """Test that expired OTCs are cleaned up during any verification
+        attempt.
 
-        Validates that the verification process automatically removes expired OTCs
-        from the database during any verification attempt, not just successful ones.
-        This prevents database bloat and maintains clean state even when users
-        attempt to verify with invalid or expired codes.
+        Validates that the verification process automatically removes expired
+        OTCs from the database during any verification attempt, not just
+        successful ones. This prevents database bloat and maintains clean state
+        even when users attempt to verify with invalid or expired codes.
         """
 
-        # Configure for OTC
-        await self.con.query("""
+        await self.con.query(
+            """
             CONFIGURE CURRENT DATABASE
             RESET ext::auth::MagicLinkProviderConfig;
 
@@ -1280,7 +1225,8 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             INSERT ext::auth::MagicLinkProviderConfig {
                 verification_method := ext::auth::VerificationMethod.Code,
             };
-        """)
+        """
+        )
 
         email = f"{uuid.uuid4()}@example.com"
         callback_url = "https://example.com/app/auth/callback"
@@ -1288,7 +1234,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         verifier, challenge = self.generate_pkce_pair()
 
         with self.http_con() as http_con:
-            # Create factor by registering
             register_body, register_headers, register_status = (
                 self.http_con_request(
                     http_con,
@@ -1322,7 +1267,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 email=email,
             )
 
-            # Manually create several expired OTCs in the database
             expired_time = utcnow() - datetime.timedelta(minutes=5)
             for i in range(3):
                 await self.con.query(
@@ -1338,8 +1282,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                     expires_at=expired_time,
                 )
 
-            # Verify there are 4 expired codes: 3 from the loop above, plus the
-            # one that was created by the register request.
             expired_codes_query = """
                 SELECT count(
                     SELECT ext::auth::OneTimeCode
@@ -1352,7 +1294,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             )
             self.assertEqual(expired_count, 4)
 
-            # Try to verify with invalid code - should trigger cleanup
             self.http_con_request(
                 http_con,
                 params={
@@ -1365,15 +1306,15 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 path="magic-link/authenticate",
             )
 
-            # All the manually created expired codes should be cleaned up
             remaining_count = await self.con.query_single(
                 expired_codes_query,
                 factor_id=factor.id,
             )
             self.assertEqual(remaining_count, 1)
 
-    async def test_http_ext_auth_otc_13(self):
-        """Test that rate limiting works across different OTC verification attempts.
+    async def test_http_auth_ext_otc_13(self):
+        """Test that rate limiting works across different OTC verification
+        attempts.
 
         Ensures that rate limiting is properly enforced across multiple failed
         verification attempts and that the system blocks further attempts after
@@ -1381,8 +1322,8 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         brute force attacks on OTC verification endpoints.
         """
 
-        # Configure for OTC
-        await self.con.query("""
+        await self.con.query(
+            """
             CONFIGURE CURRENT DATABASE
             RESET ext::auth::MagicLinkProviderConfig;
 
@@ -1390,7 +1331,8 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             INSERT ext::auth::MagicLinkProviderConfig {
                 verification_method := ext::auth::VerificationMethod.Code,
             };
-        """)
+        """
+        )
 
         email = f"{uuid.uuid4()}@example.com"
         callback_url = "https://example.com/app/auth/callback"
@@ -1398,7 +1340,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
         verifier, challenge = self.generate_pkce_pair()
 
         with self.http_con() as http_con:
-            # Register to create factor
             register_body, register_headers, register_status = (
                 self.http_con_request(
                     http_con,
@@ -1421,7 +1362,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
             )
             self.assertEqual(register_status, 200, register_body)
 
-            # Make 5 failed attempts to trigger rate limiting
             for i in range(5):
                 body, headers, status = self.http_con_request(
                     http_con,
@@ -1440,7 +1380,6 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 self.assertEqual(status, 400, body)
                 self.assertIn("invalid code", body.decode().lower())
 
-            # 6th attempt should be rate limited
             body, headers, status = self.http_con_request(
                 http_con,
                 params={
@@ -1456,5 +1395,4 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
                 },
             )
             self.assertEqual(status, 400, body)
-            # Should contain rate limiting message
             self.assertIn("attempts exceeded", body.decode().lower())

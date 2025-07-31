@@ -68,6 +68,7 @@ class Client(local.Client):
                     name=cfg.name,
                     relying_party_origin=cfg.relying_party_origin,
                     require_verification=cfg.require_verification,
+                    verification_method=cfg.verification_method,
                 )
 
         raise errors.MissingConfiguration(

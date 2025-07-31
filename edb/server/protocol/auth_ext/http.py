@@ -63,6 +63,7 @@ from . import (
     webhook,
     jwt,
     otc,
+    local,
 )
 from .data import EmailFactor
 
@@ -754,7 +755,6 @@ class Router:
     ) -> None:
         data = self._get_data_from_request(request)
 
-        # Check for OTC mode (email + code) vs Link mode (verification_token)
         verification_token = data.get("verification_token")
         email = data.get("email")
         code = data.get("code")
@@ -764,13 +764,12 @@ class Router:
             raise errors.InvalidData('Missing "provider" in verify request')
 
         if verification_token:
-            # Link mode verification
-            token = jwt.VerificationToken.verify(
-                verification_token,
-                self.signing_key,
-            )
-
             try:
+                token = jwt.VerificationToken.verify(
+                    verification_token,
+                    self.signing_key,
+                )
+
                 email_factor = await self._try_verify_email(
                     provider=provider,
                     identity_id=token.subject,
@@ -786,7 +785,7 @@ class Router:
             except errors.VerificationTokenExpired:
                 response.status = http.HTTPStatus.FORBIDDEN
                 response.content_type = b"application/json"
-                error_message = "The 'iat' claim in verification token is older than 24 hours"
+                error_message = "The verification token is older than 24 hours"
                 logger.error(f"Verification token expired: {error_message}")
                 response.body = json.dumps({"message": error_message}).encode()
                 return
@@ -822,37 +821,34 @@ class Router:
                     return
 
         elif email and code:
-            # OTC mode verification - validate required fields
             _check_keyset(data, {"email", "code", "provider"})
 
-            if provider != "builtin::local_emailpassword":
-                raise errors.InvalidData(
-                    "OTC verification only supported for email+password provider"
-                )
+            email_client: local.Client
+            if provider == "builtin::local_emailpassword":
+                email_client = email_password.Client(db=self.db)
+            elif provider == "builtin::local_webauthn":
+                email_client = webauthn.Client(db=self.db)
+            else:
+                raise errors.InvalidData(f"Unsupported provider: {provider}")
 
             try:
-                email_password_client = email_password.Client(db=self.db)
-                email_factor = (
-                    await email_password_client.get_email_factor_by_email(email)
+                maybe_email_factor = (
+                    await email_client.get_email_factor_by_email(email)
                 )
-                if email_factor is None:
+                if maybe_email_factor is None:
                     raise errors.NoIdentityFound("Invalid email")
 
-                # Verify the OTC using the mega query
-                otc_id = await otc.verify(self.db, str(email_factor.id), code)
-                logger.info(
-                    f"OTC verified successfully: otc_id={otc_id}, email={email}"
-                )
+                email_factor = maybe_email_factor
 
-                # Send webhook and increment metrics for successful OTC verification
+                otc_id = await otc.verify(self.db, str(email_factor.id), code)
+
                 await self._handle_otc_verified(
                     identity_id=str(email_factor.identity.id),
                     email_factor_id=str(email_factor.id),
                     otc_id=str(otc_id),
                 )
 
-                # Mark email as verified
-                verified_email_factor = await self._try_verify_email(
+                await self._try_verify_email(
                     provider=provider,
                     identity_id=email_factor.identity.id,
                 )
@@ -867,7 +863,8 @@ class Router:
                 )
 
                 logger.info(
-                    f"Email verified via OTC: identity_id={email_factor.identity.id}, "
+                    f"Email verified via OTC: "
+                    f"identity_id={email_factor.identity.id}, "
                     f"email_factor_id={email_factor.id}, "
                     f"email={email}"
                 )
@@ -878,7 +875,6 @@ class Router:
                 return
 
             except Exception as ex:
-                # Determine failure reason for metrics
                 failure_reason = "unknown"
                 error_msg = str(ex)
                 if "Maximum verification attempts exceeded" in error_msg:
@@ -890,7 +886,6 @@ class Router:
                 elif "Verification failed" in error_msg:
                     failure_reason = "verification_failed"
 
-                # Track failure metrics
                 self._handle_otc_failed(failure_reason)
 
                 response.status = http.HTTPStatus.BAD_REQUEST
@@ -902,7 +897,8 @@ class Router:
 
         else:
             raise errors.InvalidData(
-                'Must provide either "verification_token" (Link mode) or "email" + "code" (OTC mode)'
+                'Must provide either "verification_token" (Link mode) '
+                'or "email" + "code" (OTC mode)'
             )
 
     async def handle_resend_verification_email(
@@ -1044,9 +1040,7 @@ class Router:
                 )
                 identity_id = email_factor.identity.id
 
-                # Check verification method and branch accordingly
                 if email_password_client.config.verification_method == "Code":
-                    # OTC flow: create code and send OTC email
                     code, otc_id = await otc.create(
                         self.db,
                         str(email_factor.id),
@@ -1060,7 +1054,6 @@ class Router:
                         test_mode=self.test_mode,
                     )
 
-                    # Send webhook and increment metrics for OTC initiation
                     await self._handle_otc_initiated(
                         identity_id=identity_id,
                         email_factor_id=str(email_factor.id),
@@ -1069,11 +1062,13 @@ class Router:
                     )
 
                     logger.info(
-                        f"Sent OTC password reset email: email={email}, otc_id={otc_id}"
+                        "Sent OTC password reset email: "
+                        f"email={email}, otc_id={otc_id}"
                     )
-                    redirect_url_path = f"/ui/reset-password?code=true&email={urllib.parse.quote(email)}"
+                    redirect_url_path = (
+                        f"/ui/reset-password?code=true&email={urllib.parse.quote(email)}"
+                    )
                 else:
-                    # Link flow: create token and send link email (existing behavior)
                     new_reset_token = jwt.ResetToken(
                         subject=identity_id,
                         secret=secret,
@@ -1113,7 +1108,6 @@ class Router:
                 await auth_emails.send_fake_email(self.tenant)
                 redirect_url_path = "/ui/reset-password"
 
-            # For password reset flows, redirect directly to the appropriate page
             if allowed_redirect_to:
                 final_redirect_url = f"{self.base_path}{redirect_url_path}"
                 return self._do_redirect(
@@ -1166,7 +1160,6 @@ class Router:
     ) -> None:
         data = self._get_data_from_request(request)
 
-        # Check for OTC mode (email + code + password) vs Token mode (reset_token + password)
         reset_token = data.get('reset_token')
         email = data.get('email')
         code = data.get('code')
@@ -1202,7 +1195,8 @@ class Router:
                 )
                 response_dict = {"code": code}
                 logger.info(
-                    f"Reset password via token: identity_id={token.subject}, pkce_id={code}"
+                    "Reset password via token: "
+                    f"identity_id={token.subject}, pkce_id={code}"
                 )
 
             elif email and code:
@@ -1211,7 +1205,8 @@ class Router:
 
                 if provider != "builtin::local_emailpassword":
                     raise errors.InvalidData(
-                        "OTC password reset only supported for email+password provider"
+                        "OTC password reset only supported for "
+                        "email+password provider"
                     )
 
                 # Get email factor
@@ -1227,17 +1222,16 @@ class Router:
                         self.db, str(email_factor.id), code
                     )
                     logger.info(
-                        f"OTC verified for password reset: otc_id={otc_id}, email={email}"
+                        "OTC verified for password reset: "
+                        f"otc_id={otc_id}, email={email}"
                     )
 
-                    # Send webhook and increment metrics for successful OTC verification
                     await self._handle_otc_verified(
                         identity_id=email_factor.identity.id,
                         email_factor_id=str(email_factor.id),
                         otc_id=str(otc_id),
                     )
                 except Exception as ex:
-                    # Determine failure reason for metrics
                     failure_reason = "unknown"
                     error_msg = str(ex)
                     if "Maximum verification attempts exceeded" in error_msg:
@@ -1249,13 +1243,9 @@ class Router:
                     elif "Verification failed" in error_msg:
                         failure_reason = "verification_failed"
 
-                    # Track failure metrics
                     self._handle_otc_failed(failure_reason)
-
-                    # Re-raise the exception to preserve existing behavior
                     raise
 
-                # Update password - we need to get the secret first
                 try:
                     (
                         _,
@@ -1273,12 +1263,14 @@ class Router:
 
                 response_dict = {"status": "password_reset"}
                 logger.info(
-                    f"Reset password via OTC: identity_id={email_factor.identity.id}, email={email}"
+                    "Reset password via OTC: "
+                    f"identity_id={email_factor.identity.id}, email={email}"
                 )
 
             else:
                 raise errors.InvalidData(
-                    'Must provide either "reset_token" (Token mode) or "email" + "code" (OTC mode)'
+                    'Must provide either "reset_token" (Token mode) '
+                    'or "email" + "code" (OTC mode)'
                 )
 
             if allowed_redirect_to:
@@ -1303,13 +1295,16 @@ class Router:
                     f"Error resetting password: error={error_message}, "
                     f"reset_token={reset_token}, email={email}"
                 )
+                error_params = {
+                    "error": error_message,
+                }
+                if reset_token:
+                    error_params["reset_token"] = reset_token
+                if email:
+                    error_params["email"] = email
                 redirect_url = util.join_url_params(
                     redirect_on_failure,
-                    {
-                        "error": error_message,
-                        "reset_token": reset_token,
-                        "email": email,
-                    },
+                    error_params,
                 )
                 return self._try_redirect(response, redirect_url)
             else:
@@ -1410,9 +1405,7 @@ class Router:
                 f"email={email}"
             )
 
-            # Check verification method and branch accordingly
             if magic_link_client.provider.verification_method == "Code":
-                # OTC flow: create code and send OTC email
                 code, otc_id = await otc.create(
                     self.db,
                     str(email_factor.id),
@@ -1426,7 +1419,6 @@ class Router:
                     test_mode=self.test_mode,
                 )
 
-                # Send webhook and increment metrics for OTC initiation
                 await self._handle_otc_initiated(
                     identity_id=str(email_factor.identity.id),
                     email_factor_id=str(email_factor.id),
@@ -1444,7 +1436,6 @@ class Router:
                     f"&callback_url={urllib.parse.quote(callback_url)}"
                 )
             else:
-                # Link flow: send magic link (existing behavior)
                 await magic_link_client.send_magic_link(
                     email=email,
                     link_url=link_url,
@@ -1463,7 +1454,6 @@ class Router:
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
             elif allowed_redirect_to:
-                # For Magic Link flows, redirect directly to the appropriate page
                 final_redirect_url = f"{self.base_path}{redirect_url_path}"
                 return self._do_redirect(
                     response,
@@ -1607,7 +1597,6 @@ class Router:
                         f"&callback_url={urllib.parse.quote(callback_url)}"
                     )
                 else:
-                    # Link flow: send magic link (existing behavior)
                     await magic_link_client.send_magic_link(
                         email=email,
                         token=magic_link_token,
@@ -1620,7 +1609,6 @@ class Router:
                     )
                     redirect_url_path = "/ui/magic-link-sent"
 
-            # For Magic Link flows, redirect directly to the appropriate page
             if allowed_redirect_to:
                 final_redirect_url = f"{self.base_path}{redirect_url_path}"
                 return self._do_redirect(
@@ -1699,8 +1687,8 @@ class Router:
                 else:
                     error_message = str(ex)
                     logger.error(
-                        f"Error authenticating magic link: error={error_message}, "
-                        f"token={token_str}"
+                        "Error authenticating magic link: "
+                        f"error={error_message}, token={token_str}"
                     )
                     redirect_url = util.join_url_params(
                         redirect_on_failure,
@@ -1713,7 +1701,6 @@ class Router:
             try:
                 data = self._get_data_from_request(request)
 
-                # Validate that all required fields are present
                 _check_keyset(
                     data, {"email", "code", "challenge", "callback_url"}
                 )
@@ -1736,30 +1723,23 @@ class Router:
                     signing_key=self.signing_key,
                 )
 
-                # Get email factor for this email
                 email_factor = (
                     await magic_link_client.get_email_factor_by_email(email)
                 )
                 if email_factor is None:
                     raise errors.NoIdentityFound("Invalid email")
 
-                # Verify the OTC using the mega query
                 try:
                     otc_id = await otc.verify(
                         self.db, str(email_factor.id), code_str
                     )
-                    logger.info(
-                        f"OTC verified successfully: otc_id={otc_id}, email={email}"
-                    )
 
-                    # Send webhook and increment metrics for successful OTC verification
                     await self._handle_otc_verified(
                         identity_id=str(email_factor.identity.id),
                         email_factor_id=str(email_factor.id),
                         otc_id=str(otc_id),
                     )
                 except Exception as ex:
-                    # Determine failure reason for metrics
                     failure_reason = "unknown"
                     error_msg = str(ex)
                     if "Maximum verification attempts exceeded" in error_msg:
@@ -1771,19 +1751,14 @@ class Router:
                     elif "Verification failed" in error_msg:
                         failure_reason = "verification_failed"
 
-                    # Track failure metrics
                     self._handle_otc_failed(failure_reason)
-
-                    # Re-raise the exception to preserve existing behavior
                     raise
 
-                # Create PKCE challenge and link identity
                 await pkce.create(self.db, challenge)
                 auth_code = await pkce.link_identity_challenge(
                     self.db, email_factor.identity.id, challenge
                 )
 
-                # Mark email as verified
                 await magic_link_client.verify_email(
                     email_factor.identity.id,
                     datetime.datetime.now(datetime.timezone.utc),
@@ -1799,7 +1774,6 @@ class Router:
                     query, "redirect_on_failure"
                 )
                 if redirect_on_failure is None:
-                    # For OTC flow, return 400 error with JSON response
                     response.status = http.HTTPStatus.BAD_REQUEST
                     response.content_type = b"application/json"
                     response.body = json.dumps(
@@ -2526,9 +2500,6 @@ class Router:
         request: protocol.HttpRequest,
         response: protocol.HttpResponse,
     ) -> None:
-        """
-        Success page for when a magic link is sent or code input form for OTC flow
-        """
         query = urllib.parse.parse_qs(
             request.url.query.decode("ascii") if request.url.query else ""
         )
@@ -2593,11 +2564,8 @@ class Router:
         otc_id: str,
         one_time_code: str,
     ) -> None:
-        """Handle OTC creation: send webhook and increment metrics."""
-        # Increment metrics
         metrics.otc_initiated_total.inc(1.0, self.tenant.get_instance_name())
 
-        # Send webhook
         await self._maybe_send_webhook(
             webhook.OneTimeCodeRequested(
                 event_id=str(uuid.uuid4()),
@@ -2616,11 +2584,8 @@ class Router:
     async def _handle_otc_verified(
         self, identity_id: str, email_factor_id: str, otc_id: str
     ) -> None:
-        """Handle successful OTC verification: send webhook and increment metrics."""
-        # Increment metrics
         metrics.otc_verified_total.inc(1.0, self.tenant.get_instance_name())
 
-        # Send webhook
         await self._maybe_send_webhook(
             webhook.OneTimeCodeVerified(
                 event_id=str(uuid.uuid4()),
@@ -2634,8 +2599,6 @@ class Router:
         logger.info(f"OTC verified: identity_id={identity_id}, otc_id={otc_id}")
 
     def _handle_otc_failed(self, reason: str) -> None:
-        """Handle failed OTC verification: increment metrics."""
-        # Increment metrics
         metrics.otc_failed_total.inc(
             1.0, self.tenant.get_instance_name(), reason
         )
@@ -2716,6 +2679,7 @@ class Router:
                 name=provider.name,
                 relying_party_origin=provider.relying_party_origin,
                 require_verification=provider.require_verification,
+                verification_method=provider.verification_method,
             )
         else:
             return None
@@ -2780,7 +2744,8 @@ class Router:
                     )
 
                     logger.info(
-                        f"Sent OTC verification email: email={to_addr}, otc_id={otc_id}"
+                        "Sent OTC verification email: "
+                        f"email={to_addr}, otc_id={otc_id}"
                     )
                     return
 
