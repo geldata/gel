@@ -506,7 +506,7 @@ class TestHttpExtAuthOtc(tb.ExtAuthTestCase):
 
                 response_data = json.loads(body)
                 self.assertIn(
-                    "code=true", response_data.get("redirect_url", "")
+                    email, response_data.get("email_sent", "")
                 )
 
                 file_name_hash = hashlib.sha256(

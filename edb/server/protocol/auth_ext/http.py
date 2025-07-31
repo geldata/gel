@@ -1108,17 +1108,18 @@ class Router:
                 await auth_emails.send_fake_email(self.tenant)
                 redirect_url_path = "/ui/reset-password"
 
+            return_data = {
+                "email_sent": email,
+            }
+
             if allowed_redirect_to:
-                final_redirect_url = f"{self.base_path}{redirect_url_path}"
                 return self._do_redirect(
                     response,
-                    self._make_allowed_url(final_redirect_url),
+                    allowed_redirect_to.map(
+                        lambda u: util.join_url_params(u, return_data)
+                    ),
                 )
             else:
-                return_data = {
-                    "email_sent": email,
-                    "redirect_url": f"{self.base_path}{redirect_url_path}",
-                }
                 response.status = http.HTTPStatus.OK
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
@@ -1430,11 +1431,6 @@ class Router:
                     f"Sent OTC email: identity_id={email_factor.identity.id}, "
                     f"email={email}, otc_id={otc_id}"
                 )
-                redirect_url_path = (
-                    f"/ui/magic-link-sent?code=true&email={urllib.parse.quote(email)}"
-                    f"&challenge={urllib.parse.quote(challenge)}"
-                    f"&callback_url={urllib.parse.quote(callback_url)}"
-                )
             else:
                 await magic_link_client.send_magic_link(
                     email=email,
@@ -1442,11 +1438,9 @@ class Router:
                     redirect_on_failure=allowed_redirect_on_failure.url,
                     token=magic_link_token,
                 )
-                redirect_url_path = "/ui/magic-link-sent"
 
             return_data = {
                 "email_sent": email,
-                "redirect_url": f"{self.base_path}{redirect_url_path}",
             }
 
             if request_accepts_json:
@@ -1454,10 +1448,11 @@ class Router:
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
             elif allowed_redirect_to:
-                final_redirect_url = f"{self.base_path}{redirect_url_path}"
                 return self._do_redirect(
                     response,
-                    self._make_allowed_url(final_redirect_url),
+                    allowed_redirect_to.map(
+                        lambda u: util.join_url_params(u, return_data)
+                    ),
                 )
             else:
                 # This should not happen since we check earlier for this case
@@ -1591,11 +1586,6 @@ class Router:
                         f"Sent OTC email: identity_id={identity_id}, "
                         f"email={email}, otc_id={otc_id}"
                     )
-                    redirect_url_path = (
-                        f"/ui/magic-link-sent?code=true&email={urllib.parse.quote(email)}"
-                        f"&challenge={urllib.parse.quote(challenge)}"
-                        f"&callback_url={urllib.parse.quote(callback_url)}"
-                    )
                 else:
                     await magic_link_client.send_magic_link(
                         email=email,
@@ -1607,19 +1597,19 @@ class Router:
                         "Sent magic link email: "
                         f"identity_id={identity_id}, email={email}"
                     )
-                    redirect_url_path = "/ui/magic-link-sent"
+
+            return_data = {
+                "email_sent": email,
+            }
 
             if allowed_redirect_to:
-                final_redirect_url = f"{self.base_path}{redirect_url_path}"
                 return self._do_redirect(
                     response,
-                    self._make_allowed_url(final_redirect_url),
+                    allowed_redirect_to.map(
+                        lambda u: util.join_url_params(u, return_data)
+                    ),
                 )
             else:
-                return_data = {
-                    "email_sent": email,
-                    "redirect_url": f"{self.base_path}{redirect_url_path}",
-                }
                 response.status = http.HTTPStatus.OK
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
