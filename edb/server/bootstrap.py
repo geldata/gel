@@ -2603,7 +2603,10 @@ async def _bootstrap_edgedb_super_roles(ctx: BootstrapContext) -> uuid.UUID:
 async def _bootstrap(
     ctx: BootstrapContext,
     no_template: bool=False,
-) -> edbcompiler.Compiler:
+) -> tuple[
+    StdlibBits,
+    edbcompiler.Compiler
+]:
     args = ctx.args
     cluster = ctx.cluster
     backend_params = cluster.get_runtime_params()
@@ -2822,7 +2825,7 @@ async def _bootstrap(
             args.default_database_user or edbdef.EDGEDB_SUPERUSER,
         )
 
-    return compiler
+    return stdlib, compiler
 
 
 async def ensure_bootstrapped(
@@ -2844,7 +2847,7 @@ async def ensure_bootstrapped(
         mode = await _get_cluster_mode(ctx)
         ctx = dataclasses.replace(ctx, mode=mode)
         if mode == ClusterMode.pristine:
-            compiler = await _bootstrap(ctx)
+            _, compiler = await _bootstrap(ctx)
             return True, compiler
         else:
             compiler = await _start(ctx)

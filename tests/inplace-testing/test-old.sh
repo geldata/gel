@@ -70,6 +70,10 @@ fi
 # Prepare the upgrades
 EDGEDB_PORT=$PORT EDGEDB_CLIENT_TLS_SECURITY=insecure python3 tests/inplace-testing/prep-upgrades.py > "${DIR}/upgrade.json"
 
+if [ "$SAVE_TARBALLS" = 1 ]; then
+    tar cf "$DIR"-ready.tar "$DIR"
+fi
+
 # Get the DSN from the debug endpoint
 DSN=$(curl -s http://localhost:$PORT/server-info | jq -r '.pg_addr.dsn')
 
