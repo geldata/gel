@@ -1065,9 +1065,6 @@ class Router:
                         "Sent OTC password reset email: "
                         f"email={email}, otc_id={otc_id}"
                     )
-                    redirect_url_path = (
-                        f"/ui/reset-password?code=true&email={urllib.parse.quote(email)}"
-                    )
                 else:
                     new_reset_token = jwt.ResetToken(
                         subject=identity_id,
@@ -1098,7 +1095,6 @@ class Router:
                         reset_url=reset_url,
                         test_mode=self.test_mode,
                     )
-                    redirect_url_path = "/ui/reset-password"
 
             except errors.NoIdentityFound:
                 logger.debug(
@@ -1106,7 +1102,6 @@ class Router:
                     f"email={email}"
                 )
                 await auth_emails.send_fake_email(self.tenant)
-                redirect_url_path = "/ui/reset-password"
 
             return_data = {
                 "email_sent": email,
