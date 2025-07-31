@@ -194,10 +194,10 @@ def _compile_schema_fixup(
     return current_block
 
 
-async def _collect_upgrade_patches(
+async def _collect_6x_upgrade_patches(
     ctx: bootstrap.BootstrapContext,
     schema: s_schema.Schema,
-) -> list[qlast.Command]:
+) -> tuple[list[qlast.Command], bool]:
     from edb.pgsql import patches_6x
 
     cmds: list[qlast.Command] = []
@@ -212,8 +212,8 @@ async def _collect_upgrade_patches(
             WHERE key = 'num_patches'
             """.encode('utf-8'),
         )
-    except pgcon.BackendError:
-        return []
+    except pgcon.BackendError as e:
+        return [], False
     jnum = json.loads(res)
     for kind, patch in patches_6x.PATCHES[jnum:]:
 
@@ -233,7 +233,15 @@ async def _collect_upgrade_patches(
                 ddl_cmd = qlast.DDLQuery(query=ddl_cmd)
             cmds.append(ddl_cmd)
 
-    return cmds
+    # 6.2 introduced a change to EmbeddingModel (the addition of a new
+    # default value) that requires a repair to sync the user schema up
+    # with, since ai index annotations get copied into objects.
+    needs_repair = bool(
+        jnum <= patches_6x.PATCHES.index(('ext-pkg', 'ai'))
+        and schema.get_global(s_exts.Extension, 'ai', default=None)
+    )
+
+    return cmds, needs_repair
 
 
 async def _apply_ddl_schema_storage(
@@ -342,10 +350,6 @@ async def _upgrade_one(
         testmode=True,
     )
 
-    # fixup_ddl = ''
-    # cmds = [(x, False) for x in edgeql.parse_block(ddl)]
-    # cmds += await _collect_upgrade_patches(ctx)
-
     # Apply the DDL, but usually *only* execute the schema storage part!!
     # For the actual core DDL, only do schema storage.
     # Sometimes we have to run extension patch code, and then we
@@ -357,12 +361,27 @@ async def _upgrade_one(
         )
 
     schema_fixup = ''
-    for ddl_cmd in await _collect_upgrade_patches(ctx, schema):
+    upgrade_patches, needs_repair = await _collect_6x_upgrade_patches(
+        ctx, schema
+    )
+    for ddl_cmd in upgrade_patches:
         schema, fixup = await _apply_ddl_schema_storage(
             ddl_cmd,
             ctx, backend_params, keys, compilerctx, schema, schema_object_ids
         )
         schema_fixup += fixup
+
+    # If we need to do a schema, repair... do it
+    if needs_repair:
+        repair = bootstrap.prepare_repair_patch(
+            state.std_schema,
+            state.refl_schema,
+            schema.get_top_schema(),
+            schema.get_global_schema(),
+            state.schema_class_layout,
+            backend_params,
+        )
+        schema_fixup += repair
 
     # Refresh the pg_catalog materialized views
     current_block = dbops.PLTopBlock()
