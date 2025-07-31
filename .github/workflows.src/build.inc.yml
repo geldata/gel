@@ -68,7 +68,7 @@
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/<< plat_id >>@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-<< plat_id >>:latest
       env:
         PACKAGE: "<< package.name >>"
         SRC_REF: "${{ github.sha }}"
@@ -202,7 +202,7 @@
         path: artifacts/<< plat_id >>
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/<< plat_id >>@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-<< plat_id >>:latest
       env:
         <%- if subdist != "" %>
         PKG_SUBDIST: "<< subdist >>"
@@ -282,7 +282,7 @@
         path: artifacts/<< plat_id >>
 
     - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
+      uses: docker://ghcr.io/geldata/gelpkg-upload-linux-x86_64:latest
       env:
         <%- if subdist != "" %>
         PKG_SUBDIST: "<< subdist >>"
@@ -312,7 +312,7 @@
         target: << plat_id >>
 
     - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/<< plat_id >>@master
+      uses: docker://ghcr.io/geldata/gelpkg-testpublished-<< plat_id >>:latest
       env:
         PKG_NAME: "${{ steps.describe.outputs.name }}"
         <%- if subdist != "" %>
@@ -360,7 +360,7 @@
         target: << plat_id >>
 
     - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
+      uses: docker://ghcr.io/geldata/gelpkg-upload-linux-x86_64:latest
       env:
         <%- if subdist != "" %>
         PKG_SUBDIST: "<< subdist >>"

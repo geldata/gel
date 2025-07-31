@@ -605,7 +605,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/debian-buster@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-debian-buster:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -630,7 +630,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/debian-buster@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-debian-buster:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -655,7 +655,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/debian-bullseye@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-debian-bullseye:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -680,7 +680,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/debian-bullseye@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-debian-bullseye:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -705,7 +705,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/debian-bookworm@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-debian-bookworm:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -730,7 +730,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/debian-bookworm@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-debian-bookworm:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -755,7 +755,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-focal@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-ubuntu-focal:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -780,7 +780,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-focal@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-ubuntu-focal:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -805,7 +805,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-jammy@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-ubuntu-jammy:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -830,7 +830,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-jammy@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-ubuntu-jammy:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -855,7 +855,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-noble@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-ubuntu-noble:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -880,7 +880,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/ubuntu-noble@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-ubuntu-noble:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -905,7 +905,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/centos-8@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-centos-8:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -930,7 +930,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/centos-8@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-centos-8:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -955,7 +955,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/rockylinux-9@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-rockylinux-9:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -980,7 +980,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/rockylinux-9@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-rockylinux-9:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -1005,7 +1005,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/linux-x86_64@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-linux-x86_64:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -1031,7 +1031,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/linux-aarch64@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-linux-aarch64:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -1057,7 +1057,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/linuxmusl-x86_64@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-linuxmusl-x86_64:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -1084,7 +1084,7 @@ jobs:
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/linuxmusl-aarch64@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-linuxmusl-aarch64:latest
       env:
         PACKAGE: "edgedbpkg.edgedb:Gel"
         SRC_REF: "${{ github.sha }}"
@@ -1275,7 +1275,7 @@ jobs:
         path: artifacts/debian-buster
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/debian-buster@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-debian-buster:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "debian"
@@ -1299,7 +1299,7 @@ jobs:
         path: artifacts/debian-buster
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/debian-buster@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-debian-buster:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "debian"
@@ -1323,7 +1323,7 @@ jobs:
         path: artifacts/debian-bullseye
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/debian-bullseye@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-debian-bullseye:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "debian"
@@ -1347,7 +1347,7 @@ jobs:
         path: artifacts/debian-bullseye
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/debian-bullseye@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-debian-bullseye:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "debian"
@@ -1371,7 +1371,7 @@ jobs:
         path: artifacts/debian-bookworm
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/debian-bookworm@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-debian-bookworm:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "debian"
@@ -1395,7 +1395,7 @@ jobs:
         path: artifacts/debian-bookworm
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/debian-bookworm@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-debian-bookworm:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "debian"
@@ -1419,7 +1419,7 @@ jobs:
         path: artifacts/ubuntu-focal
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/ubuntu-focal@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-ubuntu-focal:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "ubuntu"
@@ -1443,7 +1443,7 @@ jobs:
         path: artifacts/ubuntu-focal
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/ubuntu-focal@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-ubuntu-focal:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "ubuntu"
@@ -1467,7 +1467,7 @@ jobs:
         path: artifacts/ubuntu-jammy
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/ubuntu-jammy@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-ubuntu-jammy:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "ubuntu"
@@ -1491,7 +1491,7 @@ jobs:
         path: artifacts/ubuntu-jammy
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/ubuntu-jammy@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-ubuntu-jammy:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "ubuntu"
@@ -1515,7 +1515,7 @@ jobs:
         path: artifacts/ubuntu-noble
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/ubuntu-noble@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-ubuntu-noble:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "ubuntu"
@@ -1539,7 +1539,7 @@ jobs:
         path: artifacts/ubuntu-noble
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/ubuntu-noble@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-ubuntu-noble:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "ubuntu"
@@ -1563,7 +1563,7 @@ jobs:
         path: artifacts/centos-8
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/centos-8@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-centos-8:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "centos"
@@ -1587,7 +1587,7 @@ jobs:
         path: artifacts/centos-8
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/centos-8@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-centos-8:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "centos"
@@ -1611,7 +1611,7 @@ jobs:
         path: artifacts/rockylinux-9
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/rockylinux-9@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-rockylinux-9:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "rockylinux"
@@ -1635,7 +1635,7 @@ jobs:
         path: artifacts/rockylinux-9
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/rockylinux-9@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-rockylinux-9:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "rockylinux"
@@ -1659,7 +1659,7 @@ jobs:
         path: artifacts/linux-x86_64
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/linux-x86_64@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-linux-x86_64:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "linux"
@@ -1683,7 +1683,7 @@ jobs:
         path: artifacts/linux-aarch64
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/linux-aarch64@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-linux-aarch64:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "linux"
@@ -1707,7 +1707,7 @@ jobs:
         path: artifacts/linuxmusl-x86_64
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/linuxmusl-x86_64@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-linuxmusl-x86_64:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "linux"
@@ -1731,7 +1731,7 @@ jobs:
         path: artifacts/linuxmusl-aarch64
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/linuxmusl-aarch64@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-linuxmusl-aarch64:latest
       env:
         PKG_SUBDIST: "nightly"
         PKG_PLATFORM: "linux"
