@@ -1013,6 +1013,11 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
         res = await conn.fetch(query, *args)
         return [list(r.values()) for r in res]
 
+    async def assert_sql_con_query_data(self, conn, query, expected, *args):
+        res = await conn.fetch(query, *args)
+        data = [list(r.values()) for r in res]
+        self.assert_data_shape(data, expected)
+
     async def test_server_permissions_sql_dml_01(self):
         # Non-superuser cannot use INSERT statements
 
@@ -1215,6 +1220,187 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
                 DROP ROLE foo;
             ''')
 
+    async def test_server_permissions_sql_apply_access_policies_01(self):
+        # Check that default value for apply_access_policies_pg is
+        # - True for superuser
+        # - False for non-superuser
+
+        await self.con.query('''
+            CREATE TYPE Widget {
+                CREATE PROPERTY n -> int64;
+                CREATE ACCESS POLICY ap_select ALLOW SELECT USING (false);
+                CREATE ACCESS POLICY ap_insert ALLOW INSERT;
+            };
+            INSERT Widget { n := 1 };
+            INSERT Widget { n := 2 };
+            INSERT Widget { n := 3 };
+            CREATE SUPERUSER ROLE Super {
+                SET password := 'secret';
+            };
+            CREATE ROLE NonSuper {
+                SET password := 'secret';
+            };
+        ''')
+
+        conn_super = None
+        conn_non_super = None
+
+        try:
+            conn_super = await self.create_sql_connection(
+                user='Super',
+                password='secret',
+            )
+            await self.assert_sql_con_query_data(
+                conn_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+                tb.bag([[1], [2], [3]]),
+            )
+
+            conn_non_super = await self.create_sql_connection(
+                user='NonSuper',
+                password='secret',
+            )
+            await self.assert_sql_con_query_data(
+                conn_non_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+                tb.bag([])
+            )
+
+        finally:
+            if conn_super:
+                await conn_super.close()
+            if conn_non_super:
+                await conn_non_super.close()
+            await self.con.query('''
+                DROP ROLE Super;
+                DROP ROLE NonSuper;
+                DROP TYPE Widget;
+            ''')
+
+    async def test_server_permissions_sql_apply_access_policies_02(self):
+        # Check that changing apply_access_policies_pg interacts correctly with
+        # the query cache
+
+        await self.con.query('''
+            CREATE TYPE Widget {
+                CREATE PROPERTY n -> int64;
+                CREATE ACCESS POLICY ap_select ALLOW SELECT USING (false);
+                CREATE ACCESS POLICY ap_insert ALLOW INSERT;
+            };
+            INSERT Widget { n := 1 };
+            INSERT Widget { n := 2 };
+            INSERT Widget { n := 3 };
+            CREATE SUPERUSER ROLE Super {
+                SET password := 'secret';
+            };
+            CREATE ROLE NonSuper {
+                SET password := 'secret';
+            };
+        ''')
+
+        conn_super = None
+        conn_non_super = None
+
+        async def reconnect():
+            # We need to reconnect every time the setting changes to get the
+            # updated values.
+            nonlocal conn_super
+            nonlocal conn_non_super
+            if conn_super:
+                await conn_super.close()
+                conn_super = None
+            if conn_non_super:
+                await conn_non_super.close()
+                conn_non_super = None
+            conn_super = await self.create_sql_connection(
+                user='Super',
+                password='secret',
+            )
+            conn_non_super = await self.create_sql_connection(
+                user='NonSuper',
+                password='secret',
+            )
+
+        try:
+            await reconnect()
+
+            # default apply_access_policies_pg
+            await self.assert_sql_con_query_data(
+                conn_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+                tb.bag([[1], [2], [3]]),
+            )
+            await self.assert_sql_con_query_data(
+                conn_non_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+                tb.bag([]),
+            )
+
+            # set apply_access_policies_pg := true
+            await self.con.query('''
+                CONFIGURE CURRENT BRANCH
+                SET cfg::apply_access_policies_pg := true;
+            ''')
+            await reconnect()
+
+            await self.assert_sql_con_query_data(
+                conn_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+                tb.bag([]),
+            )
+            await self.assert_sql_con_query_data(
+                conn_non_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+                tb.bag([]),
+            )
+
+            # set apply_access_policies_pg := false
+            await self.con.query('''
+                CONFIGURE CURRENT BRANCH
+                SET cfg::apply_access_policies_pg := false;
+            ''')
+            await reconnect()
+
+            await self.assert_sql_con_query_data(
+                conn_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+                tb.bag([[1], [2], [3]]),
+            )
+            await self.assert_sql_con_query_data(
+                conn_non_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+                tb.bag([[1], [2], [3]]),
+            )
+
+            # reset apply_access_policies_pg
+            await self.con.query('''
+                CONFIGURE CURRENT BRANCH
+                RESET cfg::apply_access_policies_pg;
+            ''')
+            await reconnect()
+
+            await self.assert_sql_con_query_data(
+                conn_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+                tb.bag([[1], [2], [3]]),
+            )
+            await self.assert_sql_con_query_data(
+                conn_non_super,
+                'SELECT "n" FROM "Widget" ORDER BY "n"',
+                tb.bag([]),
+            )
+
+        finally:
+            if conn_super:
+                await conn_super.close()
+            if conn_non_super:
+                await conn_non_super.close()
+            await self.con.query('''
+                DROP ROLE Super;
+                DROP ROLE NonSuper;
+                DROP TYPE Widget;
+            ''')
+
     async def test_server_permissions_sql_access_policy_01(self):
         # Non-DML access policies using permissions
 
@@ -1254,36 +1440,30 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
                 user='Super',
                 password='secret',
             )
-            res = await self.sql_con_query_values(
+            await self.assert_sql_con_query_data(
                 conn_super,
                 'SELECT "n" FROM "Widget" ORDER BY "n"',
-            )
-            self.assert_data_shape(
-                res, tb.bag([[1], [2], [3]])
+                tb.bag([[1], [2], [3]]),
             )
 
             conn_with_perm = await self.create_sql_connection(
                 user='WithPerm',
                 password='secret',
             )
-            res = await self.sql_con_query_values(
+            await self.assert_sql_con_query_data(
                 conn_with_perm,
                 'SELECT "n" FROM "Widget" ORDER BY "n"',
-            )
-            self.assert_data_shape(
-                res, tb.bag([[1], [2], [3]])
+                tb.bag([[1], [2], [3]])
             )
 
             conn_no_perm = await self.create_sql_connection(
                 user='NoPerm',
                 password='secret',
             )
-            res = await self.sql_con_query_values(
+            await self.assert_sql_con_query_data(
                 conn_no_perm,
                 'SELECT "n" FROM "Widget" ORDER BY "n"',
-            )
-            self.assert_data_shape(
-                res, tb.bag([])
+                tb.bag([]),
             )
 
         finally:

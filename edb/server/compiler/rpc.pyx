@@ -171,6 +171,7 @@ cdef class CompilationRequest:
         system_config: Mapping[str, config.SettingValue] | None = None,
         role_name: str = defines.EDGEDB_SUPERUSER,
         branch_name: str = defines.EDGEDB_SUPERUSER_DB,
+        default_apply_access_policy_pg: bool = True,
         key_params: Mapping[str, object] | None = None,
     ):
         self.serializer = compilation_config_serializer
@@ -191,6 +192,7 @@ cdef class CompilationRequest:
         self.system_config = system_config
         self.role_name = role_name
         self.branch_name = branch_name
+        self.default_apply_access_policy_pg = default_apply_access_policy_pg
         self.key_params = key_params
 
         self.serialized_cache = None
@@ -218,6 +220,7 @@ cdef class CompilationRequest:
             system_config=self.system_config,
             role_name=self.role_name,
             branch_name=self.branch_name,
+            default_apply_access_policy_pg=self.default_apply_access_policy_pg,
             key_params=self.key_params,
         )
         rv.serialized_cache = self.serialized_cache
@@ -313,6 +316,10 @@ cdef class CompilationRequest:
             self.inline_objectids == other.inline_objectids and
             self.role_name == other.role_name and
             self.branch_name == other.branch_name and
+            (
+                self.default_apply_access_policy_pg
+                == other.default_apply_access_policy_pg
+            ) and
             self.key_params == other.key_params
         )
 
@@ -397,6 +404,7 @@ cdef _deserialize_comp_req_v1(
     # * 1 byte input language (the same as in the binary protocol)
     # * role_name as a UTF-8 encoded string
     # * branch_name as a UTF-8 encoded string
+    # * default_apply_access_policy_pg as 1 byte
 
     cdef char flags
 
@@ -467,6 +475,7 @@ cdef _deserialize_comp_req_v1(
     input_language = deserialize_input_language(buf.read_byte())
     role_name = buf.read_len_prefixed_utf8()
     branch_name = buf.read_len_prefixed_utf8()
+    default_apply_access_policy_pg = buf.read_byte()
 
     if input_language is enums.InputLanguage.EDGEQL:
         source = tokenizer.deserialize(serialized_source, query_text)
@@ -499,6 +508,7 @@ cdef _deserialize_comp_req_v1(
         session_config=session_config,
         role_name=role_name,
         branch_name=branch_name,
+        default_apply_access_policy_pg=default_apply_access_policy_pg,
         key_params=key_params,
     )
 
@@ -589,5 +599,11 @@ cdef _serialize_comp_req(req: CompilationRequest):
     branch_name = req.branch_name.encode("utf-8")
     out.write_len_prefixed_bytes(branch_name)
     hash_obj.update(branch_name)
+
+    default_apply_access_policy_pg = (
+        1 if req.default_apply_access_policy_pg else 0
+    )
+    out.write_byte(default_apply_access_policy_pg)
+    hash_obj.update(default_apply_access_policy_pg.to_bytes())
 
     return hash_obj, out

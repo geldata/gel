@@ -74,6 +74,7 @@ def compile_sql(
     current_database: str,
     allow_user_specified_id: Optional[bool],
     apply_access_policies: Optional[bool],
+    default_apply_access_policy: bool,
     include_edgeql_io_format_alternative: bool = False,
     allow_prepared_statements: bool = True,
     disambiguate_column_names: bool,
@@ -93,6 +94,7 @@ def compile_sql(
             current_database=current_database,
             allow_user_specified_id=allow_user_specified_id,
             apply_access_policies=apply_access_policies,
+            default_apply_access_policy=default_apply_access_policy,
             include_edgeql_io_format_alternative=(
                 include_edgeql_io_format_alternative),
             allow_prepared_statements=allow_prepared_statements,
@@ -200,6 +202,7 @@ def _compile_sql(
     current_database: str,
     allow_user_specified_id: Optional[bool],
     apply_access_policies: Optional[bool],
+    default_apply_access_policy: bool,
     include_edgeql_io_format_alternative: bool = False,
     allow_prepared_statements: bool = True,
     disambiguate_column_names: bool,
@@ -213,6 +216,7 @@ def _compile_sql(
         current_database=current_database,
         allow_user_specified_id=allow_user_specified_id,
         apply_access_policies=apply_access_policies,
+        default_apply_access_policy=default_apply_access_policy,
         include_edgeql_io_format_alternative=(
             include_edgeql_io_format_alternative
         ),
@@ -648,6 +652,7 @@ class ResolverOptionsPartial:
     query_str: str
     allow_user_specified_id: Optional[bool]
     apply_access_policies: Optional[bool]
+    default_apply_access_policy: bool
     include_edgeql_io_format_alternative: Optional[bool]
     disambiguate_column_names: bool
     normalized_params: list[int]
@@ -687,7 +692,7 @@ def resolve_query(
     if apply_access_policies is None:
         apply_access_policies = opts.apply_access_policies
     if apply_access_policies is None:
-        apply_access_policies = False
+        apply_access_policies = opts.default_apply_access_policy
 
     options = pg_resolver.Options(
         current_database=opts.current_database,

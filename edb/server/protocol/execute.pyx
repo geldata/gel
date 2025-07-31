@@ -219,6 +219,10 @@ async def _parse(
             len(query.encode('utf-8')), tenant.get_instance_name(), 'edgeql'
         )
 
+    default_apply_access_policy_pg = (
+        tenant.get_default_apply_access_policy_pg(role_name)
+    )
+
     query_req = rpc.CompilationRequest(
         source=edgeql.Source.from_string(query),
         protocol_version=edbdef.CURRENT_PROTOCOL,
@@ -227,6 +231,7 @@ async def _parse(
         input_format=input_format,
         output_format=output_format,
         role_name=role_name,
+        default_apply_access_policy_pg=default_apply_access_policy_pg,
     )
 
     compiled = await dbv.parse(

@@ -49,6 +49,7 @@ cdef class CompilationRequest:
         readonly bint inline_objectids
         readonly str role_name
         readonly str branch_name
+        readonly bint default_apply_access_policy_pg
 
         readonly object modaliases
         readonly object session_config

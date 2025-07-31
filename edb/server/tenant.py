@@ -431,6 +431,9 @@ class Tenant(ha_base.ClusterProtocol):
     def get_role_capabilities(self) -> Mapping[str, compiler_enums.Capability]:
         return self._role_capabilities
 
+    def get_default_apply_access_policy_pg(self, role_name: str) -> bool:
+        return not bool(self._roles[role_name].get('superuser'))
+
     def _refresh_role_capabilities(self) -> None:
         role_capabilities: dict[str, compiler_enums.Capability] = {}
 

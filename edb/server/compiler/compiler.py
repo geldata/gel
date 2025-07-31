@@ -156,6 +156,7 @@ class CompileContext:
     notebook: bool = False
     branch_name: Optional[str] = None
     role_name: Optional[str] = None
+    default_apply_access_policy_pg: bool = True
     cache_key: Optional[uuid.UUID] = None
 
     def get_cache_mode(self) -> config.QueryCacheMode:
@@ -550,6 +551,7 @@ class Compiler:
         prepared_stmt_map: Mapping[str, str],
         current_database: str,
         current_user: str,
+        default_apply_access_policy: bool,
     ) -> list[dbstate.SQLQueryUnit]:
         state = dbstate.CompilerConnectionState(
             user_schema=user_schema,
@@ -569,7 +571,7 @@ class Compiler:
 
         setting = database_config.get('apply_access_policies_pg', None)
         apply_access_policies_pg = None
-        if setting and setting.value:
+        if setting:
             apply_access_policies_pg = sql.is_setting_truthy(setting.value)
 
         return sql.compile_sql(
@@ -580,6 +582,7 @@ class Compiler:
             current_database=current_database,
             allow_user_specified_id=allow_user_specified_id,
             apply_access_policies=apply_access_policies_pg,
+            default_apply_access_policy=default_apply_access_policy,
             disambiguate_column_names=False,
             backend_runtime_params=self.state.backend_runtime_params,
             protocol_version=defines.POSTGRES_PROTOCOL,
@@ -678,6 +681,9 @@ class Compiler:
             protocol_version=request.protocol_version,
             role_name=request.role_name,
             branch_name=request.branch_name,
+            default_apply_access_policy_pg=(
+                request.default_apply_access_policy_pg
+            ),
             cache_key=request.get_cache_key(),
         )
 
@@ -792,6 +798,9 @@ class Compiler:
             protocol_version=request.protocol_version,
             json_parameters=request.input_format is enums.InputFormat.JSON,
             expect_rollback=expect_rollback,
+            default_apply_access_policy_pg=(
+                request.default_apply_access_policy_pg
+            ),
             cache_key=request.get_cache_key(),
         )
 
@@ -2791,6 +2800,7 @@ def compile_sql_as_unit_group(
         tx_state=sql_tx_state,
         prepared_stmt_map={},
         current_database=ctx.branch_name or "<unknown>",
+        default_apply_access_policy=ctx.default_apply_access_policy_pg,
         allow_user_specified_id=allow_user_specified_id,
         apply_access_policies=apply_access_policies,
         include_edgeql_io_format_alternative=True,
