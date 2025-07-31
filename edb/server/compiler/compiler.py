@@ -317,6 +317,7 @@ def new_compiler_context(
         database_config=EMPTY_MAP,
         system_config=EMPTY_MAP,
         cached_reflection=EMPTY_MAP,
+        extension_refs=EMPTY_MAP,
     )
 
     ctx = CompileContext(
@@ -495,6 +496,7 @@ class Compiler:
             database_config=database_config,
             system_config=system_config,
             cached_reflection=reflection_cache,
+            extension_refs=extension_refs,
         )
 
         state.start_tx()
@@ -561,6 +563,7 @@ class Compiler:
             database_config=database_config,
             system_config=system_config,
             cached_reflection=reflection_cache,
+            extension_refs=extension_refs,
         )
         schema = state.current_tx().get_schema(self.state.std_schema)
 
@@ -667,6 +670,7 @@ class Compiler:
             database_config=database_config,
             system_config=system_config,
             cached_reflection=reflection_cache,
+            extension_refs=extension_refs,
         )
 
         ctx = CompileContext(
@@ -1162,6 +1166,7 @@ class Compiler:
             database_config=EMPTY_MAP,
             system_config=EMPTY_MAP,
             cached_reflection=EMPTY_MAP,
+            extension_refs=EMPTY_MAP,
         )
 
         ctx = CompileContext(
