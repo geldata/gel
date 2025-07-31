@@ -45,10 +45,7 @@ class SQLParamsSource:
         ...
 
 class CompilationRequest:
-    # FIXME: I didn't want to track down the errors when I put the right
-    # annotation in.
-    # source: edgeql.Source | graphql.Source | pgparser.Source
-    source: typing.Any
+    source: edgeql.Source | graphql.Source | pgparser.Source | SQLParamsSource
     protocol_version: defines.ProtocolVersion
     input_language: enums.InputLanguage
     output_format: enums.OutputFormat
