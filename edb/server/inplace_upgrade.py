@@ -212,7 +212,7 @@ async def _collect_6x_upgrade_patches(
             WHERE key = 'num_patches'
             """.encode('utf-8'),
         )
-    except pgcon.BackendError as e:
+    except pgcon.BackendError:
         return [], False
     jnum = json.loads(res)
     for kind, patch in patches_6x.PATCHES[jnum:]:
