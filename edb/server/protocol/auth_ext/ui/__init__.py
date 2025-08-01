@@ -127,6 +127,11 @@ def render_signin_page(
         magic_link_form=(
             render.render_magic_link_form(
                 base_email_form=base_email_factor_form,
+                callback_url=(
+                    redirect_to
+                    if magic_link_provider.verification_method == "Link"
+                    else None
+                ),
                 base_path=base_path,
                 provider_name=magic_link_provider.name,
                 verification_method=magic_link_provider.verification_method,
