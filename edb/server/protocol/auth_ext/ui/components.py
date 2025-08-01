@@ -785,9 +785,17 @@ def render_magic_link_form(
     base_email_form: str,
     base_path: str,
     provider_name: str,
+    callback_url: str | None = None,
     verification_method: str = "Link",
 ) -> str:
     button_text = get_magic_link_button_text(verification_method)
+    callback_field = (
+        f'''
+            <input type="hidden" name="callback_url" value="{callback_url}" />
+        '''
+        if verification_method == "Link"
+        else ""
+    )
 
     return f"""
         <form
@@ -806,6 +814,7 @@ def render_magic_link_form(
                 value="{base_path}/ui/signin?selected_tab=magic_link"
             />
             <input type="hidden" name="provider" value="{provider_name}" />
+            {callback_field}
             {base_email_form}
             {button(button_text, id="magic-link-signin")}
         </form>
