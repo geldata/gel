@@ -2853,6 +2853,29 @@ class TestUpdate(tb.QueryTestCase):
                 ) FILTER false;
             """)
 
+    async def test_edgeql_update_no_source_multi_01(self):
+        await self.con.execute("""
+            with x := assert_exists(
+                select UpdateTest filter .name = 'update-test3')
+            update x
+            set {
+                str_tags := x.comment
+            };
+        """)
+
+        await self.assert_query_result(
+            r"""
+                SELECT UpdateTest {
+                    str_tags
+                } filter .name = 'update-test3'
+            """,
+            [
+                {
+                    'str_tags': ['third'],
+                },
+            ]
+        )
+
     async def test_edgeql_update_insert_multi_required_01(self):
         await self.con.execute("""
             insert MultiRequiredTest {
