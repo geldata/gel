@@ -1146,11 +1146,11 @@ class Router:
 
         try:
             _check_keyset(data, {"password", "provider"})
+            password = data['password']
 
             reset_token = data.get('reset_token')
             email = data.get('email')
             code = data.get('code')
-            password = data.get('password')
             challenge = data.get('challenge')
 
             allowed_redirect_to = self._maybe_make_allowed_url(
@@ -1214,7 +1214,7 @@ class Router:
                     )
                 if challenge:
                     auth_code = await pkce.link_identity_challenge(
-                        self.db, email_factor.identity.id, token.challenge
+                        self.db, email_factor.identity.id, challenge
                     )
                     response_dict = {"code": auth_code}
                     logger.info(
