@@ -30,6 +30,8 @@ from . import errors
 
 logger = logging.getLogger(__name__)
 
+MAX_ATTEMPTS = 5
+
 
 def generate_code() -> str:
     return f"{secrets.randbelow(1000000):06d}"
@@ -111,7 +113,6 @@ async def verify(db: Any, factor_id: str, code: str) -> str:
     """
     code_hash = hash_code(code)
 
-    # Single composed query that handles the entire verification workflow
     r = await execute.parse_execute_json(
         db=db,
         query="""\
@@ -119,6 +120,7 @@ with
     factor_id := <uuid>$factor_id,
     FACTOR := (select ext::auth::Factor filter .id = factor_id),
     code_hash := <bytes>$code_hash,
+    MAX_ATTEMPTS := <int16>$max_attempts,
     now := datetime_current(),
     window_start := now - <duration>'10 minutes',
 
@@ -146,12 +148,11 @@ with
         limit 1
     ),
 
-    is_rate_limited := failed_attempts >= 5,
-    is_code_found := (exists otc) ?? false,
+    is_rate_limited := failed_attempts >= MAX_ATTEMPTS,
+    is_code_found := exists otc,
     is_code_expired := (otc.expires_at < now) ?? false,
     is_code_valid := (
-        (is_code_found and not is_code_expired and not is_rate_limited)
-        ?? false
+        is_code_found and not is_code_expired and not is_rate_limited
     ),
 
     # Delete OTC if valid (side effect)
@@ -171,7 +172,7 @@ with
                 successful := is_code_valid,
             }
         )
-        else (<ext::auth::AuthenticationAttempt>{})
+        else {}
     ),
 
 select {
@@ -186,6 +187,7 @@ select {
         variables={
             "factor_id": factor_id,
             "code_hash": code_hash,
+            "max_attempts": MAX_ATTEMPTS,
         },
         cached_globally=True,
         query_tag='gel/auth',
