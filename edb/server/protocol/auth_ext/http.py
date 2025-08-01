@@ -1355,6 +1355,7 @@ class Router:
 
                 return_data = {
                     "code": "true",
+                    "signup": "true",
                     "email": email,
                 }
 
@@ -1458,19 +1459,13 @@ class Router:
                     "provider",
                     "email",
                     "challenge",
-                    "callback_url",
                     "redirect_on_failure",
                 },
             )
 
             email = data["email"]
             challenge = data["challenge"]
-            callback_url = data["callback_url"]
             redirect_on_failure = data["redirect_on_failure"]
-            if not self._is_url_allowed(callback_url):
-                raise errors.InvalidData(
-                    "Callback URL does not match any allowed URLs.",
-                )
             if not self._is_url_allowed(redirect_on_failure):
                 raise errors.InvalidData(
                     "Error redirect URL does not match any allowed URLs.",
@@ -1507,21 +1502,6 @@ class Router:
                 await auth_emails.send_fake_email(self.tenant)
             else:
                 identity_id = email_factor.identity.id
-                magic_link_token = magic_link_client.make_magic_link_token(
-                    identity_id=identity_id,
-                    callback_url=callback_url,
-                    challenge=challenge,
-                )
-                await self._maybe_send_webhook(
-                    webhook.MagicLinkRequested(
-                        event_id=str(uuid.uuid4()),
-                        timestamp=datetime.datetime.now(datetime.timezone.utc),
-                        identity_id=identity_id,
-                        email_factor_id=email_factor.id,
-                        magic_link_token=magic_link_token,
-                        magic_link_url=link_url,
-                    )
-                )
                 if magic_link_client.provider.verification_method == "Code":
                     code, otc_id = await otc.create(
                         self.db,
@@ -1547,7 +1527,33 @@ class Router:
                         f"Sent OTC email: identity_id={identity_id}, "
                         f"email={email}, otc_id={otc_id}"
                     )
+
+                    return_data = {
+                        "code": "true",
+                        "email": email,
+                    }
                 else:
+                    _check_keyset(data, {"callback_url"})
+                    callback_url = data["callback_url"]
+                    if not self._is_url_allowed(callback_url):
+                        raise errors.InvalidData(
+                            "Callback URL does not match any allowed URLs.",
+                        )
+                    magic_link_token = magic_link_client.make_magic_link_token(
+                        identity_id=identity_id,
+                        callback_url=callback_url,
+                        challenge=challenge,
+                    )
+                    await self._maybe_send_webhook(
+                        webhook.MagicLinkRequested(
+                            event_id=str(uuid.uuid4()),
+                            timestamp=datetime.datetime.now(datetime.timezone.utc),
+                            identity_id=identity_id,
+                            email_factor_id=email_factor.id,
+                            magic_link_token=magic_link_token,
+                            magic_link_url=link_url,
+                        )
+                    )
                     await magic_link_client.send_magic_link(
                         email=email,
                         token=magic_link_token,
@@ -1559,9 +1565,9 @@ class Router:
                         f"identity_id={identity_id}, email={email}"
                     )
 
-            return_data = {
-                "email_sent": email,
-            }
+                    return_data = {
+                        "email_sent": email,
+                    }
 
             if allowed_redirect_to:
                 return self._do_redirect(
@@ -2442,35 +2448,51 @@ class Router:
         if ui_config is None:
             response.status = http.HTTPStatus.NOT_FOUND
             response.body = b'Auth UI not enabled'
+            return
+        app_details = self._get_app_details_config()
 
         query = urllib.parse.parse_qs(
             request.url.query.decode("ascii") if request.url.query else ""
         )
 
-        is_code_flow = "code" in query
-        maybe_email = _maybe_get_search_param(query, "email")
-        maybe_challenge = _get_pkce_challenge(
-            cookies=request.cookies, response=response, query_dict=query
-        )
-        error_message = _maybe_get_search_param(query, "error")
+        is_code_flow = _maybe_get_search_param(query, "code") == "true"
+        if is_code_flow:
+            is_signup = _maybe_get_search_param(query, "signup") == "true"
+            email = _get_search_param(query, "email")
+            challenge = _get_pkce_challenge(
+                cookies=request.cookies, response=response, query_dict=query
+            )
+            if challenge is None:
+                response.status = http.HTTPStatus.BAD_REQUEST
+                response.body = b'Missing challenge from cookie or query params'
+                return
 
-        app_details = self._get_app_details_config()
+            error_message = _maybe_get_search_param(query, "error")
+            callback_url = ui_config.redirect_to
+            if is_signup and ui_config.redirect_to_on_signup:
+                callback_url = ui_config.redirect_to_on_signup
+
+            content = ui.render_magic_link_sent_page_code_flow(
+                app_name=app_details.app_name,
+                logo_url=app_details.logo_url,
+                dark_logo_url=app_details.dark_logo_url,
+                brand_color=app_details.brand_color,
+                email=email,
+                challenge=challenge,
+                callback_url=callback_url,
+                error_message=error_message,
+            )
+        else:
+            content = ui.render_magic_link_sent_page_link_flow(
+                app_name=app_details.app_name,
+                logo_url=app_details.logo_url,
+                dark_logo_url=app_details.dark_logo_url,
+                brand_color=app_details.brand_color,
+            )
+
         response.status = http.HTTPStatus.OK
         response.content_type = b"text/html"
-        response.body = ui.render_magic_link_sent_page(
-            app_name=app_details.app_name,
-            logo_url=app_details.logo_url,
-            dark_logo_url=app_details.dark_logo_url,
-            brand_color=app_details.brand_color,
-            is_code_flow=is_code_flow,
-            email=maybe_email,
-            base_path=self.base_path if is_code_flow else None,
-            challenge=maybe_challenge,
-            callback_url=(
-                ui_config.redirect_to_on_signup or ui_config.redirect_to
-            ),
-            error_message=error_message,
-        )
+        response.body = content
 
     def _get_webhook_config(self) -> list[config.WebhookConfig]:
         raw_webhook_configs = util.get_config(
