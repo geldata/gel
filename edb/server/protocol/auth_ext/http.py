@@ -1514,9 +1514,7 @@ class Router:
                         magic_link_url=link_url,
                     )
                 )
-                # Check verification method and branch accordingly
                 if magic_link_client.provider.verification_method == "Code":
-                    # OTC flow: create code and send OTC email
                     code, otc_id = await otc.create(
                         self.db,
                         str(email_factor.id),
@@ -1530,7 +1528,6 @@ class Router:
                         test_mode=self.test_mode,
                     )
 
-                    # Send webhook and increment metrics for OTC initiation
                     await self._handle_otc_initiated(
                         identity_id=str(identity_id),
                         email_factor_id=str(email_factor.id),
@@ -2153,14 +2150,12 @@ class Router:
                 request.url.query.decode("ascii") if request.url.query else ""
             )
 
-            # Check if this is a code flow (OTC) or token flow
             is_code_flow = "code" in query
             maybe_email = _maybe_get_search_param(query, "email")
             error_message = _maybe_get_search_param(query, "error")
             reset_token = _maybe_get_search_param(query, 'reset_token')
 
             if is_code_flow and maybe_email:
-                # Code flow - show code input form for password reset
                 app_details_config = self._get_app_details_config()
                 response.status = http.HTTPStatus.OK
                 response.content_type = b'text/html'
@@ -2181,7 +2176,6 @@ class Router:
                 )
                 return
 
-            # Token flow (existing logic)
             if reset_token is not None:
                 try:
                     token = jwt.ResetToken.verify(reset_token, self.signing_key)
@@ -2236,7 +2230,6 @@ class Router:
             request.url.query.decode("ascii") if request.url.query else ""
         )
 
-        # Check if this is a code flow (OTC) or link flow
         is_code_flow = "code" in query
         maybe_email = _maybe_get_search_param(query, "email")
         maybe_provider = _maybe_get_search_param(query, "provider")
@@ -2244,7 +2237,6 @@ class Router:
         error_message = _maybe_get_search_param(query, "error")
 
         if is_code_flow:
-            # Code flow - show code input form
             if not maybe_email or not maybe_provider:
                 error_messages.append(
                     "Missing email or provider for code verification."
@@ -2270,7 +2262,6 @@ class Router:
             )
             return
 
-        # Link flow (existing logic)
         is_valid = True
         maybe_pkce_code: str | None = None
         redirect_to = ui_config.redirect_to_on_signup or ui_config.redirect_to
@@ -2658,11 +2649,9 @@ class Router:
         provider: str,
         to_addr: str,
     ) -> None:
-        # Check verification method for email+password provider
         if provider == "builtin::local_emailpassword":
             email_password_client = email_password.Client(db=self.db)
             if email_password_client.config.verification_method == "Code":
-                # OTC flow: get email factor and create OTC
                 email_factor = (
                     await email_password_client.get_email_factor_by_email(
                         to_addr
@@ -2682,7 +2671,6 @@ class Router:
                         test_mode=self.test_mode,
                     )
 
-                    # Send webhook and increment metrics for OTC initiation
                     await self._handle_otc_initiated(
                         identity_id=email_factor.identity.id,
                         email_factor_id=str(email_factor.id),
@@ -2696,7 +2684,6 @@ class Router:
                     )
                     return
 
-        # Default Link flow for all other cases
         await auth_emails.send_verification_email(
             db=self.db,
             tenant=self.tenant,

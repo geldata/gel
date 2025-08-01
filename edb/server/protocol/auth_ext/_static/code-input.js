@@ -21,26 +21,21 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // Backspace handling
     input.addEventListener("keydown", (e) => {
       if (e.key === "Backspace") {
         if (input.value === "" && index > 0) {
-          // Move focus to previous input if current is empty
           inputs[index - 1].focus();
         } else {
-          // Clear current input
           input.value = "";
           updateHiddenInput();
         }
       } else if (e.key === "ArrowLeft" && index > 0) {
-        // Arrow key navigation
         inputs[index - 1].focus();
       } else if (e.key === "ArrowRight" && index < inputs.length - 1) {
         inputs[index + 1].focus();
       }
     });
 
-    // Paste handling for complete codes
     input.addEventListener("paste", (e) => {
       e.preventDefault();
       const paste = e.clipboardData?.getData("text") || "";
@@ -52,13 +47,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         updateHiddenInput();
 
-        // Focus the next empty input or the last one
         const nextEmpty = inputs.findIndex((inp) => inp.value === "");
         if (nextEmpty !== -1) {
           inputs[nextEmpty].focus();
         } else {
           inputs[inputs.length - 1].focus();
-          // Auto-submit if all filled
           if (inputs.every((i) => i.value !== "")) {
             form.submit();
           }
@@ -66,7 +59,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // Select all text on focus for easier editing
     input.addEventListener("focus", () => {
       input.select();
     });

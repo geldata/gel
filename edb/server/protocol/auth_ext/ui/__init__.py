@@ -203,7 +203,6 @@ def render_email_factor_form(
         case (None, None, _):
             return magic_link_form
 
-    # Dynamic magic link tab label based on verification method
     magic_link_tab_label = render.get_magic_link_tab_label(
         magic_link_verification_method
     )
@@ -474,7 +473,6 @@ def render_reset_password_page(
     challenge: Optional[str] = None,
     reset_token: Optional[str] = None,
     error_message: Optional[str] = None,
-    # Code flow parameters
     is_code_flow: bool = False,
     email: Optional[str] = None,
     # config
@@ -498,7 +496,6 @@ def render_reset_password_page(
             False,
         )
     elif is_code_flow and email:
-        # Code-based password reset flow
         content = f'''
             {render.error_message(error_message)}
             <p>We've sent a 6-digit reset code to <strong>{
@@ -527,7 +524,6 @@ def render_reset_password_page(
         }
         '''
     else:
-        # Token-based password reset flow (existing)
         content = f'''
         {render.error_message(error_message)}
 
@@ -661,7 +657,6 @@ def render_verify_page(
     """Renders verification page that handles both link and code flows."""
 
     if is_code_flow and email and provider:
-        # Show code input form
         content = f'''
             {render.error_message(error_message)}
             <p>We've sent a 6-digit verification code to <strong>{
@@ -753,7 +748,6 @@ def render_magic_link_sent_page(
     logo_url: Optional[str] = None,
     dark_logo_url: Optional[str] = None,
     brand_color: Optional[str] = None,
-    # Code flow parameters
     is_code_flow: bool = False,
     email: Optional[str] = None,
     base_path: Optional[str] = None,
@@ -762,7 +756,6 @@ def render_magic_link_sent_page(
     error_message: Optional[str] = None,
 ) -> bytes:
     if is_code_flow and email and base_path:
-        # Show code input form
         content = f'''
             {render.error_message(error_message)}
             <p>We've sent a 6-digit sign-in code to <strong>{

@@ -465,7 +465,6 @@ a.field-note:hover {
   }
 }
 
-/* Code Input Styles */
 .code-input-container {
   display: flex;
   gap: 8px;
@@ -498,7 +497,6 @@ a.field-note:hover {
   border-color: #198754;
 }
 
-/* Dark theme adjustments for code input */
 @media (prefers-color-scheme: dark) {
   .code-input-container input {
     border-color: #495057;
@@ -517,7 +515,6 @@ a.field-note:hover {
   }
 }
 
-/* Mobile responsive adjustments */
 @media (max-width: 480px) {
   .code-input-container input {
     height: 40px;
