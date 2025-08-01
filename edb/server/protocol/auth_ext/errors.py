@@ -265,3 +265,50 @@ class WebAuthnRegistrationFailed(AuthExtError):
 
     def __str__(self) -> str:
         return self.description
+
+
+class OTCVerificationError(AuthExtError):
+    """Base class for one-time code verification failures."""
+
+    def __init__(self, description: str):
+        self.description = description
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"description={self.description!r}"
+            ")"
+        )
+
+    def __str__(self) -> str:
+        return self.description
+
+
+class OTCRateLimited(OTCVerificationError):
+    """Maximum verification attempts exceeded for the factor."""
+
+    def __init__(
+        self, description: str = "Maximum verification attempts exceeded"
+    ):
+        super().__init__(description)
+
+
+class OTCInvalidCode(OTCVerificationError):
+    """The provided one-time code is invalid or not found."""
+
+    def __init__(self, description: str = "Invalid code"):
+        super().__init__(description)
+
+
+class OTCExpired(OTCVerificationError):
+    """The one-time code has expired."""
+
+    def __init__(self, description: str = "Code has expired"):
+        super().__init__(description)
+
+
+class OTCVerificationFailed(OTCVerificationError):
+    """General verification failure that doesn't fall into other categories."""
+
+    def __init__(self, description: str = "Verification failed"):
+        super().__init__(description)

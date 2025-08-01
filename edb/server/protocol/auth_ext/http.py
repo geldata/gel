@@ -875,19 +875,7 @@ class Router:
                 return
 
             except Exception as ex:
-                failure_reason = "unknown"
-                error_msg = str(ex)
-                if "Maximum verification attempts exceeded" in error_msg:
-                    failure_reason = "rate_limited"
-                elif "Invalid code" in error_msg:
-                    failure_reason = "invalid_code"
-                elif "Code has expired" in error_msg:
-                    failure_reason = "expired"
-                elif "Verification failed" in error_msg:
-                    failure_reason = "verification_failed"
-
-                self._handle_otc_failed(failure_reason)
-
+                self._handle_otc_failed(ex)
                 response.status = http.HTTPStatus.BAD_REQUEST
                 response.content_type = b"application/json"
                 response.body = json.dumps(
@@ -1228,18 +1216,7 @@ class Router:
                         otc_id=str(otc_id),
                     )
                 except Exception as ex:
-                    failure_reason = "unknown"
-                    error_msg = str(ex)
-                    if "Maximum verification attempts exceeded" in error_msg:
-                        failure_reason = "rate_limited"
-                    elif "Invalid code" in error_msg:
-                        failure_reason = "invalid_code"
-                    elif "Code has expired" in error_msg:
-                        failure_reason = "expired"
-                    elif "Verification failed" in error_msg:
-                        failure_reason = "verification_failed"
-
-                    self._handle_otc_failed(failure_reason)
+                    self._handle_otc_failed(ex)
                     raise
 
                 try:
@@ -1725,18 +1702,7 @@ class Router:
                         otc_id=str(otc_id),
                     )
                 except Exception as ex:
-                    failure_reason = "unknown"
-                    error_msg = str(ex)
-                    if "Maximum verification attempts exceeded" in error_msg:
-                        failure_reason = "rate_limited"
-                    elif "Invalid code" in error_msg:
-                        failure_reason = "invalid_code"
-                    elif "Code has expired" in error_msg:
-                        failure_reason = "expired"
-                    elif "Verification failed" in error_msg:
-                        failure_reason = "verification_failed"
-
-                    self._handle_otc_failed(failure_reason)
+                    self._handle_otc_failed(ex)
                     raise
 
                 await pkce.create(self.db, challenge)
@@ -2583,12 +2549,24 @@ class Router:
 
         logger.info(f"OTC verified: identity_id={identity_id}, otc_id={otc_id}")
 
-    def _handle_otc_failed(self, reason: str) -> None:
+    def _handle_otc_failed(self, ex: Exception) -> None:
+        match ex:
+            case errors.OTCRateLimited():
+                failure_reason = "rate_limited"
+            case errors.OTCInvalidCode():
+                failure_reason = "invalid_code"
+            case errors.OTCExpired():
+                failure_reason = "expired"
+            case errors.OTCVerificationFailed():
+                failure_reason = "verification_failed"
+            case _:
+                failure_reason = "unknown"
+
         metrics.otc_failed_total.inc(
-            1.0, self.tenant.get_instance_name(), reason
+            1.0, self.tenant.get_instance_name(), failure_reason
         )
 
-        logger.info(f"OTC verification failed: reason={reason}")
+        logger.info(f"OTC verification failed: reason={failure_reason}")
 
     def _get_callback_url(self) -> str:
         return f"{self.base_path}/callback"

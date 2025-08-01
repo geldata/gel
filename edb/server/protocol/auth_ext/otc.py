@@ -104,7 +104,10 @@ async def verify(db: Any, factor_id: str, code: str) -> str:
         The OneTimeCode ID if verification succeeds
 
     Raises:
-        NoIdentityFound: If code is invalid, expired, or max attempts exceeded
+        OTCRateLimited: If maximum verification attempts exceeded
+        OTCInvalidCode: If the code is invalid or not found
+        OTCExpired: If the code has expired
+        OTCVerificationFailed: If verification fails for other reasons
     """
     code_hash = hash_code(code)
 
@@ -192,13 +195,13 @@ select {
     result = result_json[0]
 
     if result["rate_limited"]:
-        raise errors.NoIdentityFound("Maximum verification attempts exceeded")
+        raise errors.OTCRateLimited()
     elif not result["code_found"]:
-        raise errors.NoIdentityFound("Invalid code")
+        raise errors.OTCInvalidCode()
     elif result["code_expired"]:
-        raise errors.NoIdentityFound("Code has expired")
+        raise errors.OTCExpired()
     elif not result["success"]:
-        raise errors.NoIdentityFound("Verification failed")
+        raise errors.OTCVerificationFailed()
 
     return str(result["otc_id"])
 
