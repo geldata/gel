@@ -57,6 +57,8 @@ from edb.server.compiler import sertypes
 from edb.server.protocol import execute
 from edb.server.protocol import request_scheduler as rs
 
+from edb.schema import ai_indexes as s_ai_indexes
+
 if TYPE_CHECKING:
     from edb.server import dbview
     from edb.server import tenant as srv_tenant
@@ -808,25 +810,9 @@ async def _generate_embeddings_params(
         logger.error(f"{task_name}: {e}")
         return None
 
-    model_max_input_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_input_tokens",
-        )
-        for model_name in provider_models
-    }
-
-    model_max_batch_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_batch_tokens",
-        )
-        for model_name in provider_models
-    }
+    model_properties = await _get_embedding_model_properties(
+        db, provider_models
+    )
 
     model_pending_entries: dict[str, list[PendingEmbedding]] = {}
 
@@ -867,8 +853,8 @@ async def _generate_embeddings_params(
             batches, excluded_indexes = batch_texts(
                 part_texts,
                 get_model_tokenizer(provider_name, model_name),
-                model_max_input_tokens[model_name],
-                model_max_batch_tokens[model_name]
+                model_properties[model_name].max_input_tokens,
+                model_properties[model_name].max_batch_tokens,
             )
 
             if excluded_indexes:
@@ -3178,15 +3164,95 @@ async def _get_model_provider(
     return cast(str, provider)
 
 
-async def _get_model_annotation_as_int(
+async def _get_embedding_model_properties(
     db: dbview.Database,
-    base_model_type: str,
-    model_name: str,
-    annotation_name: str,
-) -> int:
-    value = await _get_model_annotation_as_json(
-        db, base_model_type, model_name, annotation_name)
-    return int(value)
+    model_names: list[str],
+) -> dict[str, s_ai_indexes.EmbeddingModelProperties]:
+    """Get all embedding model properties from both the schema and reference
+    data.
+
+    This should mirror s_ai_indexes.get_all_embedding_model_properties
+    """
+
+    # Get all schema models
+    schema_models = await _edgeql_query_json(
+        db=db,
+        role_name=None,
+        query="""
+        WITH
+            Parent := (
+                SELECT schema::ObjectType
+                FILTER .name = 'ext::ai::EmbeddingModel'
+            ),
+            Models := Parent.<ancestors[IS schema::ObjectType],
+        SELECT
+            Models {
+                annotations: {
+                    name,
+                    @value,
+                }
+            }
+        FILTER
+            (FOR ann in Models.annotations UNION (
+                ann.name = "ext::ai::model_name"
+                AND contains(<array<str>>$model_names, ann@value)
+            ))
+        """,
+        variables={
+            "model_names": model_names,
+        },
+    )
+
+    schema_model_annotations = [
+        {
+            annotation['name']: annotation['@value']
+            for annotation in model['annotations']
+        }
+        for model in schema_models
+    ]
+
+    all_model_properties = {
+        model['ext::ai::model_name']: s_ai_indexes.EmbeddingModelProperties(
+            model_name=model['ext::ai::model_name'],
+            model_provider=model['ext::ai::model_provider'],
+            max_input_tokens=int(
+                model['ext::ai::embedding_model_max_input_tokens']
+            ),
+            max_batch_tokens=int(
+                model['ext::ai::embedding_model_max_batch_tokens']
+            ),
+            max_output_dimensions=int(
+                model['ext::ai::embedding_model_max_output_dimensions']
+            ),
+            supports_shortening=bool(
+                model['ext::ai::embedding_model_supports_shortening']
+            ),
+        )
+        for model in schema_model_annotations
+    }
+
+    # Get reference data models
+    provider_descs, embedding_model_descs = s_ai_indexes._get_ai_descs(
+        db.tenant.extension_refs
+    )
+    for model_name, model_desc in embedding_model_descs.items():
+        if model_name in all_model_properties:
+            # Model in schema
+            continue
+
+        provider_desc = provider_descs[model_desc.provider_label]
+        all_model_properties[model_name] = (
+            s_ai_indexes.EmbeddingModelProperties(
+                model_name=model_name,
+                model_provider=provider_desc.name,
+                max_input_tokens=model_desc.max_input_tokens,
+                max_batch_tokens=model_desc.max_batch_tokens,
+                max_output_dimensions=model_desc.max_output_dimensions,
+                supports_shortening=model_desc.supports_shortening,
+            )
+        )
+
+    return all_model_properties
 
 
 async def _generate_embeddings_for_type(
@@ -3294,24 +3360,10 @@ async def generate_embeddings_for_texts(
         ai_index.model: ai_index.provider
         for ai_index in type_ai_indexes.values()
     }
-    model_max_input_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_input_tokens",
-        )
-        for model_name in model_providers.keys()
-    }
-    model_max_batch_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_batch_tokens",
-        )
-        for model_name in model_providers.keys()
-    }
+
+    model_properties = await _get_embedding_model_properties(
+        db, list(model_providers.keys())
+    )
 
     provider_configs = {
         provider: _get_provider_config(db=db, provider_name=provider)
@@ -3358,8 +3410,8 @@ async def generate_embeddings_for_texts(
         provider = model_providers[model_name]
 
         tokenizer = get_model_tokenizer(provider, model_name)
-        max_input_tokens = model_max_input_tokens[model_name]
-        max_batch_tokens = model_max_batch_tokens[model_name]
+        max_input_tokens = model_properties[model_name].max_input_tokens
+        max_batch_tokens = model_properties[model_name].max_batch_tokens
 
         texts = [
             (
