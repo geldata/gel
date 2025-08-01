@@ -104,6 +104,7 @@ def __sync__(client_id, pickled_schema, invalidation) -> None:
                             else pickle.loads(pickled_state.user_schema)
                         ),
                         pickle.loads(pickled_state.reflection_cache),
+                        pickle.loads(pickled_state.extension_refs),
                         pickle.loads(pickled_state.database_config),
                     )
                     for dbname, pickled_state in pickled_schema.dbs.items()
@@ -125,11 +126,13 @@ def __sync__(client_id, pickled_schema, invalidation) -> None:
                         if db_state is None:
                             assert pickled_state.user_schema is not None
                             assert pickled_state.reflection_cache is not None
+                            assert pickled_state.extension_refs is not None
                             assert pickled_state.database_config is not None
                             db_state = state.DatabaseState(
                                 dbname,
                                 pickle.loads(pickled_state.user_schema),
                                 pickle.loads(pickled_state.reflection_cache),
+                                pickle.loads(pickled_state.extension_refs),
                                 pickle.loads(pickled_state.database_config),
                             )
                             if debug.flags.server:
@@ -144,6 +147,10 @@ def __sync__(client_id, pickled_schema, invalidation) -> None:
                             if pickled_state.reflection_cache is not None:
                                 db_updates["reflection_cache"] = pickle.loads(
                                     pickled_state.reflection_cache
+                                )
+                            if pickled_state.extension_refs is not None:
+                                db_updates["extension_refs"] = pickle.loads(
+                                    pickled_state.extension_refs
                                 )
                             if pickled_state.database_config is not None:
                                 db_updates["database_config"] = pickle.loads(
@@ -200,6 +207,7 @@ def compile(
         db.user_schema,
         client_schema.global_schema,
         db.reflection_cache,
+        db.extension_refs,
         db.database_config,
         client_schema.instance_config,
         *compile_args,
@@ -258,6 +266,7 @@ def compile_notebook(
         db.user_schema,
         client_schema.global_schema,
         db.reflection_cache,
+        db.extension_refs,
         db.database_config,
         client_schema.instance_config,
         *compile_args,
@@ -310,6 +319,7 @@ def compile_graphql(
         user_schema=db.user_schema,
         global_schema=client_schema.global_schema,
         reflection_cache=db.reflection_cache,
+        extension_refs=db.extension_refs,
         database_config=db.database_config,
         system_config=client_schema.instance_config,
         request=request,
@@ -330,6 +340,7 @@ def compile_sql(
         db.user_schema,
         client_schema.global_schema,
         db.reflection_cache,
+        db.extension_refs,
         db.database_config,
         client_schema.instance_config,
         *compile_args,
@@ -359,6 +370,7 @@ def call_for_client(
             evicted_dbs,
             user_schema,
             reflection_cache,
+            extension_refs,
             global_schema,
             database_config,
             system_config,

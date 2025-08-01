@@ -1153,7 +1153,13 @@ CStateStateType = tuple[dict[int, TransactionState], Transaction, int]
 
 
 class CompilerConnectionState:
-    __slots__ = ("_savepoints_log", "_current_tx", "_tx_count", "_user_schema")
+    __slots__ = (
+        "_savepoints_log",
+        "_current_tx",
+        "_tx_count",
+        "_user_schema",
+        "_extension_refs",
+    )
 
     # Fields that affects the state key are listed here. The key is used
     # to determine if we can reuse a previously-pickled state, so remember
@@ -1164,6 +1170,7 @@ class CompilerConnectionState:
     _current_tx: Transaction
 
     _user_schema: Optional[s_schema.FlatSchema]
+    _extension_refs: Optional[immutables.Map[str, Any]]
 
     def __init__(
         self,
@@ -1175,6 +1182,7 @@ class CompilerConnectionState:
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
         cached_reflection: immutables.Map[str, tuple[str, ...]],
+        extension_refs: immutables.Map[str, Any],
     ):
         assert isinstance(user_schema, s_schema.FlatSchema)
         self._user_schema = user_schema
@@ -1189,6 +1197,7 @@ class CompilerConnectionState:
             cached_reflection=cached_reflection,
         )
         self._savepoints_log = {}
+        self._extension_refs = extension_refs
 
     def get_state_key(self) -> tuple[tuple[int, ...], int, tuple[Any, ...]]:
         # This would be much more efficient if CompilerConnectionState
@@ -1206,6 +1215,7 @@ class CompilerConnectionState:
     def __setstate__(self, state: CStateStateType) -> None:
         self._savepoints_log, self._current_tx, self._tx_count = state
         self._user_schema = None
+        self._extension_refs = None
 
     @property
     def root_user_schema(self) -> s_schema.FlatSchema:
