@@ -507,6 +507,11 @@ def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
                             span=step.span,
                         )
 
+                    # Mark the underlying pointer as needing a link table,
+                    # so that we access the mapped table to begin with.
+                    assert isinstance(fake_tip.expr, irast.Pointer)
+                    fake_tip.expr.force_link_table = True
+
                 else:
                     raise errors.EdgeQLSyntaxError(
                         f"unexpected reference to link property {ptr_name!r} "

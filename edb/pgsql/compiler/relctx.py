@@ -645,6 +645,8 @@ def new_pointer_rvar(
     ir_ptr = ir_set.expr
     ptrref = ir_ptr.ptrref
 
+    link_bias = link_bias or ir_ptr.force_link_table
+
     ptr_info = pg_types.get_ptrref_storage_info(
         ptrref, resolve_type=False, link_bias=link_bias, allow_missing=True,
         versioned=ctx.env.versioned_stdlib,

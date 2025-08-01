@@ -863,7 +863,8 @@ def process_set_as_link_property_ref(
 
         if link_rvar is None:
             src_rvar = get_set_rvar(ir_source, ctx=newctx)
-            assert irutils.is_set_instance(link_prefix, irast.Pointer)
+            assert irutils.is_set_instance(link_prefix, irast.Pointer), (
+                f'projecting lprop on {link_prefix.expr}')
             link_rvar = relctx.new_pointer_rvar(
                 link_prefix, src_rvar=src_rvar,
                 link_bias=True, ctx=newctx)
@@ -1108,7 +1109,11 @@ def process_set_as_path(
     rvars = []
 
     ptr_info = pg_types.get_ptrref_storage_info(
-        ptrref, resolve_type=False, link_bias=False, allow_missing=True)
+        ptrref,
+        resolve_type=False,
+        link_bias=rptr.force_link_table,
+        allow_missing=True,
+    )
 
     # Path is a link property.
     is_linkprop = ptrref.source_ptr is not None

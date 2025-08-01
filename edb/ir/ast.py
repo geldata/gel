@@ -465,6 +465,12 @@ class Pointer(Expr):
     source: Set
     ptrref: BasePointerRef
     direction: s_pointers.PointerDirection
+    # Whether to *always* use a link table when this pointer is
+    # accessed.  This is needed (for example) when a (possibly single)
+    # link property is being referenced in a FOR iterator, and we
+    # aren't going to have access to the Pointer when we access
+    # the iterator variable.
+    force_link_table: bool = False
 
     # If the pointer is a computed pointer (or a computed pointer
     # definition), the expression.

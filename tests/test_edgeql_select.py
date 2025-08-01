@@ -8544,7 +8544,21 @@ class TestEdgeQLSelect(tb.QueryTestCase):
         ptrs = list(val.__dataclass_fields__.keys())
         self.assertEqual(ptrs[0], '__tid__')
 
-    @test.xerror("a linkprop related ISE!")
+    @test.xerror("""
+        a linkprop related ISE!
+
+        This one is kind of screwy. *An* issue is that the FOR loop over
+        a single link is hiding the linkprop (despite our `needs_link_table`
+        based efforts).
+
+        But:
+         1. This code obviously ought to work, though you could argue
+            about whether the link property should be in the shape.
+         2. If the link prop was specified explicitly in the shape, that
+            ought to work (per our paper semantics, at least!).
+         3. It only passes the frontend for bad reasons, though!
+            If we name the field `owner2` we get a "has no property" error!!
+    """)
     async def test_edgeql_select_tid_position_06(self):
         res = await self.con._fetchall("""
             FOR issue IN Issue SELECT issue {
