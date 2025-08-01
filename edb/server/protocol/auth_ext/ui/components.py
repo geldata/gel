@@ -783,7 +783,6 @@ def render_webauthn_form(
 
 def render_magic_link_form(
     base_email_form: str,
-    redirect_to: str,
     base_path: str,
     provider_name: str,
     verification_method: str = "Link",
@@ -807,7 +806,6 @@ def render_magic_link_form(
                 value="{base_path}/ui/signin?selected_tab=magic_link"
             />
             <input type="hidden" name="provider" value="{provider_name}" />
-            <input type="hidden" name="callback_url" value="{redirect_to}" />
             {base_email_form}
             {button(button_text, id="magic-link-signin")}
         </form>

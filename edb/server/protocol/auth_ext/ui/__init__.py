@@ -127,7 +127,6 @@ def render_signin_page(
         magic_link_form=(
             render.render_magic_link_form(
                 base_email_form=base_email_factor_form,
-                redirect_to=redirect_to,
                 base_path=base_path,
                 provider_name=magic_link_provider.name,
                 verification_method=magic_link_provider.verification_method,
@@ -749,61 +748,73 @@ def render_resend_verification_done_page(
     )
 
 
-def render_magic_link_sent_page(
+def render_magic_link_sent_page_code_flow(
     *,
-    is_code_flow: bool,
+    email: str,
+    challenge: str,
+    callback_url: str,
+    error_message: Optional[str] = None,
     app_name: Optional[str] = None,
     logo_url: Optional[str] = None,
     dark_logo_url: Optional[str] = None,
     brand_color: Optional[str] = None,
-    email: Optional[str] = None,
-    base_path: Optional[str] = None,
-    challenge: Optional[str] = None,
-    callback_url: Optional[str] = None,
-    error_message: Optional[str] = None,
 ) -> bytes:
-    if is_code_flow:
-        assert email is not None
-        assert base_path is not None
-        assert callback_url is not None
-        assert challenge is not None
-
-        content = f'''
-            {render.error_message(error_message)}
-            <p>We've sent a 6-digit sign-in code to <strong>{
-            html.escape(email)
-        }</strong></p>
-            {
-            render.code_input_form(
-                action="../magic-link/authenticate",
-                email=email,
-                provider="builtin::local_magic_link",
-                label="Enter sign-in code",
-                button_text="Sign In",
-                additional_fields=f'''
-                    <input
-                        type="hidden"
-                        name="callback_url"
-                        value="{callback_url}"
-                    />
-                    <input
-                        type="hidden"
-                        name="challenge"
-                        value="{challenge}"
-                    />
-                ''',
-            )
-        }
-        '''
-        title = f'Sign in code sent{f" for {app_name}" if app_name else ""}'
-        page_title = 'Sign in code sent'
-    else:
-        content = render.success_message(
-            "A sign in link has been sent to your email. Please check your "
-            "email."
+    content = f'''
+        {render.error_message(error_message)}
+        <p>We've sent a 6-digit sign-in code to <strong>{
+        html.escape(email)
+    }</strong></p>
+        {
+        render.code_input_form(
+            action="../magic-link/authenticate",
+            email=email,
+            provider="builtin::local_magic_link",
+            label="Enter sign-in code",
+            button_text="Sign In",
+            additional_fields=f'''
+                <input
+                    type="hidden"
+                    name="callback_url"
+                    value="{callback_url}"
+                />
+                <input
+                    type="hidden"
+                    name="challenge"
+                    value="{challenge}"
+                />
+            ''',
         )
-        title = f'Sign in link sent{f" for {app_name}" if app_name else ""}'
-        page_title = 'Sign in link sent'
+    }
+    '''
+    title = f'Sign in code sent{f" for {app_name}" if app_name else ""}'
+    page_title = 'Sign in code sent'
+
+    return render.base_page(
+        title=title,
+        logo_url=logo_url,
+        dark_logo_url=dark_logo_url,
+        brand_color=brand_color,
+        cleanup_search_params=['error'],
+        content=f'''
+            {render.title(page_title, join='for', app_name=app_name)}
+            {content}
+        ''',
+    )
+
+
+def render_magic_link_sent_page_link_flow(
+    *,
+    app_name: Optional[str] = None,
+    logo_url: Optional[str] = None,
+    dark_logo_url: Optional[str] = None,
+    brand_color: Optional[str] = None,
+) -> bytes:
+    content = render.success_message(
+        "A sign in link has been sent to your email. Please check your "
+        "email."
+    )
+    title = f'Sign in link sent{f" for {app_name}" if app_name else ""}'
+    page_title = 'Sign in link sent'
 
     return render.base_page(
         title=title,
