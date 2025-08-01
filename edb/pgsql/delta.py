@@ -7614,7 +7614,9 @@ class DeleteExtension(ExtensionCommand, adapts=s_exts.DeleteExtension):
 
         if str(self.classname) == "ai":
             self.pgops.add(
-                delta_ext_ai.pg_drop_all_pending_embeddings_views(schema),
+                delta_ext_ai.pg_drop_all_pending_embeddings_views(
+                    schema, context
+                ),
             )
 
         schema = super().apply(schema, context)
