@@ -348,32 +348,18 @@ def code_input_form(
     action: str,
     email: str,
     provider: str,
-    redirect_to: str,
-    redirect_on_failure: str,
     label: str = "Enter verification code",
     button_text: str = "Verify Code",
     additional_fields: str = "",
-    challenge: Optional[str] = None,
 ) -> str:
     """Renders a 6-digit code input form with auto-formatting and mobile
     keyboard support."""
-    challenge_field = (
-        f'<input type="hidden" name="challenge" value="{challenge}" />'
-        if challenge
-        else ""
-    )
 
     return f'''
     <form id="code-form" method="POST" action="{action}" novalidate>
         <input type="hidden" name="email" value="{html.escape(email)}" />
         <input type="hidden" name="provider" value="{provider}" />
-        <input type="hidden" name="redirect_to" value="{redirect_to}" />
-        <input
-            type="hidden"
-            name="redirect_on_failure"
-            value="{redirect_on_failure}"
-        />
-        {challenge_field}
+        <input id="code-hidden-input" type="hidden" name="code" value="" />
         {additional_fields}
 
         <label for="code-input-1">{label}</label>
@@ -385,8 +371,6 @@ def code_input_form(
             {_code_digit_input("code-input-5")}
             {_code_digit_input("code-input-6")}
         </div>
-
-        <input id="code-hidden-input" type="hidden" name="code" value="" />
 
         {button(button_text)}
     </form>
@@ -830,51 +814,6 @@ def render_magic_link_form(
     """
 
 
-def render_code_input_form(
-    email: str,
-    action_url: str,
-    redirect_to: str,
-    challenge: Optional[str] = None,
-    provider: Optional[str] = None,
-) -> str:
-    challenge_input = (
-        f'<input type="hidden" name="challenge" value="{challenge}" />'
-        if challenge
-        else ''
-    )
-    provider_input = (
-        f'<input type="hidden" name="provider" value="{provider}" />'
-        if provider
-        else ''
-    )
-
-    return f"""
-        <form method="post" action="{action_url}" novalidate>
-            <input type="hidden" name="email" value="{email}" />
-            <input type="hidden" name="redirect_to" value="{redirect_to}" />
-            {challenge_input}
-            {provider_input}
-
-            <label for="code">Enter the code from your email</label>
-            <div class="code-input-container">
-                <input
-                    type="text"
-                    name="code"
-                    id="code"
-                    class="code-input"
-                    maxlength="6"
-                    pattern="[0-9]{{6}}"
-                    inputmode="numeric"
-                    autocomplete="one-time-code"
-                    placeholder="000000"
-                />
-            </div>
-
-            {button("Verify Code", id="verify-code")}
-        </form>
-    """
-
-
 # Signup-specific form helpers
 # ===========================
 
@@ -944,13 +883,17 @@ def render_webauthn_signup_form(
 
 def render_magic_link_signup_form(
     base_email_form: str,
-    redirect_to: str,
     base_path: str,
     provider_name: str,
+    callback_url: str = None,
     verification_method: str = "Link",
 ) -> str:
     """Render a complete magic link/OTC signup form."""
     tab_label = get_magic_link_tab_label(verification_method)
+    if verification_method == "Link":
+        base_email_form += f"""
+            <input type="hidden" name="callback_url" value="{callback_url}" />
+        """
 
     return f"""
         <form
@@ -958,6 +901,7 @@ def render_magic_link_signup_form(
             action="../magic-link/register"
             novalidate
         >
+            <input type="hidden" name="provider" value="{provider_name}" />
             <input
                 type="hidden"
                 name="redirect_to"
@@ -968,8 +912,6 @@ def render_magic_link_signup_form(
                 name="redirect_on_failure"
                 value="{base_path}/ui/signup?selected_tab=magic_link"
             />
-            <input type="hidden" name="provider" value="{provider_name}" />
-            <input type="hidden" name="callback_url" value="{redirect_to}" />
             {base_email_form}
             {button(f"Sign Up with {tab_label}", id="magic-link-signup")}
         </form>

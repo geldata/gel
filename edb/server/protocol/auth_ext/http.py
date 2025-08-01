@@ -1151,7 +1151,6 @@ class Router:
             reset_token = data.get('reset_token')
             email = data.get('email')
             code = data.get('code')
-            challenge = data.get('challenge')
 
             allowed_redirect_to = self._maybe_make_allowed_url(
                 data.get("redirect_to")
@@ -1212,6 +1211,8 @@ class Router:
                     raise errors.InvalidData(
                         f"Failed to reset password: {str(ex)}"
                     )
+
+                challenge = data.get('challenge')
                 if challenge:
                     auth_code = await pkce.link_identity_challenge(
                         self.db, email_factor.identity.id, challenge
@@ -1274,56 +1275,39 @@ class Router:
     ) -> None:
         data = self._get_data_from_request(request)
 
-        _check_keyset(
-            data,
-            {
-                "provider",
-                "email",
-                "challenge",
-                "callback_url",
-                "redirect_on_failure",
-            },
-        )
-
-        email = data["email"]
-        challenge = data["challenge"]
-        callback_url = data["callback_url"]
-        if not self._is_url_allowed(callback_url):
-            raise errors.InvalidData(
-                "Callback URL does not match any allowed URLs.",
-            )
-
+        _check_keyset(data, {"redirect_on_failure"})
         allowed_redirect_on_failure = self._make_allowed_url(
             data["redirect_on_failure"]
         )
 
-        allowed_redirect_to = self._maybe_make_allowed_url(
-            data.get("redirect_to")
-        )
-
-        allowed_link_url = self._maybe_make_allowed_url(data.get("link_url"))
-        link_url = (
-            allowed_link_url.url
-            if allowed_link_url
-            else f"{self.base_path}/magic-link/authenticate"
-        )
-
-        magic_link_client = magic_link.Client(
-            db=self.db,
-            issuer=self.base_path,
-            tenant=self.tenant,
-            test_mode=self.test_mode,
-            signing_key=self.signing_key,
-        )
-
-        request_accepts_json: bool = request.accept == b"application/json"
-
-        if not request_accepts_json and not allowed_redirect_to:
-            raise errors.InvalidData(
-                "Request must accept JSON or provide a redirect URL."
+        try:
+            _check_keyset(
+                data,
+                {
+                    "provider",
+                    "email",
+                },
             )
 
-        try:
+            email = data["email"]
+            allowed_redirect_to = self._maybe_make_allowed_url(
+                data.get("redirect_to")
+            )
+
+            magic_link_client = magic_link.Client(
+                db=self.db,
+                issuer=self.base_path,
+                tenant=self.tenant,
+                test_mode=self.test_mode,
+                signing_key=self.signing_key,
+            )
+
+            request_accepts_json: bool = request.accept == b"application/json"
+
+            if not request_accepts_json and not allowed_redirect_to:
+                raise errors.InvalidData(
+                    "Request must accept JSON or provide a redirect URL."
+                )
             email_factor = await magic_link_client.register(
                 email=email,
             )
@@ -1342,26 +1326,6 @@ class Router:
                     email_factor_id=email_factor.id,
                 )
             )
-            magic_link_token = magic_link_client.make_magic_link_token(
-                identity_id=email_factor.identity.id,
-                callback_url=callback_url,
-                challenge=challenge,
-            )
-            await self._maybe_send_webhook(
-                webhook.MagicLinkRequested(
-                    event_id=str(uuid.uuid4()),
-                    timestamp=datetime.datetime.now(datetime.timezone.utc),
-                    identity_id=email_factor.identity.id,
-                    email_factor_id=email_factor.id,
-                    magic_link_token=magic_link_token,
-                    magic_link_url=link_url,
-                )
-            )
-            logger.info(
-                f"Sending magic link: identity_id={email_factor.identity.id}, "
-                f"email={email}"
-            )
-
             if magic_link_client.provider.verification_method == "Code":
                 code, otc_id = await otc.create(
                     self.db,
@@ -1384,10 +1348,54 @@ class Router:
                 )
 
                 logger.info(
-                    f"Sent OTC email: identity_id={email_factor.identity.id}, "
+                    "Sent OTC email: "
+                    f"identity_id={email_factor.identity.id}, "
                     f"email={email}, otc_id={otc_id}"
                 )
+
+                return_data = {
+                    "code": "true",
+                    "email": email,
+                }
+
             else:
+                _check_keyset(data, {"challenge", "callback_url"})
+                challenge = data["challenge"]
+                callback_url = data["callback_url"]
+                if not self._is_url_allowed(callback_url):
+                    raise errors.InvalidData(
+                        "Callback URL does not match any allowed URLs.",
+                    )
+
+                allowed_link_url = self._maybe_make_allowed_url(
+                    data.get("link_url")
+                )
+                link_url = (
+                    allowed_link_url.url
+                    if allowed_link_url
+                    else f"{self.base_path}/magic-link/authenticate"
+                )
+
+                magic_link_token = magic_link_client.make_magic_link_token(
+                    identity_id=email_factor.identity.id,
+                    callback_url=callback_url,
+                    challenge=challenge,
+                )
+                await self._maybe_send_webhook(
+                    webhook.MagicLinkRequested(
+                        event_id=str(uuid.uuid4()),
+                        timestamp=datetime.datetime.now(datetime.timezone.utc),
+                        identity_id=email_factor.identity.id,
+                        email_factor_id=email_factor.id,
+                        magic_link_token=magic_link_token,
+                        magic_link_url=link_url,
+                    )
+                )
+                logger.info(
+                    "Sending magic link: "
+                    f"identity_id={email_factor.identity.id}, email={email}"
+                )
+
                 await magic_link_client.send_magic_link(
                     email=email,
                     link_url=link_url,
@@ -1395,9 +1403,9 @@ class Router:
                     token=magic_link_token,
                 )
 
-            return_data = {
-                "email_sent": email,
-            }
+                return_data = {
+                    "email_sent": email,
+                }
 
             if request_accepts_json:
                 response.status = http.HTTPStatus.OK
@@ -2136,7 +2144,15 @@ class Router:
         password_provider = (
             self._get_password_provider() if ui_config is not None else None
         )
-        challenge: Optional[str] = None
+        query = urllib.parse.parse_qs(
+            request.url.query.decode("ascii") if request.url.query else ""
+        )
+
+        challenge = _get_pkce_challenge(
+            response=response,
+            cookies=request.cookies,
+            query_dict=query,
+        )
 
         if ui_config is None or password_provider is None:
             response.status = http.HTTPStatus.NOT_FOUND
@@ -2146,10 +2162,6 @@ class Router:
                 else b'Auth UI not enabled'
             )
         else:
-            query = urllib.parse.parse_qs(
-                request.url.query.decode("ascii") if request.url.query else ""
-            )
-
             is_code_flow = "code" in query
             maybe_email = _maybe_get_search_param(query, "email")
             error_message = _maybe_get_search_param(query, "error")
@@ -2426,15 +2438,20 @@ class Router:
         request: protocol.HttpRequest,
         response: protocol.HttpResponse,
     ) -> None:
+        ui_config = self._get_ui_config()
+        if ui_config is None:
+            response.status = http.HTTPStatus.NOT_FOUND
+            response.body = b'Auth UI not enabled'
+
         query = urllib.parse.parse_qs(
             request.url.query.decode("ascii") if request.url.query else ""
         )
 
-        # Check if this is a code flow (OTC) or link flow
         is_code_flow = "code" in query
         maybe_email = _maybe_get_search_param(query, "email")
-        maybe_challenge = _maybe_get_search_param(query, "challenge")
-        maybe_callback_url = _maybe_get_search_param(query, "callback_url")
+        maybe_challenge = _get_pkce_challenge(
+            cookies=request.cookies, response=response, query_dict=query
+        )
         error_message = _maybe_get_search_param(query, "error")
 
         app_details = self._get_app_details_config()
@@ -2449,7 +2466,9 @@ class Router:
             email=maybe_email,
             base_path=self.base_path if is_code_flow else None,
             challenge=maybe_challenge,
-            callback_url=maybe_callback_url,
+            callback_url=(
+                ui_config.redirect_to_on_signup or ui_config.redirect_to
+            ),
             error_message=error_message,
         )
 
