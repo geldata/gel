@@ -358,7 +358,7 @@ def render_signup_page(
         magic_link_form=(
             render.render_magic_link_signup_form(
                 base_email_form=base_email_factor_form,
-                redirect_to=redirect_to_on_signup or redirect_to,
+                callback_url=redirect_to_on_signup or redirect_to,
                 base_path=base_path,
                 provider_name=magic_link_provider.name,
                 verification_method=magic_link_provider.verification_method,
@@ -470,7 +470,7 @@ def render_reset_password_page(
     provider_name: str,
     is_valid: bool,
     redirect_to: str,
-    challenge: Optional[str] = None,
+    challenge: str,
     reset_token: Optional[str] = None,
     error_message: Optional[str] = None,
     is_code_flow: bool = False,
@@ -506,11 +506,20 @@ def render_reset_password_page(
                 action="../reset-password",
                 email=email,
                 provider=provider_name,
-                redirect_to=redirect_to,
-                redirect_on_failure=f"{base_path}/ui/reset-password?code=true&email={html.escape(email)}",
                 label="Enter reset code",
                 button_text="Reset Password",
-                additional_fields='''
+                additional_fields=f'''
+                    <input
+                        type="hidden"
+                        name="redirect_to"
+                        value="{redirect_to}"
+                    />
+                    <input
+                        type="hidden"
+                        name="redirect_on_failure"
+                        value="{base_path}/ui/reset-password"
+                    />
+                    <input type="hidden" name="challenge" value="{challenge}" />
                     <label for="password">New Password</label>
                     <input
                         id="password"
@@ -667,8 +676,6 @@ def render_verify_page(
                 action="../verify",
                 email=email,
                 provider=provider,
-                redirect_to=redirect_to,
-                redirect_on_failure=f"{base_path}/ui/verify?code=true&email={html.escape(email)}&provider={provider}",
                 label="Enter verification code",
                 button_text="Verify Email",
                 challenge=challenge,
@@ -744,18 +751,23 @@ def render_resend_verification_done_page(
 
 def render_magic_link_sent_page(
     *,
+    is_code_flow: bool,
     app_name: Optional[str] = None,
     logo_url: Optional[str] = None,
     dark_logo_url: Optional[str] = None,
     brand_color: Optional[str] = None,
-    is_code_flow: bool = False,
     email: Optional[str] = None,
     base_path: Optional[str] = None,
     challenge: Optional[str] = None,
     callback_url: Optional[str] = None,
     error_message: Optional[str] = None,
 ) -> bytes:
-    if is_code_flow and email and base_path:
+    if is_code_flow:
+        assert email is not None
+        assert base_path is not None
+        assert callback_url is not None
+        assert challenge is not None
+
         content = f'''
             {render.error_message(error_message)}
             <p>We've sent a 6-digit sign-in code to <strong>{
@@ -766,17 +778,20 @@ def render_magic_link_sent_page(
                 action="../magic-link/authenticate",
                 email=email,
                 provider="builtin::local_magic_link",
-                redirect_to=f"{base_path}/ui/magic-link-sent",
-                redirect_on_failure=f"{base_path}/ui/magic-link-sent?code=true&email={html.escape(email)}",
                 label="Enter sign-in code",
                 button_text="Sign In",
-                challenge=challenge,
-                additional_fields=(
-                    f'<input type="hidden" name="callback_url" '
-                    f'value="{html.escape(callback_url or "")}" />'
-                )
-                if callback_url
-                else "",
+                additional_fields=f'''
+                    <input
+                        type="hidden"
+                        name="callback_url"
+                        value="{callback_url}"
+                    />
+                    <input
+                        type="hidden"
+                        name="challenge"
+                        value="{challenge}"
+                    />
+                ''',
             )
         }
         '''
