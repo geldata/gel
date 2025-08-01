@@ -1144,27 +1144,22 @@ class Router:
     ) -> None:
         data = self._get_data_from_request(request)
 
-        reset_token = data.get('reset_token')
-        email = data.get('email')
-        code = data.get('code')
-        password = data.get('password')
-        provider = data.get('provider')
-
-        if not password:
-            raise errors.InvalidData('Missing "password" in reset request')
-
-        if not provider:
-            raise errors.InvalidData('Missing "provider" in reset request')
-
-        allowed_redirect_to = self._maybe_make_allowed_url(
-            data.get("redirect_to")
-        )
-
-        email_password_client = email_password.Client(db=self.db)
-
         try:
+            _check_keyset(data, {"password", "provider"})
+
+            reset_token = data.get('reset_token')
+            email = data.get('email')
+            code = data.get('code')
+            password = data.get('password')
+            challenge = data.get('challenge')
+
+            allowed_redirect_to = self._maybe_make_allowed_url(
+                data.get("redirect_to")
+            )
+
+            email_password_client = email_password.Client(db=self.db)
+
             if reset_token:
-                # Token-based password reset (existing flow)
                 token = jwt.ResetToken.verify(
                     reset_token,
                     self.signing_key,
@@ -1184,24 +1179,14 @@ class Router:
                 )
 
             elif email and code:
-                # OTC-based password reset (new flow) - validate required fields
-                _check_keyset(data, {"email", "code", "provider", "password"})
-
-                if provider != "builtin::local_emailpassword":
-                    raise errors.InvalidData(
-                        "OTC password reset only supported for "
-                        "email+password provider"
+                try:
+                    (
+                        email_factor,
+                        secret,
+                    ) = await email_password_client.get_email_factor_and_secret(
+                        email
                     )
 
-                # Get email factor
-                email_factor = (
-                    await email_password_client.get_email_factor_by_email(email)
-                )
-                if email_factor is None:
-                    raise errors.NoIdentityFound("Invalid email")
-
-                # Verify the OTC using the mega query
-                try:
                     otc_id = await otc.verify(
                         self.db, str(email_factor.id), code
                     )
@@ -1220,12 +1205,6 @@ class Router:
                     raise
 
                 try:
-                    (
-                        _,
-                        secret,
-                    ) = await email_password_client.get_email_factor_and_secret(
-                        email
-                    )
                     await email_password_client.update_password(
                         email_factor.identity.id, secret, password
                     )
@@ -1233,12 +1212,17 @@ class Router:
                     raise errors.InvalidData(
                         f"Failed to reset password: {str(ex)}"
                     )
-
-                response_dict = {"status": "password_reset"}
-                logger.info(
-                    "Reset password via OTC: "
-                    f"identity_id={email_factor.identity.id}, email={email}"
-                )
+                if challenge:
+                    auth_code = await pkce.link_identity_challenge(
+                        self.db, email_factor.identity.id, token.challenge
+                    )
+                    response_dict = {"code": auth_code}
+                    logger.info(
+                        "Reset password via OTC: "
+                        f"identity_id={email_factor.identity.id}, email={email}"
+                    )
+                else:
+                    response_dict = {"status": "password_reset"}
 
             else:
                 raise errors.InvalidData(
