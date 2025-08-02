@@ -1,0 +1,94 @@
+{
+  "providers": {
+    "openai": {
+      "name": "builtin::openai"
+    },
+    "mistral": {
+      "name": "builtin::mistral"
+    },
+    "anthropic": {
+      "name": "builtin::anthropic"
+    },
+    "ollama": {
+      "name": "builtin::ollama"
+    }
+  },
+  "embedding_models": {
+    "text-embedding-3-small": {
+      "model_name": "text-embedding-3-small",
+      "provider_label": "openai",
+      "max_input_tokens": 8191,
+      "max_batch_tokens": 8191,
+      "max_output_dimensions": 1536,
+      "supports_shortening": true
+    },
+    "nomic-embed-text": {
+      "model_name": "nomic-embed-text",
+      "provider_label": "ollama",
+      "max_input_tokens": 8192,
+      "max_batch_tokens": 8192,
+      "max_output_dimensions": 768,
+      "supports_shortening": false
+    },
+    "bge-m3": {
+      "model_name": "bge-m3",
+      "provider_label": "ollama",
+      "max_input_tokens": 8192,
+      "max_batch_tokens": 8192,
+      "max_output_dimensions": 1024,
+      "supports_shortening": false
+    },
+    "with-builtin-provider": {
+      "model_name": "with-builtin-provider",
+      "provider_label": "ollama",
+      "max_input_tokens": 101,
+      "max_batch_tokens": 501,
+      "max_output_dimensions": 11,
+      "supports_shortening": true
+    },
+    "with-custom-provider": {
+      "model_name": "with-custom-provider",
+      "provider_label": "test",
+      "max_input_tokens": 102,
+      "max_batch_tokens": 502,
+      "max_output_dimensions": 12,
+      "supports_shortening": true
+    },
+    "my-model-1": {
+      "model_name": "my-model-1",
+      "provider_label": "ollama",
+      "max_input_tokens": 103,
+      "max_batch_tokens": 503,
+      "max_output_dimensions": 13,
+      "supports_shortening": false
+    },
+    "my-model-2": {
+      "model_name": "my-model-2",
+      "provider_label": "ollama",
+      "max_input_tokens": 104,
+      "max_batch_tokens": 504,
+      "max_output_dimensions": 14,
+      "supports_shortening": false
+    },
+    "extra-model-1": {
+      "model_name": "extra-model-1",
+      "provider_label": "ollama",
+      "max_input_tokens": 111,
+      "max_batch_tokens": 511,
+      "max_output_dimensions": 21,
+      "supports_shortening": false
+    }
+  },
+  "text_generation_models": {
+    "llama3.2": {
+      "model_name": "llama3.2",
+      "provider_label": "ollama",
+      "context_window": 131072
+    },
+    "llama3.3": {
+      "model_name": "llama3.3",
+      "provider_label": "ollama",
+      "context_window": 131072
+    }
+  }
+}
