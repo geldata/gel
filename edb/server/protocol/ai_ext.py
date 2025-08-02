@@ -37,8 +37,6 @@ import contextvars
 import itertools
 import json
 import logging
-import os
-import pathlib
 import uuid
 
 import tiktoken
@@ -442,14 +440,9 @@ async def _ext_ai_update_instdata_ref(
     from edb.pgsql import trampoline
     from edb.pgsql import common as pg_common
 
-    local_reference_path = os.path.join(
-        pathlib.Path(__file__).parent,
-        'ai_reference.json',
+    ref_data_json = pg_common.quote_literal(
+        s_ai_indexes.get_local_reference_data()
     )
-    with open(local_reference_path) as local_reference_file:
-        ref_data: dict[str, Any] = json.load(local_reference_file)
-
-    ref_data_json = pg_common.quote_literal(json.dumps(ref_data))
 
     async with tenant.with_pgcon(dbname) as pgconn:
         await pgconn.sql_fetch(

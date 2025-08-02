@@ -30,7 +30,9 @@ from typing import (
 from copy import copy
 
 import collections.abc
+import immutables
 import itertools
+import json
 import textwrap
 import uuid
 
@@ -40,6 +42,7 @@ from edb.edgeql import ast as ql_ast
 from edb.edgeql import qltypes as ql_ft
 from edb.edgeql import compiler as qlcompiler
 
+from edb.schema import ai_indexes as s_ai_indexes
 from edb.schema import annos as s_anno
 from edb.schema import casts as s_casts
 from edb.schema import scalars as s_scalars
@@ -7502,13 +7505,25 @@ class CreateExtension(ExtensionCommand, adapts=s_exts.CreateExtension):
 
         package_name = package.get_displayname(schema)
         if package_name == 'ai':
+            from edb.pgsql import common as pg_common
+
+            ref_data_str = s_ai_indexes.get_local_reference_data()
+            ref_data_json = pg_common.quote_literal(ref_data_str)
+            ref_data = json.loads(ref_data_str, object_hook=immutables.Map)
+
             self.pgops.add(
                 dbops.Query(textwrap.dedent(trampoline.fixup_query(f'''\
                     INSERT INTO edgedbinstdata_VER.instdata (key, json)
                     VALUES
-                        ('ext_ref_{package_name}', '{{}}'::jsonb)
-                    ON CONFLICT (key) DO NOTHING;
+                        ('ext_ref_{package_name}', {ref_data_json}::jsonb)
+                    ON CONFLICT (key)
+                    DO UPDATE SET json = EXCLUDED.json;
                 ''')))
+            )
+            context.extension_refs = (
+                immutables.Map({package_name: ref_data})
+                if context.extension_refs is None else
+                context.extension_refs.set(package_name, ref_data)
             )
 
         return schema
@@ -7634,17 +7649,6 @@ class DeleteExtension(ExtensionCommand, adapts=s_exts.DeleteExtension):
                         schema=ext,
                     ),
                 )
-            )
-
-        package_name = package.get_displayname(schema)
-        if package_name == 'ai':
-            self.pgops.add(
-                dbops.Query(textwrap.dedent(trampoline.fixup_query(f'''\
-                    DELETE FROM
-                        edgedbinstdata_VER.instdata
-                    WHERE
-                        key = 'ext_ref_{package_name}';
-                ''')))
             )
 
         return schema

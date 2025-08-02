@@ -29,6 +29,7 @@ from typing import (
 )
 
 from collections import defaultdict
+import immutables
 import itertools
 
 from edb import errors
@@ -671,7 +672,7 @@ def delta_from_ddl(
         Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
-    extension_refs: Optional[Mapping[str, Any]] = None
+    extension_refs: Optional[immutables.Map[str, Any]] = None
 ) -> sd.DeltaRoot:
     _, cmd = delta_and_schema_from_ddl(
         ddl_stmt,
@@ -700,7 +701,7 @@ def delta_and_schema_from_ddl(
         Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
-    extension_refs: Optional[Mapping[str, Any]] = None
+    extension_refs: Optional[immutables.Map[str, Any]] = None
 ) -> tuple[s_schema.Schema, sd.DeltaRoot]:
     delta = sd.DeltaRoot()
     context = sd.CommandContext(

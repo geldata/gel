@@ -32,6 +32,7 @@ cpdef enum SideEffects:
     InstanceConfigChanges = 1 << 2
     GlobalSchemaChanges = 1 << 3
     DatabaseChanges = 1 << 4
+    ExtensionRefChanges = 1 << 5
 
 
 @cython.final

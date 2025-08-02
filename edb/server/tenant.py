@@ -2093,6 +2093,17 @@ class Tenant(ha_base.ClusterProtocol):
 
         self.create_task(task(), interruptable=True)
 
+    def on_extension_ref_change(self, dbname: str) -> None:
+        # Triggered by a postgres notification event 'extension-ref-changes'
+        # on the __edgedb_sysevent__ channel
+        async def task():
+            try:
+                await self.fetch_extension_refs(dbname)
+            except Exception:
+                raise
+
+        self.create_task(task(), interruptable=True)
+
     async def process_local_database_config_change(
         self,
         conn: pgcon.PGConnection,

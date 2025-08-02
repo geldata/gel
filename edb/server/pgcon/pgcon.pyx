@@ -2130,6 +2130,8 @@ cdef class PGConnection:
                     self.tenant.on_remote_query_cache_change(
                         dbname, to_add=to_add, to_invalidate=to_invalidate
                     )
+                elif event == 'extension-ref-changes':
+                    self.tenant.on_extension_ref_change()
                 else:
                     raise AssertionError(f'unexpected system event: {event!r}')
 

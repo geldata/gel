@@ -21,6 +21,9 @@ from typing import TYPE_CHECKING, Any, Mapping, Optional
 
 from dataclasses import dataclass
 
+import os
+import pathlib
+
 from edb import errors
 from edb.common import parsing
 
@@ -67,6 +70,20 @@ class EmbeddingModelProperties:
     max_batch_tokens: int
     max_output_dimensions: int
     supports_shortening: bool
+
+
+def get_local_reference_data() -> str:
+    if test_reference_path := os.environ.get("EDGEDB_TEST_AI_REFERENCE_PATH"):
+        local_reference_path = test_reference_path
+    else:
+        local_reference_path = os.path.join(
+            pathlib.Path(__file__).parent.parent,
+            'server',
+            'protocol',
+            'ai_reference.json',
+        )
+    with open(local_reference_path) as local_reference_file:
+        return local_reference_file.read()
 
 
 def load_reference_descs(reference_data: Mapping[str, Any]) -> Optional[

@@ -1176,6 +1176,12 @@ cdef class DatabaseConnectionView:
             if new_types:
                 self._db._update_backend_ids(new_types)
             if query_unit.user_schema is not None:
+                if (
+                    "ai" not in self._db.extensions
+                    and "ai" in query_unit.extensions
+                ):
+                    side_effects |= SideEffects.ExtensionRefChanges
+
                 self._db._set_and_signal_new_user_schema(
                     query_unit.user_schema,
                     query_unit.user_schema_version,
@@ -1221,6 +1227,12 @@ cdef class DatabaseConnectionView:
             if self._in_tx_new_types:
                 self._db._update_backend_ids(self._in_tx_new_types)
             if query_unit.user_schema is not None:
+                if (
+                    "ai" not in self._db.extensions
+                    and "ai" in query_unit.extensions
+                ):
+                    side_effects |= SideEffects.ExtensionRefChanges
+
                 self._db._set_and_signal_new_user_schema(
                     query_unit.user_schema,
                     query_unit.user_schema_version,
@@ -1272,6 +1284,12 @@ cdef class DatabaseConnectionView:
         if self._in_tx_new_types:
             self._db._update_backend_ids(self._in_tx_new_types)
         if user_schema is not None:
+            if (
+                "ai" not in self._db.extensions
+                and "ai" in extensions
+            ):
+                side_effects |= SideEffects.ExtensionRefChanges
+
             self._db._set_and_signal_new_user_schema(
                 user_schema,
                 self._in_tx_user_schema_version,
