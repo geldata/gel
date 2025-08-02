@@ -567,7 +567,69 @@ def render_reset_password_page(
     )
 
 
-def render_email_verification_page(
+def render_email_verification_page_code_flow(
+    *,
+    email: str,
+    provider: str,
+    callback_url: str,
+    base_path: str,
+    challenge: str,
+    error_message: Optional[str] = None,
+    # config
+    app_name: Optional[str] = None,
+    logo_url: Optional[str] = None,
+    dark_logo_url: Optional[str] = None,
+    brand_color: Optional[str] = None,
+) -> bytes:
+    """Renders verification page that handles both link and code flows."""
+
+    content = f'''
+        {render.error_message(error_message)}
+        <p>We've sent a 6-digit verification code to <strong>{
+        html.escape(email)
+    }</strong></p>
+        {
+        render.code_input_form(
+            action="../verify",
+            email=email,
+            provider=provider,
+            label="Enter verification code",
+            button_text="Verify Email",
+            additional_fields=f'''
+                <input
+                    type="hidden"
+                    name="redirect_to"
+                    value="{callback_url}"
+                />
+                <input
+                    type="hidden"
+                    name="redirect_on_failure"
+                    value="{base_path}/ui/verify"
+                />
+                <input
+                    type="hidden"
+                    name="challenge"
+                    value="{challenge}"
+                />
+            '''
+        )
+    }
+    '''
+
+    return render.base_page(
+        title=f'Verify email{f" for {app_name}" if app_name else ""}',
+        logo_url=logo_url,
+        dark_logo_url=dark_logo_url,
+        brand_color=brand_color,
+        cleanup_search_params=['error'],
+        content=f'''
+            {render.title('Verify email', join='for', app_name=app_name)}
+            {content}
+        ''',
+    )
+
+
+def render_email_verification_page_link_flow(
     *,
     is_valid: bool,
     error_messages: list[str],
@@ -647,59 +709,6 @@ def render_email_verification_expired_page(
             {
             render.title('Verification expired', join='for', app_name=app_name)
         }
-            {content}
-        ''',
-    )
-
-
-def render_verify_page(
-    *,
-    base_path: str,
-    email: Optional[str] = None,
-    provider: Optional[str] = None,
-    is_code_flow: bool = False,
-    error_message: Optional[str] = None,
-    challenge: Optional[str] = None,
-    # config
-    redirect_to: str,
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = None,
-) -> bytes:
-    """Renders verification page that handles both link and code flows."""
-
-    if is_code_flow and email and provider:
-        content = f'''
-            {render.error_message(error_message)}
-            <p>We've sent a 6-digit verification code to <strong>{
-            html.escape(email)
-        }</strong></p>
-            {
-            render.code_input_form(
-                action="../verify",
-                email=email,
-                provider=provider,
-                label="Enter verification code",
-                button_text="Verify Email",
-                challenge=challenge,
-            )
-        }
-        '''
-    else:
-        content = render.success_message(
-            "A verification link has been sent to your email. Please check "
-            "your email and click the link to verify your account."
-        )
-
-    return render.base_page(
-        title=f'Verify email{f" for {app_name}" if app_name else ""}',
-        logo_url=logo_url,
-        dark_logo_url=dark_logo_url,
-        brand_color=brand_color,
-        cleanup_search_params=['error'],
-        content=f'''
-            {render.title('Verify email', join='for', app_name=app_name)}
             {content}
         ''',
     )
