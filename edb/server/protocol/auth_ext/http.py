@@ -612,6 +612,7 @@ class Router:
             if require_verification:
                 response_dict = {
                     "identity_id": identity.id,
+                    "email": email_factor.email,
                     "verification_email_sent_at": datetime.datetime.now(
                         datetime.timezone.utc
                     ).isoformat(),
@@ -795,34 +796,21 @@ class Router:
                 f"email_factor_id={email_factor.id}, "
                 f"email={email_factor.email}"
             )
-            match (token.maybe_challenge, token.maybe_redirect_to):
-                case (str(challenge), str(redirect_to)):
-                    await pkce.create(self.db, challenge)
-                    code = await pkce.link_identity_challenge(
-                        self.db, token.subject, challenge
-                    )
-                    return self._try_redirect(
-                        response,
-                        util.join_url_params(redirect_to, {"code": code}),
-                    )
-                case (str(challenge), _):
-                    await pkce.create(self.db, challenge)
-                    code = await pkce.link_identity_challenge(
-                        self.db, token.subject, challenge
-                    )
-                    response.status = http.HTTPStatus.OK
-                    response.content_type = b"application/json"
-                    response.body = json.dumps({"code": code}).encode()
-                    return
-                case (_, str(redirect_to)):
-                    return self._try_redirect(response, redirect_to)
-                case (_, _):
-                    response.status = http.HTTPStatus.NO_CONTENT
-                    return
+            identity_id = token.subject
+            challenge = token.maybe_challenge
+            redirect_to = self._maybe_make_allowed_url(token.maybe_redirect_to)
 
         elif email and code:
-            _check_keyset(data, {"email", "code", "provider"})
-
+            _check_keyset(
+                data,
+                {
+                    "email",
+                    "code",
+                    "provider",
+                    "redirect_to",
+                    "redirect_on_failure",
+                },
+            )
             email_client: local.Client
             if provider == "builtin::local_emailpassword":
                 email_client = email_password.Client(db=self.db)
@@ -869,10 +857,11 @@ class Router:
                     f"email={email}"
                 )
 
-                response.status = http.HTTPStatus.OK
-                response.content_type = b"application/json"
-                response.body = json.dumps({"status": "verified"}).encode()
-                return
+                identity_id = email_factor.identity.id
+                challenge = data.get("challenge")
+                redirect_to = self._maybe_make_allowed_url(
+                    data.get("redirect_to")
+                )
 
             except Exception as ex:
                 self._handle_otc_failed(ex)
@@ -888,6 +877,32 @@ class Router:
                 'Must provide either "verification_token" (Link mode) '
                 'or "email" + "code" (OTC mode)'
             )
+
+        logger.info(f"Challenge: {challenge}, Redirect to: {redirect_to}")
+        match (challenge, redirect_to):
+            case (str(challenge), AllowedUrl(url=redirect_to)):
+                await pkce.create(self.db, challenge)
+                code = await pkce.link_identity_challenge(
+                    self.db, identity_id, challenge
+                )
+                return self._try_redirect(
+                    response,
+                    util.join_url_params(redirect_to, {"code": code}),
+                )
+            case (str(challenge), _):
+                await pkce.create(self.db, challenge)
+                code = await pkce.link_identity_challenge(
+                    self.db, identity_id, challenge
+                )
+                response.status = http.HTTPStatus.OK
+                response.content_type = b"application/json"
+                response.body = json.dumps({"code": code}).encode()
+                return
+            case (_, AllowedUrl(url=redirect_to)):
+                return self._try_redirect(response, redirect_to)
+            case (_, _):
+                response.status = http.HTTPStatus.NO_CONTENT
+                return
 
     async def handle_resend_verification_email(
         self,
@@ -1547,7 +1562,9 @@ class Router:
                     await self._maybe_send_webhook(
                         webhook.MagicLinkRequested(
                             event_id=str(uuid.uuid4()),
-                            timestamp=datetime.datetime.now(datetime.timezone.utc),
+                            timestamp=datetime.datetime.now(
+                                datetime.timezone.utc
+                            ),
                             identity_id=identity_id,
                             email_factor_id=email_factor.id,
                             magic_link_token=magic_link_token,
@@ -1658,14 +1675,16 @@ class Router:
             try:
                 data = self._get_data_from_request(request)
 
-                _check_keyset(
-                    data, {"email", "code", "challenge", "callback_url"}
-                )
+                _check_keyset(data, {"email", "code", "callback_url"})
 
                 email = data["email"]
                 code_str = data["code"]
-                challenge = data["challenge"]
                 callback_url = data["callback_url"]
+                challenge = _get_pkce_challenge(
+                    cookies=request.cookies,
+                    response=response,
+                    query_dict=query,
+                )
 
                 if not self._is_url_allowed(callback_url):
                     raise errors.InvalidData(
@@ -2248,31 +2267,31 @@ class Router:
             request.url.query.decode("ascii") if request.url.query else ""
         )
 
-        is_code_flow = "code" in query
-        maybe_email = _maybe_get_search_param(query, "email")
-        maybe_provider = _maybe_get_search_param(query, "provider")
-        maybe_challenge = _maybe_get_search_param(query, "challenge")
-        error_message = _maybe_get_search_param(query, "error")
+        is_code_flow = _maybe_get_search_param(query, "code") == "true"
 
         if is_code_flow:
-            if not maybe_email or not maybe_provider:
-                error_messages.append(
-                    "Missing email or provider for code verification."
-                )
-                is_code_flow = False
+            _check_keyset(query, {"email", "provider"})
+            email = _get_search_param(query, "email")
+            provider = _get_search_param(query, "provider")
+            error_message = _maybe_get_search_param(query, "error")
+            challenge = _get_pkce_challenge(
+                cookies=request.cookies,
+                response=response,
+                query_dict=query,
+            )
 
             app_details_config = self._get_app_details_config()
             response.status = http.HTTPStatus.OK
             response.content_type = b'text/html'
-            response.body = ui.render_verify_page(
+            response.body = ui.render_email_verification_page_code_flow(
+                challenge=challenge,
+                email=email,
+                provider=provider,
                 base_path=self.base_path,
-                email=maybe_email,
-                provider=maybe_provider,
-                is_code_flow=is_code_flow,
+                callback_url=(
+                    ui_config.redirect_to_on_signup or ui_config.redirect_to
+                ),
                 error_message=error_message,
-                challenge=maybe_challenge,
-                redirect_to=ui_config.redirect_to_on_signup
-                or ui_config.redirect_to,
                 app_name=app_details_config.app_name,
                 logo_url=app_details_config.logo_url,
                 dark_logo_url=app_details_config.dark_logo_url,
@@ -2891,14 +2910,27 @@ def _get_pkce_challenge(
     query_dict: dict[str, list[str]],
 ) -> str | None:
     cookie_name = 'edgedb-pkce-challenge'
-    challenge: str | None = _maybe_get_search_param(
-        query_dict, 'challenge'
-    ) or _maybe_get_search_param(query_dict, "code_challenge")
+    challenge: str | None = _maybe_get_search_param(query_dict, 'challenge')
+    if challenge is not None:
+        logger.info(
+            f"PKCE challenge found in query param 'challenge': {challenge!r}"
+        )
+    else:
+        challenge = _maybe_get_search_param(query_dict, "code_challenge")
+        if challenge is not None:
+            logger.info(
+                f"PKCE challenge found in query param 'code_challenge': {challenge!r}"
+            )
     if challenge is not None:
         _set_cookie(response, cookie_name, challenge)
     else:
         if 'edgedb-pkce-challenge' in cookies:
             challenge = cookies['edgedb-pkce-challenge'].value
+            logger.info(f"PKCE challenge found in cookie: {challenge!r}")
+        else:
+            logger.info("No PKCE challenge found in query params or cookies.")
+            logger.info(f"Query params: {query_dict}")
+            logger.info(f"Cookies: {cookies}")
     return challenge
 
 
