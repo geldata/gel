@@ -3016,6 +3016,11 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
         super_col = ptr_col_name(schema, role_obj, 'superuser')
         name_col = ptr_col_name(schema, role_obj, 'name')
         pass_col = ptr_col_name(schema, role_obj, 'password')
+        pg_pol_col = ptr_col_name(
+            schema,
+            role_obj,
+            'apply_access_policies_pg_default',
+        )
         qi_superuser = qlquote.quote_ident(defines.EDGEDB_SUPERUSER)
         text = f"""
             WITH RECURSIVE
@@ -3068,6 +3073,16 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
                                     concat(
                                         'SET password_hash := ',
                                         quote_literal(role.{qi(pass_col)}),
+                                        '; '
+                                    )
+                                ELSE NULL END
+                            ),
+                            (CASE
+                                WHEN role.{qi(pg_pol_col)} IS NOT NULL THEN
+                                    concat(
+                                        'SET apply_access_policies_pg_default ',
+                                        ':= ',
+                                        role.{qi(pg_pol_col)}::text,
                                         '; '
                                     )
                                 ELSE NULL END
@@ -3146,6 +3161,17 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
                                         concat(
                                             'SET password_hash := ',
                                             quote_literal(role.{qi(pass_col)}),
+                                            '; '
+                                        )
+                                    ELSE NULL END
+                                ),
+                                (CASE
+                                    WHEN role.{qi(pg_pol_col)} IS NOT NULL THEN
+                                        concat(
+                                            'SET ',
+                                            'apply_access_policies_pg_default ',
+                                            ':= ',
+                                            role.{qi(pg_pol_col)}::text,
                                             '; '
                                         )
                                     ELSE NULL END
@@ -6120,6 +6146,9 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         'builtin': "((d.description)->>'builtin')::bool",
         'internal': 'False',
         'password': "(d.description)->>'password_hash'",
+        'apply_access_policies_pg_default': (
+            "((d.description)->>'apply_access_policies_pg_default')::bool"
+        ),
     }
 
     view_query = f'''
@@ -6348,6 +6377,9 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         'builtin': 'True',
         'internal': 'False',
         'password': "json->>'password_hash'",
+        'apply_access_policies_pg_default': (
+            "(json->>'pg_apply_access_policies_default')::bool"
+        ),
     }
 
     view_query = f'''

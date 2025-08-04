@@ -100,6 +100,7 @@ class RoleDescriptor(TypedDict):
     password: str | None
     all_permissions: list[str] | None
     branches: list[str]
+    apply_access_policies_pg_default: bool | None
 
 
 class Tenant(ha_base.ClusterProtocol):

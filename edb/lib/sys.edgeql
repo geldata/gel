@@ -127,6 +127,7 @@ CREATE TYPE sys::Role EXTENDING
     CREATE PROPERTY password -> std::str;
     CREATE MULTI PROPERTY permissions -> std::str;
     CREATE MULTI PROPERTY branches -> std::str;
+    CREATE PROPERTY apply_access_policies_pg_default -> std::bool;
 
     CREATE ACCESS POLICY ap_read allow select using (
         global sys::perm::superuser

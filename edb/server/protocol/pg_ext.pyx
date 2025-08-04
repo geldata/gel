@@ -96,7 +96,8 @@ cdef class ConnectionView:
         # Frontend-only settings are defined by the high-level compiler, and
         # tracked only here, syncing between the compiler process,
         # see current_fe_settings(), fe_transaction_state() and usages below.
-        self._fe_settings = DEFAULT_FE_SETTINGS
+        self._local_fe_defaults = DEFAULT_FE_SETTINGS
+        self._fe_settings = self._local_fe_defaults
         self._in_tx_fe_settings = None
         self._in_tx_fe_local_settings = None
 
@@ -128,15 +129,27 @@ cdef class ConnectionView:
             DEFAULT_SETTINGS, DEFAULT_FE_SETTINGS, DEFAULT_STATE
         )
 
+    cdef _init_user_configs(self, username, tenant):
+        assert self._fe_settings is DEFAULT_FE_SETTINGS
+        assert self._in_tx_fe_local_settings is None
+        role = tenant.get_roles()[username]
+        apply_default = role['apply_access_policies_pg_default']
+        if apply_default is not None:
+            self._local_fe_defaults = self._local_fe_defaults.set(
+                'apply_access_policies_pg',
+                (str(apply_default).lower(),),
+            )
+            self._fe_settings = self._local_fe_defaults
+
     cpdef inline current_fe_settings(self):
         if self.in_tx():
             # For easier access, _in_tx_fe_local_settings is always a superset
             # of _in_tx_fe_settings; _in_tx_fe_settings only keeps track of
             # non-local settings, so that the local settings don't go across
             # transaction boundaries; this must be consistent with dbstate.py.
-            return self._in_tx_fe_local_settings or DEFAULT_FE_SETTINGS
+            return self._in_tx_fe_local_settings or self._local_fe_defaults
         else:
-            return self._fe_settings or DEFAULT_FE_SETTINGS
+            return self._fe_settings
 
     cdef inline fe_transaction_state(self):
         return dbstate.SQLTransactionState(
@@ -280,11 +293,11 @@ cdef class ConnectionView:
             if unit.set_vars == {None: None}:  # RESET ALL
                 if self.in_tx():
                     self._in_tx_settings = DEFAULT_SETTINGS
-                    self._in_tx_fe_settings = DEFAULT_FE_SETTINGS
-                    self._in_tx_fe_local_settings = DEFAULT_FE_SETTINGS
+                    self._in_tx_fe_settings = self._local_fe_defaults
+                    self._in_tx_fe_local_settings = self._local_fe_defaults
                 else:
                     self._settings = DEFAULT_SETTINGS
-                    self._fe_settings = DEFAULT_FE_SETTINGS
+                    self._fe_settings = self._local_fe_defaults
             else:
                 if self.in_tx():
                     if unit.frontend_only:
@@ -292,8 +305,8 @@ cdef class ConnectionView:
                             settings = self._in_tx_fe_settings.mutate()
                             for k, v in unit.set_vars.items():
                                 if v is None:
-                                    if k in DEFAULT_FE_SETTINGS:
-                                        settings[k] = DEFAULT_FE_SETTINGS[k]
+                                    if k in self._local_fe_defaults:
+                                        settings[k] = self._local_fe_defaults[k]
                                     else:
                                         settings.pop(k, None)
                                 else:
@@ -311,8 +324,8 @@ cdef class ConnectionView:
                     return
                 for k, v in unit.set_vars.items():
                     if v is None:
-                        if unit.frontend_only and k in DEFAULT_FE_SETTINGS:
-                            settings[k] = DEFAULT_FE_SETTINGS[k]
+                        if unit.frontend_only and k in self._local_fe_defaults:
+                            settings[k] = self._local_fe_defaults[k]
                         else:
                             settings.pop(k, None)
                     else:
@@ -772,6 +785,8 @@ cdef class PgConnection(frontend.FrontendConnection):
 
         self.dbname = database
         self.username = user
+
+        self._dbview._init_user_configs(user, self.tenant)
 
         buf = WriteBuffer()
 

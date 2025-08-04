@@ -1573,6 +1573,74 @@ class TestServerPermissionsSQL(server_tb.SQLQueryTestCase):
                 CONFIGURE CURRENT BRANCH RESET cfg::apply_access_policies_pg;
             ''')
 
+    async def test_server_permissions_sql_access_policy_05(self):
+        # Test the apply_access_policies_pg_default role field...
+
+        await self.con.query('''
+            CREATE TYPE T;
+            INSERT T;
+            ALTER TYPE T {
+                CREATE ACCESS POLICY no ALLOW ALL USING (false);
+            };
+            CREATE SUPERUSER ROLE pg_05_1 {
+                SET password := 'secret';
+                SET apply_access_policies_pg_default := false;
+            };
+            CREATE SUPERUSER ROLE pg_05_2 {
+                SET password := 'secret';
+                SET apply_access_policies_pg_default := true;
+            };
+            CONFIGURE CURRENT BRANCH SET cfg::apply_access_policies_pg := true;
+        ''')
+
+        conn1 = conn2 = None
+
+        try:
+            # branch default is true - conn1 should not apply
+            # policies, conn2 should apply them
+            conn1 = await self.create_sql_connection(
+                user='pg_05_1',
+                password='secret',
+            )
+            conn2 = await self.create_sql_connection(
+                user='pg_05_2',
+                password='secret',
+            )
+            self.assertEqual(
+                await conn1.fetchval('select count(*) from "T"'),
+                1,
+            )
+            self.assertEqual(
+                await conn2.fetchval('select count(*) from "T"'),
+                0,
+            )
+
+            # Reset the config -- now the connections should not have
+            # behavior change!
+            await self.con.query('''
+                CONFIGURE CURRENT BRANCH RESET cfg::apply_access_policies_pg;
+            ''')
+            self.assertEqual(
+                await conn1.fetchval('select count(*) from "T"'),
+                1,
+            )
+            self.assertEqual(
+                await conn2.fetchval('select count(*) from "T"'),
+                0,
+            )
+
+        finally:
+            if conn1:
+                await conn1.close()
+            if conn2:
+                await conn2.close()
+            await self.con.query('''
+                DROP TYPE T;
+                DROP ROLE pg_05_1;
+                DROP ROLE pg_05_2;
+                CONFIGURE CURRENT BRANCH RESET cfg::apply_access_policies_pg;
+            ''')
+
     async def test_server_permissions_sql_config_01(self):
         # Non-superuser cannot use SET statements
 

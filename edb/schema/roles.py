@@ -82,6 +82,13 @@ class Role(
         inheritable=False,
     )
 
+    apply_access_policies_pg_default = so.SchemaField(
+        bool,
+        default=None,
+        allow_ddl_set=True,
+        inheritable=True,
+    )
+
 
 class RoleCommandContext(
         sd.ObjectCommandContext[Role],
