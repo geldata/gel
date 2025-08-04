@@ -708,11 +708,30 @@ def prepare_repair_patch(
 PatchEntry = tuple[tuple[str, ...], tuple[str, ...], dict[str, Any]]
 
 
+async def get_existing_view_columns(
+    conn: pgcon.PGConnection | PGConnectionProxy,
+) -> dict[str, list[str]]:
+    # Find all the config views (they are pg_classes where
+    # there is also a table with the same name but "_dummy"
+    # at the end) and collect all their columns in order.
+    return json.loads(await conn.sql_fetch_val('''\
+        select json_object_agg(v.relname, (
+            select json_agg(a.attname order by a.attnum)
+            from pg_catalog.pg_attribute as a
+            where v.oid = a.attrelid
+        ))
+        from pg_catalog.pg_class as v
+        inner join pg_catalog.pg_tables as t
+        on v.relname || '_dummy' = t.tablename
+
+    '''.encode('utf-8')))
+
+
 async def gather_patch_info(
     num: int,
     kind: str,
     patch: str,
-    conn: pgcon.PGConnection,
+    conn: pgcon.PGConnection | PGConnectionProxy,
 ) -> Optional[dict[str, list[str]]]:
     """Fetch info for a patch that needs to use the connection.
 
@@ -723,20 +742,7 @@ async def gather_patch_info(
     """
 
     if '+config' in kind:
-        # Find all the config views (they are pg_classes where
-        # there is also a table with the same name but "_dummy"
-        # at the end) and collect all their columns in order.
-        return json.loads(await conn.sql_fetch_val('''\
-            select json_object_agg(v.relname, (
-                select json_agg(a.attname order by a.attnum)
-                from pg_catalog.pg_attribute as a
-                where v.oid = a.attrelid
-            ))
-            from pg_catalog.pg_class as v
-            inner join pg_catalog.pg_tables as t
-            on v.relname || '_dummy' = t.tablename
-
-        '''.encode('utf-8')))
+        return await get_existing_view_columns(conn)
     else:
         return None
 

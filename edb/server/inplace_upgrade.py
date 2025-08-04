@@ -20,6 +20,7 @@
 from __future__ import annotations
 from typing import (
     Any,
+    Iterator,
     Optional,
     Sequence,
 )
@@ -45,7 +46,9 @@ from edb.schema import links as s_links
 from edb.schema import name as sn
 from edb.schema import objtypes as s_objtypes
 from edb.schema import reflection as s_refl
+from edb.schema import scalars as s_scalars
 from edb.schema import schema as s_schema
+from edb.schema import types as s_types
 from edb.schema import version as s_ver
 
 from edb.server import args as edbargs
@@ -60,6 +63,7 @@ from edb.server import pgcon
 
 from edb.pgsql import common as pg_common
 from edb.pgsql import dbops
+from edb.pgsql import patches as pg_patches
 from edb.pgsql import metaschema
 from edb.pgsql import trampoline
 
@@ -197,7 +201,7 @@ def _compile_schema_fixup(
 async def _collect_6x_upgrade_patches(
     ctx: bootstrap.BootstrapContext,
     schema: s_schema.Schema,
-) -> tuple[list[qlast.Command], bool]:
+) -> tuple[list[qlast.Command], bool, bool]:
     from edb.pgsql import patches_6x
 
     cmds: list[qlast.Command] = []
@@ -213,7 +217,9 @@ async def _collect_6x_upgrade_patches(
             """.encode('utf-8'),
         )
     except pgcon.BackendError:
-        return [], False
+        return [], False, False
+
+    needs_config = False
     jnum = json.loads(res)
     for kind, patch in patches_6x.PATCHES[jnum:]:
 
@@ -226,6 +232,9 @@ async def _collect_6x_upgrade_patches(
             s_exts.Extension, extension_name, default=None)
         if not extension:
             continue
+
+        if '+config' in kind:
+            needs_config |= True
 
         for ddl_cmd in edgeql.parse_block(patch):
             if not isinstance(ddl_cmd, qlast.DDLCommand):
@@ -241,7 +250,13 @@ async def _collect_6x_upgrade_patches(
         and schema.get_global(s_exts.Extension, 'ai', default=None)
     )
 
-    return cmds, needs_repair
+    return cmds, needs_repair, needs_config
+
+
+def _subcommands_preorder(cmd: sd.Command) -> Iterator[sd.Command]:
+    yield cmd
+    for sub in cmd.get_subcommands():
+        yield from _subcommands_preorder(sub)
 
 
 async def _apply_ddl_schema_storage(
@@ -252,6 +267,7 @@ async def _apply_ddl_schema_storage(
     compilerctx: edbcompiler.CompileContext,
     schema: s_schema.Schema,
     schema_object_ids: dict[tuple[sn.Name, Any], uuidgen.UUID],
+    fake_backend_ids: bool=False,
 
 ) -> tuple[s_schema.ChainedSchema, str]:
     # applies ddl schema storage but not the real ddl
@@ -270,10 +286,26 @@ async def _apply_ddl_schema_storage(
     # Prune any AlterSchemaVersion commands, because they won't work,
     # since all the compile_schema_storage_in_delta commands run right
     # away, while if we run a fixup block, it is during finalize.
+    sub: sd.Command
     for sub in delta_command.get_subcommands(
         type=s_ver.AlterSchemaVersion
     ):
         delta_command.discard(sub)
+    # This hack is quite frustrating: since the actual changes to the
+    # pg schema (for extensions) happen *after* the reflection schema
+    # updates (during finalization), backend_ids for new scalars
+    # aren't ready, so we force reflection to *not* try computing them
+    # now, and we'll get them later.
+    if fake_backend_ids:
+        for sub in _subcommands_preorder(delta_command):
+            if not isinstance(sub, sd.CreateObject):
+                continue
+            mcls = sub.get_schema_metaclass()
+            if (
+                issubclass(mcls, (s_scalars.ScalarType, s_types.Collection))
+                and not issubclass(mcls, s_types.CollectionExprAlias)
+            ):
+                sub.set_attribute_value('backend_id', 0)
 
     schema, plan, tplan = bootstrap._process_delta_params(
         delta_command,
@@ -361,15 +393,29 @@ async def _upgrade_one(
         )
 
     schema_fixup = ''
-    upgrade_patches, needs_repair = await _collect_6x_upgrade_patches(
-        ctx, schema
+    upgrade_patches, needs_repair, needs_config = (
+        await _collect_6x_upgrade_patches(ctx, schema)
     )
     for ddl_cmd in upgrade_patches:
         schema, fixup = await _apply_ddl_schema_storage(
             ddl_cmd,
-            ctx, backend_params, keys, compilerctx, schema, schema_object_ids
+            ctx, backend_params, keys, compilerctx, schema, schema_object_ids,
+            fake_backend_ids=True,
         )
         schema_fixup += fixup
+
+    if upgrade_patches:
+        version_key = pg_patches.get_version_key(len(pg_patches.PATCHES))
+        sysqueries = json.loads(await instdata.get_instdata(
+            ctx.conn, f'sysqueries{version_key}', 'json'))
+        schema_fixup += sysqueries['backend_id_fixup']
+    if needs_config:
+        existing_view_columns = await bootstrap.get_existing_view_columns(
+            ctx.conn)
+        cfg_block = dbops.PLTopBlock()
+        metaschema.get_config_views(schema, existing_view_columns).generate(
+            cfg_block)
+        schema_fixup += cfg_block.to_string()
 
     # If we need to do a schema, repair... do it
     if needs_repair:
@@ -582,7 +628,7 @@ async def _get_databases(
     #
     # Note: We put template last, since when deleting, we need it to
     # stay around so we can query all branches.
-    EARLY: tuple[str, ...] = ('dumpv5',)
+    EARLY: tuple[str, ...] = ()
     databases.sort(
         key=lambda k: (k == edbdef.EDGEDB_TEMPLATE_DB, k not in EARLY, k)
     )

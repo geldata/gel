@@ -550,6 +550,7 @@ def _build_object_mutation_shape(
         and not issubclass(mcls, s_types.CollectionExprAlias)
         and not cmd.get_attribute_value('abstract')
         and not cmd.get_attribute_value('transient')
+        and not cmd.has_attribute_value('backend_id')
     ):
         kind = f'"schema::{mcls.__name__}"'
 

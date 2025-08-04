@@ -319,4 +319,84 @@ std::__pg_generate_series(
     USING SQL FUNCTION 'generate_series';
 };
 '''),
+
+    # !!!!!! 7.x !!!!!
+    ('edgeql+user_ext+config|auth', '''
+    create type ext::auth::OneTimeCode extending ext::auth::Auditable {
+        create required property code_hash: std::bytes {
+            create constraint exclusive;
+            create annotation std::description :=
+                "The securely hashed one-time code.";
+        };
+        create required property expires_at: std::datetime {
+            create annotation std::description :=
+                "The date and time when the code expires.";
+        };
+
+        create required link factor: ext::auth::Factor {
+            on target delete delete source;
+        };
+    };
+
+    create scalar type ext::auth::AuthenticationAttemptType extending std::enum<
+        SignIn,
+        EmailVerification,
+        PasswordReset,
+        MagicLink,
+        OneTimeCode
+    >;
+
+    create type ext::auth::AuthenticationAttempt
+    extending ext::auth::Auditable {
+        create required link factor: ext::auth::Factor {
+            on target delete delete source;
+        };
+        create required property attempt_type:
+            ext::auth::AuthenticationAttemptType {
+            create annotation std::description :=
+                "The type of authentication attempt being made.";
+        };
+        create required property successful: std::bool {
+            create annotation std::description :=
+                "Whether this authentication attempt was successful.";
+        };
+    };
+
+    create scalar type ext::auth::VerificationMethod
+    extending std::enum<Link, Code>;
+
+    alter type ext::auth::EmailPasswordProviderConfig {
+        create required property verification_method:
+            ext::auth::VerificationMethod {
+            set default := ext::auth::VerificationMethod.Link;
+        };
+    };
+
+    alter type ext::auth::WebAuthnProviderConfig {
+        create required property verification_method:
+            ext::auth::VerificationMethod {
+            set default := ext::auth::VerificationMethod.Link;
+        };
+    };
+
+    alter type ext::auth::MagicLinkProviderConfig {
+        create required property verification_method:
+            ext::auth::VerificationMethod {
+            set default := ext::auth::VerificationMethod.Link;
+        };
+    };
+
+    alter scalar type ext::auth::WebhookEvent extending std::enum<
+        IdentityCreated,
+        IdentityAuthenticated,
+        EmailFactorCreated,
+        EmailVerified,
+        EmailVerificationRequested,
+        PasswordResetRequested,
+        MagicLinkRequested,
+        OneTimeCodeRequested,
+        OneTimeCodeVerified,
+    >;
+
+'''),
 ]
