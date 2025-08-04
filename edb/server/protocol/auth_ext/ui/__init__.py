@@ -414,7 +414,9 @@ def render_signup_page(
 
 def render_forgot_password_page(
     *,
-    base_path: str,
+    redirect_to: str,
+    redirect_on_failure: str,
+    reset_url: str,
     provider_name: str,
     challenge: str,
     error_message: Optional[str] = None,
@@ -437,15 +439,13 @@ def render_forgot_password_page(
         <form method="POST" action="../send-reset-email">
           <input type="hidden" name="provider" value="{provider_name}" />
           <input type="hidden" name="challenge" value="{challenge}" />
-          <input type="hidden" name="redirect_on_failure" value="{
-            base_path
-        }/ui/forgot-password?challenge={challenge}" />
-          <input type="hidden" name="redirect_to" value="{
-            base_path
-        }/ui/forgot-password?challenge={challenge}" />
-          <input type="hidden" name="reset_url" value="{
-            base_path
-        }/ui/reset-password" />
+          <input
+            type="hidden"
+            name="redirect_on_failure"
+            value="{redirect_on_failure}"
+          />
+          <input type="hidden" name="redirect_to" value="{redirect_to}" />
+          <input type="hidden" name="reset_url" value="{reset_url}" />
 
           <label for="email">Email</label>
           <input id="email" name="email" type="email" value="{email or ''}" />
@@ -532,7 +532,6 @@ def render_reset_password_page(
                         required
                     />
                 ''',
-                challenge=challenge,
             )
         }
         '''
