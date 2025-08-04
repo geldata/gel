@@ -2136,29 +2136,43 @@ class Router:
                 if ui_config
                 else b'Auth UI not enabled'
             )
-        else:
-            query = urllib.parse.parse_qs(
-                request.url.query.decode("ascii") if request.url.query else ""
-            )
-            challenge = _get_search_param(
-                query, "challenge", fallback_keys=["code_challenge"]
-            )
-            app_details_config = self._get_app_details_config()
+            return
 
-            response.status = http.HTTPStatus.OK
-            response.content_type = b'text/html'
-            response.body = ui.render_forgot_password_page(
-                base_path=self.base_path,
-                provider_name=password_provider.name,
-                error_message=_maybe_get_search_param(query, 'error'),
-                email=_maybe_get_search_param(query, 'email'),
-                email_sent=_maybe_get_search_param(query, 'email_sent'),
-                challenge=challenge,
-                app_name=app_details_config.app_name,
-                logo_url=app_details_config.logo_url,
-                dark_logo_url=app_details_config.dark_logo_url,
-                brand_color=app_details_config.brand_color,
+        query = urllib.parse.parse_qs(
+            request.url.query.decode("ascii") if request.url.query else ""
+        )
+        challenge = _get_search_param(
+            query, "challenge", fallback_keys=["code_challenge"]
+        )
+        app_details_config = self._get_app_details_config()
+
+        redirect_on_failure = (
+            f"{self.base_path}/ui/forgot-password?challenge={challenge}"
+        )
+        reset_url = f"{self.base_path}/ui/reset-password"
+        if password_provider.verification_method == "Code":
+            redirect_to = f"{self.base_path}/ui/reset-password?code=true&challenge={challenge}"
+        else:
+            redirect_to = (
+                f"{self.base_path}/ui/forgot-password?challenge={challenge}"
             )
+
+        response.status = http.HTTPStatus.OK
+        response.content_type = b'text/html'
+        response.body = ui.render_forgot_password_page(
+            redirect_to=redirect_to,
+            redirect_on_failure=redirect_on_failure,
+            reset_url=reset_url,
+            provider_name=password_provider.name,
+            error_message=_maybe_get_search_param(query, 'error'),
+            email=_maybe_get_search_param(query, 'email'),
+            email_sent=_maybe_get_search_param(query, 'email_sent'),
+            challenge=challenge,
+            app_name=app_details_config.app_name,
+            logo_url=app_details_config.logo_url,
+            dark_logo_url=app_details_config.dark_logo_url,
+            brand_color=app_details_config.brand_color,
+        )
 
     async def handle_ui_reset_password(
         self,
@@ -2186,70 +2200,73 @@ class Router:
                 if ui_config
                 else b'Auth UI not enabled'
             )
-        else:
-            is_code_flow = "code" in query
-            maybe_email = _maybe_get_search_param(query, "email")
-            error_message = _maybe_get_search_param(query, "error")
-            reset_token = _maybe_get_search_param(query, 'reset_token')
+            return
 
-            if is_code_flow and maybe_email:
-                app_details_config = self._get_app_details_config()
-                response.status = http.HTTPStatus.OK
-                response.content_type = b'text/html'
-                response.body = ui.render_reset_password_page(
-                    base_path=self.base_path,
-                    provider_name=password_provider.name,
-                    is_valid=True,  # Code flow is always valid to show the form
-                    redirect_to=ui_config.redirect_to,
-                    challenge=challenge,
-                    reset_token=None,
-                    error_message=error_message,
-                    is_code_flow=True,
-                    email=maybe_email,
-                    app_name=app_details_config.app_name,
-                    logo_url=app_details_config.logo_url,
-                    dark_logo_url=app_details_config.dark_logo_url,
-                    brand_color=app_details_config.brand_color,
-                )
-                return
+        is_code_flow = _maybe_get_search_param(query, "code") == "true"
+        maybe_email = _maybe_get_search_param(
+            query, "email", fallback_keys=["email_sent"]
+        )
+        error_message = _maybe_get_search_param(query, "error")
+        reset_token = _maybe_get_search_param(query, 'reset_token')
 
-            if reset_token is not None:
-                try:
-                    token = jwt.ResetToken.verify(reset_token, self.signing_key)
-
-                    email_password_client = email_password.Client(
-                        db=self.db,
-                    )
-
-                    is_valid = (
-                        await email_password_client.validate_reset_secret(
-                            token.subject, token.secret
-                        )
-                        is not None
-                    )
-                except Exception:
-                    is_valid = False
-            else:
-                is_valid = False
-
+        if is_code_flow and maybe_email:
             app_details_config = self._get_app_details_config()
             response.status = http.HTTPStatus.OK
             response.content_type = b'text/html'
             response.body = ui.render_reset_password_page(
                 base_path=self.base_path,
                 provider_name=password_provider.name,
-                is_valid=is_valid,
+                is_valid=True,  # Code flow is always valid to show the form
                 redirect_to=ui_config.redirect_to,
-                reset_token=reset_token,
                 challenge=challenge,
+                reset_token=None,
                 error_message=error_message,
-                is_code_flow=False,
-                email=None,
+                is_code_flow=True,
+                email=maybe_email,
                 app_name=app_details_config.app_name,
                 logo_url=app_details_config.logo_url,
                 dark_logo_url=app_details_config.dark_logo_url,
                 brand_color=app_details_config.brand_color,
             )
+            return
+
+        if reset_token is not None:
+            try:
+                token = jwt.ResetToken.verify(reset_token, self.signing_key)
+
+                email_password_client = email_password.Client(
+                    db=self.db,
+                )
+
+                is_valid = (
+                    await email_password_client.validate_reset_secret(
+                        token.subject, token.secret
+                    )
+                    is not None
+                )
+            except Exception:
+                is_valid = False
+        else:
+            is_valid = False
+
+        app_details_config = self._get_app_details_config()
+        response.status = http.HTTPStatus.OK
+        response.content_type = b'text/html'
+        response.body = ui.render_reset_password_page(
+            base_path=self.base_path,
+            provider_name=password_provider.name,
+            is_valid=is_valid,
+            redirect_to=ui_config.redirect_to,
+            reset_token=reset_token,
+            challenge=challenge,
+            error_message=error_message,
+            is_code_flow=False,
+            email=None,
+            app_name=app_details_config.app_name,
+            logo_url=app_details_config.logo_url,
+            dark_logo_url=app_details_config.dark_logo_url,
+            brand_color=app_details_config.brand_color,
+        )
 
     async def handle_ui_verify(
         self,
@@ -2642,7 +2659,9 @@ class Router:
     def _get_app_details_config(self) -> config.AppDetailsConfig:
         return util.get_app_details_config(self.db)
 
-    def _get_password_provider(self) -> Optional[config.ProviderConfig]:
+    def _get_password_provider(
+        self,
+    ) -> Optional[config.EmailPasswordProviderConfig]:
         providers = cast(
             list[config.ProviderConfig],
             util.get_config(
@@ -2871,9 +2890,17 @@ def _fail_with_error(
 
 
 def _maybe_get_search_param(
-    query_dict: dict[str, list[str]], key: str
+    query_dict: dict[str, list[str]],
+    key: str,
+    *,
+    fallback_keys: Optional[list[str]] = None,
 ) -> str | None:
     params = query_dict.get(key)
+    if params is None and fallback_keys is not None:
+        for fallback_key in fallback_keys:
+            params = query_dict.get(fallback_key)
+            if params is not None:
+                break
     return params[0] if params else None
 
 
@@ -2883,12 +2910,7 @@ def _get_search_param(
     *,
     fallback_keys: Optional[list[str]] = None,
 ) -> str:
-    val = _maybe_get_search_param(query_dict, key)
-    if val is None and fallback_keys is not None:
-        for fallback_key in fallback_keys:
-            val = _maybe_get_search_param(query_dict, fallback_key)
-            if val is not None:
-                break
+    val = _maybe_get_search_param(query_dict, key, fallback_keys=fallback_keys)
     if val is None:
         raise errors.InvalidData(f"Missing query parameter: {key}")
     return val
