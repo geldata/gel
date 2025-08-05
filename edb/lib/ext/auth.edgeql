@@ -23,6 +23,10 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
 
     create module ext::auth;
 
+    create module ext::auth::perm;
+    create permission ext::auth::perm::auth_read;
+    create permission ext::auth::perm::auth_write;
+
     create abstract type ext::auth::Auditable extending std::BaseObject {
         create required property created_at: std::datetime {
             set default := std::datetime_current();
@@ -33,6 +37,13 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
                 std::datetime_current()
             );
         };
+
+        create access policy ap_read allow select using (
+            global ext::auth::perm::auth_read
+        );
+        create access policy ap_write allow insert, update, delete using (
+            global ext::auth::perm::auth_write
+        );
     };
 
     create type ext::auth::Identity extending ext::auth::Auditable {
@@ -459,6 +470,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         using (
             select exists webhook_config.signing_secret_key
         );
+        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create type ext::auth::AuthConfig extending cfg::ExtensionConfig {
@@ -528,6 +540,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
             select exists cfg::Config.extensions[is ext::auth::AuthConfig]
                 .auth_signing_key
         );
+        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create scalar type ext::auth::JWTAlgo extending enum<RS256, HS256>;
@@ -568,6 +581,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
                     message := "JWT signature mismatch",
                 )
         );
+        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create function ext::auth::_jwt_parse(
@@ -587,6 +601,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
             order by
                 assert(len(parts) = 3, message := "JWT is malformed")
         );
+        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create function ext::auth::_jwt_verify(
@@ -620,6 +635,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
                     message := "JWT is expired or is not yet valid",
                 )
         );
+        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create global ext::auth::client_token: std::str;
