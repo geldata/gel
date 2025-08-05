@@ -339,4 +339,5 @@ std::__pg_generate_series(
     USING SQL FUNCTION 'generate_series';
 };
 '''),
+    # 6.10
 ]
