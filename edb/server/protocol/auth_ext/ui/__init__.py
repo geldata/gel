@@ -127,7 +127,11 @@ def render_signin_page(
         magic_link_form=(
             render.render_magic_link_form(
                 base_email_form=base_email_factor_form,
-                redirect_to=redirect_to,
+                callback_url=(
+                    redirect_to
+                    if magic_link_provider.verification_method == "Link"
+                    else None
+                ),
                 base_path=base_path,
                 provider_name=magic_link_provider.name,
                 verification_method=magic_link_provider.verification_method,
@@ -358,7 +362,7 @@ def render_signup_page(
         magic_link_form=(
             render.render_magic_link_signup_form(
                 base_email_form=base_email_factor_form,
-                redirect_to=redirect_to_on_signup or redirect_to,
+                callback_url=redirect_to_on_signup or redirect_to,
                 base_path=base_path,
                 provider_name=magic_link_provider.name,
                 verification_method=magic_link_provider.verification_method,
@@ -410,7 +414,9 @@ def render_signup_page(
 
 def render_forgot_password_page(
     *,
-    base_path: str,
+    redirect_to: str,
+    redirect_on_failure: str,
+    reset_url: str,
     provider_name: str,
     challenge: str,
     error_message: Optional[str] = None,
@@ -433,15 +439,13 @@ def render_forgot_password_page(
         <form method="POST" action="../send-reset-email">
           <input type="hidden" name="provider" value="{provider_name}" />
           <input type="hidden" name="challenge" value="{challenge}" />
-          <input type="hidden" name="redirect_on_failure" value="{
-            base_path
-        }/ui/forgot-password?challenge={challenge}" />
-          <input type="hidden" name="redirect_to" value="{
-            base_path
-        }/ui/forgot-password?challenge={challenge}" />
-          <input type="hidden" name="reset_url" value="{
-            base_path
-        }/ui/reset-password" />
+          <input
+            type="hidden"
+            name="redirect_on_failure"
+            value="{redirect_on_failure}"
+          />
+          <input type="hidden" name="redirect_to" value="{redirect_to}" />
+          <input type="hidden" name="reset_url" value="{reset_url}" />
 
           <label for="email">Email</label>
           <input id="email" name="email" type="email" value="{email or ''}" />
@@ -470,7 +474,7 @@ def render_reset_password_page(
     provider_name: str,
     is_valid: bool,
     redirect_to: str,
-    challenge: Optional[str] = None,
+    challenge: str,
     reset_token: Optional[str] = None,
     error_message: Optional[str] = None,
     is_code_flow: bool = False,
@@ -506,11 +510,20 @@ def render_reset_password_page(
                 action="../reset-password",
                 email=email,
                 provider=provider_name,
-                redirect_to=redirect_to,
-                redirect_on_failure=f"{base_path}/ui/reset-password?code=true&email={html.escape(email)}",
                 label="Enter reset code",
                 button_text="Reset Password",
-                additional_fields='''
+                additional_fields=f'''
+                    <input
+                        type="hidden"
+                        name="redirect_to"
+                        value="{redirect_to}"
+                    />
+                    <input
+                        type="hidden"
+                        name="redirect_on_failure"
+                        value="{base_path}/ui/reset-password"
+                    />
+                    <input type="hidden" name="challenge" value="{challenge}" />
                     <label for="password">New Password</label>
                     <input
                         id="password"
@@ -519,7 +532,6 @@ def render_reset_password_page(
                         required
                     />
                 ''',
-                challenge=challenge,
             )
         }
         '''
@@ -554,7 +566,69 @@ def render_reset_password_page(
     )
 
 
-def render_email_verification_page(
+def render_email_verification_page_code_flow(
+    *,
+    email: str,
+    provider: str,
+    callback_url: str,
+    base_path: str,
+    challenge: str,
+    error_message: Optional[str] = None,
+    # config
+    app_name: Optional[str] = None,
+    logo_url: Optional[str] = None,
+    dark_logo_url: Optional[str] = None,
+    brand_color: Optional[str] = None,
+) -> bytes:
+    """Renders verification page that handles both link and code flows."""
+
+    content = f'''
+        {render.error_message(error_message)}
+        <p>We've sent a 6-digit verification code to <strong>{
+        html.escape(email)
+    }</strong></p>
+        {
+        render.code_input_form(
+            action="../verify",
+            email=email,
+            provider=provider,
+            label="Enter verification code",
+            button_text="Verify Email",
+            additional_fields=f'''
+                <input
+                    type="hidden"
+                    name="redirect_to"
+                    value="{callback_url}"
+                />
+                <input
+                    type="hidden"
+                    name="redirect_on_failure"
+                    value="{base_path}/ui/verify"
+                />
+                <input
+                    type="hidden"
+                    name="challenge"
+                    value="{challenge}"
+                />
+            '''
+        )
+    }
+    '''
+
+    return render.base_page(
+        title=f'Verify email{f" for {app_name}" if app_name else ""}',
+        logo_url=logo_url,
+        dark_logo_url=dark_logo_url,
+        brand_color=brand_color,
+        cleanup_search_params=['error'],
+        content=f'''
+            {render.title('Verify email', join='for', app_name=app_name)}
+            {content}
+        ''',
+    )
+
+
+def render_email_verification_page_link_flow(
     *,
     is_valid: bool,
     error_messages: list[str],
@@ -639,61 +713,6 @@ def render_email_verification_expired_page(
     )
 
 
-def render_verify_page(
-    *,
-    base_path: str,
-    email: Optional[str] = None,
-    provider: Optional[str] = None,
-    is_code_flow: bool = False,
-    error_message: Optional[str] = None,
-    challenge: Optional[str] = None,
-    # config
-    redirect_to: str,
-    app_name: Optional[str] = None,
-    logo_url: Optional[str] = None,
-    dark_logo_url: Optional[str] = None,
-    brand_color: Optional[str] = None,
-) -> bytes:
-    """Renders verification page that handles both link and code flows."""
-
-    if is_code_flow and email and provider:
-        content = f'''
-            {render.error_message(error_message)}
-            <p>We've sent a 6-digit verification code to <strong>{
-            html.escape(email)
-        }</strong></p>
-            {
-            render.code_input_form(
-                action="../verify",
-                email=email,
-                provider=provider,
-                redirect_to=redirect_to,
-                redirect_on_failure=f"{base_path}/ui/verify?code=true&email={html.escape(email)}&provider={provider}",
-                label="Enter verification code",
-                button_text="Verify Email",
-                challenge=challenge,
-            )
-        }
-        '''
-    else:
-        content = render.success_message(
-            "A verification link has been sent to your email. Please check "
-            "your email and click the link to verify your account."
-        )
-
-    return render.base_page(
-        title=f'Verify email{f" for {app_name}" if app_name else ""}',
-        logo_url=logo_url,
-        dark_logo_url=dark_logo_url,
-        brand_color=brand_color,
-        cleanup_search_params=['error'],
-        content=f'''
-            {render.title('Verify email', join='for', app_name=app_name)}
-            {content}
-        ''',
-    )
-
-
 def render_resend_verification_done_page(
     *,
     is_valid: bool,
@@ -742,53 +761,73 @@ def render_resend_verification_done_page(
     )
 
 
-def render_magic_link_sent_page(
+def render_magic_link_sent_page_code_flow(
+    *,
+    email: str,
+    challenge: str,
+    callback_url: str,
+    error_message: Optional[str] = None,
+    app_name: Optional[str] = None,
+    logo_url: Optional[str] = None,
+    dark_logo_url: Optional[str] = None,
+    brand_color: Optional[str] = None,
+) -> bytes:
+    content = f'''
+        {render.error_message(error_message)}
+        <p>We've sent a 6-digit sign-in code to <strong>{
+        html.escape(email)
+    }</strong></p>
+        {
+        render.code_input_form(
+            action="../magic-link/authenticate",
+            email=email,
+            provider="builtin::local_magic_link",
+            label="Enter sign-in code",
+            button_text="Sign In",
+            additional_fields=f'''
+                <input
+                    type="hidden"
+                    name="callback_url"
+                    value="{callback_url}"
+                />
+                <input
+                    type="hidden"
+                    name="challenge"
+                    value="{challenge}"
+                />
+            ''',
+        )
+    }
+    '''
+    title = f'Sign in code sent{f" for {app_name}" if app_name else ""}'
+    page_title = 'Sign in code sent'
+
+    return render.base_page(
+        title=title,
+        logo_url=logo_url,
+        dark_logo_url=dark_logo_url,
+        brand_color=brand_color,
+        cleanup_search_params=['error'],
+        content=f'''
+            {render.title(page_title, join='for', app_name=app_name)}
+            {content}
+        ''',
+    )
+
+
+def render_magic_link_sent_page_link_flow(
     *,
     app_name: Optional[str] = None,
     logo_url: Optional[str] = None,
     dark_logo_url: Optional[str] = None,
     brand_color: Optional[str] = None,
-    is_code_flow: bool = False,
-    email: Optional[str] = None,
-    base_path: Optional[str] = None,
-    challenge: Optional[str] = None,
-    callback_url: Optional[str] = None,
-    error_message: Optional[str] = None,
 ) -> bytes:
-    if is_code_flow and email and base_path:
-        content = f'''
-            {render.error_message(error_message)}
-            <p>We've sent a 6-digit sign-in code to <strong>{
-            html.escape(email)
-        }</strong></p>
-            {
-            render.code_input_form(
-                action="../magic-link/authenticate",
-                email=email,
-                provider="builtin::local_magic_link",
-                redirect_to=f"{base_path}/ui/magic-link-sent",
-                redirect_on_failure=f"{base_path}/ui/magic-link-sent?code=true&email={html.escape(email)}",
-                label="Enter sign-in code",
-                button_text="Sign In",
-                challenge=challenge,
-                additional_fields=(
-                    f'<input type="hidden" name="callback_url" '
-                    f'value="{html.escape(callback_url or "")}" />'
-                )
-                if callback_url
-                else "",
-            )
-        }
-        '''
-        title = f'Sign in code sent{f" for {app_name}" if app_name else ""}'
-        page_title = 'Sign in code sent'
-    else:
-        content = render.success_message(
-            "A sign in link has been sent to your email. Please check your "
-            "email."
-        )
-        title = f'Sign in link sent{f" for {app_name}" if app_name else ""}'
-        page_title = 'Sign in link sent'
+    content = render.success_message(
+        "A sign in link has been sent to your email. Please check your "
+        "email."
+    )
+    title = f'Sign in link sent{f" for {app_name}" if app_name else ""}'
+    page_title = 'Sign in link sent'
 
     return render.base_page(
         title=title,
