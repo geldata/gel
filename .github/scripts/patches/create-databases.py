@@ -16,7 +16,7 @@ try:
     )
     for name in [
         'json', 'functions', 'expressions', 'casts', 'policies', 'vector',
-        'scope', 'httpextauth', 'extai'
+        'scope', 'httpextauth', 'extai', 'ddl',
     ]:
         db.execute(f'create database {name};')
 
