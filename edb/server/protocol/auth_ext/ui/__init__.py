@@ -1040,6 +1040,7 @@ email address:
 </tr>
     """  # noqa: E501
 
+    msg["X-gel-password-reset-url"] = reset_url
     msg.set_content(plain_text_content, subtype="plain")
     msg.add_alternative(
         render.base_default_email(
@@ -1204,6 +1205,7 @@ email address:
   </td>
 </tr>
     """
+    msg["X-gel-email-verify-url"] = verify_url
     msg.set_content(plain_text_content, subtype="plain")
     msg.add_alternative(
         render.base_default_email(
@@ -1345,6 +1347,7 @@ your account:
 </tr>
     """  # noqa: E501
 
+    msg["X-gel-magic-link"] = link
     msg.set_content(plain_text_content, subtype="plain")
     msg.add_alternative(
         render.base_default_email(
@@ -1460,6 +1463,7 @@ This code will expire in 10 minutes.
 </tr>
     """  # noqa: E501
 
+    msg["X-gel-email-verify-code"] = code
     msg.set_content(plain_text_content, subtype="plain")
     msg.add_alternative(
         render.base_default_email(
@@ -1575,6 +1579,7 @@ This code will expire in 10 minutes. If you didn't request a password reset, you
 </tr>
     """  # noqa: E501
 
+    msg["X-gel-password-reset-code"] = code
     msg.set_content(plain_text_content, subtype="plain")
     msg.add_alternative(
         render.base_default_email(
