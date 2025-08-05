@@ -570,6 +570,7 @@ def get_dml_range(
         merge_iterator(ctx.enclosing_cte_iterator, range_stmt, ctx=subctx)
 
         dispatch.visit(target_ir_set, ctx=subctx)
+        relgen.ensure_source_rvar(target_ir_set, range_stmt, ctx=subctx)
 
         pathctx.get_path_identity_output(
             range_stmt, target_ir_set.path_id, env=subctx.env)
