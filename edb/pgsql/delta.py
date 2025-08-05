@@ -1923,6 +1923,7 @@ class CastCommand(MetaCommand):
             args=args,
             returns=returns,
             strict=False,
+            wrapper_volatility=cast.get_volatility(schema),
             text=not_none(cast.get_code(schema)),
         )
 

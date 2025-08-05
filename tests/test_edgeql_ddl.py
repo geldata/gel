@@ -15990,6 +15990,15 @@ type default::Foo {
                 };
             """)
 
+    async def test_edgeql_ddl_index_10(self):
+        await self.con.execute(r"""
+            create type T {
+                create property foo -> json;
+                create index on (<str>.foo);
+                create index on (<int64>.foo);
+            };
+        """)
+
     async def test_edgeql_ddl_index_fts_01(self):
         await self.con.execute('''
             CREATE ABSTRACT TYPE default::Named {
