@@ -303,6 +303,7 @@ std::to_bytes(j: std::json) -> std::bytes {
     USING (to_bytes(to_str(j)));
 };
 '''),
+    # For #8804
     ('metaschema-sql', 'ArrayIndexWithBoundsFunction'),
     ('metaschema-sql', 'ArraySliceFunction'),
     ('metaschema-sql', 'StringIndexWithBoundsFunction'),
@@ -364,4 +365,9 @@ ALTER FUNCTION edgedbstd."std|cast@std|json@std|int64_f" IMMUTABLE;
 ALTER FUNCTION edgedbstd."std|cast@std|json@std|str_f" IMMUTABLE;
 ALTER FUNCTION edgedbstd."std|cast@std|json@std|uuid_f" IMMUTABLE;
 '''),
+    # For #8804, but I apparently missed the patch for this one.
+    # Amusingly this is the patch that caused a regression, but I
+    # guess it didn't happen if you had done a patch upgrade...
+    ('metaschema-sql', 'ExtractJSONScalarFunction'),
+
 ]
