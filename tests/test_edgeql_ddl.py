@@ -17904,3 +17904,8 @@ class TestDDLNonIsolated(tb.DDLTestCase):
         await self.con.execute("""
             reset schema to initial
         """)
+
+    async def test_administer_fixup_backend_upgrade(self):
+        await self.con.execute('''
+            administer fixup_backend_upgrade()
+        ''')
