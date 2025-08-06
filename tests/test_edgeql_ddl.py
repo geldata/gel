@@ -20385,9 +20385,9 @@ class TestDDLNonIsolated(tb.DDLTestCase):
             0,
         )
 
-    async def test_administer_rebuild_sql_introspection(self):
+    async def test_administer_fixup_backend_upgrade(self):
         await self.con.execute('''
-            administer rebuild_sql_introspection()
+            administer fixup_backend_upgrade()
         ''')
 
 

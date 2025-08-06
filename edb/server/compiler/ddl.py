@@ -1431,17 +1431,15 @@ def administer_repair_schema(
     )
 
 
-def administer_rebuild_sql_introspection(
+def administer_fixup_backend_upgrade(
     ctx: compiler.CompileContext,
     ql: qlast.AdministerStmt,
 ) -> dbstate.BaseQuery:
     if ql.expr.args or ql.expr.kwargs:
         raise errors.QueryError(
-            'rebuild_sql_introspection() does not take arguments',
+            'fixup_backend_upgrade() does not take arguments',
             span=ql.expr.span,
         )
-
-    current_tx = ctx.state.current_tx()
 
     from edb.pgsql import metaschema
 
@@ -1460,8 +1458,7 @@ def administer_rebuild_sql_introspection(
 
     return dbstate.DDLQuery(
         sql=block.to_string().encode('utf-8'),
-        user_schema=current_tx.get_user_schema_if_updated(),
-        global_schema=current_tx.get_global_schema_if_updated(),
+        user_schema=None,
         feature_used_metrics=None,
     )
 
