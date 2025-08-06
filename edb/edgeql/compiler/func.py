@@ -470,7 +470,10 @@ def compile_FunctionCall(
                 if bound_args := [
                     bound_arg
                     for bound_arg in matched_call.args
-                    if bound_arg.param == param and bound_arg.is_default
+                    if (
+                        isinstance(bound_arg, polyres.DefaultArg)
+                        and bound_arg.name == param_shortname
+                    )
                 ]:
                     assert len(bound_args) == 1
                     inline_args[param_shortname] = bound_args[0].val
@@ -1106,10 +1109,9 @@ def finalize_args(
     position_index: int = 0
 
     for i, barg in enumerate(bound_call.args):
-        param = barg.param
         arg_val = barg.val
         arg_type_path_id: Optional[irast.PathId] = None
-        if param is None:
+        if isinstance(barg, polyres.DefaultBitmask):
             # defaults bitmask
             param_name_to_arg['__defaults_mask__'] = -1
             args[-1] = irast.CallArg(
@@ -1117,14 +1119,15 @@ def finalize_args(
                 param_typemod=ft.TypeModifier.SingletonType,
             )
             continue
+        assert isinstance(barg, polyres.ValueArg)
 
         if actual_typemods:
             param_mod = actual_typemods[i]
         else:
-            param_mod = param.get_typemod(ctx.env.schema)
+            param_mod = barg.param_typemod
 
         if param_mod is not ft.TypeModifier.SetOfType:
-            param_shortname = param.get_parameter_name(ctx.env.schema)
+            param_shortname = barg.name
 
             if param_shortname in bound_call.null_args:
                 pathctx.register_set_in_scope(arg_val, optional=True, ctx=ctx)
@@ -1133,7 +1136,7 @@ def finalize_args(
             # try to go back and make it *not* optional.
             elif (
                 param_mod is ft.TypeModifier.SingletonType
-                and barg.arg_id is not None
+                and isinstance(barg, polyres.PassedArg)
                 and param_mod is not guessed_typemods[barg.arg_id]
             ):
                 for child in ctx.path_scope.children:
@@ -1154,9 +1157,7 @@ def finalize_args(
             arg_type = setgen.get_set_type(arg_val, ctx=ctx)
             if (
                 isinstance(arg_type, s_objtypes.ObjectType)
-                and barg.param
-                and not barg.param.get_type(ctx.env.schema).is_any(
-                    ctx.env.schema)
+                and not barg.orig_param_type.is_any(ctx.env.schema)
             ):
                 arg_type_path_id = pathctx.extend_path_id(
                     arg_val.path_id,
@@ -1191,7 +1192,7 @@ def finalize_args(
                 )
 
         paramtype = barg.param_type
-        param_kind = param.get_kind(ctx.env.schema)
+        param_kind = barg.param_kind
         if param_kind is ft.ParameterKind.VariadicParam:
             # For variadic params, paramtype would be array<T>,
             # and we need T to cast the arguments.
@@ -1218,11 +1219,11 @@ def finalize_args(
         arg = irast.CallArg(
             expr=arg_val,
             expr_type_path_id=arg_type_path_id,
-            is_default=barg.is_default,
+            is_default=isinstance(barg, polyres.DefaultArg),
             param_typemod=param_mod,
             polymorphism=barg.polymorphism,
         )
-        param_shortname = param.get_parameter_name(ctx.env.schema)
+        param_shortname = barg.name
         if param_kind is ft.ParameterKind.NamedOnlyParam:
             args[param_shortname] = arg
             param_name_to_arg[param_shortname] = param_shortname

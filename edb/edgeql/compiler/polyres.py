@@ -29,9 +29,9 @@ from typing import (
     Iterable,
     Mapping,
     Sequence,
-    NamedTuple,
     cast,
 )
+import dataclasses
 
 import hashlib
 import json
@@ -60,25 +60,59 @@ from . import tuple_args
 from . import typegen
 
 
-class BoundArg(NamedTuple):
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class BoundArg:
+    """The base type for bound arguments for BoundCall."""
 
-    param: Optional[s_func.ParameterLike]
+    val: irast.Set
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class DefaultBitmask(BoundArg):
+    """The default bitmask argument, if defaults are present."""
+    pass
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class ValueArg(BoundArg):
+    """A bound argument with an actual value."""
+
+    name: str
+
+    orig_param_type: s_types.Type
     param_type: s_types.Type
+    param_typemod: ft.TypeModifier
+    param_kind: ft.ParameterKind
+
     val: irast.Set
     valtype: s_types.Type
-    cast_distance: int
-    arg_id: Optional[int | str]
-    is_default: bool = False
+
     polymorphism: ft.Polymorphism = ft.Polymorphism.NotUsed
 
 
-class MissingArg(NamedTuple):
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class DefaultArg(ValueArg):
+    """A bound argument whose value comes from a default."""
+    pass
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class PassedArg(ValueArg):
+    """A bound argument whose value comes from a passed argument."""
+
+    cast_distance: int
+    arg_id: int | str
+
+
+@dataclasses.dataclass(frozen=True)
+class MissingArg:
 
     param: Optional[s_func.ParameterLike]
     param_type: s_types.Type
 
 
-class BoundCall(NamedTuple):
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class BoundCall:
 
     func: s_func.CallableLike
     args: list[BoundArg]
@@ -133,9 +167,9 @@ def find_callable_typemods(
     fts: dict[int | str, ft.TypeModifier] = {}
     for choice in options:
         for barg in choice.args:
-            if not barg.param or barg.arg_id is None:
+            if not isinstance(barg, PassedArg):
                 continue
-            ft = barg.param.get_typemod(ctx.env.schema)
+            ft = barg.param_typemod
             if barg.arg_id in fts and fts[barg.arg_id] != ft:
                 if ft == _SET_OF or fts[barg.arg_id] == _SET_OF:
                     raise errors.QueryError(
@@ -204,7 +238,11 @@ def find_callable(
         if call is None:
             continue
 
-        total_cd = sum(barg.cast_distance for barg in call.args)
+        total_cd = sum(
+            barg.cast_distance
+            for barg in call.args
+            if isinstance(barg, PassedArg)
+        )
 
         if implicit_cast_distance is None:
             implicit_cast_distance = total_cd
@@ -229,13 +267,13 @@ def find_callable(
             call_type_dist = 0
 
             for barg in call.args:
-                if barg.param is None:
+                if not isinstance(barg, PassedArg):
                     # Skip injected bitmask argument.
                     continue
 
-                paramtype = barg.param.get_type(ctx.env.schema)
                 arg_type_dist = barg.valtype.get_common_parent_type_distance(
-                    paramtype, ctx.env.schema)
+                    barg.orig_param_type, ctx.env.schema
+                )
                 call_type_dist += arg_type_dist
 
             if type_dist is None:
@@ -381,14 +419,18 @@ def try_bind_call_args(
                     irast.BytesConstant(value=b'\x00', typeref=typeref),
                     typehint=bytes_t,
                     ctx=ctx)
-                bargs = [BoundArg(None, bytes_t, argval, bytes_t, 0, -1)]
+                bargs = [
+                    DefaultBitmask(
+                        val=argval,
+                    )
+                ]
             return BoundCall(
-                func,
-                bargs,
-                set(),
-                return_type,
-                None,
-                None,
+                func=func,
+                args=bargs,
+                null_args=set(),
+                return_type=return_type,
+                variadic_arg_id=None,
+                variadic_arg_count=None,
                 server_param_conversions=server_param_conversions,
             )
         else:
@@ -403,7 +445,7 @@ def try_bind_call_args(
         # one parameter without default.
         return None
 
-    bound_args_prep: list[MissingArg | BoundArg] = []
+    bound_args_prep: list[MissingArg | PassedArg] = []
 
     params = func_params.get_in_canonical_order(schema)
     nparams = len(params)
@@ -427,6 +469,8 @@ def try_bind_call_args(
 
         param_shortname = param.get_parameter_name(schema)
         param_type = param.get_type(schema)
+        param_typemod = param.get_typemod(schema)
+        param_kind = param.get_kind(schema)
         if param_shortname in kwargs:
             matched_kwargs += 1
 
@@ -436,8 +480,18 @@ def try_bind_call_args(
                 return None
 
             bound_args_prep.append(
-                BoundArg(param, param_type, arg_val, arg_type, cd,
-                         param_shortname))
+                PassedArg(
+                    name=param_shortname,
+                    orig_param_type=param_type,
+                    param_type=param_type,
+                    param_typemod=param_typemod,
+                    param_kind=param_kind,
+                    val=arg_val,
+                    valtype=arg_type,
+                    cast_distance=cd,
+                    arg_id=param_shortname,
+                )
+            )
 
         else:
             if param.get_default(schema) is None:
@@ -462,7 +516,9 @@ def try_bind_call_args(
                 # too many positional arguments
                 return None
             param = params[pi]
+            param_shortname = param.get_parameter_name(schema)
             param_type = param.get_type(schema)
+            param_typemod = param.get_typemod(schema)
             param_kind = param.get_kind(schema)
             pi += 1
 
@@ -478,7 +534,18 @@ def try_bind_call_args(
                     return None
 
                 bound_args_prep.append(
-                    BoundArg(param, param_type, arg_val, arg_type, cd, ai - 1))
+                    PassedArg(
+                        name=param_shortname,
+                        orig_param_type=param_type,
+                        param_type=param_type,
+                        param_typemod=param_typemod,
+                        param_kind=param_kind,
+                        val=arg_val,
+                        valtype=arg_type,
+                        cast_distance=cd,
+                        arg_id=ai - 1,
+                    )
+                )
 
                 for di, (arg_type, arg_val) in enumerate(args[ai:]):
                     cd = _get_cast_distance(arg_val, arg_type, var_type)
@@ -486,8 +553,18 @@ def try_bind_call_args(
                         return None
 
                     bound_args_prep.append(
-                        BoundArg(param, param_type, arg_val, arg_type, cd,
-                                 ai + di))
+                        PassedArg(
+                            name=param_shortname,
+                            orig_param_type=param_type,
+                            param_type=param_type,
+                            param_typemod=param_typemod,
+                            param_kind=param_kind,
+                            val=arg_val,
+                            valtype=arg_type,
+                            cast_distance=cd,
+                            arg_id=ai + di,
+                        )
+                    )
 
                 variadic_arg_id = ai - 1
                 variadic_arg_count = nargs - ai + 1
@@ -499,7 +576,18 @@ def try_bind_call_args(
                 return None
 
             bound_args_prep.append(
-                BoundArg(param, param_type, arg_val, arg_type, cd, ai - 1))
+                PassedArg(
+                    name=param_shortname,
+                    orig_param_type=param_type,
+                    param_type=param_type,
+                    param_typemod=param_typemod,
+                    param_kind=param_kind,
+                    val=arg_val,
+                    valtype=arg_type,
+                    cast_distance=cd,
+                    arg_id=ai - 1,
+                )
+            )
 
         else:
             break
@@ -507,6 +595,7 @@ def try_bind_call_args(
     # Handle yet unprocessed POSITIONAL & VARIADIC arguments.
     for i in range(pi, nparams):
         param = params[i]
+        param_type = param.get_type(schema)
         param_kind = param.get_kind(schema)
 
         if param_kind is _POSITIONAL:
@@ -516,7 +605,6 @@ def try_bind_call_args(
                 return None
 
             has_missing_args = True
-            param_type = param.get_type(schema)
             bound_args_prep.append(MissingArg(param, param_type))
 
         elif param_kind is _VARIADIC:
@@ -533,18 +621,21 @@ def try_bind_call_args(
     bound_param_args: list[BoundArg] = []
     if has_missing_args:
         if has_inlined_defaults or named_only:
-            for i, barg in enumerate(bound_args_prep):
-                if isinstance(barg, BoundArg):
-                    bound_param_args.append(barg)
+            for i, prep_barg in enumerate(bound_args_prep):
+                if isinstance(prep_barg, PassedArg):
+                    bound_param_args.append(prep_barg)
                     continue
-                if barg.param is None:
+                if prep_barg.param is None:
                     # Shouldn't be possible; the code above takes care of this.
                     raise RuntimeError(
                         f'failed to resolve the parameter for the arg #{i}')
 
-                param = barg.param
+                param = prep_barg.param
                 param_shortname = param.get_parameter_name(schema)
-                param_typemod = param.get_typemod(ctx.env.schema)
+                param_type = param.get_type(schema)
+                param_typemod = param.get_typemod(schema)
+                param_kind = param.get_kind(schema)
+
                 null_args.add(param_shortname)
 
                 defaults_mask |= 1 << i
@@ -561,8 +652,6 @@ def try_bind_call_args(
                     has_inlined_defaults or
                     irutils.is_empty(default)
                 )
-
-                param_type = param.get_type(schema)
 
                 if empty_default and not basic_matching_only:
                     default_type = None
@@ -600,20 +689,20 @@ def try_bind_call_args(
                 )
 
                 bound_param_args.append(
-                    BoundArg(
-                        param,
-                        param_type,
-                        default,
-                        param_type,
-                        0,
-                        None,
-                        True,
+                    DefaultArg(
+                        name=param_shortname,
+                        orig_param_type=param_type,
+                        param_type=param_type,
+                        param_typemod=param_typemod,
+                        param_kind=param_kind,
+                        val=default,
+                        valtype=param_type,
                     )
                 )
 
         else:
             bound_param_args = [
-                barg for barg in bound_args_prep if isinstance(barg, BoundArg)
+                barg for barg in bound_args_prep if isinstance(barg, PassedArg)
             ]
     else:
         bound_param_args = cast(list[BoundArg], bound_args_prep)
@@ -629,7 +718,11 @@ def try_bind_call_args(
             irast.BytesConstant(value=bm, typeref=typeref),
             typehint=bytes_t, ctx=ctx)
         bound_param_args.insert(
-            0, BoundArg(None, bytes_t, bm_set, bytes_t, 0, None))
+            0,
+            DefaultBitmask(
+                val=bm_set,
+            ),
+        )
 
     return_polymorphism = ft.Polymorphism.NotUsed
     if return_type.is_polymorphic(schema):
@@ -645,27 +738,26 @@ def try_bind_call_args(
     # bodies of polymorphic functions
     if resolved_poly_base_type is not None:
         for i, barg in enumerate(bound_param_args):
-            if barg.param_type.is_polymorphic(schema):
+            if (
+                isinstance(barg, ValueArg)
+                and barg.param_type.is_polymorphic(schema)
+            ):
                 ctx.env.schema, ptype = barg.param_type.to_nonpolymorphic(
                     ctx.env.schema, resolved_poly_base_type)
                 polymorphism = ft.Polymorphism.from_schema_type(barg.param_type)
-                bound_param_args[i] = BoundArg(
-                    barg.param,
-                    ptype,
-                    barg.val,
-                    barg.valtype,
-                    barg.cast_distance,
-                    barg.arg_id,
-                    polymorphism=polymorphism
+                bound_param_args[i] = dataclasses.replace(
+                    barg,
+                    param_type=ptype,
+                    polymorphism=polymorphism,
                 )
 
     return BoundCall(
-        func,
-        bound_param_args,
-        null_args,
-        return_type,
-        variadic_arg_id,
-        variadic_arg_count,
+        func=func,
+        args=bound_param_args,
+        null_args=null_args,
+        return_type=return_type,
+        variadic_arg_id=variadic_arg_id,
+        variadic_arg_count=variadic_arg_count,
         return_polymorphism=return_polymorphism,
         server_param_conversions=server_param_conversions,
     )
