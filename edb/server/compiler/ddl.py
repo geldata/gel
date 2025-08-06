@@ -1431,6 +1431,41 @@ def administer_repair_schema(
     )
 
 
+def administer_rebuild_sql_introspection(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    if ql.expr.args or ql.expr.kwargs:
+        raise errors.QueryError(
+            'rebuild_sql_introspection() does not take arguments',
+            span=ql.expr.span,
+        )
+
+    current_tx = ctx.state.current_tx()
+
+    from edb.pgsql import metaschema
+
+    block = pg_dbops.PLTopBlock()
+
+    cmds = metaschema._generate_sql_information_schema(
+        ctx.compiler_state.backend_runtime_params.instance_params.version
+    )
+    metaschema.generate_drop_views(cmds, block)
+
+    cmd_group = pg_dbops.CommandGroup()
+    cmd_group.add_commands(cmds)
+    cmd_group.generate(block)
+
+    assert block.is_transactional()
+
+    return dbstate.DDLQuery(
+        sql=block.to_string().encode('utf-8'),
+        user_schema=current_tx.get_user_schema_if_updated(),
+        global_schema=current_tx.get_global_schema_if_updated(),
+        feature_used_metrics=None,
+    )
+
+
 def remove_pointless_triggers(
     schema: s_schema.Schema,
 ) -> pg_dbops.CommandGroup:

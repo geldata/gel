@@ -27,6 +27,7 @@ from typing import (
     Iterable,
     Sequence,
     cast,
+    Any
 )
 
 import functools
@@ -8914,6 +8915,40 @@ def get_config_type_views(
     ])
 
     return commands
+
+
+def generate_drop_views(
+    group: Sequence[dbops.Command | trampoline.Trampoline],
+    preblock: dbops.PLBlock,
+) -> None:
+    for cv in reversed(list(group)):
+        dv: Any
+        if isinstance(cv, dbops.CreateView):
+            # We try deleting both a MATERIALIZED and not materialized
+            # version, since that allows us to switch between them
+            # more easily.
+            dv = dbops.CommandGroup()
+            dv.add_command(dbops.DropView(
+                cv.view.name,
+                conditions=[dbops.ViewExists(cv.view.name)],
+            ))
+            dv.add_command(dbops.DropView(
+                cv.view.name,
+                conditions=[dbops.ViewExists(cv.view.name, materialized=True)],
+                materialized=True,
+            ))
+        elif isinstance(cv, dbops.CreateFunction):
+            dv = dbops.DropFunction(
+                cv.function.name,
+                args=cv.function.args or (),
+                has_variadic=bool(cv.function.has_variadic),
+                if_exists=True,
+            )
+        elif isinstance(cv, trampoline.Trampoline):
+            dv = cv.drop()
+        else:
+            raise AssertionError(f'unsupported support view command {cv}')
+        dv.generate(preblock)
 
 
 def get_config_views(

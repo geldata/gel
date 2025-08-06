@@ -25,7 +25,6 @@ from typing import (
     Iterable,
     Mapping,
     Awaitable,
-    Sequence,
     NamedTuple,
     TYPE_CHECKING,
     cast,
@@ -747,40 +746,6 @@ async def gather_patch_info(
         return None
 
 
-def _generate_drop_views(
-    group: Sequence[dbops.Command | trampoline.Trampoline],
-    preblock: dbops.PLBlock,
-) -> None:
-    for cv in reversed(list(group)):
-        dv: Any
-        if isinstance(cv, dbops.CreateView):
-            # We try deleting both a MATERIALIZED and not materialized
-            # version, since that allows us to switch between them
-            # more easily.
-            dv = dbops.CommandGroup()
-            dv.add_command(dbops.DropView(
-                cv.view.name,
-                conditions=[dbops.ViewExists(cv.view.name)],
-            ))
-            dv.add_command(dbops.DropView(
-                cv.view.name,
-                conditions=[dbops.ViewExists(cv.view.name, materialized=True)],
-                materialized=True,
-            ))
-        elif isinstance(cv, dbops.CreateFunction):
-            dv = dbops.DropFunction(
-                cv.function.name,
-                args=cv.function.args or (),
-                has_variadic=bool(cv.function.has_variadic),
-                if_exists=True,
-            )
-        elif isinstance(cv, trampoline.Trampoline):
-            dv = cv.drop()
-        else:
-            raise AssertionError(f'unsupported support view command {cv}')
-        dv.generate(preblock)
-
-
 def prepare_patch(
     num: int,
     kind: str,
@@ -973,7 +938,7 @@ def prepare_patch(
         )
         support_view_commands.generate(subblock)
 
-        _generate_drop_views(list(support_view_commands), preblock)
+        metaschema.generate_drop_views(list(support_view_commands), preblock)
 
         metadata_user_schema = reflschema
 
@@ -1034,7 +999,7 @@ def prepare_patch(
         support_view_commands.add_commands(list(wrapper_views))
         trampolines = metaschema.trampoline_command(wrapper_views)
 
-        _generate_drop_views(
+        metaschema.generate_drop_views(
             tuple(support_view_commands) + tuple(trampolines),
             preblock,
         )
