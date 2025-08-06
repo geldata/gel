@@ -569,7 +569,7 @@ class Compiler:
 
         setting = database_config.get('apply_access_policies_pg', None)
         apply_access_policies_pg = None
-        if setting and setting.value:
+        if setting is not None:
             apply_access_policies_pg = sql.is_setting_truthy(setting.value)
 
         return sql.compile_sql(
@@ -2777,7 +2777,7 @@ def compile_sql_as_unit_group(
     # the general access policy toggle, not the SQL-specific one.
     apply_access_policies = None
     setting = _get_config_val(ctx, 'apply_access_policies')
-    if setting:
+    if setting is not None:
         apply_access_policies = sql.is_setting_truthy(setting)
 
     tx_state = ctx.state.current_tx()

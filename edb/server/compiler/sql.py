@@ -687,7 +687,7 @@ def resolve_query(
     if apply_access_policies is None:
         apply_access_policies = opts.apply_access_policies
     if apply_access_policies is None:
-        apply_access_policies = False
+        apply_access_policies = True
 
     options = pg_resolver.Options(
         current_database=opts.current_database,

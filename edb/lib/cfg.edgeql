@@ -322,7 +322,7 @@ ALTER TYPE cfg::AbstractConfig {
     };
 
     CREATE PROPERTY apply_access_policies_pg -> std::bool {
-        SET default := false;
+        SET default := true;
         CREATE ANNOTATION cfg::affects_compilation := 'false';
         CREATE ANNOTATION cfg::session_cfg_permissions :=
             '"cfg::perm::configure_apply_access_policies"';
