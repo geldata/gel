@@ -1418,6 +1418,38 @@ def administer_repair_schema(
     )
 
 
+def administer_fixup_backend_upgrade(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    if ql.expr.args or ql.expr.kwargs:
+        raise errors.QueryError(
+            'fixup_backend_upgrade() does not take arguments',
+            span=ql.expr.span,
+        )
+
+    from edb.pgsql import metaschema
+
+    block = pg_dbops.PLTopBlock()
+
+    cmds = metaschema._generate_sql_information_schema(
+        ctx.compiler_state.backend_runtime_params.instance_params.version
+    )
+    metaschema.generate_drop_views(cmds, block)
+
+    cmd_group = pg_dbops.CommandGroup()
+    cmd_group.add_commands(cmds)
+    cmd_group.generate(block)
+
+    assert block.is_transactional()
+
+    return dbstate.DDLQuery(
+        sql=block.to_string().encode('utf-8'),
+        user_schema=None,
+        feature_used_metrics=None,
+    )
+
+
 def remove_pointless_triggers(
     schema: s_schema.Schema,
 ) -> pg_dbops.CommandGroup:
