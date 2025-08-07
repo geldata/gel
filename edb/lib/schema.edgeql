@@ -305,6 +305,7 @@ CREATE ABSTRACT TYPE schema::Pointer
     CREATE PROPERTY secret -> std::bool;
     CREATE PROPERTY splat_strategy -> schema::SplatStrategy;
     CREATE PROPERTY linkful -> std::bool;
+    CREATE PROPERTY protected -> std::bool;
 };
 
 
