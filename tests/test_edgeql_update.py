@@ -1795,6 +1795,32 @@ class TestUpdate(tb.QueryTestCase):
             ]
         )
 
+    async def test_edgeql_update_props_11(self):
+        # Check that we can update a link property on a specific link.
+
+        # Setup some multi links
+        await self.con.execute(
+            r"""
+                UPDATE UpdateTest
+                FILTER .name = 'update-test1'
+                SET {
+                    annotated_status := (select Status limit 1),
+                    annotated_status2 := (select Status limit 1),
+                };
+            """,
+        )
+
+        await self.con.execute(
+            r"""
+                UPDATE UpdateTest
+                FILTER .name = 'update-test1'
+                SET {
+                    annotated_status := (select Status limit 1),
+                    annotated_status2 := (select Status limit 1),
+                };
+            """,
+        )
+
     async def test_edgeql_update_for_01(self):
         await self.assert_query_result(
             r"""

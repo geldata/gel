@@ -789,6 +789,18 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             };
             ''')
 
+        async with self.assertRaisesRegexTx(
+                edgedb.InvalidValueError,
+                r"access policy violation on insert of default::Issue"):
+            await self.con.query('''
+            insert Issue {
+                name := '', body := '',
+                watchers := {},
+                status := (select Status filter .name = 'Open'), number := '',
+                owner := (insert User { name := "???" }),
+            };
+            ''')
+
     async def test_edgeql_policies_12(self):
         await self.con.query('''
             create global cur_user_obj := (
