@@ -458,6 +458,8 @@ class Tenant(ha_base.ClusterProtocol):
                     capability |= compiler_enums.Capability.BRANCH_CONFIG
                 if 'sys::perm::sql_session_config' in available_permissions:
                     capability |= compiler_enums.Capability.SQL_SESSION_CONFIG
+                if 'sys::perm::analyze' in available_permissions:
+                    capability |= compiler_enums.Capability.ANALYZE
 
             role_capabilities[name] = capability
 

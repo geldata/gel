@@ -26,6 +26,10 @@ CREATE PERMISSION sys::perm::data_modification;
 CREATE PERMISSION sys::perm::ddl;
 CREATE PERMISSION sys::perm::branch_config;
 CREATE PERMISSION sys::perm::sql_session_config;
+CREATE PERMISSION sys::perm::analyze;
+
+CREATE PERMISSION sys::perm::query_stats_read;
+CREATE PERMISSION sys::perm::approximate_count;
 
 
 CREATE SCALAR TYPE sys::TransactionIsolation
@@ -254,7 +258,7 @@ CREATE TYPE sys::QueryStats EXTENDING sys::ExternalObject {
     };
 
     CREATE ACCESS POLICY ap_read allow select using (
-        global sys::perm::superuser
+        global sys::perm::query_stats_read
     );
 };
 
@@ -463,7 +467,7 @@ sys::approximate_count(
     SET volatility := 'Stable';
     USING SQL FUNCTION 'edgedb.approximate_count';
     set impl_is_strict := false;
-    set required_permissions := { sys::perm::superuser };
+    set required_permissions := { sys::perm::approximate_count };
 };
 
 CREATE REQUIRED GLOBAL sys::current_role -> str {
