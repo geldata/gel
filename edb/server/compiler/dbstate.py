@@ -724,6 +724,8 @@ class SQLParamGlobal(SQLParam):
 
     is_permission: bool
 
+    internal_index: int
+
 
 @dataclasses.dataclass
 class ParsedDatabase:

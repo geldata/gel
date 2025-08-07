@@ -2719,8 +2719,8 @@ def merge_params(
         # search for existing params for this global
         existing_param = next(
             (
-                i
-                for i, p in enumerate(ctx.query_params)
+                p
+                for p in ctx.query_params
                 if isinstance(p, dbstate.SQLParamGlobal)
                 and p.global_name == glob.global_name
             ),
@@ -2728,7 +2728,7 @@ def merge_params(
         )
         internal_index: int
         if existing_param is not None:
-            internal_index = existing_param
+            internal_index = existing_param.internal_index
         else:
             # append a new param
             internal_index = len(ctx.query_params) + 1
@@ -2741,6 +2741,7 @@ def merge_params(
                     global_name=glob.global_name,
                     pg_type=pg_type,
                     is_permission=glob.is_permission,
+                    internal_index=internal_index,
                 )
             )
 
