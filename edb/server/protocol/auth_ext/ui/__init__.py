@@ -931,6 +931,7 @@ email address:
 </tr>
     """  # noqa: E501
 
+    msg["X-gel-password-reset-url"] = reset_url
     msg.set_content(plain_text_content, subtype="plain")
     msg.add_alternative(
         render.base_default_email(
@@ -1095,8 +1096,9 @@ email address:
   </td>
 </tr>
     """
+    msg["X-gel-email-verify-url"] = verify_url
     msg.set_content(plain_text_content, subtype="plain")
-    msg.set_content(
+    msg.add_alternative(
         render.base_default_email(
             content=html_content,
             app_name=app_name,
@@ -1219,8 +1221,9 @@ your account:
   </td>
 </tr>
     """
+    msg["X-gel-magic-link"] = link
     msg.set_content(plain_text_content, subtype="plain")
-    msg.set_content(
+    msg.add_alternative(
         render.base_default_email(
             content=html_content,
             app_name=app_name,
