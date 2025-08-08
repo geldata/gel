@@ -24,6 +24,7 @@ import uuid
 import datetime
 from typing import Any
 
+from edb.server import defines
 
 from . import errors, util
 
@@ -110,6 +111,10 @@ async def verify(db: Any, factor_id: str, code: str) -> str:
     """
     code_hash = hash_code(code)
 
+    # N.B: I (sully) don't want to make this RepeatableRead because I
+    # worry that it would allow bypassing MAX_ATTEMPTS by performing
+    # many requests "at the same time". We need to analyze this before
+    # we change it.
     r = await util.json_query(
         db=db,
         query="""\
@@ -120,11 +125,6 @@ with
     MAX_ATTEMPTS := <int16>$max_attempts,
     now := datetime_current(),
     window_start := now - <duration>'10 minutes',
-
-    # Cleanup expired codes (side effect)
-    cleanup_count := count(
-        delete ext::auth::OneTimeCode filter .expires_at < now
-    ),
 
     # Check rate limits
     failed_attempts := (
@@ -179,7 +179,6 @@ select {
     code_found := is_code_found,
     code_expired := is_code_expired,
     otc_id := otc.id,
-    cleanup_count := cleanup_count,
 };""",
         variables={
             "factor_id": factor_id,
@@ -190,6 +189,25 @@ select {
 
     result_json = json.loads(r.decode())
     result = result_json[0]
+
+    # Run an OTC GC. We don't really mind if it fails due to
+    # serialization problems.
+    try:
+        await util.json_query(
+            db=db,
+            query="""\
+with
+    now := datetime_current(),
+
+# Cleanup expired codes
+select count(
+    delete ext::auth::OneTimeCode filter .expires_at < now
+)
+            """,
+            tx_isolation=defines.TxIsolationLevel.RepeatableRead,
+        )
+    except Exception:
+        pass
 
     if result["rate_limited"]:
         raise errors.OTCRateLimited()

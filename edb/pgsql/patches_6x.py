@@ -332,6 +332,7 @@ std::__pg_generate_series(
             create annotation std::description :=
                 "The date and time when the code expires.";
         };
+        create index on (.expires_at);
 
         create required link factor: ext::auth::Factor {
             on target delete delete source;
