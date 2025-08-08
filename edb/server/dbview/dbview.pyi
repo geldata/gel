@@ -39,7 +39,6 @@ from edb.server import server
 from edb.server import tenant
 from edb.server.compiler import dbstate
 from edb.server.compiler import sertypes
-from edb.server.compiler_pool import state
 
 Config: TypeAlias = Mapping[str, config.SettingValue]
 
@@ -52,6 +51,7 @@ class Database:
     db_config: Config
     extensions: set[str]
     user_config_spec: config.Spec
+    dml_queries_executed: int
 
     @property
     def server(self) -> server.Server:
@@ -102,6 +102,9 @@ class Database:
         pass
 
     def hydrate_cache(self, query_cache: list[tuple[bytes, ...]]) -> None:
+        ...
+
+    def invalidate_cache_entries(self, to_invalidate: list[uuid.UUID]) -> None:
         ...
 
     def clear_query_cache(self) -> None:
@@ -210,6 +213,7 @@ class DatabaseIndex:
         *,
         query_cache: bool,
         protocol_version: tuple[int, int],
+        role_name: str,
     ) -> DatabaseConnectionView:
         ...
 
@@ -225,7 +229,6 @@ class DatabaseIndex:
     def get_cached_compiler_args(
         self,
     ) -> tuple[
-        immutables.Map[str, state.PickledDatabaseState],
         bytes,
         immutables.Map[str, config.SettingValue],
     ]:

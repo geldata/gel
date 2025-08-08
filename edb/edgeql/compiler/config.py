@@ -40,6 +40,7 @@ from edb.schema import links as s_links
 from edb.schema import name as sn
 from edb.schema import objtypes as s_objtypes
 from edb.schema import pointers as s_pointers
+from edb.schema import schema as s_schema
 from edb.schema import types as s_types
 from edb.schema import utils as s_utils
 from edb.schema import expr as s_expr
@@ -297,6 +298,13 @@ def _validate_global_op(
         glob_name, expr.name,
         modaliases=ctx.modaliases, type=s_globals.Global)
     assert isinstance(glob, s_globals.Global)
+
+    fullname = glob.get_name(ctx.env.schema)
+    if sn.UnqualName(fullname.module) in s_schema.STD_MODULES:
+        raise errors.ConfigurationError(
+            f"system global '{glob_name}' may not be explicitly specified",
+            span=expr.name.span
+        )
 
     if isinstance(expr, (qlast.ConfigSet, qlast.ConfigReset)):
         if glob.get_expr(ctx.env.schema):

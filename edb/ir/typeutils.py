@@ -87,6 +87,20 @@ def is_cfg_view(
     )
 
 
+def is_excluded_cfg_view(
+    child: s_obj.Object,
+    *,
+    ancestor: s_obj.Object,
+    schema: s_schema.Schema,
+) -> bool:
+    """Used to exclude sys/cfg tables from non sys/cfg views for performance.
+
+    Also used by access policies to prevent including cfg views in
+    when expanding a non-cfg type's descendants (#8865).
+    """
+    return is_cfg_view(child, schema) and not is_cfg_view(ancestor, schema)
+
+
 def is_scalar(typeref: irast.TypeRef) -> bool:
     """Return True if *typeref* describes a scalar type."""
     return typeref.is_scalar

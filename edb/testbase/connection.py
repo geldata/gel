@@ -28,6 +28,7 @@ import typing
 
 import abc
 import asyncio
+import contextlib
 import enum
 import functools
 import random
@@ -222,7 +223,33 @@ class RawTransaction(BaseTransaction):
             self._managed = False
 
 
-class Iteration(BaseTransaction, abstract.AsyncIOExecutor):
+class _Executor(abstract.AsyncIOExecutor):
+    # TODO: Remove this, once we land this in gel-python and update
+    # our bindings.
+    async def query_graphql_json(
+        self, query, *args: typing.Any, **kwargs: typing.Any
+    ) -> str:
+        return await self._query(
+            abstract.QueryContext(
+                query=abstract.QueryWithArgs(
+                    query,
+                    # None,
+                    args,
+                    kwargs,
+                    input_language=ord('G'),
+                ),
+                cache=self._get_query_cache(),
+                query_options=abstract._query_single_json_opts,
+                retry_options=self._get_retry_options(),
+                state=self._get_state(),
+                # transaction_options=self._get_active_tx_options(),
+                warning_handler=self._get_warning_handler(),
+                annotations=self._get_annotations(),
+            )
+        )
+
+
+class Iteration(BaseTransaction, _Executor):
     def __init__(self, retry, connection, iteration):
         super().__init__(connection)
         self._options = retry._options.transaction_options
@@ -343,7 +370,7 @@ class Retry:
         return iteration
 
 
-class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
+class Connection(options._OptionsMixin, _Executor):
 
     _top_xact: RawTransaction | None = None
 
@@ -378,6 +405,16 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
 
     def _get_annotations(self) -> dict[str, str]:
         return self._options.annotations
+
+    @contextlib.contextmanager
+    def capture_warnings(self) -> typing.Iterator[list[errors.EdgeDBError]]:
+        old = self._capture_warnings
+        warnings: list[errors.EdgeDBError] = []
+        self._capture_warnings = warnings
+        try:
+            yield warnings
+        finally:
+            self._capture_warnings = old
 
     def _warning_handler(self, warnings, res):
         if self._capture_warnings is not None:
@@ -436,8 +473,30 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
                     + random.randrange(100) * 0.001
                 )
 
+    def _prohibit_state(self, state) -> None:
+        # The testbase connection uses our own subclass of
+        # gel-python's AsyncIOProtocol,
+        # edb.protocol.protocol.Protocol, that overrides encode_state
+        # to ignore any user specified state and to always just use
+        # whatever the server suggests.
+        #
+        # It is probably possible to make CONFIGURE .../SET GLOBAL
+        # play nicely with with_globals/etc, by decoding what the server
+        # has sent and then overlaying the user configured stuff.
+        #
+        # Since it doesn't work, disable it.
+        if state.as_dict():
+            raise AssertionError(
+                f'test suite client cannot use with_XXX config methods; '
+                f'use SET ... in the protocol instead '
+                f'or use the stock python client '
+                f'(or go make it work; that would be nice too)\n'
+                f'config was: {state.as_dict()}'
+            )
+
     async def _execute(self, script: abstract.ExecuteContext) -> None:
         await self.ensure_connected()
+        self._prohibit_state(script.state)
 
         async def _inner():
             ctx = script.lower(allow_capabilities=edgedb_enums.Capability.ALL)
@@ -448,6 +507,8 @@ class Connection(options._OptionsMixin, abstract.AsyncIOExecutor):
         await self._retry_operation(_inner)
 
     async def raw_query(self, query_context: abstract.QueryContext):
+        self._prohibit_state(query_context.state)
+
         async def _inner():
             ctx = query_context.lower(
                 allow_capabilities=edgedb_enums.Capability.ALL)

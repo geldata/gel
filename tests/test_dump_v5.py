@@ -56,6 +56,16 @@ class DumpTestCaseMixin:
             ]
         )
 
+        # This got added in 6.6. We add it in here as part of testing
+        # in place upgrades, which use dump tests as their core things.
+        await self.assert_query_result(
+            r'''
+                select schema::ObjectType { name }
+                filter .name = 'ext::ai::OllamaBgeM3Model';
+            ''',
+            [{}],
+        )
+
     async def _ensure_data_integrity(self):
         await self.assert_query_result(
             r'''

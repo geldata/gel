@@ -913,3 +913,18 @@ CREATE CAST FROM range<anypoint> TO multirange<anypoint> {
     # Any range can be implicitly cast into a multirange.
     ALLOW IMPLICIT;
 };
+
+
+## For annoying performance reasons, we want to be able to internally
+## directly call generate_series.
+## Hopefully I'll fix this better later.
+
+CREATE FUNCTION
+std::__pg_generate_series(
+    `start`: std::int64,
+    stop: std::int64
+) -> SET OF std::int64
+{
+    SET volatility := 'Immutable';
+    USING SQL FUNCTION 'generate_series';
+};

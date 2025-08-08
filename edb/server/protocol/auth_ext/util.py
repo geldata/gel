@@ -25,19 +25,32 @@ import logging
 import asyncio
 
 from typing import (
-    TypeVar, overload, Any, cast, Optional, TYPE_CHECKING, Callable,
-    Awaitable
+    overload,
+    Any,
+    cast,
+    Optional,
+    TYPE_CHECKING,
+    Callable,
+    Awaitable,
+    Mapping,
 )
+
+import immutables
+
+from edb.common import retryloop
+from edb import errors as edb_errors
 
 from edb.server import config as edb_config, auth as jwt_auth
 from edb.server.config.types import CompositeConfigType
+from edb.server.protocol import execute
 
 from . import errors, config
 
 if TYPE_CHECKING:
     from edb.server import tenant as edbtenant
+    from edb.server.dbview import dbview
+    from edb.server import defines as edbdef
 
-T = TypeVar("T")
 
 logger = logging.getLogger('edb.server.ext.auth')
 
@@ -45,12 +58,63 @@ logger = logging.getLogger('edb.server.ext.auth')
 jwtset_cache = jwt_auth.JWKSetCache(60 * 10)
 
 
+async def json_query_no_retry(
+    db: dbview.Database,
+    query: str,
+    *,
+    variables: Mapping[str, Any] = immutables.Map(),
+    tx_isolation: edbdef.TxIsolationLevel | None = None,
+    role_name: str | None = None,
+) -> bytes:
+    try:
+        return await execute.parse_execute_json(
+            db,
+            query,
+            variables=variables,
+            tx_isolation=tx_isolation,
+            role_name=role_name,
+            cached_globally=True,
+            query_tag='gel/auth',
+        )
+    except Exception as e:
+        raise (await execute.interpret_error(e, db)) from None
+
+
+async def json_query(
+    db: dbview.Database,
+    query: str,
+    *,
+    variables: Mapping[str, Any] = immutables.Map(),
+    tx_isolation: edbdef.TxIsolationLevel | None = None,
+    role_name: str | None = None,
+    retry_timeout: float = 5.0,
+) -> bytes:
+    # TODO: Should we move the retry into a function in execute instead?
+    rloop = retryloop.RetryLoop(
+        backoff=retryloop.exp_backoff(),
+        timeout=retry_timeout,
+        ignore=(edb_errors.TransactionConflictError,),
+    )
+    async for iteration in rloop:
+        async with iteration:
+            return await json_query_no_retry(
+                db,
+                query,
+                variables=variables,
+                tx_isolation=tx_isolation,
+                role_name=role_name,
+            )
+    raise AssertionError('retryloop is broken')
+
+
 def maybe_get_config_unchecked(db: edbtenant.dbview.Database, key: str) -> Any:
     return edb_config.lookup(key, db.db_config, spec=db.user_config_spec)
 
 
 @overload
-def maybe_get_config(db: Any, key: str, expected_type: type[T]) -> T | None: ...
+def maybe_get_config[T](
+    db: Any, key: str, expected_type: type[T]
+) -> T | None: ...
 
 
 @overload
@@ -75,7 +139,7 @@ def maybe_get_config(
 
 
 @overload
-def get_config(db: Any, key: str, expected_type: type[T]) -> T: ...
+def get_config[T](db: Any, key: str, expected_type: type[T]) -> T: ...
 
 
 @overload
@@ -110,9 +174,7 @@ def escape_and_truncate(input_str: str | None, max_len: int) -> str | None:
     if input_str is None:
         return None
     trunc = (
-        f"{input_str[:max_len]}..."
-        if len(input_str) > max_len
-        else input_str
+        f"{input_str[:max_len]}..." if len(input_str) > max_len else input_str
     )
     return html.escape(trunc)
 

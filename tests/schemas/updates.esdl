@@ -44,6 +44,9 @@ type UpdateTest {
     link annotated_status -> Status {
         property note -> str;
     }
+    link annotated_status2 -> Status {
+        property note -> str;
+    }
 
     # for testing links to sets
     multi link tags -> Tag;

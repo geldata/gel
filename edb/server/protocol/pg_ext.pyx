@@ -30,6 +30,7 @@ import sys
 import time
 import uuid
 from collections import deque
+from typing import Sequence
 
 cimport cython
 import immutables
@@ -45,7 +46,7 @@ cimport edb.pgsql.parser.parser as pg_parser
 from edb.server import args as srvargs
 from edb.server import defines, metrics
 from edb.server import tenant as edbtenant
-from edb.server.compiler import dbstate
+from edb.server.compiler import dbstate, enums
 from edb.server.pgcon import errors as pgerror
 from edb.server.pgcon.pgcon cimport PGAction, PGMessage
 from edb.server.protocol cimport frontend
@@ -95,7 +96,8 @@ cdef class ConnectionView:
         # Frontend-only settings are defined by the high-level compiler, and
         # tracked only here, syncing between the compiler process,
         # see current_fe_settings(), fe_transaction_state() and usages below.
-        self._fe_settings = DEFAULT_FE_SETTINGS
+        self._local_fe_defaults = DEFAULT_FE_SETTINGS
+        self._fe_settings = self._local_fe_defaults
         self._in_tx_fe_settings = None
         self._in_tx_fe_local_settings = None
 
@@ -127,15 +129,27 @@ cdef class ConnectionView:
             DEFAULT_SETTINGS, DEFAULT_FE_SETTINGS, DEFAULT_STATE
         )
 
+    cdef _init_user_configs(self, username, tenant):
+        assert self._fe_settings is DEFAULT_FE_SETTINGS
+        assert self._in_tx_fe_local_settings is None
+        role = tenant.get_roles()[username]
+        apply_default = role['apply_access_policies_pg_default']
+        if apply_default is not None:
+            self._local_fe_defaults = self._local_fe_defaults.set(
+                'apply_access_policies_pg',
+                (str(apply_default).lower(),),
+            )
+            self._fe_settings = self._local_fe_defaults
+
     cpdef inline current_fe_settings(self):
         if self.in_tx():
             # For easier access, _in_tx_fe_local_settings is always a superset
             # of _in_tx_fe_settings; _in_tx_fe_settings only keeps track of
             # non-local settings, so that the local settings don't go across
             # transaction boundaries; this must be consistent with dbstate.py.
-            return self._in_tx_fe_local_settings or DEFAULT_FE_SETTINGS
+            return self._in_tx_fe_local_settings or self._local_fe_defaults
         else:
-            return self._fe_settings or DEFAULT_FE_SETTINGS
+            return self._fe_settings
 
     cdef inline fe_transaction_state(self):
         return dbstate.SQLTransactionState(
@@ -279,11 +293,11 @@ cdef class ConnectionView:
             if unit.set_vars == {None: None}:  # RESET ALL
                 if self.in_tx():
                     self._in_tx_settings = DEFAULT_SETTINGS
-                    self._in_tx_fe_settings = DEFAULT_FE_SETTINGS
-                    self._in_tx_fe_local_settings = DEFAULT_FE_SETTINGS
+                    self._in_tx_fe_settings = self._local_fe_defaults
+                    self._in_tx_fe_local_settings = self._local_fe_defaults
                 else:
                     self._settings = DEFAULT_SETTINGS
-                    self._fe_settings = DEFAULT_FE_SETTINGS
+                    self._fe_settings = self._local_fe_defaults
             else:
                 if self.in_tx():
                     if unit.frontend_only:
@@ -291,8 +305,8 @@ cdef class ConnectionView:
                             settings = self._in_tx_fe_settings.mutate()
                             for k, v in unit.set_vars.items():
                                 if v is None:
-                                    if k in DEFAULT_FE_SETTINGS:
-                                        settings[k] = DEFAULT_FE_SETTINGS[k]
+                                    if k in self._local_fe_defaults:
+                                        settings[k] = self._local_fe_defaults[k]
                                     else:
                                         settings.pop(k, None)
                                 else:
@@ -310,8 +324,8 @@ cdef class ConnectionView:
                     return
                 for k, v in unit.set_vars.items():
                     if v is None:
-                        if unit.frontend_only and k in DEFAULT_FE_SETTINGS:
-                            settings[k] = DEFAULT_FE_SETTINGS[k]
+                        if unit.frontend_only and k in self._local_fe_defaults:
+                            settings[k] = self._local_fe_defaults[k]
                         else:
                             settings.pop(k, None)
                     else:
@@ -772,6 +786,8 @@ cdef class PgConnection(frontend.FrontendConnection):
         self.dbname = database
         self.username = user
 
+        self._dbview._init_user_configs(user, self.tenant)
+
         buf = WriteBuffer()
 
         msg_buf = WriteBuffer.new_message(b'R')
@@ -1000,6 +1016,9 @@ cdef class PgConnection(frontend.FrontendConnection):
             source = pg_parser.Source.from_string(query_str)
             query_units = await self.compile(source, dbv)
 
+        for qu in query_units:
+            self.check_capabilities(qu)
+
         already_in_implicit_tx = dbv._in_tx_implicit
         metrics.sql_queries.inc(
             len(query_units), self.tenant.get_instance_name()
@@ -1058,6 +1077,8 @@ cdef class PgConnection(frontend.FrontendConnection):
                 parse_unit.params,
                 dbv.current_fe_settings(),
                 source,
+                self.get_permissions(),
+                self.username,
             )
             actions.append(
                 PGMessage(
@@ -1188,7 +1209,12 @@ cdef class PgConnection(frontend.FrontendConnection):
                         params = stmt.parse_action.query_unit.params
                         fe_settings = dbv.current_fe_settings()
                         data = remap_arguments(
-                            data, params, fe_settings, stmt.source
+                            data,
+                            params,
+                            fe_settings,
+                            stmt.source,
+                            self.get_permissions(),
+                            self.username,
                         )
                     except Exception as e:
                         # we return here instead of raising the exception
@@ -1329,6 +1355,35 @@ cdef class PgConnection(frontend.FrontendConnection):
             self.debug_print("extended_query", actions)
         return actions, None
 
+    def check_capabilities(
+        self,
+        query_unit,
+    ):
+        query_capabilities = query_unit.capabilities
+
+        role_capability = self.get_role_capability()
+        if query_capabilities & ~role_capability:
+            raise query_capabilities.make_error(
+                role_capability,
+                errors.DisabledCapabilityError,
+                f"role {self.username} does not have permission",
+            )
+
+    def get_role_capability(self) -> enums.Capability:
+        if capability := self.tenant.get_role_capabilities().get(
+            self.username
+        ):
+            return capability
+        return enums.Capability.NONE
+
+    def get_permissions(self) -> tuple[bool, Sequence[str]]:
+        if role_desc := self.tenant.get_roles().get(self.username):
+            return (
+                bool(role_desc.get('superuser')),
+                (role_desc.get('all_permissions') or ())
+            )
+        return False, ()
+
     async def _ensure_ps_locality(
         self,
         dbv: ConnectionView,
@@ -1429,7 +1484,7 @@ cdef class PgConnection(frontend.FrontendConnection):
         outer_stmt, new_stmts = await self._parse_statement(
             stmt_name,
             qu.orig_query,
-            parse_action.args[1],
+            parse_action.args[2],
             dbv,
             force_recompilation=True,
             injected_action=True,
@@ -1619,6 +1674,9 @@ cdef class PgConnection(frontend.FrontendConnection):
                 "statement",
             )
 
+        for qu in query_units:
+            self.check_capabilities(qu)
+
         return await self._parse_unit(
             stmt_name,
             query_units[0],
@@ -1658,12 +1716,12 @@ cdef class PgConnection(frontend.FrontendConnection):
             nested_ps_name = unit.deallocate.stmt_name
             unit = self._validate_deallocate_stmt(unit)
 
-        parse_data = remap_parameters(parse_data, unit.params)
+        remapped_parse_data = remap_parameters(parse_data, unit.params)
 
         action = PGMessage(
             PGAction.PARSE,
             stmt_name=unit.stmt_name,
-            args=(unit.query.encode("utf-8"), parse_data),
+            args=(unit.query.encode("utf-8"), remapped_parse_data, parse_data),
             query_unit=unit,
             fe_settings=fe_settings,
             injected=injected_action,
@@ -1726,6 +1784,7 @@ cdef class PgConnection(frontend.FrontendConnection):
                 self.dbname,
                 self.username,
                 client_id=self.tenant.client_id,
+                client_name=self.tenant.get_instance_name(),
             )
         finally:
             metrics.query_compilation_duration.observe(
@@ -1796,6 +1855,8 @@ cdef bytes remap_arguments(
     params: list[dbstate.SQLParam] | None,
     fe_settings: dbstate.SQLSettings,
     source: pg_parser.Source,
+    permission_info: tuple[bool, Sequence[str]],
+    username: str,  # HACK
 ):
     cdef:
         int16_t param_format_count
@@ -1803,6 +1864,8 @@ cdef bytes remap_arguments(
         int32_t arg_offset_external
         int16_t param_count_external
         int32_t size
+
+    is_superuser, permissions = permission_info
 
     # The "external" parameters (that are visible to the user)
     # don't include the internal params for globals and extracted constants.
@@ -1876,13 +1939,19 @@ cdef bytes remap_arguments(
                 buf.write_len_prefixed_bytes(extracted_consts[e])
             elif isinstance(param, dbstate.SQLParamGlobal):
                 name = param.global_name
-                setting_name = f'global {name.module}::{name.name}'
-                values = fe_settings.get(setting_name, None)
-
-                if values == None:
-                    buf.write_int32(-1) # NULL
+                if param.is_permission:
+                    buf.write_int32(1)
+                    buf.write_byte(is_superuser or str(name) in permissions)
+                elif name.module == 'sys' and name.name == 'current_role':
+                    write_arg(buf, param.pg_type, (username,))
                 else:
-                    write_arg(buf, param.pg_type, values)
+                    setting_name = f'global {name.module}::{name.name}'
+                    values = fe_settings.get(setting_name, None)
+
+                    if values == None:
+                        buf.write_int32(-1) # NULL
+                    else:
+                        write_arg(buf, param.pg_type, values)
     else:
         buf.write_int16(0)
 

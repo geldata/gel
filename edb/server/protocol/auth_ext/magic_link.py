@@ -25,7 +25,6 @@ from typing import Any, cast
 
 from edb import errors as edb_errors
 from edb.common import debug
-from edb.server.protocol import execute
 
 from . import config, data, errors, jwt, util, local, email as auth_emails
 
@@ -63,6 +62,7 @@ class Client(local.Client):
                 return config.MagicLinkProviderConfig(
                     name=cfg.name,
                     token_time_to_live=cfg.token_time_to_live,
+                    verification_method=cfg.verification_method,
                 )
 
         raise errors.MissingConfiguration(
@@ -71,7 +71,7 @@ class Client(local.Client):
 
     async def register(self, email: str) -> data.EmailFactor:
         try:
-            result = await execute.parse_execute_json(
+            result = await util.json_query(
                 self.db,
                 """
 with
@@ -88,16 +88,10 @@ select email_factor { ** };""",
                 variables={
                     "email": email,
                 },
-                cached_globally=True,
-                query_tag='gel/auth',
             )
 
-        except Exception as e:
-            exc = await execute.interpret_error(e, self.db)
-            if isinstance(exc, edb_errors.ConstraintViolationError):
-                raise errors.UserAlreadyRegistered()
-            else:
-                raise exc
+        except edb_errors.ConstraintViolationError:
+            raise errors.UserAlreadyRegistered()
 
         result_json = json.loads(result.decode())
         assert len(result_json) == 1

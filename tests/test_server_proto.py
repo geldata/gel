@@ -877,7 +877,7 @@ class TestServerProto(tb.QueryTestCase):
         # by closing.
         lock_key = tb.gen_lock_key()
 
-        con2 = await self.connect(database=self.con.dbname)
+        con2 = await self.connect()
 
         await self.con.query('START TRANSACTION')
         await self.con.query(
@@ -1434,7 +1434,7 @@ class TestServerProto(tb.QueryTestCase):
         # Test Parse/Execute with ROLLBACK; use new connection
         # to make sure that Opportunistic Execute isn't used.
 
-        con2 = await self.connect(database=self.con.dbname)
+        con2 = await self.connect()
 
         try:
             with self.assertRaises(edgedb.DivisionByZeroError):
@@ -1466,7 +1466,7 @@ class TestServerProto(tb.QueryTestCase):
         # Test Opportunistic Execute with ROLLBACK; use new connection
         # to make sure that "ROLLBACK" is cached.
 
-        con2 = await self.connect(database=self.con.dbname)
+        con2 = await self.connect()
 
         try:
             for _ in range(5):
@@ -1539,7 +1539,7 @@ class TestServerProto(tb.QueryTestCase):
 
         query = 'SELECT 1'
 
-        con2 = await self.connect(database=self.con.dbname)
+        con2 = await self.connect()
         try:
             for _ in range(5):
                 self.assertEqual(
@@ -1568,8 +1568,9 @@ class TestServerProto(tb.QueryTestCase):
             ''')
 
             with self.assertRaisesRegex(
-                    edgedb.TransactionError,
-                    'read-only transaction'):
+                edgedb.TransactionError,
+                'Modifications not allowed in a read-only transaction'
+            ):
 
                 await self.con.query('''
                     INSERT Tmp {
@@ -1912,7 +1913,7 @@ class TestServerProto(tb.QueryTestCase):
 
     async def test_server_proto_tx_17(self):
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
 
         tx1 = con1.transaction()
         tx2 = con2.transaction()
@@ -2344,7 +2345,9 @@ class TestServerProto(tb.QueryTestCase):
             await self.assert_tx_isolation_and_default(
                 'RepeatableRead', default='Serializable'
             )
-            await self.assert_read_only_and_default('read-only transaction')
+            await self.assert_read_only_and_default(
+                'Modifications not allowed in a read-only transaction'
+            )
         finally:
             await self.con.query(f'''
                 ROLLBACK;
@@ -2360,7 +2363,7 @@ class TestServerProto(tb.QueryTestCase):
 
     async def test_server_proto_tx_32(self):
         # Test state sync across 2 frontend connections works fine
-        con2 = await self.connect(database=self.con.dbname)
+        con2 = await self.connect()
         try:
             await con2.query('''
                 CONFIGURE SESSION
@@ -2390,7 +2393,7 @@ class TestServerProto(tb.QueryTestCase):
         except ImportError:
             self.skipTest("asyncpg is not installed")
 
-        conn_args = self.get_connect_args(database=self.con.dbname)
+        conn_args = self.get_connect_args()
         scon = await asyncpg.connect(
             host=conn_args['host'],
             port=conn_args['port'],
@@ -2461,6 +2464,7 @@ class TestServerProtoMigration(tb.QueryTestCase):
 
         await self.con.execute(f'''
             START MIGRATION TO {{
+                using future simple_scoping;
                 module default {{
                     type {typename} {{
                         required property foo -> str;
@@ -2833,7 +2837,7 @@ class TestServerProtoDDL(tb.DDLTestCase):
         typename = 'CacheInv_01'
 
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.execute(f'''
                 CREATE TYPE {typename} {{
@@ -2880,7 +2884,7 @@ class TestServerProtoDDL(tb.DDLTestCase):
         typename = 'CacheInv_02'
 
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.query(f'''
                 CREATE TYPE {typename} {{
@@ -2935,7 +2939,7 @@ class TestServerProtoDDL(tb.DDLTestCase):
         typename = 'CacheInv_03'
 
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.execute(f'''
                 CREATE TYPE {typename} {{
@@ -2982,7 +2986,7 @@ class TestServerProtoDDL(tb.DDLTestCase):
         typename = 'CacheInv_04'
 
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.execute(f'''
                 CREATE TYPE {typename} {{
@@ -3029,7 +3033,7 @@ class TestServerProtoDDL(tb.DDLTestCase):
         typename = 'CacheInv_05'
 
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.execute(f'''
                 CREATE TYPE {typename} {{
@@ -3087,7 +3091,7 @@ class TestServerProtoDDL(tb.DDLTestCase):
         typename = 'CacheInv_06'
 
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.execute(f'''
                 CREATE TYPE Foo{typename};
@@ -3146,7 +3150,7 @@ class TestServerProtoDDL(tb.DDLTestCase):
         typename = 'CacheInv_07'
 
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.execute(f'''
                 CREATE TYPE Foo{typename};
@@ -3253,7 +3257,7 @@ class TestServerProtoDDL(tb.DDLTestCase):
         typename = 'CacheInv_10'
 
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.execute(f'''
                 CREATE TYPE {typename} {{
@@ -3330,7 +3334,7 @@ class TestServerProtoDDL(tb.DDLTestCase):
                 await self.con.query('SELECT 123')
 
                 # DDL in another connection
-                con2 = await self.connect(database=self.con.dbname)
+                con2 = await self.connect()
                 try:
                     await con2.execute(f"""
                         ALTER TYPE {typename} {{
@@ -3396,14 +3400,8 @@ class TestServerProtoDDL(tb.DDLTestCase):
 
     async def test_server_proto_backend_tid_propagation_03(self):
         try:
-            await self.con.execute('''
-                START MIGRATION TO {
-                    module default {
-                        scalar type tid_prop_03 extending str;
-                    }
-                };
-                POPULATE MIGRATION;
-                COMMIT MIGRATION;
+            await self.migrate('''
+                scalar type tid_prop_03 extending str;
             ''')
 
             result = await self.con.query_single('''
@@ -3760,7 +3758,7 @@ class TestServerProtoConcurrentDDL(tb.DDLTestCase):
 
         async with asyncio.TaskGroup() as g:
             cons_tasks = [
-                g.create_task(self.connect(database=self.con.dbname))
+                g.create_task(self.connect())
                 for _ in range(ntasks)
             ]
 
@@ -3807,7 +3805,7 @@ class TestServerProtoConcurrentGlobalDDL(tb.DDLTestCase):
 
         async with asyncio.TaskGroup() as g:
             cons_tasks = [
-                g.create_task(self.connect(database=self.con.dbname))
+                g.create_task(self.connect())
                 for _ in range(ntasks)
             ]
 
@@ -3943,14 +3941,14 @@ class TestServerCapabilities(tb.QueryTestCase):
             edgedb.DisabledCapabilityError, "disabled by the client"
         ):
             await self.con._fetchall(
-                'START MIGRATION TO {}',
+                'START MIGRATION TO { using future simple_scoping;}',
                 __allow_capabilities__=caps,
             )
 
     async def test_server_capabilities_07(self):
         caps = enums.Capability.ALL & ~enums.Capability.TRANSACTION
         await self.con._fetchall(
-            'START MIGRATION TO {};'
+            'START MIGRATION TO { using future simple_scoping; };'
             'POPULATE MIGRATION;'
             'ABORT MIGRATION;',
             __allow_capabilities__=caps,

@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Generic,
     Optional,
     AbstractSet,
     Iterable,
@@ -47,7 +46,9 @@ if TYPE_CHECKING:
     from edb.schema import referencing as s_referencing
 
 
-class InheritingObjectCommand(sd.ObjectCommand[so.InheritingObjectT]):
+class InheritingObjectCommand[InheritingObjectT: so.InheritingObject](
+    sd.ObjectCommand[InheritingObjectT]
+):
     def _update_inherited_fields(
         self,
         schema: s_schema.Schema,
@@ -384,7 +385,7 @@ class InheritingObjectCommand(sd.ObjectCommand[so.InheritingObjectT]):
         orig_rec = context.current().enable_recursion
         context.current().enable_recursion = False
 
-        new_ancestors = so.ObjectList[so.InheritingObjectT].create(
+        new_ancestors = so.ObjectList[InheritingObjectT].create(
             schema,
             so.compute_ancestors(schema, scls),
         )
@@ -420,7 +421,7 @@ class InheritingObjectCommand(sd.ObjectCommand[so.InheritingObjectT]):
         return schema
 
     def _reinherit_classref_dict(
-        self: InheritingObjectCommand[so.InheritingObjectT],
+        self: InheritingObjectCommand[InheritingObjectT],
         schema: s_schema.Schema,
         context: sd.CommandContext,
         refdict: so.RefDict,
@@ -432,9 +433,9 @@ class InheritingObjectCommand(sd.ObjectCommand[so.InheritingObjectT]):
         refs = self.get_inherited_ref_layout(schema, context, refdict)
         refnames = set(refs)
 
-        obj_op: InheritingObjectCommand[so.InheritingObjectT]
+        obj_op: InheritingObjectCommand[InheritingObjectT]
         if isinstance(self, sd.AlterObjectFragment):
-            obj_op = cast(InheritingObjectCommand[so.InheritingObjectT],
+            obj_op = cast(InheritingObjectCommand[InheritingObjectT],
                           self.get_parent_op(context))
         else:
             obj_op = self
@@ -558,7 +559,7 @@ class InheritingObjectCommand(sd.ObjectCommand[so.InheritingObjectT]):
         schema: s_schema.Schema,
         astnode: qlast.ObjectDDL,
         context: sd.CommandContext,
-    ) -> list[so.ObjectShell[so.InheritingObjectT]]:
+    ) -> list[so.ObjectShell[InheritingObjectT]]:
         modaliases = context.modaliases
 
         base_refs = []
@@ -614,20 +615,20 @@ BaseDelta_T = tuple[
 ]
 
 
-def delta_bases(
+def delta_bases[InheritingObjectT: so.InheritingObject](
     old_bases: Iterable[sn.Name],
     new_bases: Iterable[sn.Name],
-    t: type[so.InheritingObjectT],
-) -> BaseDelta_T[so.InheritingObjectT]:
+    t: type[InheritingObjectT],
+) -> BaseDelta_T[InheritingObjectT]:
     dropped = frozenset(old_bases) - frozenset(new_bases)
     removed_bases = [so.ObjectShell(name=b, schemaclass=t) for b in dropped]
     common_bases = [b for b in old_bases if b not in dropped]
 
-    added_bases: list[BaseDeltaItem_T[so.InheritingObjectT]] = []
+    added_bases: list[BaseDeltaItem_T[InheritingObjectT]] = []
     j = 0
 
     added_set = set()
-    added_base_refs: list[so.ObjectShell[so.InheritingObjectT]] = []
+    added_base_refs: list[so.ObjectShell[InheritingObjectT]] = []
 
     if common_bases:
         for base in new_bases:
@@ -660,7 +661,7 @@ def delta_bases(
     return tuple(removed_bases), tuple(added_bases)
 
 
-class AlterInherit(sd.Command, Generic[so.InheritingObjectT]):
+class AlterInherit[InheritingObjectT: so.InheritingObject](sd.Command):
     astnode = qlast.AlterAddInherit, qlast.AlterDropInherit
 
     # We temporarily record information about inheritance alterations
@@ -668,10 +669,10 @@ class AlterInherit(sd.Command, Generic[so.InheritingObjectT]):
     # goal here is to encode the information in the subcommand stream,
     # so the positioning is maintained.
     added_bases = struct.Field(list[tuple[
-        list[so.ObjectShell[so.InheritingObjectT]],
-        Optional[str | tuple[str, so.ObjectShell[so.InheritingObjectT]]],
+        list[so.ObjectShell[InheritingObjectT]],
+        Optional[str | tuple[str, so.ObjectShell[InheritingObjectT]]],
     ]])
-    dropped_bases = struct.Field(list[so.ObjectShell[so.InheritingObjectT]])
+    dropped_bases = struct.Field(list[so.ObjectShell[InheritingObjectT]])
 
     @classmethod
     def _cmd_tree_from_ast(
@@ -681,7 +682,7 @@ class AlterInherit(sd.Command, Generic[so.InheritingObjectT]):
         context: sd.CommandContext,
     ) -> Any:
         added_bases = []
-        dropped_bases: list[so.ObjectShell[so.InheritingObjectT]] = []
+        dropped_bases: list[so.ObjectShell[InheritingObjectT]] = []
 
         parent_op = context.current().op
         assert isinstance(parent_op, sd.ObjectCommand)
@@ -711,7 +712,7 @@ class AlterInherit(sd.Command, Generic[so.InheritingObjectT]):
 
             pos_node = astcmd.position
             pos: Optional[
-                str | tuple[str, so.ObjectShell[so.InheritingObjectT]]
+                str | tuple[str, so.ObjectShell[InheritingObjectT]]
             ]
             if pos_node is not None:
                 if pos_node.ref is not None:
@@ -733,9 +734,9 @@ class AlterInherit(sd.Command, Generic[so.InheritingObjectT]):
             added_bases=added_bases, dropped_bases=dropped_bases)
 
 
-class CreateInheritingObject(
-    InheritingObjectCommand[so.InheritingObjectT],
-    sd.CreateObject[so.InheritingObjectT],
+class CreateInheritingObject[InheritingObjectT: so.InheritingObject](
+    InheritingObjectCommand[InheritingObjectT],
+    sd.CreateObject[InheritingObjectT],
 ):
 
     def canonicalize_attributes(
@@ -748,7 +749,7 @@ class CreateInheritingObject(
             'bases', schema=schema, context=context)
         bases = () if bases_coll is None else bases_coll.objects(schema)
         ancestors = so.compute_lineage(schema, bases, self.get_verbosename())
-        ancestors_coll = so.ObjectList[so.InheritingObjectT].create(
+        ancestors_coll = so.ObjectList[InheritingObjectT].create(
             schema, ancestors)
         self.set_attribute_value('ancestors', ancestors_coll.as_shell(schema))
 
@@ -838,7 +839,7 @@ class CreateInheritingObject(
 
             if explicit_bases:
                 if isinstance(node, qlast.CreateObject):
-                    if isinstance(node, qlast.BasedOnTuple):
+                    if isinstance(node, qlast.BasedOn):
                         node.bases = [
                             qlast.TypeName(maintype=utils.name_to_ast_ref(b))
                             for b in explicit_bases
@@ -856,7 +857,7 @@ class CreateInheritingObject(
                     )
             else:
                 if isinstance(node, qlast.CreateObject):
-                    if isinstance(node, qlast.BasedOnTuple):
+                    if isinstance(node, qlast.BasedOn):
                         node.bases = []
         else:
             super()._apply_field_ast(schema, context, node, op)
@@ -922,9 +923,9 @@ class CreateInheritingObject(
         return group
 
 
-class AlterInheritingObjectOrFragment(
-    InheritingObjectCommand[so.InheritingObjectT],
-    sd.AlterObjectOrFragment[so.InheritingObjectT],
+class AlterInheritingObjectOrFragment[InheritingObjectT: so.InheritingObject](
+    InheritingObjectCommand[InheritingObjectT],
+    sd.AlterObjectOrFragment[InheritingObjectT],
 ):
 
     def _alter_begin(
@@ -959,6 +960,9 @@ class AlterInheritingObjectOrFragment(
         scls: so.InheritingObject,
         props: tuple[str, ...],
     ) -> None:
+        if _has_implicit_propagation(context):
+            return
+
         descendant_names = [
             d.get_name(schema) for d in scls.ordered_descendants(schema)
         ]
@@ -979,6 +983,7 @@ class AlterInheritingObjectOrFragment(
                 d_alter_cmd.add(self.clone(d_alter_cmd.classname))
 
             with ctx_stack():
+                d_alter_cmd.set_annotation('implicit_propagation', True)
                 assert isinstance(d_alter_cmd, InheritingObjectCommand)
                 schema = d_alter_cmd.inherit_fields(
                     schema, context, d_bases, fields=props, apply=False
@@ -1014,49 +1019,10 @@ class AlterInheritingObjectOrFragment(
                     orig_value=cur_inh_fields,
                 )
 
-    # HACK: Recursively propagate the value of is_derived. Use to deal
-    # with altering computed pointers that are aliases. We should
-    # instead not have those be marked is_derived.
-    def _propagate_is_derived_flat(
-        self,
-        schema: s_schema.Schema,
-        context: sd.CommandContext,
-        val: Optional[bool],
-    ) -> None:
-        self.set_attribute_value('is_derived', val)
-        self._propagate_field_alter(schema, context, self.scls, ('is_derived',))
 
-        mcls = self.get_schema_metaclass()
-        for refdict in mcls.get_refdicts():
-            attr = refdict.attr
-            if not issubclass(refdict.ref_cls, so.InheritingObject):
-                continue
-            for obj in self.scls.get_field_value(schema, attr).objects(schema):
-                cmd = obj.init_delta_command(schema, sd.AlterObject)
-                cmd._propagate_is_derived_flat(schema, context, val)
-                self.add(cmd)
-
-    def _propagate_is_derived(
-        self,
-        schema: s_schema.Schema,
-        context: sd.CommandContext,
-        val: Optional[bool],
-    ) -> None:
-        self._propagate_is_derived_flat(schema, context, val)
-        for descendant in self.scls.ordered_descendants(schema):
-            d_root_cmd, d_alter_cmd, ctx_stack = descendant.init_delta_branch(
-                schema, context, sd.AlterObject)
-
-            with ctx_stack():
-                assert isinstance(d_alter_cmd, AlterInheritingObject)
-                d_alter_cmd._propagate_is_derived_flat(schema, context, val)
-
-            self.add(d_root_cmd)
-
-
-class AlterInheritingObject(
-    AlterInheritingObjectOrFragment[so.InheritingObjectT],
-    sd.AlterObject[so.InheritingObjectT],
+class AlterInheritingObject[InheritingObjectT: so.InheritingObject](
+    AlterInheritingObjectOrFragment[InheritingObjectT],
+    sd.AlterObject[InheritingObjectT],
 ):
 
     @classmethod
@@ -1132,29 +1098,29 @@ class AlterInheritingObject(
         return cmd
 
 
-class AlterInheritingObjectFragment(
-    AlterInheritingObjectOrFragment[so.InheritingObjectT],
-    sd.AlterObjectFragment[so.InheritingObjectT],
+class AlterInheritingObjectFragment[T: so.InheritingObject](
+    AlterInheritingObjectOrFragment[T],
+    sd.AlterObjectFragment[T],
 ):
     pass
 
 
-class RenameInheritingObject(
-    AlterInheritingObjectFragment[so.InheritingObjectT],
-    sd.RenameObject[so.InheritingObjectT],
+class RenameInheritingObject[T: so.InheritingObject](
+    AlterInheritingObjectFragment[T],
+    sd.RenameObject[T],
 ):
     pass
 
 
-class DeleteInheritingObject(
-    InheritingObjectCommand[so.InheritingObjectT],
-    sd.DeleteObject[so.InheritingObjectT],
+class DeleteInheritingObject[T: so.InheritingObject](
+    InheritingObjectCommand[T],
+    sd.DeleteObject[T],
 ):
     pass
 
 
-class RebaseInheritingObject(
-    AlterInheritingObjectFragment[so.InheritingObjectT],
+class RebaseInheritingObject[InheritingObjectT: so.InheritingObject](
+    AlterInheritingObjectFragment[InheritingObjectT],
 ):
     _delta_action = 'rebase'
 
@@ -1184,12 +1150,16 @@ class RebaseInheritingObject(
 
         if not context.canonical:
             schema = self._recompute_inheritance(schema, context)
-            if context.enable_recursion:
+            if (
+                context.enable_recursion
+                and not _has_implicit_propagation(context)
+            ):
                 for descendant in self.scls.ordered_descendants(schema):
                     d_root_cmd, d_alter_cmd, ctx_stack = (
                         descendant.init_delta_branch(
                             schema, context, sd.AlterObject))
                     assert isinstance(d_alter_cmd, InheritingObjectCommand)
+                    d_alter_cmd.set_annotation('implicit_propagation', True)
                     with ctx_stack():
                         d_alter_cmd._fixup_inheritance_refdicts(
                             schema, context)
@@ -1245,7 +1215,7 @@ class RebaseInheritingObject(
         new_bases = self._compute_new_bases(schema, context, orig_bases)
         self.set_attribute_value(
             'bases',
-            so.ObjectList[so.InheritingObjectT].create(schema, new_bases),
+            so.ObjectList[InheritingObjectT].create(schema, new_bases),
             orig_value=orig_bases,
         )
 
@@ -1255,13 +1225,13 @@ class RebaseInheritingObject(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        orig_bases: so.ObjectList[so.InheritingObjectT],
-    ) -> list[so.InheritingObjectT]:
+        orig_bases: so.ObjectList[InheritingObjectT],
+    ) -> list[InheritingObjectT]:
         mcls = self.get_schema_metaclass()
         default_base_name = mcls.get_default_base_name()
         ori_bases = list(orig_bases.objects(schema))
         if default_base_name:
-            default_base: Optional[so.InheritingObjectT] = self.get_object(
+            default_base: Optional[InheritingObjectT] = self.get_object(
                 schema, context, name=default_base_name)
             if ori_bases == [default_base]:
                 ori_bases = []
@@ -1357,8 +1327,8 @@ class RebaseInheritingObject(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-        bases: tuple[so.ObjectShell[so.InheritingObjectT], ...],
-    ) -> tuple[so.ObjectShell[so.InheritingObjectT], ...]:
+        bases: tuple[so.ObjectShell[InheritingObjectT], ...],
+    ) -> tuple[so.ObjectShell[InheritingObjectT], ...]:
         mcls = self.get_schema_metaclass()
         roots = set(mcls.get_root_classes())
         return tuple(b for b in bases if b.name not in roots)
@@ -1370,3 +1340,13 @@ def _needs_refdict(refdict: so.RefDict, context: sd.CommandContext) -> bool:
         inheritance_refdicts is None
         or refdict.attr in inheritance_refdicts
     ) and (context.inheritance_merge is None or context.inheritance_merge)
+
+
+def _has_implicit_propagation(context: sd.CommandContext) -> bool:
+    for ctx in reversed(context.stack):
+        if (
+            isinstance(ctx.op, sd.ObjectCommand)
+            and ctx.op.get_annotation('implicit_propagation')
+        ):
+            return True
+    return False

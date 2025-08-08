@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    TypeVar,
     Mapping,
     cast,
     Iterable,
@@ -59,10 +58,7 @@ if TYPE_CHECKING:
     from edb.schema import schema as s_schema
 
 
-T = TypeVar('T')
-
-
-def _assert_not_none(value: Optional[T]) -> T:
+def _assert_not_none[T](value: Optional[T]) -> T:
     if value is None:
         raise TypeError("A value is expected")
     return value
@@ -730,6 +726,39 @@ class ConstraintCommand(
 
         return localnames
 
+    def inherit_fields(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+        bases: tuple[so.Object, ...],
+        *,
+        fields: Optional[Iterable[str]] = None,
+        ignore_local: bool = False,
+        apply: bool = True,
+    ) -> s_schema.Schema:
+        # Concrete constraints populate a bunch of other fields that
+        # can be based on their abstract parents but don't come from
+        # them. So if we are inheriting a new expr from a potentially
+        # abstract parent, we need to actually inherit all of these
+        # other properties that can be populated by
+        # _populate_concrete_constraint_attrs.
+        #
+        # This is pretty fragile though, and I don't love it.
+
+        if fields is not None:
+            fields = set(fields) | {
+                'subjectexpr', 'finalexpr', 'abstract', 'args'
+            }
+
+        return super().inherit_fields(
+            schema,
+            context,
+            bases,
+            fields=fields,
+            ignore_local=ignore_local,
+            apply=apply,
+        )
+
     def _populate_concrete_constraint_attrs(
         self,
         schema: s_schema.Schema,
@@ -1002,7 +1031,7 @@ class CreateConstraint(
         *,
         param_offset: int=0
     ) -> list[s_func.ParameterDesc]:
-        if not isinstance(astnode, qlast.CallableObjectCommandTuple):
+        if not isinstance(astnode, qlast.CallableObjectCommand):
             # Concrete constraint.
             return []
 
@@ -1313,7 +1342,7 @@ class CreateConstraint(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         node: qlast.DDLOperation,
-    ) -> list[tuple[int, qlast.FuncParam]]:
+    ) -> list[tuple[int, qlast.FuncParamDecl]]:
         if isinstance(node, qlast.CreateConstraint):
             return super()._get_params_ast(schema, context, node)
         else:

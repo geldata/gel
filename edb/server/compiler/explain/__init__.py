@@ -116,7 +116,9 @@ def analyze_explain_output(
     config_vals = {
         k: v for k, v in config_vals.items() if k not in OMITTED_CONFIG_VALS
     }
-    globals_used = sorted([str(k) for k in ir.globals])
+    globals_used = sorted([
+        str(k) for k in ir.globals if not k.is_permission
+    ])
 
     if info:
         buffers = info.buffers

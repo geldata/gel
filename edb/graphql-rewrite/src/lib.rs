@@ -15,6 +15,7 @@ use pyo3::{prelude::*, types::PyString};
 #[pymodule]
 fn _graphql_rewrite(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_rewrite, m)?)?;
+    m.add_function(wrap_pyfunction!(py_entry::unpack, m)?)?;
     m.add_class::<py_entry::Entry>()?;
     m.add("LexingError", py.get_type::<LexingError>())?;
     m.add("SyntaxError", py.get_type::<SyntaxError>())?;

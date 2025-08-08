@@ -529,7 +529,7 @@ class CreateScalarType(
             if is_enum:
                 # This is an enumerated type.
                 if len(bases) > 1:
-                    assert isinstance(astnode, qlast.BasedOnTuple)
+                    assert isinstance(astnode, qlast.BasedOn)
                     raise errors.SchemaError(
                         f'invalid scalar type definition, enumeration must be'
                         f' the only supertype specified',
@@ -651,7 +651,7 @@ class CreateScalarType(
         elif op.property == 'bases':
             enum_values = self.get_local_attribute_value('enum_values')
             if enum_values:
-                assert isinstance(node, qlast.BasedOnTuple)
+                assert isinstance(node, qlast.BasedOn)
                 node.bases = [
                     qlast.TypeName(
                         maintype=qlast.ObjectRef(name='enum'),
@@ -666,7 +666,7 @@ class CreateScalarType(
                 if arg_values := self.get_local_attribute_value('arg_values'):
                     frags = [
                         s_expr.Expression(text=x).parse() for x in arg_values]
-                    assert isinstance(node, qlast.BasedOnTuple)
+                    assert isinstance(node, qlast.BasedOn)
                     node.bases[0].subtypes = [
                         qlast.TypeExprLiteral(
                             val=downcast(qlast.Constant, frag)

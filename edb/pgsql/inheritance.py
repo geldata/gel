@@ -74,9 +74,8 @@ def get_inheritance_view(
         # figure that out, do *something* so that DDL isn't
         # excruciatingly slow because of the cost of explicit id
         # checks. See #5168.
-        and (
-            not irtyputils.is_cfg_view(child, schema)
-            or irtyputils.is_cfg_view(obj, schema)
+        and not irtyputils.is_excluded_cfg_view(
+            child, ancestor=obj, schema=schema
         )
     ]
 

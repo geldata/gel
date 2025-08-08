@@ -47,6 +47,7 @@ from edb.ir import typeutils
 from edb.ir import utils as irutils
 import edb.ir.typeutils as irtypeutils
 
+from edb.schema import futures as s_futures
 from edb.schema import links as s_links
 from edb.schema import name as sn
 from edb.schema import objtypes as s_objtypes
@@ -610,7 +611,8 @@ def _process_view(
 
         if ptr_set:
             src_path_id = path_id
-            if ptrcls.is_link_property(ctx.env.schema):
+            is_linkprop = ptrcls.is_link_property(ctx.env.schema)
+            if is_linkprop:
                 src_path_id = src_path_id.ptr_path()
 
             ptr_set.path_id = pathctx.extend_path_id(
@@ -626,6 +628,15 @@ def _process_view(
                 direction=s_pointers.PointerDirection.Outbound,
                 ptrref=not_none(ptr_set.path_id.rptr()),
                 is_definition=True,
+
+                is_mutation=(
+                    is_mutation
+                    or (
+                        is_linkprop
+                        and s_ctx.view_rptr is not None
+                        and s_ctx.view_rptr.exprtype.is_mutation()
+                    )
+                ),
             )
             # XXX: We would maybe like to *not* do this when it
             # already has a context, since for explain output that
@@ -761,12 +772,31 @@ def _expand_splat(
     if intersection is not None:
         path.append(intersection)
     for ptr in pointers.objects(ctx.env.schema):
-        if not isinstance(ptr, s_props.Property):
-            continue
         if ptr.get_secret(ctx.env.schema):
             continue
+        splat_strat = ptr.get_splat_strategy(ctx.env.schema)
+        if (
+            splat_strat == qltypes.SplatStrategy.Explicit
+            or (
+                splat_strat == qltypes.SplatStrategy.Default
+                and (
+                    ptr.get_linkful(ctx.env.schema)
+                    if s_futures.future_enabled(
+                        ctx.env.schema, 'no_linkful_computed_splats'
+                    )
+                    else isinstance(ptr, s_links.Link)
+                )
+            )
+        ):
+            continue
         sname = ptr.get_shortname(ctx.env.schema)
-        if sname.name in skip_ptrs:
+        # Skip any dunder properties; these are injected properties like
+        # __tid__ and __tname__, and we want to manage injecting them
+        # ourselves, in the correct positions.
+        if (
+            (sname.name.startswith('__') and sname.name.endswith('__'))
+            or sname.name in skip_ptrs
+        ):
             continue
         step = qlast.Ptr(name=sname.name)
         # Make sure not to overwrite the id property.
@@ -804,8 +834,16 @@ def _expand_splat(
         for ptr in pointers.objects(ctx.env.schema):
             if not isinstance(ptr, s_links.Link):
                 continue
+            if ptr.get_secret(ctx.env.schema):
+                continue
+            splat_strat = ptr.get_splat_strategy(ctx.env.schema)
+            if splat_strat == qltypes.SplatStrategy.Explicit:
+                continue
             pn = ptr.get_shortname(ctx.env.schema)
-            if pn.name == '__type__' or pn.name in skip_ptrs:
+            if (
+                (pn.name.startswith('__') and pn.name.endswith('__'))
+                or pn.name in skip_ptrs
+            ):
                 continue
             elements.append(
                 qlast.ShapeElement(
@@ -962,7 +1000,7 @@ def _raise_on_missing(
             if pn.name in next(iter(rewrites.by_type.values())):
                 continue
 
-        if ptrcls.is_property(ctx.env.schema):
+        if ptrcls.is_property():
             # If the target is a sequence, there's no need
             # for an explicit value.
             ptrcls_target = ptrcls.get_target(ctx.env.schema)
@@ -1219,11 +1257,6 @@ def _compile_rewrites_for_stype(
                 scopectx.iterator_path_ids |= {anchor.path_id}
                 scopectx.anchors[key] = anchor
 
-            # XXX: I am pretty sure this must be wrong, but we get
-            # a failure without due to volatility issues in
-            # test_edgeql_rewrites_16
-            scopectx.env.singletons.append(anchors.subject_set.path_id)
-
             ctx.path_scope.factoring_allowlist.add(anchors.subject_set.path_id)
 
             # prepare expression
@@ -1298,7 +1331,9 @@ def prepare_rewrite_anchors(
         pointer_path_id = irast.PathId.from_type(
             schema,
             bool_type,
-            typename=sn.QualName(module="__derived__", name=pn.name),
+            typename=sn.QualName(
+                module="__derived__", name=ctx.aliases.get(pn.name)
+            ),
             namespace=ctx.path_id_namespace,
             env=ctx.env,
         )
@@ -1322,7 +1357,7 @@ def prepare_rewrite_anchors(
 
     # init set for __old__
     if r_ctx.kind == qltypes.RewriteKind.Update:
-        old_name = sn.QualName("__derived__", "__old__")
+        old_name = sn.QualName("__derived__", ctx.aliases.get("__old__"))
         old_path_id = irast.PathId.from_type(
             schema, stype, typename=old_name,
             namespace=ctx.path_id_namespace, env=ctx.env,
@@ -1779,7 +1814,7 @@ def _normalize_view_ptr_expr(
                 ]
 
                 ercls: type[errors.EdgeDBError]
-                if ptrcls.is_property(ctx.env.schema):
+                if ptrcls.is_property():
                     ercls = errors.InvalidPropertyTargetError
                 else:
                     ercls = errors.InvalidLinkTargetError
@@ -2327,6 +2362,9 @@ def _get_shape_configuration_inner(
         stype is not None
         and has_implicit_tid(stype, is_mutation=is_mutation, ctx=ctx)
     ):
+        # HACK: Make sure set is here first, to avoid potential
+        # warn_old_scoping warnings.
+        pathctx.register_set_in_scope(ir_set, ctx=ctx)
         assert isinstance(stype, s_objtypes.ObjectType)
         _inline_type_computable(
             ir_set, stype, '__tid__', 'id', ctx=ctx, shape_ptrs=shape_ptrs)
@@ -2335,6 +2373,9 @@ def _get_shape_configuration_inner(
         stype is not None
         and has_implicit_tname(stype, is_mutation=is_mutation, ctx=ctx)
     ):
+        # HACK: Make sure set is here first, to avoid potential
+        # warn_old_scoping warnings.
+        pathctx.register_set_in_scope(ir_set, ctx=ctx)
         assert isinstance(stype, s_objtypes.ObjectType)
         _inline_type_computable(
             ir_set, stype, '__tname__', 'name', ctx=ctx, shape_ptrs=shape_ptrs)

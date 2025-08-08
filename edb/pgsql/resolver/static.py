@@ -30,6 +30,7 @@ from edb.pgsql import common
 
 from edb.server import defines
 from edb.server.pgcon import errors as pgerror
+from edb.server.compiler import enums
 from edb.server.compiler.sql import DisableNormalization
 
 from . import context
@@ -290,6 +291,8 @@ def eval_FuncCall(
         #       - set_config('bytea_output','hex',false)
         # HACK: asyncpg
         #       - set_config('jit', ...)
+        ctx.env.capabilities |= enums.Capability.SQL_SESSION_CONFIG
+
         if args := eval_list(expr.args, ctx=ctx):
             name, value, is_local = args
             if isinstance(name, pgast.StringConstant):
@@ -521,6 +524,37 @@ VALUE_FUNC_USER = frozenset({
 })
 
 
+def eval_current_user(
+    *,
+    ctx: Context,
+) -> pgast.BaseExpr:
+    from edb.edgeql import ast as qlast
+    from edb.edgeql import compiler as qlcompiler
+    from edb.pgsql import compiler as pgcompiler
+    from . import command
+
+    ql_stmt = qlast.SelectQuery(
+        result=qlast.GlobalExpr(
+            name=qlast.ObjectRef(module='sys', name='current_role'),
+        )
+    )
+    ir_stmt = qlcompiler.compile_ast_to_ir(
+        ql_stmt,
+        ctx.schema,
+        options=qlcompiler.CompilerOptions(),
+    )
+
+    sql_tree = pgcompiler.compile_ir_to_sql_tree(
+        ir_stmt,
+        output_format=pgcompiler.OutputFormat.NATIVE_INTERNAL,
+        alias_generator=ctx.alias_generator,
+    )
+    command.merge_params(sql_tree, ir_stmt, ctx)
+
+    assert isinstance(sql_tree.ast, pgast.BaseExpr)
+    return sql_tree.ast
+
+
 @eval.register
 def eval_SQLValueFunction(
     expr: pgast.SQLValueFunction,
@@ -531,7 +565,7 @@ def eval_SQLValueFunction(
         return expr
 
     if expr.op in VALUE_FUNC_USER:
-        return pgast.StringConstant(val=ctx.options.current_user)
+        return eval_current_user(ctx=ctx)
 
     if expr.op == val_func_op.CURRENT_CATALOG:
         return pgast.StringConstant(val=ctx.options.current_database)

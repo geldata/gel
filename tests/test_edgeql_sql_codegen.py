@@ -18,6 +18,7 @@
 
 
 import os.path
+import re
 
 from edb.testbase import lang as tb
 
@@ -28,6 +29,7 @@ from edb.edgeql import parser as qlparser
 from edb.pgsql import ast as pgast
 from edb.pgsql import compiler as pg_compiler
 from edb.pgsql import codegen as pg_codegen
+from edb.pgsql import common as pg_common
 
 
 class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
@@ -103,6 +105,13 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
             "optional wrapper generated when it shouldn't be needed"
         )
 
+    SCHEMA_pol = '''
+        global name -> str;
+        type PolOwned extending default::Owned {
+            access policy x allow all using (.owner.name ?= global name);
+        }
+    '''
+
     def test_codegen_elide_optional_wrapper_01(self):
         self.no_optional_test('''
             select Issue { te := .time_estimate ?? -1 }
@@ -127,6 +136,32 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
         self.no_optional_test('''
             select Owned { z := .owner.name ?= <optional str>$0 }
         ''')
+
+    def test_codegen_elide_optional_wrapper_06(self):
+        self.no_optional_test('''
+            select Owned filter {.owner.name ?= <optional str>$0}
+        ''')
+
+    def test_codegen_elide_optional_wrapper_07(self):
+        self.no_optional_test('''
+            select Owned { z := .owner.name ?= <optional str>$0 }
+            filter {.z}
+        ''')
+
+    def test_codegen_elide_optional_wrapper_08(self):
+        self.no_optional_test('''
+            select pol::PolOwned
+        ''')
+
+    def test_codegen_access_policy_uuid(self):
+        sql = self._compile('''
+            select pol::PolOwned
+        ''')
+        count = sql.count('IS NOT DISTINCT FROM')
+        self.assertEqual(
+            count, 1,
+            ".id ?= <uuid>{} not elided"
+        )
 
     def test_codegen_order_by_not_subquery_01(self):
         sql = self._compile_to_tree('''
@@ -512,8 +547,13 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
             }
         ''')
 
+        schema_name = pg_common.versioned_schema('edgedbstd')
         table_obj = self.schema.get("std::net::http::ScheduledRequest")
-        count = sql.count(str(table_obj.id))
+        # Search for the table with versioned schema to exclude matches from
+        # access policies.
+        pattern = schema_name + r"\.['\"]" + str(table_obj.id) + r"['\"]"
+        count = len(re.findall(pattern, sql))
+
         # The table should only be referenced once, in the INSERT.
         # If we reference it more than that, we're probably selecting it.
         self.assertEqual(

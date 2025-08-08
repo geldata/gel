@@ -25,11 +25,10 @@ import click
 
 from edb import buildmeta
 from edb.edgeql import parser as qlparser
-from edb.edgeql import tokenizer as qltokenizer
 
-from . import parsing as ls_parsing
 from . import server as ls_server
 from . import definition as ls_definition
+from . import completion as ls_completion
 
 
 @click.command()
@@ -63,23 +62,27 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
 
     # construct server
     ls = ls_server.GelLanguageServer(config)
+    debug_init(ls)
 
     # register hooks
     @ls.feature(
         lsp_types.INITIALIZE,
     )
     def init(_params: lsp_types.InitializeParams):
-        ls.show_message_log('Starting')
         qlparser.preload_spec()
-        ls.show_message_log('Started')
+        ls.show_message_log('gel-ls ready for requests')
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DID_OPEN)
     def text_document_did_open(params: lsp_types.DidOpenTextDocumentParams):
-        ls_server.document_updated(ls, params.text_document.uri)
+        ls_server.document_updated(ls, params.text_document.uri, compile=True)
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DID_CHANGE)
     def text_document_did_change(params: lsp_types.DidChangeTextDocumentParams):
-        ls_server.document_updated(ls, params.text_document.uri)
+        ls_server.document_updated(ls, params.text_document.uri, compile=False)
+
+    @ls.feature(lsp_types.TEXT_DOCUMENT_DID_SAVE)
+    def text_document_did_save(params: lsp_types.DidChangeTextDocumentParams):
+        ls_server.document_updated(ls, params.text_document.uri, compile=True)
 
     @ls.feature(lsp_types.TEXT_DOCUMENT_DEFINITION)
     def text_document_definition(
@@ -92,13 +95,21 @@ def init(options_json: str | None) -> ls_server.GelLanguageServer:
         lsp_types.CompletionOptions(trigger_characters=[',']),
     )
     def completion(params: lsp_types.CompletionParams):
-        document = ls.workspace.get_text_document(params.text_document.uri)
-
-        target = qltokenizer.line_col_to_source_point(
-            document.source, params.position.line, params.position.character
-        )
-
-        items = ls_parsing.get_suggestions(document, target.offset, ls)
-        return lsp_types.CompletionList(is_incomplete=False, items=items)
+        return ls_completion.get_completion(ls, params)
 
     return ls
+
+
+# Last gel-ls instance initialed. Use ONLY for debugging purposes.
+__gel_ls: ls_server.GelLanguageServer | None = None
+
+
+def debug_init(ls: ls_server.GelLanguageServer):
+    global __gel_ls
+    __gel_ls = ls
+
+
+def send_log_message(message: str):
+    global __gel_ls
+    assert __gel_ls, 'GelLanguageServer has not be started yet'
+    __gel_ls.show_message_log(message)

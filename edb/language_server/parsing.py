@@ -16,6 +16,8 @@
 # limitations under the License.
 #
 
+from typing import Optional
+
 from pygls.server import LanguageServer
 from pygls.workspace import TextDocument
 from lsprotocol import types as lsp_types
@@ -33,7 +35,7 @@ from . import utils as ls_utils
 
 def parse(
     doc: TextDocument,
-) -> Result[list[qlast.Base] | qlast.Schema, list[lsp_types.Diagnostic]]:
+) -> Result[qlast.Commands | qlast.Schema, list[lsp_types.Diagnostic]]:
     sdl = is_schema_file(doc.filename) if doc.filename else False
 
     start_t = qltokens.T_STARTSDLDOCUMENT if sdl else qltokens.T_STARTBLOCK
@@ -75,25 +77,50 @@ def parse(
             result.out, productions, source, doc.filename
         ).val
     except errors.EdgeDBError as e:
-        return Result(
-            err=[
-                lsp_types.Diagnostic(
-                    range=ls_utils.span_to_lsp(source.text(), e.get_span()),
-                    severity=lsp_types.DiagnosticSeverity.Error,
-                    message=e.args[0],
-                )
-            ]
-        )
+        return Result(err=[ls_utils.error_to_lsp(e)])
     if sdl:
         assert isinstance(ast, qlast.Schema), ast
     else:
-        assert isinstance(ast, list), ast
+        assert isinstance(ast, qlast.Commands), ast
     return Result(ok=ast)
 
 
-def get_suggestions(
+def parse_and_recover(
+    doc: TextDocument,
+) -> Optional[qlast.Commands | qlast.Schema]:
+    sdl = is_schema_file(doc.filename) if doc.filename else False
+
+    start_t = qltokens.T_STARTSDLDOCUMENT if sdl else qltokens.T_STARTBLOCK
+    start_t_name = start_t.__name__[2:]
+
+    source_res = _tokenize(doc.source)
+    if not source_res.ok:
+        return None
+    source = source_res.ok
+
+    result, productions = rust_parser.parse(start_t_name, source.tokens())
+
+    if not isinstance(result.out, rust_parser.CSTNode):
+        return None
+
+    try:
+        ast = qlparser._cst_to_ast(
+            result.out, productions, source, doc.filename
+        ).val
+    except errors.EdgeDBError:
+        return None
+
+    if sdl:
+        assert isinstance(ast, qlast.Schema), ast
+    else:
+        assert isinstance(ast, qlast.Commands), ast
+
+    return ast
+
+
+def get_completion(
     doc: TextDocument, target: int, ls: LanguageServer
-) -> list[lsp_types.CompletionItem]:
+) -> tuple[list[lsp_types.CompletionItem], bool]:
     sdl = is_schema_file(doc.path)
 
     start_t = qltokens.T_STARTSDLDOCUMENT if sdl else qltokens.T_STARTBLOCK
@@ -102,7 +129,7 @@ def get_suggestions(
     # tokenize
     source_res = _tokenize(doc.source)
     if not source_res.ok:
-        return []
+        return [], False
     source: tokenizer.Source = source_res.ok
 
     # limit tokens to things preceding cursor position
@@ -113,8 +140,14 @@ def get_suggestions(
             break
     tokens = source.tokens()[0:cut_index]
 
+    # special case: cursor is *on* the last ident
+    if tokens[-1].is_ident() and tokens[-1].span_end() == target:
+        return [], True
+
     # run parser and suggest next possible keywords
-    suggestions = rust_parser.suggest_next_keywords(start_t_name, tokens)
+    suggestions, can_be_ident = rust_parser.suggest_next_keywords(
+        start_t_name, tokens
+    )
 
     # convert to CompletionItem
     return [
@@ -123,7 +156,7 @@ def get_suggestions(
             kind=lsp_types.CompletionItemKind.Keyword,
         )
         for keyword in suggestions
-    ]
+    ], can_be_ident
 
 
 def _tokenize(

@@ -55,6 +55,7 @@ from edb.schema import indexes as s_indexes
 from edb.schema import links as s_links
 from edb.schema import name as s_name
 from edb.schema import objtypes as s_objtypes
+from edb.schema import permissions as s_permissions
 from edb.schema import pointers as s_pointers
 from edb.schema import pseudo as s_pseudo
 from edb.schema import scalars as s_scalars
@@ -307,6 +308,21 @@ def raise_self_insert_error(
     )
 
 
+def raise_invalid_property_reference(
+    source: s_obj.Object,
+    span: Optional[qlast.Span],
+    *,
+    ctx: context.ContextLevel,
+) -> NoReturn:
+    if isinstance(source, s_types.Type):
+        source = schemactx.get_material_type(source, ctx=ctx)
+    raise errors.InvalidReferenceError(
+        f"invalid property reference on an expression of primitive type "
+        f"'{source.get_displayname(ctx.env.schema)}'",
+        span=span,
+    )
+
+
 def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
     """Create an ir.Set representing the given EdgeQL path expression."""
     anchors = ctx.anchors
@@ -351,6 +367,7 @@ def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
 
     for i, step in enumerate(expr.steps):
         is_computable = False
+        skip_register_set = False
 
         if isinstance(step, qlast.SpecialAnchor):
             path_tip = resolve_special_anchor(step, ctx=ctx)
@@ -361,6 +378,17 @@ def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
             if not refnode:
                 raise AssertionError(f'anchor {step.name} is missing')
             path_tip = new_set_from_set(refnode, ctx=ctx)
+
+            if step.move_scope:
+                assert refnode.path_scope_id is not None
+                node = next(iter(
+                    x for x in ctx.path_scope.root.descendants
+                    if x.unique_id == refnode.path_scope_id
+                ))
+                node.remove()
+                ctx.path_scope.attach_child(node)
+
+                skip_register_set = True
 
         elif isinstance(step, qlast.ObjectRef):
             if i > 0:  # pragma: no cover
@@ -478,6 +506,11 @@ def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
                             'a non-link object',
                             span=step.span,
                         )
+
+                    # Mark the underlying pointer as needing a link table,
+                    # so that we access the mapped table to begin with.
+                    assert isinstance(fake_tip.expr, irast.Pointer)
+                    fake_tip.expr.force_link_table = True
 
                 else:
                     raise errors.EdgeQLSyntaxError(
@@ -670,7 +703,14 @@ def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
 
     if expr.span:
         path_tip.span = expr.span
-    pathctx.register_set_in_scope(path_tip, ctx=ctx)
+    # Register the set in the scope tree. We only skip it when the
+    # path was an IRAnchor with move_scope set, and so instead of
+    # registering the set we moved its whole scoped set over.
+    # (I think it would be *correct* to always register it, but we
+    # get better generated code quality in some of those cases, when
+    # we want the computation to occur down in a subquery.)
+    if not skip_register_set:
+        pathctx.register_set_in_scope(path_tip, ctx=ctx)
 
     for ir_set in computables:
         # Compile the computables in sibling scopes to the subpaths
@@ -842,8 +882,7 @@ def resolve_ptr_with_intersections(
 
     if not isinstance(near_endpoint, s_sources.Source):
         # Reference to a property on non-object
-        msg = 'invalid property reference on a primitive type expression'
-        raise errors.InvalidReferenceError(msg, span=span)
+        raise_invalid_property_reference(near_endpoint, span, ctx=ctx)
 
     ptr: Optional[s_pointers.Pointer] = None
 
@@ -1225,9 +1264,8 @@ def compile_enum_path(
         )
 
     if nsteps > 2:
-        raise errors.QueryError(
-            f"invalid property reference on a primitive type expression",
-            span=expr.steps[2].span,
+        raise_invalid_property_reference(
+            source, span=expr.steps[2].span, ctx=ctx
         )
 
     if ptr_name not in enum_values:
@@ -1493,6 +1531,21 @@ def scoped_set(
             pathctx.assign_set_scope(ir_set, ctx.path_scope, ctx=ctx)
 
     return ir_set
+
+
+def moveable_anchor(
+    expr: irast.Set,
+    name: str = 'v',
+    *,
+    check_dml: bool = False,
+    ctx: context.ContextLevel,
+) -> qlast.Path:
+    return ctx.create_anchor(
+        scoped_set(expr, ctx=ctx),
+        name=name,
+        check_dml=check_dml,
+        move_scope=True,
+    )
 
 
 def ensure_set(
@@ -2035,39 +2088,67 @@ def should_materialize_type(
 
 
 def get_global_param(
-    glob: s_globals.Global, *, ctx: context.ContextLevel
+    glob: s_globals.Global | s_permissions.Permission,
+    *,
+    ctx: context.ContextLevel
 ) -> irast.Global:
     name = glob.get_name(ctx.env.schema)
 
     if name not in ctx.env.query_globals:
         param_name = f'__edb_global_{len(ctx.env.query_globals)}__'
 
-        target = glob.get_target(ctx.env.schema)
-        target_typeref = typegen.type_to_typeref(target, env=ctx.env)
+        if isinstance(glob, s_globals.Global):
+            # Globals
+            target = glob.get_target(ctx.env.schema)
+            target_typeref = typegen.type_to_typeref(target, env=ctx.env)
 
-        ctx.env.query_globals[name] = irast.Global(
-            name=param_name,
-            required=False,
-            schema_type=target,
-            ir_type=target_typeref,
-            global_name=name,
-            has_present_arg=glob.needs_present_arg(ctx.env.schema),
-        )
+            ctx.env.query_globals[name] = irast.Global(
+                name=param_name,
+                required=False,
+                schema_type=target,
+                ir_type=target_typeref,
+                global_name=name,
+                has_present_arg=glob.needs_present_arg(ctx.env.schema),
+                is_permission=False,
+            )
+
+        else:
+            # Permissions
+            target = ctx.env.schema.get('std::bool', type=s_types.Type)
+            target_typeref = typegen.type_to_typeref(target, env=ctx.env)
+
+            ctx.env.query_globals[name] = irast.Global(
+                name=param_name,
+                required=True,
+                schema_type=target,
+                ir_type=target_typeref,
+                global_name=name,
+                has_present_arg=False,
+                is_permission=True,
+            )
 
     return ctx.env.query_globals[name]
 
 
 def get_global_param_sets(
-    glob: s_globals.Global,
+    glob: s_globals.Global | s_permissions.Permission,
     *,
     ctx: context.ContextLevel,
     is_implicit_global: bool = False,
 ) -> tuple[irast.Set, Optional[irast.Set]]:
     param = get_global_param(glob, ctx=ctx)
-    default = glob.get_default(ctx.env.schema)
+    default = (
+        glob.get_default(ctx.env.schema)
+        if isinstance(glob, s_globals.Global) else
+        None
+    )
+
+    # This function is called to compile either a global expr or the global
+    # params for a function call. Both are compiled as QueryParameter.
+    assert ctx.env.options.func_params is None
 
     param_set = ensure_set(
-        irast.Parameter(
+        irast.QueryParameter(
             name=param.name,
             required=param.required and not bool(default),
             typeref=param.ir_type,
@@ -2075,14 +2156,19 @@ def get_global_param_sets(
         ),
         ctx=ctx,
     )
-    if glob.needs_present_arg(ctx.env.schema):
+
+    if (
+        isinstance(glob, s_globals.Global)
+        and glob.needs_present_arg(ctx.env.schema)
+    ):
         present_set = ensure_set(
-            irast.Parameter(
+            irast.QueryParameter(
                 name=param.name + "present__",
                 required=True,
                 typeref=typegen.type_to_typeref(
                     ctx.env.schema.get('std::bool', type=s_types.Type),
-                    env=ctx.env),
+                    env=ctx.env,
+                ),
                 is_implicit_global=is_implicit_global,
             ),
             ctx=ctx,
@@ -2098,6 +2184,11 @@ def get_func_global_json_arg(*, ctx: context.ContextLevel) -> irast.Set:
     json_typeref = typegen.type_to_typeref(json_type, env=ctx.env)
     name = '__edb_json_globals__'
 
+    is_func_param = ctx.env.options.func_params is not None
+    parameter_type = (
+        irast.FunctionParameter if is_func_param else irast.QueryParameter
+    )
+
     # If this is because we have json params, not because we're in a
     # function, we need to register it.
     if ctx.env.options.json_parameters:
@@ -2109,10 +2200,11 @@ def get_func_global_json_arg(*, ctx: context.ContextLevel) -> irast.Set:
             ir_type=json_typeref,
             global_name=qname,
             has_present_arg=False,
+            is_permission=False,
         )
 
     return ensure_set(
-        irast.Parameter(
+        parameter_type(
             name=name,
             required=True,
             typeref=json_typeref,
@@ -2122,15 +2214,14 @@ def get_func_global_json_arg(*, ctx: context.ContextLevel) -> irast.Set:
 
 
 def get_func_global_param_sets(
-    glob: s_globals.Global,
+    glob: s_globals.Global | s_permissions.Permission,
     *,
     ctx: context.ContextLevel,
 ) -> tuple[qlast.Expr, Optional[qlast.Expr]]:
     # NB: updates ctx anchors
 
-    if ctx.env.options.func_params is not None:
-        # Make sure that we properly track the globals we use in functions
-        get_global_param(glob, ctx=ctx)
+    # Make sure that we properly track the globals we use in functions
+    get_global_param(glob, ctx=ctx)
 
     with ctx.new() as subctx:
         name = str(glob.get_name(ctx.env.schema))
@@ -2144,11 +2235,20 @@ def get_func_global_param_sets(
             ],
         )
 
-        target = glob.get_target(ctx.env.schema)
+        if isinstance(glob, s_globals.Global):
+            target = glob.get_target(ctx.env.schema)
+
+        else:
+            # Permissions
+            target = ctx.env.schema.get('std::bool', type=s_types.Type)
+
         type = typegen.type_to_ql_typeref(target, ctx=ctx)
         main_set = qlast.TypeCast(expr=glob_anchor, type=type)
 
-        if glob.needs_present_arg(ctx.env.schema):
+        if (
+            isinstance(glob, s_globals.Global)
+            and glob.needs_present_arg(ctx.env.schema)
+        ):
             present_set = qlast.UnaryOp(
                 op='EXISTS',
                 operand=glob_anchor,
@@ -2160,7 +2260,7 @@ def get_func_global_param_sets(
 
 
 def get_globals_as_json(
-    globs: Sequence[s_globals.Global],
+    globs: Sequence[s_globals.Global | s_permissions.Permission],
     *,
     ctx: context.ContextLevel,
     span: Optional[qlast.Span],

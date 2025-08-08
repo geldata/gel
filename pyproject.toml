@@ -11,7 +11,7 @@ dependencies = [
     'parsing~=2.0',
     'uvloop~=0.21.0',
 
-    'click~=8.0',
+    'click~=8.1.0',
     'cryptography~=42.0',
     'graphql-core~=3.1.5',
     'psutil~=5.8',
@@ -21,7 +21,7 @@ dependencies = [
     'argon2-cffi~=23.1.0',
     'aiosmtplib~=3.0',
     'tiktoken~=0.7.0',
-    'mistral_common~=1.2.1',
+    'mistral_common~=1.3.0',
 
     # pin because newer versions are either broken or require
     # us to update setuptools (in gel-pkg)
@@ -71,7 +71,7 @@ test = [
     'prometheus_client~=0.11.0',
 
     'docutils~=0.17.0',
-    'lxml~=4.9.0',
+    'lxml~=6.0.0',
     'Pygments~=2.10.0',
     'Sphinx~=4.2.0',
     'sphinxcontrib-asyncio~=0.3.0',
@@ -85,7 +85,7 @@ test = [
 
 docs = [
     'docutils~=0.17.0',
-    'lxml~=4.9.0',
+    'lxml~=6.0.0',
     'Pygments~=2.10.0',
     'Sphinx~=4.2.0',
     'sphinxcontrib-asyncio~=0.3.0',
@@ -98,7 +98,7 @@ language-server = ['pygls~=1.3.1']
 requires = [
     "Cython(>=3.0.11,<3.1.0)",
     "packaging >= 21.0",
-    "setuptools >= 67",
+    "setuptools(>= 67,<80.0.9)",
     "setuptools-rust ~= 1.8",
     "wheel",
 
@@ -168,7 +168,7 @@ module = [
     "edb.repl.*",
     "edb.schema.*",
     "edb.schema.reflection.*",
-    "edb.server.cluster",
+    "edb.testbase.cluster",
     "edb.server.compiler.*",
     "edb.server.config",
     "edb.server.connpool.*",
@@ -250,7 +250,7 @@ quote-style = "preserve"
 
 [tool.ruff.lint]
 preview = true
-select = ["E", "F", "W", "B", "UP006", "UP007"]
+select = ["E", "F", "W", "B", "UP006", "UP007" , "UP046", "UP047"]
 ignore = [
     "F541", # f-string without any placeholders
     "B904", # Within an except clause, raise exceptions with raise ... from err

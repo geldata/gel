@@ -256,4 +256,9 @@ module.exports = [
     destination: "/reference/using/cli/:path*",
     permanent: false,
   },
+  {
+    source: "/cli/:path*",
+    destination: "/reference/using/cli/:path*",
+    permanent: false,
+  },
 ];

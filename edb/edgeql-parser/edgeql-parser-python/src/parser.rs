@@ -39,7 +39,7 @@ pub fn suggest_next_keywords(
     py: Python,
     start_token_name: &Bound<PyString>,
     tokens: PyObject,
-) -> PyResult<Py<PyList>> {
+) -> PyResult<(Py<PyList>, bool)> {
     let start_token_name = start_token_name.to_string();
 
     let (spec, _) = get_spec()?;
@@ -47,10 +47,12 @@ pub fn suggest_next_keywords(
     let tokens = downcast_tokens(py, &start_token_name, tokens)?;
 
     let context = parser::Context::new(spec);
-    let suggestions = parser::suggest_next_keyword(&tokens, &context);
+    let (suggestions, can_be_ident) = parser::suggest_next_keyword(&tokens, &context);
 
     let suggestions_py = suggestions.iter().map(|k| PyString::new(py, k.0));
-    Ok(PyList::new(py, suggestions_py)?.into())
+    let suggestions_py = PyList::new(py, suggestions_py)?.into();
+
+    Ok((suggestions_py, can_be_ident))
 }
 
 #[pyclass]
@@ -67,6 +69,10 @@ pub struct Production {
     id: usize,
     #[pyo3(get)]
     args: PyObject,
+    #[pyo3(get)]
+    start: Option<u64>,
+    #[pyo3(get)]
+    end: Option<u64>,
 }
 
 #[pyclass]
@@ -193,6 +199,8 @@ impl<'py> IntoPyObject<'py> for ParserCSTNode<'_> {
                     Production {
                         id: prod.id,
                         args: PyList::new(py, prod.args.iter().map(ParserCSTNode))?.into(),
+                        start: prod.span.map(|s| s.start),
+                        end: prod.span.map(|s| s.end),
                     },
                 )?),
                 terminal: None,

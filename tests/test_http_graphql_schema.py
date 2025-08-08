@@ -332,6 +332,22 @@ class TestGraphQLSchema(tb.GraphQLTestCase):
             }
         })
 
+        self.assert_graphql_query_result(r"""
+            query {
+                __type(name: "Profile") {
+                    __typename
+                    name
+                    kind
+                }
+            }
+        """, {
+            "__type": {
+                "kind": "INTERFACE",
+                "name": "Profile",
+                "__typename": "__Type"
+            }
+        })
+
     def test_graphql_schema_type_02(self):
         self.assert_graphql_query_result(r"""
             query {
@@ -2278,6 +2294,39 @@ class TestGraphQLSchema(tb.GraphQLTestCase):
             }
         })
 
+        self.assert_graphql_query_result(r"""
+            query($name: String!) {
+                __type(name: $name) {
+                    __typename
+                    name
+                    kind
+                    description
+                    enumValues {
+                        name
+                    }
+                }
+            }
+        """, {
+
+            "__type": {
+                "kind": "ENUM",
+                "name": "other__ColorEnum",
+                "__typename": "__Type",
+                "description": "RGB color enum",
+                "enumValues": [
+                    {
+                        "name": "RED"
+                    },
+                    {
+                        "name": "GREEN"
+                    },
+                    {
+                        "name": "BLUE"
+                    },
+                ]
+            }
+        }, variables={'name': 'other__ColorEnum'})
+
     def test_graphql_schema_type_15(self):
         self.assert_graphql_query_result(r"""
             query {
@@ -2907,7 +2956,7 @@ class TestGraphQLSchema(tb.GraphQLTestCase):
         # Make sure that FreeObject is not reflected.
         result = self.graphql_query(r"""
             query {
-                __type(name: "FeeObject") {
+                __type(name: "FreeObject") {
                     name
                 }
                 __schema {

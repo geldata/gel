@@ -268,10 +268,11 @@ class HttpClient:
             resp = await self._requests[id]
             if self._stat_callback:
                 if id in self._streaming:
-                    status_code, headers = resp
+                    status_code, _ = resp
                     body = b''
                 else:
-                    status_code, body, headers = resp
+                    assert len(resp) >= 2
+                    status_code, body = resp[0:2]
                 self._stat_callback(
                     HttpStat(
                         response_time_ms=int(

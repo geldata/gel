@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import TypeVar, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import enum
 
@@ -26,7 +26,7 @@ from edb.common import enum as s_enum
 
 
 if TYPE_CHECKING:
-    T = TypeVar("T", covariant=True)
+    from edb.schema import types as s_types
 
 
 class ParameterKind(s_enum.StrEnum):
@@ -55,6 +55,23 @@ class TypeModifier(s_enum.StrEnum):
             return 'OPTIONAL'
         else:
             return ''
+
+
+class Polymorphism(s_enum.StrEnum):
+    NotUsed = 'NotUsed'
+    Simple = 'Simple'
+    Array = 'Array'
+    Collection = 'Collection'
+
+    @staticmethod
+    def from_schema_type(type: s_types.Type) -> Polymorphism:
+        return (
+            Polymorphism.Simple
+            if not type.is_collection() else
+            Polymorphism.Array
+            if type.is_array() else
+            Polymorphism.Collection
+        )
 
 
 class OperatorKind(s_enum.StrEnum):
@@ -240,6 +257,12 @@ class RewriteKind(s_enum.StrEnum):
     Insert = 'Insert'
 
 
+class SplatStrategy(s_enum.StrEnum):
+    Default = 'Default'
+    Explicit = 'Explicit'
+    Implicit = 'Implicit'
+
+
 class DescribeLanguage(s_enum.StrEnum):
     DDL = 'DDL'
     SDL = 'SDL'
@@ -271,6 +294,7 @@ class SchemaObjectClass(s_enum.StrEnum):
     MULTIRANGE_TYPE = 'MULTIRANGE_TYPE'
     OPERATOR = 'OPERATOR'
     PARAMETER = 'PARAMETER'
+    PERMISSION = 'PERMISSION'
     PROPERTY = 'PROPERTY'
     PSEUDO_TYPE = 'PSEUDO TYPE'
     RANGE_TYPE = 'RANGE TYPE'

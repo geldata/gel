@@ -23,8 +23,13 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
 
     create module ext::ai;
 
+    create module ext::ai::perm;
+    create permission ext::ai::perm::provider_call;
+    create permission ext::ai::perm::chat_prompt_read;
+    create permission ext::ai::perm::chat_prompt_write;
+
     create scalar type ext::ai::ProviderAPIStyle
-        extending enum<OpenAI, Anthropic>;
+        extending enum<OpenAI, Anthropic, Ollama>;
 
     create abstract type ext::ai::ProviderConfig extending cfg::ConfigObject {
         create required property name: std::str {
@@ -134,6 +139,31 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         alter property api_style {
             set protected := true;
             set default := ext::ai::ProviderAPIStyle.Anthropic;
+        };
+    };
+
+    create type ext::ai::OllamaProviderConfig extending ext::ai::ProviderConfig {
+        alter property name {
+            set protected := true;
+            set default := 'builtin::ollama';
+        };
+
+        alter property display_name {
+            set protected := true;
+            set default := 'Ollama';
+        };
+
+        alter property api_url {
+            set default := 'http://localhost:11434/api'
+        };
+
+        alter property secret {
+            set default := ''
+        };
+
+        alter property api_style {
+            set protected := true;
+            set default := ext::ai::ProviderAPIStyle.Ollama;
         };
     };
 
@@ -482,7 +512,7 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::text_gen_model_context_window := "200000";
     };
 
-   # Anthropic fastest model
+    # Anthropic fastest model
     create abstract type ext::ai::AnthropicClaude_3_5_HaikuModel
         extending ext::ai::TextGenerationModel
     {
@@ -525,6 +555,59 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::model_provider := "builtin::anthropic";
         alter annotation
             ext::ai::text_gen_model_context_window := "200000";
+    };
+
+    # Ollama embedding models
+    create abstract type ext::ai::OllamaLlama_3_2_Model
+        extending ext::ai::TextGenerationModel
+    {
+        alter annotation
+            ext::ai::model_name := "llama3.2";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::text_gen_model_context_window := "131072";
+    };
+
+    create abstract type ext::ai::OllamaLlama_3_3_Model
+        extending ext::ai::TextGenerationModel
+    {
+        alter annotation
+            ext::ai::model_name := "llama3.3";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::text_gen_model_context_window := "131072";
+    };
+
+    create abstract type ext::ai::OllamaNomicEmbedTextModel
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "nomic-embed-text";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "768";
+    };
+
+    create abstract type ext::ai::OllamaBgeM3Model
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "bge-m3";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "1024";
     };
 
     create scalar type ext::ai::DistanceFunction
@@ -595,6 +678,7 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         # Needed to pick up the indexes when used in ORDER BY.
         set prefer_subquery_args := true;
         set server_param_conversions := '{"query": ["ai_text_embedding", "object"]}';
+        set required_permissions := { ext::ai::perm::provider_call };
         using sql expression;
     };
 
@@ -618,6 +702,13 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             create annotation std::description :=
                 'Prompt message contenxt.'
         };
+
+        create access policy ap_read allow select using (
+            global ext::ai::perm::chat_prompt_read
+        );
+        create access policy ap_write allow insert, update, delete using (
+            global ext::ai::perm::chat_prompt_write
+        );
     };
 
     create type ext::ai::ChatPrompt extending std::BaseObject {
@@ -632,6 +723,13 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             create annotation std::description :=
                 'Messages in this prompt configuration';
         };
+
+        create access policy ap_read allow select using (
+            global ext::ai::perm::chat_prompt_read
+        );
+        create access policy ap_write allow insert, update, delete using (
+            global ext::ai::perm::chat_prompt_write
+        );
     };
 
     insert ext::ai::ChatPrompt {
@@ -647,7 +745,7 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
                      1. Never directly reference the given context in your \
                         answer.\n\
                      2. Never include phrases like 'Based on the context, ...' \
-                        or any similar phrases in your responses. \
+                        or any similar phrases in your responses.\n\
                      3. When the context does not provide information about \
                         the question, answer with \
                         'No information available.'.\n\

@@ -22,16 +22,19 @@ import os.path
 import edgedb
 
 from edb.testbase import server as tb
-# from edb.tools import test
+from edb.tools import test
 
 
-class TestEdgeQLPolicies(tb.QueryTestCase):
+class TestEdgeQLPolicies(tb.DDLTestCase):
     '''Tests for policies.'''
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 
     SETUP = [
+        '''
+            create future warn_old_scoping;
+        ''',
         os.path.join(os.path.dirname(__file__), 'schemas',
                      'issues_setup.edgeql'),
         '''
@@ -339,6 +342,265 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
                 select Ptr { tgt }
             ''')
 
+    async def test_edgeql_policies_05c(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (not global filter_owned and .b);
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05d(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (all({not global filter_owned, .b}));
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05e(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (
+                      exists (select .b filter not global filter_owned)
+                    );
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05f(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                # demorgan's law
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (not (global filter_owned or not .b));
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05g(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+                CREATE PROPERTY fo := (not global filter_owned);
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (.fo);
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05h(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (not global filter_owned ?? .b);
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05i(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (
+                      if true then not global filter_owned else .b);
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05j(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (assert_single(
+                      not global filter_owned and .b));
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            await self.con.query('''
+                select Ptr { tgt }
+            ''')
+
+    async def test_edgeql_policies_05k(self):
+        await self.con.execute('''
+            CREATE TYPE Tgt {
+                CREATE REQUIRED PROPERTY b -> bool;
+
+                CREATE ACCESS POLICY redact
+                    ALLOW SELECT USING (<bool><str>(
+                      not global filter_owned and .b));
+                CREATE ACCESS POLICY dml_always
+                    ALLOW UPDATE, INSERT, DELETE;
+            };
+            CREATE TYPE Ptr {
+                CREATE REQUIRED LINK tgt -> Tgt;
+            };
+        ''')
+        await self.con.query('''
+            insert Ptr { tgt := (insert Tgt { b := True }) };
+        ''')
+        await self.con.execute('''
+            set global filter_owned := True;
+        ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.CardinalityViolationError,
+                r"is hidden by access policy"):
+            print(await self.con.query('''
+                select Ptr { tgt }
+            '''))
+
     async def test_edgeql_policies_06(self):
         await self.con.execute('''
             CREATE TYPE Tgt {
@@ -522,6 +784,18 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             await self.con.query('''
             insert Issue {
                 name := '', body := '',
+                status := (select Status filter .name = 'Open'), number := '',
+                owner := (insert User { name := "???" }),
+            };
+            ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.InvalidValueError,
+                r"access policy violation on insert of default::Issue"):
+            await self.con.query('''
+            insert Issue {
+                name := '', body := '',
+                watchers := {},
                 status := (select Status filter .name = 'Open'), number := '',
                 owner := (insert User { name := "???" }),
             };
@@ -931,14 +1205,73 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             ''',
             [],
         )
+
+        # This first query used to give an access policy violation,
+        # and now gives a MissingRequiredError.  This is because owner
+        # is treated as ONE and thus we do some optimization that are
+        # unsound and cause the policy to not fail.
+        #
+        # (This could also happen before also, though, if it was used
+        # in a way that wasn't getting optional wrapped also)
+        #
+        # But this *can only happen* when it is going to fail
+        # anyway, and not by constraint collision.
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            "",
+        ):
+            await self.con.execute('''
+                insert Issue {
+                    name := '',
+                    body := '',
+                    number := '4',
+                    status := {},
+                    owner := {},
+                };
+            ''')
         async with self.assertRaisesRegexTx(
             edgedb.InvalidValueError,
             "access policy violation on insert",
         ):
             await self.con.execute('''
                 insert Issue {
-                    name := '', body := '', status := {}, number := '',
-                    owner := {}};
+                    name := '',
+                    body := '',
+                    number := '4',
+                    status := (select Status limit 1),
+                    owner := (select User limit 1),
+                };
+            ''')
+
+    async def test_edgeql_policies_multi_missing_01(self):
+        await self.con.execute('''
+            create type T {
+                create required property name -> str {
+                    create constraint exclusive;
+                };
+                create required multi property x -> int64;
+                create access policy ok allow all;
+                create access policy foo_1 deny all using (
+                    (select .x limit 1) ?!= 0
+                )
+             };
+        ''')
+
+        await self.con.execute('''
+            insert T {
+                name := "x",
+                x := {0},
+            };
+        ''')
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            "",
+        ):
+            await self.con.execute('''
+                insert T {
+                    name := "x",
+                    x := {},
+                };
             ''')
 
     async def test_edgeql_policies_volatile_01(self):
@@ -1098,7 +1431,7 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
                 allow all using (
                   count((
                     WITH X := {1, 2}
-                    SELECT (X, (FOR x in {X} UNION (SELECT x)))
+                    SELECT ((FOR x in {X} UNION (SELECT x)))
                   )) = 2);
             };
             insert X;
@@ -1129,6 +1462,8 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
     async def test_edgeql_policies_complex_01(self):
         await self.migrate(
             """
+            using future warn_old_scoping;
+            module default {
             abstract type Auditable {
                 access policy auditable_default
                     allow all ;
@@ -1169,7 +1504,9 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
                     constraint std::exclusive;
                 };
             };
-            """
+            };
+            """,
+            module=None,
         )
         await self.con.execute(
             '''
@@ -1299,6 +1636,10 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
 
     async def test_edgeql_policies_global_01(self):
         # GH issue #6404
+        # HACK: HACK.
+        await self.con.execute('''
+            drop future warn_old_scoping;
+        ''')
 
         clan_and_global = '''
             type Clan {
@@ -1348,10 +1689,11 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             r'''
             select { s := S, foo := global foo };
             ''',
-            [{"s": [], "foo": None}]
+            [{"s": [], "foo": None}],
+            always_typenames=True,
         )
 
-    async def test_edgeql_policies_diamond_01(self):
+    async def test_edgeql_policies_inheritance_01(self):
         # Verify that selecting a type with overlapping children and
         # access policies in at least one child works
 
@@ -1377,10 +1719,66 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             drop type T
         ''')
 
-    async def test_edgeql_policies_set_global_01(self):
+    async def test_edgeql_policies_inheritance_02(self):
         # Verify that selecting a type with overlapping children and
         # access policies in at least one child works
 
+        await self.con.execute('''
+            create type A;
+            create type B extending A;
+            create type C extending B, A { create access policy ok allow all; };
+            insert C;
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select A
+            ''',
+            [{}]
+        )
+
+        await self.con.execute('''
+            drop type C
+        ''')
+
+    async def test_edgeql_policies_inheritance_03(self):
+        # Verify that selecting a type with access policies within an indirect
+        # descendant works
+
+        await self.con.execute('''
+            create required global flag: bool {
+                set default := true;
+            };
+            create type A;
+            create type B extending A;
+            create type C extending B {
+                create access policy ok allow all using(global flag);
+            };
+            insert C;
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select A
+            ''',
+            [{}]
+        )
+
+        await self.con.execute('''
+            set global flag := false;
+        ''')
+        await self.assert_query_result(
+            r'''
+            select A
+            ''',
+            []
+        )
+
+        await self.con.execute('''
+            drop type C
+        ''')
+
+    async def test_edgeql_policies_set_global_01(self):
         await self.con.execute('''
             create global cur: uuid;
             create type T {
@@ -1417,3 +1815,7 @@ class TestEdgeQLPolicies(tb.QueryTestCase):
             ''',
             [val.id]
         )
+
+    @test.skip("There is a bug in migrating to empty with warn_old_scoping")
+    async def test_edgeql_policies_migrate_empty(self):
+        await self.migrate('')

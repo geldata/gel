@@ -124,9 +124,9 @@ class Params:
         tuple[qlast.TypeCast, dict[Optional[str], str]]
     ] = field(default_factory=list)
     shaped_params: list[
-        tuple[qlast.Parameter, qlast.Shape]
+        tuple[qlast.QueryParameter, qlast.Shape]
     ] = field(default_factory=list)
-    loose_params: list[qlast.Parameter] = field(default_factory=list)
+    loose_params: list[qlast.QueryParameter] = field(default_factory=list)
 
 
 class FindParams(ast.NodeVisitor):
@@ -159,17 +159,17 @@ class FindParams(ast.NodeVisitor):
         self.modaliases = old
 
     def visit_TypeCast(self, n: qlast.TypeCast) -> None:
-        if isinstance(n.expr, qlast.Parameter):
+        if isinstance(n.expr, qlast.QueryParameter):
             self.params.cast_params.append((n, self.modaliases))
         elif isinstance(n.expr, qlast.Shape):
-            if isinstance(n.expr.expr, qlast.Parameter):
+            if isinstance(n.expr.expr, qlast.QueryParameter):
                 self.params.shaped_params.append((n.expr.expr, n.expr))
             else:
                 self.generic_visit(n)
         else:
             self.generic_visit(n)
 
-    def visit_Parameter(self, n: qlast.Parameter) -> None:
+    def visit_QueryParameter(self, n: qlast.QueryParameter) -> None:
         self.params.loose_params.append(n)
 
     def visit_CreateFunction(self, n: qlast.CreateFunction) -> None:

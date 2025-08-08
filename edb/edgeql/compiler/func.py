@@ -45,10 +45,12 @@ from edb.ir import typeutils as irtyputils
 from edb.schema import constraints as s_constr
 from edb.schema import delta as sd
 from edb.schema import functions as s_func
+from edb.schema import globals as s_globals
 from edb.schema import modules as s_mod
 from edb.schema import name as sn
 from edb.schema import objtypes as s_objtypes
 from edb.schema import operators as s_oper
+from edb.schema import permissions as s_permissions
 from edb.schema import scalars as s_scalars
 from edb.schema import types as s_types
 from edb.schema import indexes as s_indexes
@@ -310,6 +312,10 @@ def compile_FunctionCall(
         # form of the function is actually used.
         env.add_schema_ref(func, expr)
 
+    ctx.env.required_permissions.update(
+        func.get_required_permissions(ctx.env.schema).objects(ctx.env.schema)
+    )
+
     func_initial_value: Optional[irast.Set]
 
     if matched_func_initial_value is not None:
@@ -400,6 +406,7 @@ def compile_FunctionCall(
         is_singleton_set_of=func.get_is_singleton_set_of(env.schema),
         global_args=global_args,
         span=expr.span,
+        return_polymorphism=matched_call.return_polymorphism,
     )
 
     # Apply special function handling
@@ -463,7 +470,10 @@ def compile_FunctionCall(
                 if bound_args := [
                     bound_arg
                     for bound_arg in matched_call.args
-                    if bound_arg.param == param and bound_arg.is_default
+                    if (
+                        isinstance(bound_arg, polyres.DefaultArg)
+                        and bound_arg.name == param_shortname
+                    )
                 ]:
                     assert len(bound_args) == 1
                     inline_args[param_shortname] = bound_args[0].val
@@ -524,7 +534,7 @@ class ArgumentInliner(ast.NodeTransformer):
 
     def visit_Set(self, node: irast.Set) -> irast.Base:
         if (
-            isinstance(node.expr, irast.Parameter)
+            isinstance(node.expr, irast.FunctionParameter)
             and node.expr.name in self.inline_args
         ):
             arg = self.inline_args[node.expr.name]
@@ -922,6 +932,7 @@ def compile_operator(
         prefer_subquery_args=oper.get_prefer_subquery_args(env.schema),
         is_singleton_set_of=is_singleton_set_of,
         span=qlexpr.span,
+        return_polymorphism=matched_call.return_polymorphism,
     )
 
     _check_free_shape_op(node, ctx=ctx)
@@ -1051,15 +1062,19 @@ def get_globals(
 
     schema = ctx.env.schema
 
-    globs = set()
+    globs: set[s_globals.Global | s_permissions.Permission] = set()
     if bound_call.func.get_params(schema).has_objects(schema):
         # We look at all the candidates since it might be used in a
         # subtype's overload.
         # TODO: be careful and only do this in the needed cases
         for func in candidates:
             globs.update(set(func.get_used_globals(schema).objects(schema)))
+            globs.update(set(func.get_used_permissions(schema).objects(schema)))
     else:
         globs.update(bound_call.func.get_used_globals(schema).objects(schema))
+        globs.update(
+            bound_call.func.get_used_permissions(schema).objects(schema)
+        )
 
     if (
         (
@@ -1071,10 +1086,10 @@ def get_globals(
         glob_set = setgen.get_globals_as_json(
             tuple(globs), ctx=ctx, span=expr.span)
     else:
-        if ctx.env.options.func_params is not None:
-            # Make sure that we properly track the globals we use in functions
-            for glob in globs:
-                setgen.get_global_param(glob, ctx=ctx)
+        # Make sure that we properly track the globals we use in functions
+        for glob in globs:
+            setgen.get_global_param(glob, ctx=ctx)
+
         glob_set = setgen.get_func_global_json_arg(ctx=ctx)
 
     return [glob_set]
@@ -1094,10 +1109,9 @@ def finalize_args(
     position_index: int = 0
 
     for i, barg in enumerate(bound_call.args):
-        param = barg.param
         arg_val = barg.val
         arg_type_path_id: Optional[irast.PathId] = None
-        if param is None:
+        if isinstance(barg, polyres.DefaultBitmask):
             # defaults bitmask
             param_name_to_arg['__defaults_mask__'] = -1
             args[-1] = irast.CallArg(
@@ -1105,14 +1119,15 @@ def finalize_args(
                 param_typemod=ft.TypeModifier.SingletonType,
             )
             continue
+        assert isinstance(barg, polyres.ValueArg)
 
         if actual_typemods:
             param_mod = actual_typemods[i]
         else:
-            param_mod = param.get_typemod(ctx.env.schema)
+            param_mod = barg.param_typemod
 
         if param_mod is not ft.TypeModifier.SetOfType:
-            param_shortname = param.get_parameter_name(ctx.env.schema)
+            param_shortname = barg.name
 
             if param_shortname in bound_call.null_args:
                 pathctx.register_set_in_scope(arg_val, optional=True, ctx=ctx)
@@ -1121,7 +1136,7 @@ def finalize_args(
             # try to go back and make it *not* optional.
             elif (
                 param_mod is ft.TypeModifier.SingletonType
-                and barg.arg_id is not None
+                and isinstance(barg, polyres.PassedArg)
                 and param_mod is not guessed_typemods[barg.arg_id]
             ):
                 for child in ctx.path_scope.children:
@@ -1142,9 +1157,7 @@ def finalize_args(
             arg_type = setgen.get_set_type(arg_val, ctx=ctx)
             if (
                 isinstance(arg_type, s_objtypes.ObjectType)
-                and barg.param
-                and not barg.param.get_type(ctx.env.schema).is_any(
-                    ctx.env.schema)
+                and not barg.orig_param_type.is_any(ctx.env.schema)
             ):
                 arg_type_path_id = pathctx.extend_path_id(
                     arg_val.path_id,
@@ -1179,7 +1192,7 @@ def finalize_args(
                 )
 
         paramtype = barg.param_type
-        param_kind = param.get_kind(ctx.env.schema)
+        param_kind = barg.param_kind
         if param_kind is ft.ParameterKind.VariadicParam:
             # For variadic params, paramtype would be array<T>,
             # and we need T to cast the arguments.
@@ -1203,9 +1216,14 @@ def finalize_args(
             if ctx.path_scope.is_optional(orig_arg_val.path_id):
                 pathctx.register_set_in_scope(arg_val, optional=True, ctx=ctx)
 
-        arg = irast.CallArg(expr=arg_val, expr_type_path_id=arg_type_path_id,
-            is_default=barg.is_default, param_typemod=param_mod)
-        param_shortname = param.get_parameter_name(ctx.env.schema)
+        arg = irast.CallArg(
+            expr=arg_val,
+            expr_type_path_id=arg_type_path_id,
+            is_default=isinstance(barg, polyres.DefaultArg),
+            param_typemod=param_mod,
+            polymorphism=barg.polymorphism,
+        )
+        param_shortname = barg.name
         if param_kind is ft.ParameterKind.NamedOnlyParam:
             args[param_shortname] = arg
             param_name_to_arg[param_shortname] = param_shortname

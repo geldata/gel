@@ -330,6 +330,7 @@ def fini_expression(
         expr=ir,
         params=params,
         globals=list(ctx.env.query_globals.values()),
+        required_permissions=set(ctx.env.required_permissions),
         server_param_conversions=server_param_conversions,
         server_param_conversion_params=server_param_conversion_params,
         views=ctx.view_nodes,
@@ -762,7 +763,7 @@ def compile_anchor(
     elif isinstance(anchor, qlast.Base):
         step = dispatch.compile(anchor, ctx=ctx)
 
-    elif isinstance(anchor, irast.Parameter):
+    elif isinstance(anchor, (irast.QueryParameter, irast.FunctionParameter)):
         step = setgen.ensure_set(anchor, ctx=ctx)
 
     elif isinstance(anchor, irast.PathId):
@@ -952,7 +953,7 @@ def check_params(params: dict[str, irast.Param]) -> None:
 
 
 def throw_on_shaped_param(
-    param: qlast.Parameter, shape: qlast.Shape, ctx: context.ContextLevel
+    param: qlast.QueryParameter, shape: qlast.Shape, ctx: context.ContextLevel
 ) -> None:
     raise errors.QueryError(
         f'cannot apply a shape to the parameter',
@@ -962,7 +963,7 @@ def throw_on_shaped_param(
 
 
 def throw_on_loose_param(
-    param: qlast.Parameter, ctx: context.ContextLevel
+    param: qlast.QueryParameter, ctx: context.ContextLevel
 ) -> None:
     if ctx.env.options.func_params is not None:
         if ctx.env.options.schema_object_context is s_constr.Constraint:
@@ -979,7 +980,7 @@ def throw_on_loose_param(
 
 
 def preprocess_script(
-    stmts: list[qlast.Base], *, ctx: context.ContextLevel
+    stmts: Sequence[qlast.Base], *, ctx: context.ContextLevel
 ) -> irast.ScriptInfo:
     """Extract parameters from all statements in a script.
 
@@ -1008,13 +1009,22 @@ def preprocess_script(
     ]
     params = {}
     for cast, modaliases in casts:
-        assert isinstance(cast.expr, qlast.Parameter)
+        assert isinstance(cast.expr, qlast.QueryParameter)
         name = cast.expr.name
         if name in params:
             continue
         with ctx.new() as mctx:
             mctx.modaliases = modaliases
             target_stype = typegen.ql_typeexpr_to_type(cast.type, ctx=mctx)
+
+        if ctx.env.options.json_parameters:
+            # Rule check on JSON-input parameters.
+            # The actual casting of the the parameter happens in
+            if name.isdecimal():
+                raise errors.QueryError(
+                    'queries compiled to accept JSON parameters do not '
+                    'accept positional parameters',
+                    span=cast.expr.span)
 
         # for ObjectType parameters, we inject intermediate cast to uuid,
         # so parameter is uuid and then cast to ObjectType
@@ -1034,8 +1044,16 @@ def preprocess_script(
         target_typeref = typegen.type_to_typeref(target_stype, env=ctx.env)
         required = cast.cardinality_mod != qlast.CardinalityModifier.Optional
 
+        # This handles processing of tuple arguments, nested arrays, and
+        # all json-mode parameters.
         sub_params = tuple_args.create_sub_params(
-            name, required, typeref=target_typeref, pt=target_stype, ctx=ctx)
+            name,
+            required,
+            typeref=target_typeref,
+            pt=target_stype,
+            is_func_param=False,
+            ctx=ctx,
+        )
         params[name] = irast.Param(
             name=name,
             required=required,

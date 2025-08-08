@@ -24,6 +24,7 @@ from typing import (
     Optional,
 )
 
+import asyncio
 import http.server
 import json
 import threading
@@ -111,6 +112,22 @@ class ExtAuthTestCase(BaseHttpExtensionTest):
     def get_extension_path(cls):
         return "ext/auth"
 
+    def generate_pkce_pair(self) -> tuple[str, str]:
+        """Generate a PKCE verifier and its corresponding challenge.
+
+        Returns:
+            (verifier, challenge): tuple of str
+        """
+        import os
+        import base64
+        import hashlib
+
+        verifier = base64.urlsafe_b64encode(os.urandom(43)).rstrip(b'=')
+        challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(verifier).digest()
+        ).rstrip(b'=')
+        return verifier.decode(), challenge.decode()
+
 
 class EdgeQLTestCase(BaseHttpExtensionTest):
     EXTENSIONS = ["edgeql_http"]
@@ -127,6 +144,9 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
         variables=None,
         globals=None,
         origin=None,
+
+        user=None,
+        password=None,
     ):
         req_data = {"query": query}
 
@@ -137,7 +157,9 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
                 req_data["globals"] = globals
             req = urllib.request.Request(self.http_addr, method="POST")
             req.add_header("Content-Type", "application/json")
-            req.add_header("Authorization", self.make_auth_header())
+            req.add_header(
+                "Authorization", self.make_auth_header(user, password)
+            )
             if origin:
                 req.add_header("Origin", origin)
             response = urllib.request.urlopen(
@@ -152,7 +174,9 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
             req = urllib.request.Request(
                 f"{self.http_addr}/?{urllib.parse.urlencode(req_data)}",
             )
-            req.add_header("Authorization", self.make_auth_header())
+            req.add_header(
+                "Authorization", self.make_auth_header(user, password)
+            )
             response = urllib.request.urlopen(
                 req,
                 context=self.tls_context,
@@ -213,6 +237,9 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         variables=None,
         globals=None,
         deprecated_globals=None,
+
+        user=None,
+        password=None,
     ):
         def inner():
             return self._graphql_query(
@@ -222,6 +249,8 @@ class GraphQLTestCase(BaseHttpExtensionTest):
                 variables=variables,
                 globals=globals,
                 deprecated_globals=deprecated_globals,
+                user=user,
+                password=password,
             )
         return self._retry_operation(inner)
 
@@ -250,6 +279,8 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         variables=None,
         globals=None,
         deprecated_globals=None,
+        user=None,
+        password=None,
     ):
         req_data = {"query": query}
 
@@ -269,7 +300,9 @@ class GraphQLTestCase(BaseHttpExtensionTest):
 
             req = urllib.request.Request(self.http_addr, method="POST")
             req.add_header("Content-Type", "application/json")
-            req.add_header("Authorization", self.make_auth_header())
+            req.add_header(
+                "Authorization", self.make_auth_header(user, password)
+            )
             response = urllib.request.urlopen(
                 req, json.dumps(req_data).encode(), context=self.tls_context
             )
@@ -287,7 +320,9 @@ class GraphQLTestCase(BaseHttpExtensionTest):
             req = urllib.request.Request(
                 f"{self.http_addr}/?{urllib.parse.urlencode(req_data)}",
             )
-            req.add_header("Authorization", self.make_auth_header())
+            req.add_header(
+                "Authorization", self.make_auth_header(user, password)
+            )
             response = urllib.request.urlopen(
                 req,
                 context=self.tls_context,
@@ -323,6 +358,52 @@ class GraphQLTestCase(BaseHttpExtensionTest):
 
         raise ex
 
+    async def _native_graphql_query(
+        self,
+        query,
+        *,
+        # Can/should we support operation_name somehow...
+        variables=None,
+        globals=None,
+    ):
+        # The graphql tests are all synchronous, and our gel
+        # connections need to be async... so we spin up a new
+        # connection and asyncio.run the coro.
+        con = await self.connect()
+        try:
+            # Ahhhhhh. We don't support with_globals on testbase
+            # connections, so....
+            if globals:
+                glob_defs = {
+                    obj.name: obj
+                    for obj in
+                    await con.query('''
+                        select schema::Global {
+                            name, required, tname := .target.name
+                        }
+                    ''')
+                }
+
+                for k, v in globals.items():
+                    glob = glob_defs[k]
+                    # Why do we allow this for the HTTP proto??
+                    # We don't for binary proto stuff.
+                    if v is None and glob.required:
+                        continue
+                    mod = 'required ' if glob.required else ''
+                    await con.execute(
+                        f'set global {k} := <{mod}{glob.tname}><json>$0',
+                        json.dumps(v),
+                    )
+
+            async with server.RollbackChanges(con):
+                return json.loads(await con.query_graphql_json(
+                    query,
+                    **(variables or {}),
+                ))
+        finally:
+            await con.aclose()
+
     def assert_graphql_query_result(
         self,
         query,
@@ -332,10 +413,39 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         sort=None,
         operation_name=None,
         use_http_post=True,
+        native_variables=None,
         variables=None,
         globals=None,
         deprecated_globals=None,
     ):
+        # Try to use the native protocol first!
+        if operation_name is None:
+            try:
+                res = asyncio.run(self._native_graphql_query(
+                    query,
+                    variables=(
+                        native_variables if native_variables is not None
+                        else variables
+                    ),
+                    globals=globals or deprecated_globals,
+                ))
+
+                if sort is not None:
+                    # GQL will always have a single object
+                    # returned. The data is in the top-level fields,
+                    # so that's what needs to be sorted.
+                    for r in res.values():
+                        assert_data_shape.sort_results(r, sort)
+
+                assert_data_shape.assert_data_shape(
+                    res, result, self.fail, message=msg)
+            except gel.UnsupportedFeatureError as e:
+                if 'Default variables are not supported' in str(e):
+                    # Whatever.
+                    pass
+                else:
+                    raise
+
         res = self.graphql_query(
             query,
             operation_name=operation_name,

@@ -39,12 +39,14 @@ from edb.schema import functions as s_func
 from edb.schema import globals as s_globals
 from edb.schema import indexes as s_indexes
 from edb.schema import name as sn
+from edb.schema import objects as so
 from edb.schema import objtypes as s_objtypes
+from edb.schema import permissions as s_permissions
 from edb.schema import pseudo as s_pseudo
 from edb.schema import scalars as s_scalars
+from edb.schema import schema as s_schema
 from edb.schema import types as s_types
 from edb.schema import utils as s_utils
-from edb.schema import expr as s_expr
 
 from edb.edgeql import ast as qlast
 
@@ -53,6 +55,7 @@ from . import casts
 from . import context
 from . import dispatch
 from . import pathctx
+from . import schemactx
 from . import setgen
 from . import stmt
 from . import tuple_args
@@ -338,44 +341,7 @@ def compile_Tuple(expr: qlast.Tuple, *, ctx: context.ContextLevel) -> irast.Set:
 @dispatch.compile.register(qlast.Array)
 def compile_Array(expr: qlast.Array, *, ctx: context.ContextLevel) -> irast.Set:
     elements = [dispatch.compile(e, ctx=ctx) for e in expr.elements]
-    # check that none of the elements are themselves arrays
-    for el, expr_el in zip(elements, expr.elements):
-        if isinstance(setgen.get_set_type(el, ctx=ctx), s_abc.Array):
-            raise errors.QueryError(
-                f'nested arrays are not supported',
-                span=expr_el.span)
-
     return setgen.new_array_set(elements, ctx=ctx, span=expr.span)
-
-
-def _move_fenced_anchor(ir: irast.Set, *, ctx: context.ContextLevel) -> None:
-    """Move the scope tree of a fenced anchor to its use site.
-
-    For technical reasons, in _compile_dml_coalesce and
-    _compile_dml_ifelse, we compile the expressions normally and then
-    extract the subcomponents and use them as anchors inside a
-    desugared expression.
-
-    Because of this, the resultant scope tree does not have the right
-    shape, since the scope trees of the fenced subexpressions aren't
-    nested inside the trees of the FOR loops. This results in subtle
-    problems in backend compilation, since the loop iterators are not
-    visible to the loop bodies.
-
-    Fix the trees by finding the scope tree associated with a set used
-    as an anchor, finding where that anchor was used, and moving the
-    scope tree there.
-    """
-    match ir.expr:
-        case irast.SelectStmt(result=irast.SetE(path_scope_id=int(id))):
-            node = next(iter(
-                x for x in ctx.path_scope.root.descendants
-                if x.unique_id == id
-            ))
-            target = ctx.path_scope.find_descendant(ir.path_id)
-            assert target and target.parent
-            node.remove()
-            target.parent.attach_child(node)
 
 
 def _compile_dml_coalesce(
@@ -436,7 +402,9 @@ def _compile_dml_coalesce(
                     operand=qlast.UnaryOp(op='EXISTS', operand=cond_path),
                 ),
             ),
-            result=subctx.create_anchor(rhs_ir, check_dml=True),
+            result=subctx.create_anchor(
+                rhs_ir, move_scope=True, check_dml=True
+            ),
         )
 
         full = qlast.ForQuery(
@@ -453,8 +421,6 @@ def _compile_dml_coalesce(
         # cardinality/multiplicity.
         assert isinstance(res.expr, irast.SelectStmt)
         res.expr.card_inference_override = ir
-
-        _move_fenced_anchor(rhs_ir, ctx=subctx)
 
         return res
 
@@ -516,7 +482,9 @@ def _compile_dml_ifelse(
                     result=qlast.Tuple(elements=[]),
                     where=cond_path,
                 ),
-                result=subctx.create_anchor(if_ir, check_dml=True),
+                result=subctx.create_anchor(
+                    if_ir, move_scope=True, check_dml=True
+                ),
             )
             els.append(if_b)
 
@@ -527,7 +495,9 @@ def _compile_dml_ifelse(
                     result=qlast.Tuple(elements=[]),
                     where=qlast.UnaryOp(op='NOT', operand=cond_path),
                 ),
-                result=subctx.create_anchor(else_ir, check_dml=True),
+                result=subctx.create_anchor(
+                    else_ir, move_scope=True, check_dml=True
+                ),
             )
             els.append(else_b)
 
@@ -547,9 +517,6 @@ def _compile_dml_ifelse(
         # cardinality/multiplicity.
         assert isinstance(res.expr, irast.SelectStmt)
         res.expr.card_inference_override = ir
-
-        _move_fenced_anchor(if_ir, ctx=subctx)
-        _move_fenced_anchor(else_ir, ctx=subctx)
 
         return res
 
@@ -581,16 +548,82 @@ def compile_UnaryOp(
         expr, op_name=expr.op, qlargs=[expr.operand], ctx=ctx)
 
 
+def _cache_as_type_rewrite(
+    target: irast.Set,
+    stype: s_types.Type,
+    populate: Callable[[], irast.Set],
+    *,
+    ctx: context.ContextLevel,
+) -> irast.Set:
+    key = (stype, False)
+    if not ctx.env.type_rewrites.get(key):
+        ctx.env.type_rewrites[key] = populate()
+    rewrite_target = ctx.env.type_rewrites[key]
+
+    # We need to have the set with expr=None, so that the rewrite
+    # will be applied, but we also need to wrap it with a
+    # card_inference_override so that we use the real cardinality
+    # instead of assuming it is MANY.
+    assert isinstance(rewrite_target, irast.Set)
+    typeref = typegen.type_to_typeref(stype, env=ctx.env)
+    target = setgen.new_set_from_set(
+        target,
+        expr=irast.TypeRoot(typeref=typeref, is_cached_global=True),
+        stype=stype,
+        ctx=ctx,
+    )
+    wrap = irast.SelectStmt(
+        result=target,
+        card_inference_override=rewrite_target,
+    )
+    return setgen.new_set_from_set(target, expr=wrap, ctx=ctx)
+
+
 @dispatch.compile.register(qlast.GlobalExpr)
 def compile_GlobalExpr(
     expr: qlast.GlobalExpr, *, ctx: context.ContextLevel
 ) -> irast.Set:
+    # The expr object can be either a Permission or Global.
+    # Get an Object and manually check for correct type and None.
+    expr_schema_name = s_utils.ast_ref_to_name(expr.name)
     glob = ctx.env.get_schema_object_and_track(
-        s_utils.ast_ref_to_name(expr.name), expr.name,
-        modaliases=ctx.modaliases, type=s_globals.Global)
-    assert isinstance(glob, s_globals.Global)
+        expr_schema_name,
+        expr.name,
+        default=None,
+        modaliases=ctx.modaliases,
+        type=so.Object,
+    )
 
-    if glob.is_computable(ctx.env.schema):
+    # Check for None first.
+    if glob is None:
+        # If no object is found, we want to raise an error with 'global' as
+        # the desired type.
+        # If we let `get_schema_object_and_track`, the error will contain
+        # 'object' instead.
+        s_schema.Schema.raise_bad_reference(
+            expr_schema_name,
+            module_aliases=ctx.modaliases,
+            span=expr.span,
+            type=s_globals.Global,
+        )
+
+    # Check for incorrect type
+    if not isinstance(glob, (s_globals.Global, s_permissions.Permission)):
+        s_schema.Schema.raise_wrong_type(
+            expr_schema_name,
+            glob.__class__,
+            s_globals.Global,
+            span=expr.span,
+        )
+        # Raise an error here so mypy knows that expr_obj can only be a global
+        # or permission past this point.
+        raise AssertionError('should never happen')
+
+    if (
+        # Computed global
+        isinstance(glob, s_globals.Global)
+        and glob.is_computable(ctx.env.schema)
+    ):
         obj_ref = s_utils.name_to_ast_ref(
             glob.get_target(ctx.env.schema).get_name(ctx.env.schema))
         # Wrap the reference in a subquery so that it does not get
@@ -601,46 +634,39 @@ def compile_GlobalExpr(
         # If the global is single, use type_rewrites to make sure it
         # is computed only once in the SQL query.
         if glob.get_cardinality(ctx.env.schema).is_single():
-            key = (setgen.get_set_type(target, ctx=ctx), False)
-            if not ctx.env.type_rewrites.get(key):
+            def _populate() -> irast.Set:
                 with ctx.detached() as dctx:
                     # The official rewrite needs to be in a detached
                     # scope to avoid collisions; this won't really
                     # recompile the whole thing, it will hit a cache
                     # of the view.
-                    ctx.env.type_rewrites[key] = dispatch.compile(qry, ctx=dctx)
-            rewrite_target = ctx.env.type_rewrites[key]
+                    return dispatch.compile(qry, ctx=dctx)
 
-            # We need to have the set with expr=None, so that the rewrite
-            # will be applied, but we also need to wrap it with a
-            # card_inference_override so that we use the real cardinality
-            # instead of assuming it is MANY.
-            assert isinstance(rewrite_target, irast.Set)
-            target = setgen.new_set_from_set(
+            target = _cache_as_type_rewrite(
                 target,
-                expr=irast.TypeRoot(
-                    typeref=target.typeref, is_cached_global=True
-                ),
+                setgen.get_set_type(target, ctx=ctx),
+                populate=_populate,
                 ctx=ctx,
             )
-            wrap = irast.SelectStmt(
-                result=target,
-                card_inference_override=rewrite_target,
-            )
-            target = setgen.new_set_from_set(target, expr=wrap, ctx=ctx)
 
         return target
 
-    default: Optional[s_expr.Expression] = glob.get_default(ctx.env.schema)
+    default_ql: Optional[qlast.Expr] = None
+    if isinstance(glob, s_globals.Global):
+        if default_expr := glob.get_default(ctx.env.schema):
+            default_ql = default_expr.parse()
 
     # If we are compiling with globals suppressed but still allowed, always
     # treat it as being empty.
     if ctx.env.options.make_globals_empty:
-        if default:
-            return dispatch.compile(default.parse(), ctx=ctx)
+        if isinstance(glob, s_permissions.Permission):
+            return dispatch.compile(qlast.Constant.boolean(False), ctx=ctx)
+        elif default_ql:
+            return dispatch.compile(default_ql, ctx=ctx)
         else:
             return setgen.new_empty_set(
-                stype=glob.get_target(ctx.env.schema), ctx=ctx)
+                stype=glob.get_target(ctx.env.schema), ctx=ctx
+            )
 
     objctx = ctx.env.options.schema_object_context
     if objctx in (s_constr.Constraint, s_indexes.Index):
@@ -655,12 +681,21 @@ def compile_GlobalExpr(
         ctx.env.options.func_params is None
         and not ctx.env.options.json_parameters
     ):
-        param_set, present_set = setgen.get_global_param_sets(glob, ctx=ctx)
+        param_set, present_set = setgen.get_global_param_sets(
+            glob, ctx=ctx,
+        )
     else:
         param_set, present_set = setgen.get_func_global_param_sets(
-            glob, ctx=ctx)
+            glob, ctx=ctx
+        )
 
-    if default and not present_set:
+        if isinstance(glob, s_permissions.Permission):
+            # Globals are assumed to be optional within functions. However,
+            # permissions always have a value. Provide a default value to
+            # reassure the cardinality checks.
+            default_ql = qlast.Constant.boolean(False)
+
+    if default_ql and not present_set:
         # If we have a default value and the global is required,
         # then we can use the param being {} as a signal to use
         # the default.
@@ -668,9 +703,12 @@ def compile_GlobalExpr(
             subctx.anchors = subctx.anchors.copy()
             main_param = subctx.maybe_create_anchor(param_set, 'glob')
             param_set = func.compile_operator(
-                expr, op_name='std::??',
-                qlargs=[main_param, default.parse()], ctx=subctx)
-    elif default and present_set:
+                expr,
+                op_name='std::??',
+                qlargs=[main_param, default_ql],
+                ctx=subctx
+            )
+    elif default_ql and present_set:
         # ... but if {} is a valid value for the global, we need to
         # stick in an extra parameter to indicate whether to use
         # the default.
@@ -681,10 +719,39 @@ def compile_GlobalExpr(
             present_param = subctx.maybe_create_anchor(present_set, 'present')
 
             param_set = func.compile_operator(
-                expr, op_name='std::IF',
-                qlargs=[main_param, present_param, default.parse()], ctx=subctx)
+                expr,
+                op_name='std::IF',
+                qlargs=[main_param, present_param, default_ql],
+                ctx=subctx
+            )
     elif not isinstance(param_set, irast.Set):
         param_set = dispatch.compile(param_set, ctx=ctx)
+
+    # When we are compiling a global as something we are pulling out
+    # of JSON, arrange to cache it as a type rewrite. This can have
+    # big performance wins.
+    if (
+        not ctx.env.options.schema_object_context
+        and not (
+            ctx.env.options.func_params is None
+            and not ctx.env.options.json_parameters
+        )
+        # TODO: support this for permissions too?
+        # OR! Don't put the permissions into the globals JSON?
+        and isinstance(glob, s_globals.Global)
+    ):
+        name = glob.get_name(ctx.env.schema)
+        if name not in ctx.env.query_globals_types:
+            # HACK: We have mechanism for caching based on type... so
+            # make up a type.
+            # I would like us to be less type-forward though.
+            ctx.env.query_globals_types[name] = (
+                schemactx.derive_view(glob.get_target(ctx.env.schema), ctx=ctx)
+            )
+        ty = ctx.env.query_globals_types[name]
+        param_set = _cache_as_type_rewrite(
+            param_set, ty, lambda: param_set, ctx=ctx
+        )
 
     return param_set
 
@@ -714,7 +781,7 @@ def compile_TypeCast(
 
     ir_expr: irast.Set | irast.Expr
 
-    if isinstance(expr.expr, qlast.Parameter):
+    if isinstance(expr.expr, (qlast.QueryParameter, qlast.FunctionParameter)):
         if (
             # generic types not explicitly allowed
             not ctx.env.options.allow_generic_type_output and
@@ -743,42 +810,22 @@ def compile_TypeCast(
         else:
             required = True
 
-        if ctx.env.options.json_parameters:
-            if param_name.isdecimal():
-                raise errors.QueryError(
-                    'queries compiled to accept JSON parameters do not '
-                    'accept positional parameters',
-                    span=expr.expr.span)
+        parameter_type = (
+            irast.QueryParameter
+            if isinstance(expr.expr, qlast.QueryParameter) else
+            irast.FunctionParameter
+        )
 
-            typeref = typegen.type_to_typeref(
-                ctx.env.get_schema_type_and_track(sn.QualName('std', 'json')),
-                env=ctx.env,
-            )
-
-            param = casts.compile_cast(
-                irast.Parameter(
-                    typeref=typeref,
-                    name=param_name,
-                    required=required,
-                    span=expr.expr.span,
-                ),
-                pt,
+        typeref = typegen.type_to_typeref(pt, env=ctx.env)
+        param = setgen.ensure_set(
+            parameter_type(
+                typeref=typeref,
+                name=param_name,
+                required=required,
                 span=expr.expr.span,
-                ctx=ctx,
-                cardinality_mod=expr.cardinality_mod,
-            )
-
-        else:
-            typeref = typegen.type_to_typeref(pt, env=ctx.env)
-            param = setgen.ensure_set(
-                irast.Parameter(
-                    typeref=typeref,
-                    name=param_name,
-                    required=required,
-                    span=expr.expr.span,
-                ),
-                ctx=ctx,
-            )
+            ),
+            ctx=ctx,
+        )
 
         if ex_param := ctx.env.script_params.get(param_name):
             # N.B. Accessing the schema_type from the param is unreliable
@@ -1178,7 +1225,7 @@ def try_constant_set(expr: irast.Base) -> Optional[irast.ConstantSet]:
             stack.extend([el.args[1].expr.expr, el.args[0].expr.expr])
         elif el and irutils.is_trivial_select(el):
             stack.append(el.result)
-        elif isinstance(el, (irast.BaseConstant, irast.Parameter)):
+        elif isinstance(el, (irast.BaseConstant, irast.BaseParameter)):
             elements.append(el)
         else:
             return None
@@ -1189,3 +1236,39 @@ def try_constant_set(expr: irast.Base) -> Optional[irast.ConstantSet]:
         )
     else:
         return None
+
+
+class IdentCompletionException(BaseException):
+    """An exception that is raised to halt the compilation and return a list of
+    suggested idents to be used at the location of qlast.Cursor node.
+    """
+
+    def __init__(self, suggestions: list[str]):
+        self.suggestions = suggestions
+
+
+@dispatch.compile.register(qlast.Cursor)
+def compile_Cursor(
+    expr: qlast.Cursor, *, ctx: context.ContextLevel
+) -> irast.Set:
+    suggestions = []
+
+    # with bindings
+    name: sn.Name
+    for name in ctx.aliased_views.keys():
+        suggestions.append(name.name)
+
+    # names in current module
+    if cur_mod := ctx.modaliases.get(None):
+        obj_types = ctx.env.schema.get_objects(
+            included_modules=[sn.UnqualName(cur_mod)],
+            type=s_objtypes.ObjectType,
+        )
+        obj_type_names = [
+            obj_type.get_name(ctx.env.schema).name
+            for obj_type in obj_types
+        ]
+        obj_type_names.sort()
+        suggestions.extend(obj_type_names)
+
+    raise IdentCompletionException(suggestions)

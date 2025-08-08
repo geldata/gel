@@ -47,7 +47,7 @@ from edb.ir import statypes
 
 
 from edb.server import args
-from edb.server import cluster
+from edb.testbase import cluster
 from edb.server import config
 from edb.server.config import ops
 from edb.server.config import spec
@@ -942,7 +942,7 @@ class TestServerConfig(tb.QueryTestCase):
                 ],
             )
 
-            con2 = await self.connect(database=self.con.dbname)
+            con2 = await self.connect()
             await con2.execute('''
                 start transaction
             ''')
@@ -1070,7 +1070,7 @@ class TestServerConfig(tb.QueryTestCase):
             ''')
 
     async def test_server_proto_configure_09(self):
-        con2 = await self.connect(database=self.con.dbname)
+        con2 = await self.connect()
         default_value = await con2.query_single(
             'SELECT assert_single(cfg::Config).boolprop'
         )
@@ -1188,6 +1188,7 @@ class TestServerConfig(tb.QueryTestCase):
             (srv_ver.major, srv_ver.minor, str(srv_ver.stage),
              srv_ver.stage_no,)
         )
+        self.assertEqual(ver.major, buildmeta.EDGEDB_MAJOR_VERSION)
 
     async def test_server_proto_configure_invalid_duration(self):
         with self.assertRaisesRegex(
@@ -1286,7 +1287,7 @@ class TestServerConfig(tb.QueryTestCase):
 
     async def test_server_proto_rollback_state(self):
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.execute('''
                 CONFIGURE SESSION SET __internal_sess_testvalue := 2;
@@ -1321,7 +1322,7 @@ class TestServerConfig(tb.QueryTestCase):
 
     async def test_server_proto_orphan_rollback_state(self):
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.execute('''
                 CONFIGURE SESSION SET __internal_sess_testvalue := 2;
@@ -1358,7 +1359,7 @@ class TestServerConfig(tb.QueryTestCase):
 
     async def test_server_proto_configure_error(self):
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
 
         version_str = await con1.query_single('''
             select sys::get_version_as_str();
@@ -1461,7 +1462,7 @@ class TestServerConfig(tb.QueryTestCase):
 
     async def test_server_proto_non_transactional_pg_14_7(self):
         con1 = self.con
-        con2 = await self.connect(database=con1.dbname)
+        con2 = await self.connect()
         try:
             await con2.execute('''
                 CONFIGURE SESSION SET __internal_sess_testvalue := 2;
@@ -1525,8 +1526,8 @@ class TestServerConfig(tb.QueryTestCase):
 
     async def test_server_proto_remember_pgcon_state(self):
         query = 'SELECT assert_single(cfg::Config.__internal_sess_testvalue)'
-        con1 = await self.connect(database=self.con.dbname)
-        con2 = await self.connect(database=self.con.dbname)
+        con1 = await self.connect()
+        con2 = await self.connect()
         try:
             # make sure the default state is remembered in a pgcon
             async with con1.transaction():

@@ -23,6 +23,7 @@ import collections
 import collections.abc
 import enum
 import typing
+from typing import Self
 import uuid
 
 from edb import errors
@@ -71,7 +72,6 @@ class ExprType(enum.IntEnum):
         return self != ExprType.Select and self != ExprType.Group
 
 
-TypeT = typing.TypeVar('TypeT', bound='Type')
 TypeT_co = typing.TypeVar('TypeT_co', bound='Type', covariant=True)
 InheritingTypeT = typing.TypeVar('InheritingTypeT', bound='InheritingType')
 CollectionTypeT = typing.TypeVar('CollectionTypeT', bound='Collection')
@@ -167,7 +167,7 @@ class Type(
         return reference != self.get_rptr(schema)
 
     def derive_subtype(
-        self: TypeT,
+        self: Self,
         schema: s_schema.Schema,
         *,
         name: s_name.QualName,
@@ -179,7 +179,7 @@ class Type(
         inheritance_refdicts: Optional[AbstractSet[str]] = None,
         stdmode: bool = False,
         **kwargs: Any,
-    ) -> tuple[s_schema.Schema, TypeT]:
+    ) -> tuple[s_schema.Schema, Self]:
 
         if self.get_name(schema) == name:
             raise errors.SchemaError(
@@ -230,7 +230,7 @@ class Type(
             delta.add(cmd)
             schema = delta.apply(schema, context)
 
-        derived = typing.cast(TypeT, schema.get(name))
+        derived = typing.cast(Self, schema.get(name))
 
         return schema, derived
 
@@ -288,6 +288,9 @@ class Type(
     def is_sequence(self, schema: s_schema.Schema) -> bool:
         return False
 
+    def is_array_of_arrays(self, schema: s_schema.Schema) -> bool:
+        return False
+
     def is_array_of_tuples(self, schema: s_schema.Schema) -> bool:
         return False
 
@@ -321,6 +324,10 @@ class Type(
 
     def find_array(self, schema: s_schema.Schema) -> Optional[Type]:
         return self.find_predicate(lambda x: x.is_array(), schema)
+
+    def contains_array_of_array(self, schema: s_schema.Schema) -> bool:
+        return self.contains_predicate(
+            lambda x: x.is_array_of_arrays(schema), schema)
 
     def contains_array_of_tuples(self, schema: s_schema.Schema) -> bool:
         return self.contains_predicate(
@@ -364,7 +371,7 @@ class Type(
         return self._resolve_polymorphic(schema, other)
 
     def to_nonpolymorphic(
-        self: TypeT, schema: s_schema.Schema, concrete_type: Type
+        self: Self, schema: s_schema.Schema, concrete_type: Type
     ) -> tuple[s_schema.Schema, Type]:
         """Produce an non-polymorphic version of self.
 
@@ -389,7 +396,7 @@ class Type(
             f'{type(self)} does not support resolve_polymorphic()')
 
     def _to_nonpolymorphic(
-        self: TypeT,
+        self: Self,
         schema: s_schema.Schema,
         concrete_type: Type,
     ) -> tuple[s_schema.Schema, Type]:
@@ -436,23 +443,23 @@ class Type(
         return schema, None
 
     def get_union_of(
-        self: TypeT,
+        self: Self,
         schema: s_schema.Schema,
-    ) -> Optional[so.ObjectSet[TypeT]]:
+    ) -> Optional[so.ObjectSet[Self]]:
         return None
 
     def get_is_opaque_union(self, schema: s_schema.Schema) -> bool:
         return False
 
     def get_intersection_of(
-        self: TypeT,
+        self: Self,
         schema: s_schema.Schema,
-    ) -> Optional[so.ObjectSet[TypeT]]:
+    ) -> Optional[so.ObjectSet[Self]]:
         return None
 
     def material_type(
-        self: TypeT, schema: s_schema.Schema
-    ) -> tuple[s_schema.Schema, TypeT]:
+        self: Self, schema: s_schema.Schema
+    ) -> tuple[s_schema.Schema, Self]:
         return schema, self
 
     def peel_view(self, schema: s_schema.Schema) -> Type:
@@ -474,9 +481,9 @@ class Type(
         return not self.is_view(schema)
 
     def as_shell(
-        self: TypeT,
+        self: Self,
         schema: s_schema.Schema,
-    ) -> TypeShell[TypeT]:
+    ) -> TypeShell[Self]:
         name = typing.cast(s_name.QualName, self.get_name(schema))
 
         if (
@@ -520,9 +527,9 @@ class Type(
             cmd.set_object_aux_data('is_compound_type', True)
 
     def as_type_delete_if_unused(
-        self: TypeT,
+        self: Self,
         schema: s_schema.Schema,
-    ) -> Optional[sd.DeleteObject[TypeT]]:
+    ) -> Optional[sd.DeleteObject[Self]]:
         """If this is type is owned by other objects, delete it if unused.
 
         For types that get created behind the scenes as part of
@@ -548,10 +555,12 @@ class QualifiedType(so.QualifiedObject, Type):
 
 class InheritingType(so.DerivableInheritingObject, QualifiedType):
 
-    def material_type(
+    def material_type[
+        InheritingTypeT: InheritingType, Schema_T: s_schema.Schema
+    ](
         self: InheritingTypeT,
-        schema: s_schema.Schema_T,
-    ) -> tuple[s_schema.Schema_T, InheritingTypeT]:
+        schema: Schema_T,
+    ) -> tuple[Schema_T, InheritingTypeT]:
         return schema, self.get_nearest_non_derived_parent(schema)
 
     def peel_view(self, schema: s_schema.Schema) -> Type:
@@ -627,12 +636,10 @@ class TypeShell(so.ObjectShell[TypeT_co]):
         view_name: Optional[s_name.QualName] = None,
         attrs: Optional[dict[str, Any]] = None,
     ) -> sd.Command:
-        raise errors.UnsupportedFeatureError(
-            f'unsupported type intersection in schema {str(view_name)}',
-            hint=f'Type intersections are currently '
-                 f'unsupported as valid link targets.',
-            span=self.span,
-        )
+        raise NotImplementedError('unsupported typeshell')
+
+    def has_intersection(self) -> bool:
+        return False
 
 
 class TypeExprShell(TypeShell[TypeT_co]):
@@ -665,6 +672,12 @@ class TypeExprShell(TypeShell[TypeT_co]):
         schema: s_schema.Schema,
     ) -> tuple[TypeShell[TypeT_co], ...]:
         return self.components
+
+    def has_intersection(self) -> bool:
+        return any(
+            c.has_intersection()
+            for c in self.components
+        )
 
 
 class UnionTypeShell(TypeExprShell[TypeT_co]):
@@ -700,6 +713,9 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
     ) -> sd.Command:
         assert isinstance(self.name, s_name.QualName)
         cmd = CreateUnionType(classname=self.name)
+        for component in self.components:
+            if isinstance(component, TypeExprShell):
+                cmd.add_prerequisite(component.as_create_delta(schema))
         cmd.set_attribute_value('name', self.name)
         cmd.set_attribute_value('components', tuple(self.components))
         cmd.set_attribute_value('is_opaque_union', self.opaque)
@@ -712,7 +728,7 @@ class UnionTypeShell(TypeExprShell[TypeT_co]):
         return f'<{type(self).__name__} {dn}({comps}) at 0x{id(self):x}>'
 
 
-class AlterType(sd.AlterObject[TypeT]):
+class AlterType[TypeT: Type](sd.AlterObject[TypeT]):
 
     def _get_ast(
         self,
@@ -730,7 +746,7 @@ class AlterType(sd.AlterObject[TypeT]):
             return super()._get_ast(schema, context, parent_node=parent_node)
 
 
-class RenameType(sd.RenameObject[TypeT]):
+class RenameType[TypeT: Type](sd.RenameObject[TypeT]):
 
     def _canonicalize(
         self,
@@ -835,7 +851,7 @@ class RenameType(sd.RenameObject[TypeT]):
             return super()._get_ast(schema, context, parent_node=parent_node)
 
 
-class DeleteType(sd.DeleteObject[TypeT]):
+class DeleteType[TypeT: Type](sd.DeleteObject[TypeT]):
 
     def _get_ast(
         self,
@@ -885,6 +901,9 @@ class CreateUnionType(sd.CreateObject[InheritingType], CompoundTypeCommand):
 
         from edb.schema import types as s_types
 
+        for cmd in self.get_prerequisites():
+            schema = cmd.apply(schema, context)
+
         if not context.canonical:
             components: Sequence[s_types.Type] = [
                 c.resolve(schema)
@@ -920,7 +939,67 @@ class CreateUnionType(sd.CreateObject[InheritingType], CompoundTypeCommand):
 
                 self.add(delta)
 
-        for cmd in self.get_subcommands():
+        for cmd in self.get_subcommands(include_prerequisites=False):
+            schema = cmd.apply(schema, context)
+
+        return schema
+
+
+class CreateIntersectionType(
+    sd.CreateObject[InheritingType], CompoundTypeCommand
+):
+
+    def apply(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+    ) -> s_schema.Schema:
+
+        from edb.schema import types as s_types
+
+        for cmd in self.get_prerequisites():
+            schema = cmd.apply(schema, context)
+
+        if not context.canonical:
+            components: Sequence[s_types.Type] = [
+                c.resolve(schema)
+                for c in self.get_attribute_value('components')
+            ]
+
+            try:
+                new_schema, intersection_type, created = (
+                    utils.ensure_intersection_type(
+                        schema,
+                        components,
+                        module=self.classname.module,
+                    )
+                )
+            except errors.SchemaError as e:
+                intersection_name = (
+                    '(' + ' | '.join(sorted(
+                    c.get_displayname(schema)
+                    for c in components
+                    )) + ')'
+                )
+                e.args = (
+                    (
+                        f'cannot create intersection '
+                        f'{intersection_name} {e.args[0]}',
+                    )
+                    + e.args[1:]
+                )
+                e.set_span(self.get_attribute_value('span'))
+                raise e
+
+            if created:
+                delta = intersection_type.as_create_delta(
+                    schema=new_schema,
+                    context=so.ComparisonContext(),
+                )
+
+                self.add(delta)
+
+        for cmd in self.get_subcommands(include_prerequisites=False):
             schema = cmd.apply(schema, context)
 
         return schema
@@ -946,6 +1025,26 @@ class IntersectionTypeShell(TypeExprShell[TypeT_co]):
             schemaclass=schemaclass,
             span=span
         )
+
+    def as_create_delta(
+        self,
+        schema: s_schema.Schema,
+        *,
+        view_name: Optional[s_name.QualName] = None,
+        attrs: Optional[dict[str, Any]] = None,
+    ) -> sd.Command:
+        assert isinstance(self.name, s_name.QualName)
+        cmd = CreateIntersectionType(classname=self.name)
+        for component in self.components:
+            if isinstance(component, TypeExprShell):
+                cmd.add_prerequisite(component.as_create_delta(schema))
+        cmd.set_attribute_value('name', self.name)
+        cmd.set_attribute_value('components', tuple(self.components))
+        cmd.set_attribute_value('span', self.span)
+        return cmd
+
+    def has_intersection(self) -> bool:
+        return True
 
 
 _collection_impls: dict[str, type[Collection]] = {}
@@ -1009,9 +1108,11 @@ class Collection(Type, s_abc.Collection):
     @classmethod
     def get_displayname_static(cls, name: s_name.Name) -> str:
         if isinstance(name, s_name.QualName):
-            return str(name)
+            # FIXME: Globals and alias names do mangling but *don't*
+            # duplicate the module name, which most places do.
+            return str(name).split('@', 1)[0]
         else:
-            return s_name.unmangle_name(str(name))
+            return s_name.recursively_unmangle_shortname(str(name))
 
     @classmethod
     def get_schema_name(cls) -> str:
@@ -1294,6 +1395,9 @@ class Array(
             self.get_element_type(schema).get_name(schema),
         )
 
+    def is_array_of_arrays(self, schema: s_schema.Schema) -> bool:
+        return self.get_element_type(schema).is_array()
+
     def is_array_of_tuples(self, schema: s_schema.Schema) -> bool:
         return self.get_element_type(schema).is_tuple(schema)
 
@@ -1454,10 +1558,6 @@ class Array(
                 f'unexpected number of subtypes, expecting 1: {subtypes!r}')
         stype = subtypes[0]
 
-        if isinstance(stype, Array):
-            raise errors.UnsupportedFeatureError(
-                f'nested arrays are not supported')
-
         # One-dimensional unbounded array.
         dimensions = [-1]
 
@@ -1472,14 +1572,14 @@ class Array(
 
     @classmethod
     def create_shell(
-        cls: type[Array_T],
+        cls: type[Self],
         schema: s_schema.Schema,
         *,
         subtypes: Sequence[TypeShell[Type]],
         typemods: Any = None,
         name: Optional[s_name.Name] = None,
         expr: Optional[str] = None,
-    ) -> ArrayTypeShell[Array_T]:
+    ) -> ArrayTypeShell[Self]:
         if not typemods:
             typemods = ([-1],)
 
@@ -1494,9 +1594,9 @@ class Array(
         )
 
     def as_shell(
-        self: Array_T,
+        self: Self,
         schema: s_schema.Schema,
-    ) -> ArrayTypeShell[Array_T]:
+    ) -> ArrayTypeShell[Self]:
         expr = self.get_expr(schema)
         expr_text = expr.text if expr is not None else None
         return type(self).create_shell(
@@ -1822,9 +1922,9 @@ class Tuple(
         )
 
     def as_shell(
-        self: Tuple_T,
+        self: Self,
         schema: s_schema.Schema,
-    ) -> TupleTypeShell[Tuple_T]:
+    ) -> TupleTypeShell[Self]:
         stshells: dict[str, TypeShell[Type]] = {}
 
         for n, st in self.iter_subtypes(schema):
@@ -2006,10 +2106,10 @@ class Tuple(
         return None
 
     def _to_nonpolymorphic(
-        self: Tuple_T,
+        self: Self,
         schema: s_schema.Schema,
         concrete_type: Type,
-    ) -> tuple[s_schema.Schema, Tuple_T]:
+    ) -> tuple[s_schema.Schema, Self]:
         new_types: list[Type] = []
         for st in self.get_subtypes(schema):
             if st.is_polymorphic(schema):
@@ -2431,9 +2531,9 @@ class Range(
         )
 
     def as_shell(
-        self: Range_T,
+        self: Self,
         schema: s_schema.Schema,
-    ) -> RangeTypeShell[Range_T]:
+    ) -> RangeTypeShell[Self]:
         return type(self).create_shell(
             schema,
             subtypes=[st.as_shell(schema) for st in self.get_subtypes(schema)],
@@ -2768,9 +2868,9 @@ class MultiRange(
         )
 
     def as_shell(
-        self: MultiRange_T,
+        self: Self,
         schema: s_schema.Schema,
-    ) -> MultiRangeTypeShell[MultiRange_T]:
+    ) -> MultiRangeTypeShell[Self]:
         return type(self).create_shell(
             schema,
             subtypes=[st.as_shell(schema) for st in self.get_subtypes(schema)],
@@ -2939,7 +3039,7 @@ def type_dummy_expr(
     return s_expr.Expression.from_ast(q, schema)
 
 
-class TypeCommand(sd.ObjectCommand[TypeT]):
+class TypeCommand[TypeT: Type](sd.ObjectCommand[TypeT]):
 
     @classmethod
     def _get_alias_expr(cls, astnode: qlast.CreateAlias) -> qlast.Expr:

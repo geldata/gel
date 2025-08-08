@@ -19,11 +19,11 @@
 from __future__ import annotations
 from typing import (
     Any,
-    Optional,
-    TypeVar,
-    Iterable,
-    Sequence,
     cast,
+    Iterable,
+    Optional,
+    Self,
+    Sequence,
     TYPE_CHECKING,
 )
 
@@ -52,6 +52,7 @@ from . import constraints
 from . import delta as sd
 from . import expr as s_expr
 from . import expraliases as s_expraliases
+from . import futures as s_futures
 from . import inheriting
 from . import name as sn
 from . import objects as so
@@ -416,9 +417,6 @@ def _get_target_name_in_diff(
         return not_none(target).get_name(schema)
 
 
-Pointer_T = TypeVar("Pointer_T", bound="Pointer")
-
-
 class Pointer(referencing.NamedReferencedInheritingObject,
               constraints.ConsistencySubject,
               s_anno.AnnotationSubject,
@@ -459,6 +457,17 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         merge_fn=merge_readonly,
     )
 
+    splat_strategy = so.SchemaField(
+        qltypes.SplatStrategy,
+        allow_ddl_set=True,
+        describe_visibility=(
+            so.DescribeVisibilityPolicy.SHOW_IF_EXPLICIT_OR_DERIVED_NOT_DEFAULT
+        ),
+        coerce=True,
+        default=qltypes.SplatStrategy.Default,
+        compcoef=0.909,
+    )
+
     secret = so.SchemaField(
         bool,
         default=False,
@@ -469,6 +478,13 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         bool,
         default=False,
         compcoef=0.909,
+    )
+
+    linkful = so.SchemaField(
+        bool,
+        default=False,
+        compcoef=0.99,
+        inheritable=False,
     )
 
     # For non-derived pointers this is strongly correlated with
@@ -678,14 +694,14 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         return self.set_field_value(schema, 'target', target)
 
     def get_derived(
-        self: Pointer_T,
+        self: Self,
         schema: s_schema.Schema,
         source: s_sources.Source,
         target: s_types.Type,
         *,
         derived_name_base: Optional[sn.Name] = None,
         **kwargs: Any
-    ) -> tuple[s_schema.Schema, Pointer_T]:
+    ) -> tuple[s_schema.Schema, Self]:
         fqname = self.derive_name(
             schema, source, derived_name_base=derived_name_base)
         ptr = schema.get(fqname, default=None)
@@ -770,8 +786,10 @@ class Pointer(referencing.NamedReferencedInheritingObject,
             'source', 'target', 'id'
         } and (self.is_id_pointer(schema) or self.is_endpoint_pointer(schema))
 
-    def is_property(self, schema: s_schema.Schema) -> bool:
-        raise NotImplementedError
+    @classmethod
+    def is_property(cls) -> bool:
+        # Property overloads
+        return False
 
     def is_link_property(self, schema: s_schema.Schema) -> bool:
         raise NotImplementedError
@@ -1104,9 +1122,6 @@ class PseudoPointer(s_abc.Pointer):
     ) -> bool:
         raise NotImplementedError
 
-    def scalar(self) -> bool:
-        raise NotImplementedError
-
     def material_type(
         self,
         schema: s_schema.Schema,
@@ -1140,16 +1155,18 @@ class ComputableRef:
 
 
 class PointerCommandContext(
-    sd.ObjectCommandContext[Pointer_T],
+    sd.ObjectCommandContext[Pointer],
     s_anno.AnnotationSubjectCommandContext,
     s_rewrites.RewriteSubjectCommandContext,
 ):
     pass
 
 
-class PointerCommandOrFragment(
+class PointerCommandOrFragment[Pointer_T: Pointer](
     referencing.ReferencedObjectCommandBase[Pointer_T]
 ):
+    def is_property_command(self) -> bool:
+        return self.get_schema_metaclass().is_property()
 
     def canonicalize_attributes(
         self,
@@ -1195,7 +1212,26 @@ class PointerCommandOrFragment(
         else:
             inf_target_ref = None
 
+        if (
+            isinstance(self, sd.CreateObject)
+            and not self.is_property_command()
+        ):
+            self.set_attribute_value('linkful', True)
+
         if inf_target_ref is not None:
+            if inf_target_ref.has_intersection():
+                raise errors.UnsupportedFeatureError(
+                    (
+                        f'unsupported type intersection in schema '
+                        f'{inf_target_ref.get_name(schema).name}'
+                    ),
+                    hint=(
+                        f'Type intersections are currently '
+                        f'unsupported as valid link targets.'
+                    ),
+                    span=self.span,
+                )
+
             span = self.get_attribute_span('target')
             self.set_attribute_value(
                 'target',
@@ -1259,6 +1295,9 @@ class PointerCommandOrFragment(
             if isinstance(result_expr.expr, irast.Pointer):
                 result_expr, _ = irutils.collapse_type_intersection(
                     result_expr)
+
+        if self.is_property_command():
+            self.set_attribute_value('linkful', irutils.is_linkful(orig_expr))
 
         # Process a computable pointer which potentially could be an
         # aliased link that should inherit link properties.
@@ -1583,7 +1622,7 @@ class PointerCommandOrFragment(
             raise NotImplementedError(f'unhandled field {field.name!r}')
 
 
-class PointerCommand(
+class PointerCommand[Pointer_T: Pointer](
     referencing.NamedReferencedInheritingObjectCommand[Pointer_T],
     constraints.ConsistencySubjectCommand[Pointer_T],
     s_anno.AnnotationSubjectCommand[Pointer_T],
@@ -1810,7 +1849,7 @@ class PointerCommand(
                 s_pointer = schema.get_by_id(pointer.ptrref.id, type=Pointer)
                 card = s_pointer.get_cardinality(schema)
 
-                if s_pointer.is_property(schema) and card.is_multi():
+                if s_pointer.is_property() and card.is_multi():
                     raise errors.SchemaDefinitionError(
                         f"default expression cannot refer to multi properties "
                         "of inserted object",
@@ -1818,7 +1857,7 @@ class PointerCommand(
                         hint="this is a temporary implementation restriction",
                     )
 
-                if not s_pointer.is_property(schema):
+                if not s_pointer.is_property():
                     raise errors.SchemaDefinitionError(
                         f"default expression cannot refer to links "
                         "of inserted object",
@@ -2023,7 +2062,7 @@ class PointerCommand(
                 self.discard_attribute('expr')
 
 
-class CreatePointer(
+class CreatePointer[Pointer_T: Pointer](
     referencing.CreateReferencedInheritingObject[Pointer_T],
     PointerCommand[Pointer_T],
 ):
@@ -2068,7 +2107,7 @@ class CreatePointer(
         return cmd
 
 
-class AlterPointer(
+class AlterPointer[Pointer_T: Pointer](
     referencing.AlterReferencedInheritingObject[Pointer_T],
     PointerCommand[Pointer_T],
 ):
@@ -2162,6 +2201,8 @@ class AlterPointer(
             and not self.is_attribute_inherited('expr')
             and self.get_attribute_value('expr') is None
         ):
+            self.set_attribute_value('linkful', not self.is_property_command())
+
             old_expr = self.get_orig_attribute_value('expr')
             pointer = schema.get(self.classname, type=Pointer)
             if old_expr is None:
@@ -2242,7 +2283,7 @@ class AlterPointer(
         )
 
 
-class DeletePointer(
+class DeletePointer[Pointer_T: Pointer](
     referencing.DeleteReferencedInheritingObject[Pointer_T],
     PointerCommand[Pointer_T],
 ):
@@ -2293,7 +2334,7 @@ class DeletePointer(
         return commands
 
 
-class SetPointerType(
+class SetPointerType[Pointer_T: Pointer](
     referencing.ReferencedInheritingObjectCommand[Pointer_T],
     inheriting.AlterInheritingObjectFragment[Pointer_T],
     sd.AlterSpecialObjectField[Pointer_T],
@@ -2537,7 +2578,7 @@ class SetPointerType(
                 action=self.get_friendly_description(schema=schema),
             )
 
-            if orig_target is not None and scls.is_property(schema):
+            if orig_target is not None and scls.is_property():
                 if cleanup_op := orig_target.as_type_delete_if_unused(schema):
                     parent_op = self.get_parent_op(context)
                     parent_op.add_caused(cleanup_op)
@@ -2596,7 +2637,7 @@ class SetPointerType(
             )
 
 
-class AlterPointerUpperCardinality(
+class AlterPointerUpperCardinality[Pointer_T: Pointer](
     referencing.ReferencedInheritingObjectCommand[Pointer_T],
     inheriting.AlterInheritingObjectFragment[Pointer_T],
     sd.AlterSpecialObjectField[Pointer_T],
@@ -2860,7 +2901,7 @@ class AlterPointerUpperCardinality(
             )
 
 
-class AlterPointerLowerCardinality(
+class AlterPointerLowerCardinality[Pointer_T: Pointer](
     referencing.ReferencedInheritingObjectCommand[Pointer_T],
     inheriting.AlterInheritingObjectFragment[Pointer_T],
     sd.AlterSpecialObjectField[Pointer_T],
@@ -3217,16 +3258,17 @@ def get_or_create_intersection_pointer(
     if len(components) == 1:
         return schema, components[0]
 
+    required = any(component.get_required(schema) for component in components)
     targets: Sequence[s_types.Type]
     targets = list(filter(None, [p.get_target(schema) for p in components]))
     targets = utils.simplify_intersection_types(schema, targets)
-    schema, target = utils.ensure_intersection_type(
+    schema, target, _ = utils.ensure_intersection_type(
         schema, targets, module=modname)
 
-    cardinality = qltypes.SchemaCardinality.One
+    cardinality = qltypes.SchemaCardinality.Many
     for component in components:
-        if component.get_cardinality(schema) is qltypes.SchemaCardinality.Many:
-            cardinality = qltypes.SchemaCardinality.Many
+        if component.get_cardinality(schema) is qltypes.SchemaCardinality.One:
+            cardinality = qltypes.SchemaCardinality.One
             break
 
     metacls = type(components[0])
@@ -3242,6 +3284,7 @@ def get_or_create_intersection_pointer(
         attrs={
             'intersection_of': so.ObjectSet.create(schema, components),
             'cardinality': cardinality,
+            'required': required,
         },
         transient=transient,
     )
@@ -3280,3 +3323,15 @@ def get_or_create_intersection_pointer(
         )
 
     return schema, result
+
+
+@s_futures.register_handler('no_linkful_computed_splats')
+def toggle_no_linkful_computed_splats(
+    cmd: s_futures.FutureBehaviorCommand,
+    schema: s_schema.Schema,
+    context: sd.CommandContext,
+    on: bool,
+) -> tuple[s_schema.Schema, sd.Command]:
+    # Nothing to do because splats can't appear in functions
+    group = sd.CommandGroup()
+    return schema, group

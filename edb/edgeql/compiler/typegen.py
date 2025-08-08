@@ -200,7 +200,7 @@ def _ql_typeexpr_get_types(
         return (None, True, [stype])
 
     elif isinstance(ql_t, qlast.TypeOp):
-        if ql_t.op in ['|', '&']:
+        if ql_t.op in [qlast.TypeOpName.OR, qlast.TypeOpName.AND]:
             (left_op, left_leaf, left_types) = (
                 _ql_typeexpr_get_types(ql_t.left, ctx=ctx)
             )
@@ -216,13 +216,13 @@ def _ql_typeexpr_get_types(
             # "typeof" and is a list of object types anyway.
             if left_leaf and not left_types[0].is_object_type():
                 raise errors.UnsupportedFeatureError(
-                    f'cannot use type operator {ql_t.op!r} with non-object '
-                    f'type {left_types[0].get_displayname(ctx.env.schema)}',
+                    f"cannot use type operator '{ql_t.op}' with non-object "
+                    f"type {left_types[0].get_displayname(ctx.env.schema)}",
                     span=ql_t.left.span)
             if right_leaf and not right_types[0].is_object_type():
                 raise errors.UnsupportedFeatureError(
-                    f'cannot use type operator {ql_t.op!r} with non-object '
-                    f'type {right_types[0].get_displayname(ctx.env.schema)}',
+                    f"cannot use type operator '{ql_t.op}' with non-object "
+                    f"type {right_types[0].get_displayname(ctx.env.schema)}",
                     span=ql_t.right.span)
 
             # if an operand is either a single type or uses the same operator,

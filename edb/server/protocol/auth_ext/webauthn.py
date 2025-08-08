@@ -31,7 +31,6 @@ from webauthn.helpers import (
 )
 
 from edb.errors import ConstraintViolationError
-from edb.server.protocol import execute
 
 from . import config, data, errors, util, local
 
@@ -68,6 +67,7 @@ class Client(local.Client):
                     name=cfg.name,
                     relying_party_origin=cfg.relying_party_origin,
                     require_verification=cfg.require_verification,
+                    verification_method=cfg.verification_method,
                 )
 
         raise errors.MissingConfiguration(
@@ -106,7 +106,7 @@ class Client(local.Client):
     async def _maybe_get_existing_user_handle(
         self, email: str,
     ) -> Optional[bytes]:
-        result = await execute.parse_execute_json(
+        result = await util.json_query(
             self.db,
             """
 with
@@ -119,8 +119,6 @@ select assert_single((select distinct factors.user_handle));""",
             variables={
                 "email": email,
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
 
         result_json = json.loads(result.decode())
@@ -135,7 +133,7 @@ select assert_single((select distinct factors.user_handle));""",
         challenge: bytes,
         user_handle: bytes,
     ) -> None:
-        await execute.parse_execute_json(
+        await util.json_query(
             self.db,
             """
 with
@@ -152,8 +150,6 @@ insert ext::auth::WebAuthnRegistrationChallenge {
                 "user_handle": user_handle,
                 "email": email,
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
 
     async def register(
@@ -179,7 +175,7 @@ insert ext::auth::WebAuthnRegistrationChallenge {
         )
 
         try:
-            result = await execute.parse_execute_json(
+            result = await util.json_query(
                 self.db,
                 """
 with
@@ -207,15 +203,9 @@ select factor { ** };""",
                         registration_verification.credential_public_key
                     ),
                 },
-                cached_globally=True,
-                query_tag='gel/auth',
             )
-        except Exception as e:
-            exc = await execute.interpret_error(e, self.db)
-            if isinstance(exc, ConstraintViolationError):
-                raise errors.UserAlreadyRegistered()
-            else:
-                raise exc
+        except ConstraintViolationError:
+            raise errors.UserAlreadyRegistered()
 
         result_json = json.loads(result.decode())
         assert len(result_json) == 1
@@ -229,7 +219,7 @@ select factor { ** };""",
         email: str,
         user_handle: bytes,
     ) -> WebAuthnRegistrationChallenge:
-        result = await execute.parse_execute_json(
+        result = await util.json_query(
             self.db,
             """
 with
@@ -246,8 +236,6 @@ filter .email = email and .user_handle = user_handle;""",
                 "email": email,
                 "user_handle": user_handle,
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
         result_json = json.loads(result.decode())
         assert len(result_json) == 1
@@ -265,7 +253,7 @@ filter .email = email and .user_handle = user_handle;""",
         email: str,
         user_handle: bytes,
     ) -> None:
-        await execute.parse_execute_json(
+        await util.json_query(
             self.db,
             """
 with
@@ -277,7 +265,6 @@ filter .email = email and .user_handle = user_handle;""",
                 "email": email,
                 "user_handle": user_handle,
             },
-            query_tag='gel/auth',
         )
 
     async def create_authentication_options_for_email(
@@ -287,7 +274,7 @@ filter .email = email and .user_handle = user_handle;""",
         email: str,
     ) -> tuple[str, bytes]:
         # Find credential IDs by email
-        result = await execute.parse_execute_json(
+        result = await util.json_query(
             self.db,
             """
 select ext::auth::WebAuthnFactor {
@@ -298,8 +285,6 @@ filter .email = <str>$email;""",
             variables={
                 "email": email,
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
         result_json = json.loads(result.decode())
         if len(result_json) == 0:
@@ -326,7 +311,7 @@ filter .email = <str>$email;""",
             allow_credentials=credential_ids,
         )
 
-        await execute.parse_execute_json(
+        await util.json_query(
             self.db,
             """
 with
@@ -356,7 +341,6 @@ else (
                 "user_handle": user_handle,
                 "email": email,
             },
-            query_tag='gel/auth',
         )
 
         return (
@@ -371,7 +355,7 @@ else (
     ) -> bool:
         credential = parse_authentication_credential_json(assertion)
 
-        result = await execute.parse_execute_json(
+        result = await util.json_query(
             self.db,
             """
 with
@@ -387,8 +371,6 @@ select (factor.verified_at <= std::datetime_current()) ?? false;""",
                 "email": email,
                 "credential_id": credential.raw_id,
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
         result_json = json.loads(result.decode())
         return bool(result_json[0])
@@ -398,7 +380,7 @@ select (factor.verified_at <= std::datetime_current()) ?? false;""",
         email: str,
         credential_id: bytes,
     ) -> data.WebAuthnAuthenticationChallenge:
-        result = await execute.parse_execute_json(
+        result = await util.json_query(
             self.db,
             """
 with
@@ -432,8 +414,6 @@ filter .factors.email = email and .factors.credential_id = credential_id;""",
                 "email": email,
                 "credential_id": credential_id,
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
         result_json = json.loads(result.decode())
         if len(result_json) == 0:
@@ -451,7 +431,7 @@ filter .factors.email = email and .factors.credential_id = credential_id;""",
         email: str,
         credential_id: bytes,
     ) -> None:
-        await execute.parse_execute_json(
+        await util.json_query(
             self.db,
             """
 with
@@ -463,7 +443,6 @@ filter .factors.email = email and .factors.credential_id = credential_id;""",
                 "email": email,
                 "credential_id": credential_id,
             },
-            query_tag='gel/auth',
         )
 
     async def authenticate(
@@ -513,7 +492,7 @@ filter .factors.email = email and .factors.credential_id = credential_id;""",
         self,
         credential_id: bytes,
     ) -> Optional[data.EmailFactor]:
-        result = await execute.parse_execute_json(
+        result = await util.json_query(
             self.db,
             """
 with
@@ -529,7 +508,6 @@ select ext::auth::WebAuthnFactor {
             variables={
                 "credential_id": credential_id,
             },
-            query_tag='gel/auth',
         )
         result_json = json.loads(result.decode())
         if len(result_json) == 0:

@@ -20,6 +20,7 @@
 from __future__ import annotations
 from typing import (
     Any,
+    Iterator,
     Optional,
     Sequence,
 )
@@ -39,17 +40,22 @@ from edb.common import uuidgen
 
 from edb.schema import ddl as s_ddl
 from edb.schema import delta as sd
+from edb.schema import extensions as s_exts
 from edb.schema import functions as s_func
 from edb.schema import links as s_links
 from edb.schema import name as sn
 from edb.schema import objtypes as s_objtypes
 from edb.schema import reflection as s_refl
+from edb.schema import scalars as s_scalars
 from edb.schema import schema as s_schema
+from edb.schema import types as s_types
+from edb.schema import version as s_ver
 
 from edb.server import args as edbargs
 from edb.server import bootstrap
 from edb.server import config
 from edb.server import compiler as edbcompiler
+from edb.server.compiler import ddl as compiler_ddl
 from edb.server import defines as edbdef
 from edb.server import instdata
 from edb.server import pgcluster
@@ -57,6 +63,7 @@ from edb.server import pgcon
 
 from edb.pgsql import common as pg_common
 from edb.pgsql import dbops
+from edb.pgsql import patches as pg_patches
 from edb.pgsql import metaschema
 from edb.pgsql import trampoline
 
@@ -64,26 +71,6 @@ from edb.pgsql import trampoline
 logger = logging.getLogger('edb.server')
 
 PGCon = bootstrap.PGConnectionProxy | pgcon.PGConnection
-
-
-async def _load_schema(
-    ctx: bootstrap.BootstrapContext, state: edbcompiler.CompilerState
-) -> s_schema.ChainedSchema:
-    assert state.global_intro_query
-    json_data = await ctx.conn.sql_fetch_val(
-        state.global_intro_query.encode('utf-8'))
-    global_schema = s_refl.parse_into(
-        base_schema=state.std_schema,
-        schema=s_schema.EMPTY_SCHEMA,
-        data=json_data,
-        schema_class_layout=state.schema_class_layout,
-    )
-
-    return s_schema.ChainedSchema(
-        state.std_schema,
-        s_schema.EMPTY_SCHEMA,
-        global_schema,
-    )
 
 
 def _is_stdlib_target(
@@ -104,13 +91,13 @@ def _is_stdlib_target(
     return t.get_name(schema).get_module_name() in s_schema.STD_MODULES
 
 
-def _compile_schema_fixup(
+def _compile_inheritance_schema_fixup(
     ctx: bootstrap.BootstrapContext,
+    current_block: dbops.PLBlock,
     schema: s_schema.ChainedSchema,
     keys: dict[str, Any],
-) -> str:
-    """Compile any schema-specific fixes that need to be applied."""
-    current_block = dbops.PLTopBlock()
+) -> None:
+    """Compile schema-specific fixups for added stdlib types."""
     backend_params = ctx.cluster.get_runtime_params()
 
     # Recompile functions that reference stdlib types (like
@@ -195,12 +182,172 @@ def _compile_schema_fixup(
         )
         plan.generate(current_block)
 
-    return current_block.to_string()
+
+def _compile_schema_fixup(
+    ctx: bootstrap.BootstrapContext,
+    schema: s_schema.ChainedSchema,
+    keys: dict[str, Any],
+) -> dbops.PLBlock:
+    """Compile any schema-specific fixes that need to be applied."""
+    current_block = dbops.PLTopBlock()
+    _compile_inheritance_schema_fixup(ctx, current_block, schema, keys)
+
+    # Remove pointless triggers that existed before 6.8
+    compiler_ddl.remove_pointless_triggers(schema).generate(current_block)
+
+    return current_block
+
+
+async def _collect_6x_upgrade_patches(
+    ctx: bootstrap.BootstrapContext,
+    schema: s_schema.Schema,
+) -> tuple[list[qlast.Command], bool, bool]:
+    from edb.pgsql import patches_6x
+
+    cmds: list[qlast.Command] = []
+
+    # If that table doesn't exist, we aren't upgrading from 6.x, so
+    # don't worry. (Which means, at this point, a 7.x -> dev/nightly
+    # upgrade.)
+    try:
+        res = await ctx.conn.sql_fetch_val(
+            f"""
+            SELECT json::json FROM edgedbinstdata_v6_2f20b3fed0.instdata
+            WHERE key = 'num_patches'
+            """.encode('utf-8'),
+        )
+    except pgcon.BackendError:
+        return [], False, False
+
+    needs_config = False
+    jnum = json.loads(res)
+    for kind, patch in patches_6x.PATCHES[jnum:]:
+
+        if not kind.startswith('edgeql+user_ext'):
+            continue
+        # Only run a userext update if the extension we are trying to
+        # update is installed.
+        extension_name = kind.split('|')[-1]
+        extension = schema.get_global(
+            s_exts.Extension, extension_name, default=None)
+        if not extension:
+            continue
+
+        if '+config' in kind:
+            needs_config |= True
+
+        for ddl_cmd in edgeql.parse_block(patch):
+            if not isinstance(ddl_cmd, qlast.DDLCommand):
+                assert isinstance(ddl_cmd, qlast.Query)
+                ddl_cmd = qlast.DDLQuery(query=ddl_cmd)
+            cmds.append(ddl_cmd)
+
+    # 6.2 introduced a change to EmbeddingModel (the addition of a new
+    # default value) that requires a repair to sync the user schema up
+    # with, since ai index annotations get copied into objects.
+    needs_repair = bool(
+        jnum <= patches_6x.PATCHES.index(('ext-pkg', 'ai'))
+        and schema.get_global(s_exts.Extension, 'ai', default=None)
+    )
+
+    return cmds, needs_repair, needs_config
+
+
+def _subcommands_preorder(cmd: sd.Command) -> Iterator[sd.Command]:
+    yield cmd
+    for sub in cmd.get_subcommands():
+        yield from _subcommands_preorder(sub)
+
+
+async def _apply_ddl_schema_storage(
+    ddl_cmd: qlast.Command,
+    ctx: bootstrap.BootstrapContext,
+    backend_params,
+    keys: dict[str, Any],
+    compilerctx: edbcompiler.CompileContext,
+    schema: s_schema.Schema,
+    schema_object_ids: dict[tuple[sn.Name, Any], uuidgen.UUID],
+    fake_backend_ids: bool=False,
+
+) -> tuple[s_schema.ChainedSchema, str]:
+    # applies ddl schema storage but not the real ddl
+    # returns that, though
+    current_block = dbops.PLTopBlock()
+
+    if debug.flags.sdl_loading:
+        ddl_cmd.dump_edgeql()
+
+    assert isinstance(ddl_cmd, qlast.DDLCommand)
+    delta_command = s_ddl.delta_from_ddl(
+        ddl_cmd, modaliases={}, schema=schema,
+        schema_object_ids=schema_object_ids,
+        **keys,
+    )
+    # Prune any AlterSchemaVersion commands, because they won't work,
+    # since all the compile_schema_storage_in_delta commands run right
+    # away, while if we run a fixup block, it is during finalize.
+    sub: sd.Command
+    for sub in delta_command.get_subcommands(
+        type=s_ver.AlterSchemaVersion
+    ):
+        delta_command.discard(sub)
+    # This hack is quite frustrating: since the actual changes to the
+    # pg schema (for extensions) happen *after* the reflection schema
+    # updates (during finalization), backend_ids for new scalars
+    # aren't ready, so we force reflection to *not* try computing them
+    # now, and we'll get them later.
+    if fake_backend_ids:
+        for sub in _subcommands_preorder(delta_command):
+            if not isinstance(sub, sd.CreateObject):
+                continue
+            mcls = sub.get_schema_metaclass()
+            if (
+                issubclass(mcls, (s_scalars.ScalarType, s_types.Collection))
+                and not issubclass(mcls, s_types.CollectionExprAlias)
+            ):
+                sub.set_attribute_value('backend_id', 0)
+
+    schema, plan, tplan = bootstrap._process_delta_params(
+        delta_command,
+        schema,
+        backend_params,
+        stdmode=False,
+        **keys,
+    )
+
+    compilerctx.state.current_tx().update_schema(schema)
+
+    fixup_block = dbops.PLTopBlock()
+    plan.generate(fixup_block)
+    # # ???
+    # tplan.generate(current_block)
+    fixup_ddl = fixup_block.to_string()
+
+    context = sd.CommandContext(**keys)
+    edbcompiler.compile_schema_storage_in_delta(
+        ctx=compilerctx,
+        delta=plan,
+        block=current_block,
+        context=context,
+    )
+
+    # TODO: Should we batch them all up?
+    patch = current_block.to_string()
+
+    if debug.flags.delta_execute:
+        debug.header('Patch Script')
+        debug.dump_code(patch, lexer='sql')
+
+    await ctx.conn.sql_execute(patch.encode('utf-8'))
+
+    assert isinstance(schema, s_schema.ChainedSchema)
+    return schema, fixup_ddl
 
 
 async def _upgrade_one(
     ctx: bootstrap.BootstrapContext,
     state: edbcompiler.CompilerState,
+    global_schema: s_schema.Schema,
     upgrade_data: Optional[Any],
 ) -> None:
     if not upgrade_data:
@@ -219,7 +366,11 @@ async def _upgrade_one(
     }
 
     # Load the schemas
-    schema = await _load_schema(ctx, state)
+    schema = s_schema.ChainedSchema(
+        state.std_schema,
+        s_schema.EMPTY_SCHEMA,
+        global_schema,
+    )
 
     compilerctx = edbcompiler.new_compiler_context(
         compiler_state=state,
@@ -231,48 +382,52 @@ async def _upgrade_one(
         testmode=True,
     )
 
-    # Apply the DDL, but *only* execute the schema storage part!!
+    # Apply the DDL, but usually *only* execute the schema storage part!!
+    # For the actual core DDL, only do schema storage.
+    # Sometimes we have to run extension patch code, and then we
+    # need to run the actual code.
     for ddl_cmd in edgeql.parse_block(ddl):
-        current_block = dbops.PLTopBlock()
-
-        if debug.flags.sdl_loading:
-            ddl_cmd.dump_edgeql()
-
-        assert isinstance(ddl_cmd, qlast.DDLCommand)
-        delta_command = s_ddl.delta_from_ddl(
-            ddl_cmd, modaliases={}, schema=schema,
-            schema_object_ids=schema_object_ids,
-            **keys,
+        schema, _ = await _apply_ddl_schema_storage(
+            ddl_cmd,
+            ctx, backend_params, keys, compilerctx, schema, schema_object_ids
         )
-        schema, plan, _ = bootstrap._process_delta_params(
-            delta_command,
-            schema,
+
+    schema_fixup = ''
+    upgrade_patches, needs_repair, needs_config = (
+        await _collect_6x_upgrade_patches(ctx, schema)
+    )
+    for ddl_cmd in upgrade_patches:
+        schema, fixup = await _apply_ddl_schema_storage(
+            ddl_cmd,
+            ctx, backend_params, keys, compilerctx, schema, schema_object_ids,
+            fake_backend_ids=True,
+        )
+        schema_fixup += fixup
+
+    if upgrade_patches:
+        version_key = pg_patches.get_version_key(len(pg_patches.PATCHES))
+        sysqueries = json.loads(await instdata.get_instdata(
+            ctx.conn, f'sysqueries{version_key}', 'json'))
+        schema_fixup += sysqueries['backend_id_fixup']
+    if needs_config:
+        existing_view_columns = await bootstrap.get_existing_view_columns(
+            ctx.conn)
+        cfg_block = dbops.PLTopBlock()
+        metaschema.get_config_views(schema, existing_view_columns).generate(
+            cfg_block)
+        schema_fixup += cfg_block.to_string()
+
+    # If we need to do a schema, repair... do it
+    if needs_repair:
+        repair = bootstrap.prepare_repair_patch(
+            state.std_schema,
+            state.refl_schema,
+            schema.get_top_schema(),
+            schema.get_global_schema(),
+            state.schema_class_layout,
             backend_params,
-            stdmode=False,
-            **keys,
         )
-
-        compilerctx.state.current_tx().update_schema(schema)
-
-        context = sd.CommandContext(**keys)
-        edbcompiler.compile_schema_storage_in_delta(
-            ctx=compilerctx,
-            delta=plan,
-            block=current_block,
-            context=context,
-        )
-
-        # TODO: Should we batch them all up?
-        patch = current_block.to_string()
-
-        if debug.flags.delta_execute:
-            debug.header('Patch Script')
-            debug.dump_code(patch, lexer='sql')
-
-        try:
-            await ctx.conn.sql_execute(patch.encode('utf-8'))
-        except Exception:
-            raise
+        schema_fixup += repair
 
     # Refresh the pg_catalog materialized views
     current_block = dbops.PLTopBlock()
@@ -300,7 +455,7 @@ async def _upgrade_one(
     ''').encode('utf-8'))
 
     # Compile the fixup script for the schema and stash it away
-    schema_fixup = _compile_schema_fixup(ctx, schema, keys)
+    schema_fixup += _compile_schema_fixup(ctx, schema, keys).to_string()
     await bootstrap._store_static_text_cache(
         ctx,
         f'schema_fixup_query',
@@ -405,6 +560,7 @@ async def _get_namespaces(
 
 async def _finalize_one(
     ctx: bootstrap.BootstrapContext,
+    database: str,
 ) -> None:
     conn = ctx.conn
 
@@ -423,6 +579,14 @@ async def _finalize_one(
     await conn.sql_execute(trampoline_query)
     if fixup_query:
         await conn.sql_execute(fixup_query)
+
+    # For the template database (which is upgraded *last*, after all
+    # others have succeeded), run the commands to update the global
+    # schema. (To populate the extension packages.)
+    if database == edbdef.EDGEDB_TEMPLATE_DB:
+        global_schema_update_query = await instdata.get_instdata(
+            conn, 'global_schema_update_query', 'text')
+        await conn.sql_execute(global_schema_update_query)
 
     namespaces = await _get_namespaces(ctx.conn)
 
@@ -470,6 +634,34 @@ async def _get_databases(
     )
 
     return databases
+
+
+async def _get_global_schema(
+    ctx: bootstrap.BootstrapContext,
+    state: edbcompiler.CompilerState,
+) -> s_schema.FlatSchema:
+    cluster = ctx.cluster
+
+    tpl_db = cluster.get_db_name(edbdef.EDGEDB_TEMPLATE_DB)
+    conn = await cluster.connect(
+        source_description="inplace upgrade",
+        database=tpl_db
+    )
+
+    # FIXME: Use the sys query instead?
+    assert state.global_intro_query
+    try:
+        json_data = await conn.sql_fetch_val(
+            state.global_intro_query.encode('utf-8'))
+    finally:
+        conn.terminate()
+
+    return s_refl.parse_into(
+        base_schema=state.std_schema,
+        schema=s_schema.EMPTY_SCHEMA,
+        data=json_data,
+        schema_class_layout=state.schema_class_layout,
+    )
 
 
 async def _rollback_one(
@@ -526,8 +718,11 @@ async def _upgrade_all(
 ) -> None:
     cluster = ctx.cluster
 
-    state = (await bootstrap._bootstrap(ctx)).state
+    stdlib, compiler = (await bootstrap._bootstrap(ctx))
+    state = compiler.state
     databases = await _get_databases(ctx)
+
+    global_schema = await _get_global_schema(ctx, state)
 
     assert ctx.args.inplace_upgrade_prepare
     with open(ctx.args.inplace_upgrade_prepare) as f:
@@ -552,6 +747,7 @@ async def _upgrade_all(
             await _upgrade_one(
                 ctx=subctx,
                 state=state,
+                global_schema=global_schema,
                 upgrade_data=upgrade_data.get(database),
             )
         finally:
@@ -584,7 +780,7 @@ async def _finalize_all(
                 if database == inject_failure_on:
                     raise AssertionError(f'failure injected on {database}')
 
-                await _finalize_one(subctx)
+                await _finalize_one(subctx, database)
                 await conn.sql_execute(final_command)
                 if finish_message:
                     logger.info(f"{finish_message} database '{database}'")

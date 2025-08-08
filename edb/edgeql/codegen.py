@@ -135,7 +135,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         parent: Optional[qlast.Base] = node._parent
         return (
             parent is not None
-            and not isinstance(parent, qlast.DDL)
+            and not isinstance(parent, (qlast.Commands, qlast.DDL))
             # Non-union FOR bodies can't have parens
             and not (
                 isinstance(parent, qlast.ForQuery)
@@ -208,6 +208,9 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
             self.visit(node.limit)
             self._block_ws(-1, newlines)
 
+    def visit_Commands(self, node: qlast.Commands) -> None:
+        self.visit_list(node.commands, separator=';', terminator=';')
+
     def visit_AliasedExpr(self, node: qlast.AliasedExpr) -> None:
         self.write(ident_to_str(node.alias))
         self.write(' := ')
@@ -265,7 +268,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
 
         self.new_lines = 1
         self._write_keywords('SET ')
-        self._visit_shape(node.shape)
+        self._visit_shape(node.shape, always_emit_braces=True)
 
         if parenthesise:
             self.write(')')
@@ -494,7 +497,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         parenthesize = not (
             isinstance(parent, qlast.SelectQuery)
             and parent.implicit
-            and parent._parent is None  # type: ignore
+            and isinstance(parent._parent, qlast.Commands)  # type: ignore
         )
         if parenthesize:
             self.write('(')
@@ -564,7 +567,8 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
                         qlast.Tuple,
                         qlast.NamedTuple,
                         qlast.TypeIntersection,
-                        qlast.Parameter,
+                        qlast.QueryParameter,
+                        qlast.FunctionParameter,
                     ),
                 ):
                     self.visit(e)
@@ -581,8 +585,12 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
             self.write(' ')
         self._visit_shape(node.elements)
 
-    def _visit_shape(self, shape: Sequence[qlast.ShapeElement]) -> None:
-        if shape:
+    def _visit_shape(
+        self,
+        shape: Sequence[qlast.ShapeElement],
+        always_emit_braces: bool=False,
+    ) -> None:
+        if shape or always_emit_braces:
             self.write('{')
             self._block_ws(1)
             self.visit_list(shape)
@@ -685,7 +693,10 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
                 )
             self.visit(node.compexpr)
 
-    def visit_Parameter(self, node: qlast.Parameter) -> None:
+    def visit_QueryParameter(self, node: qlast.QueryParameter) -> None:
+        self.write(param_to_str(node.name))
+
+    def visit_FunctionParameter(self, node: qlast.FunctionParameter) -> None:
         self.write(param_to_str(node.name))
 
     def visit_Placeholder(self, node: qlast.Placeholder) -> None:
@@ -2318,7 +2329,7 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
             self.write(')')
         self._visit_DropObject(node, 'FUNCTION', after_name=after_name)
 
-    def visit_FuncParam(self, node: qlast.FuncParam) -> None:
+    def visit_FuncParamDecl(self, node: qlast.FuncParamDecl) -> None:
         kind = node.kind.to_edgeql()
         if kind:
             self._write_keywords(kind, '')
@@ -2464,6 +2475,15 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
 
     def visit_DropGlobal(self, node: qlast.DropGlobal) -> None:
         self._visit_DropObject(node, 'GLOBAL')
+
+    def visit_CreatePermission(self, node: qlast.CreatePermission) -> None:
+        self._visit_CreateObject(node, 'PERMISSION')
+
+    def visit_AlterPermission(self, node: qlast.AlterPermission) -> None:
+        self._visit_AlterObject(node, 'PERMISSION')
+
+    def visit_DropPermission(self, node: qlast.DropPermission) -> None:
+        self._visit_DropObject(node, 'PERMISSION')
 
     def visit_ConfigSet(self, node: qlast.ConfigSet) -> None:
         if node.scope == qltypes.ConfigScope.GLOBAL:

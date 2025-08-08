@@ -1117,6 +1117,28 @@ class TestSchema(tb.BaseSchemaLoadTest):
           scalar type TwoThings extending enum<One, Two>;
        """
 
+    def test_schema_permissions_01(self):
+        """
+          permission foo;
+       """
+
+    def test_schema_permissions_02(self):
+        # Check tracing dependency works
+        """
+          permission foo;
+          alias bar := global foo;
+       """
+
+    def test_schema_permissions_03(self):
+        # Check tracing dependency works
+        """
+          function test() -> int64 {
+              using (1);
+              required_permissions := foo;
+          };
+          permission foo;
+       """
+
     def test_schema_hard_sorting_01(self):
         # This is hard to sort properly because we don't understand the types.
         # From #4683.
@@ -2127,6 +2149,56 @@ class TestSchema(tb.BaseSchemaLoadTest):
         self.assertIsNone(A_tf_d.maybe_get_ptr(schema, 'd_prop1'))
         self.assertIsNone(A_tf_d.maybe_get_ptr(schema, 'd_prop2'))
         A_tf_df.getptr(schema, s_name.UnqualName('df_prop'))
+
+    def test_schema_advanced_function_params_01(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            function get_value(x: A | B) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_02(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            function get_value(x: A & B) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_03(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A | B) | (C | D)) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_04(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A & B) & (C & D)) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_05(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A & B) | (C & D)) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_06(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A | B) & (C | D)) -> int64 using (x.value);
+        """
 
     def test_schema_ancestor_propagation_on_sdl_migration(self):
         schema = self.load_schema("""
@@ -3733,6 +3805,83 @@ class TestSchema(tb.BaseSchemaLoadTest):
             errors.InvalidReferenceError,
             "abs' does not exist",
         )
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_01(self):
+        """
+        global foo: array<array<int64>>;
+        """
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_02(self):
+        """
+        type Foo;
+        global foo: array<array<Foo>>;
+        """
+
+    def test_schema_array_of_array_03(self):
+        """
+        global foo := [[1]];
+        """
+
+    def test_schema_array_of_array_04(self):
+        """
+        alias foo := [[1]];
+        """
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_05(self):
+        """
+        type Foo {
+            foo: array<array<int64>>;
+        }
+        """
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_06(self):
+        """
+        type Foo {
+            foo: array<array<Foo>>;
+        }
+        """
+
+    def test_schema_array_of_array_07(self):
+        """
+        type Foo {
+            foo := [[1]];
+        };
+        """
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_08(self):
+        """
+        function foo(x: array<array<int64>>) -> int64 using (1);
+        """
+
+    @tb.must_fail(
+        errors.UnsupportedFeatureError,
+        "nested arrays are not supported",
+    )
+    def test_schema_array_of_array_09(self):
+        """
+        type Foo;
+        function foo(x: array<array<Foo>>) -> int64 using (1);
+        """
 
 
 class TestGetMigration(tb.BaseSchemaLoadTest):
@@ -7577,6 +7726,31 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
             };
         """])
 
+    def test_schema_migrations_equivalence_linkprops_15(self):
+        self._assert_migration_equivalence([r"""
+            abstract link link_with_value {
+                single property value := 'lol';
+                index on (__subject__@value);
+            }
+            type Tgt;
+            type Foo {
+                link l1 extending link_with_value -> Tgt;
+            };
+            type Bar extending Foo;
+            type Baz extending Bar;
+        """, r"""
+            abstract link link_with_value {
+                single property value := 12;
+                index on (__subject__@value);
+            }
+            type Tgt;
+            type Foo {
+                link l1 extending link_with_value -> Tgt;
+            };
+            type Bar extending Foo;
+            type Baz extending Bar;
+        """])
+
     def test_schema_migrations_equivalence_annotation_01(self):
         self._assert_migration_equivalence([r"""
             type Base;
@@ -7984,7 +8158,7 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
         """, r"""
         """])
 
-    def test_schema_migrations_equivalence_constraint_05(self):
+    def test_schema_migrations_equivalence_constraint_05a(self):
         self._assert_migration_equivalence([r"""
             abstract constraint not_bad {
                 using (__subject__ != "bad" and __subject__ != "terrible")
@@ -8000,6 +8174,33 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
             abstract constraint not_bad {
                 using (__subject__ != "bad" and __subject__ != "awful")
             }
+
+            type Foo {
+                property x -> str {
+                    constraint not_bad;
+                }
+            }
+            type Bar extending Foo;
+        """])
+
+    def test_schema_migrations_equivalence_constraint_05b(self):
+        self._assert_migration_equivalence([r"""
+            abstract constraint not_bad_1 {
+                using (__subject__ != "bad" and __subject__ != "terrible")
+            }
+            abstract constraint not_bad extending not_bad_1;
+
+            type Foo {
+                property x -> str {
+                    constraint not_bad;
+                }
+            }
+            type Bar extending Foo;
+        """, r"""
+            abstract constraint not_bad_1 {
+                using (__subject__ != "bad" and __subject__ != "terrible")
+            }
+            abstract constraint not_bad extending not_bad_1;
 
             type Foo {
                 property x -> str {
@@ -8283,6 +8484,32 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
             schema2.get_functions('default::f2'),
             "function got deleted/recreated and should have been altered",
         )
+
+    def test_schema_migrations_equivalence_permissions_02(self):
+        self._assert_migration_equivalence([
+            '''
+                permission foo;
+                global bar := global foo;
+            ''',
+            '''
+                global bar := 1;
+            ''',
+        ])
+
+    def test_schema_migrations_equivalence_permissions_03(self):
+        self._assert_migration_equivalence([
+            '''
+                permission foo;
+            ''',
+            '''
+                permission foo {
+                    annotation title := 'B';
+                };
+            ''',
+            '''
+                permission foo;
+            ''',
+        ])
 
     # NOTE: array<str>, array<int16>, array<json> already exist in std
     # schema, so it's better to use array<float32> or some other
@@ -12527,7 +12754,7 @@ class TestSDLTextFromSchema(BaseDescribeTest):
         )
 
     def test_schema_sdl_text_order_global_01(self):
-        # Test that function non-computed global are in order
+        # Test that non-computed global contents are in order
 
         ordered_statements = (
             ["default := true;"]
@@ -12563,7 +12790,7 @@ class TestSDLTextFromSchema(BaseDescribeTest):
         )
 
     def test_schema_sdl_text_order_global_02(self):
-        # Test that function computed global are in order
+        # Test that computed global contents are in order
 
         ordered_statements = (
             ["using (true);"]
@@ -12590,6 +12817,39 @@ class TestSDLTextFromSchema(BaseDescribeTest):
             "    abstract annotation AnnotationC;\n"
             "    abstract annotation AnnotationD;\n"
             "    global Foo {\n"
+                    + ''.join(
+                        ' ' * 8 + s + '\n'
+                        for s in ordered_statements
+                    ) +
+            "    };\n"
+            "};",
+        )
+
+    def test_schema_sdl_text_order_permission_01(self):
+        # Test that non-computed permission contents are in order
+
+        ordered_statements = TestSDLTextFromSchema.annotation_statements
+        shuffled_statements = ordered_statements[:]
+        random.Random(1).shuffle(shuffled_statements)
+
+        self._assert_sdl_text_from_schema(
+            "abstract annotation AnnotationA;\n"
+            "abstract annotation AnnotationB;\n"
+            "abstract annotation AnnotationC;\n"
+            "abstract annotation AnnotationD;\n"
+            "permission Foo {\n"
+                + ''.join(
+                    ' ' * 4 + s + '\n'
+                    for s in shuffled_statements
+                ) +
+            "}",
+
+            "module default {\n"
+            "    abstract annotation AnnotationA;\n"
+            "    abstract annotation AnnotationB;\n"
+            "    abstract annotation AnnotationC;\n"
+            "    abstract annotation AnnotationD;\n"
+            "    permission Foo {\n"
                     + ''.join(
                         ' ' * 8 + s + '\n'
                         for s in ordered_statements
@@ -12854,6 +13114,10 @@ class TestSDLTextFromSchema(BaseDescribeTest):
             "abstract link LinkB;",
             "abstract link LinkC;",
             "abstract link LinkD;",
+            "permission PermissionA;"
+            "permission PermissionB;"
+            "permission PermissionC;"
+            "permission PermissionD;"
             "abstract property PropertyA;",
             "abstract property PropertyB;",
             "abstract property PropertyC;",

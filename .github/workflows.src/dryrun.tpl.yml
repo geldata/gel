@@ -1,9 +1,0 @@
-<% from "build.inc.yml" import workflow -%>
-name: Package Build Dry Run
-
-on:
-  workflow_dispatch:
-    inputs: {}
-
-jobs:
-  <<- workflow(targets, [], subdist="nightly") ->>

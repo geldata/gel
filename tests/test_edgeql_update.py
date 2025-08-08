@@ -1795,6 +1795,32 @@ class TestUpdate(tb.QueryTestCase):
             ]
         )
 
+    async def test_edgeql_update_props_11(self):
+        # Check that we can update a link property on a specific link.
+
+        # Setup some multi links
+        await self.con.execute(
+            r"""
+                UPDATE UpdateTest
+                FILTER .name = 'update-test1'
+                SET {
+                    annotated_status := (select Status limit 1),
+                    annotated_status2 := (select Status limit 1),
+                };
+            """,
+        )
+
+        await self.con.execute(
+            r"""
+                UPDATE UpdateTest
+                FILTER .name = 'update-test1'
+                SET {
+                    annotated_status := (select Status limit 1),
+                    annotated_status2 := (select Status limit 1),
+                };
+            """,
+        )
+
     async def test_edgeql_update_for_01(self):
         await self.assert_query_result(
             r"""
@@ -2852,6 +2878,29 @@ class TestUpdate(tb.QueryTestCase):
                     }
                 ) FILTER false;
             """)
+
+    async def test_edgeql_update_no_source_multi_01(self):
+        await self.con.execute("""
+            with x := assert_exists(
+                select UpdateTest filter .name = 'update-test3')
+            update x
+            set {
+                str_tags := x.comment
+            };
+        """)
+
+        await self.assert_query_result(
+            r"""
+                SELECT UpdateTest {
+                    str_tags
+                } filter .name = 'update-test3'
+            """,
+            [
+                {
+                    'str_tags': ['third'],
+                },
+            ]
+        )
 
     async def test_edgeql_update_insert_multi_required_01(self):
         await self.con.execute("""
@@ -4007,3 +4056,24 @@ class TestUpdate(tb.QueryTestCase):
                 },
             ],
         )
+
+    async def test_edgeql_update_read_only_tx_01(self):
+        con = (
+            edgedb.create_async_client(
+                **self.get_connect_args()
+            ).with_transaction_options(
+                edgedb.TransactionOptions(readonly=True)
+            )
+        )
+        try:
+            with self.assertRaisesRegex(
+                edgedb.TransactionError,
+                r'Modifications not allowed in a read-only transaction'
+            ):
+                async for tx in con.transaction():
+                    async with tx:
+                        await tx.execute(
+                            "update UpdateTest set { comment := 'hi' }"
+                        )
+        finally:
+            await con.aclose()

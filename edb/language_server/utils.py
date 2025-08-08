@@ -50,6 +50,16 @@ class DiagnosticsSet:
             self.by_doc[doc] = []
         self.by_doc[doc].extend(diagnostics)
 
+    def merge(self, other: 'DiagnosticsSet'):
+        for doc, diags in other.by_doc.items():
+            self.extend(doc, diags)
+
+    def has_any(self) -> bool:
+        for diags in self.by_doc.values():
+            if len(diags) != 0:
+                return True
+        return False
+
 
 # Convert a Span to LSP Range
 def span_to_lsp(
@@ -83,6 +93,11 @@ def span_to_lsp(
 
 # Convert EdgeDBError into an LSP Diagnostic
 def error_to_lsp(error: errors.EdgeDBError) -> lsp_types.Diagnostic:
+    message: str = error.args[0]
+
+    if hint := error.hint:
+        message += f"\nHint: {hint}"
+
     return lsp_types.Diagnostic(
         range=(
             lsp_types.Range(
@@ -102,7 +117,7 @@ def error_to_lsp(error: errors.EdgeDBError) -> lsp_types.Diagnostic:
             )
         ),
         severity=lsp_types.DiagnosticSeverity.Error,
-        message=error.args[0],
+        message=message,
     )
 
 

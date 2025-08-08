@@ -72,6 +72,7 @@ from .ha import adaptive as adaptive_ha
 from .ha import base as ha_base
 from .http import HttpClient
 from .pgcon import errors as pgcon_errors
+from .compiler import enums as compiler_enums
 
 if TYPE_CHECKING:
     from edb.pgsql import params as pgparams
@@ -85,12 +86,21 @@ logger = logging.getLogger("edb.server")
 
 
 HTTP_MAX_CONNECTIONS = 100
+HEALTH_CHECK_MIN_INTERVAL: float = float(
+    os.getenv("GEL_BACKEND_HEALTH_CHECK_MIN_INTERVAL", 10)
+)
+HEALTH_CHECK_TIMEOUT: float = float(
+    os.getenv("GEL_BACKEND_HEALTH_CHECK_TIMEOUT", 10)
+)
 
 
 class RoleDescriptor(TypedDict):
     superuser: bool
     name: str
     password: str | None
+    all_permissions: list[str] | None
+    branches: list[str]
+    apply_access_policies_pg_default: bool | None
 
 
 class Tenant(ha_base.ClusterProtocol):
@@ -115,6 +125,7 @@ class Tenant(ha_base.ClusterProtocol):
     _sys_pgcon_waiter: asyncio.Lock
     _sys_pgcon_ready_evt: asyncio.Event
     _sys_pgcon_reconnect_evt: asyncio.Event
+    _sys_pgcon_last_active_time: float
     _max_backend_connections: int
     _suggested_client_pool_size: int
     _pg_pool: connpool.Pool
@@ -136,6 +147,7 @@ class Tenant(ha_base.ClusterProtocol):
     _report_config_data: dict[defines.ProtocolVersion, bytes]
 
     _roles: Mapping[str, RoleDescriptor]
+    _role_capabilities: Mapping[str, compiler_enums.Capability]
     _sys_auth: tuple[Any, ...]
     _jwt_sub_allowlist_file: pathlib.Path | None
     _jwt_sub_allowlist: frozenset[str] | None
@@ -176,6 +188,7 @@ class Tenant(ha_base.ClusterProtocol):
         # Never use `self.__sys_pgcon` directly; get it via
         # `async with self.use_sys_pgcon()`.
         self.__sys_pgcon = None
+        self._sys_pgcon_last_active_time = 0
 
         # Increase-only counter to reject outdated attempts to connect
         self._ha_master_serial = 0
@@ -215,6 +228,7 @@ class Tenant(ha_base.ClusterProtocol):
         self._branch_sem = asyncio.Semaphore(value=1)
 
         self._roles = immutables.Map()
+        self._role_capabilities = immutables.Map()
         self._sys_auth = tuple()
         self._jwt_sub_allowlist_file = None
         self._jwt_sub_allowlist = None
@@ -413,12 +427,50 @@ class Tenant(ha_base.ClusterProtocol):
 
     def set_roles(self, roles: Mapping[str, RoleDescriptor]) -> None:
         self._roles = roles
+        self._refresh_role_capabilities()
+
+    def get_role_capabilities(self) -> Mapping[str, compiler_enums.Capability]:
+        return self._role_capabilities
+
+    def _refresh_role_capabilities(self) -> None:
+        role_capabilities: dict[str, compiler_enums.Capability] = {}
+
+        for name, role_desc in self._roles.items():
+            superuser = bool(role_desc.get('superuser'))
+            available_permissions = (role_desc.get('all_permissions') or ())
+
+            if superuser:
+                capability = compiler_enums.Capability.ALL
+            else:
+                capability = (
+                    compiler_enums.Capability.TRANSACTION
+                    | compiler_enums.Capability.SESSION_CONFIG
+                    | compiler_enums.Capability.PERSISTENT_CONFIG
+                )
+
+                # Non-superuser can be given capabilities via
+                # the permissions
+                if 'sys::perm::data_modification' in available_permissions:
+                    capability |= compiler_enums.Capability.MODIFICATIONS
+                if 'sys::perm::ddl' in available_permissions:
+                    capability |= compiler_enums.Capability.DDL
+                if 'sys::perm::branch_config' in available_permissions:
+                    capability |= compiler_enums.Capability.BRANCH_CONFIG
+                if 'sys::perm::sql_session_config' in available_permissions:
+                    capability |= compiler_enums.Capability.SQL_SESSION_CONFIG
+                if 'sys::perm::analyze' in available_permissions:
+                    capability |= compiler_enums.Capability.ANALYZE
+
+            role_capabilities[name] = capability
+
+        self._role_capabilities = immutables.Map(role_capabilities)
 
     async def _fetch_roles(self, syscon: pgcon.PGConnection) -> None:
         role_query = self._server.get_sys_query("roles")
         json_data = await syscon.sql_fetch_val(role_query, use_prep_stmt=True)
         roles = json.loads(json_data)
         self._roles = immutables.Map([(r["name"], r) for r in roles])
+        self._refresh_role_capabilities()
 
     async def init_sys_pgcon(self) -> None:
         self._sys_pgcon_waiter = asyncio.Lock()
@@ -426,6 +478,7 @@ class Tenant(ha_base.ClusterProtocol):
             defines.EDGEDB_SYSTEM_DB,
             source_description="init_sys_pgcon",
         )
+        self._sys_pgcon_last_active_time = time.monotonic()
         self._sys_pgcon_ready_evt = asyncio.Event()
         self._sys_pgcon_reconnect_evt = asyncio.Event()
 
@@ -903,6 +956,8 @@ class Tenant(ha_base.ClusterProtocol):
         try:
             yield self.__sys_pgcon
         finally:
+            if self.__sys_pgcon is not None and self.__sys_pgcon.is_healthy():
+                self._sys_pgcon_last_active_time = time.monotonic()
             self._sys_pgcon_waiter.release()
 
     def set_stmt_cache_size(self, size: int) -> None:
@@ -1028,6 +1083,7 @@ class Tenant(ha_base.ClusterProtocol):
             logger.info("Successfully reconnected to the system database.")
             self.__sys_pgcon = conn
             self.__sys_pgcon.mark_as_system_db()
+            self._sys_pgcon_last_active_time = time.monotonic()
             # This await is meant to be after mark_as_system_db() because we
             # need the pgcon to be able to trigger another reconnect if its
             # connection is lost during this await.
@@ -1563,12 +1619,16 @@ class Tenant(ha_base.ClusterProtocol):
         dbname: str,
         query_cache: bool,
         protocol_version: defines.ProtocolVersion,
+        role_name: str,
     ) -> dbview.DatabaseConnectionView:
         db = self.get_db(dbname=dbname)
         await db.introspection()
         assert self._dbindex is not None
         return self._dbindex.new_view(
-            dbname, query_cache=query_cache, protocol_version=protocol_version
+            dbname,
+            query_cache=query_cache,
+            protocol_version=protocol_version,
+            role_name=role_name,
         )
 
     def remove_dbview(self, dbview_: dbview.DatabaseConnectionView) -> None:
@@ -1866,6 +1926,16 @@ class Tenant(ha_base.ClusterProtocol):
             )
             raise
 
+    async def ping_backend(self) -> bool:
+        if not self._running:
+            return False
+        elapsed = time.monotonic() - self._sys_pgcon_last_active_time
+        if elapsed > HEALTH_CHECK_MIN_INTERVAL:
+            async with asyncio.timeout(HEALTH_CHECK_TIMEOUT):
+                async with self.use_sys_pgcon() as syscon:
+                    await syscon.sql_fetch_val(b"select 'OK'")
+        return True
+
     async def cancel_pgcon_operation(self, con: pgcon.PGConnection) -> bool:
         async with self.use_sys_pgcon() as syscon:
             if con.idle:
@@ -2086,11 +2156,6 @@ class Tenant(ha_base.ClusterProtocol):
                         use_prep_stmt=True,
                     )
 
-            # XXX: TODO: We don't need to signal here in the
-            # non-function version, but in the function caching
-            # situation this will be fraught.
-            # await self.signal_sysevent("query-cache-changes", dbname=dbname)
-
         except Exception:
             logger.exception("error in evict_query_cache():")
             metrics.background_errors.inc(
@@ -2100,17 +2165,26 @@ class Tenant(ha_base.ClusterProtocol):
     def on_remote_query_cache_change(
         self,
         dbname: str,
-        keys: Optional[list[str]],
+        to_add: Optional[list[str]],
+        to_invalidate: Optional[list[str]],
     ) -> None:
         if not self.is_db_ready(dbname):
             return
+
+        if to_invalidate:
+            if db := self.maybe_get_db(dbname=dbname):
+                db.invalidate_cache_entries(
+                    [uuid.UUID(s) for s in to_invalidate]
+                )
 
         async def task():
             try:
                 async with self._with_intro_pgcon(dbname) as conn:
                     if not conn:
                         return
-                    query_cache = await self._load_query_cache(conn, keys=keys)
+                    query_cache = await self._load_query_cache(
+                        conn, keys=to_add
+                    )
 
                 if query_cache and (db := self.maybe_get_db(dbname=dbname)):
                     db.hydrate_cache(query_cache)
@@ -2122,7 +2196,10 @@ class Tenant(ha_base.ClusterProtocol):
                 )
                 raise
 
-        self.create_task(task(), interruptable=True)
+        # If neither to_add nor to_invalidate are specified, then we do
+        # a full introspection.
+        if to_add or not to_invalidate:
+            self.create_task(task(), interruptable=True)
 
     def get_debug_info(self) -> dict[str, Any]:
         from . import smtp

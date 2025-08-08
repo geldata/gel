@@ -20,9 +20,7 @@ from __future__ import annotations
 from typing import (
     Any,
     ClassVar,
-    Generic,
     Optional,
-    TypeVar,
     AbstractSet,
     Iterable,
     Iterator,
@@ -51,11 +49,6 @@ __all__ = [
 ]
 
 
-T = TypeVar("T")
-K = TypeVar("K")
-V = TypeVar("V")
-
-
 class ParametricContainer:
 
     types: ClassVar[Optional[tuple[type, ...]]] = None
@@ -81,7 +74,7 @@ class ParametricContainer:
         return cls[params](data)  # type: ignore
 
 
-class AbstractCheckedList(Generic[T]):
+class AbstractCheckedList[T]:
     type: type
     _container: list[T]
 
@@ -128,7 +121,7 @@ class AbstractCheckedList(Generic[T]):
         return f"{_type_repr(type(self))}({repr(self._container)})"
 
 
-class FrozenCheckedList(
+class FrozenCheckedList[T](
     ParametricContainer,
     parametric.SingleParametricType[T],
     AbstractCheckedList[T],
@@ -179,7 +172,7 @@ class FrozenCheckedList(
     __rmul__ = __mul__
 
 
-class CheckedList(
+class CheckedList[T](
     ParametricContainer,
     parametric.SingleParametricType[T],
     AbstractCheckedList[T],
@@ -265,7 +258,7 @@ class CheckedList(
         self._container.sort(key=key, reverse=reverse)
 
 
-class AbstractCheckedSet(AbstractSet[T]):
+class AbstractCheckedSet[T](AbstractSet[T]):
     type: type
     _container: AbstractSet[T]
 
@@ -326,7 +319,7 @@ class AbstractCheckedSet(AbstractSet[T]):
         return self.__ge__(other)
 
 
-class FrozenCheckedSet(
+class FrozenCheckedSet[T](
     ParametricContainer,
     parametric.SingleParametricType[T],
     AbstractCheckedSet[T],
@@ -400,7 +393,7 @@ class FrozenCheckedSet(
     symmetric_difference = __xor__
 
 
-class CheckedSet(
+class CheckedSet[T](
     ParametricContainer,
     parametric.SingleParametricType[T],
     AbstractCheckedSet[T],
@@ -520,7 +513,7 @@ def _type_repr(obj: Any) -> str:
     return repr(obj)
 
 
-class AbstractCheckedDict(Generic[K, V]):
+class AbstractCheckedDict[K, V]:
     keytype: type
     valuetype: type
     _container: dict[K, V]
@@ -557,7 +550,7 @@ class AbstractCheckedDict(Generic[K, V]):
         return f"{_type_repr(type(self))}({repr(self._container)})"
 
 
-class CheckedDict(
+class CheckedDict[K, V](
     ParametricContainer,
     parametric.KeyValueParametricType[K, V],
     AbstractCheckedDict[K, V],
@@ -617,7 +610,7 @@ class CheckedDict(
         return new
 
 
-def _identity(cls: type, value: T) -> T:
+def _identity[T](cls: type, value: T) -> T:
     return value
 
 

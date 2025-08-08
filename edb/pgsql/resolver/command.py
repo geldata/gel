@@ -51,7 +51,7 @@ from edb.schema import properties as s_properties
 from edb.schema import name as sn
 from edb.schema import types as s_types
 from edb.schema import utils as s_utils
-
+from edb.server.compiler import enums
 
 from . import dispatch
 from . import context
@@ -104,7 +104,9 @@ def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
     where = dispatch.resolve_opt(stmt.where_clause, ctx=ctx)
 
     # COPY will always be top-level, so we must extract CTEs
-    query.ctes = list(ctx.ctes_buffer)
+    if not query.ctes:
+        query.ctes = list()
+    query.ctes.extend(ctx.ctes_buffer)
     ctx.ctes_buffer.clear()
 
     return pgast.CopyStmt(
@@ -1969,6 +1971,7 @@ def _compile_uncompiled_dml(
             external_rels=external_rels,
             output_format=pgcompiler.OutputFormat.NATIVE_INTERNAL,
             alias_generator=ctx.alias_generator,
+            sql_dml_mode=True,
         )
 
         merge_params(sql_result, ir_stmt, ctx)
@@ -2203,6 +2206,7 @@ def resolve_DMLQuery(
         _resolve_conflict_update_rel(compiled_dml, subject_name, ctx=ctx)
 
     ctx.ctes_buffer.extend(compiled_dml.output_ctes)
+    ctx.env.capabilities |= enums.Capability.MODIFICATIONS
 
     return _fini_resolve_dml(stmt, compiled_dml, ctx=ctx)
 
@@ -2715,8 +2719,8 @@ def merge_params(
         # search for existing params for this global
         existing_param = next(
             (
-                i
-                for i, p in enumerate(ctx.query_params)
+                p
+                for p in ctx.query_params
                 if isinstance(p, dbstate.SQLParamGlobal)
                 and p.global_name == glob.global_name
             ),
@@ -2724,7 +2728,7 @@ def merge_params(
         )
         internal_index: int
         if existing_param is not None:
-            internal_index = existing_param
+            internal_index = existing_param.internal_index
         else:
             # append a new param
             internal_index = len(ctx.query_params) + 1
@@ -2734,7 +2738,10 @@ def merge_params(
             )
             ctx.query_params.append(
                 dbstate.SQLParamGlobal(
-                    global_name=glob.global_name, pg_type=pg_type
+                    global_name=glob.global_name,
+                    pg_type=pg_type,
+                    is_permission=glob.is_permission,
+                    internal_index=internal_index,
                 )
             )
 

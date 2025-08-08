@@ -73,8 +73,8 @@ def base_page(
     )
 
     if (
-        brand_color is None or
-        util.hex_color_regexp.fullmatch(brand_color) is None
+        brand_color is None
+        or util.hex_color_regexp.fullmatch(brand_color) is None
     ):
         brand_color = DEFAULT_BRAND_COLOR
 
@@ -119,7 +119,7 @@ def oauth_buttons(
     redirect_to_on_signup: Optional[str],
     oauth_providers: list[auth_config.OAuthProviderConfig],
     label_prefix: str,
-    collapsed: bool
+    collapsed: bool,
 ) -> str:
     if len(oauth_providers) == 0:
         return ''
@@ -180,7 +180,7 @@ def button(
     *,
     id: Optional[str] = None,
     secondary: Optional[bool] = False,
-    type: Optional[str] = 'submit'
+    type: Optional[str] = 'submit',
 ) -> str:
     classes = []
     if secondary:
@@ -240,7 +240,8 @@ def tabs_content(sections: list[str], selected_tab: int) -> str:
 
     style = (
         f'style="transform: translateX({-100 * selected_tab}%)"'
-        if selected_tab > 0 else ''
+        if selected_tab > 0
+        else ''
     )
     return f'''
         <div id="slider-container" class="slider-container" {style}>
@@ -277,8 +278,8 @@ def hidden_input(
     *, name: str, value: str, secondary_value: Optional[str] = None
 ) -> str:
     return f'''<input type="hidden" name="{name}" value="{value}" {
-        f'data-secondary-value="{secondary_value}"'
-        if secondary_value else ''} />'''
+        f'data-secondary-value="{secondary_value}"' if secondary_value else ''
+    } />'''
 
 
 def bottom_note(message: str, *, link: str, href: str) -> str:
@@ -331,13 +332,77 @@ def success_message(message: str) -> str:
     '''
 
 
+def _code_digit_input(id: str) -> str:
+    return f"""\
+<input
+    id="{id}"
+    type="text"
+    inputmode="numeric"
+    pattern="[0-9]"
+    maxlength="1"
+/>"""
+
+
+def code_input_form(
+    *,
+    action: str,
+    email: str,
+    provider: str,
+    redirect_to: str,
+    redirect_on_failure: str,
+    label: str = "Enter verification code",
+    button_text: str = "Verify Code",
+    additional_fields: str = "",
+    challenge: Optional[str] = None,
+) -> str:
+    """Renders a 6-digit code input form with auto-formatting and mobile
+    keyboard support."""
+    challenge_field = (
+        f'<input type="hidden" name="challenge" value="{challenge}" />'
+        if challenge
+        else ""
+    )
+
+    return f'''
+    <form id="code-form" method="POST" action="{action}" novalidate>
+        <input type="hidden" name="email" value="{html.escape(email)}" />
+        <input type="hidden" name="provider" value="{provider}" />
+        <input type="hidden" name="redirect_to" value="{redirect_to}" />
+        <input
+            type="hidden"
+            name="redirect_on_failure"
+            value="{redirect_on_failure}"
+        />
+        {challenge_field}
+        {additional_fields}
+
+        <label for="code-input-1">{label}</label>
+        <div id="code-input-container" class="code-input-container">
+            {_code_digit_input("code-input-1")}
+            {_code_digit_input("code-input-2")}
+            {_code_digit_input("code-input-3")}
+            {_code_digit_input("code-input-4")}
+            {_code_digit_input("code-input-5")}
+            {_code_digit_input("code-input-6")}
+        </div>
+
+        <input id="code-hidden-input" type="hidden" name="code" value="" />
+
+        {button(button_text)}
+    </form>
+
+    <script type="module" src="_static/code-input.js"></script>
+    '''
+
+
 def base_default_email(
     *,
     content: str,
     app_name: Optional[str],
     logo_url: Optional[str],
 ) -> str:
-    logo_html = f"""
+    logo_html = (
+        f"""
       <!--[if mso | IE]><table align="center" border="0" cellpadding="0" cellspacing="0" class="" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
       <div style="margin: 0px auto; max-width: 600px">
         <table
@@ -437,7 +502,10 @@ def base_default_email(
         </table>
       </div>
       <!--[if mso | IE]></td></tr></table><table align="center" border="0" cellpadding="0" cellspacing="0" class="" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
-""" if logo_url else ""  # noqa: E501
+"""  # noqa: E501
+        if logo_url
+        else ""
+    )
 
     return f"""
 <!doctype html>
@@ -595,3 +663,314 @@ def base_default_email(
   </body>
 </html>
 """  # noqa: E501
+
+
+# Form Component Helpers
+# =====================
+
+
+def get_magic_link_tab_label(verification_method: str) -> str:
+    return "Email Code" if verification_method == "Code" else "Email Link"
+
+
+def get_magic_link_button_text(verification_method: str) -> str:
+    return (
+        "Email sign in code"
+        if verification_method == "Code"
+        else "Email sign in link"
+    )
+
+
+def get_email_password_signup_redirect_url(
+    verification_method: str, base_path: str, fallback_redirect: str
+) -> str:
+    if verification_method == "Code":
+        return (
+            f"{base_path}/ui/verify?code=true&provider=builtin::local_emailpassword"  # noqa: E501
+        )
+    else:
+        return fallback_redirect
+
+
+def get_webauthn_signup_redirect_url(
+    verification_method: str, base_path: str, fallback_redirect: str
+) -> str:
+    if verification_method == "Code":
+        return (
+            f"{base_path}/ui/verify?code=true&provider=builtin::local_webauthn"
+        )
+    else:
+        return fallback_redirect
+
+
+def get_password_reset_redirect_url(
+    verification_method: str, base_path: str, challenge: str
+) -> str:
+    if verification_method == "Code":
+        return f"{base_path}/ui/reset-password"
+    else:
+        return f"{base_path}/ui/forgot-password?challenge={challenge}"
+
+
+def get_send_button_text(verification_method: str) -> str:
+    return "Send Code" if verification_method == "Code" else "Send Link"
+
+
+def get_verification_method_label(verification_method: str) -> str:
+    return "Email Code" if verification_method == "Code" else "Email Link"
+
+
+def render_base_email_form(challenge: str, email: Optional[str] = None) -> str:
+    return f"""
+        <input type="hidden" name="challenge" value="{challenge}" />
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" value="{email or ''}" />
+    """
+
+
+def render_password_input(challenge: str) -> str:
+    return f"""
+        <div class="field-header">
+            <label for="password">Password</label>
+            <a
+                id="forgot-password-link"
+                class="field-note"
+                href="forgot-password?challenge={challenge}"
+                tabindex="-1">
+                Forgot password?
+            </a>
+        </div>
+        <input id="password" name="password" type="password" />
+    """
+
+
+def render_password_form(
+    base_email_form: str,
+    password_input: str,
+    redirect_to: str,
+    base_path: str,
+    provider_name: str,
+) -> str:
+    return f"""
+        <form
+            method="post"
+            action="../authenticate"
+            novalidate
+        >
+            <input type="hidden" name="redirect_to" value="{redirect_to}" />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signin?selected_tab=password"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            {base_email_form}
+            {password_input}
+            {button("Sign In", id="password-signin")}
+        </form>
+    """
+
+
+def render_webauthn_form(
+    base_email_form: str,
+    redirect_to: str,
+    base_path: str,
+    provider_name: str,
+) -> str:
+    """Render a complete WebAuthn authentication form."""
+    return f"""
+        <form
+            id="email-factor"
+            novalidate
+        >
+            <input type="hidden" name="redirect_to" value="{redirect_to}" />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signin?selected_tab=webauthn"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            <input type="hidden" name="callback_url" value="{redirect_to}" />
+            {base_email_form}
+            {button("Sign In", id="webauthn-signin")}
+        </form>
+    """
+
+
+def render_magic_link_form(
+    base_email_form: str,
+    redirect_to: str,
+    base_path: str,
+    provider_name: str,
+    verification_method: str = "Link",
+) -> str:
+    button_text = get_magic_link_button_text(verification_method)
+
+    return f"""
+        <form
+            method="post"
+            action="../magic-link/email"
+            novalidate
+        >
+            <input
+                type="hidden"
+                name="redirect_to"
+                value="{base_path}/ui/magic-link-sent"
+            />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signin?selected_tab=magic_link"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            <input type="hidden" name="callback_url" value="{redirect_to}" />
+            {base_email_form}
+            {button(button_text, id="magic-link-signin")}
+        </form>
+    """
+
+
+def render_code_input_form(
+    email: str,
+    action_url: str,
+    redirect_to: str,
+    challenge: Optional[str] = None,
+    provider: Optional[str] = None,
+) -> str:
+    challenge_input = (
+        f'<input type="hidden" name="challenge" value="{challenge}" />'
+        if challenge
+        else ''
+    )
+    provider_input = (
+        f'<input type="hidden" name="provider" value="{provider}" />'
+        if provider
+        else ''
+    )
+
+    return f"""
+        <form method="post" action="{action_url}" novalidate>
+            <input type="hidden" name="email" value="{email}" />
+            <input type="hidden" name="redirect_to" value="{redirect_to}" />
+            {challenge_input}
+            {provider_input}
+
+            <label for="code">Enter the code from your email</label>
+            <div class="code-input-container">
+                <input
+                    type="text"
+                    name="code"
+                    id="code"
+                    class="code-input"
+                    maxlength="6"
+                    pattern="[0-9]{{6}}"
+                    inputmode="numeric"
+                    autocomplete="one-time-code"
+                    placeholder="000000"
+                />
+            </div>
+
+            {button("Verify Code", id="verify-code")}
+        </form>
+    """
+
+
+# Signup-specific form helpers
+# ===========================
+
+
+def render_password_signup_form(
+    base_email_form: str,
+    redirect_to: str,
+    base_path: str,
+    provider_name: str,
+) -> str:
+    return f"""
+        <form
+            method="post"
+            action="../register"
+            novalidate
+        >
+            <input type="hidden" name="redirect_to" value="{redirect_to}" />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signup?selected_tab=password"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            <input
+                type="hidden"
+                name="verify_url"
+                value="{base_path}/ui/verify"
+            />
+            {base_email_form}
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" />
+            {button("Sign Up", id="password-signup")}
+        </form>
+    """
+
+
+def render_webauthn_signup_form(
+    base_email_form: str,
+    redirect_to: str,
+    base_path: str,
+    provider_name: str,
+) -> str:
+    """Render a complete WebAuthn signup form."""
+    return f"""
+        <form
+            id="email-factor"
+            novalidate
+        >
+            <input type="hidden" name="redirect_to" value="{redirect_to}" />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signup?selected_tab=webauthn"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            <input type="hidden" name="callback_url" value="{redirect_to}" />
+            <input
+                type="hidden"
+                name="verify_url"
+                value="{base_path}/ui/verify"
+            />
+            {base_email_form}
+            {button("Sign Up", id="webauthn-signup")}
+        </form>
+    """
+
+
+def render_magic_link_signup_form(
+    base_email_form: str,
+    redirect_to: str,
+    base_path: str,
+    provider_name: str,
+    verification_method: str = "Link",
+) -> str:
+    """Render a complete magic link/OTC signup form."""
+    tab_label = get_magic_link_tab_label(verification_method)
+
+    return f"""
+        <form
+            method="post"
+            action="../magic-link/register"
+            novalidate
+        >
+            <input
+                type="hidden"
+                name="redirect_to"
+                value="{base_path}/ui/magic-link-sent"
+            />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signup?selected_tab=magic_link"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            <input type="hidden" name="callback_url" value="{redirect_to}" />
+            {base_email_form}
+            {button(f"Sign Up with {tab_label}", id="magic-link-signup")}
+        </form>
+    """

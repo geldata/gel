@@ -272,22 +272,33 @@ def gen_dml_cte(
         # touches link tables).
         dml_stmt = pgast.SelectStmt()
 
-        # We join with the concrete table for this type, but also include
-        # overlays produced by previous DML stmts. This is needed for SQL DML
-        # support, which needs to update a link table of a newly inserted object
-        subject_rel_overlayed = relctx.range_for_typeref(
-            typeref,
-            subject_path_id,
-            for_mutation=False,
-            include_descendants=False,
-            dml_source=[
-                k for k in ctx.dml_stmts.keys()
-                if isinstance(k, irast.MutatingLikeStmt)
-            ],
-            ctx=ctx,
-        )
-        dml_stmt.from_clause.append(subject_rel_overlayed)
-        subject_rvar = subject_rel_overlayed
+        if ctx.env.sql_dml_mode:
+            # We join with the concrete table for this type, but also include
+            # overlays produced by previous DML stmts. This is needed for SQL
+            # DML, which needs to update a link table of a newly inserted object
+            subject_rel_overlayed = relctx.range_for_typeref(
+                typeref,
+                subject_path_id,
+                for_mutation=False,
+                include_descendants=False,
+                dml_source=[
+                    k for k in ctx.dml_stmts.keys()
+                    if isinstance(k, irast.MutatingLikeStmt)
+                ],
+                ctx=ctx,
+            )
+            dml_stmt.from_clause.append(subject_rel_overlayed)
+            subject_rvar = subject_rel_overlayed
+        else:
+            # We join with the concrete table for this type
+            relation = relctx.range_for_typeref(
+                typeref,
+                subject_path_id,
+                for_mutation=True,
+                ctx=ctx,
+            )
+            dml_stmt.from_clause.append(relation)
+            subject_rvar = relation
 
     elif isinstance(ir_stmt, irast.DeleteStmt):
         relation = relctx.range_for_typeref(
@@ -419,7 +430,7 @@ def merge_iterator(
     select: pgast.SelectStmt,
     *,
     ctx: context.CompilerContextLevel
-) -> None:
+) -> Optional[pgast.PathRangeVar]:
     merge_iterator_scope(iterator, select, ctx=ctx)
 
     if iterator:
@@ -447,6 +458,11 @@ def merge_iterator(
             pathctx.put_path_rvar(
                 select, other_path, iterator_rvar, aspect=aspect
             )
+
+        return iterator_rvar
+
+    else:
+        return None
 
 
 def fini_dml_stmt(
@@ -554,6 +570,7 @@ def get_dml_range(
         merge_iterator(ctx.enclosing_cte_iterator, range_stmt, ctx=subctx)
 
         dispatch.visit(target_ir_set, ctx=subctx)
+        relgen.ensure_source_rvar(target_ir_set, range_stmt, ctx=subctx)
 
         pathctx.get_path_identity_output(
             range_stmt, target_ir_set.path_id, env=subctx.env)
@@ -793,7 +810,7 @@ def process_insert_body(
         # use later. We do this in advance so that the link update code
         # can populate overlay fields in it.
         with ctx.new() as pol_ctx:
-            pass
+            pol_ctx.rel_overlays = context.RelOverlays()
 
     needs_insert_on_conflict = bool(
         ir_stmt.on_conflict and not on_conflict_fake_iterator)
@@ -844,6 +861,11 @@ def process_insert_body(
         assert not needs_insert_on_conflict
 
         assert pol_ctx
+        # Now that all the compilation for the INSERT has been done,
+        # apply the tweaked policy overlays.
+        pol_ctx.rel_overlays = update_overlay(
+            ctx.rel_overlays, pol_ctx.rel_overlays
+        )
         with pol_ctx.reenter(), pol_ctx.newrel() as rctx:
             # Pull in ptr rel overlays, so we can see the pointers
             merge_overlays_globally((ir_stmt,), ctx=rctx)
@@ -1173,6 +1195,25 @@ def merge_overlays_globally(
 
     ctx.rel_overlays.type = ctx.rel_overlays.type.set(None, type_overlay)
     ctx.rel_overlays.ptr = ctx.rel_overlays.ptr.set(None, ptr_overlay)
+
+
+def update_overlay(
+    left: context.RelOverlays,
+    right: context.RelOverlays,
+) -> context.RelOverlays:
+    '''Make an updated copy of the left overlay using right.'''
+    left = left.copy()
+
+    for ir_stmt, tm in right.type.items():
+        ltm = left.type.get(ir_stmt, immu.Map())
+        ltm = ltm.update(tm)
+        left.type = left.type.set(ir_stmt, ltm)
+    for ir_stmt, pm in right.ptr.items():
+        lpm = left.ptr.get(ir_stmt, immu.Map())
+        lpm = lpm.update(pm)
+        left.ptr = left.ptr.set(ir_stmt, lpm)
+
+    return left
 
 
 def compile_policy_check(
@@ -1735,7 +1776,7 @@ def process_update_body(
         # use later. We do this in advance so that the link update code
         # can populate overlay fields in it.
         with ctx.new() as pol_ctx:
-            pass
+            pol_ctx.rel_overlays = context.RelOverlays()
 
     no_update = not values and not rewrites and not single_external
     if no_update:
@@ -1789,6 +1830,11 @@ def process_update_body(
         if rewrites or single_external:
             rewrites = rewrites or {}
             assert pol_ctx
+            # Now that all the compilation for the UPDATE has been done,
+            # apply the tweaked policy overlays.
+            pol_ctx.rel_overlays = update_overlay(
+                ctx.rel_overlays, pol_ctx.rel_overlays
+            )
             with pol_ctx.reenter(), pol_ctx.new() as rctx:
                 merge_overlays_globally((ir_stmt,), ctx=rctx)
                 contents_cte, contents_rvar, values = process_update_rewrites(
@@ -1923,7 +1969,13 @@ def process_update_rewrites(
 
         # pull in contents_select for __subject__
         relctx.include_rvar(
-            rewrites_stmt, contents_rvar, subject_path_id, ctx=ctx
+            rewrites_stmt,
+            contents_rvar,
+            subject_path_id,
+            # We don't want to update the mask... in case the subject
+            # is an iterator that needs to be reexported.
+            update_mask=False,
+            ctx=ctx,
         )
         rewrites_stmt.where_clause = astutils.new_binop(
             lexpr=pathctx.get_rvar_path_identity_var(
@@ -2681,14 +2733,20 @@ def process_link_update(
         # Record the effect of this removal in the relation overlay
         # context to ensure that references to the link in the result
         # of this DML statement yield the expected results.
-        relctx.add_ptr_rel_overlay(
-            mptrref,
-            context.OverlayOp.EXCEPT,
-            delcte,
-            path_id=path_id.ptr_path(),
-            dml_stmts=ctx.dml_stmt_stack,
-            ctx=ctx
+        except_overlay = (lambda octx:
+            relctx.add_ptr_rel_overlay(
+                mptrref,
+                context.OverlayOp.EXCEPT,
+                delcte,
+                path_id=path_id.ptr_path(),
+                dml_stmts=ctx.dml_stmt_stack,
+                ctx=octx,
+            )
         )
+        except_overlay(ctx)
+        if policy_ctx:
+            except_overlay(policy_ctx)
+
         toplevel.append_cte(delcte)
     else:
         delqry = None
@@ -2895,7 +2953,6 @@ def process_link_update(
         )
 
     if policy_ctx:
-        policy_ctx.rel_overlays = policy_ctx.rel_overlays.copy()
         register_overlays(data_cte, policy_ctx)
 
     register_overlays(update, ctx)

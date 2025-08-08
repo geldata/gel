@@ -341,6 +341,21 @@ class Index(
         merge_fn=merge_deferred,
     )
 
+    # Whether the index is created and populated in pg. Relevant if
+    # build_concurrently is true?
+    active = so.SchemaField(
+        bool,
+        default=True,
+    )
+
+    # XXX: I am not sure this is what I want to do.
+    build_concurrently = so.SchemaField(
+        bool,
+        default=False,
+        compcoef=0.803,
+        allow_ddl_set=True,
+    )
+
     def __repr__(self) -> str:
         cls = self.__class__
         return '<{}.{} {!r} at 0x{:x}>'.format(
@@ -1070,6 +1085,13 @@ class CreateIndex(
                     span=astnode.span,
                 )
 
+            if cmd.get_attribute_span('build_concurrently'):
+                cmd.set_attribute_value(
+                    'active',
+                    False,
+                    span=astnode.span,
+                )
+
         return cmd
 
     @classmethod
@@ -1672,6 +1694,24 @@ class AlterIndex(
 ):
     astnode = [qlast.AlterConcreteIndex, qlast.AlterIndex]
     referenced_astnode = qlast.AlterConcreteIndex
+
+    def validate_object(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+    ) -> None:
+        super().validate_object(schema, context)
+
+        vn = self.scls.get_verbosename(schema, with_parent=True)
+        if (
+            not self.scls.get_build_concurrently(schema)
+            and not self.scls.get_active(schema)
+        ):
+            raise errors.SchemaDefinitionError(
+                f'{vn} is not active, so build_concurrently may '
+                f'not be cleared',
+                span=self.span,
+            )
 
     def canonicalize_alter_from_external_ref(
         self,

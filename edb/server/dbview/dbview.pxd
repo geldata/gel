@@ -98,10 +98,11 @@ cdef class Database:
         readonly object backend_oid_to_id
         readonly object extensions
         readonly object _feature_used_metrics
+        readonly int dml_queries_executed
 
     cdef _invalidate_caches(self)
     cdef _cache_compiled_query(self, key, compiled)
-    cdef _new_view(self, query_cache, protocol_version)
+    cdef _new_view(self, query_cache, protocol_version, role_name)
     cdef _remove_view(self, view)
     cdef _observe_auth_ext_config(self)
     cdef _set_backend_ids(self, types)
@@ -136,6 +137,7 @@ cdef class DatabaseConnectionView:
         Database _db
         bint _query_cache_enabled
         object _protocol_version
+        str _role_name
         public bint is_transient
         # transient dbviews won't cause an immediate error in
         # ensure_database_not_connected(..., close_frontend_conns=False),
@@ -172,7 +174,7 @@ cdef class DatabaseConnectionView:
         object _in_tx_new_types
         int _in_tx_dbver
         bint _in_tx
-        bint _in_tx_with_ddl
+        uint64_t _in_tx_capabilities
         bint _in_tx_with_sysconfig
         bint _in_tx_with_dbconfig
         bint _in_tx_with_set
@@ -184,6 +186,8 @@ cdef class DatabaseConnectionView:
 
         object _last_comp_state
         int _last_comp_state_id
+
+        dict _sys_globals
 
         object __weakref__
 
@@ -230,6 +234,7 @@ cdef class DatabaseConnectionView:
 
     cpdef get_globals(self)
     cpdef set_globals(self, new_globals)
+    cpdef get_global_value(self, k)
 
     cdef get_state_serializer(self)
     cdef set_state_serializer(self, new_serializer)
@@ -253,7 +258,7 @@ cdef class DatabaseConnectionView:
 
     cdef check_capabilities(
         self,
-        query_capabilities,
+        query_unit,
         allowed_capabilities,
         error_constructor,
         reason,

@@ -26,10 +26,6 @@ from . import config
 from .config import logger
 from edb.server import rust_async_channel
 
-# Connections must be hashable because we use them to reverse-lookup
-# an internal ID.
-C = typing.TypeVar("C", bound=typing.Hashable)
-
 CP1 = typing.TypeVar('CP1', covariant=True)
 CP2 = typing.TypeVar('CP2', contravariant=True)
 
@@ -83,7 +79,9 @@ class StatsCollector(typing.Protocol):
         pass
 
 
-class Pool(typing.Generic[C]):
+# Connections must be hashable because we use them to reverse-lookup
+# an internal ID.
+class Pool[C: typing.Hashable]:
     _pool: _rust.ConnPool
     _next_conn_id: int
     _failed_connects: int
@@ -221,9 +219,8 @@ class Pool(typing.Generic[C]):
                 if f := self._acquires.pop(msg[1], None):
                     f.set_exception(error)
                 else:
-                    logger.warn(f"Failed acquire cancelled for {msg[1]},"
-                                f"swallowing error {error}")
-                    pass
+                    logger.warning(f"Failed acquire cancelled for {msg[1]},"
+                                   f"swallowing error {error}")
         elif msg[0] == 6:
             # Pickled metrics
             self._counts = pickle.loads(msg[1])

@@ -17,7 +17,7 @@
 #
 
 from typing import (
-    Optional,
+    Optional, Sequence
 )
 
 import asyncio
@@ -45,7 +45,6 @@ from edb.server import compiler, defines, config, metrics, pgcon
 from edb.server.compiler import dbstate, enums, sertypes
 from edb.server.protocol import execute
 from edb.pgsql import dbops
-from edb.server.compiler_pool import state as compiler_state_mod
 from edb.server.pgcon import errors as pgerror
 
 from edb.server.protocol import ai_ext
@@ -64,6 +63,8 @@ __all__ = (
     'Database'
 )
 
+cdef uint64_t PROTO_CAPS = enums.Capability.PROTO_CAPS
+
 cdef DEFAULT_MODALIASES = immutables.Map({None: defines.DEFAULT_MODULE_ALIAS})
 cdef DEFAULT_CONFIG = immutables.Map()
 cdef DEFAULT_GLOBALS = immutables.Map()
@@ -74,6 +75,9 @@ cdef INT32_PACKER = struct.Struct('!l').pack
 cdef int VER_COUNTER = 0
 cdef DICTDEFAULT = (None, None)
 cdef object logger = logging.getLogger('edb.server')
+
+cdef uint64_t DML_CAPABILITIES = compiler.Capability.MODIFICATIONS
+cdef uint64_t DDL_CAPABILITIES = compiler.Capability.DDL
 
 # Mapping from oids of PostgreSQL types into corresponding EdgeQL type.
 # Needed only for pg types that do not exist in EdgeQL, such as pg_catalog.name
@@ -200,9 +204,13 @@ cdef class Database:
         self._cache_queue = asyncio.Queue()
         self._cache_worker_task = asyncio.create_task(
             self.monitor(self.cache_worker, 'cache_worker'))
+        # Queue of (key: str, is_add: bool) pairs. is_add signals
+        # whether it is an addition or deletion.
         self._cache_notify_queue = asyncio.Queue()
         self._cache_notify_task = asyncio.create_task(
             self.monitor(self.cache_notifier, 'cache_notifier'))
+
+        self.dml_queries_executed = 0
 
     @property
     def server(self):
@@ -248,6 +256,10 @@ cdef class Database:
                 unit_group.cache_state = CacheState.Evicted
             if keys:
                 await self.tenant.evict_query_cache(self.name, keys)
+                for key in keys:
+                    self._cache_notify_queue.put_nowait(
+                        (str(key), False)
+                    )
 
             # Now, populate the cache
             # Empty the queue, for batching reasons.
@@ -283,7 +295,9 @@ cdef class Database:
                     self._func_cache_gt_tx_seq[query_req] = units
                 else:
                     units[0].maybe_use_func_cache()
-                self._cache_notify_queue.put_nowait(str(units[0].cache_key))
+                self._cache_notify_queue.put_nowait(
+                    (str(units[0].cache_key), True)
+                )
 
     cdef inline uint64_t tx_seq_begin_tx(self):
         self._tx_seq += 1
@@ -326,7 +340,8 @@ cdef class Database:
             lambda keys: self.tenant.signal_sysevent(
                 'query-cache-changes',
                 dbname=self.name,
-                keys=keys,
+                to_add=[k for k, b in keys if b],
+                to_invalidate=[k for k, b in keys if not b],
             ),
             max_wait=1.0,
             delay_amt=0.2,
@@ -483,9 +498,12 @@ cdef class Database:
             rv = None
         return rv
 
-    cdef _new_view(self, query_cache, protocol_version):
+    cdef _new_view(self, query_cache, protocol_version, role_name):
         view = DatabaseConnectionView(
-            self, query_cache=query_cache, protocol_version=protocol_version
+            self,
+            query_cache=query_cache,
+            protocol_version=protocol_version,
+            role_name=role_name,
         )
         self._views.add(view)
         return view
@@ -548,6 +566,14 @@ cdef class Database:
                 "skipped %d incompatible cache items", -warning_count
             )
 
+    def invalidate_cache_entry_object(self, obj):
+        self._eql_to_compiled.pop(obj, None)
+
+    def invalidate_cache_entries(self, to_invalidate):
+        for key in to_invalidate:
+            handle = rpc.CompilationRequestIdHandle(key)
+            self._eql_to_compiled.pop(handle, None)
+
     def clear_query_cache(self):
         self._eql_to_compiled.clear()
 
@@ -580,7 +606,9 @@ cdef class Database:
 
 cdef class DatabaseConnectionView:
 
-    def __init__(self, db: Database, *, query_cache, protocol_version):
+    def __init__(
+        self, db: Database, *, query_cache, protocol_version, role_name: str
+    ):
         self._db = db
 
         self._query_cache_enabled = query_cache
@@ -592,6 +620,13 @@ cdef class DatabaseConnectionView:
         self._session_state_db_cache = None
         self._session_state_cache = None
         self._state_serializer = None
+        self._role_name = role_name
+
+        # N.B: If we add anything that is not a string, we'll need to
+        # adjust get_global_value to encode differently.
+        self._sys_globals = {
+            'sys::current_role': self._role_name,
+        }
 
         if db.name == defines.EDGEDB_SYSTEM_DB:
             # Make system database read-only.
@@ -624,7 +659,7 @@ cdef class DatabaseConnectionView:
         self._in_tx_db_config = None
         self._in_tx_modaliases = None
         self._in_tx_savepoints = []
-        self._in_tx_with_ddl = False
+        self._in_tx_capabilities = 0
         self._in_tx_with_sysconfig = False
         self._in_tx_with_dbconfig = False
         self._in_tx_with_set = False
@@ -694,6 +729,17 @@ cdef class DatabaseConnectionView:
             return self._in_tx_globals
         else:
             return self._globals
+
+    cpdef get_global_value(self, k):
+        if k in self._sys_globals:
+            # N.B: Currently only strings
+            return self._sys_globals[k].encode('utf-8'), True
+        else:
+            entry = self.get_globals().get(k)
+            if entry:
+                return entry.value, True
+            else:
+                return None, False
 
     cdef get_state_serializer(self):
         if self._in_tx:
@@ -934,6 +980,21 @@ cdef class DatabaseConnectionView:
         aliases = dict(state.get('aliases', []))
         aliases[None] = state.get('module', defines.DEFAULT_MODULE_ALIAS)
         aliases = immutables.Map(aliases)
+
+        is_superuser, permissions = self.get_permissions()
+        if not is_superuser:
+            settings = self.get_config_spec()
+            for k in state.get('config', ()):
+                setting = settings[k]
+                if setting.session_restricted and not (
+                    setting.session_permission
+                    and setting.session_permission in permissions
+                ):
+                    raise errors.DisabledCapabilityError(
+                        f'role {self._role_name} does not have permission to '
+                        f'configure session config variable {k}'
+                    )
+
         session_config = immutables.Map({
             k: config.SettingValue(
                 name=k,
@@ -999,6 +1060,21 @@ cdef class DatabaseConnectionView:
     def tenant(self):
         return self._db._index._tenant
 
+    def get_permissions(self) -> tuple[bool, Sequence[str]]:
+        if role_desc := self.tenant.get_roles().get(self._role_name):
+            return (
+                bool(role_desc.get('superuser')),
+                (role_desc.get('all_permissions') or ())
+            )
+        return False, ()
+
+    def get_role_capability(self) -> enums.Capability:
+        if capability := self.tenant.get_role_capabilities().get(
+            self._role_name
+        ):
+            return capability
+        return enums.Capability.NONE
+
     cpdef in_tx(self):
         return self._in_tx
 
@@ -1008,15 +1084,17 @@ cdef class DatabaseConnectionView:
     cdef cache_compiled_query(self, object key, object query_unit_group):
         assert query_unit_group.cacheable
 
-        if self._tx_error or self._in_tx_with_ddl:
+        if self._tx_error or self._in_tx_capabilities & DDL_CAPABILITIES:
             return
 
         self._db._cache_compiled_query(key, query_unit_group)
 
     cdef lookup_compiled_query(self, object key):
-        if (self._tx_error or
-                not self._query_cache_enabled or
-                self._in_tx_with_ddl):
+        if (
+            self._tx_error
+            or not self._query_cache_enabled
+            or self._in_tx_capabilities & DDL_CAPABILITIES
+        ):
             return None
 
         return self._db._eql_to_compiled.get(key, None)
@@ -1054,8 +1132,7 @@ cdef class DatabaseConnectionView:
         self._in_tx_seq = self._db.tx_seq_begin_tx()
 
     cdef _apply_in_tx(self, query_unit):
-        if query_unit.has_ddl:
-            self._in_tx_with_ddl = True
+        self._in_tx_capabilities |= query_unit.capabilities
         if query_unit.system_config:
             self._in_tx_with_sysconfig = True
         if query_unit.database_config:
@@ -1090,6 +1167,8 @@ cdef class DatabaseConnectionView:
         side_effects = 0
 
         if not self._in_tx:
+            if query_unit.capabilities & DML_CAPABILITIES:
+                self._db.dml_queries_executed += 1
             if new_types:
                 self._db._update_backend_ids(new_types)
             if query_unit.user_schema is not None:
@@ -1133,6 +1212,8 @@ cdef class DatabaseConnectionView:
             self._modaliases = self._in_tx_modaliases
             self._globals = self._in_tx_globals
 
+            if self._in_tx_capabilities & DML_CAPABILITIES:
+                self._db.dml_queries_executed += 1
             if self._in_tx_new_types:
                 self._db._update_backend_ids(self._in_tx_new_types)
             if query_unit.user_schema is not None:
@@ -1263,6 +1344,7 @@ cdef class DatabaseConnectionView:
                             query_req.serialize(),
                             "<unknown>",
                             client_id=self.tenant.client_id,
+                            client_name=self.tenant.get_instance_name(),
                         )
                 except Exception:
                     # ignore cache entry that cannot be recompiled
@@ -1306,6 +1388,19 @@ cdef class DatabaseConnectionView:
                     op.apply(settings, self.get_database_config()),
                 )
             elif op.scope is config.ConfigScope.SESSION:
+                is_superuser, permissions = self.get_permissions()
+                if not is_superuser:
+                    setting = op.get_setting(settings)
+                    if setting.session_restricted and not (
+                        setting.session_permission
+                        and setting.session_permission in permissions
+                    ):
+                        raise errors.DisabledCapabilityError(
+                            f'role {self._role_name} does not have permission '
+                            f'to configure session config variable '
+                            f'{setting.name}'
+                        )
+
                 self.set_session_config(
                     op.apply(settings, self.get_session_config()),
                 )
@@ -1407,7 +1502,7 @@ cdef class DatabaseConnectionView:
                     raise
 
             self.check_capabilities(
-                query_unit_group.capabilities,
+                query_unit_group,
                 allow_capabilities,
                 errors.DisabledCapabilityError,
                 "disabled by the client",
@@ -1457,7 +1552,7 @@ cdef class DatabaseConnectionView:
         ):
             # Recompile all cached queries if:
             #  * Issued a DDL or committing a tx with DDL (recompilation
-            #    before in-tx DDL needs to fix _in_tx_with_ddl caching 1st)
+            #    before in-tx DDL needs to fix _in_tx_capabilities caching 1st)
             #  * Config.auto_rebuild_query_cache is turned on
             #
             # Ideally we should compute the proper user_schema, database_config
@@ -1532,6 +1627,8 @@ cdef class DatabaseConnectionView:
         num_injected_params = 0
         if qug.globals is not None:
             num_injected_params += len(qug.globals)
+        if qug.permissions is not None:
+            num_injected_params += len(qug.permissions)
         if first_extra is not None:
             extra_type_oids = source.extra_type_oids()
             all_type_oids = [0] * first_extra + extra_type_oids
@@ -1681,6 +1778,7 @@ cdef class DatabaseConnectionView:
                     query_req.source.text(),
                     self.in_tx_error(),
                     client_id=self.tenant.client_id,
+                    client_name=self.tenant.get_instance_name(),
                 )
             else:
                 result = await compiler_pool.compile(
@@ -1693,6 +1791,7 @@ cdef class DatabaseConnectionView:
                     query_req.serialize(),
                     query_req.source.text(),
                     client_id=self.tenant.client_id,
+                    client_name=self.tenant.get_instance_name(),
                 )
         finally:
             metrics.edgeql_query_compilation_duration.observe(
@@ -1729,12 +1828,14 @@ cdef class DatabaseConnectionView:
 
     cdef check_capabilities(
         self,
-        query_capabilities,
+        query_unit,
         allowed_capabilities,
         error_constructor,
         reason,
         unsafe_isolation_dangers,
     ):
+        query_capabilities = query_unit.capabilities
+
         if query_capabilities & ~self._capability_mask:
             # _capability_mask is currently only used for system database
             raise query_capabilities.make_error(
@@ -1743,11 +1844,19 @@ cdef class DatabaseConnectionView:
                 "system database is read-only",
             )
 
-        if query_capabilities & ~allowed_capabilities:
+        if (query_capabilities & PROTO_CAPS) & ~allowed_capabilities:
             raise query_capabilities.make_error(
                 allowed_capabilities,
                 error_constructor,
                 reason,
+            )
+
+        role_capability = self.get_role_capability()
+        if query_capabilities & ~role_capability:
+            raise query_capabilities.make_error(
+                role_capability,
+                error_constructor,
+                f"role {self._role_name} does not have permission",
             )
 
         if self.tenant.is_readonly():
@@ -1761,6 +1870,21 @@ cdef class DatabaseConnectionView:
                     errors.DisabledCapabilityError,
                     msg,
                 )
+
+        if query_unit.required_permissions:
+            is_superuser, permissions = self.get_permissions()
+            if not is_superuser:
+                for perm in query_unit.required_permissions:
+                    if perm not in permissions:
+                        missing = sorted(
+                            set(query_unit.required_permissions)
+                            - set(permissions)
+                        )
+                        plural = 's' if len(missing) > 1 else ''
+                        raise errors.DisabledCapabilityError(
+                            f'role {self._role_name} does not have required '
+                            f'permission{plural}: {", ".join(missing)}'
+                        )
 
         has_write = query_capabilities & enums.Capability.WRITE
         if has_write and unsafe_isolation_dangers:
@@ -2023,9 +2147,18 @@ cdef class DatabaseIndex:
             await self._server._after_system_config_reset(
                 op.setting_name)
 
-    def new_view(self, dbname: str, *, query_cache: bool, protocol_version):
+    def new_view(
+        self,
+        dbname: str,
+        *,
+        query_cache: bool,
+        protocol_version,
+        role_name: str,
+    ):
         db = self.get_db(dbname)
-        return (<Database>db)._new_view(query_cache, protocol_version)
+        return (<Database>db)._new_view(
+            query_cache, protocol_version, role_name
+        )
 
     def remove_view(self, view: DatabaseConnectionView):
         db = self.get_db(view.dbname)
@@ -2036,18 +2169,8 @@ cdef class DatabaseIndex:
 
     def get_cached_compiler_args(self):
         if self._cached_compiler_args is None:
-            dbs = immutables.Map()
-            for db in self._dbs.values():
-                dbs = dbs.set(
-                    db.name,
-                    compiler_state_mod.PickledDatabaseState(
-                        user_schema_pickle=db.user_schema_pickle,
-                        reflection_cache=db.reflection_cache,
-                        database_config=db.db_config,
-                    )
-                )
             self._cached_compiler_args = (
-                dbs, self._global_schema_pickle, self._comp_sys_config
+                self._global_schema_pickle, self._comp_sys_config
             )
         return self._cached_compiler_args
 

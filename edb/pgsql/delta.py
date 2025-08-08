@@ -55,6 +55,7 @@ from edb.schema import functions as s_funcs
 from edb.schema import globals as s_globals
 from edb.schema import indexes as s_indexes
 from edb.schema import links as s_links
+from edb.schema import permissions as s_permissions
 from edb.schema import policies as s_policies
 from edb.schema import properties as s_props
 from edb.schema import migrations as s_migrations
@@ -84,6 +85,7 @@ from edb.ir import typeutils as irtyputils
 from edb.ir import utils as irutils
 
 from edb.pgsql import common
+from edb.pgsql import debug as pg_debug
 from edb.pgsql import dbops
 from edb.pgsql import params
 from edb.pgsql import deltafts
@@ -744,6 +746,38 @@ class DeleteGlobal(
     pass
 
 
+class PermissionCommand(MetaCommand):
+    pass
+
+
+class CreatePermission(
+    PermissionCommand,
+    adapts=s_permissions.CreatePermission,
+):
+    pass
+
+
+class AlterPermission(
+    PermissionCommand,
+    adapts=s_permissions.AlterPermission,
+):
+    pass
+
+
+class DeletePermission(
+    PermissionCommand,
+    adapts=s_permissions.DeletePermission,
+):
+    pass
+
+
+class RenamePermission(
+    PermissionCommand,
+    adapts=s_permissions.RenamePermission,
+):
+    pass
+
+
 class AccessPolicyCommand(MetaCommand):
     pass
 
@@ -1399,6 +1433,9 @@ class FunctionCommand(MetaCommand):
                 backend_runtime_params=context.backend_runtime_params,
                 versioned_stdlib=context.stdmode,
             )
+
+            pg_debug.dump_ast_and_query(sql_res.ast, compiled_expr.irast)
+
             body = codegen.generate_source(sql_res.ast)
 
         return self.make_function(func, body, schema), replace
@@ -1528,6 +1565,8 @@ class FunctionCommand(MetaCommand):
             param_type = param.get_type(schema)
             pg_at = self.get_pgtype(cobj, param_type, schema)
             args.append(f'NULL::{qt(pg_at)}')
+            if isinstance(param_type, s_objtypes.ObjectType):
+                args.append(f'NULL::uuid')
 
         return f'{q(*name)}({", ".join(args)})'
 
@@ -1884,6 +1923,7 @@ class CastCommand(MetaCommand):
             args=args,
             returns=returns,
             strict=False,
+            wrapper_volatility=cast.get_volatility(schema),
             text=not_none(cast.get_code(schema)),
         )
 
@@ -2702,8 +2742,11 @@ class AlterScalarType(ScalarTypeMetaCommand, adapts=s_scalars.AlterScalarType):
         for prop, new_typ in props.items():
             try:
                 cmd.add(new_typ.as_create_delta(schema))
-            except errors.UnsupportedFeatureError:
-                pass
+            except NotImplementedError as e:
+                if e.args == ('unsupported typeshell',):
+                    pass
+                else:
+                    raise
 
             if prop.get_default(schema):
                 delta_alter, cmd_alter, _alter_context = prop.init_delta_branch(
@@ -3392,7 +3435,7 @@ class CreateIndex(IndexCommand, adapts=s_indexes.CreateIndex):
         index: s_indexes.Index,
         schema: s_schema.Schema,
         context: sd.CommandContext,
-    ):
+    ) -> dbops.Command:
         from .compiler import astutils
 
         options = get_index_compile_options(
@@ -3505,7 +3548,12 @@ class CreateIndex(IndexCommand, adapts=s_indexes.CreateIndex):
                 'kwargs': sql_kwarg_exprs,
             }
         )
-        return dbops.CreateIndex(pg_index)
+        concurrently = index.get_build_concurrently(schema)
+        return dbops.CreateIndex(
+            pg_index,
+            concurrently=concurrently,
+            builtin_conditional=concurrently,
+        )
 
     def _create_innards(
         self,
@@ -3517,6 +3565,9 @@ class CreateIndex(IndexCommand, adapts=s_indexes.CreateIndex):
 
         if index.get_abstract(schema):
             # Don't do anything for abstract indexes
+            return schema
+
+        if index.get_build_concurrently(schema):
             return schema
 
         with errors.ensure_span(self.span):
@@ -3648,6 +3699,14 @@ class DeleteIndexMatch(IndexMatchCommand, adapts=s_indexes.DeleteIndexMatch):
 class CreateUnionType(
     MetaCommand,
     adapts=s_types.CreateUnionType,
+    metaclass=CommandMeta,
+):
+    pass
+
+
+class CreateIntersectionType(
+    MetaCommand,
+    adapts=s_types.CreateIntersectionType,
     metaclass=CommandMeta,
 ):
     pass
@@ -3904,9 +3963,9 @@ class CancelPointerCardinalityUpdate(MetaCommand):
     pass
 
 
-class PointerMetaCommand(
+class PointerMetaCommand[Pointer_T: s_pointers.Pointer](
     CompositeMetaCommand,
-    s_pointers.PointerCommand[s_pointers.Pointer_T],
+    s_pointers.PointerCommand[Pointer_T],
 ):
     def get_host(self, schema, context):
         if context:
@@ -4008,7 +4067,7 @@ class PointerMetaCommand(
         is_lprop = ptr.is_link_property(schema)
         is_multi = ptr_table and not is_lprop
         is_required = ptr.get_required(schema)
-        is_scalar = ptr.is_property(schema)
+        is_scalar = ptr.is_property()
 
         ref_ctx = self.get_referrer_context_or_die(context)
         ref_op = ref_ctx.op
@@ -4949,7 +5008,7 @@ class LinkMetaCommand(PointerMetaCommand[s_links.Link]):
                 table_name=new_table_name,
                 columns=[src_col, tgt_col]))
 
-        if not link.is_non_concrete(schema) and link.scalar():
+        if not link.is_non_concrete(schema) and link.is_property():
             tgt_prop = link.getptr(schema, sn.UnqualName('target'))
             tgt_ptr = types.get_pointer_storage_info(
                 tgt_prop, schema=schema)
@@ -6940,6 +6999,15 @@ class CreateRole(MetaCommand, RoleMixin, adapts=s_roles.CreateRole):
         members = set()
 
         role_name = str(role.get_name(schema))
+        permissions: list[str] = list(sorted(
+            role.get_permissions(schema) or ()
+        ))
+        branches: list[str] = list(sorted(
+            role.get_branches(schema)
+        ))
+        apply_access_policies_pg_default = (
+            role.get_apply_access_policies_pg_default(schema)
+        )
 
         instance_params = backend_params.instance_params
         tenant_id = instance_params.tenant_id
@@ -6973,6 +7041,11 @@ class CreateRole(MetaCommand, RoleMixin, adapts=s_roles.CreateRole):
                 tenant_id=tenant_id,
                 password_hash=passwd,
                 builtin=role.get_builtin(schema),
+                permissions=permissions,
+                branches=branches,
+                apply_access_policies_pg_default=(
+                    apply_access_policies_pg_default
+                ),
             ),
         )
         self.pgops.add(dbops.CreateRole(db_role))
@@ -6994,18 +7067,39 @@ class AlterRole(MetaCommand, RoleMixin, adapts=s_roles.AlterRole):
         role_name = str(role.get_name(schema))
 
         kwargs = {}
+        update_metadata = False
+        metadata = dict(
+            id=str(role.id),
+            name=role_name,
+            tenant_id=tenant_id,
+            builtin=role.get_builtin(schema),
+            permissions=list(sorted(role.get_permissions(schema) or ())),
+            branches=list(sorted(role.get_branches(schema) or ())),
+            apply_access_policies_pg_default=(
+                role.get_apply_access_policies_pg_default(schema)
+            ),
+        )
+
         if self.has_attribute_value('password'):
             passwd = self.get_attribute_value('password')
             if backend_params.has_create_role:
                 # Only modify Postgres password of roles managed by EdgeDB
                 kwargs['password'] = passwd
-            kwargs['metadata'] = dict(
-                id=str(role.id),
-                name=role_name,
-                tenant_id=tenant_id,
-                password_hash=passwd,
-                builtin=role.get_builtin(schema),
-            )
+
+            update_metadata = True
+            metadata['password_hash'] = passwd
+        elif old_passwd := role.get_password(schema):
+            if backend_params.has_create_role:
+                # Only modify Postgres password of roles managed by EdgeDB
+                kwargs['password'] = old_passwd
+            metadata['password_hash'] = old_passwd
+
+        if (
+            self.has_attribute_value('permissions')
+            or self.has_attribute_value('branches')
+            or self.has_attribute_value('apply_access_policies_pg_default')
+        ):
+            update_metadata = True
 
         pg_role_name = common.get_role_backend_name(
             role_name, tenant_id=tenant_id)
@@ -7032,6 +7126,9 @@ class AlterRole(MetaCommand, RoleMixin, adapts=s_roles.AlterRole):
                 superuser_flag = backend_params.has_superuser_access
 
             kwargs['superuser'] = superuser_flag
+
+        if update_metadata:
+            kwargs['metadata'] = metadata
 
         if backend_params.has_create_role:
             dbrole = dbops.Role(name=pg_role_name, **kwargs)

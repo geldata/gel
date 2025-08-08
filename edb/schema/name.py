@@ -41,6 +41,8 @@ if TYPE_CHECKING:
 
     class Name:
 
+        __match_args__ = ('name',)
+
         name: str
 
         @classmethod
@@ -75,6 +77,8 @@ if TYPE_CHECKING:
             ...
 
     class QualName(Name):
+
+        __match_args__ = ('module', 'name')
 
         module: str
         name: str
@@ -225,6 +229,14 @@ def shortname_from_fullname(fullname: Name) -> Name:
         return name_from_string(unmangle_name(parts[0]))
     else:
         return fullname
+
+
+unmangle_re_1 = re.compile(r'\|+')
+
+
+def recursively_unmangle_shortname(name: str) -> str:
+    # Any number of pipes becomes a single ::.
+    return unmangle_re_1.sub('::', name)
 
 
 @functools.lru_cache(4096)

@@ -18,11 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional, TypeVar
-
-
-T = TypeVar("T")
-Adapter_T = TypeVar("Adapter_T", bound="Adapter")
+from typing import Any, Optional
 
 
 class AdapterError(Exception):
@@ -35,7 +31,7 @@ _adapters: dict[Any, dict[type, Adapter]] = {}
 class Adapter(type):
     __edb_adaptee__: Optional[type]
 
-    def __new__(
+    def __new__[Adapter_T: Adapter](
         mcls: type[Adapter_T],
         name: str,
         bases: tuple[type, ...],
@@ -44,9 +40,8 @@ class Adapter(type):
         adapts: Optional[type] = None,
         **kwargs: Any,
     ) -> Adapter_T:
-
         if adapts is not None:
-            bases = bases + (adapts, )
+            bases = bases + (adapts,)
 
         clsdict['__edb_adaptee__'] = adapts
 
@@ -130,12 +125,14 @@ class Adapter(type):
         return None
 
     @classmethod
-    def adapt(mcls, obj: T) -> T:
+    def adapt[T](mcls, obj: T) -> T:
         adapter = mcls.get_adapter(obj.__class__)
         if adapter is None:
             raise AdapterError(
                 'could not find {}.{} adapter for {}'.format(
-                    mcls.__module__, mcls.__name__, obj.__class__.__name__))
+                    mcls.__module__, mcls.__name__, obj.__class__.__name__
+                )
+            )
         elif adapter is not obj.__class__:  # type: ignore
             return adapter.adapt(obj)
         else:

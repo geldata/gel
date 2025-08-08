@@ -1444,7 +1444,7 @@ class TestIntrospection(tb.QueryTestCase):
     async def test_edgeql_introspection_reverse_leaks_01(self):
         res1 = await self.con.query(r"""
             WITH MODULE schema
-            SELECT ScalarType { z := count(.<target) }
+            SELECT ScalarType { z := count(.<target[is Property]) }
             FILTER .name = 'std::str';
         """)
 

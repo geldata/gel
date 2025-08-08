@@ -42,7 +42,7 @@ if [ "$SAVE_TARBALLS" = 1 ]; then
 fi
 
 
-PORT=12346
+PORT=$(( $RANDOM + 2000 ))
 edb server -D "$DIR" -P $PORT &
 SPID=$!
 stop_server() {
@@ -76,6 +76,9 @@ EDGEDB_PORT=$PORT EDGEDB_CLIENT_TLS_SECURITY=insecure python3 tests/inplace-test
 # Upgrade to the new version
 patch -f -p1 < tests/inplace-testing/upgrade.patch
 make parsers
+# Force bootstrapping of the server
+TMPDIR=$(mktemp -d)
+edb server --bootstrap-only --data-dir $TMPDIR/bootstrap || (rm -rf $TMPDIR && false)
 
 # Get the DSN from the debug endpoint
 DSN=$(curl -s http://localhost:$PORT/server-info | jq -r '.pg_addr.dsn')
@@ -102,6 +105,9 @@ if [ "$ROLLBACK" = 1 ]; then
     stop_server
     patch -R -f -p1 < tests/inplace-testing/upgrade.patch
     make parsers
+    TMPDIR=$(mktemp -d)
+    edb server --bootstrap-only --data-dir $TMPDIR/bootstrap || (rm -rf $TMPDIR && false)
+
     edb test --data-dir "$DIR" --use-data-dir-dbs -v "$@"
     exit 0
 fi

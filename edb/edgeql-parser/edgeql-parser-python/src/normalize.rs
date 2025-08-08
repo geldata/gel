@@ -156,7 +156,7 @@ pub fn normalize(text: &str) -> Result<Entry, Error> {
             }
             Kind::Keyword(Keyword(kw))
             if (
-                matches!(kw, "configure"|"create"|"alter"|"drop"|"start"|"analyze")
+                matches!(kw, "administer"|"configure"|"create"|"alter"|"drop"|"start"|"analyze")
                 || (last_was_set && kw == "global")
             ) => {
                 let processed_source = serialize_tokens(&tokens);

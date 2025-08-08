@@ -125,6 +125,9 @@ class Query(BaseQuery):
     in_type_args: Optional[list[Param]] = None
 
     globals: Optional[list[tuple[str, bool]]] = None
+    permissions: Optional[list[str]] = None
+    json_permissions: Optional[list[str]] = None
+    required_permissions: Optional[list[str]] = None
 
     server_param_conversions: Optional[list[ServerParamConversion]] = None
 
@@ -171,6 +174,7 @@ class DDLQuery(BaseQuery):
     db_op_trailer: tuple[bytes, ...] = ()
     ddl_stmt_id: Optional[str] = None
     config_ops: list[config.Operation] = dataclasses.field(default_factory=list)
+    early_non_tx_sql: Optional[tuple[bytes, ...]] = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -216,6 +220,7 @@ class Param:
     array_type_id: Optional[uuid.UUID]
     outer_idx: Optional[int]
     sub_params: Optional[tuple[list[Optional[uuid.UUID]], tuple[Any, ...]]]
+    typename: str
 
 
 #############################
@@ -247,6 +252,9 @@ class QueryUnit:
     # True if all statements in *sql* can be executed inside a transaction.
     # If False, they will be executed separately.
     is_transactional: bool = True
+
+    # SQL to run *before* the main command, non transactionally
+    early_non_tx_sql: Optional[tuple[bytes, ...]] = None
 
     # Capabilities used in this query
     capabilities: enums.Capability = enums.Capability(0)
@@ -318,6 +326,9 @@ class QueryUnit:
     in_type_args: Optional[list[Param]] = None
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
+    permissions: Optional[list[str]] = None
+    json_permissions: Optional[list[str]] = None
+    required_permissions: Optional[list[str]] = None
 
     server_param_conversions: Optional[list[ServerParamConversion]] = None
 
@@ -432,6 +443,9 @@ class QueryUnitGroup:
     in_type_args: Optional[list[Param]] = None
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
+    permissions: Optional[list[str]] = None
+    json_permissions: Optional[list[str]] = None
+    required_permissions: Optional[list[str]] = None
 
     server_param_conversions: Optional[list[ServerParamConversion]] = None
     unit_converted_param_indexes: Optional[dict[int, list[int]]] = None
@@ -453,6 +467,8 @@ class QueryUnitGroup:
     tx_seq_id: int = 0
 
     force_non_normalized: bool = False
+
+    graphql_key_variables: Optional[list[str]] = None
 
     @property
     def units(self) -> list[QueryUnit]:
@@ -502,6 +518,20 @@ class QueryUnitGroup:
             if self.globals is None:
                 self.globals = []
             self.globals.extend(query_unit.globals)
+        if query_unit.permissions is not None:
+            if self.permissions is None:
+                self.permissions = []
+            self.permissions.extend(query_unit.permissions)
+        if query_unit.json_permissions is not None:
+            if self.json_permissions is None:
+                self.json_permissions = []
+            self.json_permissions.extend(query_unit.json_permissions)
+        if query_unit.required_permissions is not None:
+            if self.required_permissions is None:
+                self.required_permissions = []
+            for perm in query_unit.required_permissions:
+                if perm not in self.required_permissions:
+                    self.required_permissions.append(perm)
         if query_unit.server_param_conversions is not None:
             if self.server_param_conversions is None:
                 self.server_param_conversions = []
@@ -691,6 +721,10 @@ class SQLParamGlobal(SQLParam):
     global_name: s_name.QualName
 
     pg_type: tuple[str, ...]
+
+    is_permission: bool
+
+    internal_index: int
 
 
 @dataclasses.dataclass

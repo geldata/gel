@@ -58,6 +58,7 @@ from edb.schema import expraliases as s_aliases
 from edb.schema import futures as s_futures
 from edb.schema import name as s_name
 from edb.schema import objects as s_obj
+from edb.schema import permissions as s_permissions
 from edb.schema import pointers as s_pointers
 from edb.schema import schema as s_schema
 from edb.schema import types as s_types
@@ -179,6 +180,12 @@ class Environment:
     query_globals: dict[s_name.QualName, irast.Global]
     """A mapping of query globals.  Gets populated during
     the compilation."""
+    query_globals_types: dict[s_name.QualName, s_types.Type]
+    """Injected dummy types for caching globals when the input
+    encoding is JSON"""
+
+    required_permissions: set[s_permissions.Permission]
+    """Permissions *required* to run this query."""
 
     server_param_conversions: dict[
         str,
@@ -335,6 +342,8 @@ class Environment:
         self.schema_view_cache = {}
         self.query_parameters = {}
         self.query_globals = {}
+        self.query_globals_types = {}
+        self.required_permissions = set()
         self.server_param_conversions = {}
         self.server_param_conversion_calls = []
         self.set_types = {}
@@ -807,15 +816,23 @@ class ContextLevel(compiler.ContextLevel):
         return self.new(ContextSwitchMode.DETACHED)
 
     def create_anchor(
-        self, ir: irast.Set, name: str = 'v', *, check_dml: bool = False
+        self,
+        ir: irast.Set,
+        name: str = 'v', *,
+        check_dml: bool = False,
+        move_scope: bool = False,
     ) -> qlast.Path:
         alias = self.aliases.get(name)
         # TODO: We should probably always check for DML, but I'm
         # concerned about perf, since we don't cache it at all.
         has_dml = check_dml and irutils.contains_dml(ir)
         self.anchors[alias] = ir
+        if move_scope:
+            assert ir.path_scope_id is not None
         return qlast.Path(
-            steps=[qlast.IRAnchor(name=alias, has_dml=has_dml)],
+            steps=[qlast.IRAnchor(
+                name=alias, has_dml=has_dml, move_scope=move_scope
+            )],
         )
 
     def maybe_create_anchor(
@@ -855,9 +872,10 @@ class ContextLevel(compiler.ContextLevel):
         self.no_factoring = s_futures.future_enabled(
             self.env.schema, 'simple_scoping'
         )
-        self.warn_factoring = s_futures.future_enabled(
-            self.env.schema, 'warn_old_scoping'
-        )
+        # When compiling schema things, we don't want to cause warnings
+        # The warnings will be emitted when updating the schema,
+        # and interact poorly with compilation.
+        self.warn_factoring = False
 
 
 class CompilerContext(compiler.CompilerContext[ContextLevel]):

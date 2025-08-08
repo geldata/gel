@@ -33,10 +33,7 @@ import inspect
 import warnings
 
 
-_T = TypeVar('_T')
-
-
-async def deferred_shield(arg: Awaitable[_T]) -> _T:
+async def deferred_shield[T](arg: Awaitable[T]) -> T:
     '''Wait for a future, deferring cancellation until it is complete.
 
     If you do
@@ -74,9 +71,9 @@ async def deferred_shield(arg: Awaitable[_T]) -> _T:
     return task.result()
 
 
-async def debounce(
-    input: Callable[[], Awaitable[_T]],
-    output: Callable[[list[_T]], Awaitable[None]],
+async def debounce[T](
+    input: Callable[[], Awaitable[T]],
+    output: Callable[[list[T]], Awaitable[None]],
     *,
     max_wait: float,
     delay_amt: float,

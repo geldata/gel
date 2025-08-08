@@ -1010,6 +1010,7 @@ pub enum CreateObjectKind {
     CreateConcretePointer(CreateConcretePointer),
     CreateAlias(CreateAlias),
     CreateGlobal(CreateGlobal),
+    CreatePermission(CreatePermission),
     CreateConcreteConstraint(CreateConcreteConstraint),
     CreateConcreteIndex(CreateConcreteIndex),
     CreateAnnotationValue(CreateAnnotationValue),
@@ -1044,6 +1045,7 @@ pub enum AlterObjectKind {
     AlterObjectType(AlterObjectType),
     AlterAlias(AlterAlias),
     AlterGlobal(AlterGlobal),
+    AlterPermission(AlterPermission),
     AlterLink(AlterLink),
     AlterConcreteLink(AlterConcreteLink),
     AlterConstraint(AlterConstraint),
@@ -1084,6 +1086,7 @@ pub enum DropObjectKind {
     DropObjectType(DropObjectType),
     DropAlias(DropAlias),
     DropGlobal(DropGlobal),
+    DropPermission(DropPermission),
     DropLink(DropLink),
     DropConcreteLink(DropConcreteLink),
     DropConstraint(DropConstraint),
@@ -1425,6 +1428,18 @@ pub struct SetGlobalType {
     pub cast_expr: Option<Box<Expr>>,
     pub reset_value: bool,
 }
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "python", derive(IntoPython))]
+pub struct CreatePermission {}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "python", derive(IntoPython))]
+pub struct AlterPermission {}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "python", derive(IntoPython))]
+pub struct DropPermission {}
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "python", derive(IntoPython))]
@@ -2017,6 +2032,7 @@ pub enum SchemaObjectClass {
     MODULE,
     OPERATOR,
     PARAMETER,
+    PERMISSION,
     PROPERTY,
     PSEUDO_TYPE,
     RANGE_TYPE,

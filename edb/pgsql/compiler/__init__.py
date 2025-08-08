@@ -82,12 +82,14 @@ def compile_ir_to_sql_tree(
             ],
         ]
     ] = None,
+    json_parameters: bool = False,
     backend_runtime_params: Optional[pgparams.BackendRuntimeParams]=None,
     cache_as_function: bool = False,
     alias_generator: Optional[aliases.AliasGenerator] = None,
     versioned_stdlib: bool = True,
     # HACK?
     versioned_singleton: bool = False,
+    sql_dml_mode: bool = False,
 ) -> CompileResult:
     if singleton_mode and not versioned_singleton:
         versioned_stdlib = False
@@ -123,6 +125,15 @@ def compile_ir_to_sql_tree(
         else:
             scope_tree = irast.new_scope_tree()
 
+        # In JSON parameters mode, keep only the synthetic globals
+        if json_parameters:
+            query_globals = [
+                g for g in query_globals if g.global_name.module == '__'
+            ]
+        # Ensure permissions are after globals, since they are injected
+        # after other globals.
+        query_globals.sort(key=lambda g: g.is_permission)
+
         scope_tree_nodes = {
             node.unique_id: node for node in scope_tree.descendants
             if node.unique_id is not None
@@ -146,6 +157,7 @@ def compile_ir_to_sql_tree(
             external_rvars=external_rvars,
             backend_runtime_params=backend_runtime_params,
             versioned_stdlib=versioned_stdlib,
+            sql_dml_mode=sql_dml_mode,
         )
 
         ctx = context.CompilerContextLevel(
@@ -165,7 +177,10 @@ def compile_ir_to_sql_tree(
         if external_rels:
             ctx.external_rels = external_rels
         clauses.populate_argmap(
-            query_params, query_globals, server_param_conversion_params, ctx=ctx
+            query_params,
+            query_globals,
+            server_param_conversion_params,
+            ctx=ctx,
         )
 
         qtree = dispatch.compile(ir_expr, ctx=ctx)

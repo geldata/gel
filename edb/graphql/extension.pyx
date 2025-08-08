@@ -60,6 +60,12 @@ _USER_ERRORS = (
     _graphql_rewrite.NotFoundError,
 )
 
+# key_vars tracks which variables are actually needed for evaluation,
+# since the compiler depends on some
+
+# redirect accounts for the fact that we actually don't always know
+# which the relevant variables are until after compiling
+
 @cython.final
 cdef class CacheRedirect:
     cdef public list key_vars  # List[str],  must be sorted
@@ -78,6 +84,7 @@ async def handle_request(
     object request,
     object response,
     object db,
+    str role_name,
     list args,
     object tenant,
 ):
@@ -203,7 +210,7 @@ async def handle_request(
     response.content_type = b'application/json'
     try:
         result = await _execute(
-            db, tenant, query, operation_name, variables, globals)
+            db, role_name, tenant, query, operation_name, variables, globals)
     except Exception as ex:
         if debug.flags.server:
             markup.dump(ex)
@@ -257,6 +264,7 @@ async def compile(
             operation_name,
             variables,
             client_id=tenant.client_id,
+            client_name=tenant.get_instance_name(),
         )
     finally:
         metrics.query_compilation_duration.observe(
@@ -265,18 +273,19 @@ async def compile(
             "graphql",
         )
 
-async def _execute(db, tenant, query, operation_name, variables, globals):
+async def _execute(
+    db, role_name, tenant, query, operation_name, variables, globals
+):
     dbver = db.dbver
     query_cache = tenant.server._http_query_cache
 
     if variables:
         for var_name in variables:
-            if var_name.startswith('_edb_arg__'):
+            if var_name.startswith('__edb_arg_'):
                 raise errors.QueryError(
-                    f"Variables starting with '_edb_arg__' are prohibited")
+                    f"Variables starting with '__edb_arg_' are prohibited")
 
-    query_cache_enabled = not (
-        debug.flags.disable_qcache or debug.flags.graphql_compile)
+    query_cache_enabled = not debug.flags.disable_qcache
 
     if debug.flags.graphql_compile:
         debug.header('Input graphql')
@@ -285,13 +294,6 @@ async def _execute(db, tenant, query, operation_name, variables, globals):
 
     try:
         rewritten = _graphql_rewrite.rewrite(operation_name, query)
-
-        vars = rewritten.variables.copy()
-        if variables:
-            vars.update(variables)
-        key_var_names = rewritten.key_vars
-        # on bad queries the following line can trigger KeyError
-        key_vars = tuple(vars[k] for k in key_var_names)
     except _graphql_rewrite.QueryError as e:
         raise errors.QueryError(e.args[0])
     except Exception as e:
@@ -303,18 +305,18 @@ async def _execute(db, tenant, query, operation_name, variables, globals):
         rewrite_error = e
         prepared_query = query
         vars = variables.copy() if variables else {}
-        key_var_names = []
-        key_vars = ()
     else:
         prepared_query = rewritten.key
+        vars = rewritten.variables.copy()
+        if variables:
+            vars.update(variables)
 
         if debug.flags.graphql_compile:
             debug.header('GraphQL optimized query')
             print(rewritten)
-            print(f'key_vars: {key_var_names}')
             print(f'variables: {vars}')
 
-    cache_key = ('graphql', prepared_query, key_vars, operation_name, dbver)
+    cache_key = ('graphql', prepared_query, (), operation_name, dbver)
     use_prep_stmt = False
 
     entry: CacheEntry = None
@@ -322,6 +324,9 @@ async def _execute(db, tenant, query, operation_name, variables, globals):
         entry = query_cache.get(cache_key, None)
 
     if isinstance(entry, CacheRedirect):
+        if debug.flags.graphql_compile:
+            print("REDIRECT", entry.key_vars)
+
         key_vars2 = tuple(vars[k] for k in entry.key_vars)
         cache_key2 = (prepared_query, key_vars2, operation_name, dbver)
         entry = query_cache.get(cache_key2, None)
@@ -350,9 +355,8 @@ async def _execute(db, tenant, query, operation_name, variables, globals):
                 vars,
             )
 
-        key_var_set = set(key_var_names)
-        if gql_op.cache_deps_vars and gql_op.cache_deps_vars != key_var_set:
-            key_var_set.update(gql_op.cache_deps_vars)
+        if gql_op.cache_deps_vars and gql_op.cache_deps_vars:
+            key_var_set = set(gql_op.cache_deps_vars)
             key_var_names = sorted(key_var_set)
             redir = CacheRedirect(key_vars=key_var_names)
             query_cache[cache_key] = redir
@@ -381,6 +385,7 @@ async def _execute(db, tenant, query, operation_name, variables, globals):
         dbname=db.name,
         query_cache=False,
         protocol_version=edbdef.CURRENT_PROTOCOL,
+        role_name=role_name,
     )
 
     async with tenant.with_pgcon(db.name) as pgcon:

@@ -17,15 +17,11 @@
 #
 
 import dataclasses
-from typing import Generic, Optional, TypeVar
-
-
-T = TypeVar('T', covariant=True)
-E = TypeVar('E', covariant=True)
+from typing import Optional, Any
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class Result(Generic[T, E]):
+class Result[T, E]:
     ok: Optional[T] = None
     err: Optional[E] = None
 
@@ -36,3 +32,20 @@ def is_schema_file(path: str) -> bool:
 
 def is_edgeql_file(path: str) -> bool:
     return path.endswith('.edgeql')
+
+
+def dump_to_str(node: Any) -> str:
+    import io
+    from edb.common import markup
+
+    buf = io.StringIO()
+    markup.dump(node, file=buf)
+    return buf.getvalue()
+
+
+def dump_to_local_file(path: str, node: Any):
+    import pathlib
+    from edb.common import markup
+
+    with ('.' / pathlib.Path(path)).open('w') as file:
+        markup.dump(node, file=file)

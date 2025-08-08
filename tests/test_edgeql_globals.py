@@ -435,7 +435,17 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             )
 
     async def test_edgeql_globals_14(self):
-        with self.assertRaisesRegex(
+        async with self.assertRaisesRegexTx(
+            edgedb.ConfigurationError,
+            "system global 'sys::current_role' may not be explicitly specified"
+        ):
+            await self.con.execute(
+                '''
+                set global sys::current_role := 'yay!'
+                ''',
+            )
+
+        async with self.assertRaisesRegexTx(
             edgedb.ConfigurationError,
             "global 'def_cur_user_excited' is computed from an expression "
             "and cannot be modified",
@@ -462,9 +472,53 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
                 ''',
             )
 
+    async def test_edgeql_globals_16(self):
+        await self.assert_query_result(
+            r'''select global GlobalArrayOfArrayOfScalar''',
+            [[[1, 2, 3], [4, 5, 6]]],
+        )
+
+    async def test_edgeql_globals_17(self):
+        await self.assert_query_result(
+            r"""
+                select array_agg((
+                    for card_group in array_unpack(global GlobalCardsByCost)
+                        select array_agg((
+                            for card in array_unpack(card_group)
+                                select card.name
+                        ))
+                ))
+            """,
+            [
+                [
+                    tb.bag([]),
+                    tb.bag(['Imp', 'Dwarf', 'Sprite']),
+                    tb.bag(['Bog monster', 'Giant eagle']),
+                    tb.bag(['Giant turtle', 'Golem']),
+                    tb.bag(['Djinn']),
+                    tb.bag(['Dragon']),
+                ],
+            ],
+        )
+
+    async def test_edgeql_globals_18(self):
+        await self.con.execute('''
+            CREATE GLOBAL foo := ([(f := 1)]);
+        ''')
+        await self.con.execute('''
+            CREATE GLOBAL bar -> array<tuple<f: int64>>;
+        ''')
+        await self.con.execute('''
+            SET GLOBAL bar := ([(f := 1)]);
+        ''')
+        await self.assert_query_result(
+            'SELECT GLOBAL default::bar',
+            [[{'f': 1}]],
+        )
+
     async def test_edgeql_globals_client_01(self):
         con = edgedb.create_async_client(
-            **self.get_connect_args(database=self.con.dbname)
+            **self.get_connect_args()
         )
         try:
             globs = dict(
@@ -481,7 +535,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
 
     async def test_edgeql_globals_client_02(self):
         con = edgedb.create_async_client(
-            **self.get_connect_args(database=self.con.dbname)
+            **self.get_connect_args()
         )
         try:
             globs = dict(
@@ -501,7 +555,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
 
     async def test_edgeql_globals_client_03(self):
         con = edgedb.create_async_client(
-            **self.get_connect_args(database=self.con.dbname)
+            **self.get_connect_args()
         )
         try:
             globs = dict(
@@ -523,7 +577,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
 
     async def test_edgeql_globals_client_04(self):
         con = edgedb.create_async_client(
-            **self.get_connect_args(database=self.con.dbname)
+            **self.get_connect_args()
         )
         try:
             globs = dict(
@@ -538,6 +592,24 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
                 await scon.query_single(
                     f'select {{ imaginary := global imaginary }}'
                 )
+        finally:
+            await con.aclose()
+
+    async def test_edgeql_globals_client_05(self):
+        con = edgedb.create_async_client(
+            **self.get_connect_args()
+        )
+        try:
+            globs = {
+                'sys::current_role': 'lol'
+            }
+            scon = con.with_globals(**globs)
+            with self.assertRaisesRegex(
+                edgedb.QueryArgumentError,
+                r"got {'sys::current_role'}, "
+                r"extra {'sys::current_role'}",
+            ):
+                await scon.query_single('select global sys::current_role')
         finally:
             await con.aclose()
 
@@ -561,14 +633,10 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
     async def test_edgeql_globals_composite(self):
         # Test various composite global variables.
 
-        # HACK: Using with_globals on testbase.Connection doesn't
-        # work, and I timed out on understanding why; I got the state
-        # plumbed into the real client library code, where the state
-        # codec was not encoding it.
-        # It isn't actually important for that to work, so for now
-        # we create a connection with the real honest client library.
+        # with_globals isn't supported in the testbase client, so use
+        # the stock client instead
         con = edgedb.create_async_client(
-            **self.get_connect_args(database=self.con.dbname)
+            **self.get_connect_args()
         )
         try:
             globs = dict(

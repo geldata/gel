@@ -18,25 +18,11 @@
 
 from __future__ import annotations
 
-from edb.common import parsing
-
 from edb.edgeql import ast as qlast
 
 from .expressions import Nonterm
 from .tokens import *  # NOQA
 from .expressions import *  # NOQA
-
-
-class SessionStmt(Nonterm):
-    val: qlast.Command
-
-    @parsing.inline(0)
-    def reduce_SetStmt(self, *kids):
-        pass
-
-    @parsing.inline(0)
-    def reduce_ResetStmt(self, *kids):
-        pass
 
 
 class SetStmt(Nonterm):
@@ -46,14 +32,16 @@ class SetStmt(Nonterm):
         _, _, alias, _, _, module = kids
         self.val = qlast.SessionSetAliasDecl(
             decl=qlast.ModuleAliasDecl(
-                module='::'.join(module.val), alias=alias.val
+                module='::'.join(module.val), alias=alias.val, span=self.span
             )
         )
 
     def reduce_SET_MODULE_ModuleName(self, *kids):
         _, _, module = kids
         self.val = qlast.SessionSetAliasDecl(
-            decl=qlast.ModuleAliasDecl(module='::'.join(module.val))
+            decl=qlast.ModuleAliasDecl(
+                module='::'.join(module.val), span=self.span
+            )
         )
 
 

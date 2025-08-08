@@ -32,6 +32,7 @@ cdef class PreparedStmt:
 cdef class ConnectionView:
 
     cdef:
+        object _local_fe_defaults
         object _settings
         object _fe_settings
 
@@ -47,6 +48,7 @@ cdef class ConnectionView:
 
         tuple _session_state_db_cache
 
+    cdef _init_user_configs(self, username, tenant)
     cpdef inline current_fe_settings(self)
     cdef inline fe_transaction_state(self)
     cpdef inline bint in_tx(self)

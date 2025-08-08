@@ -23,6 +23,10 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
 
     create module ext::auth;
 
+    create module ext::auth::perm;
+    create permission ext::auth::perm::auth_read;
+    create permission ext::auth::perm::auth_write;
+
     create abstract type ext::auth::Auditable extending std::BaseObject {
         create required property created_at: std::datetime {
             set default := std::datetime_current();
@@ -33,6 +37,13 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
                 std::datetime_current()
             );
         };
+
+        create access policy ap_read allow select using (
+            global ext::auth::perm::auth_read
+        );
+        create access policy ap_write allow insert, update, delete using (
+            global ext::auth::perm::auth_write
+        );
     };
 
     create type ext::auth::Identity extending ext::auth::Auditable {
@@ -138,6 +149,47 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
             on target delete delete source;
         };
     };
+
+    create type ext::auth::OneTimeCode extending ext::auth::Auditable {
+        create required property code_hash: std::bytes {
+            create constraint exclusive;
+            create annotation std::description :=
+                "The securely hashed one-time code.";
+        };
+        create required property expires_at: std::datetime {
+            create annotation std::description :=
+                "The date and time when the code expires.";
+        };
+        create index on (.expires_at);
+
+        create required link factor: ext::auth::Factor {
+            on target delete delete source;
+        };
+    };
+
+    create scalar type ext::auth::AuthenticationAttemptType extending std::enum<
+        SignIn,
+        EmailVerification,
+        PasswordReset,
+        MagicLink,
+        OneTimeCode
+    >;
+
+    create type ext::auth::AuthenticationAttempt extending ext::auth::Auditable {
+        create required link factor: ext::auth::Factor {
+            on target delete delete source;
+        };
+        create required property attempt_type: ext::auth::AuthenticationAttemptType {
+            create annotation std::description :=
+                "The type of authentication attempt being made.";
+        };
+        create required property successful: std::bool {
+            create annotation std::description :=
+                "Whether this authentication attempt was successful.";
+        };
+    };
+
+    create scalar type ext::auth::VerificationMethod extending std::enum<Link, Code>;
 
     create abstract type ext::auth::ProviderConfig
         extending cfg::ConfigObject {
@@ -280,6 +332,10 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         create required property require_verification: std::bool {
             set default := true;
         };
+
+        create required property verification_method: ext::auth::VerificationMethod {
+            set default := ext::auth::VerificationMethod.Link;
+        };
     };
 
     create type ext::auth::WebAuthnProviderConfig
@@ -299,6 +355,10 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         create required property require_verification: std::bool {
             set default := true;
         };
+
+        create required property verification_method: ext::auth::VerificationMethod {
+            set default := ext::auth::VerificationMethod.Link;
+        };
     };
 
     create type ext::auth::MagicLinkProviderConfig
@@ -312,6 +372,10 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
             set default := <std::duration>'10 minutes';
             create annotation std::description :=
                 "The time after which a magic link token expires.";
+        };
+
+        create required property verification_method: ext::auth::VerificationMethod {
+            set default := ext::auth::VerificationMethod.Link;
         };
     };
 
@@ -376,6 +440,8 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         EmailVerificationRequested,
         PasswordResetRequested,
         MagicLinkRequested,
+        OneTimeCodeRequested,
+        OneTimeCodeVerified,
     >;
 
     create type ext::auth::WebhookConfig extending cfg::ConfigObject {
@@ -405,6 +471,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         using (
             select exists webhook_config.signing_secret_key
         );
+        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create type ext::auth::AuthConfig extending cfg::ExtensionConfig {
@@ -474,6 +541,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
             select exists cfg::Config.extensions[is ext::auth::AuthConfig]
                 .auth_signing_key
         );
+        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create scalar type ext::auth::JWTAlgo extending enum<RS256, HS256>;
@@ -514,6 +582,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
                     message := "JWT signature mismatch",
                 )
         );
+        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create function ext::auth::_jwt_parse(
@@ -533,6 +602,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
             order by
                 assert(len(parts) = 3, message := "JWT is malformed")
         );
+        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create function ext::auth::_jwt_verify(
@@ -543,21 +613,20 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
     {
         set volatility := 'Stable';
         using (
+            for jwt in (
+                ext::auth::_jwt_check_signature(
+                    ext::auth::_jwt_parse(token),
+                    key,
+                    algo,
+                )
+            )
             with
-                # NB: Free-object wrapping to force materialization
-                jwt := {
-                    t := ext::auth::_jwt_check_signature(
-                        ext::auth::_jwt_parse(token),
-                        key,
-                        algo,
-                    ),
-                },
                 validity_range := std::range(
-                    std::to_datetime(<float64>json_get(jwt.t, "nbf")),
-                    std::to_datetime(<float64>json_get(jwt.t, "exp")),
+                    std::to_datetime(<float64>json_get(jwt, "nbf")),
+                    std::to_datetime(<float64>json_get(jwt, "exp")),
                 ),
             select
-                jwt.t
+                jwt
             order by
                 assert(
                     std::contains(
@@ -567,6 +636,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
                     message := "JWT is expired or is not yet valid",
                 )
         );
+        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create global ext::auth::client_token: std::str;

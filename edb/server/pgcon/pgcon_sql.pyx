@@ -139,7 +139,7 @@ cdef class PGSQLConnection:
 
             be_parse = True
             if action.action == PGAction.PARSE:
-                sql_text, data = action.args
+                sql_text, data = action.args[:2]
                 if action.stmt_name in prepared:
                     action.frontend_only = True
                 else:

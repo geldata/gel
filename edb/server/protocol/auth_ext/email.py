@@ -99,6 +99,57 @@ async def send_magic_link_email(
     await _maybe_send_message(msg, tenant, db, test_mode)
 
 
+async def send_one_time_code_email(
+    db: Any,
+    tenant: tenant.Tenant,
+    to_addr: str,
+    code: str,
+    test_mode: bool,
+) -> None:
+    app_details_config = util.get_app_details_config(db)
+    if app_details_config is None:
+        email_args = {}
+    else:
+        email_args = dict(
+            app_name=app_details_config.app_name,
+            logo_url=app_details_config.logo_url,
+            dark_logo_url=app_details_config.dark_logo_url,
+            brand_color=app_details_config.brand_color,
+        )
+    msg = ui.render_one_time_code_email(
+        to_addr=to_addr,
+        code=code,
+        **email_args,
+    )
+    await _maybe_send_message(msg, tenant, db, test_mode)
+
+
+async def send_password_reset_code_email(
+    db: Any,
+    tenant: tenant.Tenant,
+    to_addr: str,
+    code: str,
+    test_mode: bool,
+) -> None:
+    """Send a password reset email with a one-time code."""
+    app_details_config = util.get_app_details_config(db)
+    if app_details_config is None:
+        email_args = {}
+    else:
+        email_args = dict(
+            app_name=app_details_config.app_name,
+            logo_url=app_details_config.logo_url,
+            dark_logo_url=app_details_config.dark_logo_url,
+            brand_color=app_details_config.brand_color,
+        )
+    msg = ui.render_password_reset_code_email(
+        to_addr=to_addr,
+        code=code,
+        **email_args,
+    )
+    await _maybe_send_message(msg, tenant, db, test_mode)
+
+
 async def send_fake_email(tenant: tenant.Tenant) -> None:
     async def noop_coroutine() -> None:
         pass
