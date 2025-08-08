@@ -2974,6 +2974,21 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             '''
         )
 
+    async def test_sql_query_reparse_01(self):
+        query = '''SELECT ('literal str'::text, 42::int)'''
+
+        res1 = await self.squery_values(query)
+
+        # force a reparse
+        await self.scon.execute('SET LOCAL apply_access_policies_pg TO false')
+
+        # re-run the same query, asyncpg should just issue a BIND message
+        # of the cached prepared statement, and Gel should reparse/recompile
+        # the original query.
+        res2 = await self.squery_values(query)
+
+        self.assertEqual(res1, res2)
+
     async def test_sql_native_query_00(self):
         await self.assert_sql_query_result(
             """

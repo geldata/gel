@@ -237,7 +237,7 @@ def _compile_sql(
         extract_data = _build_constant_extraction_map(orig_stmt, stmt)
 
         unit = dbstate.SQLQueryUnit(
-            orig_query=orig_text,
+            orig_query=pg_codegen.generate_source(orig_stmt),
             fe_settings=fe_settings,
             # by default, the query is sent to PostgreSQL unchanged
             query=orig_text,

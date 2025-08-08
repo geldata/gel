@@ -1484,7 +1484,7 @@ cdef class PgConnection(frontend.FrontendConnection):
         outer_stmt, new_stmts = await self._parse_statement(
             stmt_name,
             qu.orig_query,
-            parse_action.args[1],
+            parse_action.args[2],
             dbv,
             force_recompilation=True,
             injected_action=True,
@@ -1716,12 +1716,12 @@ cdef class PgConnection(frontend.FrontendConnection):
             nested_ps_name = unit.deallocate.stmt_name
             unit = self._validate_deallocate_stmt(unit)
 
-        parse_data = remap_parameters(parse_data, unit.params)
+        remapped_parse_data = remap_parameters(parse_data, unit.params)
 
         action = PGMessage(
             PGAction.PARSE,
             stmt_name=unit.stmt_name,
-            args=(unit.query.encode("utf-8"), parse_data),
+            args=(unit.query.encode("utf-8"), remapped_parse_data, parse_data),
             query_unit=unit,
             fe_settings=fe_settings,
             injected=injected_action,
