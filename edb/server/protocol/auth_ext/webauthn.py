@@ -31,7 +31,6 @@ from webauthn.helpers import (
 )
 
 from edb.errors import ConstraintViolationError
-from edb.server.protocol import execute
 
 from . import config, data, errors, util, local
 
@@ -205,12 +204,8 @@ select factor { ** };""",
                     ),
                 },
             )
-        except Exception as e:
-            exc = await execute.interpret_error(e, self.db)
-            if isinstance(exc, ConstraintViolationError):
-                raise errors.UserAlreadyRegistered()
-            else:
-                raise exc
+        except ConstraintViolationError:
+            raise errors.UserAlreadyRegistered()
 
         result_json = json.loads(result.decode())
         assert len(result_json) == 1

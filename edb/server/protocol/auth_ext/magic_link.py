@@ -25,7 +25,6 @@ from typing import Any, cast
 
 from edb import errors as edb_errors
 from edb.common import debug
-from edb.server.protocol import execute
 
 from . import config, data, errors, jwt, util, local, email as auth_emails
 
@@ -91,12 +90,8 @@ select email_factor { ** };""",
                 },
             )
 
-        except Exception as e:
-            exc = await execute.interpret_error(e, self.db)
-            if isinstance(exc, edb_errors.ConstraintViolationError):
-                raise errors.UserAlreadyRegistered()
-            else:
-                raise exc
+        except edb_errors.ConstraintViolationError:
+            raise errors.UserAlreadyRegistered()
 
         result_json = json.loads(result.decode())
         assert len(result_json) == 1

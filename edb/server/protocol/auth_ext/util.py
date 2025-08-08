@@ -37,6 +37,9 @@ from typing import (
 
 import immutables
 
+from edb.common import retryloop
+from edb import errors as edb_errors
+
 from edb.server import config as edb_config, auth as jwt_auth
 from edb.server.config.types import CompositeConfigType
 from edb.server.protocol import execute
@@ -55,7 +58,7 @@ logger = logging.getLogger('edb.server.ext.auth')
 jwtset_cache = jwt_auth.JWKSetCache(60 * 10)
 
 
-async def json_query(
+async def json_query_no_retry(
     db: dbview.Database,
     query: str,
     *,
@@ -63,15 +66,45 @@ async def json_query(
     tx_isolation: edbdef.TxIsolationLevel | None = None,
     role_name: str | None = None,
 ) -> bytes:
-    return await execute.parse_execute_json(
-        db,
-        query,
-        variables=variables,
-        tx_isolation=tx_isolation,
-        cached_globally=True,
-        query_tag='gel/auth',
-        role_name=role_name,
+    try:
+        return await execute.parse_execute_json(
+            db,
+            query,
+            variables=variables,
+            tx_isolation=tx_isolation,
+            role_name=role_name,
+            cached_globally=True,
+            query_tag='gel/auth',
+        )
+    except Exception as e:
+        raise (await execute.interpret_error(e, db)) from None
+
+
+async def json_query(
+    db: dbview.Database,
+    query: str,
+    *,
+    variables: Mapping[str, Any] = immutables.Map(),
+    tx_isolation: edbdef.TxIsolationLevel | None = None,
+    role_name: str | None = None,
+    retry_timeout: float = 5.0,
+) -> bytes:
+    # TODO: Should we move the retry into a function in execute instead?
+    rloop = retryloop.RetryLoop(
+        backoff=retryloop.exp_backoff(),
+        timeout=retry_timeout,
+        ignore=(edb_errors.TransactionConflictError,),
     )
+    async for iteration in rloop:
+        async with iteration:
+            return await json_query_no_retry(
+                db,
+                query,
+                variables=variables,
+                tx_isolation=tx_isolation,
+                role_name=role_name,
+            )
+    raise AssertionError('retryloop is broken')
 
 
 def maybe_get_config_unchecked(db: edbtenant.dbview.Database, key: str) -> Any:

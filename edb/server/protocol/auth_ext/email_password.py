@@ -24,7 +24,6 @@ import dataclasses
 
 from typing import Any, Optional
 from edb.errors import ConstraintViolationError
-from edb.server.protocol import execute
 
 from . import errors, util, data, local
 
@@ -83,12 +82,8 @@ class Client(local.Client):
                     "password_hash": ph.hash(password),
                 },
             )
-        except Exception as e:
-            exc = await execute.interpret_error(e, self.db)
-            if isinstance(exc, ConstraintViolationError):
-                raise errors.UserAlreadyRegistered()
-            else:
-                raise exc
+        except ConstraintViolationError:
+            raise errors.UserAlreadyRegistered()
 
         result_json = json.loads(r.decode())
         assert len(result_json) == 1
