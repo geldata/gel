@@ -401,9 +401,8 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ELSE 'unknown' END AS nick_name FROM "Movie"
         '''
 
-        # Something broken in the cache
-        # res = await self.squery_values(query)
-        # self.assertEqual(res, [])
+        res = await self.squery_values(query)
+        self.assertEqual(res, [])
 
         # no access policies
         await self.scon.execute('SET LOCAL apply_access_policies_pg TO false')
@@ -471,9 +470,8 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             SELECT title FROM "Content" ORDER BY title OFFSET 1 LIMIT 2
         '''
 
-        # Something broken in the cache
-        # res = await self.squery_values(query)
-        # self.assertEqual(res, [])
+        res = await self.squery_values(query)
+        self.assertEqual(res, [])
 
         # no access policies
         await self.scon.execute('SET LOCAL apply_access_policies_pg TO false')
@@ -538,9 +536,8 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             FROM content2 ORDER BY pages DESC
         '''
 
-        # Something broken in the cache
-        # res = await self.squery_values(query)
-        # self.assertEqual(res, [])
+        res = await self.squery_values(query)
+        self.assertEqual(res, [])
 
         # no access policies
         await self.scon.execute('SET LOCAL apply_access_policies_pg TO false')
@@ -591,11 +588,10 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             SELECT (SELECT title FROM "Movie" ORDER BY title LIMIT 1)
         '''
 
-        # Something broken in the cache
-        # res = await self.squery_values(query_1)
-        # self.assertEqual(res, [])
-        # res = await self.squery_values(query_2)
-        # self.assertEqual(res, [[None]])
+        res = await self.squery_values(query_1)
+        self.assertEqual(res, [])
+        res = await self.squery_values(query_2)
+        self.assertEqual(res, [[None]])
 
         # no access policies
         await self.scon.execute('SET LOCAL apply_access_policies_pg TO false')
@@ -872,9 +868,8 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ORDER BY itl
         """
 
-        # Something broken in the cache
-        # res = await self.squery_values(query)
-        # self.assertEqual(res, [])
+        res = await self.squery_values(query)
+        self.assertEqual(res, [])
 
         # no access policies
         await self.scon.execute('SET LOCAL apply_access_policies_pg TO false')
