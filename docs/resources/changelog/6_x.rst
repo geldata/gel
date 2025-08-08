@@ -961,3 +961,34 @@ Fixes
 
 * Improve some parser error messages
   (:eql:gh:`#8819`)
+
+
+6.10
+====
+
+* Fix casting from JSON in indexes/constraints
+  (:eql:gh:`#8920`)
+
+* Fix ISE when computed global is introspected using GraphQL.
+  (:eql:gh:`#8839`)
+
+* Fix policy object duplication in degenerate multiple inheritance cases
+  (:eql:gh:`#8881`)
+
+* Fix bad HTTP cache response when cache expires and upstream is not modified
+  (:eql:gh:`#8891`)
+
+* Fix accessing single link properties through FOR bindings
+  (:eql:gh:`#8911`)
+
+* Fix UPDATING a link table field with reference to non-link field in some cases
+  (:eql:gh:`#8912`)
+
+* Add ``administer rebuild_sql_introspection`` command
+  (:eql:gh:`#8926`)
+
+* pg-ext: fix bug in query reparse
+  (:eql:gh:`#8938`)
+
+* Fix updating of two single links with linkprops at once
+  (:eql:gh:`#8932`)
