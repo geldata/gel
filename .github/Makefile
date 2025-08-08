@@ -15,6 +15,14 @@ all: workflows/nightly.yml \
 	workflows/tests-patches.yml \
 	workflows/tests-inplace.yml \
 	workflows/tests-reflection.yml \
+	workflows/build.dryrun.yml \
+	workflows/build.release.yml \
 
 workflows/%.yml: workflows.src/%.tpl.yml workflows.src/%.targets.yml workflows.src/build.inc.yml workflows.src/tests.inc.yml workflows.src/ls-build.inc.yml
 	$(ROOT)/workflows.src/render.py $* $*.targets.yml
+
+workflows/build.dryrun.yml: workflows/dryrun.yml
+	cp $< $@
+
+workflows/build.release.yml: workflows/release.yml
+	cp $< $@
