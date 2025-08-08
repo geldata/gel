@@ -20,7 +20,6 @@
 import json
 
 from typing import cast, Any, Callable
-from edb.server.protocol import execute
 from edb.server.http import HttpClient
 
 from . import github, google, azure, apple, discord, slack
@@ -123,7 +122,7 @@ class Client:
     ) -> tuple[data.Identity, bool]:
         """Update or create an identity"""
 
-        r = await execute.parse_execute_json(
+        r = await util.json_query(
             db=self.db,
             query="""\
 with
@@ -144,8 +143,6 @@ select {
                 "issuer_url": self.provider.issuer_url,
                 "subject": user_info.sub,
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
         result_json = json.loads(r.decode())
         assert len(result_json) == 1

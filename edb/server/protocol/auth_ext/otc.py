@@ -24,9 +24,8 @@ import uuid
 import datetime
 from typing import Any
 
-from edb.server.protocol import execute
 
-from . import errors
+from . import errors, util
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +59,7 @@ async def create(
     code_hash = hash_code(code)
     expires_at = datetime.datetime.now(datetime.timezone.utc) + ttl
 
-    r = await execute.parse_execute_json(
+    r = await util.json_query(
         db=db,
         query="""\
 with
@@ -75,8 +74,6 @@ select ONE_TIME_CODE { id };""",
             "code_hash": code_hash,
             "expires_at": expires_at.isoformat(),
         },
-        cached_globally=True,
-        query_tag='gel/auth',
     )
 
     result_json = json.loads(r.decode())
@@ -113,7 +110,7 @@ async def verify(db: Any, factor_id: str, code: str) -> str:
     """
     code_hash = hash_code(code)
 
-    r = await execute.parse_execute_json(
+    r = await util.json_query(
         db=db,
         query="""\
 with
@@ -189,8 +186,6 @@ select {
             "code_hash": code_hash,
             "max_attempts": MAX_ATTEMPTS,
         },
-        cached_globally=True,
-        query_tag='gel/auth',
     )
 
     result_json = json.loads(r.decode())
@@ -222,7 +217,7 @@ async def cleanup_old_attempts(db: Any, retention_hours: int = 24) -> int:
     Returns:
         Number of old attempts that were deleted
     """
-    r = await execute.parse_execute_json(
+    r = await util.json_query(
         db=db,
         query="""\
 with
@@ -235,8 +230,6 @@ select count(old_attempts);""",
         variables={
             "retention_duration": f"{retention_hours} hours",
         },
-        cached_globally=True,
-        query_tag='gel/auth',
     )
 
     result_json = json.loads(r.decode())

@@ -32,20 +32,46 @@ from typing import (
     TYPE_CHECKING,
     Callable,
     Awaitable,
+    Mapping,
 )
+
+import immutables
 
 from edb.server import config as edb_config, auth as jwt_auth
 from edb.server.config.types import CompositeConfigType
+from edb.server.protocol import execute
 
 from . import errors, config
 
 if TYPE_CHECKING:
     from edb.server import tenant as edbtenant
+    from edb.server.dbview import dbview
+    from edb.server import defines as edbdef
+
 
 logger = logging.getLogger('edb.server.ext.auth')
 
 # Cache JWKSets for 10 minutes
 jwtset_cache = jwt_auth.JWKSetCache(60 * 10)
+
+
+async def json_query(
+    db: dbview.Database,
+    query: str,
+    *,
+    variables: Mapping[str, Any] = immutables.Map(),
+    tx_isolation: edbdef.TxIsolationLevel | None = None,
+    role_name: str | None = None,
+) -> bytes:
+    return await execute.parse_execute_json(
+        db,
+        query,
+        variables=variables,
+        tx_isolation=tx_isolation,
+        cached_globally=True,
+        query_tag='gel/auth',
+        role_name=role_name,
+    )
 
 
 def maybe_get_config_unchecked(db: edbtenant.dbview.Database, key: str) -> Any:

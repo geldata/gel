@@ -28,7 +28,8 @@ import hmac
 import hashlib
 import uuid
 
-from edb.server.protocol import execute
+
+from . import util
 
 if typing.TYPE_CHECKING:
     from edb.server import tenant as edbtenant
@@ -253,7 +254,7 @@ async def send(
         ).hexdigest()
         headers.append(("x-ext-auth-signature-sha256", signature))
 
-    result_json = await execute.parse_execute_json(
+    result_json = await util.json_query(
         db,
         """
 with
@@ -280,8 +281,6 @@ select REQUEST;
             "body": body,
             "headers": headers,
         },
-        cached_globally=True,
-        query_tag='gel/auth',
     )
     result = json.loads(result_json)
 

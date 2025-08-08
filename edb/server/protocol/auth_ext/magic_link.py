@@ -72,7 +72,7 @@ class Client(local.Client):
 
     async def register(self, email: str) -> data.EmailFactor:
         try:
-            result = await execute.parse_execute_json(
+            result = await util.json_query(
                 self.db,
                 """
 with
@@ -89,8 +89,6 @@ select email_factor { ** };""",
                 variables={
                     "email": email,
                 },
-                cached_globally=True,
-                query_tag='gel/auth',
             )
 
         except Exception as e:
