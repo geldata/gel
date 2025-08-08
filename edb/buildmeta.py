@@ -57,7 +57,7 @@ from edb.common import verutils
 # The merge conflict there is a nice reminder that you probably need
 # to write a patch in edb/pgsql/patches.py, and then you should preserve
 # the old value.
-EDGEDB_CATALOG_VERSION = 2025_08_07_00_01
+EDGEDB_CATALOG_VERSION = 2025_08_07_00_02
 EDGEDB_MAJOR_VERSION = 7
 
 
@@ -615,3 +615,8 @@ def get_version_line() -> str:
         extras.append(f"for {ver_meta['target']}")
 
     return get_version_string() + " ".join(extras)
+
+
+# Belt and suspenders check to prevent accidental changes.
+# DO NOT EVER CHANGE THIS.
+assert EDGEDB_CATALOG_VERSION == 2025_08_07_00_02
