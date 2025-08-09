@@ -69,7 +69,6 @@ TenantConfig = TypedDict(
 
 class MultiTenantServer(server.BaseServer):
     _config_file: pathlib.Path
-    _sys_config: Mapping[str, config.SettingValue]
     _init_con_data: list[config.ConState]
 
     _tenants_by_sslobj: MutableMapping
@@ -88,7 +87,7 @@ class MultiTenantServer(server.BaseServer):
         config_file: pathlib.Path,
         *,
         compiler_pool_tenant_cache_size: int,
-        sys_config: Mapping[str, config.SettingValue],
+        sys_config: server.ServerSysConfig,
         init_con_data: list[config.ConState],
         sys_queries: Mapping[str, bytes],
         report_config_typedesc: dict[defines.ProtocolVersion, bytes],
@@ -112,9 +111,6 @@ class MultiTenantServer(server.BaseServer):
         self._task_serial = 0
         self._sys_queries = sys_queries
         self._report_config_typedesc = report_config_typedesc
-
-    def _get_sys_config(self) -> Mapping[str, config.SettingValue]:
-        return self._sys_config
 
     def _sni_callback(self, sslobj, server_name, _sslctx):
         if server_name is None:
@@ -440,7 +436,7 @@ class MultiTenantServer(server.BaseServer):
 async def run_server(
     args: srvargs.ServerConfig,
     *,
-    sys_config: Mapping[str, config.SettingValue],
+    sys_config: server.ServerSysConfig,
     init_con_data: list[config.ConState],
     sys_queries: Mapping[str, bytes],
     report_config_typedesc: dict[defines.ProtocolVersion, bytes],

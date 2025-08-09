@@ -48,7 +48,7 @@ class CompiledQuery:
 class Database:
     name: str
     dbver: int
-    db_config: Config
+    db_config: server.ServerSysConfig
     extensions: set[str]
     user_config_spec: config.Spec
     dml_queries_executed: int
@@ -145,22 +145,17 @@ class DatabaseIndex:
         *,
         std_schema: s_schema.Schema,
         global_schema_pickle: bytes,
-        sys_config: Config,
-        default_sysconfig: Config,
-        sys_config_spec: config.Spec,
+        sys_config: server.ServerSysConfig,
     ) -> None:
         ...
 
     def count_connections(self, dbname: str) -> int:
         ...
 
-    def get_sys_config(self) -> Config:
-        ...
-
     def get_compilation_system_config(self) -> Config:
         ...
 
-    def update_sys_config(self, sys_config: Config) -> None:
+    def update_sys_config(self) -> None:
         ...
 
     def has_db(self, dbname: str) -> bool:
