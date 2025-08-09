@@ -25,6 +25,7 @@ EdgeQL
     analyze
     path_resolution
     transactions
+    session
 
 EdgeQL is a next-generation query language designed to match SQL in power and
 surpass it in terms of clarity, brevity, and intuitiveness. It's used to query
