@@ -87,7 +87,6 @@ class MultiTenantServer(server.BaseServer):
         config_file: pathlib.Path,
         *,
         compiler_pool_tenant_cache_size: int,
-        sys_config: server.ServerSysConfig,
         init_con_data: list[config.ConState],
         sys_queries: Mapping[str, bytes],
         report_config_typedesc: dict[defines.ProtocolVersion, bytes],
@@ -95,7 +94,6 @@ class MultiTenantServer(server.BaseServer):
     ):
         super().__init__(**kwargs)
         self._config_file = config_file
-        self._sys_config = sys_config
         self._init_con_data = init_con_data
         self._compiler_pool_tenant_cache_size = compiler_pool_tenant_cache_size
 
