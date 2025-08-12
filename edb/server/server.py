@@ -120,12 +120,11 @@ class ServerSysConfig:
         assert self._sys_config is not None, "ServerConfig is not initialized"
         return self._sys_config
 
-    @property
-    def default_sysconfig(self) -> Mapping[str, config.SettingValue]:
-        assert self._default_sysconfig is not None, "default_sysconfig is not initialized"
-        return self._default_sysconfig
-
-    def init(self, sys_config: Mapping[str, config.SettingValue], default_sysconfig: Mapping[str, config.SettingValue]):
+    def init(
+        self,
+        sys_config: Mapping[str, config.SettingValue],
+        default_sysconfig: Mapping[str, config.SettingValue] = None,
+    ):
         assert self._sys_config is None, "ServerConfig is already initialized"
         assert self._default_sysconfig is None, "default_sysconfig is already initialized"
         self._sys_config = sys_config
@@ -149,11 +148,11 @@ class ServerSysConfig:
     def lookup(
         self,
         name: str,
-        *db_config: Mapping[str, config.SettingValue],
+        configs: Optional[tuple[Mapping[str, config.SettingValue], ...]] = None,
         spec: config.Spec = None,
     ) -> Any:
         assert self._sys_config is not None, "ServerConfig is not initialized"
-        db_config = db_config or (self._sys_config,)
+        db_config = configs or () + (self._sys_config,)
         spec = spec or self._config_settings
         return config.lookup(name, *db_config, spec=spec)
 

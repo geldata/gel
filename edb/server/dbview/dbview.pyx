@@ -598,8 +598,7 @@ cdef class Database:
             spec = config.ChainedSpec(spec, self.user_config_spec)
         return self._index._sys_config.lookup(
             name,
-            self.db_config or DEFAULT_CONFIG,
-            self._index._sys_config._sys_config,
+            configs=(self.db_config or DEFAULT_CONFIG,),
             spec=spec
         )
 
@@ -1291,9 +1290,10 @@ cdef class DatabaseConnectionView:
     cdef lookup_config(self, name):
         return self.server.config.lookup(
             name,
-            self.get_session_config(),
-            self.get_database_config(),
-            self._db._index._sys_config._sys_config
+            configs=(
+                self.get_session_config(),
+                self.get_database_config(),
+            ),
         )
 
     async def recompile_cached_queries(
