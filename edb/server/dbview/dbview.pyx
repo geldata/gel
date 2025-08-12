@@ -2065,10 +2065,8 @@ cdef class DatabaseIndex:
     def iter_dbs(self):
         return iter(self._dbs.values())
 
-    async def _save_system_overrides(self, conn, spec):
-        data = config.to_json(
-            spec,
-            self._sys_config._sys_config,
+    async def _save_system_overrides(self, conn):
+        data = self._sys_config.to_json(
             setting_filter=lambda v: v.source == 'system override',
             include_source=False,
         )
@@ -2105,7 +2103,7 @@ cdef class DatabaseIndex:
         self._sys_config.apply(op)
         self.update_sys_config()
 
-        await self._save_system_overrides(conn, spec)
+        await self._save_system_overrides(conn)
 
         if op.opcode is config.OpCode.CONFIG_ADD:
             await self._server._on_system_config_add(op.setting_name, op_value)

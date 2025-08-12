@@ -141,6 +141,7 @@ class ServerSysConfig:
     def apply(self, op: config.Operation):
         assert self._sys_config is not None, "ServerConfig is not initialized"
         op.apply(self._config_settings, self._sys_config)
+        self.update(self._sys_config)
 
     def get_compilation_config(self) -> immutables.Map[str, config.SettingValue]:
         assert self._sys_config is not None, "ServerConfig is not initialized"
@@ -157,6 +158,17 @@ class ServerSysConfig:
         spec = spec or self._config_settings
         return config.lookup(name, *db_config, spec=spec)
 
+    def to_json(
+        self,
+        setting_filter: Optional[Callable[[config.SettingValue], bool]] = None,
+        include_source: bool = True,
+    ) -> str:
+        return config.to_json(
+            self._config_settings,
+            self._sys_config,
+            setting_filter=setting_filter,
+            include_source=include_source,
+        )
 
 class BaseServer:
     _sys_queries: Mapping[str, bytes]
