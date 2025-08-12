@@ -141,7 +141,6 @@ class ServerSysConfig:
     def apply(self, op: config.Operation):
         assert self._sys_config is not None, "ServerConfig is not initialized"
         op.apply(self._config_settings, self._sys_config)
-        self.update(self._sys_config)
 
     def get_compilation_config(self) -> immutables.Map[str, config.SettingValue]:
         assert self._sys_config is not None, "ServerConfig is not initialized"

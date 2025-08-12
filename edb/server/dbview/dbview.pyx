@@ -599,6 +599,7 @@ cdef class Database:
         return self._index._sys_config.lookup(
             name,
             self.db_config or DEFAULT_CONFIG,
+            self._index._sys_config._sys_config,
             spec=spec
         )
 
