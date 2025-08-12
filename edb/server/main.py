@@ -208,7 +208,9 @@ async def _run_server(
         from . import tenant as edbtenant
         from . import server
 
-        sys_config = server.ServerSysConfig(config_settings=compiler.state.config_spec)
+        sys_config = server.ServerSysConfig(
+            config_settings=compiler.state.config_spec
+        )
 
         # max_backend_connections should've been calculated already by now
         assert args.max_backend_connections is not None
@@ -599,14 +601,17 @@ async def run_server(
                 compiler_state.config_spec,
             )
 
-            sys_config, backend_settings, init_con_data = (
+            config_map, backend_settings, init_con_data = (
                 initialize_static_cfg(
                     args,
                     is_remote_cluster=True,
                     compiler=compiler,
                 )
             )
-            sys_config = server.ServerSysConfig(config_settings=compiler_state.config_spec, sys_config=sys_config, default_sysconfig=immutables.Map())
+            sys_config = server.ServerSysConfig(
+                config_settings=compiler_state.config_spec,
+                sys_config=config_map,
+            )
             del compiler
             if backend_settings:
                 abort(

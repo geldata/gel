@@ -236,7 +236,9 @@ class MultiTenantServer(server.BaseServer):
                 "No secret key"
             )
 
-        sys_config = server.ServerSysConfig(config_settings=self._sys_config.config_settings)
+        sys_config = server.ServerSysConfig(
+            config_settings=self._sys_config.config_settings
+        )
 
         tenant = edbtenant.Tenant(
             cluster,

@@ -103,10 +103,15 @@ class StartupError(Exception):
 
 class ServerSysConfig:
     _sys_config: Mapping[str, config.SettingValue] | None
-    _default_sysconfig: Mapping[str, config.SettingValue] | None
+    _default_sysconfig: Mapping[str, config.SettingValue]
     _config_settings: config.Spec
 
-    def __init__(self, config_settings: config.Spec, sys_config: Mapping[str, config.SettingValue] = None, default_sysconfig: Mapping[str, config.SettingValue] = None):
+    def __init__(
+            self,
+            config_settings: config.Spec,
+            sys_config: Mapping[str, config.SettingValue] = None,
+            default_sysconfig: Mapping[str, config.SettingValue] = immutables.Map(),
+    ):
         self._sys_config = sys_config
         self._default_sysconfig = default_sysconfig
         self._config_settings = config_settings
@@ -126,12 +131,10 @@ class ServerSysConfig:
         default_sysconfig: Mapping[str, config.SettingValue] = None,
     ):
         assert self._sys_config is None, "ServerConfig is already initialized"
-        assert self._default_sysconfig is None, "default_sysconfig is already initialized"
         self._sys_config = sys_config
         self._default_sysconfig = default_sysconfig
 
     def update(self, sys_config: Mapping[str, config.SettingValue]):
-        assert self._default_sysconfig is not None, "ServerConfig is not initialized"
         with self._default_sysconfig.mutate() as mm:
             mm.update(sys_config)
             sys_config = mm.finish()
