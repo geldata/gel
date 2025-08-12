@@ -107,13 +107,18 @@ class ServerSysConfig:
     _config_settings: config.Spec
 
     def __init__(self, config_settings: config.Spec, sys_config: Mapping[str, config.SettingValue] = None, default_sysconfig: Mapping[str, config.SettingValue] = None):
-        self._sys_config = None
+        self._sys_config = sys_config
         self._default_sysconfig = default_sysconfig
         self._config_settings = config_settings
 
     @property
     def settings(self) -> config.Spec:
         return self._config_settings
+
+    @property
+    def sys_config(self) -> Mapping[str, config.SettingValue]:
+        assert self._sys_config is not None, "ServerConfig is not initialized"
+        return self._sys_config
 
     @property
     def default_sysconfig(self) -> Mapping[str, config.SettingValue]:
@@ -1258,7 +1263,7 @@ class BaseServer:
                 listen_port=self._listen_port,
             ),
             instance_config=config.debug_serialize_config(
-                self._sys_config),
+                self._sys_config.sys_config),
             compiler_pool=(
                 self._compiler_pool.get_debug_info()
                 if self._compiler_pool

@@ -48,7 +48,7 @@ class CompiledQuery:
 class Database:
     name: str
     dbver: int
-    db_config: server.ServerSysConfig
+    db_config: Config
     extensions: set[str]
     user_config_spec: config.Spec
     dml_queries_executed: int

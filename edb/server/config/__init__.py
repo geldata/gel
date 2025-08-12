@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Mapping, TypedDict
+from typing import Any, Mapping, TypedDict, TYPE_CHECKING
 
 import enum
 
@@ -26,6 +26,8 @@ import immutables
 
 from edb import errors
 from edb.edgeql.qltypes import ConfigScope
+if TYPE_CHECKING:
+    from edb.server import server
 
 from .ops import OpCode, Operation, SettingValue
 from .ops import (

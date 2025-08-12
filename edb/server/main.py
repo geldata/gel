@@ -606,7 +606,7 @@ async def run_server(
                     compiler=compiler,
                 )
             )
-            sys_config = server.ServerSysConfig(config_spec=compiler_state.config_spec, sys_config=sys_config, default_sysconfig=immutables.Map())
+            sys_config = server.ServerSysConfig(config_settings=compiler_state.config_spec, sys_config=sys_config, default_sysconfig=immutables.Map())
             del compiler
             if backend_settings:
                 abort(

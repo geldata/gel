@@ -238,11 +238,14 @@ class MultiTenantServer(server.BaseServer):
                 "No secret key"
             )
 
+        sys_config = server.ServerSysConfig(config_settings=self._sys_config.config_settings)
+
         tenant = edbtenant.Tenant(
             cluster,
             instance_name=conf["instance-name"],
             max_backend_connections=max_conns,
             backend_adaptive_ha=conf.get("backend-adaptive-ha", False),
+            sys_config=sys_config,
         )
         tenant.set_init_con_data(self._init_con_data)
         config_file = conf.get("config-file")

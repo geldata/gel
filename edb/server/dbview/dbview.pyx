@@ -2068,7 +2068,7 @@ cdef class DatabaseIndex:
     async def _save_system_overrides(self, conn, spec):
         data = config.to_json(
             spec,
-            self._sys_config,
+            self._sys_config._sys_config,
             setting_filter=lambda v: v.source == 'system override',
             include_source=False,
         )
