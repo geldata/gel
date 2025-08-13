@@ -237,7 +237,7 @@ class MultiTenantServer(server.BaseServer):
             )
 
         sys_config = server.ServerSysConfig(
-            config_settings=self._sys_config.config_settings
+            config_settings=self._sys_config.settings
         )
 
         tenant = edbtenant.Tenant(
