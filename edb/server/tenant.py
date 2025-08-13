@@ -105,7 +105,7 @@ class RoleDescriptor(TypedDict):
 
 class Tenant(ha_base.ClusterProtocol):
     _server: edbserver.BaseServer
-    _sys_config: server.ServerSysConfig
+    _sys_config: edbserver.ServerSysConfig
     _cluster: pgcluster.BaseCluster
     _tenant_id: str
     _instance_name: str
@@ -167,7 +167,7 @@ class Tenant(ha_base.ClusterProtocol):
         max_backend_connections: int,
         backend_adaptive_ha: bool = False,
         extensions_dir: tuple[pathlib.Path, ...] = (),
-        sys_config: server.ServerSysConfig,
+        sys_config: edbserver.ServerSysConfig,
     ):
         self._cluster = cluster
         self._sys_config = sys_config
@@ -398,7 +398,7 @@ class Tenant(ha_base.ClusterProtocol):
         return self._readiness_reason
 
     @property
-    def config(self) -> server.ServerSysConfig:
+    def config(self) -> edbserver.ServerSysConfig:
         return self._sys_config
 
     def get_report_config_data(
