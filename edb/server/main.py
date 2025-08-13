@@ -66,7 +66,6 @@ from . import logsetup
 from . import pgcluster
 from . import service_manager
 
-
 if TYPE_CHECKING:
     from . import server
     from edb.server import bootstrap
@@ -207,6 +206,11 @@ async def _run_server(
 
     with signalctl.SignalController(signal.SIGINT, signal.SIGTERM) as sc:
         from . import tenant as edbtenant
+        from . import server
+
+        sys_config = server.ServerSysConfig(
+            config_settings=compiler.state.config_spec
+        )
 
         # max_backend_connections should've been calculated already by now
         assert args.max_backend_connections is not None
@@ -216,6 +220,7 @@ async def _run_server(
             max_backend_connections=args.max_backend_connections,
             backend_adaptive_ha=args.backend_adaptive_ha,
             extensions_dir=args.extensions_dir,
+            sys_config=sys_config,
         )
         tenant.set_init_con_data(init_con_data)
         tenant.set_reloadable_files(
@@ -531,6 +536,7 @@ async def run_server(
         from edb.schema import reflection as s_refl
         from . import bootstrap
         from . import multitenant
+        from . import server
 
         try:
             stdlib: bootstrap.StdlibBits | None
@@ -595,12 +601,16 @@ async def run_server(
                 compiler_state.config_spec,
             )
 
-            sys_config, backend_settings, init_con_data = (
+            config_map, backend_settings, init_con_data = (
                 initialize_static_cfg(
                     args,
                     is_remote_cluster=True,
                     compiler=compiler,
                 )
+            )
+            sys_config = server.ServerSysConfig(
+                config_settings=compiler_state.config_spec,
+                sys_config=config_map,
             )
             del compiler
             if backend_settings:
