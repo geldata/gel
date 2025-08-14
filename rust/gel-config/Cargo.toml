@@ -1,0 +1,21 @@
+[package]
+name = "gel-config"
+version = "0.1.0"
+license = "MIT/Apache-2.0"
+authors = ["MagicStack Inc. <hello@magic.io>"]
+edition = "2021"
+
+[lints]
+workspace = true
+
+[features]
+python_extension = ["pyo3"]
+
+[dependencies]
+pyo3 = { workspace = true, optional = true }
+tokio.workspace = true
+pyo3_util.workspace = true
+tracing.workspace = true
+
+gel-stream.workspace = true
+gel-jwt.workspace = true
