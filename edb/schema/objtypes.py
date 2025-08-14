@@ -539,11 +539,17 @@ class CreateObjectType(
         *,
         parent_node: Optional[qlast.DDLOperation] = None,
     ) -> Optional[qlast.DDLOperation]:
-        if (self.get_attribute_value('expr_type')
-                and not self.get_attribute_value('expr')):
+        if (
+            (
             # This is a nested view type, e.g
             # __FooAlias_bar produced by  FooAlias := (SELECT Foo { bar: ... })
             # and should obviously not appear as a top level definition.
+                self.get_attribute_value('expr_type')
+                and not self.get_attribute_value('expr')
+            )
+            # Or another generated type which should not appear.
+            or self.get_orig_attribute_value('is_schema_generated')
+        ):
             return None
         else:
             return super()._get_ast(schema, context, parent_node=parent_node)
@@ -599,6 +605,24 @@ class AlterObjectType(
     inheriting.AlterInheritingObject[ObjectType],
 ):
     astnode = qlast.AlterObjectType
+
+    def _get_ast(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+        *,
+        parent_node: Optional[qlast.DDLOperation] = None,
+    ) -> Optional[qlast.DDLOperation]:
+        if (
+            hasattr(self, 'scls')
+            and self.scls.get_is_schema_generated(schema)
+        ):
+            # This is another automatically generated type.
+            # Appropriate DDL will be generated from the corresponding
+            # AlterObject node.
+            return None
+        else:
+            return super()._get_ast(schema, context, parent_node=parent_node)
 
     def _alter_begin(
         self,
@@ -713,9 +737,13 @@ class DeleteObjectType(
         *,
         parent_node: Optional[qlast.DDLOperation] = None,
     ) -> Optional[qlast.DDLOperation]:
-        if self.get_orig_attribute_value('expr_type'):
-            # This is an alias type, appropriate DDL would be generated
-            # from the corresponding DeleteAlias node.
+        if (
+            self.get_orig_attribute_value('expr_type')
+            or self.get_orig_attribute_value('is_schema_generated')
+        ):
+            # This is an alias type or other automatically generated type.
+            # Appropriate DDL will be generated from the corresponding
+            # DeleteObject node.
             return None
         else:
             return super()._get_ast(schema, context, parent_node=parent_node)

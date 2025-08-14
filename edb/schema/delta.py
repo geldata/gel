@@ -42,6 +42,7 @@ import collections.abc
 import contextlib
 import functools
 import itertools
+import pathlib
 import uuid
 
 from edb import errors
@@ -1292,6 +1293,7 @@ class CommandContext:
         backend_runtime_params: Optional[Any] = None,
         compat_ver: Optional[verutils.Version] = None,
         include_ext_version: bool = True,
+        reference_paths: Optional[Mapping[str, pathlib.Path]] = None
     ) -> None:
         self.stack: list[CommandContextToken[Command]] = []
         self._cache: dict[Hashable, Any] = {}
@@ -1320,6 +1322,7 @@ class CommandContext:
         ] = collections.defaultdict(list)
         self.compat_ver = compat_ver
         self.include_ext_version = include_ext_version
+        self.reference_paths = reference_paths
 
     @property
     def modaliases(self) -> Mapping[Optional[str], str]:
