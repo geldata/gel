@@ -41,6 +41,7 @@ import collections
 import collections.abc
 import contextlib
 import functools
+import immutables
 import itertools
 import uuid
 
@@ -1292,6 +1293,7 @@ class CommandContext:
         backend_runtime_params: Optional[Any] = None,
         compat_ver: Optional[verutils.Version] = None,
         include_ext_version: bool = True,
+        extension_refs: Optional[immutables.Map[str, Any]] = None
     ) -> None:
         self.stack: list[CommandContextToken[Command]] = []
         self._cache: dict[Hashable, Any] = {}
@@ -1320,6 +1322,7 @@ class CommandContext:
         ] = collections.defaultdict(list)
         self.compat_ver = compat_ver
         self.include_ext_version = include_ext_version
+        self.extension_refs = extension_refs
 
     @property
     def modaliases(self) -> Mapping[Optional[str], str]:

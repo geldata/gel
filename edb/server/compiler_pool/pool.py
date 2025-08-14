@@ -401,6 +401,7 @@ class AbstractPool[
         user_schema_pickle: bytes,
         global_schema_pickle: bytes,
         reflection_cache: state.ReflectionCache,
+        extension_refs: immutables.Map[str, Any],
         database_config: Config,
         system_config: Config,
     ) -> tuple[PreArgs, Optional[SyncStateCallback], SyncFinalizer]:
@@ -412,6 +413,7 @@ class AbstractPool[
             user_schema_pickle: Optional[bytes] = None,
             global_schema_pickle: Optional[bytes] = None,
             reflection_cache: Optional[state.ReflectionCache] = None,
+            extension_refs: Optional[immutables.Map[str, Any]] = None,
             database_config: Optional[Config] = None,
             system_config: Optional[Config] = None,
             evicted_dbs: Optional[list[str]] = None,
@@ -424,6 +426,7 @@ class AbstractPool[
             if worker_db is None:
                 assert user_schema_pickle is not None
                 assert reflection_cache is not None
+                assert extension_refs is not None
                 assert global_schema_pickle is not None
                 assert database_config is not None
                 assert system_config is not None
@@ -433,6 +436,7 @@ class AbstractPool[
                     state.PickledDatabaseState(
                         user_schema_pickle=user_schema_pickle,
                         reflection_cache=reflection_cache,
+                        extension_refs=extension_refs,
                         database_config=database_config,
                     ),
                 )
@@ -442,6 +446,7 @@ class AbstractPool[
                 if (
                     user_schema_pickle is not None
                     or reflection_cache is not None
+                    or extension_refs is not None
                     or database_config is not None
                 ):
                     worker.set_db(
@@ -455,6 +460,11 @@ class AbstractPool[
                                 worker_db.reflection_cache
                                 if reflection_cache is None
                                 else reflection_cache
+                            ),
+                            extension_refs=(
+                                worker_db.extension_refs
+                                if extension_refs is None
+                                else extension_refs
                             ),
                             database_config=(
                                 worker_db.database_config
@@ -483,6 +493,7 @@ class AbstractPool[
                 evicted_dbs,
                 user_schema_pickle,
                 _pickle_memoized(reflection_cache),
+                _pickle_memoized(extension_refs),
                 global_schema_pickle,
                 _pickle_memoized(database_config),
                 _pickle_memoized(system_config),
@@ -491,6 +502,7 @@ class AbstractPool[
                 'evicted_dbs': evicted_dbs,
                 'user_schema_pickle': user_schema_pickle,
                 'reflection_cache': reflection_cache,
+                'extension_refs': extension_refs,
                 'global_schema_pickle': global_schema_pickle,
                 'database_config': database_config,
                 'system_config': system_config,
@@ -509,6 +521,13 @@ class AbstractPool[
                 branch_cache_hit = False
                 preargs.append(_pickle_memoized(reflection_cache))
                 to_update['reflection_cache'] = reflection_cache
+            else:
+                preargs.append(None)
+
+            if worker_db.extension_refs is not extension_refs:
+                branch_cache_hit = False
+                preargs.append(_pickle_memoized(extension_refs))
+                to_update['extension_refs'] = extension_refs
             else:
                 preargs.append(None)
 
@@ -576,6 +595,7 @@ class AbstractPool[
         user_schema_pickle: bytes,
         global_schema_pickle: bytes,
         reflection_cache: state.ReflectionCache,
+        extension_refs: immutables.Map[str, Any],
         database_config: Config,
         system_config: Config,
         *compile_args: Any,
@@ -591,6 +611,7 @@ class AbstractPool[
                 user_schema_pickle,
                 global_schema_pickle,
                 reflection_cache,
+                extension_refs,
                 database_config,
                 system_config,
             )
@@ -689,6 +710,7 @@ class AbstractPool[
         user_schema_pickle: bytes,
         global_schema_pickle: bytes,
         reflection_cache: state.ReflectionCache,
+        extension_refs: immutables.Map[str, Any],
         database_config: Config,
         system_config: Config,
         *compile_args: Any,
@@ -709,6 +731,7 @@ class AbstractPool[
                 user_schema_pickle,
                 global_schema_pickle,
                 reflection_cache,
+                extension_refs,
                 database_config,
                 system_config,
             )
@@ -729,6 +752,7 @@ class AbstractPool[
         user_schema_pickle: bytes,
         global_schema_pickle: bytes,
         reflection_cache: state.ReflectionCache,
+        extension_refs: immutables.Map[str, Any],
         database_config: Config,
         system_config: Config,
         *compile_args: Any,
@@ -744,6 +768,7 @@ class AbstractPool[
                 user_schema_pickle,
                 global_schema_pickle,
                 reflection_cache,
+                extension_refs,
                 database_config,
                 system_config,
             )
@@ -764,6 +789,7 @@ class AbstractPool[
         user_schema_pickle: bytes,
         global_schema_pickle: bytes,
         reflection_cache: state.ReflectionCache,
+        extension_refs: immutables.Map[str, Any],
         database_config: Config,
         system_config: Config,
         *compile_args: Any,
@@ -779,6 +805,7 @@ class AbstractPool[
                 user_schema_pickle,
                 global_schema_pickle,
                 reflection_cache,
+                extension_refs,
                 database_config,
                 system_config,
             )
@@ -1826,6 +1853,7 @@ class TenantSchema:
 class PickledState(NamedTuple):
     user_schema: Optional[bytes]
     reflection_cache: Optional[bytes]
+    extension_refs: Optional[immutables.Map[str, Any]]
     database_config: Optional[bytes]
 
 
@@ -2031,6 +2059,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
         user_schema_pickle: bytes,
         global_schema_pickle: bytes,
         reflection_cache: state.ReflectionCache,
+        extension_refs: immutables.Map[str, Any],
         database_config: Config,
         system_config: Config,
     ) -> tuple[PreArgs, Optional[SyncStateCallback], SyncFinalizer]:
@@ -2046,6 +2075,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
             user_schema_pickle: Optional[bytes] = None,
             global_schema_pickle: Optional[bytes] = None,
             reflection_cache: Optional[state.ReflectionCache] = None,
+            extension_refs: Optional[immutables.Map[str, Any]] = None,
             database_config: Optional[Config] = None,
             instance_config: Optional[Config] = None,
         ) -> None:
@@ -2054,6 +2084,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
             if tenant_schema is None:
                 assert user_schema_pickle is not None
                 assert reflection_cache is not None
+                assert extension_refs is not None
                 assert global_schema_pickle is not None
                 assert database_config is not None
                 assert instance_config is not None
@@ -2066,6 +2097,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                             dbname: state.PickledDatabaseState(
                                 user_schema_pickle,
                                 reflection_cache,
+                                extension_refs,
                                 database_config,
                             ),
                         }
@@ -2094,6 +2126,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                 if worker_db is None:
                     assert user_schema_pickle is not None
                     assert reflection_cache is not None
+                    assert extension_refs is not None
                     assert database_config is not None
 
                     tenant_schema.set_db(
@@ -2101,6 +2134,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                         state.PickledDatabaseState(
                             user_schema_pickle=user_schema_pickle,
                             reflection_cache=reflection_cache,
+                            extension_refs=extension_refs,
                             database_config=database_config,
                         ),
                     )
@@ -2114,6 +2148,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                 elif (
                     user_schema_pickle is not None
                     or reflection_cache is not None
+                    or extension_refs is not None
                     or database_config is not None
                 ):
                     tenant_schema.set_db(
@@ -2125,6 +2160,9 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                             ),
                             reflection_cache=(
                                 reflection_cache or worker_db.reflection_cache
+                            ),
+                            extension_refs=(
+                                extension_refs or worker_db.extension_refs
                             ),
                             database_config=(
                                 database_config or worker_db.database_config
@@ -2166,6 +2204,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
             to_update = {
                 "user_schema_pickle": user_schema_pickle,
                 "reflection_cache": reflection_cache,
+                "extension_refs": extension_refs,
                 "global_schema_pickle": global_schema_pickle,
                 "database_config": database_config,
                 "instance_config": system_config,
@@ -2180,6 +2219,7 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                 to_update = {
                     "user_schema_pickle": user_schema_pickle,
                     "reflection_cache": reflection_cache,
+                    "extension_refs": extension_refs,
                     "database_config": database_config,
                 }
             else:
@@ -2190,6 +2230,9 @@ class MultiTenantPool(FixedPoolImpl[MultiTenantWorker, MultiTenantInitArgs]):
                 if worker_db.reflection_cache is not reflection_cache:
                     branch_cache_hit = False
                     to_update["reflection_cache"] = reflection_cache
+                if worker_db.extension_refs is not extension_refs:
+                    branch_cache_hit = False
+                    to_update["extension_refs"] = extension_refs
                 if worker_db.database_config is not database_config:
                     branch_cache_hit = False
                     to_update["database_config"] = database_config

@@ -944,6 +944,9 @@ async def process_side_effects(dbv, side_effects, conn):
         tenant = dbv.tenant
         await tenant.process_local_database_config_change(conn, dbv.dbname)
 
+    if side_effects & dbview.SideEffects.ExtensionRefChanges:
+        tenant = dbv.tenant
+        await tenant.fetch_extension_refs(conn)
 
 def signal_side_effects(dbv, side_effects):
     tenant = dbv.tenant
@@ -988,6 +991,14 @@ def signal_side_effects(dbv, side_effects):
         tenant.create_task(
             tenant.signal_sysevent(
                 'system-config-changes',
+            ),
+            interruptable=False,
+        )
+
+    if side_effects & dbview.SideEffects.ExtensionRefChanges:
+        tenant.create_task(
+            tenant.signal_sysevent(
+                'extension-ref-changes',
             ),
             interruptable=False,
         )
