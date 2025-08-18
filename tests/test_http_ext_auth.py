@@ -230,6 +230,12 @@ def utcnow():
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def b64_decode_padding(s):
+    N = 4
+    extra = (N - (len(s) % N)) % N
+    return base64.b64decode(s + '=' * extra)
+
+
 SIGNING_KEY = 'a' * 32
 GITHUB_SECRET = 'b' * 32
 GOOGLE_SECRET = 'c' * 32
@@ -3399,6 +3405,15 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     refresh_token="a_refresh_token",
                     id_token="an_id_token",
                 )
+                # Some other user
+                other_user = await self.con.query_single(
+                    """
+                    insert ext::auth::Identity {
+                        issuer := "https://example.com",
+                        subject := "foobaz",
+                    }
+                    """
+                )
 
                 # Correct code, random verifier
                 (_, _, wrong_verifier_status) = self.http_con_request(
@@ -3429,16 +3444,73 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
                 self.assertEqual(status, 200, body)
                 body_json = json.loads(body)
+                auth_token = body_json["auth_token"]
+
                 self.assertEqual(
                     body_json,
                     {
-                        "auth_token": body_json["auth_token"],
+                        "auth_token": auth_token,
                         "identity_id": str(pkce.identity_id),
                         "provider_token": "a_provider_token",
                         "provider_refresh_token": "a_refresh_token",
                         "provider_id_token": "an_id_token",
                     },
                 )
+
+                # Check that the client_token and ClientTokenIdentity
+                # works!  I'm not sure if this is the simplest/best
+                # place to do these checks, but it seems to work
+                # (-sully)
+                await self.con.execute(
+                    '''
+                    set global ext::auth::client_token := <str>$0;
+                    ''',
+                    auth_token,
+                )
+                user = await self.con.query_single('''
+                    select global ext::auth::ClientTokenIdentity { ** }
+                ''')
+                await self.con.execute(
+                    '''
+                    reset global ext::auth::client_token
+                    ''',
+                )
+
+                self.assertEqual(user.subject, "abcdefg")
+
+                # Turn the real auth token into a fake auth token for
+                # a different user.
+                parts = auth_token.split('.')
+                claims_bytes = b64_decode_padding(parts[1])
+                claims = json.loads(claims_bytes)
+                claims['sub'] = str(other_user.id)
+                fake_claim_str = base64.urlsafe_b64encode(
+                    json.dumps(claims).encode('utf-8')
+                ).decode('ascii')
+                parts[1] = fake_claim_str
+                fake_auth_token = '.'.join(parts)
+
+                # Try to use the fake auth token and make sure it fails!
+                await self.con.execute(
+                    '''
+                    set global ext::auth::client_token := <str>$0;
+                    ''',
+                    fake_auth_token,
+                )
+                with self.assertRaisesRegex(
+                    QueryAssertionError,
+                    "signature mismatch",
+                ):
+                    await self.con.query_single('''
+                        select global ext::auth::ClientTokenIdentity { ** }
+                    ''')
+                await self.con.execute(
+                    '''
+                    reset global ext::auth::client_token
+                    ''',
+                )
+
+                # Check the webhooks
                 async for tr in self.try_until_succeeds(
                     delay=2, timeout=120, ignore=(KeyError, AssertionError)
                 ):
