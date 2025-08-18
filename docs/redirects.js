@@ -198,7 +198,17 @@ module.exports = [
   },
   {
     source: "/reference/reference/configuration",
-    destination: "/reference/running/configuration",
+    destination: "/reference/edgeql/session",
+    permanent: false,
+  },
+  {
+    source: "/reference/reference/edgeql/sess_reset_alias",
+    destination: "/reference/edgeql/session#reset",
+    permanent: false,
+  },
+  {
+    source: "/reference/reference/edgeql/sess_set_alias",
+    destination: "/reference/edgeql/session#set",
     permanent: false,
   },
   {
