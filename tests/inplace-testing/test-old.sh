@@ -30,8 +30,10 @@ shift 2
 TMPDIR=$(mktemp -d)
 edb server --bootstrap-only --data-dir $TMPDIR/bootstrap || (rm -rf $TMPDIR && false)
 
+TESTS="test_dump"
+
 # Setup the test database
-(cd / && GEL_SERVER_SECURITY=insecure_dev_mode $SERVER_INSTALL/bin/python3  -m edb.tools --no-devmode inittestdb --tests-dir $SERVER_INSTALL/share/tests -k test_dump --data-dir "$RDIR")
+(cd / && GEL_SERVER_SECURITY=insecure_dev_mode $SERVER_INSTALL/bin/python3  -m edb.tools --no-devmode inittestdb --tests-dir $SERVER_INSTALL/share/tests -k test_dump_fuzz -k test_dump01 -k $TESTS --data-dir "$RDIR")
 
 
 if [ "$SAVE_TARBALLS" = 1 ]; then
@@ -154,4 +156,4 @@ fi
 
 
 # Test!
-edb test --data-dir "$DIR" --use-data-dir-dbs -v "$@" -k test_dump
+edb test --data-dir "$DIR" --use-data-dir-dbs -v "$@" -k test_dump_fuzz -k test_dump01 -k $TESTS
