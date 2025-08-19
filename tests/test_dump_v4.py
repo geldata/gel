@@ -105,6 +105,7 @@ class DumpTestCaseMixin:
             {
                 'ext::auth::perm::auth_read',
                 'ext::auth::perm::auth_write',
+                'ext::auth::perm::auth_read_user',
             },
         )
 
