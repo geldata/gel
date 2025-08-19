@@ -1439,6 +1439,11 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             SELECT 'lol' COLLATE "C";
             '''
         )
+        await self.squery_values(
+            '''
+            SELECT 'lol' COLLATE pg_catalog.default;
+            '''
+        )
 
     async def test_sql_query_introspection_00(self):
         dbname = self.con.dbname
