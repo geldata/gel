@@ -1019,7 +1019,7 @@ class SQLSourceGenerator(codegen.SourceGenerator):
 
     def visit_CollateClause(self, node: pgast.CollateClause) -> None:
         self.visit(node.arg)
-        self.write(f' COLLATE {node.collname}')
+        self.write(f' COLLATE {common.qname(*node.collname)}')
 
     def visit_CoalesceExpr(self, node: pgast.CoalesceExpr) -> None:
         self.write('COALESCE(')

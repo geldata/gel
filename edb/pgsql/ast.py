@@ -801,7 +801,7 @@ class CollateClause(ImmutableBaseExpr):
     # Input expression
     arg: BaseExpr
     # Possibly-qualified collation name
-    collname: str
+    collname: typing.Sequence[str]
 
 
 class VariadicArgument(ImmutableBaseExpr):
