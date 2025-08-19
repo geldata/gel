@@ -685,7 +685,7 @@ def _build_param_ref(n: Node, c: Context) -> pgast.ParamRef:
 def _build_collate_clause(n: Node, c: Context) -> pgast.CollateClause:
     return pgast.CollateClause(
         arg=_build_base_expr(n['arg'], c),
-        collname='.'.join(_list(n, c, 'collname', _build_str)),
+        collname=tuple(_list(n, c, 'collname', _build_str)),
         span=_build_span(n, c),
     )
 
