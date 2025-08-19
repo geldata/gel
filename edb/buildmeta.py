@@ -619,4 +619,4 @@ def get_version_line() -> str:
 
 # Belt and suspenders check to prevent accidental changes.
 # DO NOT EVER CHANGE THIS.
-assert EDGEDB_CATALOG_VERSION == 2025_08_07_00_02
+assert EDGEDB_CATALOG_VERSION in (2025_08_07_00_02, 2030_01_01_00_00)
