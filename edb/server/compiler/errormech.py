@@ -783,11 +783,7 @@ def static_interpret_psql_parse_error(
     if isinstance(exc, parser_errors.PSqlSyntaxError):
         res = errors.EdgeQLSyntaxError(str(exc))
         res.set_position(exc.cursor_pos - 1, None)
-
-        source: bytes | str = exc.query_source
-        if isinstance(source, bytes):
-            source = str(source, 'utf-8')
-        res.compute_line_col(source)
+        res.compute_line_col(exc.query_source)
     elif isinstance(exc, parser_errors.PSqlUnsupportedError):
         res = errors.UnsupportedFeatureError(str(exc))
         if exc.location is not None:

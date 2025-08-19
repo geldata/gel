@@ -83,10 +83,14 @@ cdef extern from "protobuf/pg_query.pb-c.h":
         const ProtobufCEnumDescriptor *desc, int value)
 
 
-def pg_parse(query) -> str:
-    cdef PgQueryParseResult result
+def pg_parse(query: str) -> str:
+    cdef:
+        PgQueryParseResult result
+        bytes queryb
 
-    result = pg_query_parse(query)
+    queryb = query.encode("utf-8")
+    result = pg_query_parse(queryb)
+
     if result.error:
         error = PSqlSyntaxError(
             result.error.message.decode('utf8'),
