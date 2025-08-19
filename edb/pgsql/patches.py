@@ -66,4 +66,8 @@ The current kinds are:
  * ...+testmode - only run the patch in testmode. Works with any patch kind.
 """
 PATCHES: list[tuple[str, str]] = [
+    # 7.0b2 or 7.0rc1
+    # In case we are upgrading from a 7.0b1 that was IPUd to, this
+    # should fix up the missing permissions.
+    ('repair', ''),
 ]

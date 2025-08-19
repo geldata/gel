@@ -94,6 +94,20 @@ class DumpTestCaseMixin:
             ))]
         )
 
+        # Added in 7.0, here for IPU testing
+        await self.assert_query_result(
+            '''
+                select (
+                    select schema::Permission
+                    filter .name like 'ext::auth::%'
+                ).name
+            ''',
+            {
+                'ext::auth::perm::auth_read',
+                'ext::auth::perm::auth_write',
+            },
+        )
+
         await self.assert_query_result(
             '''
             select ext::_conf::get_top_secret()
