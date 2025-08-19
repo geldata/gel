@@ -257,6 +257,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
     SETUP = [
         f"""
+        CREATE ROLE auth_user {{
+            SET password := 'secret';
+            SET permissions := {{
+                ext::auth::perm::auth_read_user,
+            }}
+        }};
         CONFIGURE CURRENT DATABASE INSERT cfg::SMTPProviderConfig {{
             name := "email_hosting_is_easy",
             sender := "{SENDER}",
@@ -3470,6 +3476,11 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 user = await self.con.query_single('''
                     select global ext::auth::ClientTokenIdentity { ** }
                 ''')
+
+                identities = await self.con.query('''
+                    select ext::auth::Identity { ** }
+                ''')
+
                 await self.con.execute(
                     '''
                     reset global ext::auth::client_token
@@ -3477,6 +3488,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
 
                 self.assertEqual(user.subject, "abcdefg")
+                self.assertGreater(len(identities), 1)
 
                 # Turn the real auth token into a fake auth token for
                 # a different user.
@@ -3509,6 +3521,36 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     reset global ext::auth::client_token
                     ''',
                 )
+
+                # Now try with a non-superuser connection!
+                con2 = await self.connect(
+                    user='auth_user',
+                    password='secret',
+                )
+                try:
+                    await con2.execute(
+                        '''
+                        set global ext::auth::client_token := <str>$0;
+                        ''',
+                        auth_token,
+                    )
+                    user = await con2.query_single('''
+                        select global ext::auth::ClientTokenIdentity { ** }
+                    ''')
+                    identities = await con2.query('''
+                        select ext::auth::Identity { ** }
+                    ''')
+                    await con2.execute(
+                        '''
+                        reset global ext::auth::client_token
+                        ''',
+                    )
+
+                    self.assertEqual(user.subject, "abcdefg")
+                    self.assertEqual(len(identities), 1)
+
+                finally:
+                    await con2.aclose()
 
                 # Check the webhooks
                 async for tr in self.try_until_succeeds(

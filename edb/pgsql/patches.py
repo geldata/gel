@@ -67,4 +67,53 @@ The current kinds are:
 """
 PATCHES: list[tuple[str, str]] = [
     # 7.0b2 or 7.0rc1
+    ('ext-pkg', 'auth'),  # For #8953
+    ('edgeql+user_ext+config|auth', '''
+    create permission ext::auth::perm::auth_read_user;
+    alter function ext::auth::_jwt_verify(
+        token: std::str,
+        key: std::str,
+        algo: ext::auth::JWTAlgo = ext::auth::JWTAlgo.HS256,
+    )
+    {
+        SET required_permissions := ext::auth::perm::auth_read;
+    };
+
+    create single global ext::auth::_client_token_id := (
+        for conf_key in (
+            (
+                select cfg::Config.extensions[is ext::auth::AuthConfig]
+                limit 1
+            ).auth_signing_key
+        )
+        for jwt_claims in (
+            ext::auth::_jwt_verify(
+                global ext::auth::client_token,
+                conf_key,
+            )
+        )
+        select <uuid>json_get(jwt_claims, "sub")
+    );
+    alter type ext::auth::Identity {
+        create access policy read_current allow select using (
+            not global ext::auth::perm::auth_read
+            and global ext::auth::perm::auth_read_user
+            and .id ?= global ext::auth::_client_token_id
+        );
+    };
+
+'''),
+    # Because of bad interactions between the patch system and how
+    # aliases work (aaaaaaaaa), I had to split this up.
+    # The bug is I think on the patch system side, due to how
+    # compile_schema_storage_in_delta is alienated from the schema changes.
+    ('edgeql+user_ext+config|auth', '''
+    alter global ext::auth::ClientTokenIdentity using (
+        select
+            ext::auth::Identity
+        filter
+            .id = global ext::auth::_client_token_id
+    );
+
+'''),
 ]
