@@ -99,6 +99,19 @@ class ViewRPtr:
     rptr_dir: Optional[s_pointers.PointerDirection] = None
 
 
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class SecurityContext:
+    # N.B: Whether we are compiling a trigger is not included here
+    # since we clear cached rewrites when compiling them in the
+    # *pgsql* compiler.
+    suppress_policies: bool
+
+    def toggle_policies(self) -> SecurityContext:
+        return dataclasses.replace(
+            self, suppress_policies=not self.suppress_policies
+        )
+
+
 @dataclasses.dataclass
 class ScopeInfo:
     path_scope: irast.ScopeTreeNode
@@ -321,6 +334,12 @@ class Environment:
     unsafe_isolation_dangers: list[errors.UnsafeIsolationLevelError]
     """List of repeatable read DML dangers"""
 
+    policy_use_count: int
+    """A count of the number of times that policies have been referenced.
+
+    Can be used to detect if a sub-compilation referenced a policy.
+    """
+
     def __init__(
         self,
         *,
@@ -374,6 +393,7 @@ class Environment:
         self.dml_rewrites = {}
         self.warnings = []
         self.unsafe_isolation_dangers = []
+        self.policy_use_count = 0
 
     def add_schema_ref(
         self, sobj: s_obj.Object, expr: Optional[qlast.Base]
@@ -845,7 +865,7 @@ class ContextLevel(compiler.ContextLevel):
         else:
             return ir
 
-    def get_security_context(self) -> object:
+    def get_security_context(self) -> SecurityContext:
         '''Compute an additional compilation cache key.
 
         Return an additional key for any compilation caches that may
@@ -855,7 +875,9 @@ class ContextLevel(compiler.ContextLevel):
         # N.B: Whether we are compiling a trigger is not included here
         # since we clear cached rewrites when compiling them in the
         # *pgsql* compiler.
-        return bool(self.suppress_rewrites)
+        return SecurityContext(
+            suppress_policies=bool(self.suppress_rewrites),
+        )
 
     def log_warning(self, warning: errors.EdgeDBError) -> None:
         self.env.warnings.append(warning)

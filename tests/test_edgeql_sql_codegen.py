@@ -560,3 +560,18 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
             count,
             1,
             f"ScheduledRequest selected from and not just inserted: {sql}")
+
+    SCHEMA_gcache = r'''
+        global b := true;
+        type T {
+            access policy ok allow all using (global b);
+        };
+    '''
+
+    def test_codegen_global_cache_01(self):
+        tree = self._compile_to_tree('''
+            select gcache::T filter global gcache::b
+        ''')
+        assert isinstance(tree, pgast.SelectStmt)
+        # One CTE for the global, one for the policy
+        self.assertEqual(len(tree.ctes), 2)
