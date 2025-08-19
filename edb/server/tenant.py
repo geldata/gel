@@ -562,7 +562,10 @@ class Tenant(ha_base.ClusterProtocol):
             )
 
         logger.info("loading system config")
-        self.config.init(await self._load_sys_config(), await self._load_sys_config("sysconfig_default"))
+        self.config.init(
+            await self._load_sys_config(),
+            await self._load_sys_config("sysconfig_default"),
+        )
         await self._load_reported_config()
 
         # To make in-place upgrade failures more testable, check
@@ -1531,7 +1534,7 @@ class Tenant(ha_base.ClusterProtocol):
         self,
         query_name: str = "sysconfig",
         syscon: pgcon.PGConnection | None = None,
-    ) -> Mapping[str, config.SettingValue]:
+    ) -> immutables.Map[str, config.SettingValue]:
         query = self._server.get_sys_query(query_name)
         if syscon is None:
             async with self.use_sys_pgcon() as syscon:

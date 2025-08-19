@@ -102,15 +102,17 @@ class StartupError(Exception):
 
 
 class ServerSysConfig:
-    _sys_config: Mapping[str, config.SettingValue] | None
-    _default_sysconfig: Mapping[str, config.SettingValue]
+    _sys_config: immutables.Map[str, config.SettingValue] | None
+    _default_sysconfig: immutables.Map[str, config.SettingValue]
     _config_settings: config.Spec
 
     def __init__(
             self,
             config_settings: config.Spec,
-            sys_config: Mapping[str, config.SettingValue] = None,
-            default_sysconfig: Mapping[str, config.SettingValue] = immutables.Map(),
+            sys_config: Optional[immutables.Map[str, config.SettingValue]] = None,
+            default_sysconfig: immutables.Map[
+                str, config.SettingValue
+            ] = immutables.Map(),
     ):
         self._sys_config = sys_config
         self._default_sysconfig = default_sysconfig
@@ -121,49 +123,57 @@ class ServerSysConfig:
         return self._config_settings
 
     @property
-    def sys_config(self) -> Mapping[str, config.SettingValue]:
+    def sys_config(self) -> immutables.Map[str, config.SettingValue]:
         assert self._sys_config is not None, "ServerConfig is not initialized"
         return self._sys_config
 
     def init(
         self,
-        sys_config: Mapping[str, config.SettingValue],
-        default_sysconfig: Mapping[str, config.SettingValue] = None,
-    ):
+        sys_config: immutables.Map[str, config.SettingValue],
+        default_sysconfig: immutables.Map[str, config.SettingValue],
+    ) -> None:
         assert self._sys_config is None, "ServerConfig is already initialized"
         self._sys_config = sys_config
         self._default_sysconfig = default_sysconfig
 
-    def update(self, sys_config: Mapping[str, config.SettingValue]):
+    def update(
+        self,
+        sys_config: immutables.Map[str, config.SettingValue],
+    ) -> None:
         with self._default_sysconfig.mutate() as mm:
             mm.update(sys_config)
             sys_config = mm.finish()
         self._sys_config = sys_config
 
-    def apply(self, op: config.Operation):
+    def apply(self, op: config.Operation) -> None:
         assert self._sys_config is not None, "ServerConfig is not initialized"
-        op.apply(self._config_settings, self._sys_config)
+        sys_config = op.apply(self._config_settings, self._sys_config)
+        self.update(sys_config)
 
-    def get_compilation_config(self) -> immutables.Map[str, config.SettingValue]:
+    def get_compilation_config(
+        self
+    ) -> immutables.Map[str, config.SettingValue]:
         assert self._sys_config is not None, "ServerConfig is not initialized"
-        return config.get_compilation_config(self._sys_config, spec=self._config_settings)
+        return config.get_compilation_config(
+            self._sys_config, spec=self._config_settings
+        )
 
     def lookup(
         self,
         name: str,
         configs: Optional[tuple[Mapping[str, config.SettingValue], ...]] = None,
-        spec: config.Spec = None,
+        spec: Optional[config.Spec] = None,
     ) -> Any:
         assert self._sys_config is not None, "ServerConfig is not initialized"
-        db_config = configs or () + (self._sys_config,)
         spec = spec or self._config_settings
-        return config.lookup(name, *db_config, spec=spec)
+        return config.lookup(name, *(configs or ()), self._sys_config, spec=spec)
 
     def to_json(
         self,
         setting_filter: Optional[Callable[[config.SettingValue], bool]] = None,
         include_source: bool = True,
     ) -> str:
+        assert self._sys_config is not None, "ServerConfig is not initialized"
         return config.to_json(
             self._config_settings,
             self._sys_config,
@@ -746,7 +756,7 @@ class BaseServer:
 
     def _parse_db_config(
         self, db_config_json: bytes, user_schema: s_schema.Schema
-    ) -> Mapping[str, config.SettingValue]:
+    ) -> immutables.Map[str, config.SettingValue]:
         spec = config.ChainedSpec(
             self.config.settings,
             config.load_ext_spec_from_schema(

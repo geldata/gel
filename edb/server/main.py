@@ -899,7 +899,9 @@ def initialize_static_cfg(
     is_remote_cluster: bool,
     compiler: edbcompiler.Compiler,
 ) -> tuple[
-    Mapping[str, config.SettingValue], dict[str, str], list[config.ConState]
+    immutables.Map[str, config.SettingValue],
+    dict[str, str],
+    list[config.ConState],
 ]:
     result = {}
     init_con_script_data: list[config.ConState] = []
