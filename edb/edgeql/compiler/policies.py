@@ -60,6 +60,7 @@ def should_ignore_rewrite(
     #
     # (Eventually will might do a generalization of this based on
     # RBAC ownership of schema objects.)
+    # XXX: extension modules???
     schema = ctx.env.schema
     if (
         isinstance(stype, s_objtypes.ObjectType)

@@ -878,14 +878,15 @@ def _declare_view_from_schema(
     # We need to include "security context" things (currently just
     # access policy state) in the cache key, here.
     #
-    # FIXME: Could we do better? Sometimes we might compute a single
-    # global twice now, as a result of this. It should be possible to
-    # make some decisions based on whether the alias actually does
-    # touch any access policies...
-    key = viewcls, ctx.get_security_context()
+    # See below for an optimization in the case where polices are not
+    # used.
+    security_context = ctx.get_security_context()
+    key = viewcls, security_context
     e = ctx.env.schema_view_cache.get(key)
     if e is not None:
         return e
+
+    orig_policy_count = ctx.env.policy_use_count
 
     # N.B: This takes a context, which we need to use to create a
     # subcontext to compile in, but it should avoid depending on the
@@ -913,6 +914,16 @@ def _declare_view_from_schema(
         vs = subctx.aliased_views[viewcls_name]
         assert vs is not None
         vc = setgen.get_set_type(vs, ctx=ctx)
+
+        # If policies weren't actually used, see if we already
+        # compiled this global/alias with policy suppression in the
+        # other state, to avoid generating two CTEs for a cached
+        # global pointlessly.
+        if orig_policy_count == ctx.env.policy_use_count:
+            key2 = viewcls, security_context.toggle_policies()
+            if key2 in ctx.env.schema_view_cache:
+                vc, view_set = ctx.env.schema_view_cache[key2]
+
         ctx.env.schema_view_cache[key] = vc, view_set
 
     return vc, view_set
