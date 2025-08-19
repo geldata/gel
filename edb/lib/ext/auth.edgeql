@@ -26,6 +26,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
     create module ext::auth::perm;
     create permission ext::auth::perm::auth_read;
     create permission ext::auth::perm::auth_write;
+    create permission ext::auth::perm::auth_read_user;
 
     create abstract type ext::auth::Auditable extending std::BaseObject {
         create required property created_at: std::datetime {
@@ -636,27 +637,38 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
                     message := "JWT is expired or is not yet valid",
                 )
         );
-        SET required_permissions := ext::auth::perm::auth_read;
+        SET required_permissions := ext::auth::perm::auth_read_user;
     };
 
     create global ext::auth::client_token: std::str;
+
+    create single global ext::auth::_client_token_id := (
+        for conf_key in (
+            (
+                select cfg::Config.extensions[is ext::auth::AuthConfig]
+                limit 1
+            ).auth_signing_key
+        )
+        for jwt_claims in (
+            ext::auth::_jwt_verify(
+                global ext::auth::client_token,
+                conf_key,
+            )
+        )
+        select <uuid>json_get(jwt_claims, "sub")
+    );
+    alter type ext::auth::Identity {
+        create access policy read_current allow select using (
+            not global ext::auth::perm::auth_read
+            and global ext::auth::perm::auth_read_user
+            and .id ?= global ext::auth::_client_token_id
+        );
+    };
+
     create single global ext::auth::ClientTokenIdentity := (
-        with
-            conf := {
-                key := (
-                    select cfg::Config.extensions[is ext::auth::AuthConfig]
-                    limit 1
-                ).auth_signing_key,
-            },
-            jwt := {
-                claims := ext::auth::_jwt_verify(
-                    global ext::auth::client_token,
-                    conf.key,
-                )
-            },
         select
             ext::auth::Identity
         filter
-            .id = <uuid>json_get(jwt.claims, "sub")
+            .id = global ext::auth::_client_token_id
     );
 };
