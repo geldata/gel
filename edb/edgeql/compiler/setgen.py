@@ -121,6 +121,12 @@ def new_set(
         from . import policies
         policies.try_type_rewrite(stype, skip_subtypes=skip_subtypes, ctx=ctx)
 
+    if (
+        not ignore_rewrites
+        and ctx.env.type_rewrites.get(rw_key)
+    ):
+        ctx.env.policy_use_count += 1
+
     typeref = typegen.type_to_typeref(stype, env=ctx.env)
     ir_set = ircls(typeref=typeref, expr=expr, **kwargs)
     ctx.env.set_types[ir_set] = stype
