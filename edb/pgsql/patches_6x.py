@@ -319,8 +319,39 @@ std::__pg_generate_series(
     USING SQL FUNCTION 'generate_series';
 };
 '''),
+    # 6.10
+    # For #8920
+    ('sql', '''
+ALTER FUNCTION edgedbstd."std|cast@std|json@array<std||json>_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@cfg|memory_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|bigint_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|bool_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|bytes_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|cal|date_duration_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|cal|local_date_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|cal|local_datetime_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|cal|local_time_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|cal|relative_duration_f"
+    IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|datetime_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|decimal_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|duration_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|float32_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|float64_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|int16_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|int32_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|int64_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|str_f" IMMUTABLE;
+ALTER FUNCTION edgedbstd."std|cast@std|json@std|uuid_f" IMMUTABLE;
+'''),
+    # For #8804, but I apparently missed the patch for this one.
+    # Amusingly this is the patch that caused a regression, but I
+    # guess it didn't happen if you had done a patch upgrade...
+    ('metaschema-sql', 'ExtractJSONScalarFunction'),
 
     # !!!!!! 7.x !!!!!
+    # XXX: This was a bad mistake actually, and this should have gone
+    # into patches.py itself.
     ('edgeql+user_ext+config|auth', '''
     create type ext::auth::OneTimeCode extending ext::auth::Auditable {
         create required property code_hash: std::bytes {
