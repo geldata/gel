@@ -42,7 +42,7 @@ __all__ = (
 def parse(
     sql_query: str, propagate_spans: bool = False
 ) -> list[pgast.Query | pgast.Statement]:
-    ast_json = parser.pg_parse(bytes(sql_query, encoding="UTF8"))
+    ast_json = parser.pg_parse(sql_query)
 
     return ast_builder.build_stmts(
         json.loads(ast_json),
