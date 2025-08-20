@@ -67,16 +67,45 @@ The current kinds are:
 """
 PATCHES: list[tuple[str, str]] = [
     # 7.0b2 or 7.0rc1
-    ('ext-pkg', 'auth'),  # For #8953
+    ('ext-pkg', 'auth'),  # For #8953, #8964
     ('edgeql+user_ext+config|auth', '''
     create permission ext::auth::perm::auth_read_user;
+
+    alter function ext::auth::_jwt_check_signature(
+        jwt: tuple<header: std::str, payload: std::str, signature: std::str>,
+        key: std::str,
+        algo: ext::auth::JWTAlgo = ext::auth::JWTAlgo.HS256,
+    )
+    {
+        SET required_permissions := {};
+    };
+
+    alter function ext::auth::_jwt_parse(
+        token: std::str,
+    )
+    {
+        set volatility := 'Stable';
+        using (
+            for parts in std::str_split(token, ".")
+            select
+                (
+                    header := parts[0],
+                    payload := parts[1],
+                    signature := parts[2],
+                )
+            order by
+                assert(len(parts) = 3, message := "JWT is malformed")
+        );
+        SET required_permissions := {};
+    };
+
     alter function ext::auth::_jwt_verify(
         token: std::str,
         key: std::str,
         algo: ext::auth::JWTAlgo = ext::auth::JWTAlgo.HS256,
     )
     {
-        SET required_permissions := ext::auth::perm::auth_read;
+        SET required_permissions := {};
     };
 
     create single global ext::auth::_client_token_id := (

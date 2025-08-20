@@ -583,7 +583,6 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
                     message := "JWT signature mismatch",
                 )
         );
-        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create function ext::auth::_jwt_parse(
@@ -592,8 +591,7 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
     {
         set volatility := 'Stable';
         using (
-            with
-                parts := std::str_split(token, "."),
+            for parts in std::str_split(token, ".")
             select
                 (
                     header := parts[0],
@@ -603,7 +601,6 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
             order by
                 assert(len(parts) = 3, message := "JWT is malformed")
         );
-        SET required_permissions := ext::auth::perm::auth_read;
     };
 
     create function ext::auth::_jwt_verify(
@@ -637,7 +634,6 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
                     message := "JWT is expired or is not yet valid",
                 )
         );
-        SET required_permissions := ext::auth::perm::auth_read_user;
     };
 
     create global ext::auth::client_token: std::str;
