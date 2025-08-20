@@ -680,7 +680,7 @@ jobs:
       catalog-version: ${{ steps.describe.outputs.catalog-version }}
 
   publish-macos-x86_64:
-    needs: [test-macos-x86_64]
+    needs: [build-macos-x86_64]
     runs-on: ubuntu-latest
 
     steps:
@@ -710,7 +710,7 @@ jobs:
         PACKAGE_UPLOAD_SSH_KEY: "${{ secrets.PACKAGE_UPLOAD_SSH_KEY }}"
 
   publish-macos-aarch64:
-    needs: [test-macos-aarch64]
+    needs: [build-macos-aarch64]
     runs-on: ubuntu-latest
 
     steps:

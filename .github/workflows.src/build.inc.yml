@@ -355,7 +355,7 @@
 <%- set plat_id = tgt.platform + ("{}".format(tgt.platform_libc) if tgt.platform_libc else "") + ("-{}".format(tgt.platform_version) if tgt.platform_version else "") %>
 
   publish-<< tgt.name >>:
-    needs: [<% if publish_all %>collect<% else %>test-<< tgt.name >><% endif %>]
+    needs: [<% if publish_all %>collect<% elif package.name != "edgedbpkg.edgedb_ls:EdgeDBLanguageServer" %>test-<< tgt.name >><% else %>build-<< tgt.name >><% endif %>]
     runs-on: ubuntu-latest
 
     steps:
