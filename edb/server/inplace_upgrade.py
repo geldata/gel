@@ -202,6 +202,7 @@ async def _collect_6x_upgrade_patches(
     ctx: bootstrap.BootstrapContext,
     schema: s_schema.Schema,
 ) -> tuple[list[qlast.Command], bool, bool]:
+    from edb.pgsql import patches
     from edb.pgsql import patches_6x
 
     cmds: list[qlast.Command] = []
@@ -221,7 +222,14 @@ async def _collect_6x_upgrade_patches(
 
     needs_config = False
     jnum = json.loads(res)
-    for kind, patch in patches_6x.PATCHES[jnum:]:
+
+    to_apply = [
+        *patches_6x.PATCHES[jnum:],
+        *patches_6x.PATCHES_7x,
+        *patches.PATCHES,
+    ]
+
+    for kind, patch in to_apply:
 
         if not kind.startswith('edgeql+user_ext'):
             continue
