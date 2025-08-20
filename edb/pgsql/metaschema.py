@@ -8235,6 +8235,8 @@ END;
             """
         ),
 
+        # pg_catalog.has_column_privilege will return NULL for computed and
+        # static columns. So we COALESCE to TRUE.
         trampoline.VersionedFunction(
             name=('edgedbsql', 'has_column_privilege'),
             args=(
@@ -8244,7 +8246,9 @@ END;
             ),
             returns=('bool',),
             text="""
+              SELECT COALESCE((
                 SELECT has_column_privilege(tbl, col, privilege)
+              ), TRUE)
             """
         ),
         trampoline.VersionedFunction(
@@ -8256,8 +8260,10 @@ END;
             ),
             returns=('bool',),
             text="""
+              SELECT COALESCE((
                 SELECT has_column_privilege(
                     edgedbsql_VER.to_regclass(tbl), col, privilege)
+              ), TRUE)
             """
         ),
         trampoline.VersionedFunction(
@@ -8269,9 +8275,11 @@ END;
             ),
             returns=('bool',),
             text="""
+              SELECT COALESCE((
                 SELECT has_column_privilege(tbl, attnum_internal, privilege)
                 FROM edgedbsql_VER.pg_attribute_ext pa
                 WHERE attrelid = tbl AND attname = col
+              ), TRUE)
             """
         ),
         trampoline.VersionedFunction(
@@ -8283,10 +8291,12 @@ END;
             ),
             returns=('bool',),
             text="""
+              SELECT COALESCE((
                 SELECT has_column_privilege(pc.oid, attnum_internal, privilege)
                 FROM edgedbsql_VER.pg_attribute_ext pa,
                 LATERAL (SELECT edgedbsql_VER.to_regclass(tbl) AS oid) pc
                 WHERE pa.attrelid = pc.oid AND pa.attname = col
+              ), TRUE)
             """
         ),
         trampoline.VersionedFunction(

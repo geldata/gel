@@ -369,5 +369,6 @@ ALTER FUNCTION edgedbstd."std|cast@std|json@std|uuid_f" IMMUTABLE;
     # Amusingly this is the patch that caused a regression, but I
     # guess it didn't happen if you had done a patch upgrade...
     ('metaschema-sql', 'ExtractJSONScalarFunction'),
-
+    # 6.11
+    ('sql-introspection', ''),  # For #8962
 ]
