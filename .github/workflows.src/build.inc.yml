@@ -27,7 +27,7 @@
       shell: bash
       run: |
         rev=$(git rev-parse HEAD)
-        jq_filter='.packages[] | select(.basename == "gel-server") | select(.architecture == $ARCH) | .version_details.metadata.scm_revision | . as $rev | select(($rev != null) and ($REV | startswith($rev)))'
+        jq_filter='.packages[] | select(.basename == "<< package.basename >>") | select(.architecture == $ARCH) | .version_details.metadata.scm_revision | . as $rev | select(($rev != null) and ($REV | startswith($rev)))'
 <% for tgt in targets.linux + targets.macos %>
         key="<< tgt.name >>"
         val=true
@@ -203,6 +203,7 @@
         path: artifacts/<< plat_id >>
 <%- endfor %>
 
+<%- if package.name != "edgedbpkg.edgedb_ls:EdgeDBLanguageServer" %>
 <%- for tgt in targets.linux %>
 <%- set plat_id = tgt.platform + ("{}".format(tgt.platform_libc) if tgt.platform_libc else "") + ("-{}".format(tgt.platform_version) if tgt.platform_version else "") %>
 
@@ -270,6 +271,7 @@
         <%- endif %>
         edgedb-pkg/integration/macos/test.sh
 <%- endfor %>
+<%- endif %>
 
 <%- if publish_all %>
   collect:
@@ -287,7 +289,7 @@
 <%- for publish in publications %>
 
   publish<< publish.suffix>>-<< tgt.name >>:
-    needs: [<% if publish_all %>collect<% else %>test-<< tgt.name >><% endif %>]
+    needs: [<% if publish_all %>collect<% elif package.name != "edgedbpkg.edgedb_ls:EdgeDBLanguageServer" %>test-<< tgt.name >><% else %>build-<< tgt.name >><% endif %>]
     runs-on: ubuntu-latest
 
     steps:

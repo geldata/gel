@@ -5,6 +5,7 @@ publications:
 
 package:
   name: edgedbpkg.edgedb_ls:EdgeDBLanguageServer
+  basename: gel-ls
   tests:
     files: "test_language_server.py"
 

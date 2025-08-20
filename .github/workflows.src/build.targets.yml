@@ -5,6 +5,7 @@ publications:
 
 package:
     name: "edgedbpkg.edgedb:Gel"
+    basename: gel-server
 
 targets:
     linux:
