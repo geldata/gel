@@ -145,4 +145,5 @@ PATCHES: list[tuple[str, str]] = [
     );
 
 '''),
+    ('sql-introspection', ''),  # For #8962
 ]

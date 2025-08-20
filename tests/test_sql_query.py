@@ -2001,6 +2001,14 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         )
         self.assertEqual(res, [[True]])
 
+    async def test_sql_query_privileges_05(self):
+        res = await self.squery_values(
+            '''
+            select has_column_privilege('"Person"', 'full_name', 'SELECT');
+            '''
+        )
+        self.assertEqual(res, [[True]])
+
     async def test_sql_query_client_encoding_1(self):
         self.assertEqual(
             self.scon.get_settings().client_encoding.lower(), "utf_8"
