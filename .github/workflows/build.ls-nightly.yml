@@ -746,26 +746,20 @@ jobs:
     needs:
       - prep
       - build-linux-x86_64
-      - test-linux-x86_64
       - publish-linux-x86_64
       - check-published-linux-x86_64
       - build-linux-aarch64
-      - test-linux-aarch64
       - publish-linux-aarch64
       - check-published-linux-aarch64
       - build-linuxmusl-x86_64
-      - test-linuxmusl-x86_64
       - publish-linuxmusl-x86_64
       - check-published-linuxmusl-x86_64
       - build-linuxmusl-aarch64
-      - test-linuxmusl-aarch64
       - publish-linuxmusl-aarch64
       - check-published-linuxmusl-aarch64
       - build-macos-x86_64
-      - test-macos-x86_64
       - publish-macos-x86_64
       - build-macos-aarch64
-      - test-macos-aarch64
       - publish-macos-aarch64
     runs-on: ubuntu-latest
     permissions:

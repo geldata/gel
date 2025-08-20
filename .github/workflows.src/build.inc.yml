@@ -510,7 +510,9 @@
     <%- endif %>
     <%- for tgt in targets.linux %>
       - build-<< tgt.name >>
+    <%- if package.name != "edgedbpkg.edgedb_ls:EdgeDBLanguageServer" %>
       - test-<< tgt.name >>
+    <%- endif %>
     <%- for publish in publications %>
       - publish<< publish.suffix>>-<< tgt.name >>
       - check-published<< publish.suffix>>-<< tgt.name >>
@@ -518,7 +520,9 @@
     <%- endfor %>
     <%- for tgt in targets.macos %>
       - build-<< tgt.name >>
+    <%- if package.name != "edgedbpkg.edgedb_ls:EdgeDBLanguageServer" %>
       - test-<< tgt.name >>
+    <%- endif %>
     <%- for publish in publications %>
       - publish<< publish.suffix>>-<< tgt.name >>
     <%- endfor %>
