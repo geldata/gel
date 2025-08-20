@@ -431,4 +431,50 @@ PATCHES_7x: list[tuple[str, str]] = [
     >;
 
 '''),
+    # Added post 7.0b1, oops.
+    ('edgeql+user_ext+config|auth', '''
+    create module ext::auth::perm;
+    create permission ext::auth::perm::auth_read;
+    create permission ext::auth::perm::auth_write;
+    alter type ext::auth::Auditable {
+        create access policy ap_read allow select using (
+            global ext::auth::perm::auth_read
+        );
+        create access policy ap_write allow insert, update, delete using (
+            global ext::auth::perm::auth_write
+        );
+    };
+    '''),
+    ('edgeql+user_ext+config|ai', '''
+    create module ext::ai::perm;
+    create permission ext::ai::perm::provider_call;
+    create permission ext::ai::perm::chat_prompt_read;
+    create permission ext::ai::perm::chat_prompt_write;
+
+    alter function ext::ai::search(
+        object: anyobject,
+        query: str,
+    )
+    {
+        set required_permissions := { ext::ai::perm::provider_call };
+    };
+
+    alter type ext::ai::ChatPromptMessage {
+        create access policy ap_read allow select using (
+            global ext::ai::perm::chat_prompt_read
+        );
+        create access policy ap_write allow insert, update, delete using (
+            global ext::ai::perm::chat_prompt_write
+        );
+    };
+
+    alter type ext::ai::ChatPrompt {
+        create access policy ap_read allow select using (
+            global ext::ai::perm::chat_prompt_read
+        );
+        create access policy ap_write allow insert, update, delete using (
+            global ext::ai::perm::chat_prompt_write
+        );
+    };
+    '''),
 ]

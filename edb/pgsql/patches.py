@@ -66,4 +66,5 @@ The current kinds are:
  * ...+testmode - only run the patch in testmode. Works with any patch kind.
 """
 PATCHES: list[tuple[str, str]] = [
+    # 7.0b2 or 7.0rc1
 ]

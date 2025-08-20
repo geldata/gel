@@ -66,6 +66,21 @@ class DumpTestCaseMixin:
             [{}],
         )
 
+        # Added in 7.0, here for IPU testing
+        await self.assert_query_result(
+            '''
+                select (
+                    select schema::Permission
+                    filter .name like 'ext::ai::%'
+                ).name
+            ''',
+            {
+                'ext::ai::perm::provider_call',
+                'ext::ai::perm::chat_prompt_read',
+                'ext::ai::perm::chat_prompt_write',
+            }
+        )
+
     async def _ensure_data_integrity(self):
         await self.assert_query_result(
             r'''
