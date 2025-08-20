@@ -348,10 +348,10 @@ ALTER FUNCTION edgedbstd."std|cast@std|json@std|uuid_f" IMMUTABLE;
     # Amusingly this is the patch that caused a regression, but I
     # guess it didn't happen if you had done a patch upgrade...
     ('metaschema-sql', 'ExtractJSONScalarFunction'),
+]
 
-    # !!!!!! 7.x !!!!!
-    # XXX: This was a bad mistake actually, and this should have gone
-    # into patches.py itself.
+# Patches for upgrading extensions to 7.x
+PATCHES_7x: list[tuple[str, str]] = [
     ('edgeql+user_ext+config|auth', '''
     create type ext::auth::OneTimeCode extending ext::auth::Auditable {
         create required property code_hash: std::bytes {
