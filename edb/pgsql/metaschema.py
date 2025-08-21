@@ -9766,6 +9766,8 @@ def _generate_config_type_view(
             FROM
                 {X(target_fromlist)}
         ''')
+        if where:
+            link_query += f'\nWHERE\n    {where}'
 
         views.append((tabname(schema, prop), link_query))
 

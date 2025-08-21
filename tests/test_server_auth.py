@@ -111,6 +111,18 @@ class TestServerAuth(tb.ConnectedTestCase):
             }
         ''')
 
+        await self.assert_query_result(
+            r"""
+                SELECT cfg::Auth {
+                    method: { transports },
+                }
+                FILTER any(.user = 'foo')
+            """,
+            [
+                {'method': {'transports': ['SIMPLE_HTTP']}}
+            ],
+        )
+
         # Should fail now
         body, code = await self._basic_http_request(None, 'foo', 'foo-pass')
         self.assertEqual(code, 401, f"Wrong result: {body}")

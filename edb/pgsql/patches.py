@@ -68,7 +68,7 @@ The current kinds are:
 PATCHES: list[tuple[str, str]] = [
     # 7.0b2 or 7.0rc1
     ('ext-pkg', 'auth'),  # For #8953, #8964
-    ('edgeql+user_ext+config|auth', '''
+    ('edgeql+user_ext|auth', '''
     create permission ext::auth::perm::auth_read_user;
 
     alter function ext::auth::_jwt_check_signature(
@@ -136,7 +136,7 @@ PATCHES: list[tuple[str, str]] = [
     # aliases work (aaaaaaaaa), I had to split this up.
     # The bug is I think on the patch system side, due to how
     # compile_schema_storage_in_delta is alienated from the schema changes.
-    ('edgeql+user_ext+config|auth', '''
+    ('edgeql+user_ext|auth', '''
     alter global ext::auth::ClientTokenIdentity using (
         select
             ext::auth::Identity
@@ -146,4 +146,5 @@ PATCHES: list[tuple[str, str]] = [
 
 '''),
     ('sql-introspection', ''),  # For #8962
+    ('edgeql+schema+config', ''),  # For #8971
 ]
