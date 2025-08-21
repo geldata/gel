@@ -2216,6 +2216,56 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             ]
         )
 
+    async def test_sql_query_copy_07(self):
+        # copy using globals in a computed
+
+        await self.scon.execute(
+            'SET LOCAL "global default::username_prefix" TO user_;'
+        )
+
+        with self.assertRaisesRegex(
+            asyncpg.FeatureNotSupportedError,
+            "COPY cannot use globals in computed properties and access",
+            hint="To disable policies, set apply_access_policies_pg := false",
+        ):
+            out = io.BytesIO()
+            await self.scon.copy_from_table(
+                "Person",
+                columns=['first_name', 'username'],
+                output=out,
+                format="csv",
+                delimiter="\t",
+            )
+
+        # TODO: this should be actual result
+        # out = io.StringIO(out.getvalue().decode("utf-8"))
+        # res = list(csv.reader(out, delimiter="\t"))
+        # self.assert_data_shape(
+        #     res,
+        #     tb.bag(
+        #         [
+        #             ["Robin", "user_robin"],
+        #             ["Steven", "user_steven"],
+        #             ["Tom", "user_tom"],
+        #         ]
+        #     ),
+        # )
+
+    async def test_sql_query_copy_08(self):
+        # copy using params
+
+        with self.assertRaisesRegex(
+            asyncpg.FeatureNotSupportedError,
+            "COPY cannot use query parameters",
+        ):
+            out = io.BytesIO()
+            await self.scon.copy_from_query(
+                """SELECT first_name FROM "Person" WHERE last_name = $1""",
+                output=out,
+                format="csv",
+                delimiter="\t",
+            )
+
     async def test_sql_query_error_01(self):
         with self.assertRaisesRegex(
             asyncpg.UndefinedFunctionError,
