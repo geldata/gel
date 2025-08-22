@@ -63,6 +63,7 @@ def next_tx_state_id():
 class PickledState(NamedTuple):
     user_schema: Optional[bytes]
     reflection_cache: Optional[bytes]
+    extension_refs: Optional[bytes]
     database_config: Optional[bytes]
 
     def diff(self, other: PickledState):
@@ -70,14 +71,21 @@ class PickledState(NamedTuple):
         # fields from this state which are different in the other state, while
         # the identical fields are left None, so that we can send the minimum
         # diff to the worker to update the changed fields only.
-        user_schema = reflection_cache = database_config = None
+        user_schema = reflection_cache = extension_refs = database_config = None
         if self.user_schema is not other.user_schema:
             user_schema = self.user_schema
         if self.reflection_cache is not other.reflection_cache:
             reflection_cache = self.reflection_cache
+        if self.extension_refs is not other.extension_refs:
+            extension_refs = self.extension_refs
         if self.database_config is not other.database_config:
             database_config = self.database_config
-        return PickledState(user_schema, reflection_cache, database_config)
+        return PickledState(
+            user_schema,
+            reflection_cache,
+            extension_refs,
+            database_config,
+        )
 
     def get_estimated_size(self) -> int:
         rv = 0
@@ -85,6 +93,8 @@ class PickledState(NamedTuple):
             rv += len(self.user_schema)
         if self.reflection_cache is not None:
             rv += len(self.reflection_cache)
+        if self.extension_refs is not None:
+            rv += len(self.extension_refs)
         if self.database_config is not None:
             rv += len(self.database_config)
         return rv
@@ -271,6 +281,7 @@ class MultiSchemaPool(
         evicted_dbs: list[str],
         user_schema: Optional[bytes],
         reflection_cache: Optional[bytes],
+        extension_refs: Optional[bytes],
         global_schema: Optional[bytes],
         database_config: Optional[bytes],
         system_config: Optional[bytes],
@@ -296,9 +307,10 @@ class MultiSchemaPool(
         if db is None:
             assert user_schema is not None
             assert reflection_cache is not None
+            assert extension_refs is not None
             assert database_config is not None
             dbs[dbname] = PickledState(
-                user_schema, reflection_cache, database_config
+                user_schema, reflection_cache, extension_refs, database_config
             )
             dbs_changed = True
         else:
@@ -308,6 +320,8 @@ class MultiSchemaPool(
                 updates["user_schema"] = user_schema
             if reflection_cache is not None:
                 updates["reflection_cache"] = reflection_cache
+            if extension_refs is not None:
+                updates["extension_refs"] = extension_refs
             if database_config is not None:
                 updates["database_config"] = database_config
 
@@ -349,6 +363,7 @@ class MultiSchemaPool(
         evicted_dbs: list[str],
         user_schema: Optional[bytes],
         reflection_cache: Optional[bytes],
+        extension_refs: Optional[bytes],
         global_schema: Optional[bytes],
         database_config: Optional[bytes],
         system_config: Optional[bytes],
@@ -362,6 +377,7 @@ class MultiSchemaPool(
                 evicted_dbs=evicted_dbs,
                 user_schema=user_schema,
                 reflection_cache=reflection_cache,
+                extension_refs=extension_refs,
                 global_schema=global_schema,
                 database_config=database_config,
                 system_config=system_config,
@@ -557,6 +573,7 @@ class MultiSchemaPool(
                     evicted_dbs,
                     user_schema,
                     reflection_cache,
+                    extension_refs,
                     global_schema,
                     database_config,
                     system_config,
@@ -569,6 +586,7 @@ class MultiSchemaPool(
                     evicted_dbs=evicted_dbs,
                     user_schema=user_schema,
                     reflection_cache=reflection_cache,
+                    extension_refs=extension_refs,
                     global_schema=global_schema,
                     database_config=database_config,
                     system_config=system_config,
