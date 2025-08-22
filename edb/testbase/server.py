@@ -1544,6 +1544,11 @@ class DatabaseTestCase(ConnectedTestCase):
 
                     schema.append(f'\nmodule {module_name} {{ {module} }}')
 
+        full_schema_fn = getattr(cls, 'FULL_SCHEMA', None)
+        if full_schema_fn:
+            with open(full_schema_fn, 'r') as sf:
+                schema.append(sf.read())
+
         if schema:
             has_nontrivial_script = True
 
