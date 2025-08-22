@@ -3082,10 +3082,14 @@ class TypeCommand[TypeT: Type](sd.ObjectCommand[TypeT]):
         value: s_expr.Expression,
         track_schema_ref_exprs: bool=False,
     ) -> s_expr.CompiledExpression:
+        # XXX: This seems like pointless duplication of work from
+        # globals/aliases... why is expr even here?
+        # (... because we export it in the introspection schema)
         assert field.name == 'expr'
         return value.compiled(
             schema=schema,
             options=qlcompiler.CompilerOptions(
+                schema_object_context=self.get_schema_metaclass(),
                 modaliases=context.modaliases,
                 in_ddl_context_name='type definition',
                 track_schema_ref_exprs=track_schema_ref_exprs,
