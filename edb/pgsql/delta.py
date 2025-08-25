@@ -4825,12 +4825,16 @@ class PointerMetaCommand[Pointer_T: s_pointers.Pointer](
         for child in list(ir.scope_tree.children):
             scope_body.attach_child(child)
 
-        scope_root = irast.ScopeTreeNode(
+        scope_node = irast.ScopeTreeNode(
             unique_id=root_uid,
             path_id=outer_path,
         )
-        scope_root.attach_child(scope_iter)
-        scope_root.attach_child(scope_body)
+        scope_node.attach_child(scope_iter)
+        scope_node.attach_child(scope_body)
+
+        # The top-level node must be a fence.
+        scope_root = irast.ScopeTreeNode(fenced=True)
+        scope_root.attach_child(scope_node)
         ir.scope_tree = scope_root
 
         # IR ast wrapping
