@@ -12,6 +12,9 @@
     * - :eql:func:`math::floor`
       - :eql:func-desc:`math::floor`
 
+    * - :eql:func:`math::exp`
+      - :eql:func-desc:`math::exp`
+
     * - :eql:func:`math::ln`
       - :eql:func-desc:`math::ln`
 
@@ -38,6 +41,9 @@
 
     * - :eql:func:`math::pi`
       - :eql:func-desc:`math::pi`
+
+    * - :eql:func:`math::e`
+      - :eql:func-desc:`math::e`
 
     * - :eql:func:`math::acos`
       - :eql:func-desc:`math::acos`

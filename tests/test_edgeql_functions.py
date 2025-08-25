@@ -5817,6 +5817,76 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
             {True},
         )
 
+    async def test_edgeql_functions_math_exp_01(self):
+        await self.assert_query_result(
+            r'''SELECT math::exp(0);''',
+            {1.0},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(1);''',
+            {math.e},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(2.0);''',
+            {math.exp(2)},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<decimal>1.0);''',
+            {math.e},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp({1, 2, 3});''',
+            {math.e, math.exp(2), math.exp(3)},
+        )
+
+    async def test_edgeql_functions_math_exp_02(self):
+        await self.assert_query_result(
+            r'''SELECT math::exp(<int64>1) IS float64;''',
+            {True},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<float64>1.0) IS float64;''',
+            {True},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<decimal>1.0) IS decimal;''',
+            {True},
+        )
+
+    async def test_edgeql_functions_math_exp_03(self):
+        # Test edge cases and potential invalid values for math::exp
+
+        # Test with negative values (should work fine)
+        await self.assert_query_result(
+            r'''SELECT math::exp(-1);''',
+            {1 / math.e},
+            abs_tol=1e-5,
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(-2.0);''',
+            {1 / (math.e**2)},
+            abs_tol=1e-5,
+        )
+
+        with self.assertRaises(edgedb.NumericOutOfRangeError):
+            await self.con.query(r'''SELECT math::exp(1000);''')
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<float64>'inf');''',
+            {math.inf}
+        )
+        await self.assert_query_result(
+            r'''SELECT math::exp(<float64>'nan');''',
+            {math.nan}
+        )
+
     async def test_edgeql_functions_math_log_01(self):
         await self.assert_query_result(
             r'''SELECT math::ln({1, 10, 32});''',
