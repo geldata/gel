@@ -5860,9 +5860,6 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
         )
 
     async def test_edgeql_functions_math_exp_03(self):
-        # Test edge cases and potential invalid values for math::exp
-
-        # Test with negative values (should work fine)
         await self.assert_query_result(
             r'''SELECT math::exp(-1);''',
             {1 / math.e},
