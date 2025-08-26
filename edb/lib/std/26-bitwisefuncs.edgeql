@@ -366,3 +366,110 @@ std::bit_count(val: std::int64) -> std::int64
     SELECT bit_count(val::bit(64))
     $$;
 };
+
+
+## Bitwise bytes functions
+## ----------------------
+
+CREATE FUNCTION
+std::bytes_and(l: std::bytes, r: std::bytes) -> std::bytes
+{
+    CREATE ANNOTATION std::description :=
+        'Bitwise AND operator for bytes.';
+    SET volatility := 'Immutable';
+    USING SQL $$
+    SELECT (
+        CASE
+            WHEN length(l) != length(r) THEN
+                edgedb_VER.raise(
+                    NULL::bytea,
+                    'invalid_parameter_value',
+                    msg => (
+                        'bytes_and(): byte strings must be of equal length'
+                    )
+                )
+            ELSE l & r
+        END
+    )
+    $$;
+};
+
+CREATE FUNCTION
+std::bytes_or(l: std::bytes, r: std::bytes) -> std::bytes
+{
+    CREATE ANNOTATION std::description :=
+        'Bitwise OR operator for bytes.';
+    SET volatility := 'Immutable';
+    USING SQL $$
+    SELECT (
+        CASE
+            WHEN length(l) != length(r) THEN
+                edgedb_VER.raise(
+                    NULL::bytea,
+                    'invalid_parameter_value',
+                    msg => (
+                        'bytes_or(): byte strings must be of equal length'
+                    )
+                )
+            ELSE l | r
+        END
+    )
+    $$;
+};
+
+CREATE FUNCTION
+std::bytes_xor(l: std::bytes, r: std::bytes) -> std::bytes
+{
+    CREATE ANNOTATION std::description :=
+        'Bitwise XOR operator for bytes.';
+    SET volatility := 'Immutable';
+    USING SQL $$
+    SELECT (
+        CASE
+            WHEN length(l) != length(r) THEN
+                edgedb_VER.raise(
+                    NULL::bytea,
+                    'invalid_parameter_value',
+                    msg => (
+                        'bytes_xor(): byte strings must be of equal length'
+                    )
+                )
+            ELSE l # r
+        END
+    )
+    $$;
+};
+
+CREATE FUNCTION
+std::bytes_not(val: std::bytes) -> std::bytes
+{
+    CREATE ANNOTATION std::description :=
+        'Bitwise NOT operator for bytes.';
+    SET volatility := 'Immutable';
+    USING SQL $$
+    SELECT ~val
+    $$;
+};
+
+CREATE FUNCTION
+std::bytes_overlap(l: std::bytes, r: std::bytes) -> std::bool
+{
+    CREATE ANNOTATION std::description :=
+        'Check if two byte strings have any overlapping bits (non-zero bitwise AND).';
+    SET volatility := 'Immutable';
+    USING SQL $$
+    SELECT (
+        CASE
+            WHEN length(l) != length(r) THEN
+                edgedb_VER.raise(
+                    NULL::bool,
+                    'invalid_parameter_value',
+                    msg => (
+                        'bytes_overlap(): byte strings must be of equal length'
+                    )
+                )
+            ELSE (l & r) != repeat('\x00'::bytea, length(l))
+        END
+    )
+    $$;
+};
