@@ -1652,14 +1652,6 @@ def _get_compile_options(
             ctx.schema_reflection_mode
             or _get_config_val(ctx, '__internal_query_reflschema')
         ),
-        simple_scoping=(
-            _get_config_val(ctx, 'simple_scoping')
-        ),
-        warn_old_scoping=(
-            ctx.schema_reflection_mode or
-            ctx.bootstrap_mode or
-            _get_config_val(ctx, 'warn_old_scoping')
-        ),
     )
 
 
