@@ -1818,8 +1818,6 @@ def _get_schema_computed_ctx(
     @contextlib.contextmanager
     def newctx() -> Iterator[context.ContextLevel]:
         with ctx.detached() as subctx:
-            subctx.schema_factoring()
-
             source_scope = pathctx.get_set_scope(rptr.source, ctx=ctx)
             if source_scope and source_scope.namespaces:
                 subctx.path_id_namespace |= source_scope.namespaces

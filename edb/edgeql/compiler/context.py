@@ -887,9 +887,6 @@ class ContextLevel(compiler.ContextLevel):
     def allow_factoring(self) -> None:
         self.no_factoring = False
 
-    def schema_factoring(self) -> None:
-        self.no_factoring = True
-
 
 class CompilerContext(compiler.CompilerContext[ContextLevel]):
     ContextLevelClass = ContextLevel

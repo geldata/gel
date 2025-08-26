@@ -908,8 +908,6 @@ def _gen_pointers_from_defaults(
         )
 
         with ctx.new() as scopectx:
-            scopectx.schema_factoring()
-
             scopectx.active_defaults |= {stype}
 
             # add __source__ to anchors
@@ -1236,7 +1234,6 @@ def _compile_rewrites_for_stype(
         assert rewrite_expr
 
         with ctx.newscope(fenced=True) as scopectx:
-            scopectx.schema_factoring()
             scopectx.active_rewrites |= {stype}
 
             # prepare context

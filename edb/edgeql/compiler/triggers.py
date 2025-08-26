@@ -66,7 +66,6 @@ def compile_trigger(
     source = trigger.get_subject(schema)
 
     with ctx.detached() as tc, tc.newscope(fenced=True) as sctx:
-        sctx.schema_factoring()
         sctx.anchors = sctx.anchors.copy()
 
         anchors = {}

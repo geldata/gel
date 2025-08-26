@@ -153,7 +153,6 @@ def compile_pol(
 
     # Compile it with all of the
     with ctx.newscope(fenced=True) as _, _.detached() as dctx:
-        dctx.schema_factoring()
         dctx.partial_path_prefix = ctx.partial_path_prefix
         dctx.expr_exposed = context.Exposure.UNEXPOSED
         dctx.suppress_rewrites = frozenset(descs)
@@ -609,4 +608,3 @@ def _prepare_dml_policy_context(
 
     ctx.anchors['__subject__'] = result
     ctx.partial_path_prefix = result
-    ctx.schema_factoring()
