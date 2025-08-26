@@ -1533,6 +1533,7 @@ def administer_reindex(
 ) -> dbstate.BaseQuery:
     from edb.ir import ast as irast
     from edb.ir import typeutils as irtypeutils
+    from edb.ir import utils as irutils
 
     from edb.schema import objtypes as s_objtypes
     from edb.schema import constraints as s_constraints
@@ -1573,18 +1574,17 @@ def administer_reindex(
             modaliases=modaliases
         ),
     )
-    expr = ir.expr
+    expr = irutils.unwrap_set(ir.expr)
     if ptr:
         if (
             not expr.expr
-            or not isinstance(expr.expr, irast.SelectStmt)
-            or not isinstance(expr.expr.result.expr, irast.Pointer)
+            or not isinstance(expr.expr, irast.Pointer)
         ):
             raise errors.QueryError(
                 'invalid pointer argument to reindex()',
                 span=arg.span,
             )
-        rptr = expr.expr.result.expr
+        rptr = expr.expr
         source = rptr.source
     else:
         rptr = None

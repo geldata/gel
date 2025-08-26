@@ -20054,7 +20054,7 @@ class TestDDLNonIsolated(tb.DDLTestCase):
                 insert Mig03 { n := <int64>{} };
             ''')
 
-    async def test_edgeql_ddl_reindex(self):
+    async def _test_edgeql_ddl_reindex(self):
         await self.con.execute('''
             create type Tgt;
             create type Foo {
@@ -20102,6 +20102,20 @@ class TestDDLNonIsolated(tb.DDLTestCase):
                 drop type Foo;
                 drop type Tgt;
                 drop module test;
+            ''')
+
+    async def test_edgeql_ddl_reindex_old_scoping(self):
+        await self._test_edgeql_ddl_reindex()
+
+    async def test_edgeql_ddl_reindex_simple_scoping(self):
+        await self.con.execute('''
+            create future simple_scoping;
+        ''')
+        try:
+            await self._test_edgeql_ddl_reindex()
+        finally:
+            await self.con.execute('''
+                drop future simple_scoping;
             ''')
 
     async def _deadlock_tester(self, setup, teardown, modification, query):
