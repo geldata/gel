@@ -18,66 +18,107 @@
 
 
 from __future__ import annotations
+from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 import asyncio
 import functools
 import unittest
 import logging
 
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
 
 logger = logging.getLogger("edb.test")
 skip = unittest.skip
 
+_P = ParamSpec("_P")
+_R = TypeVar("_R", covariant=True)
 
-def _xfail(reason, *, unless=False, allow_failure, allow_error):
-    def decorator(test_item):
+
+def _xfail(
+    reason: str,
+    *,
+    unless: bool = False,
+    allow_failure: bool,
+    allow_error: bool,
+) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+    def decorator(test_item: Callable[_P, _R]) -> Callable[_P, _R]:
         if unless:
             return test_item
         else:
-            test_item.__et_xfail_reason__ = reason
-            test_item.__et_xfail_allow_failure__ = allow_failure
-            test_item.__et_xfail_allow_error__ = allow_error
+            test_item.__et_xfail_reason__ = reason  # type: ignore [attr-defined]
+            test_item.__et_xfail_allow_failure__ = allow_failure  # type: ignore [attr-defined]
+            test_item.__et_xfail_allow_error__ = allow_error  # type: ignore [attr-defined]
             return unittest.expectedFailure(test_item)
 
     return decorator
 
 
-def xfail(reason, *, unless=False):
+def xfail(
+    reason: str,
+    *,
+    unless: bool = False,
+) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     return _xfail(reason, unless=unless, allow_failure=True, allow_error=False)
 
 
-def xerror(reason, *, unless=False):
+def xerror(
+    reason: str,
+    *,
+    unless: bool = False,
+) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     return _xfail(reason, unless=unless, allow_failure=False, allow_error=True)
 
 
-def not_implemented(reason):
-    def decorator(test_item):
-        test_item.__et_xfail_reason__ = reason
-        test_item.__et_xfail_not_implemented__ = True
-        test_item.__et_xfail_allow_failure__ = True
-        test_item.__et_xfail_allow_error__ = True
+def not_implemented(
+    reason: str,
+) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
+    def decorator(test_item: Callable[_P, _R]) -> Callable[_P, _R]:
+        test_item.__et_xfail_reason__ = reason  # type: ignore [attr-defined]
+        test_item.__et_xfail_not_implemented__ = True  # type: ignore [attr-defined]
+        test_item.__et_xfail_allow_failure__ = True  # type: ignore [attr-defined]
+        test_item.__et_xfail_allow_error__ = True  # type: ignore [attr-defined]
         return unittest.expectedFailure(test_item)
 
     return decorator
 
 
-def async_timeout(timeout: int):
-    def decorator(test_func):
+def async_timeout(
+    timeout: int,
+) -> Callable[[Callable[_P, Awaitable[_R]]], Callable[_P, Awaitable[_R]]]:
+    def decorator(
+        test_func: Callable[_P, Awaitable[_R]],
+    ) -> Callable[_P, Awaitable[_R]]:
         @functools.wraps(test_func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(
+            *args: _P.args,
+            **kwargs: _P.kwargs,
+        ) -> _R:
             try:
-                await asyncio.wait_for(test_func(*args, **kwargs), timeout)
-            except asyncio.TimeoutError:
+                return await asyncio.wait_for(
+                    test_func(*args, **kwargs), timeout
+                )
+            except TimeoutError:
                 logger.error(
-                    f"Test {test_func} failed due to timeout after {timeout}"
-                    "seconds")
+                    "Test %s failed due to timeout after %s seconds",
+                    test_func,
+                    timeout,
+                )
                 raise AssertionError(
-                    f"Test failed due to timeout after {timeout} seconds")
+                    f"Test failed due to timeout after {timeout} seconds"
+                ) from None
             except asyncio.CancelledError as e:
                 logger.error(
-                    f"Test {test_func} failed due to timeout after {timeout}"
-                    "seconds", e)
+                    "Test %s failed due to timeout after %s seconds",
+                    test_func,
+                    timeout,
+                    exc_info=e,
+                )
                 raise AssertionError(
-                    f"Test failed due to timeout after {timeout} seconds", e)
+                    f"Test failed due to timeout after {timeout} seconds"
+                ) from e
+
         return wrapper
+
     return decorator

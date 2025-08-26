@@ -53,7 +53,10 @@ import struct
 import subprocess
 import sys
 import tempfile
+import traceback
+import types
 import unittest
+import unittest.result
 import urllib
 
 import edgedb
@@ -63,14 +66,13 @@ from edb.server import args as edgedb_args
 from edb.testbase import cluster as edgedb_cluster
 from edb.server import pgcluster
 from edb.server import defines as edgedb_defines
-from edb.server import auth
 from edb.server.pgconnparams import ConnectionParams
 
 from edb.common import assert_data_shape
 from edb.common import devmode
 from edb.common import debug
 from edb.common import retryloop
-from edb.common import secretkey
+from edb.common import verutils
 
 from edb import buildmeta
 from edb import protocol
@@ -236,6 +238,38 @@ class TestCase(unittest.TestCase, metaclass=TestCaseMeta):
     @classmethod
     def uses_server(cls) -> bool:
         return True
+
+    def exc_info_to_string(
+        self,
+        result,
+        exc_info: tuple[
+            type[BaseException], BaseException, types.TracebackType
+        ],
+    ) -> str:
+        from edb.common import traceback as edb_traceback
+
+        # Copied from unittest.TestResult._exc_info_to_string
+
+        exctype, value, tb = exc_info
+        tb = result._clean_tracebacks(exctype, value, tb, self)  # type: ignore
+        tb_e = traceback.TracebackException(
+            exctype, value, tb, capture_locals=result.tb_locals, compact=True
+        )
+        tb_e.stack = edb_traceback.StandardStackSummary(tb_e.stack)
+        msgLines = list(tb_e.format())
+
+        if result.buffer:
+            output = sys.stdout.getvalue()  # type: ignore
+            error = sys.stderr.getvalue()  # type: ignore
+            if output:
+                if not output.endswith('\n'):
+                    output += '\n'
+                msgLines.append(unittest.result.STDOUT_LINE % output)
+            if error:
+                if not error.endswith('\n'):
+                    error += '\n'
+                msgLines.append(unittest.result.STDERR_LINE % error)
+        return ''.join(msgLines)
 
     def add_fail_notes(self, **kwargs):
         if getattr(self, 'fail_notes', None) is None:
@@ -566,12 +600,11 @@ class TestCaseWithHttpClient(TestCase):
 _default_cluster = None
 
 
-async def init_cluster(
+def _make_test_cluster(
     data_dir=None,
     backend_dsn=None,
     *,
     cleanup_atexit=True,
-    init_settings=None,
     security=edgedb_args.ServerSecurityMode.Strict,
     http_endpoint_security=edgedb_args.ServerEndpointSecurityMode.Optional,
     compiler_pool_mode=edgedb_args.CompilerPoolMode.Fixed,
@@ -579,9 +612,6 @@ async def init_cluster(
     if data_dir is not None and backend_dsn is not None:
         raise ValueError(
             "data_dir and backend_dsn cannot be set at the same time")
-    if init_settings is None:
-        init_settings = {}
-
     log_level = 's' if not debug.flags.server else 'd'
 
     if backend_dsn:
@@ -616,17 +646,84 @@ async def init_cluster(
         )
         destroy = False
 
+    if cleanup_atexit:
+        atexit.register(_shutdown_cluster, cluster, destroy=destroy)
+
+    return cluster
+
+
+async def _configure_test_cluster(
+    cluster: edgedb_cluster.BaseCluster,
+    init_settings: dict[str, Any] | None = None,
+    port: int | None = 0,
+) -> None:
+    if init_settings is None:
+        init_settings = {}
+
     pg_cluster = await cluster._get_pg_cluster()
     if await pg_cluster.get_status() == 'not-initialized':
         await cluster.init(server_settings=init_settings)
 
-    await cluster.start(port=0)
+    await cluster.start(port=port)
     await cluster.set_test_config()
     await cluster.set_superuser_password('test')
 
-    if cleanup_atexit:
-        atexit.register(_shutdown_cluster, cluster, destroy=destroy)
 
+class _ClusterWrapper:
+    # XXX: temporary shim, needed to properly initialize the
+    #      test cluster at first startup.
+    def __init__(self, cluster: edgedb_cluster.BaseCluster) -> None:
+        self._cluster = cluster
+        self._initialized = False
+
+    def get_data_dir(self) -> pathlib.Path:
+        return self._cluster.get_data_dir()
+
+    def set_data_dir(self, data_dir: pathlib.Path) -> None:
+        self._cluster.set_data_dir(data_dir)
+
+    def get_connect_args(self) -> dict[str, Any]:
+        return self._cluster.get_connect_args()
+
+    def has_create_role(self) -> bool:
+        return self._cluster.has_create_role()
+
+    def has_create_database(self) -> bool:
+        return self._cluster.has_create_database()
+
+    def get_server_version(self) -> verutils.Version:
+        return self._cluster.get_server_version()
+
+    async def start(self, *, port: int | None = 0) -> None:
+        if not self._initialized:
+            await _configure_test_cluster(self._cluster, port=port)
+            self._initialized = True
+        else:
+            await self._cluster.start(port=port)
+
+    def stop(self) -> None:
+        self._cluster.stop()
+
+
+async def init_cluster(
+    data_dir=None,
+    backend_dsn=None,
+    *,
+    cleanup_atexit=True,
+    init_settings=None,
+    security=edgedb_args.ServerSecurityMode.Strict,
+    http_endpoint_security=edgedb_args.ServerEndpointSecurityMode.Optional,
+    compiler_pool_mode=edgedb_args.CompilerPoolMode.Fixed,
+) -> edgedb_cluster.BaseCluster:
+    cluster = _make_test_cluster(
+        data_dir=data_dir,
+        backend_dsn=backend_dsn,
+        cleanup_atexit=cleanup_atexit,
+        security=security,
+        http_endpoint_security=http_endpoint_security,
+        compiler_pool_mode=compiler_pool_mode,
+    )
+    await _configure_test_cluster(cluster, init_settings=init_settings)
     return cluster
 
 
@@ -794,31 +891,35 @@ class ClusterTestCase(TestCaseWithHttpClient):
                 raise unittest.SkipTest('skipped due to lack of superuser')
 
     @classmethod
-    async def make_test_instance(
+    def make_test_instance(
         cls,
         *,
         backend_dsn: str | None = None,
         cleanup_atexit: bool = False,
         data_dir: str | None = None,
-    ) -> edgedb_cluster.BaseCluster:
-        return await init_cluster(
+    ) -> _ClusterWrapper:
+        cluster = _make_test_cluster(
             data_dir=data_dir,
             backend_dsn=backend_dsn,
             cleanup_atexit=cleanup_atexit,
         )
+        return _ClusterWrapper(cluster)
 
     @classmethod
     def shutdown_test_instance(
         cls,
-        cluster: edgedb_cluster.BaseCluster,
+        cluster: _ClusterWrapper,
         *,
         destroy: bool = False,
     ) -> None:
-        _shutdown_cluster(cluster, destroy=destroy)
+        _shutdown_cluster(cluster._cluster, destroy=destroy)
 
     @classmethod
-    def get_cache_dir(cls) -> pathlib.Path:
-        return devmode.get_dev_mode_cache_dir()
+    def get_cache_info(cls, instance) -> tuple[pathlib.Path, str] | None:
+        if not devmode.is_in_dev_mode():
+            return None
+
+        return devmode.get_dev_mode_cache_dir(), ""
 
     @classmethod
     async def tearDownSingleDB(cls):
@@ -1071,7 +1172,7 @@ class ConnectedTestCase(ClusterTestCase):
                 super().tearDown()
 
     @classmethod
-    def make_async_test_client(cls, **kwargs):
+    def make_async_test_client(cls, *, instance, **kwargs):
         if not kwargs.get("password"):
             kwargs["password"] = "test"
         return tconn.make_async_test_client(**kwargs)

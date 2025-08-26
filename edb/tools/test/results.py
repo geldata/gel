@@ -19,7 +19,18 @@
 # Warning: this file is ran in GHA tests/test-conclusion, with (almost) no
 # dependencies installed.
 
+
 from __future__ import annotations
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Protocol,
+    TextIO,
+    TypeVar,
+    overload,
+)
+from typing_extensions import TypeAliasType
 
 import binascii
 import dataclasses
@@ -28,17 +39,24 @@ import functools
 import json
 import pathlib
 import sys
-import traceback
 import typing
 import unittest
 import glob
 import shutil
-from unittest.result import STDERR_LINE, STDOUT_LINE
+import types
 
 import click
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from . import runner
+
+_T_co = TypeVar("_T_co", covariant=True)
+
+
+ExcInfo = TypeAliasType(
+    "ExcInfo", tuple[type[BaseException], BaseException, types.TracebackType]
+)
+OptExcInfo = TypeAliasType("OptExcInfo", ExcInfo | tuple[None, None, None])
 
 
 @dataclasses.dataclass()
@@ -46,34 +64,34 @@ class TestCase:
     id: str
     description: str
 
-    py_HashSecret: typing.Optional[str]
-    py_random_seed: typing.Optional[str]
+    py_HashSecret: str | None
+    py_random_seed: str | None
 
-    error_message: typing.Optional[str]
-    server_traceback: typing.Optional[str]
+    error_message: str | None
+    server_traceback: str | None
 
 
 def _collect_case_data(
     result: runner.ParallelTextTestResult,
     test: unittest.TestCase,
-    err: typing.Any,
+    err: Any,
 ) -> TestCase:
-    from . import runner
-    import gel
+    import gel  # noqa: PLC0415
+    from . import runner  # noqa: PLC0415
 
     py_HashSecret = None
     py_random_seed = None
     if annos := result.get_test_annotations(test):
-        if phs := annos.get('py-hash-secret'):
+        if phs := annos.get("py-hash-secret"):
             py_HashSecret = binascii.hexlify(phs).decode()
-        if prs := annos.get('py-random-seed'):
+        if prs := annos.get("py-random-seed"):
             py_random_seed = binascii.hexlify(prs).decode()
 
     error_message = None
     server_traceback = None
     if runner._is_exc_info(err):
         if isinstance(err[1], gel.EdgeDBError):
-            server_traceback = err[1].get_server_context()
+            server_traceback = err[1].get_server_context()  # type: ignore [no-untyped-call]
         error_message = _exc_info_to_string(result, err, test)
     elif isinstance(err, runner.SerializedServerError):
         error_message, server_traceback = err.test_error, err.server_error
@@ -92,34 +110,14 @@ def _collect_case_data(
 
 def _exc_info_to_string(
     result: runner.ParallelTextTestResult,
-    err: typing.Any,
+    err: OptExcInfo,
     test: unittest.TestCase,
-):
+) -> str:
     """Converts a sys.exc_info()-style tuple of values into a string."""
-    from edb.common import traceback as edb_traceback
-
-    # Copied from unittest.TestResult._exc_info_to_string
-
-    exctype, value, tb = err
-    tb = result._clean_tracebacks(exctype, value, tb, test)  # type: ignore
-    tb_e = traceback.TracebackException(
-        exctype, value, tb, capture_locals=result.tb_locals, compact=True
-    )
-    tb_e.stack = edb_traceback.StandardStackSummary(tb_e.stack)
-    msgLines = list(tb_e.format())
-
-    if result.buffer:
-        output = sys.stdout.getvalue()  # type: ignore
-        error = sys.stderr.getvalue()  # type: ignore
-        if output:
-            if not output.endswith('\n'):
-                output += '\n'
-            msgLines.append(STDOUT_LINE % output)
-        if error:
-            if not error.endswith('\n'):
-                error += '\n'
-            msgLines.append(STDERR_LINE % error)
-    return ''.join(msgLines)
+    if callable(eits := getattr(test, "exc_info_to_string", None)):
+        return eits(result, err)  # type: ignore [no-any-return]
+    else:
+        return unittest.TestResult._exc_info_to_string(result, err, test)  # type: ignore [attr-defined, no-any-return]
 
 
 @dataclasses.dataclass()
@@ -166,7 +164,7 @@ def collect_result_data(
     r: runner.ParallelTextTestResult,
     boot_time_taken: float,
     tests_time_taken: float,
-):
+) -> TestResult:
     return TestResult(
         was_successful=r.wasSuccessful(),
         testsRun=r.testsRun,
@@ -189,104 +187,103 @@ def collect_result_data(
 
 
 class EnhancedJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if dataclasses.is_dataclass(o):
+    def default(self, o: Any) -> Any:
+        if dataclasses.is_dataclass(o) and not isinstance(o, type):
             return dataclasses.asdict(o)
         return super().default(o)
 
 
-def _get_term_width():
+def _get_term_width() -> int:
     return shutil.get_terminal_size()[0] or 70
 
 
-def _echo(file: typing.IO, s: str = '', **kwargs):
+def _echo(file: TextIO, s: str = "", **kwargs: Any) -> None:
     click.secho(s, file=file, **kwargs)
 
 
-def _fill(file: typing.IO, char, **kwargs):
+def _fill(file: TextIO, char: str, **kwargs: Any) -> None:
     _echo(file, char * _get_term_width(), **kwargs)
 
 
-def _format_time(seconds: float):
+def _format_time(seconds: float) -> str:
     hours = int(seconds // 3600)
     seconds %= 3600
     minutes = int(seconds // 60)
     seconds %= 60
 
-    return f'{hours:02d}:{minutes:02d}:{seconds:04.1f}'
+    return f"{hours:02d}:{minutes:02d}:{seconds:04.1f}"
 
 
-def _print_case_result(file: typing.IO, case: TestCase, kind: str, fg: str):
-    _fill(file, '=', fg=fg)
-    _echo(file, f'{kind}: {case.description}', fg=fg, bold=True)
-    _fill(file, '-', fg=fg)
+def _print_case_result(
+    file: TextIO, case: TestCase, kind: str, fg: str
+) -> None:
+    _fill(file, "=", fg=fg)
+    _echo(file, f"{kind}: {case.description}", fg=fg, bold=True)
+    _fill(file, "-", fg=fg)
 
     if case.py_HashSecret or case.py_random_seed:
         if case.py_HashSecret:
-            _echo(file, f'Py_HashSecret: {case.py_HashSecret}')
+            _echo(file, f"Py_HashSecret: {case.py_HashSecret}")
         if case.py_random_seed:
-            _echo(file, f'random.seed(): {case.py_random_seed}')
-        _fill(file, '-', fg=fg)
+            _echo(file, f"random.seed(): {case.py_random_seed}")
+        _fill(file, "-", fg=fg)
 
     if case.server_traceback:
-        _echo(file, 'Server Traceback:', fg='red', bold=True)
+        _echo(file, "Server Traceback:", fg="red", bold=True)
         _echo(file, case.server_traceback)
     if case.error_message:
         if case.server_traceback:
-            _echo(file, 'Test Traceback:', fg='red', bold=True)
+            _echo(file, "Test Traceback:", fg="red", bold=True)
         _echo(file, case.error_message)
 
 
-def render_result(
-    file: typing.IO,
-    result: TestResult,
-) -> None:
+def render_result(file: TextIO, result: TestResult) -> None:
     _echo(file)
 
     # cases
     for case in sorted(result.warnings, key=lambda c: c.id):
-        _print_case_result(file, case, 'WARNING', 'yellow')
+        _print_case_result(file, case, "WARNING", "yellow")
     for case in sorted(result.errors, key=lambda c: c.id):
-        _print_case_result(file, case, 'ERROR', 'red')
+        _print_case_result(file, case, "ERROR", "red")
     for case in sorted(result.failures, key=lambda c: c.id):
-        _print_case_result(file, case, 'FAIL', 'red')
+        _print_case_result(file, case, "FAIL", "red")
     for case in sorted(result.unexpected_successes, key=lambda c: c.id):
-        _print_case_result(file, case, 'UNEXPECTED SUCCESS', 'red')
+        _print_case_result(file, case, "UNEXPECTED SUCCESS", "red")
 
     # outcome
     if result.was_successful:
-        _echo(file, 'SUCCESS', fg='green', bold=True)
+        _echo(file, "SUCCESS", fg="green", bold=True)
     else:
-        _echo(file, 'FAILURE', fg='red', bold=True)
+        _echo(file, "FAILURE", fg="red", bold=True)
 
     # counts
     counts = [
-        ('tests ran', result.testsRun, None),
-        ('failures', len(result.failures), 'red'),
-        ('errors', len(result.errors), 'red'),
-        ('unexpected successes', len(result.unexpected_successes), 'red'),
-        ('not implemented', len(result.not_implemented), 'yellow'),
-        ('skipped', len(result.skipped), 'yellow'),
-        ('expected failures', len(result.expected_failures), None),
+        ("tests ran", result.testsRun, None),
+        ("failures", len(result.failures), "red"),
+        ("errors", len(result.errors), "red"),
+        ("unexpected successes", len(result.unexpected_successes), "red"),
+        ("not implemented", len(result.not_implemented), "yellow"),
+        ("skipped", len(result.skipped), "yellow"),
+        ("expected failures", len(result.expected_failures), None),
     ]
     for name, count, fg in counts:
         if not count:
             continue
-        _echo(file, f'  {name}: ', nl=False, fg=fg)
-        _echo(file, f'{count}', bold=True)
+        _echo(file, f"  {name}: ", nl=False, fg=fg)
+        _echo(file, f"{count}", bold=True)
 
     # running times
     _echo(file)
-    _echo(file, f'Running times: ')
+    _echo(file, "Running times: ")
     if result.boot_time_taken > 0.0:
-        _echo(file, '  bootstrap: ', nl=False)
+        _echo(file, "  bootstrap: ", nl=False)
         _echo(file, _format_time(result.boot_time_taken), bold=True)
 
-    _echo(file, '  tests: ', nl=False)
+    _echo(file, "  tests: ", nl=False)
     _echo(file, _format_time(result.tests_time_taken), bold=True)
 
     if result.boot_time_taken > 0.0:
-        _echo(file, '  total: ', nl=False)
+        _echo(file, "  total: ", nl=False)
         _echo(
             file,
             _format_time(result.boot_time_taken + result.tests_time_taken),
@@ -296,26 +293,25 @@ def render_result(
     _echo(file)
 
 
-def _result_log_path(path_template: str) -> typing.Optional[pathlib.Path]:
-    now = str(datetime.datetime.now()).replace(' ', '_')
-    path = pathlib.Path(path_template.replace('%TIMESTAMP%', now))
+def _result_log_path(path_template: str) -> pathlib.Path | None:
+    now = str(datetime.datetime.now(datetime.UTC)).replace(" ", "_")
+    path = pathlib.Path(path_template.replace("%TIMESTAMP%", now))
 
-    dir = path.parent
+    parent_dir = path.parent
     try:
-        dir.mkdir(parents=True, exist_ok=True)
+        parent_dir.mkdir(parents=True, exist_ok=True)
         return path
     except OSError:
         # this might happen when the process is running in readonly mode
         return None
 
 
-def write_result(path_template: str, res: TestResult):
+def write_result(path_template: str, res: TestResult) -> None:
     path = _result_log_path(path_template)
     if not path:
         return None
-    log_file = open(path, 'w')
-
-    json.dump(dataclasses.asdict(res), log_file, indent=4)
+    with open(path, "w", encoding="utf-8") as log_file:
+        json.dump(dataclasses.asdict(res), log_file, indent=4)
 
 
 def read_unsuccessful(path_template: str) -> list[str]:
@@ -330,33 +326,57 @@ def read_unsuccessful(path_template: str) -> list[str]:
     last = results[-1]
 
     try:
-        result_dict = json.load(open(last, 'r'))
+        with open(last, encoding="utf-8") as f:
+            result_dict = json.load(f)
     except Exception:
         return []
     result: TestResult = _dataclass_from_dict(TestResult, result_dict)
     return [
-        case.id.split('.')[-1]
+        case.id.split(".")[-1]
         for case in result.failures
         + result.errors
         + result.unexpected_successes
     ]
 
 
-def _dataclass_from_dict(cls: typing.Any, data: typing.Any):
-    if not cls:
-        return data
+class _DataclassInstance(Protocol[_T_co]):
+    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
 
-    if hasattr(cls, '__origin__') and cls.__origin__ is list:
-        args = cls.__args__
-        return [_dataclass_from_dict(args[0], e) for e in data]
+
+@overload
+def _dataclass_from_dict(
+    cls: type[_DataclassInstance[_T_co]],
+    data: Any,
+) -> _T_co: ...
+
+
+@overload
+def _dataclass_from_dict(
+    cls: Any,
+    data: Any,
+) -> Any: ...
+
+
+def _dataclass_from_dict(
+    cls: type[_DataclassInstance[_T_co]] | Any,
+    data: Any,
+) -> _T_co | Any:
+    if typing.get_origin(cls) is list:
+        args = typing.get_args(cls)
+        list_type = args[0]
+        if not isinstance(data, list):
+            raise ValueError(
+                f"expected a list of dataclasses, found {type(data)}"
+            )
+        return [_dataclass_from_dict(list_type, e) for e in data]
 
     if not dataclasses.is_dataclass(cls):
         return data
     if not isinstance(data, dict):
-        raise ValueError(f'expected a dict of a dataclass, found {type(data)}')
+        raise ValueError(f"expected a dict of a dataclass, found {type(data)}")
 
-    field_types: typing.Mapping[str, type] = typing.get_type_hints(cls)
-    return cls(  # type: ignore
+    field_types = typing.get_type_hints(cls)
+    return cls(
         **{
             k: _dataclass_from_dict(field_types.get(k), v)
             for k, v in data.items()
@@ -365,24 +385,24 @@ def _dataclass_from_dict(cls: typing.Any, data: typing.Any):
 
 
 # if this file is invoked directly
-if __name__ == '__main__':
+if __name__ == "__main__":
     # read result JSON files, concat them into a single result and render
     result_path_glob = sys.argv[1]
 
     results: list[TestResult] = []
     for new_file in glob.glob(result_path_glob):
-        with open(new_file) as f:
+        with open(new_file, encoding="utf-8") as f:
             result_dict = json.load(f)
             results.append(_dataclass_from_dict(TestResult, result_dict))
 
     result = functools.reduce(
         lambda acc, r: _combine_test_results(acc, r) if acc else r,
         results,
-        typing.cast(typing.Optional[TestResult], None),
+        typing.cast("typing.Optional[TestResult]", None),
     )
     if not result:
         raise ValueError(
-            f'no result files were found at glob {result_path_glob}'
+            f"no result files were found at glob {result_path_glob}"
         )
 
     render_result(sys.stdout, result)

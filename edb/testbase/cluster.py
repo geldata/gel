@@ -32,6 +32,7 @@ import time
 
 from edb import buildmeta
 from edb.common import devmode
+from edb.common import verutils
 from edb.edgeql import quote
 
 from edb.server import auth
@@ -132,6 +133,12 @@ class BaseCluster:
         self._effective_port = None
         self._tls_cert_file = None
         self._env = env
+        self._server_version: verutils.Version | None = None
+
+    def get_server_version(self) -> verutils.Version:
+        if self._server_version is None:
+            raise ClusterError("server version not yet known, run start()")
+        return self._server_version
 
     async def _get_pg_cluster(self) -> pgcluster.BaseCluster:
         if self._pg_cluster is None:
@@ -322,24 +329,57 @@ class BaseCluster:
             started = time.monotonic()
             await test()
             left -= (time.monotonic() - started)
-        if res := self._admin_query(
-            "SELECT ();",
-            f"{max(1, int(left))}s",
+
+        res = self._admin_query(
+            "SELECT sys::get_version();",
+            wait_until_available=f"{max(1, int(left))}s",
             check=False,
-        ):
+        )
+        if res.returncode != 0:
             raise ClusterError(
                 f'could not connect to edgedb-server '
                 f'within {timeout} seconds (exit code = {res})') from None
+
+        try:
+            output = json.loads(res.stdout)
+        except ValueError:
+            raise ClusterError(
+                f'server did not respond with valid version JSON: {res.stdout}'
+            )
+
+        if (
+            not output
+            or not isinstance(output, list)
+            or not isinstance(output[0], dict)
+        ):
+            raise ClusterError(
+                f'server did not respond with valid version JSON: {res.stdout}'
+            )
+
+        version = output[0]
+
+        self._server_version = verutils.Version(
+            major=version["major"],
+            minor=version["minor"],
+            stage=getattr(
+                verutils.VersionStage,
+                version["stage"].upper(),
+                verutils.VersionStage.FINAL,
+            ),
+            stage_no=version["stage_no"],
+            local=tuple(version["local"]),
+        )
 
     def _admin_query(
         self,
         query: str,
         wait_until_available: str = "0s",
         check: bool=True,
-    ) -> int:
+    ) -> subprocess.CompletedProcess[str]:
         args = [
             "gel",
             "query",
+            "--output-format=json",
             "--unix-path",
             str(os.path.abspath(self._runstate_dir)),
             "--port",
@@ -353,13 +393,12 @@ class BaseCluster:
             wait_until_available,
             query,
         ]
-        res = subprocess.run(
+        return subprocess.run(
             args=args,
             check=check,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            text=True,
+            capture_output=True,
         )
-        return res.returncode
 
     async def set_test_config(self) -> None:
         # Set session_idle_transaction_timeout to 5 minutes.

@@ -18,20 +18,46 @@
 
 
 from __future__ import annotations
+from typing_extensions import TypeAliasType
+from collections.abc import Callable
 
 import click
 
 
-__all__ = ()
+Style = TypeAliasType("Style", Callable[[str], str])
 
 
-marker_passed = lambda t: t
-marker_errored = lambda t: click.style(t, fg='red', bold=True)
-marker_skipped = lambda t: click.style(t, fg='yellow')
-marker_failed = lambda t: click.style(t, fg='red', bold=True)
-marker_xfailed = lambda t: t
-marker_not_implemented = lambda t: t
-marker_upassed = lambda t: click.style(t, fg='yellow')
+def marker_passed(t: str) -> str:
+    return t
 
-status = lambda t: click.style(t, fg='white', bold=True)
-warning = lambda t: click.style(t, fg='yellow')
+
+def marker_errored(t: str) -> str:
+    return click.style(t, fg="red", bold=True)
+
+
+def marker_skipped(t: str) -> str:
+    return click.style(t, fg="yellow")
+
+
+def marker_failed(t: str) -> str:
+    return click.style(t, fg="red", bold=True)
+
+
+def marker_xfailed(t: str) -> str:
+    return t
+
+
+def marker_not_implemented(t: str) -> str:
+    return t
+
+
+def marker_upassed(t: str) -> str:
+    return click.style(t, fg="yellow")
+
+
+def status(t: str) -> str:
+    return click.style(t, fg="white", bold=True)
+
+
+def warning(t: str) -> str:
+    return click.style(t, fg="yellow")

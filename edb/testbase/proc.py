@@ -21,7 +21,7 @@ import socket
 import sys
 import unittest
 
-from edb.tools.test import coverage
+from edb.common import cov
 
 from . import server
 
@@ -55,15 +55,15 @@ class ProcTest(server.TestCase):
 
 
 def main():
-    cov_config = coverage.CoverageConfig.from_environ()
+    cov_config = cov.CoverageConfig.from_environ()
     if cov_config:
-        cov = cov_config.new_coverage_object()
-        cov.start()
+        cfg = cov_config.new_coverage_object()
+        cfg.start()
         try:
             unittest.main(argv=sys.argv[:1], verbosity=2)
         finally:
-            cov.stop()
-            cov.save()
+            cfg.stop()
+            cfg.save()
     else:
         unittest.main(argv=sys.argv[:1], verbosity=2)
 
