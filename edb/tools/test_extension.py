@@ -24,7 +24,7 @@ import sys
 import typing
 
 import click
-import edgedb
+import gel
 
 from edb import edgeql
 from edb.edgeql import ast as qlast
@@ -64,7 +64,7 @@ def test_extension(
             dsn='_localdev',
             tls_security='insecure',
         )
-    db = edgedb.create_client(**conn_params)
+    db = gel.create_client(**conn_params)
 
     db.execute(f'''
         configure current database set __internal_testmode := true;

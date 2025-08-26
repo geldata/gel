@@ -59,7 +59,7 @@ def _collect_case_data(
     err: typing.Any,
 ) -> TestCase:
     from . import runner
-    import edgedb
+    import gel
 
     py_HashSecret = None
     py_random_seed = None
@@ -72,7 +72,7 @@ def _collect_case_data(
     error_message = None
     server_traceback = None
     if runner._is_exc_info(err):
-        if isinstance(err[1], edgedb.EdgeDBError):
+        if isinstance(err[1], gel.EdgeDBError):
             server_traceback = err[1].get_server_context()
         error_message = _exc_info_to_string(result, err, test)
     elif isinstance(err, runner.SerializedServerError):

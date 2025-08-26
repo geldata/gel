@@ -52,6 +52,7 @@ import uvloop
 from edb import buildmeta
 from edb import errors
 from edb.ir import statypes
+from edb.common import cov
 from edb.common import exceptions
 from edb.common import devmode
 from edb.common import signalctl
@@ -841,7 +842,7 @@ def server_main(**kwargs: Any) -> None:
                     runstate_dir=runstate_dir,
                 ))
         else:
-            with devmode.CoverageConfig.enable_coverage_if_requested():
+            with cov.CoverageConfig.enable_coverage_if_requested():
                 asyncio.run(run_server(
                     server_args,
                     runstate_dir=runstate_dir,

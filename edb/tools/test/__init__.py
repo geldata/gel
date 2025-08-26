@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import os
 import pathlib
 import shutil
@@ -31,11 +32,6 @@ import typing
 import click
 import psutil
 
-import edb
-from edb.common import devmode
-from edb.testbase.server import get_test_cases
-from edb.tools.edb import edbcommands
-
 from .decorators import async_timeout
 from .decorators import not_implemented
 from .decorators import _xfail
@@ -43,6 +39,7 @@ from .decorators import xfail
 from .decorators import xerror
 from .decorators import skip
 
+from . import coverage as covcfg
 from . import loader
 from . import mproc_fixes
 from . import runner
@@ -54,7 +51,6 @@ __all__ = ('async_timeout', 'not_implemented', 'xerror', 'xfail', '_xfail',
            'skip')
 
 
-@edbcommands.command()
 @click.argument('files', nargs=-1, metavar='[file or directory]...')
 @click.option('-v', '--verbose', is_flag=True,
               help='increase verbosity')
@@ -235,6 +231,25 @@ def test(
     sys.exit(result)
 
 
+def _modules_parent_path(modnames: typing.Sequence[str]) -> pathlib.Path:
+    origins: set[str] = set()
+    for modname in modnames:
+        spec = importlib.util.find_spec(modname)
+        if spec is not None and spec.origin and spec.has_location:
+            origins.add(spec.origin)
+
+    return pathlib.Path(os.path.commonpath(origins))
+
+
+def _find_pyproject_toml(path: pathlib.Path) -> pathlib.Path:
+    for modpath in [path, *path.parents]:
+        cov_rc = modpath / 'pyproject.toml'
+        if cov_rc.exists():
+            return cov_rc
+
+    raise RuntimeError('cannot locate the pyproject.toml file')
+
+
 @contextlib.contextmanager
 def _coverage_wrapper(paths):
     try:
@@ -245,15 +260,10 @@ def _coverage_wrapper(paths):
             'with --cov')
         sys.exit(1)
 
-    for path in edb.__path__:
-        cov_rc = pathlib.Path(path).parent / 'pyproject.toml'
-        if cov_rc.exists():
-            break
-    else:
-        raise RuntimeError('cannot locate the pyproject.toml file')
+    cov_rc = _find_pyproject_toml(_modules_parent_path(paths))
 
     with tempfile.TemporaryDirectory() as td:
-        cov_config = devmode.CoverageConfig(
+        cov_config = covcfg.CoverageConfig(
             paths=paths,
             config=str(cov_rc),
             datadir=td)
@@ -358,7 +368,7 @@ def _run(
 
     if list_tests:
         click.echo(err=True)
-        cases = get_test_cases([suite])
+        cases = loader.get_test_cases([suite])
         for tests in cases.values():
             for test in tests:
                 click.echo(str(test))

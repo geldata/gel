@@ -119,7 +119,12 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
             await asyncio.sleep(2)
 
             with self.assertRaises(
-                    (ConnectionError, edgedb.ClientConnectionError)):
+                (
+                    ConnectionError,
+                    edgedb.ClientConnectionError,
+                    FileNotFoundError,
+                )
+            ):
                 await sd.connect(wait_until_available=0)
 
     async def test_server_ops_auto_shutdown_after_one_2(self):
@@ -140,7 +145,12 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
             await asyncio.sleep(2)
 
             with self.assertRaises(
-                (ConnectionError, edgedb.ClientConnectionError)):
+                (
+                    ConnectionError,
+                    edgedb.ClientConnectionError,
+                    FileNotFoundError,
+                )
+            ):
                 await sd.connect(wait_until_available=0)
 
     @unittest.skipIf(

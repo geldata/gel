@@ -16,14 +16,18 @@
 # limitations under the License.
 #
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Iterable
+
 import dataclasses
-from typing import Iterable
 
 from lsprotocol import types as lsp_types
-import pygls
 
 from edb import errors
 from edb.edgeql import tokenizer
+
+if TYPE_CHECKING:
+    import pygls.workspace
 
 
 @dataclasses.dataclass(kw_only=True)

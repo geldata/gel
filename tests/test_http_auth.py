@@ -186,7 +186,7 @@ class TestHttpAuth(BaseTestHttpAuth):
             req = urllib.request.Request(url, method='OPTIONS')
             req.add_header('Origin', 'https://example.edgedb.com')
             response = urllib.request.urlopen(
-                req, context=self.tls_context
+                req, context=sd.tls_context
             )
             self.assertNotIn('Access-Control-Allow-Origin', response.headers)
 
@@ -203,7 +203,7 @@ class TestHttpAuth(BaseTestHttpAuth):
             req = urllib.request.Request(url, method='OPTIONS')
             req.add_header('Origin', 'https://example.edgedb.com')
             response = urllib.request.urlopen(
-                req, context=self.tls_context
+                req, context=sd.tls_context
             )
             headers = response.headers
 

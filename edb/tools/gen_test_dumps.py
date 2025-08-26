@@ -34,6 +34,7 @@ from edb import buildmeta
 from edb.testbase import cluster as edgedb_cluster
 from edb.testbase import server as tb
 from edb.tools.edb import edbcommands
+from edb.tools.test import fixtures as test_fixtures
 
 
 class TestResult:
@@ -64,13 +65,14 @@ async def execute(
         exit=False,
     )
 
-    setup_scripts = tb.get_test_cases_setup(runner.cases)
+    setup_scripts = test_fixtures.get_test_cases_setup(runner.cases)
     dump_cases = {
         db_name: case
         for case, db_name, _ss in setup_scripts
         if getattr(case, "STABLE_DUMP", False)
     }
-    await tb.setup_test_cases(list(dump_cases.values()), conn, num_workers)
+    await test_fixtures.setup_test_cases(
+        list(dump_cases.values()), conn, num_jobs=num_workers)
 
     dumps_dir = pathlib.Path(tests_dir) / "dumps"
     db_friendly_version = version.split("+", 1)[0]

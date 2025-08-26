@@ -26,8 +26,8 @@ import sys
 import time
 import traceback
 
+from edb.common import cov
 from edb.common import debug
-from edb.common import devmode
 from edb.common import markup
 from edb.common import lru
 from edb.edgeql import parser as ql_parser
@@ -79,7 +79,7 @@ def worker(sockname, version_serial, get_handler):
 
 
 def run_worker(sockname, version_serial, get_handler):
-    with devmode.CoverageConfig.enable_coverage_if_requested():
+    with cov.CoverageConfig.enable_coverage_if_requested():
         worker(sockname, version_serial, get_handler)
 
 

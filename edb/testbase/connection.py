@@ -756,7 +756,7 @@ class Connection(options._OptionsMixin, _Executor):
         return self._transport
 
 
-async def async_connect_test_client(
+def make_async_test_client(
     dsn: typing.Optional[str] = None,
     host: typing.Optional[str] = None,
     port: typing.Optional[int] = None,
@@ -775,7 +775,7 @@ async def async_connect_test_client(
     timeout: int = 10,
     server_hostname: str | None = None,
 ) -> Connection:
-    return await Connection(
+    return Connection(
         {
             "dsn": dsn,
             "host": host,
@@ -795,4 +795,46 @@ async def async_connect_test_client(
         },
         test_no_tls=test_no_tls,
         server_hostname=server_hostname,
-    ).ensure_connected()
+    )
+
+
+async def async_connect_test_client(
+    dsn: typing.Optional[str] = None,
+    host: typing.Optional[str] = None,
+    port: typing.Optional[int] = None,
+    credentials: typing.Optional[str] = None,
+    credentials_file: typing.Optional[str] = None,
+    user: typing.Optional[str] = None,
+    password: typing.Optional[str] = None,
+    secret_key: typing.Optional[str] = None,
+    branch: typing.Optional[str] = None,
+    database: typing.Optional[str] = None,
+    tls_ca: typing.Optional[str] = None,
+    tls_ca_file: typing.Optional[str] = None,
+    tls_security: typing.Optional[str] = None,
+    test_no_tls: bool = False,
+    wait_until_available: int = 30,
+    timeout: int = 10,
+    server_hostname: str | None = None,
+) -> Connection:
+    client = make_async_test_client(
+        dsn=dsn,
+        host=host,
+        port=port,
+        credentials=credentials,
+        credentials_file=credentials_file,
+        user=user,
+        password=password,
+        secret_key=secret_key,
+        branch=branch,
+        database=database,
+        tls_ca=tls_ca,
+        tls_ca_file=tls_ca_file,
+        tls_security=tls_security,
+        test_no_tls=test_no_tls,
+        wait_until_available=wait_until_available,
+        timeout=timeout,
+        server_hostname=server_hostname,
+    )
+
+    return await client.ensure_connected()

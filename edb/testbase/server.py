@@ -37,7 +37,6 @@ import base64
 import contextlib
 import dataclasses
 import functools
-import heapq
 import http
 import http.client
 import inspect
@@ -54,7 +53,6 @@ import struct
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
 import urllib
 
@@ -84,51 +82,9 @@ from edb.testbase import connection as tconn
 
 if TYPE_CHECKING:
     import asyncpg
-    DatabaseName = str
-    SetupScript = str
-
-
-def _add_test(result, test):
-    # test is a tuple of the same test method that may zREPEAT
-    cls = type(test[0])
-    try:
-        methods, repeat_methods = result[cls]
-    except KeyError:
-        # put zREPEAT tests in a separate list
-        methods = []
-        repeat_methods = []
-        result[cls] = methods, repeat_methods
-
-    methods.append(test[0])
-    if len(test) > 1:
-        repeat_methods.extend(test[1:])
-
-
-def _merge_results(result):
-    # make sure all the zREPEAT tests comes in the end
-    return {k: v[0] + v[1] for k, v in result.items()}
-
-
-def _get_test_cases(tests):
-    result = {}
-
-    for test in tests:
-        if isinstance(test, unittest.TestSuite):
-            result.update(_get_test_cases(test._tests))
-        elif not getattr(test, '__unittest_skip__', False):
-            _add_test(result, (test,))
-
-    return result
-
-
-def get_test_cases(tests):
-    return _merge_results(_get_test_cases(tests))
 
 
 bag = assert_data_shape.bag
-
-generate_jwk = auth.generate_jwk
-generate_tls_cert = secretkey.generate_tls_cert
 
 
 class CustomSNI_HTTPSConnection(http.client.HTTPSConnection):
@@ -838,6 +794,33 @@ class ClusterTestCase(TestCaseWithHttpClient):
                 raise unittest.SkipTest('skipped due to lack of superuser')
 
     @classmethod
+    async def make_test_instance(
+        cls,
+        *,
+        backend_dsn: str | None = None,
+        cleanup_atexit: bool = False,
+        data_dir: str | None = None,
+    ) -> edgedb_cluster.BaseCluster:
+        return await init_cluster(
+            data_dir=data_dir,
+            backend_dsn=backend_dsn,
+            cleanup_atexit=cleanup_atexit,
+        )
+
+    @classmethod
+    def shutdown_test_instance(
+        cls,
+        cluster: edgedb_cluster.BaseCluster,
+        *,
+        destroy: bool = False,
+    ) -> None:
+        _shutdown_cluster(cluster, destroy=destroy)
+
+    @classmethod
+    def get_cache_dir(cls) -> pathlib.Path:
+        return devmode.get_dev_mode_cache_dir()
+
+    @classmethod
     async def tearDownSingleDB(cls):
         await cls.con.execute("RESET SCHEMA TO initial;")
 
@@ -1022,6 +1005,13 @@ class ConnectedTestCase(ClusterTestCase):
         await asyncio.sleep(0)
         cls.con = None
 
+    @classmethod
+    async def execute_retrying(cls, dbconn, script):
+        async for tx in dbconn.retrying_transaction():
+            async with tx:
+                with dbconn.capture_warnings():
+                    await dbconn.execute(script)
+
     def setUp(self):
         if self.INTERNAL_TESTMODE:
             self.loop.run_until_complete(
@@ -1079,6 +1069,12 @@ class ConnectedTestCase(ClusterTestCase):
 
             finally:
                 super().tearDown()
+
+    @classmethod
+    def make_async_test_client(cls, **kwargs):
+        if not kwargs.get("password"):
+            kwargs["password"] = "test"
+        return tconn.make_async_test_client(**kwargs)
 
     @classmethod
     async def connect(
@@ -2186,144 +2182,6 @@ class StablePGDumpTestCase(BaseQueryTestCase):
             )
 
 
-def get_test_cases_setup(
-    cases: Iterable[unittest.TestCase]
-) -> list[tuple[unittest.TestCase, DatabaseName, SetupScript]]:
-    result: list[tuple[unittest.TestCase, DatabaseName, SetupScript]] = []
-
-    for case in cases:
-        if not hasattr(case, 'get_setup_script'):
-            continue
-
-        try:
-            setup_script = case.get_setup_script()
-        except unittest.SkipTest:
-            continue
-
-        dbname = case.get_database_name()
-        result.append((case, dbname, setup_script))
-
-    return result
-
-
-def test_cases_use_server(cases: Iterable[unittest.TestCase]) -> bool:
-    for case in cases:
-        if not hasattr(case, 'uses_server'):
-            continue
-
-        if case.uses_server():
-            return True
-
-
-async def setup_test_cases(
-    cases,
-    conn,
-    num_jobs,
-    try_cached_db=False,
-    skip_empty_databases=False,
-    verbose=False,
-):
-    setup = get_test_cases_setup(cases)
-
-    stats = []
-    if num_jobs == 1:
-        # Special case for --jobs=1
-        for _case, dbname, setup_script in setup:
-            if skip_empty_databases and not setup_script:
-                continue
-            await _setup_database(
-                dbname, setup_script, conn, stats, try_cached_db)
-            if verbose:
-                print(f' -> {dbname}: OK', flush=True)
-    else:
-        async with asyncio.TaskGroup() as g:
-            # Use a semaphore to limit the concurrency of bootstrap
-            # tasks to the number of jobs (bootstrap is heavy, having
-            # more tasks than `--jobs` won't necessarily make
-            # things faster.)
-            sem = asyncio.BoundedSemaphore(num_jobs)
-
-            async def controller(coro, dbname, *args):
-                async with sem:
-                    await coro(dbname, *args)
-                    if verbose:
-                        print(f' -> {dbname}: OK', flush=True)
-
-            for _case, dbname, setup_script in setup:
-                if skip_empty_databases and not setup_script:
-                    continue
-
-                g.create_task(controller(
-                    _setup_database, dbname, setup_script, conn, stats,
-                    try_cached_db))
-    return stats
-
-
-async def _setup_database(
-        dbname, setup_script, conn_args, stats, try_cached_db):
-    start_time = time.monotonic()
-    default_args = {
-        'user': edgedb_defines.EDGEDB_SUPERUSER,
-        'password': 'test',
-    }
-
-    default_args.update(conn_args)
-
-    try:
-        admin_conn = await tconn.async_connect_test_client(
-            database=edgedb_defines.EDGEDB_SUPERUSER_DB,
-            **default_args)
-    except Exception as ex:
-        raise RuntimeError(
-            f'exception during creation of {dbname!r} test DB; '
-            f'could not connect to the {edgedb_defines.EDGEDB_SUPERUSER_DB} '
-            f'db; {type(ex).__name__}({ex})'
-        ) from ex
-
-    try:
-        await admin_conn.execute(
-            f'CREATE DATABASE {qlquote.quote_ident(dbname)};'
-        )
-    except edgedb.DuplicateDatabaseDefinitionError:
-        # Eh, that's fine
-        # And, if we are trying to use a cache of the database, assume
-        # the db is populated and return.
-        if try_cached_db:
-            elapsed = time.monotonic() - start_time
-            stats.append(
-                ('setup::' + dbname,
-                 {'running-time': elapsed, 'cached': True}))
-            return
-    except Exception as ex:
-        raise RuntimeError(
-            f'exception during creation of {dbname!r} test DB: '
-            f'{type(ex).__name__}({ex})'
-        ) from ex
-    finally:
-        await admin_conn.aclose()
-
-    dbconn = await tconn.async_connect_test_client(
-        database=dbname, **default_args
-    )
-    try:
-        if setup_script:
-            async for tx in dbconn.retrying_transaction():
-                async with tx:
-                    with dbconn.capture_warnings():
-                        await dbconn.execute(setup_script)
-    except Exception as ex:
-        raise RuntimeError(
-            f'exception during initialization of {dbname!r} test DB: '
-            f'{type(ex).__name__}({ex})'
-        ) from ex
-    finally:
-        await dbconn.aclose()
-
-    elapsed = time.monotonic() - start_time
-    stats.append(
-        ('setup::' + dbname, {'running-time': elapsed, 'cached': False}))
-
-
 _lock_cnt = 0
 
 
@@ -2353,6 +2211,16 @@ class _EdgeDBServerData(NamedTuple):
 
         conn_args.update(kwargs)
         return conn_args
+
+    @property
+    def tls_context(self) -> ssl.SSLContext:
+        conn_args = self.get_connect_args()
+        tls_context = ssl.create_default_context(
+            ssl.Purpose.SERVER_AUTH,
+            cafile=conn_args["tls_ca_file"],
+        )
+        tls_context.check_hostname = False
+        return tls_context
 
     def fetch_metrics(self) -> str:
         ctx = ssl.create_default_context()
@@ -2887,161 +2755,6 @@ def start_edgedb_server(
         net_worker_mode=net_worker_mode,
         password=password,
     )
-
-
-def get_cases_by_shard(cases, selected_shard, total_shards, verbosity, stats):
-    if total_shards <= 1:
-        return cases
-
-    selected_shard -= 1  # starting from 0
-    new_test_est = 0.1  # default estimate if test is not found in stats
-    new_setup_est = 1  # default estimate if setup is not found in stats
-
-    # For logging
-    total_tests = 0
-    selected_tests = 0
-    total_est = 0
-    selected_est = 0
-
-    # Priority queue of tests grouped by setup script ordered by estimated
-    # running time of the groups. Order of tests within cases is preserved.
-    tests_by_setup = []
-
-    # Priority queue of individual tests ordered by estimated running time.
-    tests_with_est = []
-
-    # Prepare the source heaps
-    setup_count = 0
-    for case, tests in cases.items():
-        # Extract zREPEAT tests and attach them to their first runs
-        combined = {}
-        for test in tests:
-            test_name = str(test)
-            orig_name = test_name.replace('test_zREPEAT', 'test')
-            if orig_name == test_name:
-                if test_name in combined:
-                    combined[test_name] = (test, *combined[test_name])
-                else:
-                    combined[test_name] = (test,)
-            else:
-                if orig_name in combined:
-                    combined[orig_name] = (*combined[orig_name], test)
-                else:
-                    combined[orig_name] = (test,)
-
-        setup_script_getter = getattr(case, 'get_setup_script', None)
-        if setup_script_getter and combined:
-            tests_per_setup = []
-            est_per_setup = setup_est = stats.get(
-                'setup::' + case.get_database_name(), (new_setup_est, 0),
-            )[0]
-            for test_name, test in combined.items():
-                total_tests += len(test)
-                est = stats.get(test_name, (new_test_est, 0))[0] * len(test)
-                est_per_setup += est
-                tests_per_setup.append((est, test))
-            heapq.heappush(
-                tests_by_setup,
-                (-est_per_setup, setup_count, setup_est, tests_per_setup),
-            )
-            setup_count += 1
-            total_est += est_per_setup
-        else:
-            for test_name, test in combined.items():
-                total_tests += len(test)
-                est = stats.get(test_name, (new_test_est, 0))[0] * len(test)
-                total_est += est
-                heapq.heappush(tests_with_est, (-est, total_tests, test))
-
-    target_est = total_est / total_shards  # target running time of one shard
-    shards_est = [(0, shard, set()) for shard in range(total_shards)]
-    cases = {}  # output
-    setup_to_alloc = set(range(setup_count))  # tracks first run of each setup
-
-    # Assign per-setup tests first
-    while tests_by_setup:
-        remaining_est, setup_id, setup_est, tests = heapq.heappop(
-            tests_by_setup,
-        )
-        est_acc, current, setups = heapq.heappop(shards_est)
-
-        # Add setup time
-        if setup_id not in setups:
-            setups.add(setup_id)
-            est_acc += setup_est
-            if current == selected_shard:
-                selected_est += setup_est
-            if setup_id in setup_to_alloc:
-                setup_to_alloc.remove(setup_id)
-            else:
-                # This means one more setup for the overall test run
-                target_est += setup_est / total_shards
-
-        # Add as much tests from this group to current shard as possible
-        while tests:
-            est, test = tests.pop(0)
-            est_acc += est  # est is a positive number
-            remaining_est += est  # remaining_est is a negative number
-
-            if current == selected_shard:
-                # Add the test to the result
-                _add_test(cases, test)
-                selected_tests += len(test)
-                selected_est += est
-
-            if est_acc >= target_est and -remaining_est > setup_est * 2:
-                # Current shard is full and the remaining tests would take more
-                # time than their setup, then add the tests back to the heap so
-                # that we could add them to another shard
-                heapq.heappush(
-                    tests_by_setup,
-                    (remaining_est, setup_id, setup_est, tests),
-                )
-                break
-
-        heapq.heappush(shards_est, (est_acc, current, setups))
-
-    # Assign all non-setup tests, but leave the last shard for everything else
-    setups = set()
-    while tests_with_est and len(shards_est) > 1:
-        est, _, test = heapq.heappop(tests_with_est)  # est is negative
-        est_acc, current, setups = heapq.heappop(shards_est)
-        est_acc -= est
-
-        if current == selected_shard:
-            # Add the test to the result
-            _add_test(cases, test)
-            selected_tests += len(test)
-            selected_est -= est
-
-        if est_acc >= target_est:
-            # The current shard is full
-            if current == selected_shard:
-                # End early if the selected shard is full
-                break
-        else:
-            # Only add the current shard back to the heap if it's not full
-            heapq.heappush(shards_est, (est_acc, current, setups))
-
-    else:
-        # Add all the remaining tests to the first remaining shard if any
-        while shards_est:
-            est_acc, current, setups = heapq.heappop(shards_est)
-            if current == selected_shard:
-                for est, _, test in tests_with_est:
-                    _add_test(cases, test)
-                    selected_tests += len(test)
-                    selected_est -= est
-                break
-            tests_with_est.clear()  # should always be empty already here
-
-    if verbosity >= 1:
-        print(f'Running {selected_tests}/{total_tests} tests for shard '
-              f'#{selected_shard + 1} out of {total_shards} shards, '
-              f'estimate: {int(selected_est / 60)}m {int(selected_est % 60)}s'
-              f' / {int(total_est / 60)}m {int(total_est % 60)}s, '
-              f'{len(setups)}/{setup_count} databases to setup.')
-    return _merge_results(cases)
 
 
 def find_available_port() -> int:

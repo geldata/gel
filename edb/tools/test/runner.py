@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import Any, Callable, Optional
 
 import asyncio
 import collections
@@ -32,9 +32,7 @@ import itertools
 import json
 import multiprocessing
 import multiprocessing.reduction
-import multiprocessing.util
 import os
-import pathlib
 import random
 import re
 import shutil
@@ -46,24 +44,20 @@ import time
 import types
 import unittest.case
 import unittest.result
-import unittest.runner
 import unittest.signals
 import warnings
 
 import click
 
-import edgedb
+import gel
 
-from edb.common import devmode
-from edb.testbase import server as tb
-
+from . import coverage
 from . import cpython_state
+from . import fixtures
+from . import loader
 from . import mproc_fixes
 from . import styles
 from . import results
-
-if TYPE_CHECKING:
-    import edb.testbase.cluster as edb_cluster
 
 result: Optional[unittest.result.TestResult] = None
 coverage_run: Optional[Any] = None
@@ -115,7 +109,7 @@ def init_worker(
             os.environ['EDGEDB_TEST_BACKEND_DSN'] = backend_dsn
 
     os.environ['EDGEDB_TEST_PARALLEL'] = '1'
-    coverage_run = devmode.CoverageConfig.start_coverage_if_requested()
+    coverage_run = coverage.CoverageConfig.start_coverage_if_requested()
     py_hash_secret = cpython_state.get_py_hash_secret()
     status_queue.put(True)
 
@@ -225,7 +219,7 @@ class ChannelingTestResultMeta(type):
             if args and _is_exc_info(args[-1]):
                 exc_info = args[-1]
                 err = self._exc_info_to_string(exc_info, args[0])
-                if isinstance(exc_info[1], edgedb.EdgeDBError):
+                if isinstance(exc_info[1], gel.EdgeDBError):
                     srv_tb = exc_info[1].get_server_context()
                     if srv_tb:
                         err = SerializedServerError(err, srv_tb)
@@ -946,7 +940,7 @@ class ParallelTextTestRunner:
         running_times_log_file: Optional[Any],
     ) -> results.TestResult:
         session_start = time.monotonic()
-        cases = tb.get_test_cases([test])
+        cases = loader.get_test_cases([test])
         stats = {}
         if running_times_log_file:
             running_times_log_file.seek(0)
@@ -954,54 +948,18 @@ class ParallelTextTestRunner:
                 k: (float(v), int(c))
                 for k, v, c in csv.reader(running_times_log_file)
             }
-        cases = tb.get_cases_by_shard(
+        cases = loader.get_cases_by_shard(
             cases, selected_shard, total_shards, self.verbosity, stats,
         )
-        setup = tb.get_test_cases_setup(cases)
-        server_used = tb.test_cases_use_server(cases)
+        setup = fixtures.get_test_cases_setup(cases)
         worker_init = None
         bootstrap_time_taken = 0.0
         tests_time_taken = 0.0
         result: Optional[ParallelTextTestResult] = None
-        cluster: Optional[edb_cluster.BaseCluster] = None
+        cluster = None
         conn = None
         tempdir = None
         setup_stats = []
-
-        if server_used:
-            tempdir = tempfile.TemporaryDirectory(prefix="edb-test-")
-
-            if (
-                not os.environ.get("EDGEDB_SERVER_TLS_CERT_FILE")
-                and not os.environ.get("EDGEDB_SERVER_TLS_KEY_FILE")
-                and not os.environ.get("GEL_SERVER_TLS_CERT_FILE")
-                and not os.environ.get("GEL_SERVER_TLS_KEY_FILE")
-            ):
-                if self.verbosity >= 1:
-                    self._echo(
-                        'Generating TLS key and certificate...',
-                        fg='white',
-                    )
-                cert_file = pathlib.Path(tempdir.name) / "tlscert.pem"
-                key_file = pathlib.Path(tempdir.name) / "tlskey.pem"
-                tb.generate_tls_cert(cert_file, key_file, ["localhost"])
-
-                os.environ["GEL_SERVER_TLS_CERT_FILE"] = str(cert_file)
-                os.environ["GEL_SERVER_TLS_KEY_FILE"] = str(key_file)
-
-            if (
-                not os.environ.get("EDGEDB_SERVER_JWS_KEY_FILE")
-                and not os.environ.get("GEL_SERVER_JWS_KEY_FILE")
-            ):
-                jwk_file = pathlib.Path(tempdir.name) / "jwk.json"
-                if self.verbosity >= 1:
-                    self._echo(
-                        'Generating JSON Web Key...',
-                        fg='white',
-                    )
-                tb.generate_jwk(jwk_file)
-
-                os.environ["GEL_SERVER_JWS_KEY_FILE"] = str(jwk_file)
 
         try:
             if setup:
@@ -1019,6 +977,8 @@ class ParallelTextTestRunner:
                         nl=False,
                     )
 
+                test_case, _, _ = next(iter(setup))
+
                 async def _setup():
                     nonlocal cluster
                     nonlocal conn
@@ -1028,7 +988,7 @@ class ParallelTextTestRunner:
                     if (
                         self.try_cached_db
                         and (cache_file := (
-                            devmode.get_dev_mode_cache_dir() / 'test_dbs.tar')
+                            test_case.get_cache_dir() / 'test_dbs.tar')
                         ).is_file()
                     ):
                         if self.verbosity >= 1:
@@ -1047,7 +1007,7 @@ class ParallelTextTestRunner:
                             cwd=data_dir,
                         )
 
-                    cluster = await tb.init_cluster(
+                    cluster = await test_case.make_test_instance(
                         backend_dsn=self.backend_dsn,
                         cleanup_atexit=False,
                         data_dir=data_dir,
@@ -1065,10 +1025,10 @@ class ParallelTextTestRunner:
                         for case in cases:
                             case.is_superuser = False
 
-                    stats = await tb.setup_test_cases(
+                    stats = await fixtures.setup_test_cases(
                         cases,
                         conn,
-                        self.num_workers,
+                        num_jobs=self.num_workers,
                         verbose=self.verbosity > 1,
                         try_cached_db=(
                             self.try_cached_db or self.use_data_dir_dbs
@@ -1176,10 +1136,14 @@ class ParallelTextTestRunner:
             if tempdir is not None:
                 tempdir.cleanup()
 
-            if setup:
+            if setup and cluster is not None:
+                test_case, _, _ = next(iter(setup))
                 self._echo()
                 self._echo('Shutting down test cluster... ', nl=False)
-                tb._shutdown_cluster(cluster, destroy=self.data_dir is None)
+                test_case.shutdown_test_instance(
+                    cluster,
+                    destroy=self.data_dir is None,
+                )
                 self._echo('OK.')
 
         if result is not None:

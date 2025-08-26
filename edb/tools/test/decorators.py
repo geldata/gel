@@ -25,7 +25,7 @@ import unittest
 import logging
 
 
-logger = logging.getLogger("edb.server")
+logger = logging.getLogger("edb.test")
 skip = unittest.skip
 
 

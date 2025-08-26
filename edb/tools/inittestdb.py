@@ -57,7 +57,7 @@ async def execute(tests_dir, conn, num_workers, include):
         testRunner=runner, exit=False)
 
     await tb.setup_test_cases(
-        runner.cases, conn, num_workers, skip_empty_databases=True
+        runner.cases, conn, num_jobs=num_workers, skip_empty_databases=True
     )
 
 

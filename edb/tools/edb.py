@@ -94,3 +94,5 @@ from . import ls  # noqa
 from . import railroad_diagram  # noqa
 from .profiling import cli as prof_cli  # noqa
 from .experimental_interpreter import edb_entry # noqa
+
+test = edbcommands.command(test.test)
