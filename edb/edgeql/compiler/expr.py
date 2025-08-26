@@ -79,13 +79,18 @@ def compile__Optional(
 @dispatch.compile.register(qlast.Path)
 def compile_Path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
     if ctx.no_factoring and not expr.allow_factoring:
-        return dispatch.compile(
+        res = dispatch.compile(
             qlast.SelectQuery(
                 result=expr.replace(allow_factoring=True),
                 implicit=True,
             ),
             ctx=ctx,
         )
+        # Mark the nodes as having been protected from factoring. At
+        # the end of compilation, we see if we can eliminate the
+        # scopes without inducing factoring.
+        res.is_factoring_protected = True
+        return res
 
     if ctx.warn_factoring and not expr.allow_factoring:
         with ctx.newscope(fenced=False) as subctx:

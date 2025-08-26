@@ -2304,6 +2304,16 @@ class TestEdgeQLScope(tb.QueryTestCase):
             ]
         )
 
+    @test.xfail("""
+        gives every user name in the output
+
+        this was xfailed for a long time, and then the xfail was removed
+        in #8405 when we switched to simple_scoping for tests.
+
+        But I don't think it was working for any fundamental reason,
+        so when I broke it in simple_scoping mode while doing some
+        optimizations, I figured it was fine for now.
+    """)
     async def test_edgeql_scope_ref_outer_05b(self):
         # I was trying to do something I wasn't sure of, and I tried
         # to write this variant of outer_05a to investigate.

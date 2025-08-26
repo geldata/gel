@@ -38,6 +38,8 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
     Tests can be written by inspecting the AST or the generated text.
     """
 
+    SIMPLE_SCOPING = True
+
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 
@@ -63,6 +65,7 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
             self.schema,
             options=compiler.CompilerOptions(
                 modaliases={None: 'default'},
+                simple_scoping=self.SIMPLE_SCOPING,
             ),
         )
         sql_res = pg_compiler.compile_ir_to_sql_tree(
@@ -118,7 +121,9 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
         ''')
 
     def test_codegen_elide_optional_wrapper_02(self):
+        # "For Issue in Issue" added when we switched to SIMPLE_SCOPING
         self.no_optional_test('''
+            FOR Issue in Issue
             SELECT (Issue.name, Issue.time_estimate ?= 60)
         ''')
 
@@ -575,3 +580,7 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
         assert isinstance(tree, pgast.SelectStmt)
         # One CTE for the global, one for the policy
         self.assertEqual(len(tree.ctes), 2)
+
+
+class TestEdgeQLSQLCodegenOldScoping(TestEdgeQLSQLCodegen):
+    SIMPLE_SCOPING = False

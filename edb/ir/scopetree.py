@@ -41,6 +41,7 @@ import textwrap
 import weakref
 
 from edb import errors
+from edb.common import ordered
 from edb.common import span
 from edb.common import term
 from edb.common.typeutils import not_none
@@ -257,8 +258,8 @@ class ScopeTreeNode:
             if has_path_id(p)
         )
 
-    def get_all_paths(self) -> set[pathid.PathId]:
-        return {pd.path_id for pd in self.path_descendants}
+    def get_all_paths(self) -> AbstractSet[pathid.PathId]:
+        return ordered.OrderedSet(pd.path_id for pd in self.path_descendants)
 
     @property
     def descendants(self) -> Iterator[ScopeTreeNode]:
@@ -1004,6 +1005,8 @@ class ScopeTreeNode:
     def find_factorable_nodes(
         self,
         path_id: pathid.PathId,
+        *,
+        child_to_skip: Optional[ScopeTreeNode] = None,
     ) -> list[
         tuple[
             ScopeTreeNodeWithPathId,
@@ -1041,7 +1044,7 @@ class ScopeTreeNode:
         # for descendants, to avoid performance pathologies, but also
         # to avoid rediscovering the same nodes when searching higher
         # in the tree.
-        last = None
+        last = child_to_skip
 
         # Search up the tree
         for node, ans in self.ancestors_and_namespaces:
