@@ -264,6 +264,8 @@ def fini_expression(
     # Fix up weak namespaces
     _rewrite_weak_namespaces(all_exprs, ctx)
 
+    _collapse_factoring_protected(all_exprs, ctx)
+
     ctx.path_scope.validate_unique_ids()
 
     # Collect query parameters
@@ -594,6 +596,104 @@ def _rewrite_weak_namespaces(
             # in temporary scopes, so we need to just skip those.
             if scope := ctx.env.scope_tree_nodes.get(path_scope_id):
                 ir_set.path_id = _try_namespace_fix(scope, ir_set.path_id)
+
+
+def _get_all_pathids(irs: Sequence[irast.Base]) -> set[
+    tuple[irast.PathId, irast.Set | None]
+]:
+    all_ids: set[tuple[irast.PathId, irast.Set | None]] = set()
+    for ir in irs:
+        for ir_set in ast_visitor.find_children(ir, irast.Set):
+            all_ids.add((ir_set.path_id, ir_set))
+        for arg in ast_visitor.find_children(ir, irast.CallArg):
+            if arg.expr_type_path_id:
+                all_ids.add((arg.expr_type_path_id, None))
+
+    return all_ids
+
+
+def _collapse_factoring_protected(
+    irs: Sequence[irast.Base], ctx: context.ContextLevel
+) -> None:
+    """Try to remove the Selects inserted for simple_scoping.
+
+    In simple_scoping mode, we protect certain paths by wrapping them
+    in selects so that they don't participate in path factoring.
+
+    This generates more verbose SQL in all cases and inhibits
+    important optimizations in others -- in particular, our efforts to
+    make ORDER BY clauses simple enough for postgres to optimize.
+
+    To remedy this, we try to collapse away those selects and their
+    fences in the scope tree by checking if removing them would lead
+    to any path factoring. If not, we can drop it.
+
+    Note that *some* new-school factoring may still have happened.
+    If we have `select User filter User.name = 'Elvis'`, the outer `User`
+    will be unprotected and the inner `User` will be factored out to it,
+    leaving just `User.name` in a protected inner scope.
+    That's fine, and we will see User.name doesn't have anything
+    to factor with and remove the select that was injected.
+    """
+    children = []
+    for ir in irs:
+        children += ast_visitor.find_children(
+            ir, irast.Set, lambda x: x.is_factoring_protected
+        )
+    all_ids = _get_all_pathids(irs)
+
+    for ir_set in ordered.OrderedSet(children):
+        if (
+            ir_set.path_scope_id is None
+            or not irutils.is_implicit_wrapper(ir_set.expr)
+        ):
+            continue
+
+        node = ctx.env.scope_tree_nodes[ir_set.path_scope_id]
+        if not (parent := node.parent):
+            continue
+
+        # If collapsing this node would lead to any factoring, we
+        # obviously can't do it.
+        # We check by seeing if there are some factorable nodes
+        # *other* than the ones we are starting from.
+        if any(
+            parent.find_factorable_nodes(path_id, child_to_skip=node)
+            for path_id in node.get_all_paths()
+        ):
+            continue
+
+        # If the path is referenced at all, we can't do it.
+        # PERF: Should we build a dict with all prefixes as keys, instead
+        # of this O(n*m) loop?
+        if any(
+            x is not ir_set and path_id.startswith(ir_set.path_id)
+            for path_id, x in all_ids
+        ):
+            continue
+
+        del ctx.env.scope_tree_nodes[ir_set.path_scope_id]
+
+        # Merge the node up into its parent
+        node.optional |= parent.optional
+        parent.fuse_subtree(node, self_fenced=True, ctx=ctx)
+
+        # Mark the new path as optional if the old path was optional.
+        orig = None
+        gparent = parent.parent
+        if (
+            gparent
+            and (orig := gparent.find_child(ir_set.path_id))
+            and parent.optional
+            and orig.optional
+        ):
+            pathctx.register_set_in_scope(
+                ir_set.expr.result, optional=True, path_scope=gparent, ctx=ctx
+            )
+        if orig:
+            orig.remove()
+        # Yeeeee haw. Replace the old set with the inner one.
+        ir_set.__dict__ = ir_set.expr.result.__dict__
 
 
 def _fixup_schema_view(*, ctx: context.ContextLevel) -> None:

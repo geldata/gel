@@ -187,6 +187,7 @@ def new_set_from_set(
         is_materialized_ref: Optional[bool]=None,
         is_visible_binding_ref: Optional[bool]=None,
         ignore_rewrites: Optional[bool]=None,
+        is_factoring_protected: Optional[bool]=None,
         ctx: context.ContextLevel) -> irast.Set:
     """Create a new ir.Set from another ir.Set.
 
@@ -218,6 +219,8 @@ def new_set_from_set(
         is_visible_binding_ref = ir_set.is_visible_binding_ref
     if ignore_rewrites is None:
         ignore_rewrites = ir_set.ignore_rewrites
+    if is_factoring_protected is None:
+        is_factoring_protected = ir_set.is_factoring_protected
     return new_set(
         path_id=path_id,
         path_scope_id=path_scope_id,
@@ -229,6 +232,7 @@ def new_set_from_set(
         is_materialized_ref=is_materialized_ref,
         is_visible_binding_ref=is_visible_binding_ref,
         ignore_rewrites=ignore_rewrites,
+        is_factoring_protected=is_factoring_protected,
         ircls=type(ir_set),
         ctx=ctx,
     )

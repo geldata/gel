@@ -603,6 +603,12 @@ class SetE(Base, typing.Generic[T_expr_co]):  # noqa: UP046
     # to join against target types on links, and to ensure rvars.
     ignore_rewrites: bool = False
 
+    # Is this Set a dummy introduced by simple_scoping to protect a
+    # path from factoring? We track this because we try to collapse
+    # these extra scopes away when they are not needed, at the end of
+    # compilation.
+    is_factoring_protected: bool = False
+
     def __repr__(self) -> str:
         return f'<ir.Set \'{self.path_id}\' at 0x{id(self):x}>'
 
