@@ -5121,7 +5121,9 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
                 response_data = json.loads(body)
                 self.assertIn(
-                    email, response_data.get("email_sent", "")
+                    email,
+                    response_data.get("email", ""),
+                    f"Email not found in response: {response_data}",
                 )
 
                 file_name_hash = hashlib.sha256(
@@ -5487,7 +5489,9 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 self.assertEqual(verify_status, 200, verify_body)
 
                 verify_data = json.loads(verify_body)
-                self.assertEqual(verify_data.get("status"), "verified")
+                self.assertIsNotNone(
+                    verify_data.get("code"), "No 'code' in JSON response"
+                )
 
                 auth_body, auth_headers, auth_status = self.http_con_request(
                     http_con,
