@@ -1995,7 +1995,3 @@ class TestEdgeQLCoalesce(tb.QueryTestCase):
                   ?? [is MultiRange].element_type.id,
             };
         ''')
-
-
-class TestEdgeQLCoalesceNoFactor(TestEdgeQLCoalesce):
-    NO_FACTOR = True

@@ -18836,18 +18836,15 @@ DDLStatement);
             select { func := get_whatever(), alias := X, query := all(T = T) }
         """
 
+        # It is *always* simple_scoping now
         await self.assert_query_result(
             Q,
-            [dict(func=True, alias=True, query=True)],
+            [dict(func=False, alias=False, query=False)],
         )
 
-        async with self.assertRaisesRegexTx(
-            edgedb.InvalidReferenceError,
-            "attempting to factor",
-        ):
-            await self.con.execute("""
-                create future warn_old_scoping
-            """)
+        await self.con.execute("""
+            create future warn_old_scoping
+        """)
 
         # Config flag is set but future is not: main query does not factor
         # but schema things do
@@ -18856,7 +18853,7 @@ DDLStatement);
         """)
         await self.assert_query_result(
             Q,
-            [dict(func=True, alias=True, query=False)],
+            [dict(func=False, alias=False, query=False)],
         )
 
         # Future and config flag: nothing factors
@@ -18875,7 +18872,7 @@ DDLStatement);
         """)
         await self.assert_query_result(
             Q,
-            [dict(func=False, alias=False, query=True)],
+            [dict(func=False, alias=False, query=False)],
         )
 
         # Config not set: falls back to future, nothing factors

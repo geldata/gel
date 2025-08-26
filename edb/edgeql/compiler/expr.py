@@ -100,13 +100,6 @@ def compile_Path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
             res.is_factoring_protected = True
         return res
 
-    if ctx.warn_factoring and not expr.allow_factoring:
-        with ctx.newscope(fenced=False) as subctx:
-            subctx.path_scope.warn = True
-            return dispatch.compile(
-                expr.replace(allow_factoring=True), ctx=subctx
-            )
-
     return stmt.maybe_add_view(setgen.compile_path(expr, ctx=ctx), ctx=ctx)
 
 
@@ -514,10 +507,6 @@ def _compile_dml_ifelse(
             )
             els.append(else_b)
 
-        # If we are warning on factoring, double wrap it.
-        if ctx.warn_factoring:
-            cond_ir = setgen.ensure_set(
-                setgen.ensure_stmt(cond_ir, ctx=ctx), ctx=ctx)
         full = qlast.ForQuery(
             iterator_alias=alias,
             iterator=subctx.create_anchor(cond_ir, 'b'),

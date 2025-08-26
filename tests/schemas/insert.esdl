@@ -113,9 +113,9 @@ type DefaultTest2 {
     required property num -> int64 {
         # XXX: circumventing sequence deficiency
         default := (
-            SELECT DefaultTest1.num + 1
-            ORDER BY DefaultTest1.num DESC
-            LIMIT 1
+          (SELECT DefaultTest1
+            ORDER BY .num DESC
+           LIMIT 1).num + 1
         );
     }
 }

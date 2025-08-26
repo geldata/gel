@@ -1374,9 +1374,9 @@ class TestSchema(tb.BaseSchemaLoadTest):
             type Object2 {
                 required property num -> int64 {
                     default := (
-                        SELECT Object1.num + 1
-                        ORDER BY Object1.num DESC
-                        LIMIT 1
+                       (SELECT Object1
+                         ORDER BY .num DESC
+                        LIMIT 1).num + 1
                     )
                 }
             };

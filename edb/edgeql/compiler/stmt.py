@@ -88,7 +88,7 @@ def try_desugar(
 def _protect_expr(
     expr: Optional[qlast.Expr], *, ctx: context.ContextLevel
 ) -> None:
-    if ctx.no_factoring or ctx.warn_factoring:
+    if ctx.no_factoring:
         while isinstance(expr, qlast.Shape):
             expr.allow_factoring = True
             expr = expr.expr
@@ -1130,14 +1130,6 @@ def compile_Shape(
             ctx=ctx,
         )
 
-    if ctx.warn_factoring and not shape.allow_factoring:
-        with ctx.newscope(fenced=False) as subctx:
-            subctx.path_scope.warn = True
-            _protect_expr(shape, ctx=ctx)
-            return dispatch.compile(
-                shape, ctx=subctx
-            )
-
     shape_expr = shape.expr or qlutils.FREE_SHAPE_EXPR
     with ctx.new() as subctx:
         subctx.qlstmt = astutils.ensure_ql_query(shape)
@@ -1226,7 +1218,6 @@ def init_stmt(
         parent_ctx.toplevel_stmt = ctx.toplevel_stmt = irstmt
 
     ctx.path_scope = parent_ctx.path_scope.attach_fence()
-    ctx.path_scope.warn = ctx.warn_factoring
 
     pending_own_ns = parent_ctx.pending_stmt_own_path_id_namespace
     if pending_own_ns:

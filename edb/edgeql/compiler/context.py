@@ -643,7 +643,6 @@ class ContextLevel(compiler.ContextLevel):
     """
 
     no_factoring: bool
-    warn_factoring: bool
 
     def __init__(
         self,
@@ -704,7 +703,6 @@ class ContextLevel(compiler.ContextLevel):
             self.allow_endpoint_linkprops = False
             self.disallow_dml = None
             self.no_factoring = False
-            self.warn_factoring = False
 
             self.collection_cast_info = None
 
@@ -751,7 +749,6 @@ class ContextLevel(compiler.ContextLevel):
             self.allow_endpoint_linkprops = prevlevel.allow_endpoint_linkprops
             self.disallow_dml = prevlevel.disallow_dml
             self.no_factoring = prevlevel.no_factoring
-            self.warn_factoring = prevlevel.warn_factoring
 
             self.collection_cast_info = prevlevel.collection_cast_info
 
@@ -888,16 +885,10 @@ class ContextLevel(compiler.ContextLevel):
         self.env.unsafe_isolation_dangers.append(d)
 
     def allow_factoring(self) -> None:
-        self.no_factoring = self.warn_factoring = False
+        self.no_factoring = False
 
     def schema_factoring(self) -> None:
-        self.no_factoring = s_futures.future_enabled(
-            self.env.schema, 'simple_scoping'
-        )
-        # When compiling schema things, we don't want to cause warnings
-        # The warnings will be emitted when updating the schema,
-        # and interact poorly with compilation.
-        self.warn_factoring = False
+        self.no_factoring = True
 
 
 class CompilerContext(compiler.CompilerContext[ContextLevel]):

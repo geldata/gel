@@ -39,7 +39,6 @@ from edb.ir import utils as irutils
 from edb.ir import typeutils as irtyputils
 
 from edb.schema import constraints as s_constr
-from edb.schema import futures as s_futures
 from edb.schema import modules as s_mod
 from edb.schema import name as s_name
 from edb.schema import objects as s_obj
@@ -173,7 +172,6 @@ def init_context(
     ctx.expr_exposed = context.Exposure.EXPOSED
 
     ctx.no_factoring = True
-    ctx.warn_factoring = False
 
     return ctx
 

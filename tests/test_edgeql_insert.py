@@ -17,7 +17,6 @@
 #
 
 
-import contextlib
 import os.path
 import uuid
 
@@ -29,8 +28,6 @@ from edb.tools import test
 
 class TestInsert(tb.DDLTestCase):
     '''The scope of the tests is testing various modes of Object creation.'''
-    NO_FACTOR = False
-    WARN_FACTOR = True
     INTERNAL_TESTMODE = False
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
@@ -38,8 +35,7 @@ class TestInsert(tb.DDLTestCase):
 
     def assertRaisesRegex(self, exc, r, **kwargs):
         if (
-            (self.NO_FACTOR or self.WARN_FACTOR)
-            and "cannot reference correlated set" in r
+            "cannot reference correlated set" in r
         ):
             r = ""
         return super().assertRaisesRegex(exc, r, **kwargs)
@@ -7514,21 +7510,13 @@ class TestInsert(tb.DDLTestCase):
         )
 
     async def test_edgeql_insert_conditional_02(self):
-        ctxmgr = (
-            contextlib.nullcontext() if self.NO_FACTOR
-            else self.assertRaisesRegexTx(
-                edgedb.errors.QueryError,
-                "cannot reference correlated set",
-            )
-        )
-        async with ctxmgr:
-            await self.con.execute('''
-                select ((if ExceptTest.deleted then (
-                    insert InsertTest { l2 := 2 }
-                ) else (
-                    insert DerivedTest { l2 := 200 }
-                )), (select ExceptTest.deleted limit 1));
-            ''')
+        await self.con.execute('''
+            select ((if ExceptTest.deleted then (
+                insert InsertTest { l2 := 2 }
+            ) else (
+                insert DerivedTest { l2 := 200 }
+            )), (select ExceptTest.deleted limit 1));
+        ''')
 
     async def test_edgeql_insert_conditional_03(self):
         await self.assert_query_result(
@@ -7993,7 +7981,6 @@ class TestInsert(tb.DDLTestCase):
 
 class TestRepeatableReadInsert(tb.QueryTestCase):
     '''The scope of the tests is testing various modes of Object creation.'''
-    NO_FACTOR = True
     INTERNAL_TESTMODE = False
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
