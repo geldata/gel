@@ -807,8 +807,6 @@ class Router:
                     "email",
                     "code",
                     "provider",
-                    "redirect_to",
-                    "redirect_on_failure",
                 },
             )
             email_client: local.Client
