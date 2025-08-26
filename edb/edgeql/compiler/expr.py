@@ -89,7 +89,15 @@ def compile_Path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
         # Mark the nodes as having been protected from factoring. At
         # the end of compilation, we see if we can eliminate the
         # scopes without inducing factoring.
-        res.is_factoring_protected = True
+        #
+        # Don't do this if the head of the path is an expression
+        # (instead of an ObjectRef), though, because that interacts
+        # badly with function inlining in some cases??
+        # (test_edgeql_functions_inline_object_06).
+        # My hope is to just destroy all this machinery instead of tracking
+        # that interaction down, though.
+        if expr.partial or not isinstance(expr.steps[0], qlast.Expr):
+            res.is_factoring_protected = True
         return res
 
     if ctx.warn_factoring and not expr.allow_factoring:
