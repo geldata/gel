@@ -26,7 +26,6 @@ from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
 
 from . import delta as sd
-from . import modules as s_mod
 from . import name as sn
 from . import objects as so
 from . import schema as s_schema

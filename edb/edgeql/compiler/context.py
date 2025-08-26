@@ -55,7 +55,6 @@ from edb.ir import utils as irutils
 from edb.ir import typeutils as irtyputils
 
 from edb.schema import expraliases as s_aliases
-from edb.schema import futures as s_futures
 from edb.schema import name as s_name
 from edb.schema import objects as s_obj
 from edb.schema import permissions as s_permissions

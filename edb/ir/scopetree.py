@@ -44,7 +44,6 @@ from edb import errors
 from edb.common import ordered
 from edb.common import span
 from edb.common import term
-from edb.common.typeutils import not_none
 
 from . import pathid
 from . import ast as irast
@@ -564,7 +563,6 @@ class ScopeTreeNode:
                     if desc_optional:
                         descendant.mark_as_optional()
 
-                moved = False
                 for factorable in factorable_nodes:
                     (
                         existing,
@@ -610,7 +608,6 @@ class ScopeTreeNode:
                     )
 
                     current = existing
-                    moved = True
 
                     # HACK: If we are being called from fuse_subtree,
                     # skip all but the first. This is because we don't
