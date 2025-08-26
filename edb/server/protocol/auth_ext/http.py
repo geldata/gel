@@ -1673,16 +1673,14 @@ class Router:
             try:
                 data = self._get_data_from_request(request)
 
-                _check_keyset(data, {"email", "code", "callback_url"})
+                _check_keyset(
+                    data, {"email", "code", "callback_url", "challenge"}
+                )
 
                 email = data["email"]
                 code_str = data["code"]
                 callback_url = data["callback_url"]
-                challenge = _get_pkce_challenge(
-                    cookies=request.cookies,
-                    response=response,
-                    query_dict=query,
-                )
+                challenge = data["challenge"]
 
                 if not self._is_url_allowed(callback_url):
                     raise errors.InvalidData(
