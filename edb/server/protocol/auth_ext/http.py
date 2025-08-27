@@ -1227,6 +1227,7 @@ class Router:
 
                 challenge = data.get('challenge')
                 if challenge:
+                    await pkce.create(self.db, challenge)
                     auth_code = await pkce.link_identity_challenge(
                         self.db, email_factor.identity.id, challenge
                     )
