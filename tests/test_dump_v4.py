@@ -42,9 +42,11 @@ class DumpTestCaseMixin:
 
         await self.assert_query_result(
             r'''
-                with x := range_unpack(range(1, 1000))
                 select all(
-                    L2.vec in <v3>[x % 10, std::math::ln(x), x / 7 % 13]
+                    L2.vec in (
+                        for x in range_unpack(range(1, 1000))
+                        select <v3>[x % 10, std::math::ln(x), x / 7 % 13]
+                    )
                 )
             ''',
             [
