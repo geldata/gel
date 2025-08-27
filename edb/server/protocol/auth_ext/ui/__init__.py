@@ -485,13 +485,7 @@ def render_reset_password_page(
     dark_logo_url: Optional[str] = None,
     brand_color: Optional[str] = None,
 ) -> bytes:
-    if not is_valid and challenge is None:
-        content = render.error_message(
-            f'''Reset token is invalid, challenge string is missing. Please
-            return to the app, and attempt to log in again.''',
-            False,
-        )
-    elif not is_valid and challenge is not None:
+    if not is_valid:
         content = render.error_message(
             f'''Reset token is invalid, it may have expired.
             <a href="forgot-password?challenge={challenge}">
