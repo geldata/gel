@@ -352,30 +352,32 @@ def code_input_form(
     button_text: str = "Verify Code",
     additional_fields: str = "",
 ) -> str:
-    """Renders a 6-digit code input form with auto-formatting and mobile
+    """Renders a code input form with auto-formatting and mobile
     keyboard support."""
 
     return f'''
-    <form id="code-form" method="POST" action="{action}" novalidate>
+    <form id="code-form" method="POST" action="{action}">
         <input type="hidden" name="email" value="{html.escape(email)}" />
         <input type="hidden" name="provider" value="{provider}" />
-        <input id="code-hidden-input" type="hidden" name="code" value="" />
+        <label for="code">{label}</label>
+        <input
+            id="code"
+            name="code"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            enterkeyhint="done"
+            pattern="[0-9]{6}"
+            maxlength="6"
+            required
+            spellcheck="false"
+            autocapitalize="off"
+            placeholder="123456"
+        />
+
         {additional_fields}
-
-        <label for="code-input-1">{label}</label>
-        <div id="code-input-container" class="code-input-container">
-            {_code_digit_input("code-input-1")}
-            {_code_digit_input("code-input-2")}
-            {_code_digit_input("code-input-3")}
-            {_code_digit_input("code-input-4")}
-            {_code_digit_input("code-input-5")}
-            {_code_digit_input("code-input-6")}
-        </div>
-
         {button(button_text)}
     </form>
-
-    <script type="module" src="_static/code-input.js"></script>
     '''
 
 
