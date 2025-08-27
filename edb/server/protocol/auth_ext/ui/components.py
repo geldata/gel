@@ -892,7 +892,7 @@ def render_magic_link_signup_form(
     base_email_form: str,
     base_path: str,
     provider_name: str,
-    callback_url: str = None,
+    callback_url: str | None = None,
     verification_method: str = "Link",
 ) -> str:
     """Render a complete magic link/OTC signup form."""

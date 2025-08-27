@@ -798,7 +798,7 @@ class Router:
             )
             identity_id = token.subject
             challenge = token.maybe_challenge
-            redirect_to = self._maybe_make_allowed_url(token.maybe_redirect_to)
+            redirect_to = token.maybe_redirect_to
 
         elif email and code:
             _check_keyset(
@@ -857,9 +857,7 @@ class Router:
 
                 identity_id = email_factor.identity.id
                 challenge = data.get("challenge")
-                redirect_to = self._maybe_make_allowed_url(
-                    data.get("redirect_to")
-                )
+                redirect_to = data.get("redirect_to")
 
             except Exception as ex:
                 self._handle_otc_failed(ex)
@@ -878,7 +876,7 @@ class Router:
 
         logger.info(f"Challenge: {challenge}, Redirect to: {redirect_to}")
         match (challenge, redirect_to):
-            case (str(challenge), AllowedUrl(url=redirect_to)):
+            case (str(), str()):
                 await pkce.create(self.db, challenge)
                 code = await pkce.link_identity_challenge(
                     self.db, identity_id, challenge
@@ -887,7 +885,7 @@ class Router:
                     response,
                     util.join_url_params(redirect_to, {"code": code}),
                 )
-            case (str(challenge), _):
+            case (str(), None):
                 await pkce.create(self.db, challenge)
                 code = await pkce.link_identity_challenge(
                     self.db, identity_id, challenge
@@ -896,9 +894,9 @@ class Router:
                 response.content_type = b"application/json"
                 response.body = json.dumps({"code": code}).encode()
                 return
-            case (_, AllowedUrl(url=redirect_to)):
+            case (None, str()):
                 return self._try_redirect(response, redirect_to)
-            case (_, _):
+            case (None, None):
                 response.status = http.HTTPStatus.NO_CONTENT
                 return
 
@@ -2148,7 +2146,10 @@ class Router:
         )
         reset_url = f"{self.base_path}/ui/reset-password"
         if password_provider.verification_method == "Code":
-            redirect_to = f"{self.base_path}/ui/reset-password?code=true&challenge={challenge}"
+            redirect_to = (
+                f"{self.base_path}/ui/reset-password?"
+                f"code=true&challenge={challenge}"
+            )
         else:
             redirect_to = (
                 f"{self.base_path}/ui/forgot-password?challenge={challenge}"
@@ -2180,6 +2181,14 @@ class Router:
         password_provider = (
             self._get_password_provider() if ui_config is not None else None
         )
+
+        if ui_config is None or password_provider is None:
+            raise errors.NotFound(
+                'Password provider not configured'
+                if ui_config
+                else 'Auth UI not enabled'
+            )
+
         query = urllib.parse.parse_qs(
             request.url.query.decode("ascii") if request.url.query else ""
         )
@@ -2190,14 +2199,10 @@ class Router:
             query_dict=query,
         )
 
-        if ui_config is None or password_provider is None:
-            response.status = http.HTTPStatus.NOT_FOUND
-            response.body = (
-                b'Password provider not configured'
-                if ui_config
-                else b'Auth UI not enabled'
+        if challenge is None:
+            raise errors.InvalidData(
+                'Missing "challenge" in reset password request'
             )
-            return
 
         is_code_flow = _maybe_get_search_param(query, "code") == "true"
         maybe_email = _maybe_get_search_param(
@@ -2293,6 +2298,11 @@ class Router:
                 response=response,
                 query_dict=query,
             )
+
+            if challenge is None:
+                raise errors.InvalidData(
+                    'Missing "challenge" in email verification request'
+                )
 
             app_details_config = self._get_app_details_config()
             response.status = http.HTTPStatus.OK
@@ -2394,7 +2404,7 @@ class Router:
         app_details_config = self._get_app_details_config()
         response.status = http.HTTPStatus.OK
         response.content_type = b'text/html'
-        response.body = ui.render_email_verification_page(
+        response.body = ui.render_email_verification_page_link_flow(
             verification_token=maybe_verification_token,
             is_valid=is_valid,
             error_messages=error_messages,
@@ -2668,7 +2678,9 @@ class Router:
             ),
         )
         password_providers = [
-            p for p in providers if (p.name == 'builtin::local_emailpassword')
+            cast(config.EmailPasswordProviderConfig, p)
+            for p in providers
+            if (p.name == 'builtin::local_emailpassword')
         ]
 
         return password_providers[0] if len(password_providers) == 1 else None
@@ -2938,7 +2950,8 @@ def _get_pkce_challenge(
         challenge = _maybe_get_search_param(query_dict, "code_challenge")
         if challenge is not None:
             logger.info(
-                f"PKCE challenge found in query param 'code_challenge': {challenge!r}"
+                "PKCE challenge found in query param 'code_challenge':"
+                f" {challenge!r}"
             )
     if challenge is not None:
         _set_cookie(response, cookie_name, challenge)
