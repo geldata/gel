@@ -653,6 +653,11 @@ def _collapse_factoring_protected(
         if not (parent := node.parent):
             continue
 
+        # If the underlying thing has already been factored fully, we
+        # skip it, because it might be no-factor fenced?
+        if parent.find_visible(ir_set.expr.result.path_id):
+            continue
+
         # If collapsing this node would lead to any factoring, we
         # obviously can't do it.
         # We check by seeing if there are some factorable nodes
