@@ -247,15 +247,20 @@ def tabs_content(
         if labels is not None and i < len(labels):
             slug = _slugify_label(labels[i])
             aria_attrs = (
-                f' role="tabpanel" id="panel-{slug}" aria-labelledby="tab-{slug}"'
+                ' role="tabpanel" '
+                f'id="panel-{slug}" aria-labelledby="tab-{slug}"'
             )
             hidden_attrs = ' aria-hidden="true" hidden' if not active else ''
         else:
             hidden_attrs = '' if active else ''
 
         content += f'''
-            <div class="slider-section{' active' if active else ''}"{aria_attrs}{hidden_attrs}>
-              {section}
+            <div
+                class="slider-section{' active' if active else ''}"
+                {aria_attrs}
+                {hidden_attrs}
+            >
+                {section}
             </div>
         '''
 
@@ -362,17 +367,6 @@ def success_message(message: str) -> str:
         <span>{message}</span>
         </div>
     '''
-
-
-def _code_digit_input(id: str) -> str:
-    return f"""\
-<input
-    id="{id}"
-    type="text"
-    inputmode="numeric"
-    pattern="[0-9]"
-    maxlength="1"
-/>"""
 
 
 def code_input_form(

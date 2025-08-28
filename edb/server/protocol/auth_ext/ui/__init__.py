@@ -211,7 +211,7 @@ def render_email_factor_form(
     has_password = password_form is not None
     has_webauthn = webauthn_form is not None
     has_magic_link = magic_link_form is not None
-    has_single_quick_factor = (has_webauthn ^ has_magic_link)
+    has_single_quick_factor = has_webauthn ^ has_magic_link
 
     should_render_slider = (
         has_password and has_single_quick_factor and challenge is not None
@@ -247,9 +247,9 @@ def render_email_factor_form(
 
         labels = [t[0] for t in tabs if t is not None]
         sections = [t[1] for t in tabs if t is not None]
-        return render.tabs_buttons(labels, selected_index) + render.tabs_content(
-            sections, selected_index, labels
-        )
+        return render.tabs_buttons(
+            labels, selected_index
+        ) + render.tabs_content(sections, selected_index, labels)
 
     # Build slider content for the single-form flow.
     base_email_factor_form = render.render_base_email_form(
