@@ -54,8 +54,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
 document.addEventListener("DOMContentLoaded", () => {
   const forgotLink = document.getElementById("forgot-password-link");
-  const emailInput = document.getElementById("email");
-  if (forgotLink) {
+  // Find the email input near the forgot link; fall back to a known id.
+  const emailInput =
+    forgotLink?.closest("form")?.querySelector('input[name="email"]') ||
+    document.getElementById("password-email");
+  if (forgotLink && emailInput) {
     const href = forgotLink.href;
     emailInput.addEventListener("input", (e) => {
       {

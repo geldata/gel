@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
 import html
+import re
 import urllib.parse
 
 from . import util
@@ -228,12 +229,32 @@ divider = '''
     </div>'''
 
 
-def tabs_content(sections: list[str], selected_tab: int) -> str:
+def _slugify_label(label: str) -> str:
+    slug = label.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    slug = re.sub(r"(^-|-$)", "", slug)
+    return slug or "section"
+
+
+def tabs_content(
+    sections: list[str], selected_tab: int, labels: Optional[list[str]] = None
+) -> str:
     content = ''
 
     for i, section in enumerate(sections):
+        active = selected_tab == i
+        aria_attrs = ''
+        if labels is not None and i < len(labels):
+            slug = _slugify_label(labels[i])
+            aria_attrs = (
+                f' role="tabpanel" id="panel-{slug}" aria-labelledby="tab-{slug}"'
+            )
+            hidden_attrs = ' aria-hidden="true" hidden' if not active else ''
+        else:
+            hidden_attrs = '' if active else ''
+
         content += f'''
-            <div class="slider-section{' active' if selected_tab == i else ''}">
+            <div class="slider-section{' active' if active else ''}"{aria_attrs}{hidden_attrs}>
               {section}
             </div>
         '''
@@ -260,15 +281,26 @@ def tabs_buttons(labels: list[str], selected_tab: int) -> str:
     content = ''
 
     for i, label in enumerate(labels):
+        active = selected_tab == i
+        slug = _slugify_label(label)
+        aria_selected = 'true' if active else 'false'
+        tabindex = '0' if active else '-1'
         content += f'''
-            <div class="tab{' active' if selected_tab == i else ''}">
+            <div
+              id="tab-{slug}"
+              class="tab{' active' if active else ''}"
+              role="tab"
+              aria-selected="{aria_selected}"
+              aria-controls="panel-{slug}"
+              tabindex="{tabindex}"
+            >
               {label}
               {_tab_underline}
             </div>
         '''
 
     return f'''
-        <div id="email-provider-tabs" class="tabs">
+        <div id="email-provider-tabs" class="tabs" role="tablist">
           {content}
         </div>
     '''
@@ -671,9 +703,7 @@ def get_email_password_signup_redirect_url(
     verification_method: str, base_path: str, fallback_redirect: str
 ) -> str:
     if verification_method == "Code":
-        return (
-            f"{base_path}/ui/verify?code=true&provider=builtin::local_emailpassword"  # noqa: E501
-        )
+        return f"{base_path}/ui/verify?code=true&provider=builtin::local_emailpassword"  # noqa: E501
     else:
         return fallback_redirect
 
@@ -706,33 +736,47 @@ def get_verification_method_label(verification_method: str) -> str:
     return "Email Code" if verification_method == "Code" else "Email Link"
 
 
-def render_base_email_form(challenge: str, email: Optional[str] = None) -> str:
+def render_base_email_form(
+    *, id: str, challenge: str, email: str | None = None
+) -> str:
     return f"""
         <input type="hidden" name="challenge" value="{challenge}" />
         <label for="email">Email</label>
-        <input id="email" name="email" type="email" value="{email or ''}" />
+        <input id="{id}" name="email" type="email" value="{email or ''}" />
     """
 
 
-def render_password_input(challenge: str) -> str:
+def render_password_input(
+    *, challenge: str, should_show_forgot_password: bool
+) -> str:
+    forgot_password_link = (
+        f"""
+        <a
+          id="forgot-password-link"
+          class="field-note"
+          href="forgot-password?challenge={challenge}"
+          tabindex="-1"
+        >
+            Forgot password?
+        </a>
+        """
+        if should_show_forgot_password
+        else ''
+    )
+
     return f"""
         <div class="field-header">
             <label for="password">Password</label>
-            <a
-                id="forgot-password-link"
-                class="field-note"
-                href="forgot-password?challenge={challenge}"
-                tabindex="-1">
-                Forgot password?
-            </a>
+            {forgot_password_link}
         </div>
         <input id="password" name="password" type="password" />
     """
 
 
 def render_password_form(
-    base_email_form: str,
-    password_input: str,
+    *,
+    challenge: str,
+    email: str | None = None,
     redirect_to: str,
     base_path: str,
     provider_name: str,
@@ -750,15 +794,22 @@ def render_password_form(
                 value="{base_path}/ui/signin?selected_tab=password"
             />
             <input type="hidden" name="provider" value="{provider_name}" />
-            {base_email_form}
-            {password_input}
+            {render_base_email_form(
+                id="password-email", challenge=challenge, email=email
+            )}
+            {render_password_input(
+                challenge=challenge,
+                should_show_forgot_password=True,
+            )}
             {button("Sign In", id="password-signin")}
         </form>
     """
 
 
 def render_webauthn_form(
-    base_email_form: str,
+    *,
+    challenge: str,
+    email: str | None = None,
     redirect_to: str,
     base_path: str,
     provider_name: str,
@@ -777,14 +828,18 @@ def render_webauthn_form(
             />
             <input type="hidden" name="provider" value="{provider_name}" />
             <input type="hidden" name="callback_url" value="{redirect_to}" />
-            {base_email_form}
+            {render_base_email_form(
+                id="webauthn-email", challenge=challenge, email=email
+            )}
             {button("Sign In", id="webauthn-signin")}
         </form>
     """
 
 
 def render_magic_link_form(
-    base_email_form: str,
+    *,
+    challenge: str,
+    email: str | None = None,
     base_path: str,
     provider_name: str,
     callback_url: str | None = None,
@@ -817,7 +872,9 @@ def render_magic_link_form(
             />
             <input type="hidden" name="provider" value="{provider_name}" />
             {callback_field}
-            {base_email_form}
+            {render_base_email_form(
+                id="magic-link-email", challenge=challenge, email=email
+            )}
             {button(button_text, id="magic-link-signin")}
         </form>
     """
@@ -828,7 +885,9 @@ def render_magic_link_form(
 
 
 def render_password_signup_form(
-    base_email_form: str,
+    *,
+    challenge: str,
+    email: str | None = None,
     redirect_to: str,
     base_path: str,
     provider_name: str,
@@ -851,16 +910,22 @@ def render_password_signup_form(
                 name="verify_url"
                 value="{base_path}/ui/verify"
             />
-            {base_email_form}
-            <label for="password">Password</label>
-            <input id="password" name="password" type="password" />
+            {render_base_email_form(
+                id="password-email", challenge=challenge, email=email
+            )}
+            {render_password_input(
+                challenge=challenge,
+                should_show_forgot_password=False,
+            )}
             {button("Sign Up", id="password-signup")}
         </form>
     """
 
 
 def render_webauthn_signup_form(
-    base_email_form: str,
+    *,
+    challenge: str,
+    email: str | None = None,
     redirect_to: str,
     base_path: str,
     provider_name: str,
@@ -884,14 +949,18 @@ def render_webauthn_signup_form(
                 name="verify_url"
                 value="{base_path}/ui/verify"
             />
-            {base_email_form}
+            {render_base_email_form(
+                id="webauthn-email", challenge=challenge, email=email
+            )}
             {button("Sign Up", id="webauthn-signup")}
         </form>
     """
 
 
 def render_magic_link_signup_form(
-    base_email_form: str,
+    *,
+    challenge: str,
+    email: str | None = None,
     base_path: str,
     provider_name: str,
     callback_url: str | None = None,
@@ -899,10 +968,13 @@ def render_magic_link_signup_form(
 ) -> str:
     """Render a complete magic link/OTC signup form."""
     tab_label = get_magic_link_tab_label(verification_method)
-    if verification_method == "Link":
-        base_email_form += f"""
+    callback_field = (
+        f"""
             <input type="hidden" name="callback_url" value="{callback_url}" />
         """
+        if verification_method == "Link"
+        else ""
+    )
 
     return f"""
         <form
@@ -921,7 +993,10 @@ def render_magic_link_signup_form(
                 name="redirect_on_failure"
                 value="{base_path}/ui/signup?selected_tab=magic_link"
             />
-            {base_email_form}
+            {callback_field}
+            {render_base_email_form(
+                id="magic-link-email", challenge=challenge, email=email
+            )}
             {button(f"Sign Up with {tab_label}", id="magic-link-signup")}
         </form>
     """

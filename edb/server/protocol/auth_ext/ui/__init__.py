@@ -57,17 +57,9 @@ def render_signin_page(
         elif p.name.startswith('builtin::oauth_') or hasattr(p, "issuer_url"):
             oauth_providers.append(cast(auth_config.OAuthProviderConfig, p))
 
-    base_email_factor_form = render.render_base_email_form(
-        challenge=challenge, email=email
-    )
-
-    password_input = (
-        render.render_password_input(challenge) if password_provider else ''
-    )
-
     email_factor_form = render_email_factor_form(
-        base_email_factor_form=base_email_factor_form,
-        password_input=password_input,
+        challenge=challenge,
+        email=email,
         selected_tab=selected_tab,
         single_form_fields=f'''
             {
@@ -105,8 +97,8 @@ def render_signin_page(
         ''',
         password_form=(
             render.render_password_form(
-                base_email_form=base_email_factor_form,
-                password_input=password_input,
+                challenge=challenge,
+                email=email,
                 redirect_to=redirect_to,
                 base_path=base_path,
                 provider_name=password_provider.name,
@@ -116,7 +108,8 @@ def render_signin_page(
         ),
         webauthn_form=(
             render.render_webauthn_form(
-                base_email_form=base_email_factor_form,
+                challenge=challenge,
+                email=email,
                 redirect_to=redirect_to,
                 base_path=base_path,
                 provider_name=webauthn_provider.name,
@@ -126,7 +119,8 @@ def render_signin_page(
         ),
         magic_link_form=(
             render.render_magic_link_form(
-                base_email_form=base_email_factor_form,
+                challenge=challenge,
+                email=email,
                 callback_url=(
                     redirect_to
                     if magic_link_provider.verification_method == "Link"
@@ -183,23 +177,19 @@ def render_signin_page(
 
 def render_email_factor_form(
     *,
-    base_email_factor_form: Optional[str] = None,
-    password_input: str = '',
     selected_tab: Optional[str] = None,
     single_form_fields: str = '',
     password_form: Optional[str],
     webauthn_form: Optional[str],
     magic_link_form: Optional[str],
     magic_link_verification_method: str = "Link",
+    # used only for slider mode
+    challenge: Optional[str] = None,
+    email: Optional[str] = None,
 ) -> Optional[str]:
-    if (
-        password_form is None
-        and webauthn_form is None
-        and magic_link_form is None
-    ):
-        return None
-
     match (password_form, webauthn_form, magic_link_form):
+        case (None, None, None):
+            return None
         case (_, None, None):
             return password_form
         case (None, _, None):
@@ -214,9 +204,20 @@ def render_email_factor_form(
         magic_link_verification_method
     )
 
-    if base_email_factor_form is None or (
-        webauthn_form is not None and magic_link_form is not None
-    ):
+    # Determine whether to render tabs (multiple distinct forms) or the
+    # single-form slider (quick factor + password) UI.
+    # Slider is shown only when there is exactly one of webauthn/magic-link
+    # available AND a password form, since it relies on a shared email input.
+    has_password = password_form is not None
+    has_webauthn = webauthn_form is not None
+    has_magic_link = magic_link_form is not None
+    has_single_quick_factor = (has_webauthn ^ has_magic_link)
+
+    should_render_slider = (
+        has_password and has_single_quick_factor and challenge is not None
+    )
+
+    if not should_render_slider or (has_webauthn and has_magic_link):
         tabs = [
             (
                 ('Passkey', webauthn_form, selected_tab == 'webauthn')
@@ -244,11 +245,19 @@ def render_email_factor_form(
             selected_tabs.index(True) if True in selected_tabs else 0
         )
 
-        return render.tabs_buttons(
-            [t[0] for t in tabs if t is not None], selected_index
-        ) + render.tabs_content(
-            [t[1] for t in tabs if t is not None], selected_index
+        labels = [t[0] for t in tabs if t is not None]
+        sections = [t[1] for t in tabs if t is not None]
+        return render.tabs_buttons(labels, selected_index) + render.tabs_content(
+            sections, selected_index, labels
         )
+
+    # Build slider content for the single-form flow.
+    base_email_factor_form = render.render_base_email_form(
+        id="email", challenge=challenge or "", email=email
+    )
+    password_input = render.render_password_input(
+        challenge=challenge or "", should_show_forgot_password=True
+    )
 
     slider_content = [
         f'''
@@ -325,15 +334,12 @@ def render_signup_page(
         elif p.name.startswith('builtin::oauth_') or hasattr(p, "issuer_url"):
             oauth_providers.append(cast(auth_config.OAuthProviderConfig, p))
 
-    base_email_factor_form = render.render_base_email_form(
-        challenge=challenge, email=email
-    )
-
     email_factor_form = render_email_factor_form(
         selected_tab=selected_tab,
         password_form=(
             render.render_password_signup_form(
-                base_email_form=base_email_factor_form,
+                challenge=challenge,
+                email=email,
                 redirect_to=render.get_email_password_signup_redirect_url(
                     password_provider.verification_method,
                     base_path,
@@ -347,7 +353,8 @@ def render_signup_page(
         ),
         webauthn_form=(
             render.render_webauthn_signup_form(
-                base_email_form=base_email_factor_form,
+                challenge=challenge,
+                email=email,
                 redirect_to=render.get_webauthn_signup_redirect_url(
                     webauthn_provider.verification_method,
                     base_path,
@@ -361,7 +368,8 @@ def render_signup_page(
         ),
         magic_link_form=(
             render.render_magic_link_signup_form(
-                base_email_form=base_email_factor_form,
+                challenge=challenge,
+                email=email,
                 callback_url=redirect_to_on_signup or redirect_to,
                 base_path=base_path,
                 provider_name=magic_link_provider.name,
