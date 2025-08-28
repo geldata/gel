@@ -1141,8 +1141,8 @@ class TestEdgeQLFor(tb.QueryTestCase):
         )
 
     async def test_edgeql_for_optional_01(self):
-        # Lol FOR OPTIONAL doesn't work for object-type iterators
-        # but it does work for 1-ary tuples
+        # Lol *originally* FOR OPTIONAL didn't work for object-type
+        # iterators but it did work for 1-ary tuples...
         await self.assert_query_result(
             r'''
                 for optional x in
