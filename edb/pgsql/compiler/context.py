@@ -26,6 +26,7 @@ from typing import (
     Mapping,
     ChainMap,
     Generator,
+    Sequence,
     TYPE_CHECKING,
 )
 
@@ -550,6 +551,12 @@ class Environment:
     #: query level.
     check_ctes: list[pgast.CommonTableExpr]
 
+    #: Map of binding path ids to DML used in the binding. I hope and
+    #: suspect that this will grow towards becoming a more general and
+    #: traditional symbol table as I rip out path factoring? Who knows
+    #: though.
+    binding_dml: dict[irast.PathId, Sequence[irast.MutatingLikeStmt]]
+
     def __init__(
         self,
         *,
@@ -590,6 +597,7 @@ class Environment:
         self.backend_runtime_params = backend_runtime_params
         self.versioned_stdlib = versioned_stdlib
         self.sql_dml_mode = sql_dml_mode
+        self.binding_dml = {}
 
 
 # XXX: this context hack is necessary until pathctx is converted
