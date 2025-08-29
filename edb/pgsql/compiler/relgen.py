@@ -999,7 +999,7 @@ def process_set_as_path_type_intersection(
         poly_rvar = relctx.range_for_typeref(
             rptr.ptrref.out_target,
             path_id=ir_set.path_id,
-            dml_source=irutils.get_dml_sources(ir_set),
+            dml_source=irutils.get_dml_sources(ir_set, ctx.env.binding_dml),
             lateral=True,
             ctx=ctx,
         )

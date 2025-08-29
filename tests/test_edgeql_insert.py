@@ -1824,6 +1824,28 @@ class TestInsert(tb.DDLTestCase):
                                   INSERT Note {name := y ++ x.name}))))));
             """)
 
+    async def test_edgeql_insert_for_iterator_01(self):
+        await self.assert_query_result(
+            r'''
+                with noobs := {
+                  (insert InsertTest { l2 := 1 }),
+                },
+                for n in noobs select assert_exists((select n filter true));
+            ''',
+            [{}],
+        )
+
+        await self.assert_query_result(
+            r'''
+                with noobs := {
+                  ((insert InsertTest { l2 := 1 }), "bar"),
+                  ((insert InsertTest { l2 := 2 }), "eggs"),
+                },
+                for n in noobs select n.0;
+            ''',
+            [{}, {}],
+        )
+
     @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_insert_default_01(self):
         await self.con.execute(r'''

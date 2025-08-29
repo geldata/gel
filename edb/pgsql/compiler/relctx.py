@@ -561,7 +561,7 @@ def new_primitive_rvar(
         is_global = False
 
     typeref = ir_set.typeref
-    dml_source = irutils.get_dml_sources(ir_set)
+    dml_source = irutils.get_dml_sources(ir_set, ctx.env.binding_dml)
     set_rvar = range_for_typeref(
         typeref, path_id, lateral=lateral, dml_source=dml_source,
         include_descendants=not skip_subtypes,
@@ -694,7 +694,7 @@ def _new_mapped_pointer_rvar(
     ir_ptr = ir_set.expr
 
     ptrref = ir_ptr.ptrref
-    dml_source = irutils.get_dml_sources(ir_ptr.source)
+    dml_source = irutils.get_dml_sources(ir_ptr.source, ctx.env.binding_dml)
     ptr_rvar = range_for_pointer(ir_set, dml_source=dml_source, ctx=ctx)
 
     src_col = 'source'
