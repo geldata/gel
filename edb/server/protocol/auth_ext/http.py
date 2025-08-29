@@ -1914,7 +1914,11 @@ class Router:
             if pkce_code is None:
                 raise errors.PKCECreationFailed
             response.body = json.dumps(
-                {"code": pkce_code, "provider": provider_name}
+                {
+                    "code": pkce_code,
+                    "provider": provider_name,
+                    "email": email_factor.email,
+                }
             ).encode()
             logger.info(
                 f"WebAuthn registration successful: identity_id={identity_id}, "
@@ -2788,11 +2792,7 @@ class Router:
                 client = webauthn.Client(self.db)
         if client is not None:
             if client.config.verification_method == "Code":
-                email_factor = (
-                    await client.get_email_factor_by_email(
-                        to_addr
-                    )
-                )
+                email_factor = await client.get_email_factor_by_email(to_addr)
                 if email_factor is not None:
                     code, otc_id = await otc.create(
                         self.db,
