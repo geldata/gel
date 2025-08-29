@@ -62,6 +62,9 @@ export async function onRegisterSubmit(form) {
         response.verification_email_sent_at
       );
     }
+    if ("email" in response) {
+      redirectUrl.searchParams.append("email", response.email);
+    }
 
     window.location.href = redirectUrl.href;
   } catch (error) {

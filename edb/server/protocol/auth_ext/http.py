@@ -1902,6 +1902,7 @@ class Router:
             response.body = json.dumps(
                 {
                     "identity_id": identity_id,
+                    "email": email_factor.email,
                     "verification_email_sent_at": now_iso8601,
                 }
             ).encode()
@@ -2779,11 +2780,16 @@ class Router:
         provider: str,
         to_addr: str,
     ) -> None:
-        if provider == "builtin::local_emailpassword":
-            email_password_client = email_password.Client(db=self.db)
-            if email_password_client.config.verification_method == "Code":
+        client: email_password.Client | webauthn.Client | None = None
+        match provider:
+            case "builtin::local_emailpassword":
+                client = email_password.Client(db=self.db)
+            case "builtin::local_webauthn":
+                client = webauthn.Client(self.db)
+        if client is not None:
+            if client.config.verification_method == "Code":
                 email_factor = (
-                    await email_password_client.get_email_factor_by_email(
+                    await client.get_email_factor_by_email(
                         to_addr
                     )
                 )
