@@ -2406,6 +2406,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     parsed_query,
                     {
                         "code": [str(pkce_challenge.id)],
+                        "email": [email],
                         "provider": ["builtin::local_emailpassword"],
                     },
                 )
@@ -2744,6 +2745,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 json.loads(body),
                 {
                     "code": str(pkce_challenge.id),
+                    "email": email,
                     "provider": "builtin::local_emailpassword",
                 },
             )
