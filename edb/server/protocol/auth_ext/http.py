@@ -2204,14 +2204,14 @@ class Router:
                 'Missing "challenge" in reset password request'
             )
 
-        is_code_flow = _maybe_get_search_param(query, "code") == "true"
-        maybe_email = _maybe_get_search_param(
-            query, "email", fallback_keys=["email_sent"]
-        )
         error_message = _maybe_get_search_param(query, "error")
-        reset_token = _maybe_get_search_param(query, 'reset_token')
 
-        if is_code_flow and maybe_email:
+        if password_provider.verification_method == "Code":
+            maybe_email = _maybe_get_search_param(
+                query, "email", fallback_keys=["email_sent"]
+            )
+            if maybe_email is None:
+                raise errors.InvalidData('Missing "email" for reset code flow')
             app_details_config = self._get_app_details_config()
             response.status = http.HTTPStatus.OK
             response.content_type = b'text/html'
@@ -2232,23 +2232,21 @@ class Router:
             )
             return
 
-        if reset_token is not None:
-            try:
-                token = jwt.ResetToken.verify(reset_token, self.signing_key)
+        try:
+            reset_token = _get_search_param(query, 'reset_token')
+            token = jwt.ResetToken.verify(reset_token, self.signing_key)
 
-                email_password_client = email_password.Client(
-                    db=self.db,
-                )
+            email_password_client = email_password.Client(
+                db=self.db,
+            )
 
-                is_valid = (
-                    await email_password_client.validate_reset_secret(
-                        token.subject, token.secret
-                    )
-                    is not None
+            is_valid = (
+                await email_password_client.validate_reset_secret(
+                    token.subject, token.secret
                 )
-            except Exception:
-                is_valid = False
-        else:
+                is not None
+            )
+        except Exception:
             is_valid = False
 
         app_details_config = self._get_app_details_config()
@@ -2276,6 +2274,9 @@ class Router:
         response: protocol.HttpResponse,
     ) -> None:
         error_messages: list[str] = []
+        is_valid = True
+        is_code_method: bool = False
+
         ui_config = self._get_ui_config()
         if ui_config is None:
             response.status = http.HTTPStatus.NOT_FOUND
@@ -2286,19 +2287,42 @@ class Router:
             request.url.query.decode("ascii") if request.url.query else ""
         )
 
-        is_code_flow = _maybe_get_search_param(query, "code") == "true"
+        maybe_provider_name = _maybe_get_search_param(query, "provider")
+        provider: (
+            config.WebAuthnProvider | config.EmailPasswordProviderConfig | None
+        ) = None
 
-        if is_code_flow:
-            _check_keyset(query, {"email", "provider"})
+        # Decide flow by provider config
+        match maybe_provider_name:
+            case "builtin::local_emailpassword":
+                provider = self._get_password_provider()
+                if provider is None:
+                    raise errors.MissingConfiguration(
+                        "ext::auth::AuthConfig::providers",
+                        "EmailPassword provider is not configured",
+                    )
+                is_code_method = provider.verification_method == "Code"
+            case "builtin::local_webauthn":
+                provider = self._get_webauthn_provider()
+                if provider is None:
+                    raise errors.MissingConfiguration(
+                        "ext::auth::AuthConfig::providers",
+                        "WebAuthn provider is not configured",
+                    )
+                is_code_method = provider.verification_method == "Code"
+            case _:
+                raise errors.InvalidData(
+                    f"Unknown provider: {maybe_provider_name}"
+                )
+
+        if is_code_method:
             email = _get_search_param(query, "email")
-            provider = _get_search_param(query, "provider")
             error_message = _maybe_get_search_param(query, "error")
             challenge = _get_pkce_challenge(
                 cookies=request.cookies,
                 response=response,
                 query_dict=query,
             )
-
             if challenge is None:
                 raise errors.InvalidData(
                     'Missing "challenge" in email verification request'
@@ -2310,7 +2334,7 @@ class Router:
             response.body = ui.render_email_verification_page_code_flow(
                 challenge=challenge,
                 email=email,
-                provider=provider,
+                provider=maybe_provider_name,
                 base_path=self.base_path,
                 callback_url=(
                     ui_config.redirect_to_on_signup or ui_config.redirect_to
@@ -2323,11 +2347,9 @@ class Router:
             )
             return
 
-        is_valid = True
         maybe_pkce_code: str | None = None
         redirect_to = ui_config.redirect_to_on_signup or ui_config.redirect_to
 
-        maybe_provider_name = _maybe_get_search_param(query, "provider")
         maybe_verification_token = _maybe_get_search_param(
             query, "verification_token"
         )
@@ -2498,8 +2520,25 @@ class Router:
             request.url.query.decode("ascii") if request.url.query else ""
         )
 
-        is_code_flow = _maybe_get_search_param(query, "code") == "true"
-        if is_code_flow:
+        # Use magic link provider to decide display mode
+        magic_link_provider = None
+        providers = util.maybe_get_config(
+            self.db,
+            "ext::auth::AuthConfig::providers",
+            frozenset,
+        )
+        if providers is not None:
+            for p in providers:
+                if getattr(p, 'name', None) == 'builtin::local_magic_link':
+                    magic_link_provider = p
+                    break
+
+        is_code_method = (
+            getattr(magic_link_provider, 'verification_method', 'Link')
+            == 'Code'
+        )
+
+        if is_code_method:
             is_signup = _maybe_get_search_param(query, "signup") == "true"
             email = _get_search_param(query, "email")
             challenge = _get_pkce_challenge(
@@ -2716,6 +2755,8 @@ class Router:
         verify_url: str,
         maybe_challenge: str | None,
         maybe_redirect_to: str | None,
+        *,
+        maybe_provider: str | None = None,
     ) -> str:
         if not self._is_url_allowed(verify_url):
             raise errors.InvalidData(

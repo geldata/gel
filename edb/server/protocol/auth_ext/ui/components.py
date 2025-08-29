@@ -697,7 +697,7 @@ def get_email_password_signup_redirect_url(
     verification_method: str, base_path: str, fallback_redirect: str
 ) -> str:
     if verification_method == "Code":
-        return f"{base_path}/ui/verify?code=true&provider=builtin::local_emailpassword"  # noqa: E501
+        return f"{base_path}/ui/verify?provider=builtin::local_emailpassword"
     else:
         return fallback_redirect
 
@@ -706,9 +706,7 @@ def get_webauthn_signup_redirect_url(
     verification_method: str, base_path: str, fallback_redirect: str
 ) -> str:
     if verification_method == "Code":
-        return (
-            f"{base_path}/ui/verify?code=true&provider=builtin::local_webauthn"
-        )
+        return f"{base_path}/ui/verify?provider=builtin::local_webauthn"
     else:
         return fallback_redirect
 
