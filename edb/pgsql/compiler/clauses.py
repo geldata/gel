@@ -190,6 +190,10 @@ def compile_iterator_expr(
 
     assert isinstance(iterator_expr.expr, (irast.GroupStmt, irast.SelectStmt))
 
+    ctx.env.binding_dml[iterator_expr.path_id] = irutils.get_dml_sources(
+        iterator_expr, ctx.env.binding_dml
+    )
+
     with ctx.new() as subctx:
         subctx.expr_exposed = False
         subctx.rel = query
