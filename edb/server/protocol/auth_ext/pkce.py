@@ -27,7 +27,7 @@ import dataclasses
 from edb.ir import statypes
 from edb.server import defines
 
-from . import util
+from . import util, errors
 
 if typing.TYPE_CHECKING:
     from edb.server import server as edbserver
@@ -86,7 +86,10 @@ async def link_identity_challenge(
     )
 
     result_json = json.loads(r.decode())
-    assert len(result_json) == 1
+    if len(result_json) != 1:
+        raise errors.PKCEVerificationFailed(
+            f"No linked PKCE session found for challenge '{challenge}'"
+        )
 
     return typing.cast(str, result_json[0]["id"])
 
@@ -118,7 +121,10 @@ async def add_provider_tokens(
     )
 
     result_json = json.loads(r.decode())
-    assert len(result_json) == 1
+    if len(result_json) != 1:
+        raise errors.PKCEVerificationFailed(
+            f"No PKCE session found with id '{id}'"
+        )
 
     return typing.cast(str, result_json[0]["id"])
 
@@ -142,7 +148,10 @@ async def get_by_id(db: edbtenant.dbview.Database, id: str) -> PKCEChallenge:
     )
 
     result_json = json.loads(r.decode())
-    assert len(result_json) == 1
+    if len(result_json) != 1:
+        raise errors.PKCEVerificationFailed(
+            f"No current PKCE session found with id '{id}'"
+        )
 
     return PKCEChallenge(**result_json[0])
 
@@ -157,7 +166,10 @@ async def delete(db: edbtenant.dbview.Database, id: str) -> None:
     )
 
     result_json = json.loads(r.decode())
-    assert len(result_json) == 1
+    if len(result_json) != 1:
+        raise errors.PKCEVerificationFailed(
+            f"No PKCE session found with id '{id}'"
+        )
 
 
 async def _delete_challenge(db: edbtenant.dbview.Database) -> None:
