@@ -3019,6 +3019,16 @@ class TestEdgeQLCasts(tb.QueryTestCase):
                 SELECT <multirange<int64>>to_json('{"a": 1}');
             """)
 
+    async def test_edgeql_casts_multirange_set_01(self):
+        await self.assert_query_result(
+            r"""
+                select count(
+                  <multirange<int32>>{range(0, 10), range(12, 15)}
+                 );
+            """,
+            [2],
+        )
+
     async def test_edgeql_casts_assignment_01(self):
         async with self._run_and_rollback():
             await self.con.execute(r"""
