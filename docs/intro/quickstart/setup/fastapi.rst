@@ -14,10 +14,9 @@ Setting up your environment
         git@github.com:geldata/quickstart-fastapi.git \
         flashcards
     $ cd flashcards
-    $ python -m venv venv
-    $ source venv/bin/activate # or venv\Scripts\activate on Windows
-    $ pip install -r requirements.txt
-    $ uvx gel project init
+    $ uv venv
+    $ uv sync
+    $ uvx gel init
 
 .. edb:split-section::
 
@@ -69,7 +68,7 @@ Setting up your environment
       :caption: gel.toml
 
       [instance]
-      server-version = 6.1
+      server-version = 6.9
 
       [hooks]
       schema.update.after = "uvx gel-py"

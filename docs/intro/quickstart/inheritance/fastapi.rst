@@ -44,47 +44,15 @@ Adding shared properties
 
 .. edb:split-section::
 
-  Since you don't have historical data for when these objects were actually created or modified, the migration will fall back to the default values set in the ``Timestamped`` type.
-
-  .. code-block:: sh
-
-    $ gel migration create
-    did you create object type 'default::Timestamped'? [y,n,l,c,b,s,q,?]
-    > y
-    did you alter object type 'default::Card'? [y,n,l,c,b,s,q,?]
-    > y
-    did you alter object type 'default::Deck'? [y,n,l,c,b,s,q,?]
-    > y
-    Created /home/strinh/projects/flashcards/dbschema/migrations/00004-m1d2m5n.edgeql, id: m1d2m5n5ajkalyijrxdliioyginonqbtfzihvwdfdmfwodunszstya
-
-    $ gel migrate
-    Applying m1d2m5n5ajkalyijrxdliioyginonqbtfzihvwdfdmfwodunszstya (00004-m1d2m5n.edgeql)
-    ... parsed
-    ... applied
-
-.. edb:split-section::
+  If you have ``fastapi dev`` still running, the schema will automatically be updated, no manual migrations are needed. Once the schema is updated, the model generation tool will also be run, and you can see the changes in the ``models`` module. Since you don't have historical data for when these objects were actually created or modified, the migration will fall back to the default values set in the ``Timestamped`` type.
 
   Update the ``get_decks`` query to sort the decks by ``updated_at`` in descending order.
 
   .. code-block:: python-diff
     :caption: main.py
 
-      @app.get("/decks", response_model=List[Deck])
+      @app.get("/decks")
       async def get_decks():
-          decks = await client.query("""
-              select Deck {
-                  id,
-                  name,
-                  description,
-                  cards := (
-                      select .cards {
-                          id,
-                          front,
-                          back
-                      }
-                      order by .order
-                  )
-              }
-    +         order by .updated_at desc
-          """)
-          return decks
+          db = g.client
+    -     return await db.query(Deck.select("*", cards=True))
+    +     return await db.query(Deck.select("*", cards=True).order_by(updated_at="desc"))
