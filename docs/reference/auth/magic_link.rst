@@ -154,7 +154,7 @@ Sign up
 .. code-block:: javascript
 
    /**
-    * Handles sign up with email and password.
+    * Send magic link to new user's email for sign up.
     *
     * @param {Request} req
     * @param {Response} res
