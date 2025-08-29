@@ -626,6 +626,7 @@ class Router:
                 )
                 response_dict = {
                     "code": pkce_code,
+                    "email": email_factor.email,
                     "provider": register_provider_name,
                 }
 
