@@ -1074,6 +1074,20 @@ def _check_secret_ptr(
 ) -> None:
     module = ptrcls.get_name(ctx.env.schema).module
 
+    # HACK: Workaround for #8974. Aliases/globals have expr duplicated
+    # in their associated Type, and sometimes recompilation of the
+    # Type is triggered.
+    # Skip producing secret errors there, since we don't have the
+    # result_view_name available.
+    #
+    # The errors will get produced when actually compiling the
+    # Global/Alias itself.
+    if (
+        ctx.env.options.schema_object_context
+        and issubclass(ctx.env.options.schema_object_context, s_types.Type)
+    ):
+        return
+
     func_name = ctx.env.options.func_name
     if func_name and func_name.module == module:
         return

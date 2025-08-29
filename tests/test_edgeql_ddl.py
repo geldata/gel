@@ -3596,6 +3596,26 @@ class TestEdgeQLDDL(tb.DDLTestCase):
         )
         await self.assert_query_result("select X { foo }", [{"foo": "test"}])
 
+    async def test_edgeql_ddl_ptr_set_required_03(self):
+        await self.con.execute("""
+            CREATE TYPE Agent;
+            CREATE TYPE AgentVersion {
+                CREATE SINGLE LINK agent2 -> Agent;
+                CREATE SINGLE LINK agent := .agent2;
+            };
+            CREATE TYPE Obj {
+                CREATE REQUIRED SINGLE LINK agentVersion: AgentVersion;
+            };
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Obj {
+                CREATE REQUIRED SINGLE LINK agent: Agent {
+                    SET REQUIRED USING (.agentVersion.agent);
+                };
+            };
+        """)
+
     async def test_edgeql_ddl_link_property_01(self):
         await self.con.execute("""
             CREATE TYPE Tgt;
