@@ -970,6 +970,7 @@ def _cast_multirange(
     with ctx.new() as subctx:
         subctx.allow_factoring()
         subctx.anchors = subctx.anchors.copy()
+        pathctx.register_set_in_scope(ir_set, ctx=subctx)
         source_path = subctx.create_anchor(ir_set, 'a')
 
         # multirange(
