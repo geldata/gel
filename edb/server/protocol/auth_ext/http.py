@@ -1596,6 +1596,10 @@ class Router:
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
         except Exception as ex:
+            request_accepts_json: bool = request.accept == b"application/json"
+            if request_accepts_json:
+                raise ex
+
             redirect_on_failure = data.get(
                 "redirect_on_failure", data.get("redirect_to")
             )
