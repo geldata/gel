@@ -55,6 +55,7 @@ class Client(local.Client):
         self.db = db
         self.provider = self._get_provider()
         self.app_name = self._get_app_name()
+        self.config = self._get_provider_config("builtin::local_webauthn")
 
     def _get_provider(self) -> config.WebAuthnProvider:
         provider_name = "builtin::local_webauthn"
@@ -79,7 +80,8 @@ class Client(local.Client):
         return app_config.app_name
 
     async def create_registration_options_for_email(
-        self, email: str,
+        self,
+        email: str,
     ) -> tuple[str, bytes]:
         maybe_user_handle = await self._maybe_get_existing_user_handle(
             email=email
@@ -104,7 +106,8 @@ class Client(local.Client):
         )
 
     async def _maybe_get_existing_user_handle(
-        self, email: str,
+        self,
+        email: str,
     ) -> Optional[bytes]:
         result = await util.json_query(
             self.db,
@@ -518,3 +521,22 @@ select ext::auth::WebAuthnFactor {
                 "Multiple WebAuthn factors found for the same credential ID."
             )
         return data.EmailFactor(**result_json[0])
+
+    def _get_provider_config(
+        self, provider_name: str
+    ) -> config.WebAuthnProvider:
+        provider_client_config = util.get_config(
+            self.db, "ext::auth::AuthConfig::providers", frozenset
+        )
+        for cfg in provider_client_config:
+            if cfg.name == provider_name:
+                return config.WebAuthnProvider(
+                    name=cfg.name,
+                    relying_party_origin=cfg.relying_party_origin,
+                    require_verification=cfg.require_verification,
+                    verification_method=cfg.verification_method,
+                )
+
+        raise errors.MissingConfiguration(
+            provider_name, f"Provider is not configured"
+        )
