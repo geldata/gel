@@ -71,7 +71,7 @@ Once you're satisfied with the schema changes you've made iteratively, you'll wa
 Undoing destructive changes
 ===========================
 
-Mistakes happen! You might accidentally make a destructive schema change. Fortunately, Gel has your back. Every time you migrate your schema (either via :gelcmd:`watch --migrate` or :gelcmd:`migrate --dev-mode`), a backup of your local instance is automatically taken.
+Mistakes happen! You might accidentally make a destructive schema change. Fortunately, Gel has your back. Every time you migrate your schema (either via :gelcmd:`watch --migrate` or :gelcmd:`migrate --dev-mode`), a backup of your local instance is automatically taken (you can disable this behavior by setting env variable `GEL_AUTO_BACKUP_MODE` to `disabled``).
 
 If you need to roll back to a previous state:
 
