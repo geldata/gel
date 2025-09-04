@@ -76,6 +76,7 @@ class Client:
                 )
             case ("builtin::oauth_discord", _):
                 self.provider = discord.DiscordProvider(
+                    provider_config.always_show_consent_form,
                     *provider_args,
                     **provider_kwargs,
                 )
@@ -167,6 +168,7 @@ select {
                     client_id=cfg.client_id,
                     secret=cfg.secret,
                     additional_scope=cfg.additional_scope,
+                    always_show_consent_form=getattr(cfg, 'always_show_consent_form', None),
                     issuer_url=getattr(cfg, 'issuer_url', None),
                     logo_url=getattr(cfg, 'logo_url', None),
                 )

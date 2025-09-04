@@ -288,6 +288,10 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         alter property display_name {
             set default := 'Discord';
         };
+
+        create required property always_show_consent_form: std::bool {
+            set default := true;
+        };
     };
 
     create type ext::auth::SlackOAuthProvider
