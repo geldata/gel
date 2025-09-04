@@ -12749,8 +12749,9 @@ class EdgeQLAIMigrationTestCase(EdgeQLDataMigrationTestCase):
 
         with self.assertRaisesRegex(
             edgedb.SchemaDefinitionError,
-            "object type 'default::TestEmbeddingModel' is missing a value "
-            "for the 'ext::ai::embedding_model_max_input_tokens' annotation"
+            "annotation ext::ai::embedding_model_max_input_tokens on "
+            "object type 'default::TestEmbeddingModel' "
+            "is not set to a valid integer value"
         ):
             await self.migrate(schema, explicit_modules=True)
 

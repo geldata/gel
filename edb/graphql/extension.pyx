@@ -256,6 +256,7 @@ async def compile(
             db.user_schema_pickle,
             tenant.get_global_schema_pickle(),
             db.reflection_cache,
+            tenant.extension_refs,
             db.db_config,
             db._index.get_compilation_system_config(),
             query,

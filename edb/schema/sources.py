@@ -29,6 +29,7 @@ from typing import (
 
 from edb import errors
 
+from . import ai_indexes as s_ai_indexes
 from . import delta as sd
 from . import indexes
 from . import name as sn
@@ -192,7 +193,7 @@ class Source(
             schema, self, sn.QualName("ext::ai", "index")
         )
         if ext_ai_index:
-            idx_id = indexes.get_ai_index_id(schema, ext_ai_index)
+            idx_id = s_ai_indexes.get_ai_index_id(schema, ext_ai_index)
             dimensions = ext_ai_index.must_get_json_annotation(
                 schema,
                 sn.QualName(
