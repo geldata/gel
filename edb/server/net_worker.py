@@ -55,8 +55,8 @@ class TenantState:
 
 
 async def _http_task(tenant: edbtenant.Tenant, state: TenantState) -> None:
-    http_max_connections = tenant._server.config_lookup(
-        'http_max_connections', tenant.get_sys_config()
+    http_max_connections = tenant.config.lookup(
+        'http_max_connections'
     )
     http_client = state.http_client
     http_client._update_limit(http_max_connections)

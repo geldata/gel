@@ -101,8 +101,79 @@ class StartupError(Exception):
     pass
 
 
+class ServerSysConfig:
+    _sys_config: Mapping[str, config.SettingValue] | None
+    _default_sysconfig: Mapping[str, config.SettingValue]
+    _config_settings: config.Spec
+
+    def __init__(
+            self,
+            config_settings: config.Spec,
+            sys_config: Mapping[str, config.SettingValue] = None,
+            default_sysconfig: Mapping[str, config.SettingValue] = immutables.Map(),
+    ):
+        self._sys_config = sys_config
+        self._default_sysconfig = default_sysconfig
+        self._config_settings = config_settings
+
+    @property
+    def settings(self) -> config.Spec:
+        return self._config_settings
+
+    @property
+    def sys_config(self) -> Mapping[str, config.SettingValue]:
+        assert self._sys_config is not None, "ServerConfig is not initialized"
+        return self._sys_config
+
+    def init(
+        self,
+        sys_config: Mapping[str, config.SettingValue],
+        default_sysconfig: Mapping[str, config.SettingValue] = None,
+    ):
+        assert self._sys_config is None, "ServerConfig is already initialized"
+        self._sys_config = sys_config
+        self._default_sysconfig = default_sysconfig
+
+    def update(self, sys_config: Mapping[str, config.SettingValue]):
+        with self._default_sysconfig.mutate() as mm:
+            mm.update(sys_config)
+            sys_config = mm.finish()
+        self._sys_config = sys_config
+
+    def apply(self, op: config.Operation):
+        assert self._sys_config is not None, "ServerConfig is not initialized"
+        op.apply(self._config_settings, self._sys_config)
+
+    def get_compilation_config(self) -> immutables.Map[str, config.SettingValue]:
+        assert self._sys_config is not None, "ServerConfig is not initialized"
+        return config.get_compilation_config(self._sys_config, spec=self._config_settings)
+
+    def lookup(
+        self,
+        name: str,
+        configs: Optional[tuple[Mapping[str, config.SettingValue], ...]] = None,
+        spec: config.Spec = None,
+    ) -> Any:
+        assert self._sys_config is not None, "ServerConfig is not initialized"
+        db_config = configs or () + (self._sys_config,)
+        spec = spec or self._config_settings
+        return config.lookup(name, *db_config, spec=spec)
+
+    def to_json(
+        self,
+        setting_filter: Optional[Callable[[config.SettingValue], bool]] = None,
+        include_source: bool = True,
+    ) -> str:
+        return config.to_json(
+            self._config_settings,
+            self._sys_config,
+            setting_filter=setting_filter,
+            include_source=include_source,
+        )
+
 class BaseServer:
     _sys_queries: Mapping[str, bytes]
+    _sys_config: ServerSysConfig
     _local_intro_query: bytes
     _global_intro_query: bytes
     _report_config_typedesc: dict[defines.ProtocolVersion, bytes]
@@ -140,6 +211,7 @@ class BaseServer:
     def __init__(
         self,
         *,
+        sys_config: ServerSysConfig,
         runstate_dir,
         internal_runstate_dir,
         compiler_pool_size,
@@ -172,8 +244,8 @@ class BaseServer:
         self.__loop = asyncio.get_running_loop()
         self._use_monitor_fs = use_monitor_fs
 
+        self._sys_config = sys_config
         self._schema_class_layout = compiler_state.schema_class_layout
-        self._config_settings = compiler_state.config_spec
         self._refl_schema = compiler_state.refl_schema
         self._std_schema = compiler_state.std_schema
         assert compiler_state.global_intro_query is not None
@@ -282,7 +354,7 @@ class BaseServer:
         for transport, methods in auth_methods_spec.items():
             result = []
             for method in methods:
-                auth_type = self.config_settings.get_type_by_name(
+                auth_type = self.config.settings.get_type_by_name(
                     f'cfg::{method.value}'
                 )
                 result.append(auth_type())
@@ -473,39 +545,28 @@ class BaseServer:
 
         return finalizer
 
-    def _get_sys_config(self) -> Mapping[str, config.SettingValue]:
-        raise NotImplementedError
-
-    def config_lookup(
-        self,
-        name: str,
-        *configs: Mapping[str, config.SettingValue],
-    ) -> Any:
-        return config.lookup(name, *configs, spec=self._config_settings)
-
     @property
-    def config_settings(self) -> config.Spec:
-        return self._config_settings
+    def config(self) -> ServerSysConfig:
+        return self._sys_config
 
     async def init(self):
         if self.is_admin_ui_enabled():
             ui_ext.cache_assets()
 
-        sys_config = self._get_sys_config()
         if not self._listen_hosts:
             self._listen_hosts = (
-                self.config_lookup('listen_addresses', sys_config)
+                self.config.lookup('listen_addresses')
                 or ('localhost',)
             )
 
         if self._listen_port is None:
             self._listen_port = (
-                self.config_lookup('listen_port', sys_config)
+                self.config.lookup('listen_port')
                 or defines.EDGEDB_PORT
             )
 
-        self._stmt_cache_size = self.config_lookup(
-            '_pg_prepared_statement_cache_size', sys_config
+        self._stmt_cache_size = self.config.lookup(
+            '_pg_prepared_statement_cache_size'
         )
 
         self.reinit_idle_gc_collector()
@@ -518,8 +579,8 @@ class BaseServer:
             self._idle_gc_handler.cancel()
             self._idle_gc_handler = None
 
-        session_idle_timeout = self.config_lookup(
-            'session_idle_timeout', self._get_sys_config())
+        session_idle_timeout = self.config.lookup(
+            'session_idle_timeout')
 
         timeout = session_idle_timeout.to_microseconds()
         timeout /= 1_000_000.0  # convert to seconds
@@ -687,7 +748,7 @@ class BaseServer:
         self, db_config_json: bytes, user_schema: s_schema.Schema
     ) -> Mapping[str, config.SettingValue]:
         spec = config.ChainedSpec(
-            self._config_settings,
+            self.config.settings,
             config.load_ext_spec_from_schema(
                 user_schema,
                 self.get_std_schema(),
@@ -1215,7 +1276,7 @@ class BaseServer:
                 listen_port=self._listen_port,
             ),
             instance_config=config.debug_serialize_config(
-                self._get_sys_config()),
+                self._sys_config.sys_config),
             compiler_pool=(
                 self._compiler_pool.get_debug_info()
                 if self._compiler_pool
@@ -1300,15 +1361,12 @@ class Server(BaseServer):
         new_instance: bool,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(sys_config=tenant.config, **kwargs)
         self._tenant = tenant
         self._startup_script = startup_script
         self._new_instance = new_instance
 
         tenant.set_server(self)
-
-    def _get_sys_config(self) -> Mapping[str, config.SettingValue]:
-        return self._tenant.get_sys_config()
 
     async def init(self) -> None:
         logger.debug("starting server init")
@@ -1560,8 +1618,8 @@ class Server(BaseServer):
             )
 
     def _reload_stmt_cache_size(self):
-        size = self.config_lookup(
-            '_pg_prepared_statement_cache_size', self._get_sys_config()
+        size = self.config.lookup(
+            '_pg_prepared_statement_cache_size'
         )
         self._stmt_cache_size = size
         self._tenant.set_stmt_cache_size(size)
@@ -1690,18 +1748,16 @@ class Server(BaseServer):
     async def _on_system_config_reset(self, setting_name):
         try:
             if setting_name == 'listen_addresses':
-                cfg = self._get_sys_config()
                 await self._restart_servers_new_addr(
-                    self.config_lookup('listen_addresses', cfg)
+                    self.config.lookup('listen_addresses')
                     or ('localhost',),
                     self._listen_port,
                 )
 
             elif setting_name == 'listen_port':
-                cfg = self._get_sys_config()
                 await self._restart_servers_new_addr(
                     self._listen_hosts,
-                    self.config_lookup('listen_port', cfg)
+                    self.config.lookup('listen_port')
                     or defines.EDGEDB_PORT,
                 )
 

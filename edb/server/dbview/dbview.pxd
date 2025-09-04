@@ -59,7 +59,6 @@ cdef class DatabaseIndex:
         object _comp_sys_config
         object _std_schema
         object _global_schema_pickle
-        object _default_sysconfig
         object _sys_config_spec
         object _cached_compiler_args
 
@@ -242,9 +241,8 @@ cdef class DatabaseConnectionView:
     cpdef get_database_config(self)
     cdef set_database_config(self, new_conf)
 
-    cdef get_system_config(self)
     cpdef get_compilation_system_config(self)
-    cdef config_lookup(self, name)
+    cdef lookup_config(self, name)
 
     cdef set_modaliases(self, new_aliases)
     cpdef get_modaliases(self)
