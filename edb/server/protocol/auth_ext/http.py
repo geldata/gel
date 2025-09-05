@@ -1287,11 +1287,12 @@ class Router:
         response: protocol.HttpResponse,
     ) -> None:
         data = self._get_data_from_request(request)
+        email: str | None = None
 
         try:
             _check_keyset(data, {"email"})
 
-            email = data["email"]
+            email = cast(str, data["email"])
             allowed_redirect_to = self._maybe_make_allowed_url(
                 data.get("redirect_to")
             )
@@ -1439,7 +1440,7 @@ class Router:
                 "redirect_on_failure", data.get("redirect_to")
             )
             error_message = str(ex)
-            email = locals().get('email', 'unbound')
+            email = email or ""
             logger.error(
                 f"Error sending magic link email: error={error_message}, "
                 f"email={email}"
@@ -1462,10 +1463,11 @@ class Router:
         response: protocol.HttpResponse,
     ) -> None:
         data = self._get_data_from_request(request)
+        email: str | None = None
 
         try:
             _check_keyset(data, {"email"})
-            email = data["email"]
+            email = cast(str, data["email"])
 
             allowed_redirect_to = self._maybe_make_allowed_url(
                 data.get("redirect_to")
@@ -1596,7 +1598,7 @@ class Router:
                 "redirect_on_failure", data.get("redirect_to")
             )
             error_message = str(ex)
-            email = locals().get('email', 'unbound')
+            email = email or ""
             logger.error(
                 f"Error sending magic link email: error={error_message}, "
                 f"email={email}"
