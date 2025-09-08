@@ -1616,3 +1616,231 @@ class TestEdgeQLLinkproperties(tb.QueryTestCase):
                 } FILTER NOT .is_compound_type;
                 '''
             )
+
+    async def test_edgeql_props_dunder_default_01(self):
+        # insert link prop with __default__ in expr
+        await self.con.execute(r'''
+            CREATE TYPE Tgt {
+                CREATE PROPERTY n -> int64;
+            };
+            CREATE TYPE Src {
+                CREATE PROPERTY n -> int64;
+                CREATE LINK l -> Tgt {
+                    CREATE PROPERTY x -> int64 {
+                        set default := -1;
+                    };
+                };
+            };
+
+            insert Tgt;
+        ''')
+
+        await self.con.query(
+            r'''
+            insert Src {
+                n := 1,
+                l := assert_single(Tgt { @x := __default__ }),
+            };
+            insert Src {
+                n := 2,
+                l := assert_single(Tgt) { @x := __default__ },
+            };
+            insert Src {
+                n := 3,
+                l := assert_single(Tgt { @x := ( .n ?? __default__ ) }),
+            };
+            update Tgt set { n := 9 };
+            insert Src {
+                n := 4,
+                l := assert_single(Tgt { @x := ( .n ?? __default__ ) }),
+            };
+            insert Src {
+                n := 5,
+                l := (insert Tgt { n := 8, @x := __default__ })
+            };
+            insert Src {
+                n := 6,
+                l := (insert Tgt { n := 7 }) { @x := __default__ }
+            };
+            '''
+        )
+
+        await self.assert_query_result(
+            r'SELECT Src { n, l: { n, @x } };',
+            [
+                {"n": 1, "l": {"n": 9, "@x": -1}},
+                {"n": 2, "l": {"n": 9, "@x": -1}},
+                {"n": 3, "l": {"n": 9, "@x": -1}},
+                {"n": 4, "l": {"n": 9, "@x": 9}},
+                {"n": 5, "l": {"n": 8, "@x": -1}},
+                {"n": 6, "l": {"n": 7, "@x": -1}},
+            ]
+        )
+
+    async def test_edgeql_props_dunder_default_02(self):
+        # insert link prop with __default__ with overloaded link
+        await self.con.execute(r'''
+            CREATE TYPE Tgt {
+                CREATE PROPERTY n -> int64;
+            };
+            CREATE TYPE Src {
+                CREATE PROPERTY n -> int64;
+                CREATE LINK l -> Tgt {
+                    CREATE PROPERTY x -> int64 {
+                        set default := -1;
+                    };
+                };
+            };
+            CREATE TYPE Src2 extending Src {
+                ALTER LINK l {
+                    ALTER PROPERTY x {
+                        set default := -2;
+                    };
+                };
+            };
+
+            insert Tgt;
+        ''')
+
+        await self.con.query(
+            r'''
+            insert Src {
+                n := 1,
+                l := assert_single(Tgt { @x := __default__ }),
+            };
+            insert Src2 {
+                n := 2,
+                l := assert_single(Tgt { @x := __default__ }),
+            };
+            '''
+        )
+
+        await self.assert_query_result(
+            r'SELECT Src { n, l: { n, @x } };',
+            [
+                {"n": 1, "l": {"n": None, "@x": -1}},
+                {"n": 2, "l": {"n": None, "@x": -2}},
+            ]
+        )
+
+    async def test_edgeql_props_dunder_default_03(self):
+        # update link prop with __default__ in expr
+        await self.con.execute(r'''
+            CREATE TYPE Tgt {
+                CREATE PROPERTY n -> int64;
+            };
+            CREATE TYPE Src {
+                CREATE PROPERTY n -> int64;
+                CREATE LINK l -> Tgt {
+                    CREATE PROPERTY x -> int64 {
+                        set default := -1;
+                    };
+                };
+            };
+
+            insert Tgt { n := 1 };
+            insert Src {
+                n := 0,
+                l := assert_single(Tgt),
+            };
+        ''')
+
+        await self.con.query(
+            r'''
+            update Src set { l := .l { @x := 9 }, };
+            update Src set { l := .l { @x := __default__ }, };
+            '''
+        )
+        await self.assert_query_result(
+            r'SELECT Src { n, l: { n, @x } };',
+            [
+                {"n": 0, "l": {"n": 1, "@x": -1}},
+            ]
+        )
+
+        # Update with insert stmt, shape on insert
+        await self.con.query(
+            r'''
+            update Src set { l := .l { @x := 9 }, };
+            update Src set {
+                l := (insert Tgt { n := 2, @x := __default__ }),
+            };
+            '''
+        )
+        await self.assert_query_result(
+            r'SELECT Src { n, l: { n, @x } };',
+            [
+                {"n": 0, "l": {"n": 2, "@x": -1}},
+            ]
+        )
+
+        # Update with insert stmt, shape applied after insert
+        await self.con.query(
+            r'''
+            update Src set { l := .l { @x := 9 }, };
+            update Src set {
+                l := (insert Tgt { n := 3 }) { @x := __default__ },
+            };
+            '''
+        )
+        await self.assert_query_result(
+            r'SELECT Src { n, l: { n, @x } };',
+            [
+                {"n": 0, "l": {"n": 3, "@x": -1}},
+            ]
+        )
+
+    async def test_edgeql_props_dunder_default_04(self):
+        # update link prop with __default__ with overloaded link
+        await self.con.execute(r'''
+            CREATE TYPE Tgt {
+                CREATE PROPERTY n -> int64;
+            };
+            CREATE TYPE Src {
+                CREATE PROPERTY n -> int64;
+                CREATE LINK l -> Tgt {
+                    CREATE PROPERTY x -> int64 {
+                        set default := -1;
+                    };
+                };
+            };
+            CREATE TYPE Src2 extending Src {
+                ALTER LINK l {
+                    ALTER PROPERTY x {
+                        set default := -2;
+                    };
+                };
+            };
+
+            insert Tgt;
+            insert Src {
+                n := 1,
+                l := assert_single(Tgt { @x := 8 }),
+            };
+            insert Src2 {
+                n := 2,
+                l := assert_single(Tgt { @x := 9 }),
+            };
+        ''')
+
+        await self.con.query(
+            r'update Src set { l := .l { @x := __default__ }, }'
+        )
+        await self.assert_query_result(
+            r'SELECT Src { n, l: { @x } };',
+            [
+                {"n": 1, "l": {"@x": -1}},
+                {"n": 2, "l": {"@x": -1}},
+            ]
+        )
+
+        await self.con.query(
+            r'update Src2 set { l := .l { @x := __default__ }, }'
+        )
+        await self.assert_query_result(
+            r'SELECT Src { n, l: { @x } };',
+            [
+                {"n": 1, "l": {"@x": -1}},
+                {"n": 2, "l": {"@x": -2}},
+            ]
+        )

@@ -2213,6 +2213,71 @@ class TestInsert(tb.DDLTestCase):
             ]
         )
 
+    async def test_edgeql_insert_dunder_default_03(self):
+        # insert with inner stmt using __default__
+
+        # prop doesn't have __default
+        await self.con.execute(r'''
+            INSERT DunderDefaultTest03_A {
+                x := (
+                    INSERT DunderDefaultTest03_C { x := __default__ }
+                ).x
+            };
+        ''')
+        await self.assert_query_result(
+            r'''
+                SELECT DunderDefaultTest03_A { x };
+            ''',
+            [{'x': 2}]
+        )
+
+        # prop has __default
+        await self.con.execute(r'''
+            INSERT DunderDefaultTest03_B {
+                x := (
+                    INSERT DunderDefaultTest03_C { x := __default__ }
+                ).x
+            };
+        ''')
+        await self.assert_query_result(
+            r'''
+                SELECT DunderDefaultTest03_B { x };
+            ''',
+            [{'x': 2}]
+        )
+
+        # inner statement does not have __default
+        async with self.assertRaisesRegexTx(
+            edgedb.InvalidReferenceError,
+            r"__default__ cannot be used in this expression",
+            _hint='No default expression exists',
+        ):
+            await self.con.execute(r'''
+                INSERT DunderDefaultTest03_B {
+                    x := (
+                        INSERT DunderDefaultTest03_A { x := __default__ }
+                    ).x
+                };
+            ''')
+
+    async def test_edgeql_insert_dunder_default_04(self):
+        await self.con.execute(r'''
+            INSERT DunderDefaultTest04_A { x := 1 };
+        ''')
+
+        await self.con.execute(r'''
+            INSERT DunderDefaultTest04_B {
+                x := 2,
+                l := __default__,
+            };
+        ''')
+        await self.assert_query_result(
+            r'''
+                SELECT DunderDefaultTest04_B { x, l: { x } };
+            ''',
+            [{'x': 2, 'l': {'x': 1}}]
+        )
+
     async def test_edgeql_insert_as_expr_01(self):
         await self.con.execute(r'''
             # insert several objects, then annotate one of the inserted batch
