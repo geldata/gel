@@ -1287,22 +1287,12 @@ class Router:
         response: protocol.HttpResponse,
     ) -> None:
         data = self._get_data_from_request(request)
-
-        _check_keyset(data, {"redirect_on_failure"})
-        allowed_redirect_on_failure = self._make_allowed_url(
-            data["redirect_on_failure"]
-        )
+        email: str | None = None
 
         try:
-            _check_keyset(
-                data,
-                {
-                    "provider",
-                    "email",
-                },
-            )
+            _check_keyset(data, {"email"})
 
-            email = data["email"]
+            email = cast(str, data["email"])
             allowed_redirect_to = self._maybe_make_allowed_url(
                 data.get("redirect_to")
             )
@@ -1315,9 +1305,7 @@ class Router:
                 signing_key=self.signing_key,
             )
 
-            request_accepts_json: bool = request.accept == b"application/json"
-
-            if not request_accepts_json and not allowed_redirect_to:
+            if not _accepts_json(request) and not allowed_redirect_to:
                 raise errors.InvalidData(
                     "Request must accept JSON or provide a redirect URL."
                 )
@@ -1373,7 +1361,10 @@ class Router:
                 }
 
             else:
-                _check_keyset(data, {"challenge", "callback_url"})
+                _check_keyset(
+                    data, {"challenge", "callback_url", "redirect_on_failure"}
+                )
+
                 challenge = data["challenge"]
                 callback_url = data["callback_url"]
                 if not self._is_url_allowed(callback_url):
@@ -1381,6 +1372,9 @@ class Router:
                         "Callback URL does not match any allowed URLs.",
                     )
 
+                allowed_redirect_on_failure = self._make_allowed_url(
+                    data["redirect_on_failure"]
+                )
                 allowed_link_url = self._maybe_make_allowed_url(
                     data.get("link_url")
                 )
@@ -1421,7 +1415,7 @@ class Router:
                     "email_sent": email,
                 }
 
-            if request_accepts_json:
+            if _accepts_json(request):
                 response.status = http.HTTPStatus.OK
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
@@ -1439,24 +1433,29 @@ class Router:
                     "Request must accept JSON or provide a redirect URL."
                 )
         except Exception as ex:
-            if request_accepts_json:
+            if _accepts_json(request):
                 raise ex
 
+            redirect_on_failure = data.get(
+                "redirect_on_failure", data.get("redirect_to")
+            )
             error_message = str(ex)
+            email = email or ""
             logger.error(
-                f"Error sending magic link: error={error_message}, "
+                f"Error sending magic link email: error={error_message}, "
                 f"email={email}"
             )
-            redirect_url = allowed_redirect_on_failure.map(
-                lambda u: util.join_url_params(
-                    u,
-                    {
-                        "error": error_message,
-                        "email": email,
-                    },
-                )
+
+            if redirect_on_failure is None:
+                raise ex
+            error_redirect_url = util.join_url_params(
+                redirect_on_failure,
+                {
+                    "error": error_message,
+                    "email": email,
+                },
             )
-            return self._do_redirect(response, redirect_url)
+            self._try_redirect(response, error_redirect_url)
 
     async def handle_magic_link_email(
         self,
@@ -1464,37 +1463,14 @@ class Router:
         response: protocol.HttpResponse,
     ) -> None:
         data = self._get_data_from_request(request)
+        email: str | None = None
 
         try:
-            _check_keyset(
-                data,
-                {
-                    "provider",
-                    "email",
-                    "challenge",
-                    "redirect_on_failure",
-                },
-            )
-
-            email = data["email"]
-            challenge = data["challenge"]
-            redirect_on_failure = data["redirect_on_failure"]
-            if not self._is_url_allowed(redirect_on_failure):
-                raise errors.InvalidData(
-                    "Error redirect URL does not match any allowed URLs.",
-                )
+            _check_keyset(data, {"email"})
+            email = cast(str, data["email"])
 
             allowed_redirect_to = self._maybe_make_allowed_url(
                 data.get("redirect_to")
-            )
-
-            allowed_link_url = self._maybe_make_allowed_url(
-                data.get("link_url")
-            )
-            link_url = (
-                allowed_link_url.url
-                if allowed_link_url
-                else f"{self.base_path}/magic-link/authenticate"
             )
 
             magic_link_client = magic_link.Client(
@@ -1546,12 +1522,31 @@ class Router:
                         "email": email,
                     }
                 else:
-                    _check_keyset(data, {"callback_url"})
+                    _check_keyset(
+                        data,
+                        {"challenge", "callback_url", "redirect_on_failure"},
+                    )
+                    challenge = data["challenge"]
                     callback_url = data["callback_url"]
                     if not self._is_url_allowed(callback_url):
                         raise errors.InvalidData(
-                            "Callback URL does not match any allowed URLs.",
+                            "callback_url does not match any allowed URLs.",
                         )
+                    redirect_on_failure = data["redirect_on_failure"]
+                    if not self._is_url_allowed(redirect_on_failure):
+                        raise errors.InvalidData(
+                            "redirect_on_failure"
+                            " does not match any allowed URLs.",
+                        )
+
+                    allowed_link_url = self._maybe_make_allowed_url(
+                        data.get("link_url")
+                    )
+                    link_url = (
+                        allowed_link_url.url
+                        if allowed_link_url
+                        else f"{self.base_path}/magic-link/authenticate"
+                    )
                     magic_link_token = magic_link_client.make_magic_link_token(
                         identity_id=identity_id,
                         callback_url=callback_url,
@@ -1596,29 +1591,29 @@ class Router:
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
         except Exception as ex:
-            request_accepts_json: bool = request.accept == b"application/json"
-            if request_accepts_json:
+            if _accepts_json(request):
                 raise ex
 
             redirect_on_failure = data.get(
                 "redirect_on_failure", data.get("redirect_to")
             )
+            error_message = str(ex)
+            email = email or ""
+            logger.error(
+                f"Error sending magic link email: error={error_message}, "
+                f"email={email}"
+            )
+
             if redirect_on_failure is None:
                 raise ex
-            else:
-                error_message = str(ex)
-                logger.error(
-                    f"Error sending magic link email: error={error_message}, "
-                    f"email={email}"
-                )
-                error_redirect_url = util.join_url_params(
-                    redirect_on_failure,
-                    {
-                        "error": error_message,
-                        "email": email,
-                    },
-                )
-                self._try_redirect(response, error_redirect_url)
+            error_redirect_url = util.join_url_params(
+                redirect_on_failure,
+                {
+                    "error": error_message,
+                    "email": email,
+                },
+            )
+            self._try_redirect(response, error_redirect_url)
 
     async def handle_magic_link_authenticate(
         self,
@@ -3045,3 +3040,7 @@ def _check_keyset(candidate: dict[str, Any], keyset: set[str]) -> None:
         raise errors.InvalidData(
             f"Missing required fields: {', '.join(missing_fields)}"
         )
+
+
+def _accepts_json(request: protocol.HttpRequest) -> bool:
+    return request.accept == b"application/json"

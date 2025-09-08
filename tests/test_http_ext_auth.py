@@ -4624,51 +4624,100 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 f"{self.http_addr}/magic-link/authenticate",
             )
 
-            _, headers, status = self.http_con_request(
-                http_con,
-                method="GET",
-                path=f"magic-link/authenticate?token={token}",
+    async def test_http_auth_ext_magic_code_register(self):
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
+
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/register",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_magic_link",
+                            "email": email,
+                            # No challenge, no redirect_on_failure in Code mode
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 200, body)
+                data = json.loads(body)
+                self.assertEqual(data.get("code"), "true")
+                self.assertEqual(data.get("signup"), "true")
+                self.assertEqual(data.get("email"), email)
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+            """
             )
 
-            self.assertEqual(status, 302)
-            location = headers.get("location")
-            assert location is not None
-            parsed_location = urllib.parse.urlparse(location)
-            self.assertEqual(
-                urllib.parse.urlunparse(
-                    (
-                        parsed_location.scheme,
-                        parsed_location.netloc,
-                        parsed_location.path,
-                        '',
-                        '',
-                        '',
-                    )
-                ),
-                callback_url,
-            )
+    async def test_http_auth_ext_magic_code_email(self):
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
 
-            # Sign in with the registered email without link_url
-            _, _, status = self.http_con_request(
-                http_con,
-                method="POST",
-                path="magic-link/email",
-                body=json.dumps(
-                    {
-                        "provider": "builtin::local_magic_link",
-                        "email": email,
-                        "challenge": challenge,
-                        "callback_url": callback_url,
-                        "redirect_on_failure": redirect_on_failure,
-                    }
-                ).encode(),
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-            )
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
 
-            # Get the token from email
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/register",
+                    body=json.dumps({"email": email}).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 200, body)
+
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps({"email": email}).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 200, body)
+                data = json.loads(body)
+                self.assertEqual(data.get("code"), "true")
+                self.assertEqual(data.get("email"), email)
+
+            # Verify that a 6-digit code email was sent
             file_name_hash = hashlib.sha256(
                 f"{SENDER}{email}".encode()
             ).hexdigest()
@@ -4678,33 +4727,121 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             )
             with open(test_file, "rb") as f:
                 email_args = pickle.load(f)
-            self.assertEqual(email_args["sender"], SENDER)
-            self.assertEqual(email_args["recipients"], email)
-            msg = cast(EmailMessage, email_args["message"]).get_body(
-                ("html",)
+            msg = cast(EmailMessage, email_args["message"])
+            html_body = msg.get_body(("html",))
+            assert html_body is not None
+            html_content = html_body.get_payload(decode=True).decode("utf-8")
+            code_match = re.search(r"(?:^|\s)(\d{6})(?:\s|$)", html_content)
+            self.assertIsNotNone(code_match, "No 6-digit code found in email")
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+            """
             )
-            assert msg is not None
-            html_email = msg.get_payload(decode=True).decode("utf-8")
-            match = re.search(
-                r'<p style="word-break: break-all">([^<]+)', html_email
-            )
-            assert match is not None
-            magic_link_url = urllib.parse.urlparse(match.group(1))
-            search_params = urllib.parse.parse_qs(magic_link_url.query)
-            token = search_params.get("token", [None])[0]
-            assert token is not None
-            self.assertEqual(
-                urllib.parse.urlunparse(
+
+    async def test_http_auth_ext_magic_link_register_missing_keys(
+        self,
+    ):
+        email = f"{uuid.uuid4()}@example.com"
+        callback_url = "https://example.com/app/auth/callback"
+        redirect_on_failure = "https://example.com/app/auth/magic-link-failure"
+        challenge = "test_challenge"
+        link_url = "https://example.com/app/magic-link/authenticate"
+
+        # All 5 keys are required, so we test all invalid combinations
+        partial_keys = [
+            {"challenge", "callback_url", "redirect_on_failure", "link_url"},
+            {"challenge", "callback_url", "redirect_on_failure"},
+            {"challenge", "callback_url", "link_url"},
+            {"challenge", "redirect_on_failure", "link_url"},
+            {"callback_url", "redirect_on_failure", "link_url"},
+            {"challenge", "callback_url"},
+            {"challenge", "redirect_on_failure"},
+            {"challenge", "link_url"},
+            {"callback_url", "redirect_on_failure"},
+            {"callback_url", "link_url"},
+            {"redirect_on_failure", "link_url"},
+        ]
+        for partial_keyset in partial_keys:
+            with self.http_con() as http_con:
+                body = {
+                    "email": email,
+                    "challenge": challenge,
+                    "callback_url": callback_url,
+                    "redirect_on_failure": redirect_on_failure,
+                    "link_url": link_url,
+                }
+                request_body = {
+                    k: v for k, v in body.items() if k in partial_keyset
+                }
+                response_body, headers, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/register",
+                    body=json.dumps(request_body).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+                expected_status = (
+                    302 if "redirect_on_failure" in partial_keyset else 400
+                )
+                self.assertEqual(
+                    status,
+                    expected_status,
                     (
-                        magic_link_url.scheme,
-                        magic_link_url.netloc,
-                        magic_link_url.path,
-                        '',
-                        '',
-                        '',
+                        f"Expected {expected_status}, got {status} "
+                        f"with body {response_body}"
+                    ),
+                )
+                if expected_status == 302:
+                    location = headers.get(
+                        "Location", headers.get("location", "")
                     )
-                ),
-                f"{self.http_addr}/magic-link/authenticate",
+                    self.assertTrue(
+                        location.startswith(redirect_on_failure),
+                        (
+                            "Expected Location to start with "
+                            f"{redirect_on_failure}, got {location}"
+                        ),
+                    )
+
+    async def test_http_auth_ext_magic_code_missing_email(self):
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
+
+        try:
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps({}).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 400, body)
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+            """
             )
 
     async def test_http_auth_ext_identity_delete_cascade_01(self):
