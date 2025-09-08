@@ -63,6 +63,7 @@ class Client(local.Client):
                     name=cfg.name,
                     token_time_to_live=cfg.token_time_to_live,
                     verification_method=cfg.verification_method,
+                    auto_signup=cfg.auto_signup,
                 )
 
         raise errors.MissingConfiguration(

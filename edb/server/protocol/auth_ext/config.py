@@ -104,6 +104,7 @@ class MagicLinkProviderConfig(ProviderConfig):
     name: Literal["builtin::local_magic_link"]
     token_time_to_live: statypes.Duration
     verification_method: VerificationMethod
+    auto_signup: bool
 
 
 @dataclass
