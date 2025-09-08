@@ -1464,6 +1464,7 @@ class Router:
     ) -> None:
         data = self._get_data_from_request(request)
         email: str | None = None
+        return_data: dict[str, Any] = {}
 
         try:
             _check_keyset(data, {"email"})
@@ -1483,22 +1484,45 @@ class Router:
             email_factor = await magic_link_client.get_email_factor_by_email(
                 email
             )
+            is_signup = False
             if email_factor is None:
-                logger.error(
-                    f"Cannot send magic link email: no email factor found for "
-                    f"email={email}"
-                )
-                await auth_emails.send_fake_email(self.tenant)
-                if magic_link_client.provider.verification_method == "Code":
-                    return_data = {
-                        "code": "true",
-                        "email": email,
-                    }
+                if magic_link_client.provider.auto_signup:
+                    # Auto-signup is enabled, create a new user
+                    is_signup = True
+                    email_factor = await magic_link_client.register(
+                        email=email,
+                    )
+                    await self._maybe_send_webhook(
+                        webhook.IdentityCreated(
+                            event_id=str(uuid.uuid4()),
+                            timestamp=datetime.datetime.now(datetime.timezone.utc),
+                            identity_id=email_factor.identity.id,
+                        )
+                    )
+                    await self._maybe_send_webhook(
+                        webhook.EmailFactorCreated(
+                            event_id=str(uuid.uuid4()),
+                            timestamp=datetime.datetime.now(datetime.timezone.utc),
+                            identity_id=email_factor.identity.id,
+                            email_factor_id=email_factor.id,
+                        )
+                    )
                 else:
-                    return_data = {
-                        "email_sent": email,
-                    }
-            else:
+                    logger.error(
+                        "Cannot send magic link email: no email factor found "
+                        f"for email={email}"
+                    )
+                    await auth_emails.send_fake_email(self.tenant)
+                    if magic_link_client.provider.verification_method == "Code":
+                        return_data = {
+                            "code": "true",
+                            "email": email,
+                        }
+                    else:
+                        return_data = {
+                            "email_sent": email,
+                        }
+            if email_factor is not None:
                 identity_id = email_factor.identity.id
                 if magic_link_client.provider.verification_method == "Code":
                     code, otc_id = await otc.create(
@@ -1530,6 +1554,8 @@ class Router:
                         "code": "true",
                         "email": email,
                     }
+                    if is_signup:
+                        return_data["signup"] = "true"
                 else:
                     _check_keyset(
                         data,
@@ -1587,6 +1613,8 @@ class Router:
                     return_data = {
                         "email_sent": email,
                     }
+                    if is_signup:
+                        return_data["signup"] = "true"
 
             if allowed_redirect_to:
                 return self._do_redirect(

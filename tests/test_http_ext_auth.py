@@ -6103,3 +6103,371 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             )
             self.assertEqual(status, 400, body)
             self.assertIn("attempts exceeded", body.decode().lower())
+
+    async def test_http_auth_ext_magic_link_auto_signup_00(self):
+        """Test Magic Link auto-signup flow: email request for non-existent user
+        creates account when auto_signup is enabled.
+
+        Tests the complete Magic Link auto-signup flow where a user requests a
+        magic link for an email that doesn't exist in the system. With
+        auto_signup enabled, this should automatically create a new identity
+        and email factor, send appropriate webhooks, and proceed with the
+        normal magic link authentication flow.
+        """
+
+        # Configure MagicLinkProviderConfig with auto_signup enabled
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                auto_signup := true,
+            };
+            """
+        )
+
+        # Set up webhooks to verify events are sent
+        base_url = self.mock_net_server.get_base_url().rstrip("/")
+        webhook_url = f"{base_url}/auto-signup-webhook"
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::WebhookConfig {
+                url := <str>$url,
+                events := {
+                    ext::auth::WebhookEvent.IdentityCreated,
+                    ext::auth::WebhookEvent.EmailFactorCreated,
+                    ext::auth::WebhookEvent.MagicLinkRequested,
+                },
+            };
+            """,
+            url=webhook_url,
+        )
+
+        webhook_request = (
+            "POST",
+            base_url,
+            "/auto-signup-webhook",
+        )
+        self.mock_net_server.register_route_handler(*webhook_request)(("", 204))
+
+        await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
+
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+            challenge = "test_auto_signup_challenge"
+            callback_url = "https://example.com/app/auth/callback"
+            redirect_on_failure = "https://example.com/app/auth/magic-link-failure"
+
+            # Verify user doesn't exist initially
+            existing_factor = await self.con.query(
+                """
+                SELECT ext::auth::EmailFactor
+                FILTER .email = <str>$email
+                """,
+                email=email,
+            )
+            self.assertEqual(len(existing_factor), 0)
+
+            with self.http_con() as http_con:
+                # Request magic link for non-existent user
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_magic_link",
+                            "email": email,
+                            "challenge": challenge,
+                            "callback_url": callback_url,
+                            "redirect_on_failure": redirect_on_failure,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+
+                # Should succeed and indicate signup occurred
+                self.assertEqual(status, 200, body)
+                response_data = json.loads(body)
+                self.assertEqual(response_data.get("email_sent"), email)
+                self.assertEqual(response_data.get("signup"), "true")
+
+                # Verify magic link email was sent
+                file_name_hash = hashlib.sha256(
+                    f"{SENDER}{email}".encode()
+                ).hexdigest()
+                test_file = os.environ.get(
+                    "EDGEDB_TEST_EMAIL_FILE",
+                    f"/tmp/edb-test-email-{file_name_hash}.pickle",
+                )
+                with open(test_file, "rb") as f:
+                    email_args = pickle.load(f)
+                self.assertEqual(email_args["sender"], SENDER)
+                self.assertEqual(email_args["recipients"], email)
+
+                msg = cast(EmailMessage, email_args["message"]).get_body(
+                    ("html",)
+                )
+                assert msg is not None
+                html_email = msg.get_payload(decode=True).decode("utf-8")
+                match = re.search(
+                    r'<p style="word-break: break-all">([^<]+)', html_email
+                )
+                assert match is not None
+                magic_link_url = urllib.parse.urlparse(match.group(1))
+                search_params = urllib.parse.parse_qs(magic_link_url.query)
+                token = search_params.get("token", [None])[0]
+                assert token is not None
+
+                # Authenticate using the magic link token
+                _, headers, status = self.http_con_request(
+                    http_con,
+                    method="GET",
+                    path=f"magic-link/authenticate?token={token}",
+                )
+
+                self.assertEqual(status, 302)
+                location = headers.get("location")
+                assert location is not None
+                parsed_location = urllib.parse.urlparse(location)
+                self.assertEqual(
+                    urllib.parse.urlunparse(
+                        (
+                            parsed_location.scheme,
+                            parsed_location.netloc,
+                            parsed_location.path,
+                            '',
+                            '',
+                            '',
+                        )
+                    ),
+                    callback_url,
+                )
+
+                # Verify webhooks were sent
+                async for tr in self.try_until_succeeds(
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
+                ):
+                    async with tr:
+                        requests_for_webhook = self.mock_net_server.requests[
+                            webhook_request
+                        ]
+                        self.assertEqual(len(requests_for_webhook), 3)
+
+                event_types: dict[str, dict | None] = {
+                    "IdentityCreated": None,
+                    "EmailFactorCreated": None,
+                    "MagicLinkRequested": None,
+                }
+
+                for request in requests_for_webhook:
+                    assert request.body is not None
+                    event_data = json.loads(request.body)
+                    event_type = event_data["event_type"]
+                    self.assertIn(event_type, event_types)
+                    event_types[event_type] = event_data
+
+                self.assertTrue(
+                    all(value is not None for value in event_types.values())
+                )
+
+        finally:
+            await self.con.query(
+                "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
+            )
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+                """
+            )
+
+    async def test_http_auth_ext_magic_link_auto_signup_disabled_00(self):
+        """Test Magic Link email request for non-existent user with auto_signup
+        disabled.
+
+        Tests that when auto_signup is disabled (default behavior), requesting
+        a magic link for a non-existent email address does not create a new
+        account and instead sends a fake email while maintaining user privacy.
+        """
+
+        # Configure MagicLinkProviderConfig with auto_signup disabled (default)
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                auto_signup := false,
+            };
+            """
+        )
+
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+            challenge = "test_no_auto_signup_challenge"
+            callback_url = "https://example.com/app/auth/callback"
+            redirect_on_failure = "https://example.com/app/auth/magic-link-failure"
+
+            # Verify user doesn't exist initially
+            existing_factor = await self.con.query(
+                """
+                SELECT ext::auth::EmailFactor
+                FILTER .email = <str>$email
+                """,
+                email=email,
+            )
+            self.assertEqual(len(existing_factor), 0)
+
+            with self.http_con() as http_con:
+                # Request magic link for non-existent user
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_magic_link",
+                            "email": email,
+                            "challenge": challenge,
+                            "callback_url": callback_url,
+                            "redirect_on_failure": redirect_on_failure,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+
+                # Should succeed but not indicate signup
+                self.assertEqual(status, 200, body)
+                response_data = json.loads(body)
+                self.assertEqual(response_data.get("email_sent"), email)
+                self.assertNotIn("signup", response_data)
+
+                # Verify user was NOT created
+                still_no_factor = await self.con.query(
+                    """
+                    SELECT ext::auth::EmailFactor
+                    FILTER .email = <str>$email
+                    """,
+                    email=email,
+                )
+                self.assertEqual(len(still_no_factor), 0)
+
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+                """
+            )
+
+    async def test_http_auth_ext_magic_code_auto_signup_00(self):
+        """Test Magic Link OTC auto-signup flow: code request for non-existent
+        user creates account when auto_signup is enabled and verification_method
+        is Code.
+
+        Tests the complete Magic Link OTC auto-signup flow where a user requests
+        a verification code for an email that doesn't exist in the system. With
+        auto_signup enabled and verification_method set to Code, this should
+        automatically create a new identity and email factor, send a code email,
+        and allow subsequent verification.
+        """
+
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                auto_signup := true,
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+            """
+        )
+
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+
+            # Verify user doesn't exist initially
+            existing_factor = await self.con.query(
+                """
+                SELECT ext::auth::EmailFactor
+                FILTER .email = <str>$email
+                """,
+                email=email,
+            )
+            self.assertEqual(len(existing_factor), 0)
+
+            with self.http_con() as http_con:
+                # Request magic link code for non-existent user
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_magic_link",
+                            "email": email,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+
+                # Should succeed and indicate signup and code mode
+                self.assertEqual(status, 200, body)
+                response_data = json.loads(body)
+                self.assertEqual(response_data.get("code"), "true")
+                self.assertEqual(response_data.get("signup"), "true")
+                self.assertEqual(response_data.get("email"), email)
+
+                # Verify that a 6-digit code email was sent
+                file_name_hash = hashlib.sha256(
+                    f"{SENDER}{email}".encode()
+                ).hexdigest()
+                test_file = os.environ.get(
+                    "EDGEDB_TEST_EMAIL_FILE",
+                    f"/tmp/edb-test-email-{file_name_hash}.pickle",
+                )
+                with open(test_file, "rb") as f:
+                    email_args = pickle.load(f)
+                self.assertEqual(email_args["sender"], SENDER)
+                self.assertEqual(email_args["recipients"], email)
+
+                msg = cast(EmailMessage, email_args["message"])
+                html_body = msg.get_body(("html",))
+                assert html_body is not None
+                html_content = html_body.get_payload(decode=True).decode(
+                    "utf-8"
+                )
+                code_match = re.search(r"(?:^|\s)(\d{6})(?:\s|$)", html_content)
+                self.assertIsNotNone(
+                    code_match, "No 6-digit code found in email"
+                )
+
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+                """
+            )
