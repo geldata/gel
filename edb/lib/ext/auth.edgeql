@@ -378,6 +378,10 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
         create required property verification_method: ext::auth::VerificationMethod {
             set default := ext::auth::VerificationMethod.Link;
         };
+
+        create required property auto_signup: std::bool {
+            set default := false;
+        };
     };
 
     create scalar type ext::auth::FlowType extending std::enum<PKCE, Implicit>;
