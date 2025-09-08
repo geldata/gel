@@ -1489,6 +1489,15 @@ class Router:
                     f"email={email}"
                 )
                 await auth_emails.send_fake_email(self.tenant)
+                if magic_link_client.provider.verification_method == "Code":
+                    return_data = {
+                        "code": "true",
+                        "email": email,
+                    }
+                else:
+                    return_data = {
+                        "email_sent": email,
+                    }
             else:
                 identity_id = email_factor.identity.id
                 if magic_link_client.provider.verification_method == "Code":
