@@ -155,7 +155,7 @@ as the permission. This global is of boolean type and cannot be manually set.
 In combination with access policies, permissions can be used to limit read or
 write access of any type:
 
-.. code-block:: edgeql
+.. code-block:: sdl
 
     type AuditLog {
         property event: str;
