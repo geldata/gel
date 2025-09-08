@@ -195,6 +195,7 @@ class Schema(abc.ABC):
         default: tuple[s_func.Function, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
+        disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> tuple[s_func.Function, ...]:
         raise NotImplementedError
 
@@ -205,6 +206,7 @@ class Schema(abc.ABC):
         default: tuple[s_oper.Operator, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
+        disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> tuple[s_oper.Operator, ...]:
         raise NotImplementedError
 
@@ -454,6 +456,7 @@ class Schema(abc.ABC):
         condition: Optional[Callable[[so.Object], bool]],
         label: Optional[str],
         span: Optional[parsing.Span],
+        disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> Optional[so.Object]:
         raise NotImplementedError
 
@@ -1133,6 +1136,7 @@ class FlatSchema(Schema):
         getter: Callable[[FlatSchema, sn.Name], Any],
         default: Any,
         module_aliases: Optional[Mapping[Optional[str], str]],
+        disallow_module: Optional[Callable[[str], bool]],
     ) -> Any:
         """
         Find something in the schema with a given name.
@@ -1189,7 +1193,10 @@ class FlatSchema(Schema):
 
             # Ensure module is not a base module.
             # Then try the module as part of std.
-            if module and not self.has_module(module.split('::')[0]):
+            if module and not (
+                self.has_module(fmod := module.split('::')[0])
+                or (disallow_module and disallow_module(fmod))
+            ):
                 mod_name = f'std::{module}'
                 fqname = sn.QualName(mod_name, shortname)
                 result = getter(self, fqname)
@@ -1204,6 +1211,7 @@ class FlatSchema(Schema):
         default: tuple[s_func.Function, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
+        disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> tuple[s_func.Function, ...]:
         if isinstance(name, str):
             name = sn.name_from_string(name)
@@ -1212,6 +1220,7 @@ class FlatSchema(Schema):
             getter=_get_functions,
             module_aliases=module_aliases,
             default=default,
+            disallow_module=disallow_module,
         )
 
         if funcs is not so.NoDefault:
@@ -1232,12 +1241,14 @@ class FlatSchema(Schema):
         default: tuple[s_oper.Operator, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
+        disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> tuple[s_oper.Operator, ...]:
         funcs = self._search_with_getter(
             name,
             getter=_get_operators,
             module_aliases=module_aliases,
             default=default,
+            disallow_module=disallow_module,
         )
 
         if funcs is not so.NoDefault:
@@ -1438,6 +1449,7 @@ class FlatSchema(Schema):
         condition: Optional[Callable[[so.Object], bool]],
         label: Optional[str],
         span: Optional[parsing.Span],
+        disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> Optional[so.Object]:
         def getter(schema: FlatSchema, name: sn.Name) -> Optional[so.Object]:
             obj_id = schema._name_to_id.get(name)
@@ -1455,6 +1467,7 @@ class FlatSchema(Schema):
             getter=getter,
             module_aliases=module_aliases,
             default=default,
+            disallow_module=disallow_module,
         )
 
         if obj is not so.NoDefault:
@@ -1891,17 +1904,26 @@ class ChainedSchema(Schema):
         default: tuple[s_func.Function, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
+        disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> tuple[s_func.Function, ...]:
         objs = self._top_schema.get_functions(
             name,
             module_aliases=module_aliases,
             default=(),
+            disallow_module=disallow_module,
         )
         if not objs:
+            if disallow_module is not None:
+                dm = disallow_module
+                disallow_module = (
+                    lambda s: dm(s) or self._top_schema.has_module(s))
+            else:
+                disallow_module = self._top_schema.has_module
             objs = self._base_schema.get_functions(
                 name,
                 default=default,
                 module_aliases=module_aliases,
+                disallow_module=disallow_module,
             )
         return objs
 
@@ -1911,17 +1933,26 @@ class ChainedSchema(Schema):
         default: tuple[s_oper.Operator, ...] | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
+        disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> tuple[s_oper.Operator, ...]:
         objs = self._top_schema.get_operators(
             name,
             module_aliases=module_aliases,
             default=(),
+            disallow_module=disallow_module,
         )
         if not objs:
+            if disallow_module is not None:
+                dm = disallow_module
+                disallow_module = (
+                    lambda s: dm(s) or self._top_schema.has_module(s))
+            else:
+                disallow_module = self._top_schema.has_module
             objs = self._base_schema.get_operators(
                 name,
                 default=default,
                 module_aliases=module_aliases,
+                disallow_module=disallow_module,
             )
         return objs
 
@@ -2057,6 +2088,7 @@ class ChainedSchema(Schema):
         condition: Optional[Callable[[so.Object], bool]],
         label: Optional[str],
         span: Optional[parsing.Span],
+        disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> Optional[so.Object]:
         obj = self._top_schema._get(
             name,
@@ -2066,8 +2098,15 @@ class ChainedSchema(Schema):
             condition=condition,
             label=label,
             span=span,
+            disallow_module=disallow_module,
         )
         if obj is None:
+            if disallow_module is not None:
+                dm = disallow_module
+                disallow_module = (
+                    lambda s: dm(s) or self._top_schema.has_module(s))
+            else:
+                disallow_module = self._top_schema.has_module
             return self._base_schema._get(
                 name,
                 default=default,
@@ -2076,6 +2115,7 @@ class ChainedSchema(Schema):
                 condition=condition,
                 label=label,
                 span=span,
+                disallow_module=disallow_module,
             )
         else:
             return obj
