@@ -10,22 +10,14 @@ on:
   push:
     branches:
       - "A-inplace*"
+      - "run-patches-schedule"
 
 jobs:
-  checkout-branch:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout 7.x branch
-        run: |
-          git checkout release/7.x
-          git submodule update
-
   build:
     runs-on: ubuntu-latest
 
     steps:
-    <%- call build() -%>
+    <%- call build("release/7.x") -%>
     - name: Compute cache keys
       run: |
         << calc_cache_key()|indent >>
