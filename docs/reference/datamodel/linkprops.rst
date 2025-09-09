@@ -8,8 +8,7 @@ Link properties
 .. api-index:: @
 
 Links, like objects, can also contain **properties**. These are used to store metadata about the link. Due to how they're persisted under the hood,
-link properties have a few additional constraints: they're always ``single``
-and ``optional``.
+link properties have a the additional constraint of always being ``single``.
 
 Link properties require non-trivial syntax to use them, so they are considered
 to be an advanced feature. In many cases, regular properties should be used
@@ -23,6 +22,9 @@ you don't need them very often, but when you do, they can be clutch."
   one-to-many, and many-to-one relationships the same data should be stored in
   object properties instead.
 
+.. versionchanged:: 7.0
+
+  Link properties can now be made required.
 
 Declaration
 ===========
@@ -70,7 +72,7 @@ with an index on it:
 .. code-block:: sdl
 
     abstract link friendship {
-      strength: float64;
+      required strength: float64;
       index on (__subject__@strength);
     }
 
