@@ -8,7 +8,7 @@ Link properties
 .. api-index:: @
 
 Links, like objects, can also contain **properties**. These are used to store metadata about the link. Due to how they're persisted under the hood,
-link properties have a the additional constraint of always being ``single``.
+link properties have the additional constraint of always being ``single``.
 
 Link properties require non-trivial syntax to use them, so they are considered
 to be an advanced feature. In many cases, regular properties should be used
