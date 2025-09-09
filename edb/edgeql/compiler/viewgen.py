@@ -410,8 +410,22 @@ def _process_view(
                 (
                     # mutating statement, ptrcls guaranteed to exist
                     (s_ctx.exprtype.is_insert() or s_ctx.exprtype.is_update())
-                    # linkprop, ptrcls guaranteed to exist
-                    or (shape_el_desc.is_linkprop)
+                    # linkprops are used in non-mutating statements as part of
+                    # mutating statemnts, ptrcls not guaranteed to exist
+                    or (
+                        shape_el_desc.is_linkprop
+                        # check that the linkprop actually exists in the source
+                        and (
+                            sn.UnqualName(shape_el_desc.ptr_name) in (
+                                source_ptr.get_local_name(scopectx.env.schema)
+                                for source_ptr in (
+                                    shape_el_desc.source
+                                    .get_pointers(scopectx.env.schema)
+                                    .objects(scopectx.env.schema)
+                                )
+                            )
+                        )
+                    )
                 )
                 and shape_el_desc.ql.compexpr is not None
                 and shape_el_desc.ptr_name not in (
