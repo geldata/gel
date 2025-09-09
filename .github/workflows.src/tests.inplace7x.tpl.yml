@@ -54,6 +54,10 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: false
+        ref: release/7.x
     - id: set-matrix
       name: Compute versions to run on
       run: python3 .github/scripts/patches/compute-ipu-versions.py
