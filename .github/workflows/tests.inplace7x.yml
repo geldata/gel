@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - "A-inplace*"
-      - "run-patches-schedule"
 
 jobs:
   build:
