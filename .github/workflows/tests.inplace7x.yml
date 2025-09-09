@@ -324,11 +324,13 @@ jobs:
       with:
         fetch-depth: 0
         submodules: false
+        ref: release/7.x
 
     - uses: actions/checkout@v4
       with:
         fetch-depth: 50
         submodules: true
+        ref: release/7.x
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -491,11 +493,13 @@ jobs:
       with:
         fetch-depth: 0
         submodules: false
+        ref: release/7.x
 
     - uses: actions/checkout@v4
       with:
         fetch-depth: 50
         submodules: true
+        ref: release/7.x
 
     - name: Set up Python
       uses: actions/setup-python@v5

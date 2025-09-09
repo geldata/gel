@@ -314,8 +314,8 @@
 
 <%- endmacro %>
 
-<% macro restore_cache() %>
-    << init() >>
+<% macro restore_cache(ref="") %>
+    << init(ref) >>
     << install_python_requirements() >>
 
     # Restore the artifacts and environment variables

@@ -40,7 +40,7 @@ jobs:
             tests: -k test_link_on_target_delete -k test_edgeql_select -k test_dump
 
     steps:
-    <<- restore_cache() >>
+    <<- restore_cache("release/7.x") >>
 
     # Run the test
     # TODO: Would it be better to split this up into multiple jobs?
@@ -67,7 +67,7 @@ jobs:
       matrix: ${{fromJSON(needs.compute-versions.outputs.matrix)}}
 
     steps:
-    <<- restore_cache() >>
+    <<- restore_cache("release/7.x") >>
 
     # Run the test
 
