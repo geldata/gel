@@ -926,9 +926,8 @@ class Compiler:
                 base_schema,
             )
 
-        return s_refl.parse_into(
+        return s_refl.parse_schema(
             base_schema=base_schema,
-            schema=s_schema.EMPTY_SCHEMA,
             data=schema_json,
             schema_class_layout=self.state.schema_class_layout,
         )

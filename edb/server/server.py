@@ -635,9 +635,8 @@ class BaseServer:
     def _parse_global_schema(
         self, json_data: Any
     ) -> s_schema.Schema:
-        return s_refl.parse_into(
+        return s_refl.parse_schema(
             base_schema=self._std_schema,
-            schema=s_schema.EMPTY_SCHEMA,
             data=json_data,
             schema_class_layout=self._schema_class_layout,
         )
@@ -665,9 +664,8 @@ class BaseServer:
             global_schema,
         )
 
-        return s_refl.parse_into(
+        return s_refl.parse_schema(
             base_schema=base_schema,
-            schema=s_schema.EMPTY_SCHEMA,
             data=json_data,
             schema_class_layout=self._schema_class_layout,
         )
