@@ -21,6 +21,7 @@ Schema
     aliases
     globals
     access_policies
+    permissions
     functions
     triggers
     mutation_rewrites
