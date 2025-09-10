@@ -1710,15 +1710,21 @@ class Router:
                 data = self._get_data_from_request(request)
 
                 _check_keyset(
-                    data, {"email", "code", "callback_url", "challenge"}
+                    data, {"email", "code", "challenge"}
                 )
 
                 email = data["email"]
                 code_str = data["code"]
-                callback_url = data["callback_url"]
                 challenge = data["challenge"]
 
-                if not self._is_url_allowed(callback_url):
+                maybe_callback_url = cast(
+                    Optional[str], data.get("callback_url")
+                )
+
+                if (
+                    maybe_callback_url and
+                    not self._is_url_allowed(maybe_callback_url)
+                ):
                     raise errors.InvalidData(
                         "Callback URL does not match any allowed URLs.",
                     )
@@ -1761,10 +1767,17 @@ class Router:
                     datetime.datetime.now(datetime.timezone.utc),
                 )
 
-                return self._try_redirect(
-                    response,
-                    util.join_url_params(callback_url, {"code": auth_code}),
-                )
+                response_dict = {"code": auth_code}
+
+                if maybe_callback_url:
+                    return self._try_redirect(
+                        response,
+                        util.join_url_params(maybe_callback_url, response_dict),
+                    )
+                else:
+                    response.status = http.HTTPStatus.OK
+                    response.content_type = b"application/json"
+                    response.body = json.dumps(response_dict).encode()
 
             except Exception as ex:
                 redirect_on_failure = _maybe_get_search_param(
