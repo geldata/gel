@@ -4333,7 +4333,7 @@ class PointerMetaCommand[Pointer_T: s_pointers.Pointer](
 
             source_rel_alias = f'source_{uuidgen.uuid1mc()}'
 
-            (conv_expr_ctes, _, _) = self._compile_conversion_expr(
+            (conv_expr_ctes, conv_expr, _) = self._compile_conversion_expr(
                 ptr,
                 fill_expr,
                 source_rel_alias,
@@ -4342,9 +4342,30 @@ class PointerMetaCommand[Pointer_T: s_pointers.Pointer](
                 context=context,
                 check_non_null=is_required and not is_multi,
                 allow_globals=is_default,
+                produce_ctes=not is_lprop,
             )
 
-            if not is_multi:
+            if is_lprop:
+                # The produce_ctes=True flow really wants to key
+                # everything based on id, which doesn't work for link
+                # properties.  If produce_ctes=True was able to use
+                # ctid or (source, target) for keying, we could use
+                # that here, but for now we will just use the
+                # old-school version. See #5050, which would require
+                # that in order to support DML in cast expressions.
+                assert conv_expr
+                update_with = (
+                    f'WITH {conv_expr_ctes}' if conv_expr_ctes else ''
+                )
+                update_qry = f'''
+                    {update_with}
+                    UPDATE {tab} AS {qi(source_rel_alias)}
+                    SET {qi(target_col)} = ({conv_expr})
+                    WHERE {qi(target_col)} IS NULL
+                '''
+                self.pgops.add(dbops.Query(update_qry))
+
+            elif not is_multi:
                 update_qry = textwrap.dedent(f'''\
                     WITH
                     "{source_rel_alias}" AS ({source_rel}),
@@ -4898,12 +4919,14 @@ class PointerMetaCommand[Pointer_T: s_pointers.Pointer](
             )
             # Concat to string which is a JSON. Great. Equivalent to SQL:
             # '{"object_id": "' || {obj_id_ref} || '"}'
+            # We report 'source' for linkprops. Seems OK, I guess.
+            id_col = 'source' if is_lprop else 'id'
             detail = pgast.Expr(
                 name='||',
                 lexpr=pgast.StringConstant(val='{"object_id": "'),
                 rexpr=pgast.Expr(
                     name='||',
-                    lexpr=pgast.ColumnRef(name=('id',)),
+                    lexpr=pgast.ColumnRef(name=(id_col,)),
                     rexpr=pgast.StringConstant(val='"}'),
                 )
             )

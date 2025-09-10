@@ -19284,6 +19284,91 @@ DDLStatement);
                 ALTER TYPE Foo ALTER LINK link SET REQUIRED;
             """)
 
+    async def test_edgeql_ddl_set_required_lprop_01(self):
+        await self.con.execute(r"""
+            CREATE TYPE default::User {
+                CREATE PROPERTY name: std::str;
+            };
+            CREATE TYPE default::Post {
+                CREATE MULTI LINK author: default::User {
+                    CREATE PROPERTY created_at: std::str;
+                };
+                CREATE PROPERTY title: std::str;
+            };
+            INSERT Post { author := {
+                (insert User { name := "1" }),
+                (insert User { name := "2" }),
+            } };
+        """)
+
+        await self.con.execute(r"""
+            ALTER TYPE default::Post {
+                ALTER LINK author {
+                    ALTER PROPERTY created_at {
+                        SET REQUIRED USING (.name);
+                    };
+                };
+            };
+        """)
+
+        async with self.assertRaisesRegexTx(
+            edgedb.MissingRequiredError,
+            "missing value"
+        ):
+            await self.con.execute(r"""
+                INSERT Post { author := {(insert User), (insert User)} };
+            """)
+
+    async def test_edgeql_ddl_set_required_lprop_02(self):
+        await self.con.execute(r"""
+            CREATE TYPE default::User {
+                CREATE PROPERTY name: std::str;
+            };
+            CREATE TYPE default::Post {
+                CREATE LINK author: default::User {
+                    CREATE PROPERTY created_at: std::str;
+                };
+                CREATE PROPERTY title: std::str;
+            };
+            INSERT Post { author := (insert User { name := "asdf" }) };
+        """)
+
+        await self.con.execute(r"""
+            ALTER TYPE default::Post {
+                ALTER LINK author {
+                    ALTER PROPERTY created_at {
+                        SET REQUIRED USING (<str>.name);
+                    };
+                };
+            };
+        """)
+
+    async def test_edgeql_ddl_set_required_lprop_03(self):
+        await self.con.execute(r"""
+            CREATE TYPE default::User;
+            CREATE TYPE default::Post {
+                CREATE MULTI LINK author: default::User {
+                    CREATE PROPERTY created_at: std::str;
+                };
+                CREATE PROPERTY title: std::str;
+            };
+            INSERT Post { author := {(insert User), (insert User)} };
+        """)
+
+        async with self.assertRaisesRegexTx(
+            edgedb.UnsupportedFeatureError,
+            "cannot include mutating statements"
+        ):
+            await self.con.execute(r"""
+                ALTER TYPE default::Post {
+                    ALTER LINK author {
+                        ALTER PROPERTY created_at {
+                            SET REQUIRED USING (<str>(insert User).id);
+                        };
+                    };
+                };
+            """)
+
     async def test_edgeql_ddl_link_union_delete_01(self):
         await self.con.execute(r"""
             CREATE TYPE default::M;
