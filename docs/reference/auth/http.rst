@@ -752,13 +752,13 @@ The endpoint attempts to prevent email enumeration by always returning a success
 
    *   If the request accepts ``application/json`` and ``redirect_to`` is not provided, a 200 OK JSON response is returned:
 
-     .. code-block:: json
+       .. code-block:: json
 
-         {
-           "code": "true",
-           "signup": "true",
-           "email": "user@example.com"
-         }
+           {
+             "code": "true",
+             "signup": "true",
+             "email": "user@example.com"
+           }
 
    *   If ``redirect_to`` is provided, a 302 Found redirect occurs to ``redirect_to`` with ``code=true``, ``signup=true`` and ``email`` as query parameters.
 
@@ -766,11 +766,11 @@ The endpoint attempts to prevent email enumeration by always returning a success
 
    *   If the request accepts ``application/json`` and ``redirect_to`` is not provided, a 200 OK JSON response is returned:
 
-     .. code-block:: json
+       .. code-block:: json
 
-         {
-           "email_sent": "user@example.com"
-         }
+           {
+             "email_sent": "user@example.com"
+           }
 
    *   If ``redirect_to`` is provided, a 302 Found redirect occurs to ``redirect_to`` with ``email_sent`` as a query parameter.
 
@@ -817,12 +817,12 @@ The endpoint attempts to prevent email enumeration by always returning a success
 
    *   If ``redirect_to`` is NOT provided, a 200 OK JSON response is returned:
 
-     .. code-block:: json
+       .. code-block:: json
 
-         {
-           "code": "true",
-           "email": "user@example.com"
-         }
+           {
+             "code": "true",
+             "email": "user@example.com"
+           }
 
    *   If ``redirect_to`` is provided, a 302 Found redirect occurs to the ``redirect_to`` URL with ``code=true`` and ``email`` as query parameters.
 
@@ -830,11 +830,11 @@ The endpoint attempts to prevent email enumeration by always returning a success
 
    *   If ``redirect_to`` is NOT provided, a 200 OK JSON response is returned:
 
-     .. code-block:: json
+       .. code-block:: json
 
-         {
-           "email_sent": "user@example.com"
-         }
+           {
+             "email_sent": "user@example.com"
+           }
 
    *   If ``redirect_to`` is provided, a 302 Found redirect occurs to the ``redirect_to`` URL with ``email_sent`` as a query parameter.
 
