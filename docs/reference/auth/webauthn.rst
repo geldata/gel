@@ -447,6 +447,19 @@ handle the verification flow, we implement an endpoint:
 
 .. note::
 
+   If your WebAuthn provider uses the **Code** verification method, the
+   verification email contains a one-time code rather than a link. In that
+   case, prompt the user for the code and call ``POST /verify`` with:
+
+   - **provider**: ``builtin::local_webauthn``
+   - **email** and **code**
+   - optionally a **challenge** and **redirect_to** to receive a PKCE code or a redirect upon success
+
+   The Link-based example below continues to work when the provider uses the
+   Link method.
+
+.. note::
+
    💡 If you would like to allow users to still log in, but offer limited access
    to your application, you can check the associated
    ``ext::auth::WebAuthnFactor`` for the ``ext::auth::Identity`` to see if the

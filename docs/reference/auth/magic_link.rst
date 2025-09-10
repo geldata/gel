@@ -24,6 +24,13 @@ The Magic Link authentication flow involves three main steps:
 
 3. **Authentication and Token Retrieval**: The magic link directs the user to your application, which then authenticates the user and retrieves an authentication token from Gel Auth.
 
+.. note::
+
+   Your Magic Link provider can be configured to send either a **Link** or a one-time **Code**:
+
+   - **Code**: Instead of clicking a link, users receive a one-time code. Prompt for the code and call ``POST /magic-link/authenticate`` with ``email``, ``code``, ``callback_url`` and the PKCE ``challenge``. On success, you will be redirected to ``callback_url`` with a PKCE ``code`` you can exchange at ``POST /token``.
+   - **Link**: Users click a link that includes a token. Your app handles the token-based callback as shown below.
+
 UI considerations
 =================
 
@@ -277,9 +284,15 @@ authenticate.
 Callback
 --------
 
-Once the user clicks on the magic link, they will be redirected back to your
-application with a ``code`` query parameter. Your application will then exchange
-this code for an authentication token.
+Once the user clicks on the magic link (Link method), they will be redirected
+back to your application with a ``code`` query parameter. Your application will
+then exchange this code for an authentication token.
+
+If the provider uses the Code method, you will instead collect the one-time
+code from the user and call ``POST /magic-link/authenticate`` with
+``email``, ``code``, ``callback_url`` and the PKCE ``challenge``. On success
+you will be redirected to ``callback_url`` with a PKCE ``code`` to exchange at
+``POST /token``.
 
 .. lint-off
 

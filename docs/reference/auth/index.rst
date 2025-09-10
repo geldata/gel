@@ -409,8 +409,17 @@ illustration purposes):
 Magic link
 ----------
 
-Magic link offers only one setting: ``token_time_to_live``. This determines how
-long after sending the magic link is valid.
+Magic link offers the following settings:
+
+- ``verification_method``: ``Link`` (default) or ``Code``.
+  - ``Link``: users receive a link and are redirected back with a PKCE
+    ``code``.
+  - ``Code``: users receive a one-time code. Collect the code and call
+    ``POST /magic-link/authenticate`` with ``email``, ``code``,
+    ``callback_url``, and the PKCE ``challenge`` to receive a PKCE ``code``.
+
+- ``token_time_to_live``: determines how long a magic link (or one-time code)
+  remains valid after sending.
 
 Since magic links rely on email, you must also configure SMTP or webhooks. For
 local testing, you can use the same method used for SMTP previously for
