@@ -399,7 +399,15 @@ async def _upgrade_one(
     for ddl_cmd in upgrade_patches:
         schema, fixup = await _apply_ddl_schema_storage(
             ddl_cmd,
-            ctx, backend_params, keys, compilerctx, schema, schema_object_ids,
+            ctx, backend_params, keys, compilerctx, schema,
+            # Empty schema_object_ids because this isn't actually user
+            # objects anymore, and because reusing the
+            # schema_object_ids led to a subtle issue:
+            # when altering a computed Global in a patch, the underlying
+            # ObjectType got deleted and replaced with a new one with
+            # identical id, which caused the link policy to spuriously
+            # fail!
+            schema_object_ids={},
             fake_backend_ids=True,
         )
         schema_fixup += fixup

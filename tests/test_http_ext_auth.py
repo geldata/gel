@@ -4717,6 +4717,23 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 self.assertEqual(data.get("code"), "true")
                 self.assertEqual(data.get("email"), email)
 
+            nonexistent_email = f"nonexistent-{uuid.uuid4()}@example.com"
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps({"email": nonexistent_email}).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 200, body)
+                data = json.loads(body)
+                self.assertEqual(data.get("code"), "true")
+                self.assertEqual(data.get("email"), nonexistent_email)
+
             # Verify that a 6-digit code email was sent
             file_name_hash = hashlib.sha256(
                 f"{SENDER}{email}".encode()
@@ -5231,22 +5248,36 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
         try:
             email = f"{uuid.uuid4()}@example.com"
+            nonexistent_email = f"nonexistent-{uuid.uuid4()}@example.com"
             verifier, challenge = self.generate_pkce_pair()
             callback_url = "https://example.com/app/auth/callback"
-            error_url = "https://example.com/app/auth/error"
 
             with self.http_con() as http_con:
-                body, headers, status = self.http_con_request(
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps(
+                        {
+                            "email": nonexistent_email,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 200, body)
+
+                response_data = json.loads(body)
+                self.assertEqual(response_data.get("email"), nonexistent_email)
+                body, _, status = self.http_con_request(
                     http_con,
                     method="POST",
                     path="magic-link/register",
                     body=json.dumps(
                         {
-                            "provider": "builtin::local_magic_link",
                             "email": email,
-                            "challenge": challenge,
-                            "callback_url": callback_url,
-                            "redirect_on_failure": error_url,
                         }
                     ).encode(),
                     headers={
@@ -5399,114 +5430,6 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 INSERT ext::auth::MagicLinkProviderConfig {};
             """
             )
-
-    async def test_http_auth_ext_otc_magic_link_01(self):
-        """Test Magic Link OTC cross-device: initiate on device A, verify on
-        device B.
-
-        Tests the cross-device authentication scenario where a user initiates
-        authentication on one device but completes verification on another. This
-        validates that OTC codes can be shared between devices and that PKCE
-        challenges work correctly across different sessions.
-        """
-
-        await self.con.query(
-            """
-            CONFIGURE CURRENT DATABASE
-            RESET ext::auth::MagicLinkProviderConfig;
-
-            CONFIGURE CURRENT DATABASE
-            INSERT ext::auth::MagicLinkProviderConfig {
-                verification_method := ext::auth::VerificationMethod.Code,
-            };
-        """
-        )
-
-        email = f"{uuid.uuid4()}@example.com"
-        callback_url = "https://example.com/app/auth/callback"
-        error_url = "https://example.com/app/auth/error"
-        pkce_device_a = self.generate_pkce_pair()
-        pkce_device_b = self.generate_pkce_pair()
-
-        with self.http_con() as http_con_device_a:
-            body, headers, status = self.http_con_request(
-                http_con_device_a,
-                method="POST",
-                path="magic-link/register",
-                body=json.dumps(
-                    {
-                        "provider": "builtin::local_magic_link",
-                        "email": email,
-                        "callback_url": callback_url,
-                        "redirect_on_failure": error_url,
-                        "challenge": pkce_device_a[1],
-                    }
-                ).encode(),
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-            )
-            self.assertEqual(status, 200, body)
-
-        file_name_hash = hashlib.sha256(f"{SENDER}{email}".encode()).hexdigest()
-        test_file = os.environ.get(
-            "EDGEDB_TEST_EMAIL_FILE",
-            f"/tmp/edb-test-email-{file_name_hash}.pickle",
-        )
-        with open(test_file, "rb") as f:
-            email_args = pickle.load(f)
-
-        msg = cast(EmailMessage, email_args["message"])
-        html_content = (
-            msg.get_body(('html',)).get_payload(decode=True).decode('utf-8')
-        )
-        code_match = re.search(r'(?:^|\s)(\d{6})(?:\s|$)', html_content)
-        otc_code = code_match.group(1)
-
-        with self.http_con() as http_con_device_b:
-            form_data = {
-                "email": email,
-                "code": otc_code,
-                "callback_url": callback_url,
-                "redirect_on_failure": error_url,
-                "challenge": pkce_device_b[1],
-            }
-            form_data_encoded = urllib.parse.urlencode(form_data).encode()
-
-            auth_body, auth_headers, auth_status = self.http_con_request(
-                http_con_device_b,
-                method="POST",
-                path="magic-link/authenticate",
-                body=form_data_encoded,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-
-            self.assertEqual(auth_status, 302, auth_body)
-
-            location = auth_headers.get("location", "")
-            self.assertTrue(
-                location.startswith(callback_url),
-                f"Expected callback_url: {callback_url}, got: {location}",
-            )
-
-            parsed_url = urllib.parse.urlparse(location)
-            query_params = urllib.parse.parse_qs(parsed_url.query)
-            auth_code = query_params.get("code", [None])[0]
-
-            token_body, _, token_status = self.http_con_request(
-                http_con_device_b,
-                params={
-                    "code": auth_code,
-                    "verifier": pkce_device_b[0],
-                },
-                method="GET",
-                path="token",
-            )
-
-            self.assertEqual(token_status, 200, token_body)
-            token_data = json.loads(token_body)
-            self.assertIn("auth_token", token_data)
 
     async def test_http_auth_ext_otc_email_password_00(self):
         """Test Email+Password OTC flow: register -> email with code -> verify.

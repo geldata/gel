@@ -15,6 +15,7 @@ all: \
 	workflows/tests.pg-versions.yml \
 	workflows/tests.patches.yml \
 	workflows/tests.inplace.yml \
+	workflows/tests.inplace7x.yml \
 	workflows/tests.reflection.yml \
 
 workflows/build.%.yml: workflows.src/build.%.tpl.yml workflows.src/build.%.targets.yml workflows.src/build.inc.yml
