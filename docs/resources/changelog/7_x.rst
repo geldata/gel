@@ -212,6 +212,22 @@ See `our RFC 1029 for more details on the changes
 * Add ``global sys::current_role``
   (:eql:gh:`#8889`)
 
+Auth extension: One-time code-based flow
+----------------------------------------
+
+Gel's `ext::auth` module now supports one-time codes (OTCs) as an alternative to email links for all email-based authentication flows. This feature dramatically simplifies the end user experience by allowing users to enter a short numeric code from their email instead of clicking a link. The primary benefit is solving the common cross-device usability problem where users start authentication on one device (like their desktop) but check email on another device (like their phone). With one-time codes, users can easily transcribe the code between devices without worrying about PKCE session mismatches that would cause link-based authentication to fail.
+
+The one-time code verification method covers all forms of email-based flows in EdgeDB that traditionally use links, including email verification for account registration, password reset flows, magic link authentication, and email verification for WebAuthn registration. When configured to use the ``Code`` verification method, the system decouples the PKCE session from the initial authentication request - the code generation is PKCE-agnostic, while the verification step handles PKCE creation and completion. This allows for both same-device flows (where the existing PKCE session is reused) and cross-device flows (where a new PKCE session is created during verification). The codes are securely hashed, include rate limiting protection, and automatically expire after 10 minutes.
+
+The feature is fully backwards compatible, with the default `verification_method` remaining as `Link` to ensure existing projects continue working without changes. To enable one-time codes for magic link authentication, you can configure your provider like this:
+
+```esdl
+configure current branch insert ext::auth::MagicLinkProviderConfig {
+    verification_method := ext::auth::VerificationMethod.Code;
+};
+```
+
+The same `verification_method` property is also available for `EmailPasswordProviderConfig` and `WebAuthnProviderConfig`, allowing you to standardize the verification experience across all your email-based authentication methods. See `RFC 1043: Email-Based One-Time Code Authentication <https://github.com/geldata/rfcs/blob/master/text/1043-ext-auth-otc.rst>` for more details on the motivations, and the :ref:`Auth docs <ref_guide_auth>`.
 
 Other features
 --------------
