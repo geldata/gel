@@ -412,6 +412,7 @@ Magic link
 Magic link offers the following settings:
 
 - ``verification_method``: ``Link`` (default) or ``Code``.
+
   - ``Link``: users receive a link and are redirected back with a PKCE ``code``.
   - ``Code``: users receive a one-time code. Collect the code and call ``POST /magic-link/authenticate`` with ``email``, ``code``, ``callback_url``, and the PKCE ``challenge`` to receive a PKCE ``code``.
 
