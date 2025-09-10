@@ -221,10 +221,10 @@ The one-time code verification method covers all forms of email-based flows in E
 
 The feature is fully backwards compatible, with the default ``verification_method`` remaining as ``Link`` to ensure existing projects continue working without changes. To enable one-time codes for magic link authentication, you can configure your provider like this:
 
-.. code-block:: sdl
+.. code-block:: edgeql
 
    configure current branch insert ext::auth::MagicLinkProviderConfig {
-       verification_method := ext::auth::VerificationMethod.Code;
+       verification_method := ext::auth::VerificationMethod.Code,
    };
 
 The same ``verification_method`` property is also available for ``EmailPasswordProviderConfig`` and ``WebAuthnProviderConfig``, allowing you to standardize the verification experience across all your email-based authentication methods. See `RFC 1043: Email-Based One-Time Code Authentication <https://github.com/geldata/rfcs/blob/master/text/1043-ext-auth-otc.rst>`_ for more details on the motivations, and the :ref:`Auth docs <ref_guide_auth>`.
