@@ -42,6 +42,7 @@ from edb.server import args as edbargs
 from edb.server import compiler as edbcompiler
 from edb.server.compiler import rpc
 from edb.server import config
+from edb.server import server
 from edb.server.compiler_pool import amsg
 from edb.server.compiler_pool import pool
 from edb.server.dbview import dbview
@@ -541,7 +542,9 @@ class TestCompilerPool(tbs.TestCase):
         cls._schema_class_layout = _schema_class_layout
 
     async def _test_pool_disconnect_queue(self, pool_class):
+        config_settings = config.load_spec_from_schema(self._std_schema)
         with tempfile.TemporaryDirectory() as td:
+            sys_config = server.ServerSysConfig(config_settings)
             pool_ = await pool.create_compiler_pool(
                 runstate_dir=td,
                 pool_size=2,
@@ -555,10 +558,7 @@ class TestCompilerPool(tbs.TestCase):
                     unittest.mock.MagicMock(),
                     std_schema=self._std_schema,
                     global_schema_pickle=pickle.dumps(None, -1),
-                    sys_config={},
-                    default_sysconfig=immutables.Map(),
-                    sys_config_spec=config.load_spec_from_schema(
-                        self._std_schema),
+                    sys_config=sys_config,
                 ),
             )
             try:

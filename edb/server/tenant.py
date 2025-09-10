@@ -105,6 +105,7 @@ class RoleDescriptor(TypedDict):
 
 class Tenant(ha_base.ClusterProtocol):
     _server: edbserver.BaseServer
+    _sys_config: edbserver.ServerSysConfig
     _cluster: pgcluster.BaseCluster
     _tenant_id: str
     _instance_name: str
@@ -166,8 +167,10 @@ class Tenant(ha_base.ClusterProtocol):
         max_backend_connections: int,
         backend_adaptive_ha: bool = False,
         extensions_dir: tuple[pathlib.Path, ...] = (),
+        sys_config: edbserver.ServerSysConfig,
     ):
         self._cluster = cluster
+        self._sys_config = sys_config
         self._tenant_id = self.get_backend_runtime_params().tenant_id
         self._instance_name = instance_name
         self._instance_data = immutables.Map()
@@ -303,8 +306,8 @@ class Tenant(ha_base.ClusterProtocol):
 
     def get_http_client(self, *, originator: str) -> HttpClient:
         if self._http_client is None:
-            http_max_connections = self._server.config_lookup(
-                'http_max_connections', self.get_sys_config()
+            http_max_connections = self.config.lookup(
+                'http_max_connections'
             )
             self._http_client = HttpClient(
                 http_max_connections,
@@ -394,9 +397,9 @@ class Tenant(ha_base.ClusterProtocol):
     def get_readiness_reason(self) -> str:
         return self._readiness_reason
 
-    def get_sys_config(self) -> Mapping[str, config.SettingValue]:
-        assert self._dbindex is not None
-        return self._dbindex.get_sys_config()
+    @property
+    def config(self) -> edbserver.ServerSysConfig:
+        return self._sys_config
 
     def get_report_config_data(
         self,
@@ -559,23 +562,19 @@ class Tenant(ha_base.ClusterProtocol):
             )
 
         logger.info("loading system config")
-        sys_config = await self._load_sys_config()
-        default_sysconfig = await self._load_sys_config("sysconfig_default")
+        self.config.init(await self._load_sys_config(), await self._load_sys_config("sysconfig_default"))
         await self._load_reported_config()
 
         # To make in-place upgrade failures more testable, check
         # 'force_database_error' with a 'startup' scope.
-        force_error = self._server.config_lookup(
-            'force_database_error', sys_config)
+        force_error = self.config.lookup('force_database_error')
         edbcompiler.maybe_force_database_error(force_error, scope='startup')
 
         self._dbindex = dbview.DatabaseIndex(
             self,
             std_schema=self._server.get_std_schema(),
             global_schema_pickle=global_schema_pickle,
-            sys_config=sys_config,
-            default_sysconfig=default_sysconfig,
-            sys_config_spec=self._server.config_settings,
+            sys_config=self._server.config,
         )
 
         await self._introspect_dbs()
@@ -1540,7 +1539,7 @@ class Tenant(ha_base.ClusterProtocol):
         else:
             sys_config_json = await syscon.sql_fetch_val(query)
 
-        return config.from_json(self._server.config_settings, sys_config_json)
+        return config.from_json(self.config.settings, sys_config_json)
 
     async def _reintrospect_global_schema(self) -> None:
         if not self._initing and not self._running:
@@ -1558,9 +1557,7 @@ class Tenant(ha_base.ClusterProtocol):
         self._dbindex.update_global_schema(global_schema_pickle)
 
     def populate_sys_auth(self) -> None:
-        assert self._dbindex is not None
-        cfg = self._dbindex.get_sys_config()
-        auth = self._server.config_lookup("auth", cfg) or ()
+        auth = self.config.lookup("auth") or ()
         self._sys_auth = tuple(sorted(auth, key=lambda a: a.priority))
 
     def resolve_branch_name(
@@ -1636,7 +1633,7 @@ class Tenant(ha_base.ClusterProtocol):
         return self._dbindex.remove_view(dbview_)
 
     def schedule_reported_config_if_needed(self, setting_name: str) -> None:
-        setting = self._server.config_settings.get(setting_name)
+        setting = self._server.config.settings.get(setting_name)
         if setting and setting.report and self._accept_new_tasks:
             self.create_task(self._load_reported_config(), interruptable=True)
 
@@ -1781,7 +1778,7 @@ class Tenant(ha_base.ClusterProtocol):
                 result = await result
 
             def setting_filter(value: config.SettingValue) -> bool:
-                if self._server.config_settings[value.name].backend_setting:
+                if self._server.config.settings[value.name].backend_setting:
                     raise errors.ConfigurationError(
                         f"backend config {value.name!r} cannot be set "
                         f"via config file"
@@ -1789,7 +1786,7 @@ class Tenant(ha_base.ClusterProtocol):
                 return True
 
             json_obj = config.to_json_obj(
-                self._server.config_settings,
+                self._server.config.settings,
                 result["cfg::Config"],
                 include_source=False,
                 setting_filter=setting_filter,
@@ -1827,10 +1824,11 @@ class Tenant(ha_base.ClusterProtocol):
                     pgcon.RESET_STATIC_CFG_SCRIPT + (self._init_con_sql or b'')
                 )
                 syscon.last_init_con_data = self._init_con_data
-            sys_config = await self._load_sys_config(syscon=syscon)
+            cfg = await self._load_sys_config(syscon=syscon)
             # GOTCHA: no need to notify other EdgeDBs on the same backend about
             # such change to sysconfig, because static config is instance-local
-        self._dbindex.update_sys_config(sys_config)
+        self.config.update(cfg)
+        self._dbindex.update_sys_config()
 
     def reload(self):
         # In multi-tenant mode, the file paths for the following states may be
@@ -2088,7 +2086,8 @@ class Tenant(ha_base.ClusterProtocol):
         async def task():
             try:
                 cfg = await self._load_sys_config()
-                self._dbindex.update_sys_config(cfg)
+                self.config.update(cfg)
+                self._dbindex.update_sys_config()
                 self._server.reinit_idle_gc_collector()
             except Exception:
                 metrics.background_errors.inc(
@@ -2217,7 +2216,7 @@ class Tenant(ha_base.ClusterProtocol):
                 tenant_id=self._tenant_id,
             ),
             instance_config=config.debug_serialize_config(
-                self.get_sys_config()),
+                self.config.sys_config),
             user_roles=self._roles,
             pg_addr=dict(
                 server_settings=vars(self._cluster.get_connection_params()),

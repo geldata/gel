@@ -284,6 +284,7 @@ class BaseCluster:
         ) -> dict[str, Any]:
             while True:
                 line = await stream.readline()
+                print(line)
                 if not line:
                     raise ClusterError("Gel server terminated")
                 if line.startswith(b'READY='):
@@ -299,6 +300,7 @@ class BaseCluster:
                 )
 
         async def test() -> None:
+            print(status_sock)
             stat_reader, stat_writer = await asyncio.open_connection(
                 sock=status_sock,
             )
@@ -307,6 +309,7 @@ class BaseCluster:
                     _read_server_status(stat_reader),
                     timeout=timeout
                 )
+                print(data)
             except asyncio.TimeoutError:
                 raise ClusterError(
                     f'Gel server did not initialize '
@@ -359,6 +362,8 @@ class BaseCluster:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
+        print(args)
+        print(res)
         return res.returncode
 
     async def set_test_config(self) -> None:
