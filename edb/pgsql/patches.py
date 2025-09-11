@@ -147,4 +147,14 @@ PATCHES: list[tuple[str, str]] = [
 '''),
     ('sql-introspection', ''),  # For #8962
     ('edgeql+schema+config', ''),  # For #8971
+
+    # 7.0rc2
+    ('ext-pkg', 'auth'),  # For #9007
+    ('edgeql+user_ext|auth', '''
+    ALTER TYPE ext::auth::MagicLinkProviderConfig {
+        CREATE REQUIRED PROPERTY auto_signup: std::bool {
+            SET default := false;
+        };
+    };
+'''),
 ]
