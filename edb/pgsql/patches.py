@@ -150,7 +150,7 @@ PATCHES: list[tuple[str, str]] = [
 
     # 7.0rc2
     ('ext-pkg', 'auth'),  # For #9007
-    ('edgeql+user_ext|auth', '''
+    ('edgeql+user_ext+config|auth', '''
     ALTER TYPE ext::auth::MagicLinkProviderConfig {
         CREATE REQUIRED PROPERTY auto_signup: std::bool {
             SET default := false;
