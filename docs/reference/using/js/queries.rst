@@ -75,7 +75,7 @@ The following command will run the ``queries`` generator.
     # Or with specific files as patterns
     $ bunx @gel/generate queries "queries/*.edgeql"
 
-The generator will detect the project root by looking for an ``gel.toml``, then scan the directory for ``*.edgeql`` files. In this case, there's only one: ``queries/getUser.edgeql``.
+The generator will detect the project root by looking for a ``gel.toml``. By default, it scans the directory for all ``*.edgeql`` files, but if you specify patterns, only matching files will be processed. In this case, there's only one: ``queries/getUser.edgeql``.
 
 .. code-block:: edgeql
   :caption: getUser.edgeql
