@@ -36,6 +36,7 @@ from edb.schema import links as s_links
 from edb.schema import name as s_name
 from edb.schema import objtypes as s_objtypes
 from edb.schema import properties as s_props
+from edb.schema import operators as s_oper
 
 from edb.testbase import lang as tb
 from edb.tools import test
@@ -1963,7 +1964,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
             "parameter 'json' of function 'std::json_typeof(json: std::json)'",
         )
 
-        op = list(schema.get_operators('std::AND'))[0]
+        op = list(schema.get_by_shortname('std::AND', s_oper.Operator))[0]
         self.assertEqual(
             op.get_verbosename(schema),
             'operator "std::bool AND std::bool"',

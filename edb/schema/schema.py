@@ -117,6 +117,10 @@ TESTMODE_SOURCES = (
 )
 
 
+# Deep optimization: avoid lookups into so.Object
+raw_schema_restore = so.Object.raw_schema_restore
+
+
 class Schema(abc.ABC):
 
     @abc.abstractmethod
@@ -197,17 +201,6 @@ class Schema(abc.ABC):
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> tuple[s_func.Function, ...]:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def get_operators(
-        self,
-        name: str | sn.Name,
-        default: tuple[s_oper.Operator, ...] | so.NoDefaultT = so.NoDefault,
-        *,
-        module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> tuple[s_oper.Operator, ...]:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -458,6 +451,14 @@ class Schema(abc.ABC):
         span: Optional[parsing.Span],
         disallow_module: Optional[Callable[[str], bool]] = None,
     ) -> Optional[so.Object]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_by_shortname[T: so.Object](
+        self,
+        shortname: sn.Name,
+        scls: type[T],
+    ) -> Optional[tuple[T, ...]]:
         raise NotImplementedError
 
     def _get_object_ids(self) -> Iterable[uuid.UUID]:
@@ -1222,34 +1223,6 @@ class FlatSchema(Schema):
                 type=s_func.Function,
             )
 
-    def get_operators(
-        self,
-        name: str | sn.Name,
-        default: tuple[s_oper.Operator, ...] | so.NoDefaultT = so.NoDefault,
-        *,
-        module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> tuple[s_oper.Operator, ...]:
-        funcs = self._search_with_getter(
-            name,
-            getter=_get_operators,
-            module_aliases=module_aliases,
-            default=default,
-            disallow_module=disallow_module,
-        )
-
-        if funcs is not so.NoDefault:
-            return cast(
-                tuple[s_oper.Operator, ...],
-                funcs,
-            )
-        else:
-            return Schema.raise_bad_reference(
-                name=name,
-                module_aliases=module_aliases,
-                type=s_oper.Operator,
-            )
-
     @lru.lru_method_cache()
     def _get_casts(
         self,
@@ -1473,6 +1446,19 @@ class FlatSchema(Schema):
                 type=type,
             )
 
+    def get_by_shortname[T: so.Object](
+        self,
+        shortname: sn.Name,
+        scls: type[T],
+    ) -> Optional[tuple[T, ...]]:
+        obj_ids = self._shortname_to_id.get((scls, shortname))
+        if obj_ids is None:
+            return None
+        return tuple(
+            raw_schema_restore(scls.__name__, i)  # type: ignore
+            for i in obj_ids
+        )
+
     def has_object(self, object_id: uuid.UUID) -> bool:
         return object_id in self._id_to_type
 
@@ -1524,6 +1510,72 @@ class FlatSchema(Schema):
     def __repr__(self) -> str:
         return (
             f'<{type(self).__name__} gen:{self._generation} at {id(self):#x}>')
+
+
+def lookup[T](
+    schema: Schema,
+    name: sn.Name | str,
+    *,
+    getter: Callable[[Schema, sn.Name], T | None],
+    default: T | so.NoDefaultT = so.NoDefault,
+    module_aliases: Optional[Mapping[Optional[str], str]],
+) -> T | so.NoDefaultT:
+    """
+    Find something in the schema with a given name.
+
+    This function mostly mirrors edgeql.tracer.resolve_name
+    except:
+    - When searching in std, disallow some modules (often the base modules)
+    - If no result found, return default
+    """
+    if isinstance(name, str):
+        name = sn.name_from_string(name)
+
+    shortname = name.name
+    module = name.module if isinstance(name, sn.QualName) else None
+    orig_module = module
+
+    print(shortname)
+    print(module)
+
+    if module == '__std__':
+        fqname = sn.QualName('std', shortname)
+        result = getter(schema, fqname)
+        if result is not None:
+            return result
+        else:
+            return default
+
+    # Apply module aliases
+    module = apply_module_aliases(
+        module, module_aliases
+    )
+
+    print(module)
+
+    # Check if something matches the name
+    if module is not None:
+        fqname = sn.QualName(module, shortname)
+        result = getter(schema, fqname)
+        if result is not None:
+            return result
+
+    # If module == None, look in std
+    if orig_module is None:
+        fqname = sn.QualName('std', shortname)
+        result = getter(schema, fqname)
+        if result is not None:
+            return result
+
+    # Ensure module is not a base module.
+    # Then try the module as part of std.
+    if module:
+        fqname = sn.QualName(f'std::{module}', shortname)
+        result = getter(schema, fqname)
+        if result is not None:
+            return result
+
+    return default
 
 
 def apply_module_aliases(
@@ -1905,35 +1957,6 @@ class ChainedSchema(Schema):
             )
         return objs
 
-    def get_operators(
-        self,
-        name: str | sn.Name,
-        default: tuple[s_oper.Operator, ...] | so.NoDefaultT = so.NoDefault,
-        *,
-        module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> tuple[s_oper.Operator, ...]:
-        objs = self._top_schema.get_operators(
-            name,
-            module_aliases=module_aliases,
-            default=(),
-            disallow_module=disallow_module,
-        )
-        if not objs:
-            if disallow_module is not None:
-                dm = disallow_module
-                disallow_module = (
-                    lambda s: dm(s) or self._top_schema.has_module(s))
-            else:
-                disallow_module = self._top_schema.has_module
-            objs = self._base_schema.get_operators(
-                name,
-                default=default,
-                module_aliases=module_aliases,
-                disallow_module=disallow_module,
-            )
-        return objs
-
     def get_casts_to_type(
         self,
         to_type: s_types.Type,
@@ -2098,6 +2121,19 @@ class ChainedSchema(Schema):
         else:
             return obj
 
+    def get_by_shortname[T: so.Object](
+        self,
+        shortname: sn.Name,
+        scls: type[T],
+    ) -> Optional[tuple[T, ...]]:
+        objs = self._base_schema.get_by_shortname(shortname, scls)
+        if objs is not None:
+            return objs
+        objs = self._top_schema.get_by_shortname(shortname, scls)
+        if objs is not None:
+            return objs
+        return self._global_schema.get_by_shortname(shortname, scls)
+
     def has_object(self, object_id: uuid.UUID) -> bool:
         return (
             self._base_schema.has_object(object_id)
@@ -2175,16 +2211,10 @@ def _get_functions(
 
 @lru.per_job_lru_cache()
 def _get_operators(
-    schema: FlatSchema,
+    schema: Schema,
     name: sn.Name,
 ) -> Optional[tuple[s_oper.Operator, ...]]:
-    objids = schema._shortname_to_id.get((s_oper.Operator, name))
-    if objids is None:
-        return None
-    else:
-        return tuple(
-            schema.get_by_id(oid, type=s_oper.Operator) for oid in objids
-        )
+    return schema.get_by_shortname(name, s_oper.Operator)
 
 
 @lru.per_job_lru_cache()

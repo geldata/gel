@@ -29,6 +29,7 @@ from edb.ir import ast as irast
 
 from edb import errors
 from edb.schema import name as sn
+from edb.schema import operators as s_oper
 
 from . import context
 from . import dispatch
@@ -93,8 +94,11 @@ def compile_orderby_clause(
                     op_name = '>'
                 else:
                     op_name = '<'
-                opers = env.schema.get_operators(
-                    op_name, module_aliases=exprctx.modaliases)
+                opers = s_oper.lookup_operators(
+                    op_name,
+                    module_aliases=exprctx.modaliases,
+                    schema=env.schema
+                )
 
                 # Verify that a comparison operator is defined for 2
                 # sort_type expressions.

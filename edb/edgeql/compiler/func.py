@@ -633,7 +633,9 @@ def compile_operator(
 
     env = ctx.env
     schema = env.schema
-    opers = schema.get_operators(op_name, module_aliases=ctx.modaliases)
+    opers = s_oper.lookup_operators(
+        op_name, module_aliases=ctx.modaliases, schema=schema
+    )
 
     if opers is None:
         raise errors.QueryError(
@@ -680,7 +682,7 @@ def compile_operator(
                 span=qlarg.span)
 
         derivative_op = opers[0]
-        opers = schema.get_operators(origin_op)
+        opers = s_oper.lookup_operators(origin_op, schema=schema)
         if not opers:
             raise errors.InternalServerError(
                 f'cannot find the origin operator for {op_name}',
