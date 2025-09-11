@@ -85,6 +85,7 @@ import hashlib
 import struct
 import textwrap
 
+from edb.schema import ai_indexes as s_ai_indexes
 from edb.schema import expr as s_expr
 from edb.schema import indexes as s_indexes
 from edb.schema import types as s_types
@@ -657,7 +658,9 @@ def pg_rebuild_all_pending_embeddings_views(
         extra_filters=(flt,),
     )
 
-    all_models = s_indexes.get_defined_ext_ai_embedding_models(schema)
+    all_models = s_ai_indexes.get_all_embedding_model_properties(
+        schema, context
+    )
 
     used_models = collections.defaultdict(list)
     for other_index in all_ai_indexes:
@@ -672,7 +675,7 @@ def pg_rebuild_all_pending_embeddings_views(
 
     model_providers = {}
 
-    for model_name, model_stype in all_models.items():
+    for model_name, model_properties in all_models.items():
         views = used_models.get(model_name)
 
         if views:
@@ -701,9 +704,7 @@ def pg_rebuild_all_pending_embeddings_views(
         )
         ops.add_command(dbops.CreateView(view, or_replace=True))
 
-        provider = model_stype.must_get_annotation(
-            schema, sn.QualName("ext::ai", "model_provider"))
-        model_providers[model_name] = provider
+        model_providers[model_name] = model_properties.model_provider
 
     if used_models:
         bits = []
@@ -742,10 +743,14 @@ def pg_rebuild_all_pending_embeddings_views(
 
 def pg_drop_all_pending_embeddings_views(
     schema: s_schema.Schema,
+    context: sd.CommandContext,
 ) -> dbops.Command:
     ops = dbops.CommandGroup()
 
-    all_models = s_indexes.get_defined_ext_ai_embedding_models(schema)
+    all_models = s_ai_indexes.get_all_embedding_model_properties(
+        schema, context
+    )
+
     for model_name in all_models:
         view_name = (
             "edgedbext",
@@ -866,4 +871,4 @@ def _get_index_root_id(
     schema: s_schema.Schema,
     index: s_indexes.Index,
 ) -> str:
-    return s_indexes.get_ai_index_id(schema, index)
+    return s_ai_indexes.get_ai_index_id(schema, index)

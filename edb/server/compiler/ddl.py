@@ -356,6 +356,7 @@ def _get_delta_context_args(ctx: compiler.CompileContext) -> dict[str, Any]:
         ) == 'AlwaysStore',
         schema_object_ids=ctx.schema_object_ids,
         compat_ver=ctx.compat_ver,
+        extension_refs=ctx.state._extension_refs,
     )
 
 
@@ -374,6 +375,8 @@ def _process_delta(
     context = _new_delta_context(ctx, context_args)
     schema = pgdelta.apply(schema, context)
     current_tx.update_schema(schema)
+    if ctx.state._extension_refs != context.extension_refs:
+        ctx.state._extension_refs = context.extension_refs
 
     if debug.flags.delta_pgsql_plan:
         debug.header('PgSQL Delta Plan')

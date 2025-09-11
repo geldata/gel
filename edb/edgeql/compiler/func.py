@@ -42,6 +42,7 @@ from edb.ir import staeval
 from edb.ir import utils as irutils
 from edb.ir import typeutils as irtyputils
 
+from edb.schema import ai_indexes as s_ai_indexes
 from edb.schema import constraints as s_constr
 from edb.schema import delta as sd
 from edb.schema import functions as s_func
@@ -1287,7 +1288,7 @@ def compile_ext_ai_search(
         )[0]
 
         index_metadata[typeref] = {
-            "id": s_indexes.get_ai_index_id(schema, index),
+            "id": s_ai_indexes.get_ai_index_id(schema, index),
             "dimensions": dimensions,
             "distance_function": (
                 distance_func.get_shortname(schema),
