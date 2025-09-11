@@ -384,7 +384,7 @@ def _build_object_mutation_shape(
                         )
                     )'''
                     if v is not None:
-                        target_value = [str(i) for i in v.ids(schema)]
+                        target_value = [str(i) for i in v.ids()]
                     else:
                         target_value = []
                 else:
@@ -393,7 +393,7 @@ def _build_object_mutation_shape(
                         FILTER .id IN <uuid>json_array_unpack(<json>${var_n})
                     )'''
                     if v is not None:
-                        target_value = [str(i) for i in v.ids(schema)]
+                        target_value = [str(i) for i in v.ids()]
                     else:
                         target_value = []
             else:
@@ -419,7 +419,7 @@ def _build_object_mutation_shape(
 
             assignments.append(f'{ns}__internal := {shadow_target_expr}')
             if v is not None:
-                ids = [str(i) for i in v.refs.ids(schema)]
+                ids = [str(i) for i in v.refs.ids()]
                 variables[f'{var_n}_expr'] = json.dumps(
                     {'text': v.text, 'refs': ids}
                 )
@@ -435,7 +435,7 @@ def _build_object_mutation_shape(
                     {
                         'text': ex.text,
                         'refs': (
-                            [str(i) for i in ex.refs.ids(schema)]
+                            [str(i) for i in ex.refs.ids()]
                             if ex.refs else []
                         )
                     }
@@ -478,7 +478,7 @@ def _build_object_mutation_shape(
                         'expr': {
                             'text': ex.text,
                             'refs': (
-                                [str(i) for i in ex.refs.ids(schema)]
+                                [str(i) for i in ex.refs.ids()]
                                 if ex.refs else []
                             )
                         }

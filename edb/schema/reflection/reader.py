@@ -68,7 +68,6 @@ def parse_schema(
         JSON sequence.
     """
 
-    schema = s_schema.EMPTY_SCHEMA
     id_to_type = {}
     id_to_data = {}
     name_to_id = {}
@@ -170,14 +169,14 @@ def parse_schema(
                     if val is not None and type(val) is not ftype:
                         if issubclass(ftype, s_expr.Expression):
                             val = _parse_expression(val, objid, k)
-                            for refid in val.refs.ids(schema):
+                            for refid in val.refs.ids():
                                 refs_to[refid][mcls, fn][objid] = None
                         elif issubclass(ftype, s_expr.ExpressionList):
                             exprs = []
                             for e_dict in val:
                                 e = _parse_expression(e_dict, objid, k)
                                 assert e.refs is not None
-                                for refid in e.refs.ids(schema):
+                                for refid in e.refs.ids():
                                     refs_to[refid][mcls, fn][objid] = None
                                 exprs.append(e)
                             val = ftype(exprs)
@@ -187,7 +186,7 @@ def parse_schema(
                                 e = _parse_expression(
                                     e_dict['expr'], objid, k)
                                 assert e.refs is not None
-                                for refid in e.refs.ids(schema):
+                                for refid in e.refs.ids():
                                     refs_to[refid][mcls, fn][objid] = None
                                 expr_dict[e_dict['name']] = e
                             val = ftype(expr_dict)
@@ -254,6 +253,7 @@ def parse_schema(
                 updated_data[field.index] = v
             id_to_data[objid] = tuple(updated_data)
 
+    schema = s_schema.EMPTY_SCHEMA
     with schema._refs_to.mutate() as mm:
         for referred_id, refdata in refs_to.items():
             try:
