@@ -178,7 +178,7 @@ By default, the generator scans your entire project for ``*.edgeql`` files. You 
 
 **Pattern Features:**
 
-- **Glob support**: Use ``*``, ``**``, and ``?`` wildcards for flexible matching. See https://github.com/mrmlnc/fast-glob for more details
+- **Glob support**: Use ``*`` (match any number of characters), ``**`` (match any number of directories), and ``?`` (match a single character) wildcards for flexible matching. For more details, see the [fast-glob documentation on npm](https://www.npmjs.com/package/fast-glob).
 - **Directory expansion**: Bare directory names automatically expand to ``directory/**/*.edgeql``
 - **Schema protection**: Migration and fixup files in ``dbschema/`` are automatically excluded
 - **Multiple patterns**: Specify multiple patterns to process files from different locations
