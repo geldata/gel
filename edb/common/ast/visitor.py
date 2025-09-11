@@ -38,12 +38,15 @@ def find_children[_T](
     test_func: Optional[Callable[[_T], bool]] = None,
     terminate_early=False,
     extra_skips: AbstractSet[str] = frozenset(),
+    extra_skip_types: tuple[type, ...] = (),
 ) -> list[_T]:
     visited = set()
     result = []
 
     def _find_children(node):
-        if isinstance(node, (tuple, list, set, frozenset)):
+        if isinstance(node, extra_skip_types):
+            return False
+        elif isinstance(node, (tuple, list, set, frozenset)):
             for n in node:
                 if _find_children(n):
                     return True
