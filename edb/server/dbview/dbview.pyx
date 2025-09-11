@@ -596,11 +596,10 @@ cdef class Database:
         spec = self._index._sys_config_spec
         if self.user_config_spec is not None:
             spec = config.ChainedSpec(spec, self.user_config_spec)
-        return config.lookup(
+        return self._index._sys_config.lookup(
             name,
-            self.db_config or DEFAULT_CONFIG,
-            self._index._sys_config,
-            spec=spec,
+            configs=(self.db_config or DEFAULT_CONFIG,),
+            spec=spec
         )
 
 
@@ -805,9 +804,6 @@ cdef class DatabaseConnectionView:
             # multiple connections do db configs.)
             pass
 
-
-    cdef get_system_config(self):
-        return self._db._index.get_sys_config()
 
     cpdef get_compilation_system_config(self):
         return self._db._index.get_compilation_system_config()
@@ -1291,12 +1287,13 @@ cdef class DatabaseConnectionView:
         self._reset_tx_state()
         return side_effects
 
-    cdef config_lookup(self, name):
-        return self.server.config_lookup(
+    cdef lookup_config(self, name):
+        return self.server.config.lookup(
             name,
-            self.get_session_config(),
-            self.get_database_config(),
-            self.get_system_config(),
+            configs=(
+                self.get_session_config(),
+                self.get_database_config(),
+            ),
         )
 
     async def recompile_cached_queries(
@@ -1310,7 +1307,7 @@ cdef class DatabaseConnectionView:
         concurrency_control = asyncio.Semaphore(compile_concurrency)
         rv = []
 
-        recompile_timeout = self.config_lookup(
+        recompile_timeout = self.lookup_config(
             "auto_rebuild_query_cache_timeout",
         )
 
@@ -1567,7 +1564,7 @@ cdef class DatabaseConnectionView:
                 if unit.user_schema:
                     user_schema = unit.user_schema
                     user_schema_version = unit.user_schema_version
-            if user_schema and not self.config_lookup(
+            if user_schema and not self.lookup_config(
                 "auto_rebuild_query_cache",
             ):
                 user_schema = None
@@ -1893,7 +1890,7 @@ cdef class DatabaseConnectionView:
             if self.in_tx():
                 isolation = self._in_tx_isolation_level
             else:
-                isolation = self.config_lookup(
+                isolation = self.lookup_config(
                     "default_transaction_isolation"
                 )
                 if isolation and isolation.to_str() == "RepeatableRead":
@@ -1915,7 +1912,7 @@ cdef class DatabaseConnectionView:
                 )
 
         if not self.in_tx() and has_write:
-            access_mode = self.config_lookup("default_transaction_access_mode")
+            access_mode = self.lookup_config("default_transaction_access_mode")
             if access_mode and access_mode.to_str() == "ReadOnly":
                 raise query_capabilities.make_error(
                     ~enums.Capability.WRITE,
@@ -1947,17 +1944,15 @@ cdef class DatabaseIndex:
         std_schema,
         global_schema_pickle,
         sys_config,
-        default_sysconfig,  # system config without system override
-        sys_config_spec,
     ):
         self._dbs = {}
         self._server = tenant.server
         self._tenant = tenant
         self._std_schema = std_schema
         self._global_schema_pickle = global_schema_pickle
-        self._default_sysconfig = default_sysconfig
-        self._sys_config_spec = sys_config_spec
-        self.update_sys_config(sys_config)
+        self._sys_config = sys_config
+        self._sys_config_spec = sys_config.settings
+        self.update_sys_config()
         self._cached_compiler_args = None
 
     def count_connections(self, dbname: str):
@@ -1968,23 +1963,15 @@ cdef class DatabaseIndex:
 
         return sum(1 for dbv in (<Database>db)._views if not dbv.is_transient)
 
-    def get_sys_config(self):
-        return self._sys_config
-
     def get_compilation_system_config(self):
         return self._comp_sys_config
 
-    def update_sys_config(self, sys_config):
+    def update_sys_config(self):
         cdef Database db
         for db in self._dbs.values():
             db.dbver = next_dbver()
 
-        with self._default_sysconfig.mutate() as mm:
-            mm.update(sys_config)
-            sys_config = mm.finish()
-        self._sys_config = sys_config
-        self._comp_sys_config = config.get_compilation_config(
-            sys_config, spec=self._sys_config_spec)
+        self._comp_sys_config = self._sys_config.get_compilation_config()
         self.invalidate_caches()
 
     def has_db(self, dbname):
@@ -2079,10 +2066,8 @@ cdef class DatabaseIndex:
     def iter_dbs(self):
         return iter(self._dbs.values())
 
-    async def _save_system_overrides(self, conn, spec):
-        data = config.to_json(
-            spec,
-            self._sys_config,
+    async def _save_system_overrides(self, conn):
+        data = self._sys_config.to_json(
             setting_filter=lambda v: v.source == 'system override',
             include_source=False,
         )
@@ -2116,11 +2101,10 @@ cdef class DatabaseIndex:
         # _save_system_overrides *must* happen before
         # the callbacks below, because certain config changes
         # may cause the backend connection to drop.
-        self.update_sys_config(
-            op.apply(spec, self._sys_config)
-        )
+        self._sys_config.apply(op)
+        self.update_sys_config()
 
-        await self._save_system_overrides(conn, spec)
+        await self._save_system_overrides(conn)
 
         if op.opcode is config.OpCode.CONFIG_ADD:
             await self._server._on_system_config_add(op.setting_name, op_value)
@@ -2175,8 +2159,4 @@ cdef class DatabaseIndex:
         return self._cached_compiler_args
 
     def lookup_config(self, name: str):
-        return config.lookup(
-            name,
-            self._sys_config,
-            spec=self._sys_config_spec,
-        )
+        return self._sys_config.lookup(name)
