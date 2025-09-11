@@ -3075,7 +3075,8 @@ class CreateObject[Object_T: so.Object](ObjectCommand[Object_T]):
         # Check if functions by this name exist
         obj_name = self.get_attribute_value('name')
         if obj_name is not None and not sn.is_fullname(str(obj_name)):
-            funcs = schema.get_functions(obj_name, tuple())
+            from . import functions as s_func
+            funcs = s_func.lookup_functions(obj_name, tuple(), schema=schema)
             if funcs:
                 raise errors.SchemaError(
                     f'{funcs[0].get_verbosename(schema)} already exists')

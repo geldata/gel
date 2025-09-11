@@ -24,14 +24,7 @@ import types
 import uuid
 import builtins
 from typing import (
-    Any,
-    Optional,
-    TypeVar,
-    Iterable,
-    Mapping,
-    Sequence,
-    cast,
-    TYPE_CHECKING,
+    Any, Optional, TypeVar, Iterable, Mapping, Sequence, cast, TYPE_CHECKING,
 )
 
 from edb import errors
@@ -40,6 +33,7 @@ from edb.common import ast
 from edb.common import parsing
 from edb.common import struct
 from edb.common import verutils
+from edb.common import lru
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import compiler as qlcompiler
@@ -59,12 +53,12 @@ from . import permissions as s_permissions
 from . import referencing
 from . import types as s_types
 from . import utils
+from . import schema as s_schema
 
 
 if TYPE_CHECKING:
     from edb.edgeql.compiler import context as qlcontext
     from edb.ir import ast as irast
-    from . import schema as s_schema
 
 
 FUNC_NAMESPACE = uuidgen.UUID('80cd3b19-bb51-4659-952d-6bb03e3347d7')
@@ -1416,7 +1410,7 @@ class Function(
         diff_param = -1
         overloads = []
         sn = self.get_shortname(schema)
-        for f in schema.get_functions(sn):
+        for f in lookup_functions(sn, schema=schema):
             if f == self:
                 continue
 
@@ -1790,8 +1784,9 @@ class CreateFunction(CreateCallableObject[Function], FunctionCommand):
             if backend_name := self.get_prespecified_id(
                     context, id_field='backend_name'):
                 pass
-            elif others := schema.get_functions(
-                    sn.QualName(fullname.module, shortname.name), ()):
+            elif others := lookup_functions(
+                sn.QualName(fullname.module, shortname.name), (), schema=schema
+            ):
                 backend_name = others[0].get_backend_name(schema)
             elif context.stdmode:
                 backend_name = uuidgen.uuid5(FUNC_NAMESPACE, str(fullname))
@@ -1886,7 +1881,7 @@ class CreateFunction(CreateCallableObject[Function], FunctionCommand):
                 f'generic parameters',
                 span=self.span)
 
-        overloaded_funcs = schema.get_functions(shortname, ())
+        overloaded_funcs = lookup_functions(shortname, (), schema=schema)
         has_from_function = from_function
 
         for func in overloaded_funcs:
@@ -2174,13 +2169,13 @@ class RenameFunction(RenameCallableObject[Function], FunctionCommand):
         if cur_name == new_name:
             return
 
-        existing = schema.get_functions(cur_name)
+        existing = lookup_functions(cur_name, schema=schema)
         if len(existing) > 1:
             raise errors.SchemaError(
                 'renaming an overloaded function is not allowed',
                 span=self.span)
 
-        target = schema.get_functions(new_name, ())
+        target = lookup_functions(new_name, (), schema=schema)
         if target:
             raise errors.SchemaError(
                 f"can not rename function to '{new_name!s}' because "
@@ -2205,8 +2200,9 @@ class AlterFunction(AlterCallableObject[Function], FunctionCommand):
             return schema
 
         if self.has_attribute_value("fallback"):
-            overloaded_funcs = schema.get_functions(
-                self.scls.get_shortname(schema), ())
+            overloaded_funcs = schema.get_by_shortname(
+                self.scls.get_shortname(schema), Function,
+            ) or ()
 
             if len([func for func in overloaded_funcs
                     if func.get_fallback(schema)]) > 1:
@@ -2683,3 +2679,34 @@ def get_compiler_options(
         apply_query_rewrites=not context.stdmode,
         track_schema_ref_exprs=track_schema_ref_exprs,
     )
+
+
+def lookup_functions(
+    name: str | sn.Name,
+    default: tuple[Function, ...] | so.NoDefaultT = so.NoDefault,
+    *,
+    module_aliases: Optional[Mapping[Optional[str], str]] = None,
+    schema: s_schema.Schema,
+) -> tuple[Function, ...]:
+    funcs = s_schema.lookup(
+        schema,
+        name,
+        getter=_get_functions,
+        module_aliases=module_aliases,
+        default=default,
+    )
+
+    if funcs is not so.NoDefault:
+        return funcs
+    else:
+        return s_schema.Schema.raise_bad_reference(
+            name=name, module_aliases=module_aliases, type=Function,
+        )
+
+
+@lru.per_job_lru_cache()
+def _get_functions(
+    schema: s_schema.Schema,
+    name: sn.Name,
+) -> tuple[Function, ...] | None:
+    return schema.get_by_shortname(name, Function)

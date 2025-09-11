@@ -193,17 +193,6 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_functions(
-        self,
-        name: str | sn.Name,
-        default: tuple[s_func.Function, ...] | so.NoDefaultT = so.NoDefault,
-        *,
-        module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> tuple[s_func.Function, ...]:
-        raise NotImplementedError
-
-    @abc.abstractmethod
     def get_casts_to_type(
         self,
         to_type: s_types.Type,
@@ -457,7 +446,7 @@ class Schema(abc.ABC):
     def get_by_shortname[T: so.Object](
         self,
         shortname: sn.Name,
-        scls: type[T],
+        mcls: type[T],
     ) -> Optional[tuple[T, ...]]:
         raise NotImplementedError
 
@@ -1193,36 +1182,6 @@ class FlatSchema(Schema):
 
         return default
 
-    def get_functions(
-        self,
-        name: str | sn.Name,
-        default: tuple[s_func.Function, ...] | so.NoDefaultT = so.NoDefault,
-        *,
-        module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> tuple[s_func.Function, ...]:
-        if isinstance(name, str):
-            name = sn.name_from_string(name)
-        funcs = self._search_with_getter(
-            name,
-            getter=_get_functions,
-            module_aliases=module_aliases,
-            default=default,
-            disallow_module=disallow_module,
-        )
-
-        if funcs is not so.NoDefault:
-            return cast(
-                tuple[s_func.Function, ...],
-                funcs,
-            )
-        else:
-            return Schema.raise_bad_reference(
-                name=name,
-                module_aliases=module_aliases,
-                type=s_func.Function,
-            )
-
     @lru.lru_method_cache()
     def _get_casts(
         self,
@@ -1449,13 +1408,13 @@ class FlatSchema(Schema):
     def get_by_shortname[T: so.Object](
         self,
         shortname: sn.Name,
-        scls: type[T],
+        mcls: type[T],
     ) -> Optional[tuple[T, ...]]:
-        obj_ids = self._shortname_to_id.get((scls, shortname))
+        obj_ids = self._shortname_to_id.get((mcls, shortname))
         if obj_ids is None:
             return None
         return tuple(
-            raw_schema_restore(scls.__name__, i)  # type: ignore
+            raw_schema_restore(mcls.__name__, i)  # type: ignore
             for i in obj_ids
         )
 
@@ -1535,9 +1494,6 @@ def lookup[T](
     module = name.module if isinstance(name, sn.QualName) else None
     orig_module = module
 
-    print(shortname)
-    print(module)
-
     if module == '__std__':
         fqname = sn.QualName('std', shortname)
         result = getter(schema, fqname)
@@ -1550,8 +1506,6 @@ def lookup[T](
     module = apply_module_aliases(
         module, module_aliases
     )
-
-    print(module)
 
     # Check if something matches the name
     if module is not None:
@@ -1928,35 +1882,6 @@ class ChainedSchema(Schema):
                 self._global_schema,
             )
 
-    def get_functions(
-        self,
-        name: str | sn.Name,
-        default: tuple[s_func.Function, ...] | so.NoDefaultT = so.NoDefault,
-        *,
-        module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> tuple[s_func.Function, ...]:
-        objs = self._top_schema.get_functions(
-            name,
-            module_aliases=module_aliases,
-            default=(),
-            disallow_module=disallow_module,
-        )
-        if not objs:
-            if disallow_module is not None:
-                dm = disallow_module
-                disallow_module = (
-                    lambda s: dm(s) or self._top_schema.has_module(s))
-            else:
-                disallow_module = self._top_schema.has_module
-            objs = self._base_schema.get_functions(
-                name,
-                default=default,
-                module_aliases=module_aliases,
-                disallow_module=disallow_module,
-            )
-        return objs
-
     def get_casts_to_type(
         self,
         to_type: s_types.Type,
@@ -2124,15 +2049,15 @@ class ChainedSchema(Schema):
     def get_by_shortname[T: so.Object](
         self,
         shortname: sn.Name,
-        scls: type[T],
+        mcls: type[T],
     ) -> Optional[tuple[T, ...]]:
-        objs = self._base_schema.get_by_shortname(shortname, scls)
+        objs = self._base_schema.get_by_shortname(shortname, mcls)
         if objs is not None:
             return objs
-        objs = self._top_schema.get_by_shortname(shortname, scls)
+        objs = self._top_schema.get_by_shortname(shortname, mcls)
         if objs is not None:
             return objs
-        return self._global_schema.get_by_shortname(shortname, scls)
+        return self._global_schema.get_by_shortname(shortname, mcls)
 
     def has_object(self, object_id: uuid.UUID) -> bool:
         return (
@@ -2196,24 +2121,10 @@ class ChainedSchema(Schema):
 
 
 @lru.per_job_lru_cache()
-def _get_functions(
-    schema: FlatSchema,
-    name: sn.Name,
-) -> Optional[tuple[s_func.Function, ...]]:
-    objids = schema._shortname_to_id.get((s_func.Function, name))
-    if objids is None:
-        return None
-    return cast(
-        tuple[s_func.Function, ...],
-        tuple(schema.get_by_id(oid) for oid in objids),
-    )
-
-
-@lru.per_job_lru_cache()
 def _get_operators(
     schema: Schema,
     name: sn.Name,
-) -> Optional[tuple[s_oper.Operator, ...]]:
+) -> tuple[s_oper.Operator, ...] | None:
     return schema.get_by_shortname(name, s_oper.Operator)
 
 

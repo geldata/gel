@@ -99,9 +99,10 @@ def compile_FunctionCall(
         funcname = sn.QualName(*expr.func)
 
     try:
-        funcs = env.schema.get_functions(
+        funcs = s_func.lookup_functions(
             funcname,
             module_aliases=ctx.modaliases,
+            schema=env.schema,
         )
     except errors.InvalidReferenceError as e:
         s_utils.enrich_schema_lookup_error(
@@ -1284,9 +1285,11 @@ def compile_ext_ai_search(
             case _:
                 raise RuntimeError(f"unsupported distance_function: {df}")
 
-        distance_func = schema.get_functions(
-            sn.QualName("ext::pgvector", distance_fname),
-        )[0]
+        distance_funcs = schema.get_by_shortname(
+            sn.QualName("ext::pgvector", distance_fname), s_func.Function
+        )
+        assert distance_funcs
+        distance_func = distance_funcs[0]
 
         index_metadata[typeref] = {
             "id": s_indexes.get_ai_index_id(schema, index),
