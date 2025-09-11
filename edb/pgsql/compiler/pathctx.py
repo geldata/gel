@@ -1108,7 +1108,10 @@ def _get_rel_path_output(
     ptr_info = None
     if ptrref and not isinstance(ptrref, irast.TypeIntersectionPointerRef):
         ptr_info = pg_types.get_ptrref_storage_info(
-            ptrref, resolve_type=False, link_bias=False)
+            ptrref,
+            resolve_type=False,
+            link_bias=bool(rel.path_id and rel.path_id.is_ptr_path()),
+        )
 
     if (rptr_dir is not None and
             rptr_dir != s_pointers.PointerDirection.Outbound):

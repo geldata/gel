@@ -2936,6 +2936,8 @@ class AlterPointerLowerCardinality[Pointer_T: Pointer](
         schema: s_schema.Schema,
         context: sd.CommandContext,
     ) -> s_schema.Schema:
+        from edb.ir import utils as irutils
+
         orig_schema = schema
         schema = super()._alter_begin(schema, context)
         scls = self.scls
@@ -2985,6 +2987,17 @@ class AlterPointerLowerCardinality[Pointer_T: Pointer](
                     raise errors.SchemaError(
                         f'result of USING clause for the alteration of '
                         f'{vn} may not include a shape',
+                        span=self.span,
+                    )
+
+                if (
+                    self.scls.is_link_property(schema)
+                    and irutils.contains_dml(self.fill_expr.ir_statement)
+                ):
+                    raise errors.UnsupportedFeatureError(
+                        f'USING clause for the alteration of optionality of '
+                        f'{vn} cannot include mutating statements, '
+                        'because it is a link property',
                         span=self.span,
                     )
 
