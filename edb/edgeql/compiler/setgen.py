@@ -1803,6 +1803,8 @@ def computable_ptr_set(
         subctx.view_rptr = context.ViewRPtr(
             source=source_scls, ptrcls=ptrcls)
         subctx.anchors['__source__'] = source_set
+        if qlctx and '__default__' in qlctx.anchors:
+            subctx.anchors['__default__'] = qlctx.anchors['__default__']
         subctx.empty_result_type_hint = ptrcls.get_target(ctx.env.schema)
         subctx.partial_path_prefix = source_set
         # On a mutation, make the expr_exposed. This corresponds with
