@@ -1161,18 +1161,7 @@ class FlatSchema(Schema):
                 return default
 
         # Apply module aliases
-        current_module = (
-            module_aliases[None]
-            if module_aliases and None in module_aliases else
-            None
-        )
-        is_current, module = apply_module_aliases(
-            module, module_aliases, current_module,
-        )
-        if is_current and current_module is None:
-            return default
-
-        no_std = is_current
+        module = apply_module_aliases(module, module_aliases)
 
         # Check if something matches the name
         if module is not None:
@@ -1181,27 +1170,25 @@ class FlatSchema(Schema):
             if result is not None:
                 return result
 
-        # Try something in std if __current__ was not specified
-        if not no_std:
-            # If module == None, look in std
-            if orig_module is None:
-                mod_name = 'std'
-                fqname = sn.QualName(mod_name, shortname)
-                result = getter(self, fqname)
-                if result is not None:
-                    return result
+        # If module == None, look in std
+        if orig_module is None:
+            mod_name = 'std'
+            fqname = sn.QualName(mod_name, shortname)
+            result = getter(self, fqname)
+            if result is not None:
+                return result
 
-            # Ensure module is not a base module.
-            # Then try the module as part of std.
-            if module and not (
-                self.has_module(fmod := module.split('::')[0])
-                or (disallow_module and disallow_module(fmod))
-            ):
-                mod_name = f'std::{module}'
-                fqname = sn.QualName(mod_name, shortname)
-                result = getter(self, fqname)
-                if result is not None:
-                    return result
+        # Ensure module is not a base module.
+        # Then try the module as part of std.
+        if module and not (
+            self.has_module(fmod := module.split('::')[0])
+            or (disallow_module and disallow_module(fmod))
+        ):
+            mod_name = f'std::{module}'
+            fqname = sn.QualName(mod_name, shortname)
+            result = getter(self, fqname)
+            if result is not None:
+                return result
 
         return default
 
@@ -1540,19 +1527,10 @@ class FlatSchema(Schema):
 
 
 def apply_module_aliases(
-    module: Optional[str],
+    module: str | None,
     module_aliases: Optional[Mapping[Optional[str], str]],
-    current_module: Optional[str],
-) -> tuple[bool, Optional[str]]:
-    is_current = False
-    if module and module.startswith('__current__::'):
-        # Replace __current__ with default module
-        is_current = True
-        if current_module is not None:
-            module = f'{current_module}::{module.removeprefix("__current__::")}'
-        else:
-            module = None
-    elif module_aliases is not None:
+) -> str | None:
+    if module_aliases is not None:
         # Apply modalias
         first: Optional[str]
         if module:
@@ -1564,7 +1542,7 @@ def apply_module_aliases(
         if fq_module is not None:
             module = fq_module + sep + rest
 
-    return is_current, module
+    return module
 
 
 EMPTY_SCHEMA = FlatSchema()

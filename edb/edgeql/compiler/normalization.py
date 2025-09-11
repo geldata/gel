@@ -421,14 +421,7 @@ def normalize_FunctionCall(
             # module default {
             #     alias query := (with A as module B select A::foo() );
             # }
-            current_module = (
-                modaliases[None]
-                if modaliases and None in modaliases else
-                None
-            )
-            _, module = s_schema.apply_module_aliases(
-                name.module, modaliases, current_module,
-            )
+            module = s_schema.apply_module_aliases(name.module, modaliases)
             if module is not None:
                 node.func = (module, name.name)
 
