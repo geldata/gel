@@ -378,7 +378,7 @@ class Schema(abc.ABC):
     def get(
         self,
         name: str | sn.Name,
-        default: so.Object_T | so.NoDefaultT = so.NoDefault,
+        default: so.Object | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
         condition: Optional[Callable[[so.Object], bool]] = None,
@@ -401,31 +401,31 @@ class Schema(abc.ABC):
         ...
 
     @overload
-    def get(
+    def get[T: so.Object](
         self,
         name: str | sn.Name,
-        default: so.Object_T | so.NoDefaultT = so.NoDefault,
+        default: T | so.NoDefaultT = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        type: type[so.Object_T],
+        type: type[T],
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
         span: Optional[parsing.Span] = None,
-    ) -> so.Object_T:
+    ) -> T:
         ...
 
     @overload
-    def get(
+    def get[T: so.Object](
         self,
         name: str | sn.Name,
         default: None,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        type: type[so.Object_T],
+        type: type[T],
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
         span: Optional[parsing.Span] = None,
-    ) -> Optional[so.Object_T]:
+    ) -> Optional[T]:
         ...
 
     @overload
@@ -435,7 +435,7 @@ class Schema(abc.ABC):
         default: so.Object | so.NoDefaultT | None = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Optional[type[so.Object_T]] = None,
+        type: Optional[type[so.Object]] = None,
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
         span: Optional[parsing.Span] = None,
@@ -448,7 +448,7 @@ class Schema(abc.ABC):
         default: so.Object | so.NoDefaultT | None = so.NoDefault,
         *,
         module_aliases: Optional[Mapping[Optional[str], str]] = None,
-        type: Optional[type[so.Object_T]] = None,
+        type: Optional[type[so.Object]] = None,
         condition: Optional[Callable[[so.Object], bool]] = None,
         label: Optional[str] = None,
         span: Optional[parsing.Span] = None,
