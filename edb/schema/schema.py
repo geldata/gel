@@ -422,30 +422,37 @@ class Schema(abc.ABC):
         label: Optional[str] = None,
         span: Optional[parsing.Span] = None,
     ) -> Optional[so.Object]:
-        return self._get(
+
+        def getter(schema: Schema, name: sn.Name) -> Optional[so.Object]:
+            obj = schema.get_by_fully_qualified(name)
+            if obj is not None and condition is not None:
+                if not condition(obj):
+                    obj = None
+            return obj
+
+        obj = lookup(
+            self,
             name,
-            default,
+            getter=getter,
+            default=default,
             module_aliases=module_aliases,
-            type=type,
-            condition=condition,
-            label=label,
-            span=span,
         )
 
-    @abc.abstractmethod
-    def _get(
-        self,
-        name: str | sn.Name,
-        default: so.Object | so.NoDefaultT | None,
-        *,
-        module_aliases: Optional[Mapping[Optional[str], str]],
-        type: Optional[type[so.Object_T]],
-        condition: Optional[Callable[[so.Object], bool]],
-        label: Optional[str],
-        span: Optional[parsing.Span],
-        disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> Optional[so.Object]:
-        raise NotImplementedError
+        if obj is not so.NoDefault:
+            # We do our own type check, instead of using get_by_id's, so
+            # we can produce a user-facing error message.
+            if obj and type is not None and not isinstance(obj, type):
+                Schema.raise_wrong_type(name, obj.__class__, type, span)
+
+            return obj  # type: ignore
+        else:
+            Schema.raise_bad_reference(
+                name=name,
+                label=label,
+                module_aliases=module_aliases,
+                span=span,
+                type=type,
+            )
 
     @abc.abstractmethod
     def get_by_shortname[T: so.Object](
@@ -453,6 +460,13 @@ class Schema(abc.ABC):
         mcls: type[T],
         shortname: sn.Name,
     ) -> Optional[tuple[T, ...]]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_by_fully_qualified(
+        self,
+        name: sn.Name,
+    ) -> Optional[so.Object]:
         raise NotImplementedError
 
     def _get_object_ids(self) -> Iterable[uuid.UUID]:
@@ -1124,69 +1138,6 @@ class FlatSchema(Schema):
     def delete(self, obj: so.Object) -> FlatSchema:
         return self._delete(obj)
 
-    def _search_with_getter(
-        self,
-        name: str | sn.Name,
-        *,
-        getter: Callable[[FlatSchema, sn.Name], Any],
-        default: Any,
-        module_aliases: Optional[Mapping[Optional[str], str]],
-        disallow_module: Optional[Callable[[str], bool]],
-    ) -> Any:
-        """
-        Find something in the schema with a given name.
-
-        This function mostly mirrors edgeql.tracer.resolve_name
-        except:
-        - When searching in std, disallow some modules (often the base modules)
-        - If no result found, return default
-        """
-        if isinstance(name, str):
-            name = sn.name_from_string(name)
-        shortname = name.name
-        module = name.module if isinstance(name, sn.QualName) else None
-        orig_module = module
-
-        if module == '__std__':
-            fqname = sn.QualName('std', shortname)
-            result = getter(self, fqname)
-            if result is not None:
-                return result
-            else:
-                return default
-
-        # Apply module aliases
-        module = apply_module_aliases(module, module_aliases)
-
-        # Check if something matches the name
-        if module is not None:
-            fqname = sn.QualName(module, shortname)
-            result = getter(self, fqname)
-            if result is not None:
-                return result
-
-        # If module == None, look in std
-        if orig_module is None:
-            mod_name = 'std'
-            fqname = sn.QualName(mod_name, shortname)
-            result = getter(self, fqname)
-            if result is not None:
-                return result
-
-        # Ensure module is not a base module.
-        # Then try the module as part of std.
-        if module and not (
-            self.has_module(fmod := module.split('::')[0])
-            or (disallow_module and disallow_module(fmod))
-        ):
-            mod_name = f'std::{module}'
-            fqname = sn.QualName(mod_name, shortname)
-            result = getter(self, fqname)
-            if result is not None:
-                return result
-
-        return default
-
     @lru.lru_method_cache()
     def _get_casts(
         self,
@@ -1353,53 +1304,6 @@ class FlatSchema(Schema):
             return None
         return _raw_schema_restore(mcls.__name__, obj_id)  # type: ignore
 
-    def _get(
-        self,
-        name: str | sn.Name,
-        default: so.Object | so.NoDefaultT | None,
-        *,
-        module_aliases: Optional[Mapping[Optional[str], str]],
-        type: Optional[type[so.Object_T]],
-        condition: Optional[Callable[[so.Object], bool]],
-        label: Optional[str],
-        span: Optional[parsing.Span],
-        disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> Optional[so.Object]:
-        def getter(schema: FlatSchema, name: sn.Name) -> Optional[so.Object]:
-            obj_id = schema._name_to_id.get(name)
-            if obj_id is None:
-                return None
-
-            obj = schema.get_by_id(obj_id, default=None)
-            if obj is not None and condition is not None:
-                if not condition(obj):
-                    obj = None
-            return obj
-
-        obj = self._search_with_getter(
-            name,
-            getter=getter,
-            module_aliases=module_aliases,
-            default=default,
-            disallow_module=disallow_module,
-        )
-
-        if obj is not so.NoDefault:
-            # We do our own type check, instead of using get_by_id's, so
-            # we can produce a user-facing error message.
-            if obj and type is not None and not isinstance(obj, type):
-                Schema.raise_wrong_type(name, obj.__class__, type, span)
-
-            return obj  # type: ignore
-        else:
-            Schema.raise_bad_reference(
-                name=name,
-                label=label,
-                module_aliases=module_aliases,
-                span=span,
-                type=type,
-            )
-
     def get_by_shortname[T: so.Object](
         self,
         mcls: type[T],
@@ -1412,6 +1316,15 @@ class FlatSchema(Schema):
             _raw_schema_restore(mcls.__name__, i)  # type: ignore
             for i in obj_ids
         )
+
+    def get_by_fully_qualified(
+        self,
+        name: sn.Name,
+    ) -> Optional[so.Object]:
+        obj_id = self._name_to_id.get(name)
+        if obj_id is None:
+            return None
+        return self.get_by_id(obj_id)
 
     def has_object(self, object_id: uuid.UUID) -> bool:
         return object_id in self._id_to_type
@@ -1996,48 +1909,6 @@ class ChainedSchema(Schema):
                 obj = self._base_schema.get_by_globalname(mcls, name)
             return obj
 
-    def _get(
-        self,
-        name: str | sn.Name,
-        default: so.Object | so.NoDefaultT | None,
-        *,
-        module_aliases: Optional[Mapping[Optional[str], str]],
-        type: Optional[type[so.Object_T]],
-        condition: Optional[Callable[[so.Object], bool]],
-        label: Optional[str],
-        span: Optional[parsing.Span],
-        disallow_module: Optional[Callable[[str], bool]] = None,
-    ) -> Optional[so.Object]:
-        obj = self._top_schema._get(
-            name,
-            module_aliases=module_aliases,
-            type=type,
-            default=None,
-            condition=condition,
-            label=label,
-            span=span,
-            disallow_module=disallow_module,
-        )
-        if obj is None:
-            if disallow_module is not None:
-                dm = disallow_module
-                disallow_module = (
-                    lambda s: dm(s) or self._top_schema.has_module(s))
-            else:
-                disallow_module = self._top_schema.has_module
-            return self._base_schema._get(
-                name,
-                default=default,
-                module_aliases=module_aliases,
-                type=type,
-                condition=condition,
-                label=label,
-                span=span,
-                disallow_module=disallow_module,
-            )
-        else:
-            return obj
-
     def get_by_shortname[T: so.Object](
         self,
         mcls: type[T],
@@ -2047,6 +1918,15 @@ class ChainedSchema(Schema):
         if objs is not None:
             return objs
         return self._top_schema.get_by_shortname(mcls, shortname)
+
+    def get_by_fully_qualified(
+        self,
+        name: sn.Name,
+    ) -> Optional[so.Object]:
+        objs = self._base_schema.get_by_fully_qualified(name)
+        if objs is not None:
+            return objs
+        return self._top_schema.get_by_fully_qualified(name)
 
     def has_object(self, object_id: uuid.UUID) -> bool:
         return (
