@@ -118,7 +118,7 @@ TESTMODE_SOURCES = (
 
 
 # Deep optimization: avoid lookups into so.Object
-raw_schema_restore = so.Object.raw_schema_restore
+_raw_schema_restore = so.Object.raw_schema_restore
 
 
 class Schema(abc.ABC):
@@ -1316,10 +1316,6 @@ class FlatSchema(Schema):
         default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
         *,
         type: Optional[type[so.Object_T]] = None,
-        # Deep u-optimization; this is the hottest path in the system,
-        # so avoid needing to do lookups for this function.
-        _raw_schema_restore: Callable[[str, uuid.UUID], so.Object] = (
-            so.Object.raw_schema_restore),
     ) -> Optional[so.Object_T]:
         try:
             sclass_name = self._id_to_type[obj_id]
@@ -1355,7 +1351,7 @@ class FlatSchema(Schema):
         obj_id = self._globalname_to_id.get((mcls, name))
         if obj_id is None:
             return None
-        return raw_schema_restore(mcls.__name__, obj_id)  # type: ignore
+        return _raw_schema_restore(mcls.__name__, obj_id)  # type: ignore
 
     def _get(
         self,
@@ -1413,7 +1409,7 @@ class FlatSchema(Schema):
         if obj_ids is None:
             return None
         return tuple(
-            raw_schema_restore(mcls.__name__, i)  # type: ignore
+            _raw_schema_restore(mcls.__name__, i)  # type: ignore
             for i in obj_ids
         )
 
