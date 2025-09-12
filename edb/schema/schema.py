@@ -1485,12 +1485,12 @@ def lookup[T](
     if isinstance(name, str):
         name = sn.name_from_string(name)
 
-    shortname = name.name
+    obj_name = name.name
     module = name.module if isinstance(name, sn.QualName) else None
     orig_module = module
 
     if module == '__std__':
-        fqname = sn.QualName('std', shortname)
+        fqname = sn.QualName('std', obj_name)
         result = getter(schema, fqname)
         if result is not None:
             return result
@@ -1504,22 +1504,22 @@ def lookup[T](
 
     # Check if something matches the name
     if module is not None:
-        fqname = sn.QualName(module, shortname)
+        fqname = sn.QualName(module, obj_name)
         result = getter(schema, fqname)
         if result is not None:
             return result
 
-    # If module == None, look in std
+    # For unqualified names, fallback to std::{obj_name}
     if orig_module is None:
-        fqname = sn.QualName('std', shortname)
+        fqname = sn.QualName('std', obj_name)
         result = getter(schema, fqname)
         if result is not None:
             return result
 
-    # Ensure module is not a base module.
-    # Then try the module as part of std.
-    if module:
-        fqname = sn.QualName(f'std::{module}', shortname)
+    # For qualified names, fallback to std::{module}::{obj_name}
+    # This is allowed only when there is no top-level module with the same name.
+    if module and not schema.has_module(module.split('::')[0]):
+        fqname = sn.QualName(f'std::{module}', obj_name)
         result = getter(schema, fqname)
         if result is not None:
             return result
@@ -2046,10 +2046,7 @@ class ChainedSchema(Schema):
         objs = self._base_schema.get_by_shortname(mcls, shortname)
         if objs is not None:
             return objs
-        objs = self._top_schema.get_by_shortname(mcls, shortname)
-        if objs is not None:
-            return objs
-        return self._global_schema.get_by_shortname(mcls, shortname)
+        return self._top_schema.get_by_shortname(mcls, shortname)
 
     def has_object(self, object_id: uuid.UUID) -> bool:
         return (
