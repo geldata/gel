@@ -132,22 +132,14 @@ class Schema(abc.ABC):
     ) -> Self:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def add(
-        self,
+        self: Self,
         id: uuid.UUID,
         sclass: type[so.Object],
         data: tuple[Any, ...],
-    ) -> FlatSchema:
-        reducible_fields = sclass.get_reducible_fields()
-        if reducible_fields:
-            data_list = list(data)
-            for field in reducible_fields:
-                val = data[field.index]
-                if val is not None:
-                    data_list[field.index] = val.schema_reduce()
-            data = tuple(data_list)
-
-        return self.add_raw(id, sclass, data)
+    ) -> Self:
+        raise NotImplementedError
 
     @abc.abstractmethod
     def discard(self: Self, obj: so.Object) -> Self:
@@ -176,17 +168,12 @@ class Schema(abc.ABC):
     ) -> Optional[tuple[Any, ...]]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def get_obj_data_raw(
         self,
         obj: so.Object,
     ) -> tuple[Any, ...]:
-        data = self.maybe_get_obj_data_raw(obj)
-        if data is not None:
-            return data
-        else:
-            err = (f'cannot get item data: item {str(obj.id)!r} '
-                   f'is not present in the schema {self!r}')
-            raise errors.SchemaError(err) from None
+        raise NotImplementedError
 
     @abc.abstractmethod
     def set_obj_field(
@@ -335,30 +322,15 @@ class Schema(abc.ABC):
         *,
         type: Optional[type[so.Object_T]] = None,
     ) -> Optional[so.Object_T]:
-        obj = self._get_by_id(obj_id)
-
-        if obj is None:
-            if default is so.NoDefault:
-                raise LookupError(
-                    f'reference to a non-existent schema item {obj_id}'
-                    f' in schema {self!r}'
-                ) from None
-            else:
-                return default
-
-        if type is not None and not isinstance(obj, type):
-            raise TypeError(
-                f'schema object {obj_id!r} exists, but is a '
-                f'{obj.__class__.get_schema_class_displayname()!r}, '
-                f'not a {type.get_schema_class_displayname()!r}'
-            )
-        # Avoid the overhead of cast(Object_T) below
-        return obj  # type: ignore
+        return self._get_by_id(obj_id, default, type=type)
 
     @abc.abstractmethod
     def _get_by_id(
         self,
         obj_id: uuid.UUID,
+        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
+        *,
+        type: Optional[type[so.Object_T]] = None,
     ) -> Optional[so.Object_T]:
         raise NotImplementedError
 
@@ -869,6 +841,17 @@ class FlatSchema(Schema):
     ) -> Optional[tuple[Any, ...]]:
         return self._id_to_data.get(obj.id)
 
+    def get_obj_data_raw(
+        self,
+        obj: so.Object,
+    ) -> tuple[Any, ...]:
+        try:
+            return self._id_to_data[obj.id]
+        except KeyError:
+            err = (f'cannot get item data: item {str(obj.id)!r} '
+                   f'is not present in the schema {self!r}')
+            raise errors.SchemaError(err) from None
+
     def set_obj_field(
         self,
         obj: so.Object,
@@ -1112,6 +1095,23 @@ class FlatSchema(Schema):
 
         return self._replace(**updates)  # type: ignore
 
+    def add(
+        self,
+        id: uuid.UUID,
+        sclass: type[so.Object],
+        data: tuple[Any, ...],
+    ) -> FlatSchema:
+        reducible_fields = sclass.get_reducible_fields()
+        if reducible_fields:
+            data_list = list(data)
+            for field in reducible_fields:
+                val = data[field.index]
+                if val is not None:
+                    data_list[field.index] = val.schema_reduce()
+            data = tuple(data_list)
+
+        return self.add_raw(id, sclass, data)
+
     def delist(self, name: sn.Name) -> FlatSchema:
         name_to_id = self._name_to_id.delete(name)
         return self._replace(
@@ -1247,11 +1247,38 @@ class FlatSchema(Schema):
 
             return result  # type: ignore
 
-    def _get_by_id(self, obj_id: uuid.UUID) -> Optional[so.Object_T]:
-        sclass_name = self._id_to_type.get(obj_id)
-        if sclass_name is None:
-            return None
-        return _raw_schema_restore(sclass_name, obj_id)
+    def _get_by_id(
+        self,
+        obj_id: uuid.UUID,
+        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
+        *,
+        type: Optional[type[so.Object_T]] = None,
+    ) -> Optional[so.Object_T]:
+        try:
+            sclass_name = self._id_to_type[obj_id]
+        except KeyError:
+            if default is so.NoDefault:
+                raise LookupError(
+                    f'reference to a non-existent schema item {obj_id}'
+                    f' in schema {self!r}'
+                ) from None
+            else:
+                return default
+        else:
+            obj = _raw_schema_restore(sclass_name, obj_id)
+            if type is not None and not isinstance(obj, type):
+                raise TypeError(
+                    f'schema object {obj_id!r} exists, but is a '
+                    f'{obj.__class__.get_schema_class_displayname()!r}, '
+                    f'not a {type.get_schema_class_displayname()!r}'
+                )
+
+            # Avoid the overhead of cast(Object_T) below
+            return obj  # type: ignore
+
+    # Important micro-optimization
+    if not TYPE_CHECKING:
+        get_by_id = _get_by_id
 
     def get_by_globalname[T: so.Object](
         self, mcls: type[T], name: sn.Name,
@@ -1594,6 +1621,25 @@ class ChainedSchema(Schema):
                 self._global_schema,
             )
 
+    def add(
+        self,
+        id: uuid.UUID,
+        sclass: type[so.Object],
+        data: tuple[Any, ...],
+    ) -> ChainedSchema:
+        if issubclass(sclass, so.GlobalObject):
+            return ChainedSchema(
+                self._base_schema,
+                self._top_schema,
+                self._global_schema.add(id, sclass, data),
+            )
+        else:
+            return ChainedSchema(
+                self._base_schema,
+                self._top_schema.add(id, sclass, data),
+                self._global_schema,
+            )
+
     def discard(self, obj: so.Object) -> ChainedSchema:
         if isinstance(obj, so.GlobalObject):
             return ChainedSchema(
@@ -1668,15 +1714,30 @@ class ChainedSchema(Schema):
         self,
         obj: so.Object,
     ) -> Optional[tuple[Any, ...]]:
-        data = self._top_schema.maybe_get_obj_data_raw(obj)
-        if data is not None:
-            return data
-        data = self._base_schema.maybe_get_obj_data_raw(obj)
-        if data is not None:
-            return data
         if obj.is_global_object:
             return self._global_schema.maybe_get_obj_data_raw(obj)
-        return None
+        else:
+            top = self._top_schema.maybe_get_obj_data_raw(obj)
+            if top is not None:
+                return top
+            else:
+                return self._base_schema.maybe_get_obj_data_raw(obj)
+
+    def get_obj_data_raw(
+        self,
+        obj: so.Object,
+    ) -> tuple[Any, ...]:
+        top = self._top_schema.maybe_get_obj_data_raw(obj)
+        if top is not None:
+            return top
+        else:
+            try:
+                return self._base_schema.get_obj_data_raw(obj)
+            except errors.SchemaError:
+                if obj.is_global_object:
+                    return self._global_schema.get_obj_data_raw(obj)
+                else:
+                    raise
 
     def set_obj_field(
         self,
@@ -1764,13 +1825,22 @@ class ChainedSchema(Schema):
     def _get_by_id(
         self,
         obj_id: uuid.UUID,
-    ) -> Optional[so.Object]:
-        obj = self._top_schema.get_by_id(obj_id)
+        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
+        *,
+        type: Optional[type[so.Object_T]] = None,
+    ) -> Optional[so.Object_T]:
+        obj = self._top_schema.get_by_id(obj_id, type=type, default=None)
         if obj is None:
-            obj = self._base_schema.get_by_id(obj_id)
+            obj = self._base_schema.get_by_id(
+                obj_id, default=None, type=type)
             if obj is None:
-                obj = self._global_schema.get_by_id(obj_id)
+                obj = self._global_schema.get_by_id(
+                    obj_id, default=default, type=type)
         return obj
+
+    # Important micro-optimization
+    if not TYPE_CHECKING:
+        get_by_id = _get_by_id
 
     def get_by_globalname[T: so.Object](
         self, mcls: type[T], name: sn.Name,
