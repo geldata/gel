@@ -304,38 +304,43 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @overload
-    def get_global(
+    def get_global[T: so.Object](
         self,
-        objtype: type[so.Object_T],
+        mcls: type[T],
         name: str | sn.Name,
-        default: so.Object_T | so.NoDefaultT = so.NoDefault,
-    ) -> so.Object_T:
+        default: T | so.NoDefaultT = so.NoDefault,
+    ) -> T:
         ...
 
     @overload
-    def get_global(
+    def get_global[T: so.Object](
         self,
-        objtype: type[so.Object_T],
+        mcls: type[T],
         name: str | sn.Name,
         default: None = None,
-    ) -> Optional[so.Object_T]:
+    ) -> Optional[T]:
         ...
 
-    def get_global(
+    def get_global[T: so.Object](
         self,
-        objtype: type[so.Object_T],
+        mcls: type[T],
         name: str | sn.Name,
-        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
-    ) -> Optional[so.Object_T]:
-        return self._get_global(objtype, name, default)
+        default: T | so.NoDefaultT | None = so.NoDefault,
+    ) -> Optional[T]:
+        if isinstance(name, str):
+            name = sn.UnqualName(name)
+        obj = self.get_by_globalname(mcls, name)
+        if obj is not None:
+            return obj
+        elif default is not so.NoDefault:
+            return default
+        else:
+            Schema.raise_bad_reference(name, type=mcls)
 
     @abc.abstractmethod
-    def _get_global(
-        self,
-        objtype: type[so.Object_T],
-        name: str | sn.Name,
-        default: so.Object_T | so.NoDefaultT | None,
-    ) -> Optional[so.Object_T]:
+    def get_by_globalname[T: so.Object](
+        self, mcls: type[T], name: sn.Name,
+    ) -> Optional[T]:
         raise NotImplementedError
 
     @overload
@@ -445,8 +450,8 @@ class Schema(abc.ABC):
     @abc.abstractmethod
     def get_by_shortname[T: so.Object](
         self,
-        shortname: sn.Name,
         mcls: type[T],
+        shortname: sn.Name,
     ) -> Optional[tuple[T, ...]]:
         raise NotImplementedError
 
@@ -1342,21 +1347,15 @@ class FlatSchema(Schema):
     if not TYPE_CHECKING:
         get_by_id = _get_by_id
 
-    def _get_global(
-        self,
-        objtype: type[so.Object_T],
-        name: str | sn.Name,
-        default: so.Object_T | so.NoDefaultT | None,
-    ) -> Optional[so.Object_T]:
+    def get_by_globalname[T: so.Object](
+        self, mcls: type[T], name: sn.Name,
+    ) -> Optional[T]:
         if isinstance(name, str):
             name = sn.UnqualName(name)
-        obj_id = self._globalname_to_id.get((objtype, name))
-        if obj_id is not None:
-            return self.get_by_id(obj_id)  # type: ignore
-        elif default is not so.NoDefault:
-            return default
-        else:
-            Schema.raise_bad_reference(name, type=objtype)
+        obj_id = self._globalname_to_id.get((mcls, name))
+        if obj_id is None:
+            return None
+        return raw_schema_restore(mcls.__name__, obj_id)  # type: ignore
 
     def _get(
         self,
@@ -1407,8 +1406,8 @@ class FlatSchema(Schema):
 
     def get_by_shortname[T: so.Object](
         self,
-        shortname: sn.Name,
         mcls: type[T],
+        shortname: sn.Name,
     ) -> Optional[tuple[T, ...]]:
         obj_ids = self._shortname_to_id.get((mcls, shortname))
         if obj_ids is None:
@@ -1988,20 +1987,17 @@ class ChainedSchema(Schema):
     if not TYPE_CHECKING:
         get_by_id = _get_by_id
 
-    def _get_global(
-        self,
-        objtype: type[so.Object_T],
-        name: str | sn.Name,
-        default: so.Object_T | so.NoDefaultT | None,
-    ) -> Optional[so.Object_T]:
-        if issubclass(objtype, so.GlobalObject):
-            return self._global_schema.get_global(  # type: ignore
-                objtype, name, default=default)
+    def get_by_globalname[T: so.Object](
+        self, mcls: type[T], name: sn.Name,
+    ) -> Optional[T]:
+        if issubclass(mcls, so.GlobalObject):
+            return self._global_schema.get_by_globalname(  # type: ignore
+                mcls, name
+            )
         else:
-            obj = self._top_schema.get_global(objtype, name, default=None)
+            obj = self._top_schema.get_by_globalname(mcls, name)
             if obj is None:
-                obj = self._base_schema.get_global(
-                    objtype, name, default=default)
+                obj = self._base_schema.get_by_globalname(mcls, name)
             return obj
 
     def _get(
@@ -2048,16 +2044,16 @@ class ChainedSchema(Schema):
 
     def get_by_shortname[T: so.Object](
         self,
-        shortname: sn.Name,
         mcls: type[T],
+        shortname: sn.Name,
     ) -> Optional[tuple[T, ...]]:
-        objs = self._base_schema.get_by_shortname(shortname, mcls)
+        objs = self._base_schema.get_by_shortname(mcls, shortname)
         if objs is not None:
             return objs
-        objs = self._top_schema.get_by_shortname(shortname, mcls)
+        objs = self._top_schema.get_by_shortname(mcls, shortname)
         if objs is not None:
             return objs
-        return self._global_schema.get_by_shortname(shortname, mcls)
+        return self._global_schema.get_by_shortname(mcls, shortname)
 
     def has_object(self, object_id: uuid.UUID) -> bool:
         return (
@@ -2125,7 +2121,7 @@ def _get_operators(
     schema: Schema,
     name: sn.Name,
 ) -> tuple[s_oper.Operator, ...] | None:
-    return schema.get_by_shortname(name, s_oper.Operator)
+    return schema.get_by_shortname(s_oper.Operator, name)
 
 
 @lru.per_job_lru_cache()

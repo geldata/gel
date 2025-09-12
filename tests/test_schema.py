@@ -1350,7 +1350,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         my_scalar_t = schema.get('test::my_scalar_t')
         constr = my_scalar_t.get_constraints(schema).objects(schema)[0]
         my_contains = (schema.get_by_shortname(
-            s_name.name_from_string('test::my_contains'), s_func.Function
+            s_func.Function, s_name.name_from_string('test::my_contains'),
         ) or ())[0]
         self.assertEqual(
             schema.get_referrers(my_contains),
@@ -1956,7 +1956,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         )
 
         fn, = schema.get_by_shortname(
-            s_name.QualName('std', 'json_typeof'), s_func.Function
+            s_func.Function, s_name.QualName('std', 'json_typeof'),
         )
         self.assertEqual(
             fn.get_verbosename(schema),
@@ -1970,7 +1970,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
         )
 
         op, = schema.get_by_shortname(
-            s_name.QualName('std', 'AND'), s_oper.Operator
+            s_oper.Operator, s_name.QualName('std', 'AND'),
         )
         self.assertEqual(
             op.get_verbosename(schema),
@@ -8489,10 +8489,10 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
 
         self.assertEqual(
             schema1.get_by_shortname(
-                s_name.name_from_string('default::f2'), s_func.Function
+                s_func.Function, s_name.name_from_string('default::f2'),
             )[0],
             schema2.get_by_shortname(
-                s_name.name_from_string('default::f2'), s_func.Function
+                s_func.Function, s_name.name_from_string('default::f2'),
             )[0],
             "function got deleted/recreated and should have been altered",
         )

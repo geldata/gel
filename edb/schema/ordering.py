@@ -840,8 +840,8 @@ def _trace_op(
 
             if isinstance(obj, s_func.Function) and old_schema is not None:
                 old_funcs = old_schema.get_by_shortname(
-                    sn.shortname_from_fullname(op.classname),
                     s_func.Function,
+                    sn.shortname_from_fullname(op.classname),
                 ) or ()
                 for old_func in old_funcs:
                     deps.add(('delete', str(old_func.get_name(old_schema))))
