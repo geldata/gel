@@ -20,7 +20,7 @@ impl Hasher {
         })
     }
 
-    fn add_source(&self, py: Python, data: &Bound<PyString>) -> PyResult<PyObject> {
+    fn add_source(&self, py: Python, data: &Bound<PyString>) -> PyResult<Py<PyAny>> {
         let text = data.to_str()?;
         let mut cell = self._hasher.write().unwrap();
         let hasher = cell

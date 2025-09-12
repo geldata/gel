@@ -34,13 +34,13 @@ pub fn normalize(py: Python<'_>, text: &Bound<PyString>) -> PyResult<Entry> {
 #[pyclass]
 pub struct Entry {
     #[pyo3(get)]
-    key: PyObject,
+    key: Py<PyAny>,
 
     #[pyo3(get)]
-    tokens: PyObject,
+    tokens: Py<PyAny>,
 
     #[pyo3(get)]
-    extra_blobs: PyObject,
+    extra_blobs: Py<PyAny>,
 
     extra_named: bool,
 
@@ -48,7 +48,7 @@ pub struct Entry {
     first_extra: Option<usize>,
 
     #[pyo3(get)]
-    extra_counts: PyObject,
+    extra_counts: Py<PyAny>,
 
     entry_pack: PackedEntry,
 }
@@ -72,7 +72,7 @@ impl Entry {
 
 #[pymethods]
 impl Entry {
-    fn get_variables(&self, py: Python) -> PyResult<PyObject> {
+    fn get_variables(&self, py: Python) -> PyResult<Py<PyAny>> {
         let vars = PyDict::new(py);
         let first = match self.first_extra {
             Some(first) => first,
@@ -90,7 +90,7 @@ impl Entry {
         Ok(vars.into())
     }
 
-    fn pack(&self, py: Python) -> PyResult<PyObject> {
+    fn pack(&self, py: Python) -> PyResult<Py<PyAny>> {
         let mut buf = vec![1u8]; // type and version
         bincode::serialize_into(&mut buf, &self.entry_pack)
             .map_err(|e| PyValueError::new_err(format!("Failed to pack: {e}")))?;

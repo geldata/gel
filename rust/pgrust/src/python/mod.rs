@@ -84,7 +84,7 @@ impl PyConnectionParams {
             .inner
             .hosts()
             .map_err(|e| PyException::new_err(e.to_string()))?;
-        let hosts = py.allow_threads(|| hosts.to_addrs_sync());
+        let hosts = py.detach(|| hosts.to_addrs_sync());
         let mut errors = Vec::new();
         let mut resolved_hosts = Vec::new();
 
@@ -396,7 +396,7 @@ struct PyConnectionStateUpdate {
 
 impl ConnectionStateSend for PyConnectionStateUpdate {
     fn send_initial(&mut self, message: InitialBuilder) -> Result<(), std::io::Error> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let bytes = PyByteArray::new(py, &message.to_vec());
             if let Err(e) = self.py_update.call_method1(py, "send", (bytes,)) {
                 eprintln!("Error in send_initial: {:?}", e);
@@ -407,7 +407,7 @@ impl ConnectionStateSend for PyConnectionStateUpdate {
     }
 
     fn send(&mut self, message: FrontendBuilder) -> Result<(), std::io::Error> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let bytes = PyBytes::new(py, &message.to_vec());
             if let Err(e) = self.py_update.call_method1(py, "send", (bytes,)) {
                 eprintln!("Error in send: {:?}", e);
@@ -418,7 +418,7 @@ impl ConnectionStateSend for PyConnectionStateUpdate {
     }
 
     fn upgrade(&mut self) -> Result<(), std::io::Error> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             if let Err(e) = self.py_update.call_method0(py, "upgrade") {
                 eprintln!("Error in upgrade: {:?}", e);
                 e.print(py);
@@ -430,7 +430,7 @@ impl ConnectionStateSend for PyConnectionStateUpdate {
 
 impl ConnectionStateUpdate for PyConnectionStateUpdate {
     fn parameter(&mut self, name: &str, value: &str) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             if let Err(e) = self.py_update.call_method1(py, "parameter", (name, value)) {
                 eprintln!("Error in parameter: {:?}", e);
                 e.print(py);
@@ -439,7 +439,7 @@ impl ConnectionStateUpdate for PyConnectionStateUpdate {
     }
 
     fn cancellation_key(&mut self, pid: i32, key: i32) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             if let Err(e) = self
                 .py_update
                 .call_method1(py, "cancellation_key", (pid, key))
@@ -451,7 +451,7 @@ impl ConnectionStateUpdate for PyConnectionStateUpdate {
     }
 
     fn state_changed(&mut self, state: ConnectionStateType) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             if let Err(e) = self
                 .py_update
                 .call_method1(py, "state_changed", (state as u8,))
@@ -463,7 +463,7 @@ impl ConnectionStateUpdate for PyConnectionStateUpdate {
     }
 
     fn auth(&mut self, auth: gel_auth::AuthType) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             if let Err(e) = self.py_update.call_method1(py, "auth", (auth as u8,)) {
                 eprintln!("Error in auth: {:?}", e);
                 e.print(py);
@@ -476,7 +476,7 @@ impl ConnectionStateUpdate for PyConnectionStateUpdate {
     }
 
     fn server_error(&mut self, error: &PgServerError) {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut fields = vec![];
             for (field, value) in error.fields() {
                 let etype = field as u8 as char;

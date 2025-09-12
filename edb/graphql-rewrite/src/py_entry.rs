@@ -10,11 +10,11 @@ use crate::rewrite::{self, Value};
 #[pyclass]
 pub struct Entry {
     #[pyo3(get)]
-    key: PyObject,
+    key: Py<PyAny>,
     #[pyo3(get)]
-    variables: PyObject,
+    variables: Py<PyAny>,
     #[pyo3(get)]
-    substitutions: PyObject,
+    substitutions: Py<PyAny>,
     _tokens: Vec<PyToken>,
     _end_pos: Pos,
     #[pyo3(get)]
@@ -25,11 +25,11 @@ pub struct Entry {
 
 #[pymethods]
 impl Entry {
-    fn tokens<'py>(&self, py: Python<'py>, kinds: PyObject) -> PyResult<impl IntoPyObject<'py>> {
+    fn tokens<'py>(&self, py: Python<'py>, kinds: Py<PyAny>) -> PyResult<impl IntoPyObject<'py>> {
         py_token::convert_tokens(py, &self._tokens, &self._end_pos, kinds)
     }
 
-    fn pack(&self, py: Python) -> PyResult<PyObject> {
+    fn pack(&self, py: Python) -> PyResult<Py<PyAny>> {
         let mut buf = vec![1u8]; // type and version
         bincode::serialize_into(&mut buf, &self.orig_entry)
             .map_err(|e| PyValueError::new_err(format!("Failed to pack: {e}")))?;
@@ -38,7 +38,7 @@ impl Entry {
 }
 
 #[pyfunction]
-pub fn unpack(py: Python<'_>, serialized: &Bound<PyBytes>) -> PyResult<PyObject> {
+pub fn unpack(py: Python<'_>, serialized: &Bound<PyBytes>) -> PyResult<Py<PyAny>> {
     let buf = serialized.as_bytes();
     match buf[0] {
         1u8 => {
@@ -88,7 +88,7 @@ pub fn convert_entry(py: Python<'_>, entry: rewrite::Entry) -> PyResult<Entry> {
     })
 }
 
-fn value_to_py(py: Python, value: &Value, decimal_cls: &Bound<PyAny>) -> PyResult<PyObject> {
+fn value_to_py(py: Python, value: &Value, decimal_cls: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
     let v = match value {
         Value::Str(ref v) => PyString::new(py, v).into_any(),
         Value::Int32(v) => v.into_pyobject(py)?.into_any(),
