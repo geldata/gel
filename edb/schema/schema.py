@@ -192,7 +192,6 @@ class Schema(abc.ABC):
     ) -> Self:
         raise NotImplementedError
 
-    @abc.abstractmethod
     def get_casts_to_type(
         self,
         to_type: s_types.Type,
@@ -200,9 +199,13 @@ class Schema(abc.ABC):
         implicit: bool = False,
         assignment: bool = False,
     ) -> frozenset[s_casts.Cast]:
-        raise NotImplementedError
+        return self._get_casts(
+            to_type,
+            disposition='to_type',
+            implicit=implicit,
+            assignment=assignment,
+        )
 
-    @abc.abstractmethod
     def get_casts_from_type(
         self,
         from_type: s_types.Type,
@@ -210,16 +213,44 @@ class Schema(abc.ABC):
         implicit: bool = False,
         assignment: bool = False,
     ) -> frozenset[s_casts.Cast]:
-        raise NotImplementedError
+        return self._get_casts(
+            from_type,
+            disposition='from_type',
+            implicit=implicit,
+            assignment=assignment,
+        )
+
+    @lru.lru_method_cache()
+    def _get_casts(
+        self,
+        stype: s_types.Type,
+        *,
+        disposition: str,
+        implicit: bool = False,
+        assignment: bool = False,
+    ) -> frozenset[s_casts.Cast]:
+        all_casts = self.get_referrers(
+            stype, scls_type=s_casts.Cast, field_name=disposition
+        )
+
+        casts = []
+        for castobj in all_casts:
+            if implicit and not castobj.get_allow_implicit(self):
+                continue
+            if assignment and not castobj.get_allow_assignment(self):
+                continue
+            casts.append(castobj)
+
+        return frozenset(casts)
 
     @overload
-    def get_referrers(
+    def get_referrers[T: so.Object](
         self,
         scls: so.Object,
         *,
-        scls_type: type[so.Object_T],
+        scls_type: type[T],
         field_name: Optional[str] = None,
-    ) -> frozenset[so.Object_T]:
+    ) -> frozenset[T]:
         ...
 
     @overload
@@ -237,9 +268,9 @@ class Schema(abc.ABC):
         self,
         scls: so.Object,
         *,
-        scls_type: Optional[type[so.Object_T]] = None,
+        scls_type: Optional[type[so.Object]] = None,
         field_name: Optional[str] = None,
-    ) -> frozenset[so.Object_T]:
+    ) -> frozenset[so.Object]:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -1138,52 +1169,6 @@ class FlatSchema(Schema):
     def delete(self, obj: so.Object) -> FlatSchema:
         return self._delete(obj)
 
-    @lru.lru_method_cache()
-    def _get_casts(
-        self,
-        stype: s_types.Type,
-        *,
-        disposition: str,
-        implicit: bool = False,
-        assignment: bool = False,
-    ) -> frozenset[s_casts.Cast]:
-
-        all_casts = cast(
-            frozenset[s_casts.Cast],
-            self.get_referrers(
-                stype, scls_type=s_casts.Cast, field_name=disposition),
-        )
-
-        casts = []
-        for castobj in all_casts:
-            if implicit and not castobj.get_allow_implicit(self):
-                continue
-            if assignment and not castobj.get_allow_assignment(self):
-                continue
-            casts.append(castobj)
-
-        return frozenset(casts)
-
-    def get_casts_to_type(
-        self,
-        to_type: s_types.Type,
-        *,
-        implicit: bool = False,
-        assignment: bool = False,
-    ) -> frozenset[s_casts.Cast]:
-        return self._get_casts(to_type, disposition='to_type',
-                               implicit=implicit, assignment=assignment)
-
-    def get_casts_from_type(
-        self,
-        from_type: s_types.Type,
-        *,
-        implicit: bool = False,
-        assignment: bool = False,
-    ) -> frozenset[s_casts.Cast]:
-        return self._get_casts(from_type, disposition='from_type',
-                               implicit=implicit, assignment=assignment)
-
     def get_referrers(
         self,
         scls: so.Object,
@@ -1192,7 +1177,8 @@ class FlatSchema(Schema):
         field_name: Optional[str] = None,
     ) -> frozenset[so.Object_T]:
         return self._get_referrers(
-            scls, scls_type=scls_type, field_name=field_name)
+            scls, scls_type=scls_type, field_name=field_name
+        )
 
     @lru.lru_method_cache()
     def _get_referrers(
@@ -1789,46 +1775,6 @@ class ChainedSchema(Schema):
                 self._top_schema.unset_obj_field(obj, field),
                 self._global_schema,
             )
-
-    def get_casts_to_type(
-        self,
-        to_type: s_types.Type,
-        *,
-        implicit: bool = False,
-        assignment: bool = False,
-    ) -> frozenset[s_casts.Cast]:
-        return (
-            self._base_schema.get_casts_to_type(
-                to_type,
-                implicit=implicit,
-                assignment=assignment,
-            )
-            | self._top_schema.get_casts_to_type(
-                to_type,
-                implicit=implicit,
-                assignment=assignment,
-            )
-        )
-
-    def get_casts_from_type(
-        self,
-        from_type: s_types.Type,
-        *,
-        implicit: bool = False,
-        assignment: bool = False,
-    ) -> frozenset[s_casts.Cast]:
-        return (
-            self._base_schema.get_casts_from_type(
-                from_type,
-                implicit=implicit,
-                assignment=assignment,
-            )
-            | self._top_schema.get_casts_from_type(
-                from_type,
-                implicit=implicit,
-                assignment=assignment,
-            )
-        )
 
     def get_referrers(
         self,
