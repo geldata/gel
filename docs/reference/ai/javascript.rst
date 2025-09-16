@@ -73,7 +73,9 @@ Factory functions
 
     :param string options.model:
         Required. Specifies the AI model to use. This could be a version of GPT
-        or any other model supported by |Gel| AI.
+        or any other model supported by |Gel| AI. It is possible to specify the
+        model name as a URI, eg. ``openai:gpt-5``.  See::ref:`text generation
+        models<ref_ai_extai_reference_text_generation_models>`.
 
     :param options.prompt:
         Optional. Defines the input prompt for the AI model. The prompt can be

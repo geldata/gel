@@ -121,7 +121,9 @@ Request body
    * ``globals`` (object, optional): A dictionary of globals for use in the context query.
    * ``max_object_count`` (number, optional): Maximum number of objects to retrieve; default is 5.
 
-* ``model`` (string, required): The name of the text generation model to use.
+* ``model`` (string, required): The name of the text generation model to use. It is possible to specify the
+  model name as a URI, eg. ``openai:gpt-5``. See: :ref:`text generation models
+  <ref_ai_extai_reference_text_generation_models>`.
 
 * ``query`` (string, required): The query string used as the basis for text generation.
 

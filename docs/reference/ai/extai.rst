@@ -199,16 +199,24 @@ Functions
                     object: anyobject, \
                     query: array<float32> \
                   ) -> optional tuple<object: anyobject, distance: float64>
+                  ext::ai::search( \
+                    object: anyobject, \
+                    query: str \
+                  ) -> optional tuple<object: anyobject, distance: float64>
 
     Searches objects using their :ref:`ai::index
     <ref_ai_extai_reference_index>`.
 
     Returns tuples of (object, distance).
 
-    .. note::
+    .. versionadded:: 7.0
 
-        The ``query`` argument should *not* be a textual query but the
-        embeddings generated *from* a textual query.
+        If the ``query``  is a ``str``, the ai extension will make an embedding
+        request to the provider and use the result to compute distances.
+
+        To prevent unwanted provider calls, this functionality may only be
+        used by roles with the :eql:permission:`ext::ai::perm::provider_call`
+        permission.
 
     .. code-block:: edgeql-repl
 
@@ -309,6 +317,19 @@ Example provider configuration:
 Model Types
 -----------
 
+.. list-table::
+    :class: funcoptable
+
+    * - :eql:type:`ext::ai::Model`
+      - Abstract base type for AI models.
+
+    * - :eql:type:`ext::ai::EmbeddingModel`
+      - Abstract type for embedding models.
+
+    * - :eql:type:`ext::ai::TextGenerationModel`
+      - Abstract type for text generation models.
+
+
 .. _ref_ai_extai_reference_embedding_models:
 
 Embedding models
@@ -323,6 +344,11 @@ OpenAI (`documentation <https://platform.openai.com/docs/guides/embeddings/embed
 Mistral (`documentation <https://docs.mistral.ai/capabilities/embeddings/#mistral-embeddings-api>`__)
 
 * ``mistral-embed``
+
+Ollama (`documentation <https://github.com/ollama/ollama/blob/main/docs/api.md#generate-embeddings>`__)
+
+* ``nomic-embed-text``
+* ``bge-m3``
 
 
 .. _ref_ai_extai_reference_text_generation_models:
@@ -347,18 +373,20 @@ Anthropic (`documentation <https://docs.anthropic.com/claude/docs/models-overvie
 * ``claude-3-sonnet-20240229``
 * ``claude-3-opus-20240229``
 
+Ollama (`documentation <https://github.com/ollama/ollama/blob/main/docs/api.md#generate-a-chat-completion>`__)
 
-.. list-table::
-    :class: funcoptable
+* ``llama3.2``
+* ``llama3.3``
 
-    * - :eql:type:`ext::ai::Model`
-      - Abstract base type for AI models.
+When using RAG, It is possible to specify a text generation model using a URI,
+combining the provider name (in lower case), and the model name.
 
-    * - :eql:type:`ext::ai::EmbeddingModel`
-      - Abstract type for embedding models.
+- eg. ``"openai:gpt-5"``
+- eg. ``"anthropic:claude-opus-4-20250514"``
 
-    * - :eql:type:`ext::ai::TextGenerationModel`
-      - Abstract type for text generation models.
+Using this form allows text generation from models which are not explicitly
+instantiated as a :eql:type:`ext::ai::TextGenerationModel`
+
 
 ---------
 
@@ -383,8 +411,6 @@ Anthropic (`documentation <https://docs.anthropic.com/claude/docs/models-overvie
     * ``embedding_model_max_batch_tokens`` - Maximum tokens per batch. Default: ``'8191'``.
     * ``embedding_model_max_output_dimensions`` - Maximum embedding dimensions
     * ``embedding_model_supports_shortening`` - Input shortening support flag
-
-
 
 ---------
 
@@ -493,3 +519,36 @@ Example custom prompt configuration:
     * ``name``: str (Required)
     * ``messages``: set of ChatPromptMessage (Required)
 
+
+Permissions
+===========
+
+.. versionadded:: 7.0
+
+.. list-table::
+    :class: funcoptable
+
+    * - :eql:permission:`ext::ai::perm::provider_call`
+    * - :eql:permission:`ext::ai::perm::chat_prompt_read`
+    * - :eql:permission:`ext::ai::perm::chat_prompt_write`
+
+---------
+
+.. eql:permission:: ext::ai::perm::provider_call
+
+    Gives permission to make ai provider calls.
+
+    Required to call :eql:func:`ext::ai::search` using text directly
+    instead of an already generated embedding.
+
+---------
+
+.. eql:permission:: ext::ai::perm::chat_prompt_read
+
+    Gives permission to read chat prompt configuration.
+
+---------
+
+.. eql:permission:: ext::ai::perm::chat_prompt_write
+
+    Gives permission to modify chat prompt configuration.
