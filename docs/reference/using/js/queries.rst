@@ -55,17 +55,27 @@ The following command will run the ``queries`` generator.
 
     $ npx @gel/generate queries
 
+    # Or with specific files as patterns
+    $ npx @gel/generate queries "queries/*.edgeql"
+
   .. code-tab:: bash
     :caption: Deno
 
     $ deno run --allow-all npm:@gel/generate queries
+
+    # Or with specific files as patterns
+    $ deno run --allow-all npm:@gel/generate queries "queries/*.edgeql"
+
 
   .. code-tab:: bash
     :caption: Bun
 
     $ bunx @gel/generate queries
 
-The generator will detect the project root by looking for an ``gel.toml``, then scan the directory for ``*.edgeql`` files. In this case, there's only one: ``queries/getUser.edgeql``.
+    # Or with specific files as patterns
+    $ bunx @gel/generate queries "queries/*.edgeql"
+
+The generator will detect the project root by looking for a ``gel.toml``. By default, it scans the directory for all ``*.edgeql`` files, but if you specify patterns, only matching files will be processed. In this case, there's only one: ``queries/getUser.edgeql``.
 
 .. code-block:: edgeql
   :caption: getUser.edgeql
@@ -149,6 +159,45 @@ We can now use this function in our code.
 .. note::
 
   Generators work by connecting to the database to get information about the current state of the schema. Make sure you run the generators again any time the schema changes so that the generated code is in-sync with the current state of the schema. The easiest way to do this is to add the generator command to the :ref:`schema.update.after hook <ref_reference_gel_toml_hooks>` in your :ref:`gel.toml <ref_reference_gel_toml>`.
+
+File Pattern Selection
+======================
+
+By default, the generator scans your entire project for ``*.edgeql`` files. You can specify which files to process using glob patterns as positional arguments.
+
+.. code-block:: bash
+
+  # Process specific files
+  $ npx @gel/generate queries "getUser.edgeql" "admin/permissions.edgeql"
+
+  # Use glob patterns
+  $ npx @gel/generate queries "src/**/*user*.edgeql"
+
+  # Process entire directories
+  $ npx @gel/generate queries "queries/" "admin/"
+
+**Pattern Features:**
+
+- **Glob support**: Use ``*`` (match any number of characters), ``**`` (match any number of directories), and ``?`` (match a single character) wildcards for flexible matching. For more details, see the [fast-glob documentation on npm](https://www.npmjs.com/package/fast-glob).
+- **Directory expansion**: Bare directory names automatically expand to ``directory/**/*.edgeql``
+- **Schema protection**: Migration and fixup files in ``dbschema/`` are automatically excluded
+- **Multiple patterns**: Specify multiple patterns to process files from different locations
+
+**Examples:**
+
+.. code-block:: bash
+
+  # Process only user-related queries
+  $ npx @gel/generate queries "**/*user*.edgeql"
+
+  # Process queries from specific modules
+  $ npx @gel/generate queries "src/queries/" "admin/queries/"
+
+  # Process a single file
+  $ npx @gel/generate queries "scripts/migration-helper.edgeql"
+
+Patterns are resolved relative to your current working directory and will automatically exclude schema management files to prevent accidentally processing migrations.
+
 
 Single-file mode
 ================
