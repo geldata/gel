@@ -157,4 +157,11 @@ PATCHES: list[tuple[str, str]] = [
         };
     };
 '''),
+    # 7.0rc3 or 7.0 final??
+
+    # For #9028.
+    # N.B: We don't need to do any actual in place patching, since it
+    # just adjusts the compat version numbers. If it is installed,
+    # then we're already fine.
+    ('ext-pkg', 'pgvector'),
 ]
