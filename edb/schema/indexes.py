@@ -26,7 +26,6 @@ from typing import (
     Sequence,
     cast,
     overload,
-    TYPE_CHECKING,
 )
 
 from edb import edgeql
@@ -37,6 +36,7 @@ from edb.edgeql import ast as qlast
 from edb.edgeql import compiler as qlcompiler
 from edb.edgeql import qltypes
 
+from . import ai_indexes as s_ai_indexes
 from . import annos as s_anno
 from . import delta as sd
 from . import expr as s_expr
@@ -50,10 +50,6 @@ from . import scalars as s_scalars
 from . import types as s_types
 from . import schema as s_schema
 from . import utils
-
-
-if TYPE_CHECKING:
-    from . import objtypes as s_objtypes
 
 
 # The name used for default concrete indexes
@@ -1446,7 +1442,19 @@ class CreateIndex(
         schema: s_schema.Schema,
         context: sd.CommandContext,
     ) -> s_schema.Schema:
-        model_stype = self._get_referenced_embedding_model(schema, context)
+
+        _, model_stype = (
+            s_ai_indexes.get_index_embedding_model_properties(
+                self.scls,
+                schema,
+                context,
+                span=self.span,
+            )
+        )
+
+        if model_stype is None:
+            # Model is from descs, no dependency to add
+            return schema
 
         type_args = so.ObjectList.create(
             schema,
@@ -1468,46 +1476,56 @@ class CreateIndex(
         # Copy ext::ai:: annotations declared on the model specified
         # by the `embedding_model` kwarg.  This is necessary to avoid
         # expensive lookups later where the index is used.
-        model_stype = self._get_referenced_embedding_model(schema, context)
-        model_stype_vn = model_stype.get_verbosename(schema)
-        model_annos = model_stype.get_annotations(schema)
+        model_properties, _ = (
+            s_ai_indexes.get_index_embedding_model_properties(
+                self.scls,
+                schema,
+                context,
+                span=self.span,
+            )
+        )
+
         my_name = self.scls.get_name(schema)
         idx_defined_here = self.scls.is_defined_here(schema)
+        properties_as_annotations: dict[sn.QualName, str] = {
+            sn.QualName("ext::ai", "model_name"): model_properties.model_name,
+            sn.QualName("ext::ai", "model_provider"): (
+                model_properties.model_provider
+            ),
+            sn.QualName("ext::ai", "embedding_model_max_input_tokens"): (
+                str(model_properties.max_input_tokens)
+            ),
+            sn.QualName("ext::ai", "embedding_model_max_batch_tokens"): (
+                str(model_properties.max_batch_tokens)
+            ),
+            sn.QualName("ext::ai", "embedding_model_max_output_dimensions"): (
+                str(model_properties.max_output_dimensions)
+            ),
+            sn.QualName("ext::ai", "embedding_model_supports_shortening"): (
+                str(model_properties.supports_shortening)
+            ),
+        }
 
-        for model_anno in model_annos.objects(schema):
-            anno_name = model_anno.get_shortname(schema)
-            if anno_name.module != "ext::ai":
-                continue
-            value = model_anno.get_value(schema)
-            if value is None or value == "<must override>":
-                raise errors.SchemaDefinitionError(
-                    f"{model_stype_vn} is missing a value for the "
-                    f"'{anno_name}' annotation"
-                )
-            anno_sname = sn.get_specialized_name(
-                anno_name,
-                str(my_name),
-            )
-            anno_fqname = sn.QualName(my_name.module, anno_sname)
-            schema1 = model_anno.update(
-                schema,
-                {
-                    "name": anno_fqname,
-                    "subject": self.scls,
-                },
-            )
-            anno_copy = schema1.get(
-                anno_fqname,
-                type=s_anno.AnnotationValue,
-            )
+        for anno_name, anno_value in properties_as_annotations.items():
 
-            anno_cmd: sd.ObjectCommand[s_anno.AnnotationValue]
             if idx_defined_here:
-                anno_cmd = anno_copy.as_create_delta(
-                    schema1, so.ComparisonContext())
-                anno_cmd.discard_attribute("bases")
-                anno_cmd.discard_attribute("ancestors")
+                anno_ast = qlast.CreateAnnotationValue(
+                    name=qlast.ObjectRef(
+                        name=anno_name.name,
+                        module=anno_name.module,
+                        itemclass=qltypes.SchemaObjectClass.ANNOTATION,
+                    ),
+                    value=qlast.Constant.string(anno_value),
+                )
+                anno_cmd = sd.compile_ddl(schema, anno_ast, context=context)
+
             else:
+                anno_sname = sn.get_specialized_name(
+                    anno_name,
+                    str(my_name),
+                )
+                anno_fqname = sn.QualName(my_name.module, anno_sname)
+
                 anno_cmd = sd.get_object_delta_command(
                     objtype=s_anno.AnnotationValue,
                     cmdtype=sd.AlterObject,
@@ -1518,36 +1536,25 @@ class CreateIndex(
 
             self.add(anno_cmd)
 
-        model_dimensions = model_stype.must_get_json_annotation(
-            schema,
-            sn.QualName("ext::ai", "embedding_model_max_output_dimensions"),
-            int,
-        )
-        supports_shortening = model_stype.must_get_json_annotation(
-            schema,
-            sn.QualName("ext::ai", "embedding_model_supports_shortening"),
-            bool,
-        )
-
         kwargs = self.scls.get_concrete_kwargs_as_values(schema)
         specified_dimensions = kwargs["dimensions"]
 
         MAX_DIM = 2000  # pgvector limit
 
         if specified_dimensions is None:
-            if model_dimensions > MAX_DIM:
-                if not supports_shortening:
+            if model_properties.max_output_dimensions > MAX_DIM:
+                if not model_properties.supports_shortening:
                     raise errors.SchemaDefinitionError(
-                        f"{model_stype_vn} returns embeddings with over "
-                        f"{MAX_DIM} dimensions, does not support embedding "
-                        f"shortening, and thus cannot be used with "
+                        f"{model_properties.model_name} returns embeddings "
+                        f"with over {MAX_DIM} dimensions, does not support "
+                        f"embedding shortening, and thus cannot be used with "
                         f"this index",
                         span=self.span,
                     )
                 else:
                     dimensions = MAX_DIM
             else:
-                dimensions = model_dimensions
+                dimensions = model_properties.max_output_dimensions
         else:
             if specified_dimensions > MAX_DIM:
                 raise errors.SchemaDefinitionError(
@@ -1555,21 +1562,22 @@ class CreateIndex(
                     f"this index",
                     span=self.span,
                 )
-            elif specified_dimensions > model_dimensions:
+            elif specified_dimensions > model_properties.max_output_dimensions:
                 raise errors.SchemaDefinitionError(
-                    f"{model_stype_vn} does not support more than "
-                    f"{model_dimensions} dimensions, "
+                    f"{model_properties.model_name} does not support more than "
+                    f"{model_properties.max_output_dimensions} dimensions, "
                     f"got {specified_dimensions}",
                     span=self.span,
                 )
             elif (
-                specified_dimensions != model_dimensions
-                and not supports_shortening
+                specified_dimensions != model_properties.max_output_dimensions
+                and not model_properties.supports_shortening
             ):
                 raise errors.SchemaDefinitionError(
-                    f"{model_stype_vn} returns embeddings with over "
-                    f"{model_dimensions} dimensions, and does not support "
-                    f"embedding shortening, and thus {specified_dimensions} "
+                    f"{model_properties.model_name} returns embeddings "
+                    f"with over {model_properties.max_output_dimensions} "
+                    f"dimensions, and does not support embedding shortening, "
+                    f"and thus {specified_dimensions} "
                     f"cannot be used for this index",
                     span=self.span,
                 )
@@ -1589,37 +1597,6 @@ class CreateIndex(
         alter_anno.set_attribute_value("value", str(dimensions))
         alter_anno.set_attribute_value("owned", True)
         self.add(alter_anno)
-
-    def _get_referenced_embedding_model(
-        self,
-        schema: s_schema.Schema,
-        context: sd.CommandContext,
-    ) -> s_objtypes.ObjectType:
-        # Copy ext::ai:: annotations declared on the model specified
-        # by the `embedding_model` kwarg.  This is necessary to avoid
-        # expensive lookups later where the index is used.
-        kwargs = self.scls.get_concrete_kwargs_as_values(schema)
-        model_name = kwargs["embedding_model"]
-
-        models = get_defined_ext_ai_embedding_models(schema, model_name)
-        if len(models) == 0:
-            raise errors.SchemaDefinitionError(
-                f'undefined embedding model: no subtype of '
-                f'ext::ai::EmbeddingModel is annotated as {model_name!r}',
-                span=self.span,
-            )
-        elif len(models) > 1:
-            models_dn = [
-                model.get_displayname(schema) for model in models.values()
-            ]
-            raise errors.SchemaDefinitionError(
-                f'expecting only one embedding model to be annotated '
-                f'with ext::ai::model_name={model_name!r}: got multiple: '
-                f'{", ".join(models_dn)}',
-                span=self.span,
-            )
-
-        return next(iter(models.values()))
 
 
 class RenameIndex(
@@ -2024,14 +2001,6 @@ def is_fts_index(
     return index.issubclass(schema, fts_index)
 
 
-def get_ai_index_id(
-    schema: s_schema.Schema,
-    index: Index,
-) -> str:
-    # TODO: Use the model name?
-    return f'base'
-
-
 def is_ext_ai_index(
     schema: s_schema.Schema,
     index: Index,
@@ -2045,49 +2014,3 @@ def is_ext_ai_index(
         return False
     else:
         return index.issubclass(schema, ai_index)
-
-
-_embedding_model = sn.QualName("ext::ai", "EmbeddingModel")
-_model_name = sn.QualName("ext::ai", "model_name")
-
-
-def get_defined_ext_ai_embedding_models(
-    schema: s_schema.Schema,
-    model_name: Optional[str] = None,
-) -> dict[str, s_objtypes.ObjectType]:
-    from . import objtypes as s_objtypes
-
-    base_embedding_model = schema.get(
-        _embedding_model,
-        type=s_objtypes.ObjectType,
-    )
-
-    def _flt(
-        schema: s_schema.Schema,
-        anno: s_anno.AnnotationValue,
-    ) -> bool:
-        if anno.get_shortname(schema) != _model_name:
-            return False
-
-        subject = anno.get_subject(schema)
-        value = anno.get_value(schema)
-
-        return (
-            value is not None and value != "<must override>"
-            and (model_name is None or anno.get_value(schema) == model_name)
-            and isinstance(subject, s_objtypes.ObjectType)
-            and subject.issubclass(schema, base_embedding_model)
-        )
-
-    annos = schema.get_objects(
-        type=s_anno.AnnotationValue,
-        extra_filters=(_flt,),
-    )
-
-    result = {}
-    for anno in annos:
-        subject = anno.get_subject(schema)
-        assert isinstance(subject, s_objtypes.ObjectType)
-        result[anno.get_value(schema)] = subject
-
-    return result
