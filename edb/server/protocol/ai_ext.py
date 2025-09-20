@@ -2772,12 +2772,18 @@ async def _handle_rag_request(
         WITH
             __query := <array<float32>>std::to_json(<str>$input),
             search := ext::ai::search(({ctx_query}), __query),
-        SELECT
-            ext::ai::to_context(search.object)
-        ORDER BY
-            search.distance ASC EMPTY LAST
-        LIMIT
-            <int64>$limit
+            context := (
+                for s in search union (
+                    (ext::ai::to_context(s.object), s.distance)
+                )
+            )
+        SELECT (
+            SELECT context
+            ORDER BY
+                .1 ASC EMPTY LAST
+            LIMIT
+                <int64>$limit
+        ).0
     """
     if ctx_variables is None:
         ctx_variables = {}
