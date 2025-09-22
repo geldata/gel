@@ -409,6 +409,7 @@ instantiated as a :eql:type:`ext::ai::TextGenerationModel`
 
     * ``embedding_model_max_input_tokens`` - Maximum tokens per input
     * ``embedding_model_max_batch_tokens`` - Maximum tokens per batch. Default: ``'8191'``.
+    * ``embedding_model_max_batch_size`` - Maximum inputs per batch. Optional.
     * ``embedding_model_max_output_dimensions`` - Maximum embedding dimensions
     * ``embedding_model_supports_shortening`` - Input shortening support flag
 
