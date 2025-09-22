@@ -366,3 +366,176 @@ std::bit_count(val: std::int64) -> std::int64
     SELECT bit_count(val::bit(64))
     $$;
 };
+
+
+## Bitwise bytes functions
+## ----------------------
+
+CREATE FUNCTION
+std::bytes_and(a: bytes, b: bytes) -> bytes
+{
+    CREATE ANNOTATION std::description := 
+        'Bitwise AND operator for bytes.';
+    SET volatility := 'Immutable';
+    USING SQL $$
+    SELECT CASE 
+        WHEN octet_length($1) != octet_length($2) THEN
+            edgedb_VER.raise(
+                NULL::bytea,
+                'invalid_parameter_value',
+                msg => 'bytes_and: bytes must be of equal length'
+            )
+        ELSE (
+            WITH splits AS (
+                SELECT generate_series(1, octet_length($1)) AS i
+            )
+            SELECT string_agg(
+                decode(
+                    lpad(
+                        to_hex(
+                            (get_byte($1, i-1) & get_byte($2, i-1))::int
+                        ),
+                        2,
+                        '0'
+                    ),
+                    'hex'
+                ),
+                ''
+            )::bytea
+            FROM splits
+        )
+    END
+    $$;
+};
+
+CREATE FUNCTION
+std::bytes_or(a: bytes, b: bytes) -> bytes
+{
+    CREATE ANNOTATION std::description := 
+        'Bitwise OR operator for bytes.';
+    SET volatility := 'Immutable';
+    USING SQL $$
+    SELECT CASE 
+        WHEN octet_length($1) != octet_length($2) THEN
+            edgedb_VER.raise(
+                NULL::bytea,
+                'invalid_parameter_value',
+                msg => 'bytes_or: bytes must be of equal length'
+            )
+        ELSE (
+            WITH splits AS (
+                SELECT generate_series(1, octet_length($1)) AS i
+            )
+            SELECT string_agg(
+                decode(
+                    lpad(
+                        to_hex(
+                            (get_byte($1, i-1) | get_byte($2, i-1))::int
+                        ),
+                        2,
+                        '0'
+                    ),
+                    'hex'
+                ),
+                ''
+            )::bytea
+            FROM splits
+        )
+    END
+    $$;
+};
+
+CREATE FUNCTION
+std::bytes_xor(a: bytes, b: bytes) -> bytes
+{
+    CREATE ANNOTATION std::description := 
+        'Bitwise XOR operator for bytes.';
+    SET volatility := 'Immutable';
+    USING SQL $$
+    SELECT CASE 
+        WHEN octet_length($1) != octet_length($2) THEN
+            edgedb_VER.raise(
+                NULL::bytea,
+                'invalid_parameter_value',
+                msg => 'bytes_xor: bytes must be of equal length'
+            )
+        ELSE (
+            WITH splits AS (
+                SELECT generate_series(1, octet_length($1)) AS i
+            )
+            SELECT string_agg(
+                decode(
+                    lpad(
+                        to_hex(
+                            (get_byte($1, i-1) # get_byte($2, i-1))::int
+                        ),
+                        2,
+                        '0'
+                    ),
+                    'hex'
+                ),
+                ''
+            )::bytea
+            FROM splits
+        )
+    END
+    $$;
+};
+
+CREATE FUNCTION
+std::bytes_not(a: bytes) -> bytes
+{
+    CREATE ANNOTATION std::description :=
+        'Bitwise NOT operator for bytes.';
+    SET volatility := 'Immutable';
+    USING SQL $$
+    WITH splits AS (
+        SELECT generate_series(1, octet_length($1)) AS i
+    )
+    SELECT string_agg(
+        decode(
+            lpad(
+                to_hex(
+                    (~get_byte($1, i-1) & 255)::int
+                ),
+                2,
+                '0'
+            ),
+            'hex'
+        ),
+        ''
+    )::bytea
+    FROM splits
+    $$;
+};
+
+CREATE FUNCTION
+std::bytes_overlap(l: std::bytes, r: std::bytes) -> std::bool
+{
+    CREATE ANNOTATION std::description :=
+        'Check if two bytes have any overlapping bits (bitwise AND is non-zero).';
+    SET volatility := 'Immutable';
+    USING SQL $$
+    SELECT (
+        CASE
+            WHEN octet_length(l) != octet_length(r) THEN
+                edgedb_VER.raise(
+                    NULL::bool,
+                    'invalid_parameter_value',
+                    msg => (
+                        'bytes_overlap(): bytes must be of equal length'
+                    )
+                )
+            ELSE (
+                WITH splits AS (
+                    SELECT generate_series(1, octet_length(l)) AS i
+                )
+                SELECT EXISTS (
+                    SELECT 1 FROM splits
+                    WHERE (get_byte(l, i-1) & get_byte(r, i-1)) != 0
+                )
+            )
+        END
+    )
+    $$;
+};
