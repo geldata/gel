@@ -4659,9 +4659,23 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
                 self.assertEqual(status, 200, body)
                 data = json.loads(body)
+                expected_identity_id = await self.con.query_single(
+                    """
+                    with IDENTITY := (
+                      select ext::auth::MagicLinkFactor
+                      filter .email = <str>$email
+                    ).identity
+                    select IDENTITY.id;
+                    """,
+                    email=email,
+                )
                 self.assertEqual(data.get("code"), "true")
                 self.assertEqual(data.get("signup"), "true")
                 self.assertEqual(data.get("email"), email)
+                self.assertEqual(
+                    data.get("identity_id"),
+                    str(expected_identity_id)
+                )
         finally:
             await self.con.query(
                 """
@@ -6437,6 +6451,20 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 self.assertEqual(response_data.get("code"), "true")
                 self.assertEqual(response_data.get("signup"), "true")
                 self.assertEqual(response_data.get("email"), email)
+                expected_identity_id = await self.con.query_single(
+                    """
+                    with IDENTITY := (
+                      select ext::auth::MagicLinkFactor
+                      filter .email = <str>$email
+                    ).identity
+                    select IDENTITY.id;
+                    """,
+                    email=email,
+                )
+                self.assertEqual(
+                    response_data.get("identity_id"),
+                    str(expected_identity_id)
+                )
 
                 # Verify that a 6-digit code email was sent
                 file_name_hash = hashlib.sha256(

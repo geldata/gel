@@ -1357,6 +1357,7 @@ class Router:
                 return_data = {
                     "code": "true",
                     "signup": "true",
+                    "identity_id": str(email_factor.identity.id),
                     "email": email,
                 }
 
@@ -1555,6 +1556,7 @@ class Router:
                         "email": email,
                     }
                     if is_signup:
+                        return_data["identity_id"] = str(identity_id)
                         return_data["signup"] = "true"
                 else:
                     _check_keyset(
