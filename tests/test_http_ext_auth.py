@@ -4674,7 +4674,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 self.assertEqual(data.get("email"), email)
                 self.assertEqual(
                     data.get("identity_id"),
-                    expected_identity_id
+                    str(expected_identity_id)
                 )
         finally:
             await self.con.query(
@@ -6463,7 +6463,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 )
                 self.assertEqual(
                     response_data.get("identity_id"),
-                    expected_identity_id
+                    str(expected_identity_id)
                 )
 
                 # Verify that a 6-digit code email was sent
