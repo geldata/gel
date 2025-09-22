@@ -132,14 +132,22 @@ class Schema(abc.ABC):
     ) -> Self:
         raise NotImplementedError
 
-    @abc.abstractmethod
     def add(
-        self: Self,
+        self,
         id: uuid.UUID,
         sclass: type[so.Object],
         data: tuple[Any, ...],
-    ) -> Self:
-        raise NotImplementedError
+    ) -> FlatSchema:
+        reducible_fields = sclass.get_reducible_fields()
+        if reducible_fields:
+            data_list = list(data)
+            for field in reducible_fields:
+                val = data[field.index]
+                if val is not None:
+                    data_list[field.index] = val.schema_reduce()
+            data = tuple(data_list)
+
+        return self.add_raw(id, sclass, data)
 
     @abc.abstractmethod
     def discard(self: Self, obj: so.Object) -> Self:
@@ -1095,23 +1103,6 @@ class FlatSchema(Schema):
 
         return self._replace(**updates)  # type: ignore
 
-    def add(
-        self,
-        id: uuid.UUID,
-        sclass: type[so.Object],
-        data: tuple[Any, ...],
-    ) -> FlatSchema:
-        reducible_fields = sclass.get_reducible_fields()
-        if reducible_fields:
-            data_list = list(data)
-            for field in reducible_fields:
-                val = data[field.index]
-                if val is not None:
-                    data_list[field.index] = val.schema_reduce()
-            data = tuple(data_list)
-
-        return self.add_raw(id, sclass, data)
-
     def delist(self, name: sn.Name) -> FlatSchema:
         name_to_id = self._name_to_id.delete(name)
         return self._replace(
@@ -1618,25 +1609,6 @@ class ChainedSchema(Schema):
             return ChainedSchema(
                 self._base_schema,
                 self._top_schema.add_raw(id, sclass, data),
-                self._global_schema,
-            )
-
-    def add(
-        self,
-        id: uuid.UUID,
-        sclass: type[so.Object],
-        data: tuple[Any, ...],
-    ) -> ChainedSchema:
-        if issubclass(sclass, so.GlobalObject):
-            return ChainedSchema(
-                self._base_schema,
-                self._top_schema,
-                self._global_schema.add(id, sclass, data),
-            )
-        else:
-            return ChainedSchema(
-                self._base_schema,
-                self._top_schema.add(id, sclass, data),
                 self._global_schema,
             )
 
