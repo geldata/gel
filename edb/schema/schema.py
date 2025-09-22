@@ -170,17 +170,11 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def maybe_get_obj_data_raw(
-        self,
-        obj: so.Object,
-    ) -> Optional[tuple[Any, ...]]:
-        raise NotImplementedError
-
-    @abc.abstractmethod
     def get_obj_data_raw(
         self,
         obj: so.Object,
-    ) -> tuple[Any, ...]:
+        field_index: int,
+    ) -> Optional[Any]:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -843,22 +837,17 @@ class FlatSchema(Schema):
                              id_to_data=id_to_data,
                              refs_to=refs_to)
 
-    def maybe_get_obj_data_raw(
-        self,
-        obj: so.Object,
-    ) -> Optional[tuple[Any, ...]]:
-        return self._id_to_data.get(obj.id)
-
     def get_obj_data_raw(
         self,
         obj: so.Object,
-    ) -> tuple[Any, ...]:
-        try:
-            return self._id_to_data[obj.id]
-        except KeyError:
-            err = (f'cannot get item data: item {str(obj.id)!r} '
-                   f'is not present in the schema {self!r}')
-            raise errors.SchemaError(err) from None
+        field_index: int
+    ) -> Optional[tuple[Any, ...]]:
+        data = self._id_to_data.get(obj.id)
+        assert data, (
+            f'cannot get item data: item {str(obj.id)!r} '
+            f'is not present in the schema {self!r}'
+        )
+        return data[field_index]
 
     def set_obj_field(
         self,
@@ -1682,34 +1671,21 @@ class ChainedSchema(Schema):
                 self._global_schema,
             )
 
-    def maybe_get_obj_data_raw(
-        self,
-        obj: so.Object,
-    ) -> Optional[tuple[Any, ...]]:
-        if obj.is_global_object:
-            return self._global_schema.maybe_get_obj_data_raw(obj)
-        else:
-            top = self._top_schema.maybe_get_obj_data_raw(obj)
-            if top is not None:
-                return top
-            else:
-                return self._base_schema.maybe_get_obj_data_raw(obj)
-
     def get_obj_data_raw(
         self,
         obj: so.Object,
-    ) -> tuple[Any, ...]:
-        top = self._top_schema.maybe_get_obj_data_raw(obj)
-        if top is not None:
-            return top
-        else:
-            try:
-                return self._base_schema.get_obj_data_raw(obj)
-            except errors.SchemaError:
-                if obj.is_global_object:
-                    return self._global_schema.get_obj_data_raw(obj)
-                else:
-                    raise
+        field_index: int,
+    ) -> Optional[tuple[Any, ...]]:
+        if self._top_schema.has_object(obj.id):
+            return self._top_schema.get_obj_data_raw(obj, field_index)
+        if self._base_schema.has_object(obj.id):
+            return self._base_schema.get_obj_data_raw(obj, field_index)
+        if self._global_schema.has_object(obj.id):
+            return self._global_schema.get_obj_data_raw(obj, field_index)
+        raise AssertionError(
+            f'cannot get item data: item {str(obj.id)!r} '
+            f'is not present in the schema {self!r}'
+        )
 
     def set_obj_field(
         self,
