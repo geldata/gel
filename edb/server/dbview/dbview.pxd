@@ -32,6 +32,7 @@ cpdef enum SideEffects:
     InstanceConfigChanges = 1 << 2
     GlobalSchemaChanges = 1 << 3
     DatabaseChanges = 1 << 4
+    ExtensionRefChanges = 1 << 5
 
 
 @cython.final
@@ -94,6 +95,7 @@ cdef class Database:
         readonly object db_config
         readonly bytes user_schema_pickle
         readonly object reflection_cache
+        readonly object extension_refs
         readonly object backend_ids
         readonly object backend_oid_to_id
         readonly object extensions

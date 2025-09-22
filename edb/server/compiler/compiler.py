@@ -317,6 +317,7 @@ def new_compiler_context(
         database_config=EMPTY_MAP,
         system_config=EMPTY_MAP,
         cached_reflection=EMPTY_MAP,
+        extension_refs=EMPTY_MAP,
     )
 
     ctx = CompileContext(
@@ -474,6 +475,7 @@ class Compiler:
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
         reflection_cache: immutables.Map[str, tuple[str, ...]],
+        extension_refs: immutables.Map[str, Any],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
         queries: list[str],
@@ -494,6 +496,7 @@ class Compiler:
             database_config=database_config,
             system_config=system_config,
             cached_reflection=reflection_cache,
+            extension_refs=extension_refs,
         )
 
         state.start_tx()
@@ -543,6 +546,7 @@ class Compiler:
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
         reflection_cache: immutables.Map[str, tuple[str, ...]],
+        extension_refs: immutables.Map[str, Any],
         database_config: immutables.Map[str, config.SettingValue],
         system_config: immutables.Map[str, config.SettingValue],
         source: pg_parser.Source,
@@ -559,6 +563,7 @@ class Compiler:
             database_config=database_config,
             system_config=system_config,
             cached_reflection=reflection_cache,
+            extension_refs=extension_refs,
         )
         schema = state.current_tx().get_schema(self.state.std_schema)
 
@@ -590,6 +595,7 @@ class Compiler:
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
         reflection_cache: immutables.Map[str, tuple[str, ...]],
+        extension_refs: immutables.Map[str, Any],
         database_config: Optional[immutables.Map[str, config.SettingValue]],
         system_config: Optional[immutables.Map[str, config.SettingValue]],
         serialized_request: bytes,
@@ -608,6 +614,7 @@ class Compiler:
             user_schema=user_schema,
             global_schema=global_schema,
             reflection_cache=reflection_cache,
+            extension_refs=extension_refs,
             database_config=database_config,
             system_config=system_config,
             request=request,
@@ -619,6 +626,7 @@ class Compiler:
         user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
         reflection_cache: immutables.Map[str, tuple[str, ...]],
+        extension_refs: immutables.Map[str, Any],
         database_config: Optional[immutables.Map[str, config.SettingValue]],
         system_config: Optional[immutables.Map[str, config.SettingValue]],
         request: rpc.CompilationRequest,
@@ -662,6 +670,7 @@ class Compiler:
             database_config=database_config,
             system_config=system_config,
             cached_reflection=reflection_cache,
+            extension_refs=extension_refs,
         )
 
         ctx = CompileContext(
@@ -1156,6 +1165,7 @@ class Compiler:
             database_config=EMPTY_MAP,
             system_config=EMPTY_MAP,
             cached_reflection=EMPTY_MAP,
+            extension_refs=EMPTY_MAP,
         )
 
         ctx = CompileContext(

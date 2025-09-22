@@ -174,6 +174,71 @@ class AnnotationSubject(so.Object):
         else:
             return value
 
+    def get_annotation_as_int(
+        self,
+        schema: s_schema.Schema,
+        name: sn.QualName,
+    ) -> Optional[int]:
+        annotation_text = self.get_annotation(schema, name)
+        if annotation_text is None:
+            return None
+        else:
+            try:
+                return int(annotation_text)
+            except Exception:
+                vn = self.get_verbosename(schema, with_parent=True)
+                raise errors.SchemaDefinitionError(
+                    f"annotation {name} on {vn} is not set to "
+                    f"a valid integer value")
+
+    def must_get_annotation_as_int(
+        self,
+        schema: s_schema.Schema,
+        name: sn.QualName,
+    ) -> int:
+        value = self.get_annotation_as_int(schema, name)
+        if value is None:
+            vn = self.get_verbosename(schema, with_parent=True)
+            raise errors.SchemaDefinitionError(
+                f"annotation {name} is not set on {vn}"
+            )
+        else:
+            return value
+
+    def get_annotation_as_bool(
+        self,
+        schema: s_schema.Schema,
+        name: sn.QualName,
+    ) -> Optional[bool]:
+        annotation_text = self.get_annotation(schema, name)
+        if annotation_text is None:
+            return None
+        else:
+            annotation_text = annotation_text.lower()
+            if annotation_text == 'true':
+                return True
+            elif annotation_text == 'false':
+                return False
+            else:
+                vn = self.get_verbosename(schema, with_parent=True)
+                raise errors.SchemaDefinitionError(
+                    f"annotation {name} on {vn} is not set to "
+                    f"a valid boolean value")
+
+    def must_get_annotation_as_bool(
+        self,
+        schema: s_schema.Schema,
+        name: sn.QualName,
+    ) -> bool:
+        value = self.get_annotation_as_bool(schema, name)
+        if value is None:
+            vn = self.get_verbosename(schema, with_parent=True)
+            raise errors.SchemaDefinitionError(
+                f"annotation {name} is not set on {vn}"
+            )
+        else:
+            return value
+
 
 class Annotation(
     so.QualifiedObject,

@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 from typing import (
+    Any,
     Callable,
     Optional,
     Iterable,
@@ -28,6 +29,7 @@ from typing import (
 )
 
 from collections import defaultdict
+import immutables
 import itertools
 
 from edb import errors
@@ -630,6 +632,7 @@ def apply_ddl_script_ex(
         Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
+    extension_refs: Optional[Mapping[str, Any]] = None
 ) -> tuple[s_schema.Schema, sd.DeltaRoot]:
 
     delta = sd.DeltaRoot()
@@ -669,6 +672,7 @@ def delta_from_ddl(
         Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
+    extension_refs: Optional[immutables.Map[str, Any]] = None
 ) -> sd.DeltaRoot:
     _, cmd = delta_and_schema_from_ddl(
         ddl_stmt,
@@ -679,6 +683,7 @@ def delta_from_ddl(
         store_migration_sdl=store_migration_sdl,
         schema_object_ids=schema_object_ids,
         compat_ver=compat_ver,
+        extension_refs=extension_refs,
     )
     return cmd
 
@@ -696,6 +701,7 @@ def delta_and_schema_from_ddl(
         Mapping[tuple[sn.Name, Optional[str]], uuid.UUID]
     ]=None,
     compat_ver: Optional[verutils.Version] = None,
+    extension_refs: Optional[immutables.Map[str, Any]] = None
 ) -> tuple[s_schema.Schema, sd.DeltaRoot]:
     delta = sd.DeltaRoot()
     context = sd.CommandContext(
@@ -707,6 +713,7 @@ def delta_and_schema_from_ddl(
         store_migration_sdl=store_migration_sdl,
         schema_object_ids=schema_object_ids,
         compat_ver=compat_ver,
+        extension_refs=extension_refs,
     )
 
     with context(sd.DeltaRootContext(schema=schema, op=delta)):

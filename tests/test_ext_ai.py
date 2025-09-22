@@ -18,17 +18,20 @@
 
 import json
 import pathlib
+import tempfile
 import unittest
 
 import edgedb
 
 from edb.common import assert_data_shape
 
+from edb.server import args
 from edb.server.protocol import ai_ext
-from edb.testbase import http as tb
+from edb.testbase import http as tb_http
+from edb.testbase import server as tb_server
 
 
-class TestExtAI(tb.BaseHttpExtensionTest):
+class TestExtAI(tb_http.BaseHttpExtensionTest):
     EXTENSIONS = ['pgvector', 'ai']
     BACKEND_SUPERUSER = True
     TRANSACTION_ISOLATION = False
@@ -39,7 +42,7 @@ class TestExtAI(tb.BaseHttpExtensionTest):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.mock_server = tb.MockHttpServer()
+        cls.mock_server = tb_http.MockHttpServer()
         cls.mock_server.start()
         base_url = cls.mock_server.get_base_url().rstrip("/")
 
@@ -103,9 +106,9 @@ class TestExtAI(tb.BaseHttpExtensionTest):
     @classmethod
     def mock_api_embeddings(
         cls,
-        handler: tb.MockHttpServerHandler,
-        request_details: tb.RequestDetails,
-    ) -> tb.ResponseType:
+        handler: tb_http.MockHttpServerHandler,
+        request_details: tb_http.RequestDetails,
+    ) -> tb_http.ResponseType:
         assert request_details.body is not None
         inputs: list[str] = json.loads(request_details.body)['input']
         cls._embeddings_log.append(inputs)
@@ -1422,3 +1425,205 @@ class TestExtAIUtils(unittest.TestCase):
                 ([4, 1], 6),
             ],
         )
+
+
+class TestExtAIDDL(tb_server.DDLTestCase):
+
+    async def test_ext_ai_ddl_uri_error_01(self):
+        # URI with mismatched provider and model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"An embedding model with the name 'text-embedding-3-small' exists "
+            r"but the provider specified by the index \('anthropic'\) "
+            r"differs from the one specified by the model \('openai'\)\."
+        ):
+            await self.con.execute("""
+                ALTER TYPE Foo {
+                    CREATE DEFERRED INDEX ext::ai::index(
+                        embedding_model := 'anthropic:text-embedding-3-small'
+                    ) ON (.content);
+                };
+            """)
+
+    async def test_ext_ai_ddl_uri_error_02(self):
+        # URI with unknown provider
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"An embedding model with the name 'text-embedding-3-small' exists "
+            r"but the provider specified by the index \('unknown'\) "
+            r"differs from the one specified by the model \('openai'\)\."
+        ):
+            await self.con.execute("""
+                ALTER TYPE Foo {
+                    CREATE DEFERRED INDEX ext::ai::index(
+                        embedding_model := 'unknown:text-embedding-3-small'
+                    ) ON (.content);
+                };
+            """)
+
+    async def test_ext_ai_ddl_uri_error_03(self):
+        # URI with unknown model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"undefined embedding model: no subtype of "
+            r"ext::ai::EmbeddingModel is annotated as 'unknown'"
+        ):
+            await self.con.execute("""
+                ALTER TYPE Foo {
+                    CREATE DEFERRED INDEX ext::ai::index(
+                        embedding_model := 'openai:unknown'
+                    ) ON (.content);
+                };
+            """)
+
+    async def test_ext_ai_ddl_uri_error_04(self):
+        # URI with unknown provider and model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"undefined embedding model: no subtype of "
+            r"ext::ai::EmbeddingModel is annotated as 'unknown'"
+        ):
+            await self.con.execute("""
+                ALTER TYPE Foo {
+                    CREATE DEFERRED INDEX ext::ai::index(
+                        embedding_model := 'unknown:unknown'
+                    ) ON (.content);
+                };
+            """)
+
+    async def test_ext_ai_ddl_uri_error_06(self):
+        # Drop model type when referred to by URI index
+        # Model in reference
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ref_file = (
+                pathlib.Path(__file__).parent
+                / 'ai_reference_files' / 'testing.json'
+            )
+
+            async with tb_server.start_edgedb_server(
+                data_dir=temp_dir,
+                default_auth_method=args.ServerAuthMethod.Trust,
+                env={"EDGEDB_TEST_AI_REFERENCE_PATH": ref_file},
+            ) as sd:
+                con = await sd.connect()
+                try:
+                    await con.execute("""
+                        CREATE TYPE Foo {
+                            CREATE PROPERTY content: str;
+                        };
+                        CREATE EXTENSION pgvector;
+                        CREATE EXTENSION ai;
+                        CREATE ABSTRACT TYPE FromReference
+                            EXTENDING ext::ai::EmbeddingModel
+                        {
+                            ALTER ANNOTATION ext::ai::model_name
+                                := "with-builtin-provider";
+                            ALTER ANNOTATION ext::ai::model_provider
+                                := "builtin::ollama";
+                            ALTER ANNOTATION
+                                ext::ai::embedding_model_max_input_tokens
+                                := "8192";
+                            ALTER ANNOTATION
+                                ext::ai::embedding_model_max_batch_tokens
+                                := "8192";
+                            ALTER ANNOTATION
+                                ext::ai::embedding_model_max_output_dimensions
+                                := "1024";
+                        };
+                    """)
+
+                    await con.execute("""
+                        ALTER TYPE Foo {
+                            CREATE DEFERRED INDEX ext::ai::index(
+                                embedding_model := (
+                                    'ollama:with-builtin-provider'
+                                )
+                            ) ON (.content);
+                        };
+                    """)
+
+                    with self.assertRaisesRegex(
+                        edgedb.SchemaError,
+                        r"cannot drop object type 'default::FromReference' "
+                        r"because other objects in the schema depend on it"
+                    ):
+                        await con.execute("""
+                            DROP TYPE FromReference;
+                        """)
+
+                finally:
+                    await con.aclose()
+
+    async def test_ext_ai_ddl_uri_error_07(self):
+        # Drop model type when referred to by URI index
+        # Model not in reference
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+            CREATE ABSTRACT TYPE NotInReference
+                EXTENDING ext::ai::EmbeddingModel
+            {
+                ALTER ANNOTATION ext::ai::model_name
+                    := "not-in-reference";
+                ALTER ANNOTATION ext::ai::model_provider
+                    := "builtin::ollama";
+                ALTER ANNOTATION ext::ai::embedding_model_max_input_tokens
+                    := "123";
+                ALTER ANNOTATION ext::ai::embedding_model_max_batch_tokens
+                    := "456";
+                ALTER ANNOTATION ext::ai::embedding_model_max_output_dimensions
+                    := "78";
+            };
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:not-in-reference'
+                ) ON (.content);
+            };
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaError,
+            r"cannot drop object type 'default::NotInReference' "
+            r"because other objects in the schema depend on it"
+        ):
+            await self.con.execute("""
+                DROP TYPE NotInReference;
+            """)
