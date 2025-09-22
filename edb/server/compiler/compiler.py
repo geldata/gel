@@ -35,6 +35,7 @@ import dataclasses
 import functools
 import json
 import hashlib
+import pathlib
 import pickle
 import textwrap
 import time
@@ -244,6 +245,7 @@ def new_compiler(
     local_intro_query: Optional[str] = None,
     global_intro_query: Optional[str] = None,
     config_spec: Optional[config.Spec] = None,
+    reference_paths: Optional[Mapping[str, pathlib.Path]] = None,
 ) -> Compiler:
     """Create and return a compiler instance."""
 
@@ -265,6 +267,7 @@ def new_compiler(
         config_spec=config_spec,
         local_intro_query=local_intro_query,
         global_intro_query=global_intro_query,
+        reference_paths=reference_paths,
     ))
 
 
@@ -405,6 +408,8 @@ class CompilerState:
 
     local_intro_query: Optional[str]
     global_intro_query: Optional[str]
+
+    reference_paths: Optional[Mapping[str, pathlib.Path]] = None
 
     @functools.cached_property
     def state_serializer_factory(self) -> sertypes.StateSerializerFactory:

@@ -18,17 +18,22 @@
 
 import json
 import pathlib
+import tempfile
 import unittest
 
 import edgedb
 
 from edb.common import assert_data_shape
 
+from edb.schema import indexes as s_indexes
+from edb.server import args
 from edb.server.protocol import ai_ext
-from edb.testbase import http as tb
+from edb.testbase import http as tb_http
+from edb.testbase import server as tb_server
+from edb.tools import test
 
 
-class TestExtAI(tb.BaseHttpExtensionTest):
+class TestExtAI(tb_http.BaseHttpExtensionTest):
     EXTENSIONS = ['pgvector', 'ai']
     BACKEND_SUPERUSER = True
     TRANSACTION_ISOLATION = False
@@ -39,7 +44,7 @@ class TestExtAI(tb.BaseHttpExtensionTest):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.mock_server = tb.MockHttpServer()
+        cls.mock_server = tb_http.MockHttpServer()
         cls.mock_server.start()
         base_url = cls.mock_server.get_base_url().rstrip("/")
 
@@ -103,9 +108,9 @@ class TestExtAI(tb.BaseHttpExtensionTest):
     @classmethod
     def mock_api_embeddings(
         cls,
-        handler: tb.MockHttpServerHandler,
-        request_details: tb.RequestDetails,
-    ) -> tb.ResponseType:
+        handler: tb_http.MockHttpServerHandler,
+        request_details: tb_http.RequestDetails,
+    ) -> tb_http.ResponseType:
         assert request_details.body is not None
         inputs: list[str] = json.loads(request_details.body)['input']
         cls._embeddings_log.append(inputs)
@@ -1422,3 +1427,931 @@ class TestExtAIUtils(unittest.TestCase):
                 ([4, 1], 6),
             ],
         )
+
+
+class TestExtAIDDL(tb_server.DDLTestCase):
+
+    @test.xfail('''
+        We need to add a check for duplicate model names
+    ''')
+    async def test_ext_ai_ddl_error_01(self):
+        # Add model type when URI generated type exists
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+            CREATE ABSTRACT TYPE OriginalModel
+                EXTENDING ext::ai::EmbeddingModel
+            {
+                ALTER ANNOTATION ext::ai::model_name
+                    := "with-builtin-provider";
+                ALTER ANNOTATION ext::ai::model_provider
+                    := "builtin::ollama";
+                ALTER ANNOTATION ext::ai::embedding_model_max_input_tokens
+                    := "8192";
+                ALTER ANNOTATION ext::ai::embedding_model_max_batch_tokens
+                    := "8192";
+                ALTER ANNOTATION ext::ai::embedding_model_max_output_dimensions
+                    := "1024";
+            };
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'with-builtin-provider'
+                ) ON (.content);
+            };
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"An embedding model with that model name already exists."
+        ):
+            await self.con.execute("""
+                CREATE ABSTRACT TYPE DuplicateModel
+                    EXTENDING ext::ai::EmbeddingModel
+                {
+                    ALTER ANNOTATION ext::ai::model_name
+                        := "with-builtin-provider";
+                    ALTER ANNOTATION ext::ai::model_provider
+                        := "builtin::ollama";
+                    ALTER ANNOTATION ext::ai::embedding_model_max_input_tokens
+                        := "8192";
+                    ALTER ANNOTATION ext::ai::embedding_model_max_batch_tokens
+                        := "8192";
+                    ALTER ANNOTATION
+                        ext::ai::embedding_model_max_output_dimensions
+                        := "1024";
+                };
+            """)
+
+    async def _assert_generated_models(
+        self,
+        model_descs: list[s_indexes.EmbeddingModelDesc],
+        *,
+        con=None,
+    ):
+        if con is None:
+            con = self.con
+
+        expected = [
+            {
+                "name": (
+                    f"__ext_generated_types__::ai_embedding_"
+                    f"{model_desc.model_provider.split(':')[-1]}_"
+                    f"{model_desc.model_name}"
+                ),
+                "annotations": [
+                    {
+                        "name": "ext::ai::model_name",
+                        "@value": model_desc.model_name,
+                    },
+                    {
+                        "name": "ext::ai::model_provider",
+                        "@value": model_desc.model_provider,
+                    },
+                    {
+                        "name": "ext::ai::embedding_model_max_input_tokens",
+                        "@value": str(model_desc.max_input_tokens),
+                    },
+                    {
+                        "name": "ext::ai::embedding_model_max_batch_tokens",
+                        "@value": str(model_desc.max_batch_tokens),
+                    },
+                    {
+                        "name": (
+                            "ext::ai::embedding_model_max_output_dimensions"
+                        ),
+                        "@value": str(model_desc.max_output_dimensions),
+                    },
+                    {
+                        "name": (
+                            "ext::ai::embedding_model_supports_shortening"
+                        ),
+                        "@value": (
+                            str(model_desc.supports_shortening).lower()
+                        ),
+                    },
+                ]
+            }
+            for model_desc in model_descs
+        ]
+
+        res = await con._fetchall_json(
+            '''
+            select schema::ObjectType {
+                name,
+                annotations: { name, @value }
+            }
+            filter contains(.name, '__ext_generated_types__')
+            order by .name
+            ''',
+        )
+        actual = json.loads(res)
+        assert_data_shape.assert_data_shape(
+            actual, expected, self.fail,
+        )
+
+    async def test_ext_ai_ddl_uri_01(self):
+        # Builtin provider and builtin embedding model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'openai:text-embedding-3-small'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                DROP INDEX ext::ai::index(
+                    embedding_model := 'openai:text-embedding-3-small'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+    async def test_ext_ai_ddl_uri_02(self):
+        # Builtin provider and custom embedding model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+            CREATE ABSTRACT TYPE NotInReference
+                EXTENDING ext::ai::EmbeddingModel
+            {
+                ALTER ANNOTATION ext::ai::model_name
+                    := "not-in-reference";
+                ALTER ANNOTATION ext::ai::model_provider
+                    := "builtin::ollama";
+                ALTER ANNOTATION ext::ai::embedding_model_max_input_tokens
+                    := "8192";
+                ALTER ANNOTATION ext::ai::embedding_model_max_batch_tokens
+                    := "8192";
+                ALTER ANNOTATION ext::ai::embedding_model_max_output_dimensions
+                    := "1024";
+            };
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:not-in-reference'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                DROP INDEX ext::ai::index(
+                    embedding_model := 'ollama:not-in-reference'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+    async def test_ext_ai_ddl_uri_03(self):
+        # Builtin provider and reference embedding model
+        # User generated model type
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+            CREATE ABSTRACT TYPE FromReference
+                EXTENDING ext::ai::EmbeddingModel
+            {
+                ALTER ANNOTATION ext::ai::model_name
+                    := "with-builtin-provider";
+                ALTER ANNOTATION ext::ai::model_provider
+                    := "builtin::ollama";
+                ALTER ANNOTATION ext::ai::embedding_model_max_input_tokens
+                    := "8192";
+                ALTER ANNOTATION ext::ai::embedding_model_max_batch_tokens
+                    := "8192";
+                ALTER ANNOTATION ext::ai::embedding_model_max_output_dimensions
+                    := "1024";
+            };
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:with-builtin-provider'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                DROP INDEX ext::ai::index(
+                    embedding_model := 'ollama:with-builtin-provider'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+    async def test_ext_ai_ddl_uri_04(self):
+        # Builtin provider and reference embedding model
+        # Creates new model type when created and drops it when removed
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:with-builtin-provider'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([
+            s_indexes.EmbeddingModelDesc(
+                model_name='with-builtin-provider',
+                model_provider='builtin::ollama',
+                max_input_tokens=101,
+                max_batch_tokens=501,
+                max_output_dimensions=11,
+                supports_shortening=True,
+            )
+        ])
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                DROP INDEX ext::ai::index(
+                    embedding_model := 'ollama:with-builtin-provider'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+    async def test_ext_ai_ddl_uri_05(self):
+        # Custom provider and reference embedding model
+        # Creates new model type when created and drops it when removed
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'test:with-custom-provider'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([
+            s_indexes.EmbeddingModelDesc(
+                model_name='with-custom-provider',
+                model_provider='test',
+                max_input_tokens=102,
+                max_batch_tokens=502,
+                max_output_dimensions=12,
+                supports_shortening=False,
+            )
+        ])
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                DROP INDEX ext::ai::index(
+                    embedding_model := 'test:with-custom-provider'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+    async def test_ext_ai_ddl_uri_06(self):
+        # Custom provider and custom embedding model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+            CREATE ABSTRACT TYPE NotInReference
+                EXTENDING ext::ai::EmbeddingModel
+            {
+                ALTER ANNOTATION ext::ai::model_name
+                    := "not-in-reference";
+                ALTER ANNOTATION ext::ai::model_provider
+                    := "custom-provider";
+                ALTER ANNOTATION ext::ai::embedding_model_max_input_tokens
+                    := "123";
+                ALTER ANNOTATION ext::ai::embedding_model_max_batch_tokens
+                    := "456";
+                ALTER ANNOTATION ext::ai::embedding_model_max_output_dimensions
+                    := "78";
+            };
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'custom-provider:not-in-reference'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                DROP INDEX ext::ai::index(
+                    embedding_model := 'custom-provider:not-in-reference'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+    async def test_ext_ai_ddl_uri_07(self):
+        # Builtin provider and reference embedding model
+
+        # Multiple indexes with same reference embedding model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE TYPE Bar {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:my-model-1'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([
+            s_indexes.EmbeddingModelDesc(
+                model_name='my-model-1',
+                model_provider='builtin::ollama',
+                max_input_tokens=103,
+                max_batch_tokens=503,
+                max_output_dimensions=13,
+                supports_shortening=False,
+            )
+        ])
+
+        await self.con.execute("""
+            ALTER TYPE Bar {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:my-model-1'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([
+            s_indexes.EmbeddingModelDesc(
+                model_name='my-model-1',
+                model_provider='builtin::ollama',
+                max_input_tokens=103,
+                max_batch_tokens=503,
+                max_output_dimensions=13,
+                supports_shortening=False,
+            )
+        ])
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                DROP INDEX ext::ai::index(
+                    embedding_model := 'ollama:my-model-1'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([
+            s_indexes.EmbeddingModelDesc(
+                model_name='my-model-1',
+                model_provider='builtin::ollama',
+                max_input_tokens=103,
+                max_batch_tokens=503,
+                max_output_dimensions=13,
+                supports_shortening=False,
+            )
+        ])
+
+        await self.con.execute("""
+            ALTER TYPE Bar {
+                DROP INDEX ext::ai::index(
+                    embedding_model := 'ollama:my-model-1'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+    async def test_ext_ai_ddl_uri_08(self):
+        # Builtin provider and reference embedding model
+
+        # Multiple indexes with difference reference embedding model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE TYPE Bar {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:my-model-1'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([
+            s_indexes.EmbeddingModelDesc(
+                model_name='my-model-1',
+                model_provider='builtin::ollama',
+                max_input_tokens=103,
+                max_batch_tokens=503,
+                max_output_dimensions=13,
+                supports_shortening=False,
+            )
+        ])
+
+        await self.con.execute("""
+            ALTER TYPE Bar {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:my-model-2'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([
+            s_indexes.EmbeddingModelDesc(
+                model_name='my-model-1',
+                model_provider='builtin::ollama',
+                max_input_tokens=103,
+                max_batch_tokens=503,
+                max_output_dimensions=13,
+                supports_shortening=False,
+            ),
+            s_indexes.EmbeddingModelDesc(
+                model_name='my-model-2',
+                model_provider='builtin::ollama',
+                max_input_tokens=104,
+                max_batch_tokens=504,
+                max_output_dimensions=14,
+                supports_shortening=False,
+            ),
+        ])
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                DROP INDEX ext::ai::index(
+                    embedding_model := 'ollama:my-model-1'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([
+            s_indexes.EmbeddingModelDesc(
+                model_name='my-model-2',
+                model_provider='builtin::ollama',
+                max_input_tokens=104,
+                max_batch_tokens=504,
+                max_output_dimensions=14,
+                supports_shortening=False,
+            )
+        ])
+
+        await self.con.execute("""
+            ALTER TYPE Bar {
+                DROP INDEX ext::ai::index(
+                    embedding_model := 'ollama:my-model-2'
+                ) ON (.content);
+            };
+        """)
+        await self._assert_generated_models([])
+
+    async def test_ext_ai_ddl_uri_error_01(self):
+        # URI with mismatched provider and model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"An embedding model with the name 'text-embedding-3-small' exists "
+            r"but the provider specified by the index \('anthropic'\) "
+            r"differs from the one specified by the model \('openai'\)\."
+        ):
+            await self.con.execute("""
+                ALTER TYPE Foo {
+                    CREATE DEFERRED INDEX ext::ai::index(
+                        embedding_model := 'anthropic:text-embedding-3-small'
+                    ) ON (.content);
+                };
+            """)
+
+    async def test_ext_ai_ddl_uri_error_02(self):
+        # URI with unknown provider
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"An embedding model with the name 'text-embedding-3-small' exists "
+            r"but the provider specified by the index \('unknown'\) "
+            r"differs from the one specified by the model \('openai'\)\."
+        ):
+            await self.con.execute("""
+                ALTER TYPE Foo {
+                    CREATE DEFERRED INDEX ext::ai::index(
+                        embedding_model := 'unknown:text-embedding-3-small'
+                    ) ON (.content);
+                };
+            """)
+
+    async def test_ext_ai_ddl_uri_error_03(self):
+        # URI with unknown model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"undefined embedding model: no subtype of "
+            r"ext::ai::EmbeddingModel is annotated as 'unknown'"
+        ):
+            await self.con.execute("""
+                ALTER TYPE Foo {
+                    CREATE DEFERRED INDEX ext::ai::index(
+                        embedding_model := 'openai:unknown'
+                    ) ON (.content);
+                };
+            """)
+
+    async def test_ext_ai_ddl_uri_error_04(self):
+        # URI with unknown provider and model
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"undefined embedding model: no subtype of "
+            r"ext::ai::EmbeddingModel is annotated as 'unknown'"
+        ):
+            await self.con.execute("""
+                ALTER TYPE Foo {
+                    CREATE DEFERRED INDEX ext::ai::index(
+                        embedding_model := 'unknown:unknown'
+                    ) ON (.content);
+                };
+            """)
+
+    @test.xfail('''
+        We need to add a check for duplicate model names
+    ''')
+    async def test_ext_ai_ddl_uri_error_05(self):
+        # Add model type when URI generated type exists
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:with-builtin-provider'
+                ) ON (.content);
+            };
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaDefinitionError,
+            r"undefined embedding model: no subtype of "
+            r"ext::ai::EmbeddingModel is annotated as 'unknown'"
+        ):
+            await self.con.execute("""
+                CREATE ABSTRACT TYPE MyModel
+                    EXTENDING ext::ai::EmbeddingModel
+                {
+                    ALTER ANNOTATION ext::ai::model_name
+                        := "with-builtin-provider";
+                    ALTER ANNOTATION ext::ai::model_provider
+                        := "builtin::ollama";
+                    ALTER ANNOTATION ext::ai::embedding_model_max_input_tokens
+                        := "8192";
+                    ALTER ANNOTATION ext::ai::embedding_model_max_batch_tokens
+                        := "8192";
+                    ALTER ANNOTATION
+                        ext::ai::embedding_model_max_output_dimensions
+                        := "1024";
+                };
+            """)
+
+    async def test_ext_ai_ddl_uri_error_06(self):
+        # Drop model type when referred to by URI index
+        # Model in reference
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+            CREATE ABSTRACT TYPE FromReference
+                EXTENDING ext::ai::EmbeddingModel
+            {
+                ALTER ANNOTATION ext::ai::model_name
+                    := "with-builtin-provider";
+                ALTER ANNOTATION ext::ai::model_provider
+                    := "builtin::ollama";
+                ALTER ANNOTATION ext::ai::embedding_model_max_input_tokens
+                    := "8192";
+                ALTER ANNOTATION ext::ai::embedding_model_max_batch_tokens
+                    := "8192";
+                ALTER ANNOTATION ext::ai::embedding_model_max_output_dimensions
+                    := "1024";
+            };
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:with-builtin-provider'
+                ) ON (.content);
+            };
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaError,
+            r"cannot drop object type 'default::FromReference' "
+            r"because other objects in the schema depend on it"
+        ):
+            await self.con.execute("""
+                DROP TYPE FromReference;
+            """)
+
+    async def test_ext_ai_ddl_uri_error_07(self):
+        # Drop model type when referred to by URI index
+        # Model not in reference
+        await self.con.execute("""
+            CREATE TYPE Foo {
+                CREATE PROPERTY content: str;
+            };
+            CREATE EXTENSION pgvector;
+            CREATE EXTENSION ai;
+            CREATE ABSTRACT TYPE NotInReference
+                EXTENDING ext::ai::EmbeddingModel
+            {
+                ALTER ANNOTATION ext::ai::model_name
+                    := "not-in-reference";
+                ALTER ANNOTATION ext::ai::model_provider
+                    := "custom-provider";
+                ALTER ANNOTATION ext::ai::embedding_model_max_input_tokens
+                    := "123";
+                ALTER ANNOTATION ext::ai::embedding_model_max_batch_tokens
+                    := "456";
+                ALTER ANNOTATION ext::ai::embedding_model_max_output_dimensions
+                    := "78";
+            };
+        """)
+
+        await self.con.execute("""
+            ALTER TYPE Foo {
+                CREATE DEFERRED INDEX ext::ai::index(
+                    embedding_model := 'ollama:not-in-reference'
+                ) ON (.content);
+            };
+        """)
+
+        with self.assertRaisesRegex(
+            edgedb.SchemaError,
+            r"cannot drop object type 'default::NotInReference' "
+            r"because other objects in the schema depend on it"
+        ):
+            await self.con.execute("""
+                DROP TYPE NotInReference;
+            """)
+
+    async def test_ext_ai_ddl_uri_reference_json_01(self):
+        # Custom model defined by user then added to reference json
+        # New type should not be created
+        with tempfile.TemporaryDirectory() as temp_dir:
+            old_ref_file = (
+                pathlib.Path(__file__).parent
+                / 'ai_reference_files' / 'testing.json'
+            )
+            new_ref_file = (
+                pathlib.Path(__file__).parent
+                / 'ai_reference_files' / 'testing-extra.json'
+            )
+
+            async with tb_server.start_edgedb_server(
+                data_dir=temp_dir,
+                default_auth_method=args.ServerAuthMethod.Trust,
+                extra_args=[f'--ai-reference-file={old_ref_file}'],
+            ) as sd:
+                con = await sd.connect()
+                try:
+                    await con.execute('''
+                        CREATE TYPE Foo {
+                            CREATE PROPERTY content: str;
+                        };
+                        CREATE TYPE Bar {
+                            CREATE PROPERTY content: str;
+                        };
+                        CREATE EXTENSION pgvector;
+                        CREATE EXTENSION ai;
+                        CREATE ABSTRACT TYPE FromReference
+                            EXTENDING ext::ai::EmbeddingModel
+                        {
+                            ALTER ANNOTATION ext::ai::model_name
+                                := "extra-model-1";
+                            ALTER ANNOTATION ext::ai::model_provider
+                                := "builtin::ollama";
+                            ALTER ANNOTATION
+                                ext::ai::embedding_model_max_input_tokens
+                                := "111";
+                            ALTER ANNOTATION
+                                ext::ai::embedding_model_max_batch_tokens
+                                := "511";
+                            ALTER ANNOTATION
+                                ext::ai::embedding_model_max_output_dimensions
+                                := "21";
+                        };
+                    ''')
+
+                    await con.execute("""
+                        ALTER TYPE Foo {
+                            CREATE DEFERRED INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models([], con=con)
+
+                finally:
+                    await con.aclose()
+
+            async with tb_server.start_edgedb_server(
+                data_dir=temp_dir,
+                default_auth_method=args.ServerAuthMethod.Trust,
+                extra_args=[f'--ai-reference-file={new_ref_file}'],
+            ) as sd:
+                con = await sd.connect()
+                try:
+                    await con.execute("""
+                        ALTER TYPE Bar {
+                            CREATE DEFERRED INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models([], con=con)
+
+                    await con.execute("""
+                        ALTER TYPE Foo {
+                            DROP INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models([], con=con)
+
+                    await con.execute("""
+                        ALTER TYPE Bar {
+                            DROP INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models([], con=con)
+
+                finally:
+                    await con.aclose()
+
+    async def test_ext_ai_ddl_uri_reference_json_02(self):
+        # New model added to reference json
+        # New type should be created, but this only succeeds after the json is
+        # updated.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            old_ref_file = (
+                pathlib.Path(__file__).parent
+                / 'ai_reference_files' / 'testing.json'
+            )
+            new_ref_file = (
+                pathlib.Path(__file__).parent
+                / 'ai_reference_files' / 'testing-extra.json'
+            )
+
+            async with tb_server.start_edgedb_server(
+                data_dir=temp_dir,
+                default_auth_method=args.ServerAuthMethod.Trust,
+                extra_args=[f'--ai-reference-file={old_ref_file}'],
+            ) as sd:
+                con = await sd.connect()
+                try:
+                    await con.execute('''
+                        CREATE TYPE Foo {
+                            CREATE PROPERTY content: str;
+                        };
+                        CREATE EXTENSION pgvector;
+                        CREATE EXTENSION ai;
+                    ''')
+
+                    with self.assertRaisesRegex(
+                        edgedb.SchemaDefinitionError,
+                        r"undefined embedding model: no subtype of "
+                        r"ext::ai::EmbeddingModel is annotated as "
+                        r"'extra-model-1'"
+                    ):
+                        await con.execute("""
+                            ALTER TYPE Foo {
+                                CREATE DEFERRED INDEX ext::ai::index(
+                                    embedding_model := 'ollama:extra-model-1'
+                                ) ON (.content);
+                            };
+                        """)
+                    await self._assert_generated_models([], con=con)
+
+                finally:
+                    await con.aclose()
+
+            async with tb_server.start_edgedb_server(
+                data_dir=temp_dir,
+                default_auth_method=args.ServerAuthMethod.Trust,
+                extra_args=[f'--ai-reference-file={new_ref_file}'],
+            ) as sd:
+                con = await sd.connect()
+                try:
+                    await con.execute("""
+                        ALTER TYPE Foo {
+                            CREATE DEFERRED INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models(
+                        [
+                            s_indexes.EmbeddingModelDesc(
+                                model_name='extra-model-1',
+                                model_provider='builtin::ollama',
+                                max_input_tokens=111,
+                                max_batch_tokens=511,
+                                max_output_dimensions=21,
+                                supports_shortening=False,
+                            ),
+                        ],
+                        con=con,
+                    )
+
+                    await con.execute("""
+                        ALTER TYPE Foo {
+                            DROP INDEX ext::ai::index(
+                                embedding_model := 'ollama:extra-model-1'
+                            ) ON (.content);
+                        };
+                    """)
+                    await self._assert_generated_models([], con=con)
+
+                finally:
+                    await con.aclose()

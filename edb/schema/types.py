@@ -101,6 +101,13 @@ class Type(
         ExprType,
         default=None, compcoef=0.909)
 
+    # Whether this type was generated from elsewhere in the schema.
+    is_schema_generated = so.SchemaField(
+        bool,
+        default=False,
+        compcoef=0.0,
+    )
+
     # True for views.  This should always match the value of
     # `bool(expr_type)`, but can be exported in the introspection
     # schema without revealing weird internals.
@@ -193,6 +200,9 @@ class Type(
         derived_attrs['name'] = name
         derived_attrs['bases'] = so.ObjectList.create(schema, [self])
         derived_attrs['from_alias'] = bool(derived_attrs.get('expr_type'))
+        derived_attrs['is_schema_generated'] = bool(
+            derived_attrs.get('is_schema_generated')
+        )
 
         cmd = sd.get_object_delta_command(
             objtype=type(self),
@@ -3059,7 +3069,10 @@ class TypeCommand[TypeT: Type](sd.ObjectCommand[TypeT]):
         *,
         parent_node: Optional[qlast.DDLOperation] = None,
     ) -> Optional[qlast.DDLOperation]:
-        if self.get_attribute_value('expr'):
+        if (
+            self.get_attribute_value('expr')
+            or self.get_attribute_value('is_schema_generated')
+        ):
             return None
         elif (
             (union_of := self.get_attribute_value('union_of')) is not None

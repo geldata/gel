@@ -3612,13 +3612,13 @@ class DeleteIndex(IndexCommand, adapts=s_indexes.DeleteIndex):
         )
         return dbops.DropIndex(pg_index, conditions=(index_exists,))
 
-    def apply(
+    def _delete_innards(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
     ) -> s_schema.Schema:
         orig_schema = schema
-        schema = super().apply(schema, context)
+        schema = super()._delete_innards(schema, context)
         index = self.scls
 
         if index.get_abstract(orig_schema):

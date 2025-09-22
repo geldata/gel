@@ -1,0 +1,194 @@
+{
+  "providers": {
+    "openai": {
+      "name": "builtin::openai"
+    },
+    "mistral": {
+      "name": "builtin::mistral"
+    },
+    "anthropic": {
+      "name": "builtin::anthropic"
+    },
+    "ollama": {
+      "name": "builtin::ollama"
+    }
+  },
+  "embedding_models": {
+    "text-embedding-3-small": {
+      "model_name": "text-embedding-3-small",
+      "model_provider": "openai",
+      "max_input_tokens": 8191,
+      "max_batch_tokens": 8191,
+      "max_output_dimensions": 1536,
+      "supports_shortening": true
+    },
+    "text-embedding-3-large": {
+      "model_name": "text-embedding-3-large",
+      "model_provider": "openai",
+      "max_input_tokens": 8191,
+      "max_batch_tokens": 8191,
+      "max_output_dimensions": 3072,
+      "supports_shortening": true
+    },
+    "text-embedding-ada-002": {
+      "model_name": "text-embedding-ada-002",
+      "model_provider": "openai",
+      "max_input_tokens": 8191,
+      "max_batch_tokens": 8191,
+      "max_output_dimensions": 1536,
+      "supports_shortening": false
+    },
+    "mistral-embed": {
+      "model_name": "mistral-embed",
+      "model_provider": "mistral",
+      "max_input_tokens": 8192,
+      "max_batch_tokens": 16384,
+      "max_output_dimensions": 1024,
+      "supports_shortening": false
+    },
+    "nomic-embed-text": {
+      "model_name": "nomic-embed-text",
+      "model_provider": "ollama",
+      "max_input_tokens": 8192,
+      "max_batch_tokens": 8192,
+      "max_output_dimensions": 768,
+      "supports_shortening": false
+    },
+    "bge-m3": {
+      "model_name": "bge-m3",
+      "model_provider": "ollama",
+      "max_input_tokens": 8192,
+      "max_batch_tokens": 8192,
+      "max_output_dimensions": 1024,
+      "supports_shortening": false
+    }
+  },
+  "text_generation_models": {
+    "gpt-3.5-turbo": {
+      "model_name": "gpt-3.5-turbo",
+      "model_provider": "openai",
+      "context_window": 16385
+    },
+    "gpt-4-turbo-preview": {
+      "model_name": "gpt-4-turbo-preview",
+      "model_provider": "openai",
+      "context_window": 128000
+    },
+    "gpt-4-turbo": {
+      "model_name": "gpt-4-turbo",
+      "model_provider": "openai",
+      "context_window": 128000
+    },
+    "gpt-4o": {
+      "model_name": "gpt-4o",
+      "model_provider": "openai",
+      "context_window": 128000
+    },
+    "gpt-4o-mini": {
+      "model_name": "gpt-4o-mini",
+      "model_provider": "openai",
+      "context_window": 128000
+    },
+    "gpt-4": {
+      "model_name": "gpt-4",
+      "model_provider": "openai",
+      "context_window": 128000
+    },
+    "o1-preview": {
+      "model_name": "o1-preview",
+      "model_provider": "openai",
+      "context_window": 128000
+    },
+    "o1-mini": {
+      "model_name": "o1-mini",
+      "model_provider": "openai",
+      "context_window": 128000
+    },
+    "mistral-small-latest": {
+      "model_name": "mistral-small-latest",
+      "model_provider": "mistral",
+      "context_window": 32000
+    },
+    "mistral-medium-latest": {
+      "model_name": "mistral-medium-latest",
+      "model_provider": "mistral",
+      "context_window": 32000,
+      "deprecated": true
+    },
+    "mistral-large-latest": {
+      "model_name": "mistral-large-latest",
+      "model_provider": "mistral",
+      "context_window": 128000
+    },
+    "pixtral-large-latest": {
+      "model_name": "pixtral-large-latest",
+      "model_provider": "mistral",
+      "context_window": 128000
+    },
+    "ministral-3b-latest": {
+      "model_name": "ministral-3b-latest",
+      "model_provider": "mistral",
+      "context_window": 128000
+    },
+    "ministral-8b-latest": {
+      "model_name": "ministral-8b-latest",
+      "model_provider": "mistral",
+      "context_window": 128000
+    },
+    "codestral-latest": {
+      "model_name": "codestral-latest",
+      "model_provider": "mistral",
+      "context_window": 32000
+    },
+    "pixtral-12b-2409": {
+      "model_name": "pixtral-12b-2409",
+      "model_provider": "mistral",
+      "context_window": 128000
+    },
+    "open-mistral-nemo": {
+      "model_name": "open-mistral-nemo",
+      "model_provider": "mistral",
+      "context_window": 128000
+    },
+    "open-codestral-mamba": {
+      "model_name": "open-codestral-mamba",
+      "model_provider": "mistral",
+      "context_window": 256000
+    },
+    "claude-3-5-sonnet-latest": {
+      "model_name": "claude-3-5-sonnet-latest",
+      "model_provider": "anthropic",
+      "context_window": 200000
+    },
+    "claude-3-5-haiku-latest": {
+      "model_name": "claude-3-5-haiku-latest",
+      "model_provider": "anthropic",
+      "context_window": 200000
+    },
+    "claude-3-haiku-20240307": {
+      "model_name": "claude-3-haiku-20240307",
+      "model_provider": "anthropic",
+      "context_window": 200000
+    },
+    "claude-3-sonnet-20240229": {
+      "model_name": "claude-3-sonnet-20240229",
+      "model_provider": "anthropic",
+      "context_window": 200000
+    },
+    "claude-3-opus-latest": {
+      "model_name": "claude-3-opus-latest",
+      "model_provider": "anthropic",
+      "context_window": 200000
+    },
+    "llama3.2": {
+      "model_name": "llama3.2",
+      "model_provider": "ollama",
+      "context_window": 131072
+    },
+    "llama3.3": {
+      "model_name": "llama3.3",
+      "model_provider": "ollama",
+      "context_window": 131072
+    }
+  }
+}

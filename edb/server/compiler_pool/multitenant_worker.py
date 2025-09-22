@@ -20,6 +20,7 @@
 from __future__ import annotations
 from typing import Any, Callable, Optional, NamedTuple, Sequence
 
+import pathlib
 import pickle
 
 import immutables
@@ -47,6 +48,7 @@ BACKEND_RUNTIME_PARAMS: pgparams.BackendRuntimeParams = (
 COMPILER: compiler.Compiler
 LAST_STATE: Optional[compiler.dbstate.CompilerConnectionState] = None
 STD_SCHEMA: s_schema.FlatSchema
+REFERENCE_PATHS: immutables.Map[str, pathlib.Path]
 
 
 class ClientSchema(NamedTuple):
@@ -62,17 +64,20 @@ def __init_worker__(
     global BACKEND_RUNTIME_PARAMS
     global COMPILER
     global STD_SCHEMA
+    global REFERENCE_PATHS
 
     (
         backend_runtime_params,
         std_schema,
         refl_schema,
         schema_class_layout,
+        reference_paths,
     ) = pickle.loads(init_args_pickled)
 
     INITED = True
     BACKEND_RUNTIME_PARAMS = backend_runtime_params
     STD_SCHEMA = std_schema
+    REFERENCE_PATHS = immutables.Map(reference_paths)
 
     COMPILER = compiler.new_compiler(
         std_schema,
@@ -80,6 +85,7 @@ def __init_worker__(
         schema_class_layout,
         backend_runtime_params=backend_runtime_params,
         config_spec=None,
+        reference_paths=REFERENCE_PATHS,
     )
 
 

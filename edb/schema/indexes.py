@@ -29,6 +29,11 @@ from typing import (
     TYPE_CHECKING,
 )
 
+from dataclasses import dataclass
+import json
+import os
+import pathlib
+
 from edb import edgeql
 from edb import errors
 from edb.common import parsing
@@ -354,6 +359,14 @@ class Index(
         default=False,
         compcoef=0.803,
         allow_ddl_set=True,
+    )
+
+    # If this is a generated AI index, track the created type.
+    # This ensures that the model is correctly deleted in the case multiple
+    # indexes use the same model uri.
+    generated_ai_model_type = so.SchemaField(
+        s_types.Type,
+        default=None,
     )
 
     def __repr__(self) -> str:
@@ -966,6 +979,101 @@ class IndexCommand(
                 )
         return schema
 
+    def _handle_ai_index_op(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+        *,
+        is_alter: bool = False,
+    ) -> None:
+        """Makes subcommands for AI embedding models.
+
+        If an AI index uses a URI for it model name, this ensures that
+        the appropriate embedding model types exist.
+        """
+        if context.canonical:
+            return
+
+        # Get the provider and model from the kwargs
+        kwargs: Optional[s_expr.ExpressionDict] = (
+            self.get_resolved_attribute_value(
+                'kwargs', schema=schema, context=context
+            )
+        )
+        if not kwargs:
+            return
+
+        embedding_model_kwarg: Optional[s_expr.Expression] = (
+            kwargs.get('embedding_model')
+        )
+        if not embedding_model_kwarg:
+            return
+
+        embedding_model_expr = s_expr.Expression.compiled(
+            embedding_model_kwarg, schema=schema, context=None
+        )
+        model_name = embedding_model_expr.as_python_value()
+        if ':' in model_name:
+            # Model name is a URI
+            pschema = schema
+
+            drop_old_model_cmd: Optional[sd.Command] = None
+            if is_alter:
+                drop_old_model_cmd = self._delete_ai_model_type(
+                    self.scls, schema, context)
+                with context.suspend_dep_verification():
+                    pschema = drop_old_model_cmd.apply(pschema, context)
+
+            # Create new type if necessary
+            model_cmd, model_typeshell = _create_ai_model_type(
+                model_name, pschema, context, span=self.span,
+            )
+            if drop_old_model_cmd:
+                model_cmd.prepend(drop_old_model_cmd)
+
+            self.add_prerequisite(model_cmd)
+            if model_typeshell:
+                self.set_attribute_value(
+                    'generated_ai_model_type',
+                    model_typeshell,
+                )
+
+    def _delete_ai_model_type(
+        self,
+        scls: Index,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+    ) -> sd.CommandGroup:
+
+        model_type: Optional[s_types.Type] = (
+            scls.get_generated_ai_model_type(schema)
+        )
+        if not model_type:
+            return sd.DeltaRoot()
+
+        delta = sd.DeltaRoot()
+
+        alter_index = scls.init_delta_command(schema, sd.AlterObject)
+        alter_index.canonical = True
+
+        # Unset generated_ai_model_type, so the types can be dropped
+        alter_index.add(
+            sd.AlterObjectProperty(
+                property='generated_ai_model_type', new_value=None
+            )
+        )
+        delta.add(alter_index)
+
+        drop_model_type = model_type.init_delta_command(
+            schema, sd.DeleteObject, if_exists=True, if_unused=True
+        )
+        subcmds = drop_model_type._canonicalize(schema, context, model_type)
+        drop_model_type.update(subcmds)
+
+        delta.add(drop_model_type)
+
+        return delta
+
     def ast_ignore_field_ownership(self, field: str) -> bool:
         """Whether to force generating an AST even though field isn't owned"""
         return field == "deferred"
@@ -985,6 +1093,313 @@ class IndexCommand(
                 return
 
         super()._append_subcmd_ast(schema, node, subcmd, context)
+
+
+@dataclass(kw_only=True, frozen=True)
+class ProviderDesc:
+    name: str
+
+
+@dataclass(kw_only=True, frozen=True)
+class EmbeddingModelDesc:
+    model_name: str
+    model_provider: str
+    max_input_tokens: int
+    max_batch_tokens: int
+    max_output_dimensions: int
+    supports_shortening: bool
+
+
+def _try_load_reference_descs(
+    *,
+    context: sd.CommandContext,
+) -> tuple[
+    dict[str, ProviderDesc],
+    dict[str, EmbeddingModelDesc],
+]:
+    """Try to fetch the AI reference json.
+
+    This currently only checks the local build's edb.server.protocol directory.
+    """
+    provider_descs: dict[str, ProviderDesc] = {}
+    embedding_model_descs: dict[str, EmbeddingModelDesc] = {}
+
+    try:
+        reference_path: str | pathlib.Path
+        if (
+            context.reference_paths
+            and 'ai_reference_file' in context.reference_paths
+        ):
+            reference_path = context.reference_paths['ai_reference_file']
+        else:
+            reference_path = os.path.join(
+                pathlib.Path(__file__).parent.parent,
+                'server',
+                'protocol',
+                'ai_reference.json',
+            )
+
+        with open(reference_path) as reference_file:
+            local_reference: dict[str, Any] = json.load(reference_file)
+            if provider_ref := local_reference.get("providers"):
+                for name, ref in provider_ref.items():
+                    provider_descs[name] = ProviderDesc(
+                        name=ref["name"],
+                    )
+            if embedding_models_ref := local_reference.get("embedding_models"):
+                for name, ref in embedding_models_ref.items():
+                    embedding_model_descs[name] = EmbeddingModelDesc(
+                        model_name=ref["model_name"],
+                        model_provider=ref["model_provider"],
+                        max_input_tokens=ref["max_input_tokens"],
+                        max_batch_tokens=ref["max_batch_tokens"],
+                        max_output_dimensions=ref["max_output_dimensions"],
+                        supports_shortening=ref["supports_shortening"],
+                    )
+
+    except Exception:
+        # Ignore failures
+        pass
+
+    if context.testmode:
+        # For testing, add some special model descriptions
+        embedding_model_descs['with-builtin-provider'] = EmbeddingModelDesc(
+            model_name='with-builtin-provider',
+            model_provider='ollama',
+            max_input_tokens=101,
+            max_batch_tokens=501,
+            max_output_dimensions=11,
+            supports_shortening=True,
+        )
+        embedding_model_descs['with-custom-provider'] = EmbeddingModelDesc(
+            model_name='with-custom-provider',
+            model_provider='test',
+            max_input_tokens=102,
+            max_batch_tokens=502,
+            max_output_dimensions=12,
+            supports_shortening=False,
+        )
+        embedding_model_descs['my-model-1'] = EmbeddingModelDesc(
+            model_name='my-model-1',
+            model_provider='ollama',
+            max_input_tokens=103,
+            max_batch_tokens=503,
+            max_output_dimensions=13,
+            supports_shortening=False,
+        )
+        embedding_model_descs['my-model-2'] = EmbeddingModelDesc(
+            model_name='my-model-2',
+            model_provider='ollama',
+            max_input_tokens=104,
+            max_batch_tokens=504,
+            max_output_dimensions=14,
+            supports_shortening=False,
+        )
+
+    return (provider_descs, embedding_model_descs)
+
+
+def _create_ai_model_type(
+    model_name: str,
+    schema: s_schema.Schema,
+    context: sd.CommandContext,
+    *,
+    span: Optional[parsing.Span],
+) -> tuple[
+    sd.Command,
+    Optional[so.ObjectShell[s_types.Type]],
+]:
+    """Ensure an AI model type exists.
+
+    If the AI type does not exist, returns a create object command.
+    If the AI type does exist, returns an empty command.
+
+    Also returns the typeshell of the model if it was generated by any
+    AI index.
+    """
+
+    model_name_parts = model_name.split(':')
+    if len(model_name_parts) > 2:
+        raise errors.SchemaDefinitionError(
+            f"Invalid model uri, ':' used more than once: {model_name}",
+            span=span
+        )
+
+    uri_provider_name = model_name_parts[0]
+    uri_model_name = model_name_parts[1]
+
+    # Lookup the ai model description
+    provider_descs, model_descs = _try_load_reference_descs(
+        context=context
+    )
+
+    if uri_model_name not in model_descs:
+        # No match in reference
+        return sd.DeltaRoot(), None
+
+    model_desc = model_descs[uri_model_name]
+
+    resolved_provider_name = (
+        provider_descs[uri_provider_name].name
+        if uri_provider_name in provider_descs else
+        uri_provider_name
+    )
+
+    model_typeshell: Optional[so.ObjectShell[s_types.Type]]
+
+    # First check if a model with a matching name is already in the schema
+    if models := get_defined_ext_ai_embedding_models(schema, uri_model_name):
+        # If there is only 1 model, ensure that the provider name matches
+        if len(models) == 1:
+            model = next(iter(models.values()))
+
+            model_provider_name = model.get_annotation(
+                schema, sn.QualName("ext::ai", "model_provider")
+            )
+            # The URI will specify "openai" instead of "builtin::openai"
+            # We want to show only "openai" in the case of an error here.
+            model_provider_short_name = model_provider_name
+            for provider_short_name, provider_desc in provider_descs.items():
+                if provider_desc.name == model_provider_name:
+                    model_provider_short_name = provider_short_name
+                    break
+
+            if model_provider_name != resolved_provider_name:
+                raise errors.SchemaDefinitionError(
+                    f"An embedding model with the name '{uri_model_name}' "
+                    f"exists but the provider specified by the index "
+                    f"('{uri_provider_name}') differs from the one "
+                    f"specified by the model ('{model_provider_short_name}').",
+                    span=span,
+                )
+
+        elif len(models) > 1:
+            models_dn = [
+                model.get_displayname(schema) for model in models.values()
+            ]
+            raise errors.SchemaDefinitionError(
+                f'expecting only one embedding model to be annotated '
+                f'with ext::ai::model_name={model_name!r}: got multiple: '
+                f'{", ".join(models_dn)}',
+                span=span,
+            )
+
+        # Only return a typeshell if the model is generated
+        if model.get_name(schema).module == '__ext_generated_types__':
+            model_typeshell = model.as_shell(schema)
+        else:
+            model_typeshell = None
+
+        return sd.DeltaRoot(), model_typeshell
+
+    # Ensure that a suitable model type exists for the ai index
+    model_typename = sn.QualName(
+        '__ext_generated_types__',
+        f'ai_embedding_{uri_provider_name}_{uri_model_name}'
+    )
+
+    if model_type := schema.get(model_typename, None, type=s_types.Type):
+        # If the model type already exists, add a link to it
+        model_typeshell = so.ObjectShell(
+            name=model_typename,
+            schemaclass=type(model_type),
+        )
+        return sd.DeltaRoot(), model_typeshell
+
+    else:
+        # If the model type does not exist, create it and also add a link
+
+        # Command to create the model
+        model_ast = qlast.CreateObjectType(
+            name=qlast.ObjectRef(
+                name=model_typename.name,
+                module=model_typename.module,
+                itemclass=qltypes.SchemaObjectClass.TYPE,
+            ),
+            abstract=True,
+            bases=[
+                qlast.TypeName(
+                    maintype=qlast.ObjectRef(
+                        name='EmbeddingModel',
+                        module='ext::ai',
+                    ),
+                ),
+            ],
+            commands=[
+                qlast.AlterAnnotationValue(
+                    name=qlast.ObjectRef(
+                        name='model_name',
+                        module='ext::ai',
+                    ),
+                    value=qlast.Constant.string(model_desc.model_name),
+                ),
+                qlast.AlterAnnotationValue(
+                    name=qlast.ObjectRef(
+                        name='model_provider',
+                        module='ext::ai',
+                    ),
+                    value=qlast.Constant.string(resolved_provider_name),
+                ),
+                qlast.AlterAnnotationValue(
+                    name=qlast.ObjectRef(
+                        name='embedding_model_max_input_tokens',
+                        module='ext::ai',
+                    ),
+                    value=qlast.Constant.string(str(model_desc.max_input_tokens)),
+                ),
+                qlast.AlterAnnotationValue(
+                    name=qlast.ObjectRef(
+                        name='embedding_model_max_batch_tokens',
+                        module='ext::ai',
+                    ),
+                    value=qlast.Constant.string(str(model_desc.max_batch_tokens)),
+                ),
+                qlast.AlterAnnotationValue(
+                    name=qlast.ObjectRef(
+                        name='embedding_model_max_output_dimensions',
+                        module='ext::ai',
+                    ),
+                    value=qlast.Constant.string(str(model_desc.max_output_dimensions)),
+                ),
+            ],
+        )
+        if model_desc.supports_shortening:
+            model_ast.commands.append(
+                qlast.AlterAnnotationValue(
+                    name=qlast.ObjectRef(
+                        name='embedding_model_supports_shortening',
+                        module='ext::ai',
+                    ),
+                    value=qlast.Constant.string('true'),
+                )
+            )
+
+        model_cmd = sd.compile_ddl(
+            schema,
+            model_ast,
+        )
+        model_cmd.set_attribute_value('is_schema_generated', True)
+
+        # Apply the command to the schema to generate an actual type
+        # and typeshell.
+
+        # Recompile the command to get a clean copy of the command.
+        # Apply will normalize the command, but we don't want that to happen
+        # here and then again in the CreateIndex/AlterIndex.
+        dummy_model_cmd = sd.compile_ddl(
+            schema,
+            model_ast,
+        )
+        dummy_model_cmd.set_attribute_value('is_schema_generated', True)
+        new_schema = dummy_model_cmd.apply(schema, context)
+        model_type = new_schema.get(model_typename, None, type=s_types.Type)
+        assert model_type is not None
+        model_typeshell = so.ObjectShell(
+            name=model_typename,
+            schemaclass=type(model_type),
+        )
+
+        return model_cmd, model_typeshell
 
 
 class CreateIndex(
@@ -1382,6 +1797,8 @@ class CreateIndex(
         schema: s_schema.Schema,
         context: sd.CommandContext,
     ) -> s_schema.Schema:
+        self._handle_ai_index_op(schema, context, is_alter=False)
+
         schema = super()._create_begin(schema, context)
         referrer_ctx = self.get_referrer_context(context)
         if (
@@ -1601,6 +2018,19 @@ class CreateIndex(
         kwargs = self.scls.get_concrete_kwargs_as_values(schema)
         model_name = kwargs["embedding_model"]
 
+        if ':' in model_name:
+            # We are doing URI lookup.
+            # If a new model type is needed, it will have been created in
+            # _handle_ai_index_op.
+            model_name_parts = model_name.split(':')
+            if len(model_name_parts) > 2:
+                raise errors.SchemaDefinitionError(
+                    f"Invalid model uri, ':' used more than once: {model_name}",
+                    span=self.span
+                )
+
+            model_name = model_name_parts[1]
+
         models = get_defined_ext_ai_embedding_models(schema, model_name)
         if len(models) == 0:
             raise errors.SchemaDefinitionError(
@@ -1651,6 +2081,8 @@ class AlterIndexOwned(
         schema: s_schema.Schema,
         context: sd.CommandContext,
     ) -> s_schema.Schema:
+        self._handle_ai_index_op(schema, context, is_alter=True)
+
         schema = super()._alter_begin(schema, context)
         referrer_ctx = self.get_referrer_context(context)
         if (
@@ -1762,6 +2194,13 @@ class DeleteIndex(
         if not context.canonical:
             for param in self.scls.get_params(schema).objects(schema):
                 self.add(param.init_delta_command(schema, sd.DeleteObject))
+        if (
+            not context.canonical
+            and self.scls.get_generated_ai_model_type(schema)
+        ):
+            self.add_caused(
+                self._delete_ai_model_type(self.scls, schema, context)
+            )
         return schema
 
     @classmethod

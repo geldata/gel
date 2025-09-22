@@ -137,6 +137,8 @@ class BaseServer:
     _net_worker_http: asyncio.Task | None
     _net_worker_http_gc: asyncio.Task | None
 
+    _ai_reference_file: Optional[pathlib.Path] = None
+
     def __init__(
         self,
         *,
@@ -168,6 +170,7 @@ class BaseServer:
         compiler_state: edbcompiler.CompilerState,
         use_monitor_fs: bool = False,
         net_worker_mode: srvargs.NetWorkerMode = srvargs.NetWorkerMode.Default,
+        ai_reference_file: Optional[pathlib.Path] = None,
     ):
         self.__loop = asyncio.get_running_loop()
         self._use_monitor_fs = use_monitor_fs
@@ -273,6 +276,8 @@ class BaseServer:
 
         self._disable_dynamic_system_config = disable_dynamic_system_config
         self._report_config_typedesc = {}
+
+        self._ai_reference_file = ai_reference_file
 
     def _get_auth_method_types(
         self,
@@ -611,6 +616,7 @@ class BaseServer:
             std_schema=self._std_schema,
             refl_schema=self._refl_schema,
             schema_class_layout=self._schema_class_layout,
+            ai_reference_file=self._ai_reference_file,
         )
         if self._compiler_pool_mode == srvargs.CompilerPoolMode.Remote:
             args['address'] = self._compiler_pool_addr

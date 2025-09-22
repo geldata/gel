@@ -20,6 +20,7 @@
 from __future__ import annotations
 from typing import Any, Optional
 
+import pathlib
 import pickle
 
 import immutables
@@ -47,6 +48,7 @@ LAST_STATE_PICKLE: Optional[bytes] = None
 STD_SCHEMA: s_schema.FlatSchema
 GLOBAL_SCHEMA: s_schema.FlatSchema
 INSTANCE_CONFIG: immutables.Map[str, config.SettingValue]
+REFERENCE_PATHS: immutables.Map[str, pathlib.Path]
 
 
 def __init_worker__(
@@ -58,6 +60,7 @@ def __init_worker__(
     global STD_SCHEMA
     global GLOBAL_SCHEMA
     global INSTANCE_CONFIG
+    global REFERENCE_PATHS
 
     (
         backend_runtime_params,
@@ -66,6 +69,7 @@ def __init_worker__(
         schema_class_layout,
         global_schema_pickle,
         system_config,
+        reference_paths,
     ) = pickle.loads(init_args_pickled)
 
     INITED = True
@@ -73,6 +77,7 @@ def __init_worker__(
     STD_SCHEMA = std_schema
     GLOBAL_SCHEMA = pickle.loads(global_schema_pickle)
     INSTANCE_CONFIG = system_config
+    REFERENCE_PATHS = immutables.Map(reference_paths)
 
     COMPILER = compiler.new_compiler(
         std_schema,
@@ -80,6 +85,7 @@ def __init_worker__(
         schema_class_layout,
         backend_runtime_params=BACKEND_RUNTIME_PARAMS,
         config_spec=None,
+        reference_paths=REFERENCE_PATHS,
     )
 
 
