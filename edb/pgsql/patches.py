@@ -372,4 +372,10 @@ ALTER FUNCTION edgedbstd."std|cast@std|json@std|uuid_f" IMMUTABLE;
     # 6.11
     ('sql-introspection', ''),  # For #8962
     ('edgeql+schema+config', ''),  # For #8971
+
+    # For #9028.
+    # N.B: We don't need to do any actual in place patching, since it
+    # just adjusts the compat version numbers. If it is installed,
+    # then we're already fine.
+    ('ext-pkg', 'pgvector'),
 ]
