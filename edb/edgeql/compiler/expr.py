@@ -983,13 +983,13 @@ def _infer_index_type(
     node_type = setgen.get_expr_type(expr, ctx=ctx)
     index_type = setgen.get_set_type(index, ctx=ctx)
 
-    str_t = env.schema.get_fully_qualified(sn.Name('std', 'str'))
+    str_t = env.schema.get_by_fully_qualified(sn.QualName('std', 'str'))
     assert isinstance(str_t, s_scalars.ScalarType)
-    bytes_t = env.schema.get_fully_qualified(sn.Name('std', 'bytes'))
+    bytes_t = env.schema.get_by_fully_qualified(sn.QualName('std', 'bytes'))
     assert isinstance(bytes_t, s_scalars.ScalarType)
-    int_t = env.schema.get_fully_qualified(sn.Name('std', 'int64'))
+    int_t = env.schema.get_by_fully_qualified(sn.QualName('std', 'int64'))
     assert isinstance(int_t, s_scalars.ScalarType)
-    json_t = env.schema.get_fully_qualified(sn.Name('std', 'json'))
+    json_t = env.schema.get_by_fully_qualified(sn.QualName('std', 'json'))
     assert isinstance(json_t, s_scalars.ScalarType)
 
     result: s_types.Type
@@ -1066,13 +1066,13 @@ def _infer_slice_type(
     env = ctx.env
     node_type = setgen.get_set_type(expr, ctx=ctx)
 
-    str_t = env.schema.get_fully_qualified(sn.Name('std', 'str'))
+    str_t = env.schema.get_by_fully_qualified(sn.QualName('std', 'str'))
     assert isinstance(str_t, s_scalars.ScalarType)
-    bytes_t = env.schema.get_fully_qualified(sn.Name('std', 'bytes'))
+    bytes_t = env.schema.get_by_fully_qualified(sn.QualName('std', 'bytes'))
     assert isinstance(bytes_t, s_scalars.ScalarType)
-    int_t = env.schema.get_fully_qualified(sn.Name('std', 'int64'))
+    int_t = env.schema.get_by_fully_qualified(sn.QualName('std', 'int64'))
     assert isinstance(int_t, s_scalars.ScalarType)
-    json_t = env.schema.get_fully_qualified(sn.Name('std', 'json'))
+    json_t = env.schema.get_by_fully_qualified(sn.QualName('std', 'json'))
     assert isinstance(json_t, s_scalars.ScalarType)
 
     if node_type.issubclass(env.schema, str_t):
