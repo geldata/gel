@@ -1318,7 +1318,18 @@ def compile_ext_ai_to_str(
     with ctx.detached() as subctx:
         subctx.partial_path_prefix = call.args[0].expr
         subctx.anchors["__subject__"] = call.args[0].expr
-        call.body = dispatch.compile(index_expr.parse(), ctx=subctx)
+        call.body = dispatch.compile(
+            qlast.FunctionCall(
+                func=('__std__', 'assert_exists'),
+                args=[index_expr.parse()],
+                kwargs={
+                    'message': qlast.Constant.string(
+                        'Object context is not set.'
+                    ),
+                }
+            ),
+            ctx=subctx,
+        )
 
     return call
 
