@@ -1105,20 +1105,48 @@ def write_meta_delete_object(
 
             parent_variables = {}
 
-            parent_variables[f'__{target_link}'] = (
-                json.dumps(str(target.id))
-            )
+            # N.B: In some cases, like repair, where the delta came
+            # directly from diffing, we might have an ObjectShell
+            # instead of an Object, and so no .id.
+            # In that case, just deal with it, and use name instead.
+            # (XXX: We can't always use name because the target object might
+            # be deleted in some cases?)
+            #
+            # An alternate approach would be to try to always force resolve
+            # the fields in these cases, but the straightforward approaches
+            # seemed like they'd hit more cases than we wanted.
+            if isinstance(target, so.ObjectShell):
+                parent_variables[f'__{target_link}'] = (
+                    json.dumps(str(target.get_name(schema)))
+                )
 
-            parent_update_query = f'''
-                UPDATE schema::{refcls.__name__}
-                FILTER .name__internal = <str>$__parent_classname
-                SET {{
-                    {refdict.attr} -= (
-                        SELECT DETACHED (schema::{target_field.type.__name__})
-                        FILTER .id = <uuid>$__{target_link}
-                    )
-                }}
-            '''
+                parent_update_query = f'''
+                    UPDATE schema::{refcls.__name__}
+                    FILTER .name__internal = <str>$__parent_classname
+                    SET {{
+                        {refdict.attr} -= (
+                            SELECT DETACHED
+                              (schema::{target_field.type.__name__})
+                            FILTER .name__internal = <str>$__{target_link}
+                        )
+                    }}
+                '''
+            else:
+                parent_variables[f'__{target_link}'] = (
+                    json.dumps(str(target.id))
+                )
+
+                parent_update_query = f'''
+                    UPDATE schema::{refcls.__name__}
+                    FILTER .name__internal = <str>$__parent_classname
+                    SET {{
+                        {refdict.attr} -= (
+                            SELECT DETACHED
+                              (schema::{target_field.type.__name__})
+                            FILTER .id = <uuid>$__{target_link}
+                        )
+                    }}
+                '''
 
             ref_name = context.get_referrer_name(refctx)
             parent_variables['__parent_classname'] = (

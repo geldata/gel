@@ -541,19 +541,17 @@ def _pg_delete_ai_embeddings(
     if not source_drop:
         table_name = common.get_index_table_backend_name(index, orig_schema)
 
-        dimensions = index.must_get_json_annotation(
-            orig_schema,
-            sn.QualName("ext::ai", "embedding_dimensions"),
-            int,
-        )
-
         alter_table = dbops.AlterTable(table_name)
 
         alter_table.add_operation(
             dbops.AlterTableDropColumn(
                 dbops.Column(
                     name=f'__ext_ai_{idx_id}_embedding__',
-                    type=('edgedb', f'vector({dimensions})'),
+                    # This isn't actually needed to do the drop, and
+                    # it saves us needing to get the dimensions.
+                    # (Which is good, because they are missing when we
+                    # try to schema_repair to fix #9033.)
+                    type='XXX UNUSED',
                 )
             )
         )
