@@ -18,6 +18,7 @@
 
 import json
 import pathlib
+import textwrap
 import unittest
 
 import edgedb
@@ -50,24 +51,26 @@ class TestExtAI(tb.BaseHttpExtensionTest):
         )(cls.mock_api_embeddings)
 
         async def _setup():
-            await cls.con.execute(
-                f"""
-                CONFIGURE CURRENT DATABASE
-                INSERT ext::ai::CustomProviderConfig {{
-                    name := 'custom::test',
-                    secret := 'very secret',
-                    api_url := '{base_url}/v1',
-                    api_style := ext::ai::ProviderAPIStyle.OpenAI,
-                }};
-
-                CONFIGURE CURRENT DATABASE
-                    SET ext::ai::Config::indexer_naptime := <duration>'100ms';
-                """,
-            )
+            await cls.con.execute(cls.get_ai_config(base_url))
 
             await cls._wait_for_db_config('ext::ai::Config::providers')
 
         cls.loop.run_until_complete(_setup())
+
+    @staticmethod
+    def get_ai_config(base_url):
+        return textwrap.dedent(f"""\
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::ai::CustomProviderConfig {{
+                name := 'custom::test',
+                secret := 'very secret',
+                api_url := '{base_url}/v1',
+                api_style := ext::ai::ProviderAPIStyle.OpenAI,
+            }};
+
+            CONFIGURE CURRENT DATABASE
+                SET ext::ai::Config::indexer_naptime := <duration>'100ms';
+        """)
 
     @classmethod
     def tearDownClass(cls):

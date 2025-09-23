@@ -507,7 +507,9 @@ class MockHttpServer:
     def __init__(
         self,
         handler_type: type[MockHttpServerHandler] = MockHttpServerHandler,
+        port: int = 0,
     ) -> None:
+        self._port = port
         self.has_started = threading.Event()
         self.routes: dict[
             tuple[str, str, str],
@@ -648,7 +650,7 @@ class MockHttpServer:
 
     def _http_worker(self):
         self._http_server = http.server.HTTPServer(
-            ("localhost", 0), self.handler_type
+            ("localhost", self._port), self.handler_type
         )
         self._http_server.owner = self
         self._address = self._http_server.server_address
