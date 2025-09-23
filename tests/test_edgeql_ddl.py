@@ -16060,6 +16060,44 @@ type default::Foo {
                 drop abstract index test;
             ''')
 
+    async def test_edgeql_ddl_abstract_index_02(self):
+        await self.con.execute('''
+            create abstract index test(
+                named only lists: int64
+            ) {
+                set code := ' ((__col__) NULLS FIRST)';
+            };
+        ''')
+
+        await self.con.execute('''
+            create abstract type default::Foo {
+                create property content: std::str;
+                create index test(lists := 5) on (.content);
+            };
+            create abstract type default::Bar extending default::Foo;
+            create type default::Baz extending default::Bar;
+        ''')
+        await self.assert_query_result(
+            '''
+            select schema::Index { name, kwargs }
+            filter .name = 'default::test'
+            ''',
+            tb.bag([
+                {'name': 'default::test', 'kwargs': []},
+                {'name': 'default::test',
+                 'kwargs': [{'name': 'lists', 'expr': '5'}]},
+                {'name': 'default::test',
+                 'kwargs': [{'name': 'lists', 'expr': '5'}]},
+                {'name': 'default::test',
+                 'kwargs': [{'name': 'lists', 'expr': '5'}]},
+            ])
+        )
+
+        await self.con.execute('''
+            alter type Foo
+            drop index test(lists := 5) on (.content);
+        ''')
+
     async def test_edgeql_ddl_deferred_index_01(self):
         with self.assertRaisesRegex(
             edgedb.SchemaDefinitionError,

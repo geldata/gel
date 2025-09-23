@@ -3555,12 +3555,16 @@ class CreateIndex(IndexCommand, adapts=s_indexes.CreateIndex):
             builtin_conditional=concurrently,
         )
 
-    def _create_innards(
+    # N.B: This is in _create_finalize instead of _create_innards
+    # because when trying to do repair_schema() to repair issue #9033,
+    # there will be generated CreateIndexes where the annotation
+    # creation is in `caused`, not regular subcommands...
+    def _create_finalize(
         self,
         schema: s_schema.Schema,
         context: sd.CommandContext,
     ) -> s_schema.Schema:
-        schema = super()._create_innards(schema, context)
+        schema = super()._create_finalize(schema, context)
         index = self.scls
 
         if index.get_abstract(schema):
