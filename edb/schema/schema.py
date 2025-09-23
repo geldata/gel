@@ -137,7 +137,7 @@ class Schema(abc.ABC):
         id: uuid.UUID,
         sclass: type[so.Object],
         data: tuple[Any, ...],
-    ) -> FlatSchema:
+    ) -> Self:
         reducible_fields = sclass.get_reducible_fields()
         if reducible_fields:
             data_list = list(data)
@@ -841,7 +841,7 @@ class FlatSchema(Schema):
         self,
         obj: so.Object,
         field_index: int
-    ) -> Optional[tuple[Any, ...]]:
+    ) -> Optional[Any]:
         data = self._id_to_data.get(obj.id)
         assert data, (
             f'cannot get item data: item {str(obj.id)!r} '
@@ -1675,7 +1675,7 @@ class ChainedSchema(Schema):
         self,
         obj: so.Object,
         field_index: int,
-    ) -> Optional[tuple[Any, ...]]:
+    ) -> Optional[Any]:
         if self._top_schema.has_object(obj.id):
             return self._top_schema.get_obj_data_raw(obj, field_index)
         if self._base_schema.has_object(obj.id):
