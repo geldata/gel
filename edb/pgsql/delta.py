@@ -172,7 +172,7 @@ class MetaCommand(sd.Command, metaclass=CommandMeta):
     def as_markup(cls, self, *, ctx):
         node = markup.elements.lang.TreeNode(name=str(self))
 
-        for dd in self.pgops:
+        for dd in self.ops:
             if isinstance(dd, AlterObjectProperty):
                 diff = markup.elements.doc.ValueDiff(
                     before=repr(dd.old_value), after=repr(dd.new_value))
@@ -183,8 +183,8 @@ class MetaCommand(sd.Command, metaclass=CommandMeta):
                     diff.comment = 'computed'
 
                 node.add_child(label=dd.property, node=diff)
-            else:
-                node.add_child(node=markup.serialize(dd, ctx=ctx))
+        for dd in self.pgops:
+            node.add_child(node=markup.serialize(dd, ctx=ctx))
 
         return node
 
