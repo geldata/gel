@@ -477,7 +477,7 @@ class Schema(abc.ABC):
             if obj and type is not None and not isinstance(obj, type):
                 Schema.raise_wrong_type(name, obj.__class__, type, span)
 
-            return obj  # type: ignore
+            return obj
         else:
             Schema.raise_bad_reference(
                 name=name,
