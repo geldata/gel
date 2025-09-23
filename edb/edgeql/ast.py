@@ -1344,7 +1344,7 @@ class ConcreteIndexCommand(IndexCommand):
     kwargs: dict[str, Expr] = ast.field(factory=dict)
     expr: Expr
     except_expr: typing.Optional[Expr] = None
-    deferred: typing.Optional[bool] = None
+    deferred: bool = False
 
 
 class CreateConcreteIndex(ConcreteIndexCommand, CreateObject):
