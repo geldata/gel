@@ -914,6 +914,9 @@ def _update_lprops(
         mcls.get_reflection_method() is so.ReflectionMethod.AS_LINK
     )
 
+    # N.B: For reflect_as_link AlterObjects, we depend on all of the
+    # relevant fields having been populated in the command, which is
+    # done by _populate_link_reflection_fields.
     if reflect_as_link:
         target_link = mcls.get_reflection_link()
         assert target_link is not None

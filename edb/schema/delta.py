@@ -1959,8 +1959,12 @@ class ObjectCommand[Object_T: so.Object](Command):
         orig_computed: Optional[bool] = None,
         from_default: bool = False,
         span: Optional[parsing.Span] = None,
+        disallow_special: bool = False,
     ) -> Command:
-        special = type(self)._get_special_handler(attr_name)
+        special = (
+            type(self)._get_special_handler(attr_name)
+            if not disallow_special else None
+        )
         op = self._get_attribute_set_cmd(attr_name)
         top_op: Optional[Command] = None
 
@@ -3324,6 +3328,38 @@ class AlterObjectOrFragment[Object_T: so.Object](ObjectCommand[Object_T]):
     ) -> s_schema.Schema:
         return self.apply_subcommands(schema, context)
 
+    def _populate_link_reflection_fields(
+        self,
+        schema: s_schema.Schema,
+        context: CommandContext,
+    ) -> None:
+        """For objects reflected with AS_LINK, populate all attributes
+
+        This is kind of a hack around reflection.writer (... and edgeql)
+        deficiencies, where reflection needs anything that is reflected
+        as a linkprop to actually be present in the Alter, or it will
+        be lost.
+        """
+        if isinstance(self, AlterSpecialObjectField):
+            return
+        mcls = self.get_schema_metaclass()
+        for name in mcls.get_schema_fields().keys():
+            if not self.has_attribute_value(name):
+                try:
+                    value = self.scls.get_explicit_field_value(
+                        schema, name
+                    )
+                except so.FieldValueNotFoundError:
+                    continue
+                self.set_attribute_value(
+                    name,
+                    value,
+                    orig_value=value,
+                    inherited=self.scls.field_is_inherited(schema, name),
+                    computed=self.scls.field_is_computed(schema, name),
+                    disallow_special=True,
+                )
+
     def _alter_finalize(
         self,
         schema: s_schema.Schema,
@@ -3332,6 +3368,9 @@ class AlterObjectOrFragment[Object_T: so.Object](ObjectCommand[Object_T]):
         schema = self._finalize_affected_refs(schema, context)
         if not context.canonical:
             self.validate_object(schema, context)
+            mcls = self.get_schema_metaclass()
+            if mcls.get_reflection_method() == so.ReflectionMethod.AS_LINK:
+                self._populate_link_reflection_fields(schema, context)
         return schema
 
     def _update_computed_fields(
