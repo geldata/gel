@@ -459,7 +459,7 @@ class Schema(abc.ABC):
     ) -> Optional[so.Object]:
 
         def getter(schema: Schema, name: sn.Name) -> Optional[so.Object]:
-            obj = schema.get_by_fully_qualified(name)
+            obj = schema.get_by_name(name)
             if obj is not None and condition is not None:
                 if not condition(obj):
                     obj = None
@@ -498,7 +498,7 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_by_fully_qualified(
+    def get_by_name(
         self,
         name: sn.Name,
     ) -> Optional[so.Object]:
@@ -1276,7 +1276,7 @@ class FlatSchema(Schema):
             for i in obj_ids
         )
 
-    def get_by_fully_qualified(
+    def get_by_name(
         self,
         name: sn.Name,
     ) -> Optional[so.Object]:
@@ -1342,7 +1342,7 @@ def lookup[T](
     schema: Schema,
     name: sn.Name | str,
     *,
-    getter: Callable[[Schema, sn.Name], T | None],
+    getter: Callable[[Schema, sn.QualName], T | None],
     default: T | so.NoDefaultT = so.NoDefault,
     module_aliases: Optional[Mapping[Optional[str], str]],
 ) -> T | so.NoDefaultT:
@@ -1792,14 +1792,14 @@ class ChainedSchema(Schema):
             return objs
         return self._top_schema.get_by_shortname(mcls, shortname)
 
-    def get_by_fully_qualified(
+    def get_by_name(
         self,
         name: sn.Name,
     ) -> Optional[so.Object]:
-        objs = self._base_schema.get_by_fully_qualified(name)
+        objs = self._base_schema.get_by_name(name)
         if objs is not None:
             return objs
-        return self._top_schema.get_by_fully_qualified(name)
+        return self._top_schema.get_by_name(name)
 
     def has_object(self, object_id: uuid.UUID) -> bool:
         return (
