@@ -16,15 +16,16 @@ To initialize a Gel-aware FastAPI project, create the following file:
   import fastapi
   import gel.fastapi
 
+
   app = fastapi.FastAPI()
-  db = gel.fastapi.gelify(app)
+  gel.fastapi.gelify(app)
+
 
   @app.get("/")
-  async def index():
-      # get the Gel client associated with the app
-      db = g.client
+  async def index(db: gel.fastapi.Client):
       # This is an actual (trivial) query sent to Gel
       return await db.query_single("select 'Hello world!'")
+
 
 ...and start the FastAPI development:
 
@@ -45,7 +46,9 @@ Among the output you should see some messages from |gelcmd|:
   gel   Monitoring /home/projects/myproject for changes in:
   gel
   gel   --migrate: gel migration apply --dev-mode
+  gel   gel.local.toml: gel configure apply
   gel
+  gel   No configuration to apply.
   gel   Automatic backup is enabled, see the full backup list with "gel
         instance list-backups -I myproject".
   gel   Read more at https://geldata.com/p/localdev
@@ -88,18 +91,19 @@ Let's start with endpoints for creating and listing people:
 
     import fastapi
     import gel.fastapi
-
+  + import uuid
+  +
   + from pydantic import BaseModel
   + from models import default, std
 
+
     app = fastapi.FastAPI()
-    g = gel.fastapi.gelify(app)
+    gel.fastapi.gelify(app)
 
 
     @app.get("/")
-    async def index():
-        # get the Gel client associated with the app
-        db = g.client
+    async def index(db: gel.fastapi.Client):
+        # This is an actual (trivial) query sent to Gel
         return await db.query_single("select 'Hello world!'")
   +
   +
@@ -108,23 +112,24 @@ Let's start with endpoints for creating and listing people:
   +     email: str
   +
   +
-  + @app.post("/person/")
-  + async def create_person(data: CreatePerson):
-  +     db = g.client
-  +     person = default.Person(**data.model_dump())
-  +     await db.save(person)
-  +     return person.id
+  +  @app.post("/person/", response_model=uuid.UUID)
+  +  async def create_person(
+  +      db: gel.fastapi.Client,
+  +      data: CreatePerson,
+  +  ):
+  +      person = default.Person(**data.model_dump())
+  +      await db.save(person)
+  +      return person.id
   +
   +
-  + @app.get("/people/", response_model=list[default.Person])
-  + async def get_people():
-  +     db = g.client
-  +     q = default.Person.order_by(name=True)
-  +     return await db.query(q)
+  +  @app.get("/people/", response_model=list[default.Person])
+  +  async def get_people(db: gel.fastapi.Client):
+  +      q = default.Person.order_by(name=True)
+  +      return await db.query(q)
 
 In order to create a new person we'll need a simple input model with the ``name`` and ``email`` fields. We can then use that input model to initialize the fields of ``default.Person`` reflected Gel model. After that all that's left is to call ``save()`` on our database client, passing the new person we want to save. Finally, we can just return the ``person.id`` since it will be initialized after the model is saved.
 
-Listing all existing people is even simpler. We just use the query builder to create a query by starting with the base model we want to fetch: ``default.Person``. In this case we're fetching all the data, so we don't need any filters added, but we still probably want to sort the results, so we add an ``order_by(name=True)``. Then we use the database client to run the query, just like we would run a hand-written query. We'll get a bunch of ``default.Person`` objects as the response, so we can set ``response_model=list[default.Person]``.
+Listing all existing people is even simpler. We use the query builder to create a query by starting with the base model we want to fetch: ``default.Person``. In this case we're fetching all the data, so we don't need any filters added, but we still probably want to sort the results, so we add an ``order_by(name=True)``. Then we use the database client to run the query, just like we would run a hand-written query. We'll get a bunch of ``default.Person`` objects as the response, so we can set ``response_model=list[default.Person]``.
 
 We can use the built-in FastAPI docs to introspect the endpoints and even try them out.
 
@@ -169,22 +174,22 @@ And then we can try out the endpoint listing all people, getting:
 
   [
     {
-      "id": "60a49492-4aa1-11f0-8507-4729d6e4bd07",
+      "id": "6fc7cabe-9918-11f0-a10c-0709758f6232",
       "email": "alice@gel.com",
       "name": "Alice"
     },
     {
-      "id": "8ae1bd40-4aa4-11f0-9256-33400a7cef0d",
+      "id": "89966504-9918-11f0-bc45-ab5bfb435776",
       "email": "billie@gel.com",
       "name": "Billie"
     },
     {
-      "id": "c2407822-4aa8-11f0-9854-73380baaaa0c",
+      "id": "8d5d0080-9918-11f0-bc45-0f30c465cd8a",
       "email": "cameron@gel.com",
       "name": "Cameron"
     },
     {
-      "id": "c9ee56ac-4aa8-11f0-9854-3f9a869324db",
+      "id": "92383f02-9918-11f0-bc45-2b3d6c902fa2",
       "email": "dana@gel.com",
       "name": "Dana"
     }
@@ -214,18 +219,18 @@ We're going to keep the existing endpoints, but we'll need some more models to d
 
     import fastapi
     import gel.fastapi
+    import uuid
 
     from pydantic import BaseModel
     from models import default, std
 
+
     app = fastapi.FastAPI()
-    g = gel.fastapi.gelify(app)
+    gel.fastapi.gelify(app)
 
 
     @app.get("/")
-    async def index():
-        # get the Gel client associated with the app
-        db = g.client
+    async def index(db: gel.fastapi.Client):
         # This is an actual (trivial) query sent to Gel
         return await db.query_single("select 'Hello world!'")
 
@@ -235,14 +240,18 @@ We're going to keep the existing endpoints, but we'll need some more models to d
         email: str
 
 
-  + class BasePerson(default.Person.__variants__.Base):
-  +     name: default.Person.__typeof__.name
-  +     email: default.Person.__typeof__.email
+  + class BasePerson(
+  +     default.Person.__shapes__.RequiredId,
+  +     default.Person.__shapes__.PropsAsDeclared,
+  + ):
+  +     pass
   +
   +
-    @app.post("/person/")
-    async def create_person(data: CreatePerson):
-        db = g.client
+    @app.post("/person/", response_model=uuid.UUID)
+    async def create_person(
+        db: gel.fastapi.Client,
+        data: CreatePerson,
+    ):
         person = default.Person(**data.model_dump())
         await db.save(person)
         return person.id
@@ -250,13 +259,13 @@ We're going to keep the existing endpoints, but we'll need some more models to d
 
   - @app.get("/people/", response_model=list[default.Person])
   + @app.get("/people/", response_model=list[BasePerson])
-    async def get_people():
-        db = g.client
+    async def get_people(db: gel.fastapi.Client):
   -     q = default.Person.order_by(name=True)
   +     q = BasePerson.order_by(name=True)
         return await db.query(q)
 
-The ``BasePerson`` model is derived from the ``default.Person.__variants__.Base`` by only declaring the ``name`` and ``email`` fields. The ``__variants__`` contain several useful model templates. The ``Base`` template just has the ``id`` so that it can be used to declare only the fields we need. In addition to being useful as a Pydantic model that declares the expected output shape, it can also be used as the base model in the query builder (since it's derived from one of the ``__variants__``).
+
+Gel tools create some pre-built model templates in  ``default.Person.__shapes__``. In general every reflected type will have these ``__shapes__`` available. We define ``BasePerson`` model entirely in terms of these templates. The ``default.Person.__shapes__.RequiredId`` provides the ``id`` field, which is something we want in our output. The ``default.Person.__shapes__.PropsAsDeclared`` includes the the ``name`` and ``email`` fields, but not the ``friends`` link. In addition to being useful as a Pydantic model that declares the expected output shape , ``BasePerson`` can also be used as the base model in the query builder (since it's derived from one of the ``__shapes__``). Using the same tpye in ``response_model`` and the query streamlines the output serialization, so it's highly recommended.
 
 We still need to add another endpoint for adding friends as well as the corresponding output model:
 
@@ -265,18 +274,19 @@ We still need to add another endpoint for adding friends as well as the correspo
 
     import fastapi
     import gel.fastapi
+    import uuid
 
     from pydantic import BaseModel
     from models import default, std
+  + from gel.models.pydantic import OptionalMultiLink
+
 
     app = fastapi.FastAPI()
-    g = gel.fastapi.gelify(app)
+    gel.fastapi.gelify(app)
 
 
     @app.get("/")
-    async def index():
-        # get the Gel client associated with the app
-        db = g.client
+    async def index(db: gel.fastapi.Client):
         # This is an actual (trivial) query sent to Gel
         return await db.query_single("select 'Hello world!'")
 
@@ -286,39 +296,42 @@ We still need to add another endpoint for adding friends as well as the correspo
         email: str
 
 
-    class BasePerson(default.Person.__variants__.Base):
-        name: default.Person.__typeof__.name
-        email: default.Person.__typeof__.email
+    class BasePerson(
+        default.Person.__shapes__.RequiredId,
+        default.Person.__shapes__.PropsAsDeclared,
+    ):
+        pass
 
 
   + class PersonWithFriends(BasePerson):
-  +     friends: list[BasePerson]
+  +     friends: OptionalMultiLink[BasePerson]
   +
   +
-    @app.post("/person/")
-    async def create_person(data: CreatePerson):
-        db = g.client
+    @app.post("/person/", response_model=uuid.UUID)
+    async def create_person(
+        db: gel.fastapi.Client,
+        data: CreatePerson,
+    ):
         person = default.Person(**data.model_dump())
         await db.save(person)
         return person.id
 
 
     @app.get("/people/", response_model=list[BasePerson])
-    async def get_people():
-        db = g.client
+    async def get_people(db: gel.fastapi.Client):
         q = BasePerson.order_by(name=True)
         return await db.query(q)
   +
   +
-  + @app.post("/person/{pname}/add_friend", response_model=PersonWithFriends)
+  + @app.patch("/person/{pname}/add_friend", response_model=PersonWithFriends)
   + async def add_friend(
+  +     db: gel.fastapi.Client,
   +     pname: str,
   +     frname: str,
   + ):
-  +     db = g.client
-  +     # fetch the main person
+  +     # fetch the main person using response_model type
   +     person = await db.get(
-  +         default.Person.select(
+  +         PersonWithFriends.select(
   +             # fetch all properties
   +             '*',
   +             # also fetch friends (with properties)
@@ -327,56 +340,57 @@ We still need to add another endpoint for adding friends as well as the correspo
   +             name=pname
   +         )
   +     )
-  +     # fetch the friend
+  +     # fetch the friend as BasePerson, since that's what PersonWithFriends
+  +     # expects
   +     friend = await db.get(
-  +         default.Person.filter(
+  +         BasePerson.filter(
   +             name=frname
   +         )
   +     )
-  +     # append the new friend to existing friends
-  +     person.friends.append(friend)
+  +     # add the new friend to existing friends
+  +     person.friends.add(friend)
   +     await db.save(person)
   +     return person
 
 We can now try adding a friend to Alice:
 
 .. code-block:: json
-  :caption: POST http://127.0.0.1:8000/person/Alice/add_friend?frname=Billie
+  :caption: PATCH http://127.0.0.1:8000/person/Alice/add_friend?frname=Billie
 
   {
-    "id": "60a49492-4aa1-11f0-8507-4729d6e4bd07",
-    "name": "Alice",
-    "email": "alice@gel.com",
     "friends": [
       {
-        "id": "8ae1bd40-4aa4-11f0-9256-33400a7cef0d",
-        "name": "Billie",
-        "email": "billie@gel.com"
+        "id": "89966504-9918-11f0-bc45-ab5bfb435776",
+        "email": "billie@gel.com",
+        "name": "Billie"
       }
-    ]
+    ],
+    "id": "6fc7cabe-9918-11f0-a10c-0709758f6232",
+    "email": "alice@gel.com",
+    "name": "Alice"
   }
 
 And another one:
 
 .. code-block:: json
-  :caption: POST http://127.0.0.1:8000/person/Alice/add_friend?frname=Cameron
+  :caption: PATCH http://127.0.0.1:8000/person/Alice/add_friend?frname=Cameron
 
   {
-    "id": "60a49492-4aa1-11f0-8507-4729d6e4bd07",
-    "name": "Alice",
-    "email": "alice@gel.com",
     "friends": [
       {
-        "id": "8ae1bd40-4aa4-11f0-9256-33400a7cef0d",
-        "name": "Billie",
-        "email": "billie@gel.com"
+        "id": "89966504-9918-11f0-bc45-ab5bfb435776",
+        "email": "billie@gel.com",
+        "name": "Billie"
       },
       {
-        "id": "c2407822-4aa8-11f0-9854-73380baaaa0c",
-        "name": "Cameron",
-        "email": "cameron@gel.com"
+        "id": "8d5d0080-9918-11f0-bc45-0f30c465cd8a",
+        "email": "cameron@gel.com",
+        "name": "Cameron"
       }
-    ]
+    ],
+    "id": "6fc7cabe-9918-11f0-a10c-0709758f6232",
+    "email": "alice@gel.com",
+    "name": "Alice"
   }
 
 If we can add a friend, we should also make an endpoint for removing a friend. We'll use the same general type of interface:
@@ -386,18 +400,19 @@ If we can add a friend, we should also make an endpoint for removing a friend. W
 
     import fastapi
     import gel.fastapi
+    import uuid
 
     from pydantic import BaseModel
     from models import default, std
+    from gel.models.pydantic import OptionalMultiLink
+
 
     app = fastapi.FastAPI()
-    g = gel.fastapi.gelify(app)
+    gel.fastapi.gelify(app)
 
 
     @app.get("/")
-    async def index():
-        # get the Gel client associated with the app
-        db = g.client
+    async def index(db: gel.fastapi.Client):
         # This is an actual (trivial) query sent to Gel
         return await db.query_single("select 'Hello world!'")
 
@@ -407,66 +422,72 @@ If we can add a friend, we should also make an endpoint for removing a friend. W
         email: str
 
 
-    class BasePerson(default.Person.__variants__.Base):
-        name: default.Person.__typeof__.name
-        email: default.Person.__typeof__.email
+    class BasePerson(
+        default.Person.__shapes__.RequiredId,
+        default.Person.__shapes__.PropsAsDeclared,
+    ):
+        pass
 
 
     class PersonWithFriends(BasePerson):
-        friends: list[BasePerson]
+        friends: OptionalMultiLink[BasePerson]
 
 
-    @app.post("/person/")
-    async def create_person(data: CreatePerson):
-        db = g.client
+    @app.post("/person/", response_model=uuid.UUID)
+    async def create_person(
+        db: gel.fastapi.Client,
+        data: CreatePerson,
+    ):
         person = default.Person(**data.model_dump())
         await db.save(person)
         return person.id
 
 
     @app.get("/people/", response_model=list[BasePerson])
-    async def get_people():
-        db = g.client
+    async def get_people(db: gel.fastapi.Client):
         q = BasePerson.order_by(name=True)
         return await db.query(q)
 
 
-    @app.post("/person/{pname}/add_friend", response_model=PersonWithFriends)
+    @app.patch("/person/{pname}/add_friend", response_model=PersonWithFriends)
     async def add_friend(
+        db: gel.fastapi.Client,
         pname: str,
         frname: str,
     ):
-        db = g.client
-        # fetch the main person
+        # fetch the main person using response_model type
         person = await db.get(
-            default.Person.select(
+            PersonWithFriends.select(
+                # fetch all properties
                 '*',
+                # also fetch friends (with properties)
                 friends=True,
             ).filter(
                 name=pname
             )
         )
-        # fetch the friend
+        # fetch the friend as BasePerson, since that's what PersonWithFriends
+        # expects
         friend = await db.get(
-            default.Person.filter(
+            BasePerson.filter(
                 name=frname
             )
         )
-        # append the new friend to existing friends
-        person.friends.append(friend)
+        # add the new friend to existing friends
+        person.friends.add(friend)
         await db.save(person)
         return person
   +
   +
-  + @app.post("/person/{pname}/remove_friend", response_model=PersonWithFriends)
+  + @app.patch("/person/{pname}/remove_friend", response_model=PersonWithFriends)
   + async def remove_friend(
+  +     db: gel.fastapi.Client,
   +     pname: str,
   +     frname: str,
   + ):
-  +     db = g.client
   +     # fetch the main person
   +     person = await db.get(
-  +         default.Person.select(
+  +         PersonWithFriends.select(
   +             # fetch all properties
   +             '*',
   +             # also fetch friends (with properties)
@@ -491,18 +512,19 @@ Finally, let's add an endpoint for deleting a ``Person``. We'll use the query bu
 
     import fastapi
     import gel.fastapi
+    import uuid
 
     from pydantic import BaseModel
     from models import default, std
+    from gel.models.pydantic import OptionalMultiLink
+
 
     app = fastapi.FastAPI()
-    g = gel.fastapi.gelify(app)
+    gel.fastapi.gelify(app)
 
 
     @app.get("/")
-    async def index():
-        # get the Gel client associated with the app
-        db = g.client
+    async def index(db: gel.fastapi.Client):
         # This is an actual (trivial) query sent to Gel
         return await db.query_single("select 'Hello world!'")
 
@@ -512,46 +534,42 @@ Finally, let's add an endpoint for deleting a ``Person``. We'll use the query bu
         email: str
 
 
-    class BasePerson(default.Person.__variants__.Base):
-        name: default.Person.__typeof__.name
-        email: default.Person.__typeof__.email
+    class BasePerson(
+        default.Person.__shapes__.RequiredId,
+        default.Person.__shapes__.PropsAsDeclared,
+    ):
+        pass
 
 
     class PersonWithFriends(BasePerson):
-        friends: list[BasePerson]
+        friends: OptionalMultiLink[BasePerson]
 
 
-    @app.post("/person/")
-    async def create_person(data: CreatePerson):
-        db = g.client
+    @app.post("/person/", response_model=uuid.UUID)
+    async def create_person(
+        db: gel.fastapi.Client,
+        data: CreatePerson,
+    ):
         person = default.Person(**data.model_dump())
         await db.save(person)
         return person.id
 
 
     @app.get("/people/", response_model=list[BasePerson])
-    async def get_people():
-        db = g.client
+    async def get_people(db: gel.fastapi.Client):
         q = BasePerson.order_by(name=True)
         return await db.query(q)
 
 
-  + @app.delete("/person/{pname}")
-  + async def delete_person(pname: str):
-  +     db = g.client
-  +     q = default.Person.filter(name=pname).delete()
-  +     return await db.query_single(q)
-  +
-  +
-    @app.post("/person/{pname}/add_friend", response_model=PersonWithFriends)
+    @app.patch("/person/{pname}/add_friend", response_model=PersonWithFriends)
     async def add_friend(
+        db: gel.fastapi.Client,
         pname: str,
         frname: str,
     ):
-        db = g.client
-        # fetch the main person
+        # fetch the main person using response_model type
         person = await db.get(
-            default.Person.select(
+            PersonWithFriends.select(
                 # fetch all properties
                 '*',
                 # also fetch friends (with properties)
@@ -560,27 +578,28 @@ Finally, let's add an endpoint for deleting a ``Person``. We'll use the query bu
                 name=pname
             )
         )
-        # fetch the friend
+        # fetch the friend as BasePerson, since that's what PersonWithFriends
+        # expects
         friend = await db.get(
-            default.Person.filter(
+            BasePerson.filter(
                 name=frname
             )
         )
-        # append the new friend to existing friends
-        person.friends.append(friend)
+        # add the new friend to existing friends
+        person.friends.add(friend)
         await db.save(person)
         return person
 
 
-    @app.post("/person/{pname}/remove_friend", response_model=PersonWithFriends)
+    @app.patch("/person/{pname}/remove_friend", response_model=PersonWithFriends)
     async def remove_friend(
+        db: gel.fastapi.Client,
         pname: str,
         frname: str,
     ):
-        db = g.client
         # fetch the main person
         person = await db.get(
-            default.Person.select(
+            PersonWithFriends.select(
                 # fetch all properties
                 '*',
                 # also fetch friends (with properties)
@@ -597,6 +616,19 @@ Finally, let's add an endpoint for deleting a ``Person``. We'll use the query bu
 
         await db.save(person)
         return person
+  +
+  +
+  + @app.delete("/person/{pname}", response_model=uuid.UUID | None)
+  + async def delete_person(
+  +     db: gel.fastapi.Client,
+  +     pname: str,
+  + ):
+  +     q = default.Person.filter(name=pname).delete()
+  +     deleted = await db.query_single(q)
+  +     if deleted:
+  +         return deleted.id
+  +     else:
+  +         return None
 
 .. note:: Be careful what you delete
 

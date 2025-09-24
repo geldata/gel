@@ -106,7 +106,7 @@ We can fetch just one object using ``db.get()`` and adding a ``.filter()`` to th
     :caption: Python
 
     q = default.Person.filter(name='Alice')
-    alice = db.query(q)
+    alice = db.get(q)
 
   .. code-tab:: edgeql
     :caption: equivalent EdgeQL
