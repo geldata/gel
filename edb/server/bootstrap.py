@@ -550,7 +550,9 @@ async def _store_static_json_cache(
 
 
 def _process_delta_params[Schema_T: s_schema.Schema](
-    delta, schema: Schema_T, params,
+    delta: sd.Command,
+    schema: Schema_T,
+    params: params.BackendRuntimeParams,
     stdmode: bool=True,
     **kwargs,
 ) -> tuple[
@@ -570,31 +572,32 @@ def _process_delta_params[Schema_T: s_schema.Schema](
         # Canonicalize
         sd.apply(delta, schema=schema)
 
-    delta = delta_cmds.CommandMeta.adapt(delta)
+    delta_pg: delta_cmds.MetaCommand = delta_cmds.CommandMeta.adapt(delta)  # type: ignore
     context = sd.CommandContext(
         stdmode=stdmode,
         backend_runtime_params=params,
         **kwargs,
     )
-    schema = cast(
-        Schema_T,
-        sd.apply(delta, schema=schema, context=context),
-    )
+    schema = sd.apply(delta_pg, schema=schema, context=context)
 
     if debug.flags.delta_pgsql_plan:
         debug.header('PgSQL Delta Plan')
-        debug.dump(delta, schema=schema)
+        debug.dump(delta_pg, schema=schema)
 
-    if isinstance(delta, delta_cmds.DeltaRoot):
-        out = delta.create_trampolines
+    if isinstance(delta_pg, delta_cmds.DeltaRoot):
+        out = delta_pg.create_trampolines
     else:
         out = delta_cmds.CreateTrampolines()
 
-    return schema, delta, out
+    return schema, delta_pg, out
 
 
-def _process_delta(ctx, delta, schema) -> tuple[
-    s_schema.ChainedSchema,
+def _process_delta[Schema_T: s_schema.Schema](
+    ctx: BootstrapContext,
+    delta: sd.Command,
+    schema: Schema_T,
+) -> tuple[
+    Schema_T,
     delta_cmds.MetaCommand,
     delta_cmds.CreateTrampolines,
 ]:
@@ -1289,7 +1292,7 @@ def _make_stdlib(
     testmode: bool,
     global_ids: Mapping[str, uuid.UUID],
 ) -> StdlibBits:
-    schema: s_schema.Schema = s_schema.ChainedSchema(
+    schema: s_schema.ChainedSchema = s_schema.ChainedSchema(
         s_schema.EMPTY_SCHEMA,
         s_schema.EMPTY_SCHEMA,
         s_schema.EMPTY_SCHEMA,
@@ -1379,7 +1382,10 @@ def _make_stdlib(
         if not schema.has_object(obj.id):
             delta = sd.DeltaRoot()
             delta.add(obj.as_shell(reflschema).as_create_delta(reflschema))
-            schema = delta.apply(schema, sd.CommandContext(stdmode=True))
+            schema = cast(
+                s_schema.ChainedSchema,
+                delta.apply(schema, sd.CommandContext(stdmode=True))
+            )
     assert isinstance(schema, s_schema.ChainedSchema)
 
     assert current_block is not None

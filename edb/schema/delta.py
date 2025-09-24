@@ -4650,12 +4650,12 @@ def get_object_command_id(key: CommandKey) -> str:
     return f'{cmdclass_name} {qlcls} {name}{extra}'
 
 
-def apply(
+def apply[S: s_schema.Schema](
     delta: Command,
     *,
-    schema: s_schema.Schema,
+    schema: S,
     context: Optional[CommandContext] = None,
-) -> s_schema.Schema:
+) -> S:
     if context is None:
         context = CommandContext()
 
@@ -4665,4 +4665,4 @@ def apply(
     else:
         root = delta
 
-    return root.apply(schema, context)
+    return cast(S, root.apply(schema, context))
