@@ -1442,7 +1442,7 @@ class DropRewrite(DropObject, RewriteCommand):
 
 class Language(s_enum.StrEnum):
     SQL = 'SQL'
-    EdgeQL = 'EDGEQL'
+    EdgeQL = 'EdgeQL'
 
 
 class FunctionCode(DDL):

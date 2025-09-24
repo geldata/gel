@@ -44,12 +44,14 @@ Nonterm = expressions.Nonterm  # type: ignore[misc]
 
 
 def _parse_language(node):
-    try:
-        return qlast.Language(node.val.upper())
-    except ValueError:
-        raise EdgeQLSyntaxError(
-            f'{node.val} is not a valid language',
-            span=node.span) from None
+    lang = node.val.upper()
+    if lang == 'EDGEQL':
+        return qlast.Language.EdgeQL
+    if lang == 'SQL':
+        return qlast.Language.SQL
+    raise EdgeQLSyntaxError(
+        f'{node.val} is not a valid language',
+        span=node.span) from None
 
 
 def _validate_declarations(
