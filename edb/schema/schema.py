@@ -504,6 +504,7 @@ class Schema(abc.ABC):
     ) -> Optional[so.Object]:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def _get_object_ids(self) -> Iterable[uuid.UUID]:
         raise NotImplementedError
 
@@ -511,13 +512,11 @@ class Schema(abc.ABC):
     def has_object(self, object_id: uuid.UUID) -> bool:
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def has_module(self, module: str) -> bool:
-        raise NotImplementedError
+    def has_module(self, name: str) -> bool:
+        return self.get_global(s_mod.Module, name, None) is not None
 
-    @abc.abstractmethod
     def has_migration(self, name: str) -> bool:
-        raise NotImplementedError
+        return self.get_global(s_migrations.Migration, name, None) is not None
 
     def get_children(
         self,
@@ -1288,12 +1287,6 @@ class FlatSchema(Schema):
     def has_object(self, object_id: uuid.UUID) -> bool:
         return object_id in self._id_to_type
 
-    def has_module(self, module: str) -> bool:
-        return self.get_global(s_mod.Module, module, None) is not None
-
-    def has_migration(self, name: str) -> bool:
-        return self.get_global(s_migrations.Migration, name, None) is not None
-
     def get_objects(
         self,
         *,
@@ -1806,18 +1799,6 @@ class ChainedSchema(Schema):
             self._base_schema.has_object(object_id)
             or self._top_schema.has_object(object_id)
             or self._global_schema.has_object(object_id)
-        )
-
-    def has_module(self, module: str) -> bool:
-        return (
-            self._base_schema.has_module(module)
-            or self._top_schema.has_module(module)
-        )
-
-    def has_migration(self, name: str) -> bool:
-        return (
-            self._base_schema.has_migration(name)
-            or self._top_schema.has_migration(name)
         )
 
     def get_objects(
