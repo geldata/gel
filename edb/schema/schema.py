@@ -149,9 +149,11 @@ class Schema(abc.ABC):
 
         return self.add_raw(id, sclass, data)
 
-    @abc.abstractmethod
     def discard(self: Self, obj: so.Object) -> Self:
-        raise NotImplementedError
+        if self.has_object(obj.id):
+            return self.delete(obj)
+        else:
+            return self
 
     @abc.abstractmethod
     def delete(self: Self, obj: so.Object) -> Self:
@@ -1100,7 +1102,7 @@ class FlatSchema(Schema):
             globalname_to_id=self._globalname_to_id,
         )
 
-    def _delete(self, obj: so.Object) -> FlatSchema:
+    def delete(self, obj: so.Object) -> FlatSchema:
         data = self._id_to_data.get(obj.id)
         if data is None:
             raise errors.InvalidReferenceError(
@@ -1139,15 +1141,6 @@ class FlatSchema(Schema):
         ))
 
         return self._replace(**updates)  # type: ignore
-
-    def discard(self, obj: so.Object) -> FlatSchema:
-        if obj.id in self._id_to_data:
-            return self._delete(obj)
-        else:
-            return self
-
-    def delete(self, obj: so.Object) -> FlatSchema:
-        return self._delete(obj)
 
     def get_referrers(
         self,
@@ -1598,20 +1591,6 @@ class ChainedSchema(Schema):
             return ChainedSchema(
                 self._base_schema,
                 self._top_schema.add_raw(id, sclass, data),
-                self._global_schema,
-            )
-
-    def discard(self, obj: so.Object) -> ChainedSchema:
-        if isinstance(obj, so.GlobalObject):
-            return ChainedSchema(
-                self._base_schema,
-                self._top_schema,
-                self._global_schema.discard(obj),
-            )
-        else:
-            return ChainedSchema(
-                self._base_schema,
-                self._top_schema.discard(obj),
                 self._global_schema,
             )
 
