@@ -166,5 +166,18 @@ PATCHES: list[tuple[str, str]] = [
     ('ext-pkg', 'pgvector'),
     # For #9041, unfortunately -- this may actually drop and recreate
     # ai indexes in the database.
+    # ('repair', ''),  # applied later for rc3
+
+    # For #9040
+    ('ext-pkg', 'ai'),
+    ('edgeql+user_ext+config|ai', '''
+    create abstract inheritable annotation
+        ext::ai::embedding_model_max_batch_size;
+
+    alter type ext::ai::EmbeddingModel {
+        create annotation
+            ext::ai::embedding_model_max_batch_size := "<optional>";
+    };
+    '''),
     ('repair', ''),
 ]
