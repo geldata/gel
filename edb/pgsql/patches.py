@@ -167,4 +167,17 @@ PATCHES: list[tuple[str, str]] = [
     # For #9041, unfortunately -- this may actually drop and recreate
     # ai indexes in the database.
     ('repair', ''),
+
+    # For #9040
+    ('ext-pkg', 'auth'),
+    ('edgeql+user_ext+config|ai', '''
+    create abstract inheritable annotation
+        ext::ai::embedding_model_max_batch_size;
+
+    alter abstract type ext::ai::EmbeddingModel {
+        create annotation
+            ext::ai::embedding_model_max_batch_size := "<optional>";
+    };
+    ''')
+    # ('repair', ''), we already have repair in rc3
 ]

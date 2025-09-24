@@ -1409,7 +1409,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 [],
-                10
+                10,
+                None,
             ),
             [],
         )
@@ -1417,7 +1418,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['1', '22', '333', '4444'],
-                10
+                10,
+                None,
             ),
             [([3, 0, 1, 2], 10)],
         )
@@ -1425,7 +1427,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['1', '22', '333', '4444', '55555'],
-                10
+                10,
+                None,
             ),
             [
                 ([4, 0, 1], 8),
@@ -1436,7 +1439,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['1', '22', '333', '4444', '55555', '666666'],
-                10
+                10,
+                None,
             ),
             [
                 ([5, 0, 1], 9),
@@ -1448,7 +1452,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['1', '22', '333', '4444', '55555', '666666'],
-                10
+                10,
+                None,
             ),
             [
                 ([5, 0, 1], 9),
@@ -1460,11 +1465,35 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['1', '22', '333', '4444', '55555', '121212121212'],
-                10
+                10,
+                None,
             ),
             [
                 ([4, 0, 1], 8),
                 ([3, 2], 7),
+            ],
+        )
+        self.assertEqual(
+            ai_ext._batch_embeddings_inputs(
+                CharacterTokenizer(),
+                [
+                    '1',
+                    '22',
+                    '333',
+                    '4444',
+                    '55555',
+                    '666666',
+                    '7777777',
+                    '88888888',
+                ],
+                12,
+                3,
+            ),
+            [
+                ([7, 0, 1], 11),
+                ([6, 2], 10),
+                ([5, 3], 10),
+                ([4], 5),
             ],
         )
         # Text is alphabetically ordered to ensure consistent batching
@@ -1472,7 +1501,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['AAA', 'CCC', 'EEE', 'BBB', 'DDD'],
-                10
+                10,
+                None,
             ),
             [
                 ([2, 0, 3], 9),

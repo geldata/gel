@@ -199,6 +199,9 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         ext::ai::embedding_model_max_batch_tokens;
 
     create abstract inheritable annotation
+        ext::ai::embedding_model_max_batch_size;
+
+    create abstract inheritable annotation
         ext::ai::embedding_model_max_output_dimensions;
 
     create abstract inheritable annotation
@@ -212,6 +215,8 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         # for now, use the openai batch limit as the default.
         create annotation
             ext::ai::embedding_model_max_batch_tokens := "8191";
+        create annotation
+            ext::ai::embedding_model_max_batch_size := "<optional>";
         create annotation
             ext::ai::embedding_model_max_output_dimensions := "<must override>";
         create annotation

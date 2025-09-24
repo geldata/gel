@@ -328,6 +328,7 @@ class BaseModel:
 class EmbeddingModel (BaseModel):
     max_input_tokens: int
     max_batch_tokens: int
+    max_batch_size: int | None
     max_output_dimensions: int
     supports_shortening: bool
 
@@ -338,6 +339,9 @@ class EmbeddingModel (BaseModel):
     )
     max_batch_tokens_annotation: ClassVar[str] = (
         "ext::ai::embedding_model_max_batch_tokens"
+    )
+    max_batch_size_annotation: ClassVar[str] = (
+        "ext::ai::embedding_model_max_batch_size"
     )
     max_output_dimensions_annotation: ClassVar[str] = (
         "ext::ai::embedding_model_max_output_dimensions"
@@ -846,6 +850,8 @@ async def _generate_embeddings_params(
     embeddings_params: list[EmbeddingsParams] = []
 
     for model_name, pending_entries in model_pending_entries.items():
+        embedding_model = embedding_models[model_name]
+
         groups = itertools.groupby(
             pending_entries, key=lambda e: e.target_dims_shortening
         )
@@ -856,8 +862,9 @@ async def _generate_embeddings_params(
             batches, excluded_indexes = batch_texts(
                 part_texts,
                 get_model_tokenizer(provider_name, model_name),
-                embedding_models[model_name].max_input_tokens,
-                embedding_models[model_name].max_batch_tokens,
+                max_input_tokens=embedding_model.max_input_tokens,
+                max_batch_tokens=embedding_model.max_batch_tokens,
+                max_batch_size=embedding_model.max_batch_size,
             )
 
             if excluded_indexes:
@@ -908,8 +915,10 @@ class TextBatch:
 def batch_texts(
     texts: list[tuple[str, bool]],
     tokenizer: Optional[Tokenizer],
+    *,
     max_input_tokens: int,
     max_batch_tokens: int,
+    max_batch_size: int | None,
 ) -> tuple[list[TextBatch], list[int]]:
     """Given a list of texts and whether each can be truncated, produce a list
     of valid texts to batch.
@@ -942,7 +951,7 @@ def batch_texts(
 
         # Group the valid texts into batches based on token count
         batched_inputs = _batch_embeddings_inputs(
-            tokenizer, input_texts, max_batch_tokens
+            tokenizer, input_texts, max_batch_tokens, max_batch_size
         )
 
         # Gather results
@@ -958,6 +967,25 @@ def batch_texts(
                 token_count=token_count
             )
             for batch_input_indexes, token_count in batched_inputs
+        ]
+
+    elif max_batch_size:
+        batch_count = (len(texts) - 1) // max_batch_size + 1
+        batches = [
+            TextBatch(
+                entries=[
+                    TextBatchEntry(
+                        input_index=index,
+                        input_text=texts[index][0],
+                    )
+                    for index in range(
+                        batch_index * max_batch_size,
+                        min((batch_index + 1) * max_batch_size, len(texts))
+                    )
+                ],
+                token_count=0,
+            )
+            for batch_index in range(batch_count)
         ]
 
     else:
@@ -1099,6 +1127,7 @@ def _batch_embeddings_inputs(
     tokenizer: Tokenizer,
     inputs: list[str],
     max_batch_tokens: int,
+    max_batch_size: int | None,
 ) -> list[tuple[list[int], int]]:
     """Create batches of embeddings inputs.
 
@@ -1140,9 +1169,15 @@ def _batch_embeddings_inputs(
 
         if batch_token_count < max_batch_tokens:
             # Then add the smallest available input as long as long as the
-            # max batch token count isn't exceeded
+            # max batch token and input counts aren't exceeded
             unbatched_index = 0
-            while unbatched_index < len(unbatched_input_indexes):
+            while (
+                unbatched_index < len(unbatched_input_indexes)
+                and (
+                    max_batch_size is None
+                    or len(batch_input_indexes) < max_batch_size
+                )
+            ):
                 if (
                     batch_token_count + unbatched_token_count(unbatched_index)
                     <= max_batch_tokens
@@ -3124,6 +3159,7 @@ async def _get_embedding_models(
             EmbeddingModel.provider_annotation,
             EmbeddingModel.max_model_input_tokens_annotation,
             EmbeddingModel.max_batch_tokens_annotation,
+            EmbeddingModel.max_batch_size_annotation,
             EmbeddingModel.max_output_dimensions_annotation,
             EmbeddingModel.supports_shortening_annotation,
         ],
@@ -3143,20 +3179,6 @@ async def _get_embedding_models(
             )
         return val
 
-    def _get_int_ann(
-        model: str,
-        anns: dict[str, str | None],
-        name: str,
-    ) -> int:
-        val = _get_ann(model, anns, name)
-        try:
-            return int(val)
-        except ValueError:
-            raise InternalError(
-                f"Model '{model}' annotation '{name}' "
-                f"has non integer value {val}"
-            )
-
     def _get_bool_ann(
         model: str,
         anns: dict[str, str | None],
@@ -3171,6 +3193,36 @@ async def _get_embedding_models(
                 f"has non boolean value {val}"
             )
 
+    def _get_int_ann(
+        model: str,
+        anns: dict[str, str | None],
+        name: str,
+    ) -> int:
+        val = _get_ann(model, anns, name)
+        try:
+            return int(val)
+        except ValueError:
+            raise InternalError(
+                f"Model '{model}' annotation '{name}' "
+                f"has non integer value {val}"
+            )
+
+    def _get_int_or_none_ann(
+        model: str,
+        anns: dict[str, str | None],
+        name: str,
+    ) -> int | None:
+        val = _get_ann(model, anns, name)
+        if val == "<optional>":
+            return None
+        try:
+            return int(val)
+        except ValueError:
+            raise InternalError(
+                f"Model '{model}' annotation '{name}' "
+                f"has non integer value {val}"
+            )
+
     result: dict[str, EmbeddingModel] = {}
     for model, anns in model_annotations.items():
         result[model] = EmbeddingModel(
@@ -3181,6 +3233,9 @@ async def _get_embedding_models(
             ),
             max_batch_tokens=_get_int_ann(
                 model, anns, EmbeddingModel.max_batch_tokens_annotation
+            ),
+            max_batch_size=_get_int_or_none_ann(
+                model, anns, EmbeddingModel.max_batch_size_annotation
             ),
             max_output_dimensions=_get_int_ann(
                 model, anns, EmbeddingModel.max_output_dimensions_annotation
@@ -3427,8 +3482,6 @@ async def generate_embeddings_for_texts(
         embedding_model = embedding_models[model_name]
 
         tokenizer = get_model_tokenizer(provider, model_name)
-        max_input_tokens = embedding_model.max_input_tokens
-        max_batch_tokens = embedding_model.max_batch_tokens
 
         texts = [
             (
@@ -3441,8 +3494,9 @@ async def generate_embeddings_for_texts(
         text_batches, excluded_indexes = batch_texts(
             texts,
             tokenizer,
-            max_input_tokens,
-            max_batch_tokens,
+            max_input_tokens=embedding_model.max_input_tokens,
+            max_batch_tokens=embedding_model.max_batch_tokens,
+            max_batch_size=embedding_model.max_batch_size,
         )
 
         if excluded_indexes or too_long:
