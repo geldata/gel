@@ -16,7 +16,7 @@ try:
     )
     for name in [
         'json', 'functions', 'expressions', 'casts', 'policies', 'vector',
-        'scope', 'httpextauth',
+        'scope', 'httpextauth', 'extai',
     ]:
         db.execute(f'create database {name};')
 
@@ -44,6 +44,25 @@ try:
             id
         }
         ORDER BY User.name;
+    ''')
+
+    db2.close()
+
+    # AI also
+    db2 = edgedb.create_client(
+        host='localhost', port=10000, tls_security='insecure', database='extai'
+    )
+    with open("tests/schemas/ext_ai.esdl") as f:
+        body = f.read()
+    db2.execute(f'''
+        START MIGRATION TO {{
+            using extension ai;
+            module default {{
+                {body}
+            }}
+        }};
+        POPULATE MIGRATION;
+        COMMIT MIGRATION;
     ''')
 
     db2.close()
