@@ -48,6 +48,7 @@ from edb.common import debug
 from edb.common import enum as s_enum
 from edb.common import markup
 from edb.common import uuidgen
+from edb.common.typeutils import not_none
 
 from edb.server import compiler, http
 from edb.server import defines as edbdef
@@ -281,7 +282,7 @@ def get_model_tokenizer(
         return None
 
 
-@dataclass
+@dataclass(frozen=True)
 class ProviderConfig:
     name: str
     display_name: str
@@ -312,6 +313,43 @@ class ProviderConfig:
                     for entry_result in decoded_result["data"]
                 ],
             )
+
+
+@dataclass(frozen=True, kw_only=True)
+class BaseModel:
+    name: str
+    provider: str
+
+    name_annotation: ClassVar[str] = "ext::ai::model_name"
+    provider_annotation: ClassVar[str] = "ext::ai::model_provider"
+
+
+@dataclass(frozen=True, kw_only=True)
+class EmbeddingModel (BaseModel):
+    max_input_tokens: int
+    max_batch_tokens: int
+    max_output_dimensions: int
+    supports_shortening: bool
+
+    gel_type: ClassVar[str] = "ext::ai::EmbeddingModel"
+
+    max_model_input_tokens_annotation: ClassVar[str] = (
+        "ext::ai::embedding_model_max_input_tokens"
+    )
+    max_batch_tokens_annotation: ClassVar[str] = (
+        "ext::ai::embedding_model_max_batch_tokens"
+    )
+    max_output_dimensions_annotation: ClassVar[str] = (
+        "ext::ai::embedding_model_max_output_dimensions"
+    )
+    supports_shortening_annotation: ClassVar[str] = (
+        "ext::ai::embedding_model_supports_shortening"
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class TextGenerationModel (BaseModel):
+    gel_type: ClassVar[str] = "ext::ai::TextGenerationModel"
 
 
 def start_extension(
@@ -775,25 +813,9 @@ async def _generate_embeddings_params(
         logger.error(f"{task_name}: {e}")
         return None
 
-    model_max_input_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_input_tokens",
-        )
-        for model_name in provider_models
-    }
-
-    model_max_batch_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_batch_tokens",
-        )
-        for model_name in provider_models
-    }
+    embedding_models = await _get_embedding_models(
+        db, provider_models
+    )
 
     model_pending_entries: dict[str, list[PendingEmbedding]] = {}
 
@@ -834,8 +856,8 @@ async def _generate_embeddings_params(
             batches, excluded_indexes = batch_texts(
                 part_texts,
                 get_model_tokenizer(provider_name, model_name),
-                model_max_input_tokens[model_name],
-                model_max_batch_tokens[model_name]
+                embedding_models[model_name].max_input_tokens,
+                embedding_models[model_name].max_batch_tokens,
             )
 
             if excluded_indexes:
@@ -2751,7 +2773,7 @@ async def _handle_rag_request(
     else:
         provider_name = await _get_model_provider(
             db,
-            base_model_type="ext::ai::TextGenerationModel",
+            base_model_type=TextGenerationModel.gel_type,
             model_name=model,
         )
         model_name = model
@@ -2928,7 +2950,7 @@ async def _handle_embeddings_request(
 
     provider_name = await _get_model_provider(
         db,
-        base_model_type="ext::ai::EmbeddingModel",
+        base_model_type=EmbeddingModel.gel_type,
         model_name=model_name,
     )
     if provider_name is None:
@@ -3089,19 +3111,100 @@ def _get_provider_config(
     )
 
 
-async def _get_model_annotation_as_json(
+async def _get_embedding_models(
+    db: dbview.Database,
+    model_names: list[str],
+) -> dict[str, EmbeddingModel]:
+
+    model_annotations = await _get_model_annotations(
+        db,
+        base_model_type=EmbeddingModel.gel_type,
+        model_names=model_names,
+        annotation_names=[
+            EmbeddingModel.provider_annotation,
+            EmbeddingModel.max_model_input_tokens_annotation,
+            EmbeddingModel.max_batch_tokens_annotation,
+            EmbeddingModel.max_output_dimensions_annotation,
+            EmbeddingModel.supports_shortening_annotation,
+        ],
+    )
+
+    def _get_ann(
+        model: str,
+        anns: dict[str, str | None],
+        name: str,
+    ) -> str:
+        val = anns.get(name)
+        if val is None:
+            raise InternalError(f"Could not read annotation '{name}'")
+        if val == "<must override>":
+            raise InternalError(
+                f"Model '{model}' is missing value for annotation '{name}'"
+            )
+        return val
+
+    def _get_int_ann(
+        model: str,
+        anns: dict[str, str | None],
+        name: str,
+    ) -> int:
+        val = _get_ann(model, anns, name)
+        try:
+            return int(val)
+        except ValueError:
+            raise InternalError(
+                f"Model '{model}' annotation '{name}' "
+                f"has non integer value {val}"
+            )
+
+    def _get_bool_ann(
+        model: str,
+        anns: dict[str, str | None],
+        name: str,
+    ) -> bool:
+        val = _get_ann(model, anns, name)
+        try:
+            return bool(val)
+        except ValueError:
+            raise InternalError(
+                f"Model '{model}' annotation '{name}' "
+                f"has non boolean value {val}"
+            )
+
+    result: dict[str, EmbeddingModel] = {}
+    for model, anns in model_annotations.items():
+        result[model] = EmbeddingModel(
+            name=model,
+            provider=_get_ann(model, anns, EmbeddingModel.provider_annotation),
+            max_input_tokens=_get_int_ann(
+                model, anns, EmbeddingModel.max_model_input_tokens_annotation
+            ),
+            max_batch_tokens=_get_int_ann(
+                model, anns, EmbeddingModel.max_batch_tokens_annotation
+            ),
+            max_output_dimensions=_get_int_ann(
+                model, anns, EmbeddingModel.max_output_dimensions_annotation
+            ),
+            supports_shortening=_get_bool_ann(
+                model, anns, EmbeddingModel.supports_shortening_annotation
+            ),
+        )
+
+    return result
+
+
+async def _get_model_annotations(
     db: dbview.Database,
     base_model_type: str,
-    model_name: str,
-    annotation_name: str,
-) -> Any:
+    model_names: list[str],
+    annotation_names: list[str],
+) -> dict[str, dict[str, str | None]]:
+
     models = await _edgeql_query_json(
         db=db,
         role_name=None,
         query="""
         WITH
-            base_model_type := <str>$base_model_type,
-            model_name := <str>$model_name,
             Parent := (
                 SELECT
                     schema::ObjectType
@@ -3111,34 +3214,49 @@ async def _get_model_annotation_as_json(
             Models := Parent.<ancestors[IS schema::ObjectType],
         SELECT
             Models {
-                value := (
+                model_name := (
                     SELECT
-                        (FOR ann IN .annotations SELECT (ann@value, ann.name))
+                        (FOR ann IN .annotations SELECT (ann.name, ann@value))
                     FILTER
-                        .1 = <str>$annotation_name
-                    LIMIT
-                        1
-                ).0,
+                        .0 = "ext::ai::model_name"
+                    limit 1
+                ).1,
+                values := (
+                    SELECT
+                        (FOR ann IN .annotations SELECT (ann.name, ann@value))
+                    FILTER
+                        .0 in array_unpack(<array<str>>$annotation_names)
+                ),
             }
         FILTER
-            (FOR ann in Models.annotations
-            UNION (
-                ann.name = "ext::ai::model_name"
-                AND ann@value = <str>$model_name
-            ))
+            .model_name in array_unpack(<array<str>>$model_names)
         """,
         variables={
             "base_model_type": base_model_type,
-            "model_name": model_name,
-            "annotation_name": annotation_name,
+            "model_names": model_names,
+            "annotation_names": annotation_names,
         },
     )
     if len(models) == 0:
         raise BadRequestError("invalid model name")
-    elif len(models) > 1:
-        raise InternalError("multiple models defined as requested model")
 
-    return models[0]['value']
+    result: dict[str, dict[str, str | None]] = {}
+    for model in models:
+        model_name = model['model_name']
+        if model_name in result:
+            raise InternalError(f"models with duplicate name: {model_name}")
+
+        model_anns = {
+            ann_name: ann_value
+            for ann_name, ann_value in model['values']
+        }
+
+        result[model_name] = {
+            ann_name: model_anns.get(ann_name)
+            for ann_name in annotation_names
+        }
+
+    return result
 
 
 async def _get_model_provider(
@@ -3146,20 +3264,12 @@ async def _get_model_provider(
     base_model_type: str,
     model_name: str,
 ) -> str:
-    provider = await _get_model_annotation_as_json(
-        db, base_model_type, model_name, "ext::ai::model_provider")
-    return cast(str, provider)
-
-
-async def _get_model_annotation_as_int(
-    db: dbview.Database,
-    base_model_type: str,
-    model_name: str,
-    annotation_name: str,
-) -> int:
-    value = await _get_model_annotation_as_json(
-        db, base_model_type, model_name, annotation_name)
-    return int(value)
+    model_annotations = await _get_model_annotations(
+        db, base_model_type, [model_name], [BaseModel.provider_annotation]
+    )
+    return not_none(
+        model_annotations[model_name][BaseModel.provider_annotation]
+    )
 
 
 async def _generate_embeddings_for_type(
@@ -3267,24 +3377,9 @@ async def generate_embeddings_for_texts(
         ai_index.model: ai_index.provider
         for ai_index in type_ai_indexes.values()
     }
-    model_max_input_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_input_tokens",
-        )
-        for model_name in model_providers.keys()
-    }
-    model_max_batch_tokens: dict[str, int] = {
-        model_name: await _get_model_annotation_as_int(
-            db,
-            base_model_type="ext::ai::EmbeddingModel",
-            model_name=model_name,
-            annotation_name="ext::ai::embedding_model_max_batch_tokens",
-        )
-        for model_name in model_providers.keys()
-    }
+    embedding_models = await _get_embedding_models(
+        db, list(model_providers.keys())
+    )
 
     provider_configs = {
         provider: _get_provider_config(db=db, provider_name=provider)
@@ -3329,10 +3424,11 @@ async def generate_embeddings_for_texts(
     for group_key, input_indexes in group_input_indexes.items():
         model_name, shortening = group_key
         provider = model_providers[model_name]
+        embedding_model = embedding_models[model_name]
 
         tokenizer = get_model_tokenizer(provider, model_name)
-        max_input_tokens = model_max_input_tokens[model_name]
-        max_batch_tokens = model_max_batch_tokens[model_name]
+        max_input_tokens = embedding_model.max_input_tokens
+        max_batch_tokens = embedding_model.max_batch_tokens
 
         texts = [
             (
