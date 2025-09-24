@@ -130,6 +130,44 @@ class TestExtAI(tb.BaseHttpExtensionTest):
             200,
         )
 
+    async def test_ext_ai_introspection(self):
+        await self.assert_query_result(
+            r"""
+                select schema::Index {
+                    annotations: {name, @value},
+                    subject_name := .<indexes[is schema::ObjectType].name
+                }
+                filter 'ext::ai::index' IN .ancestors.name
+                and .subject_name = 'default::Star';
+            """,
+            [
+                {
+                    "annotations": tb.bag([
+                        {"name": "ext::ai::model_name",
+                         "@value": "text-embedding-test"},
+                        {"name": "ext::ai::model_provider",
+                         "@value": "custom::test"},
+                        {"name": "ext::ai::embedding_model_max_input_tokens",
+                         "@value": "100"},
+                        {"name": "ext::ai::embedding_model_max_batch_tokens",
+                         "@value": "500"},
+                        {
+                            "name":
+                            "ext::ai::embedding_model_max_output_dimensions",
+                            "@value": "10"
+                        },
+                        # {'name': 'ext::ai::embedding_model_max_batch_size',
+                        #  '@value': '<optional>'},
+                        {"name": "ext::ai::embedding_model_supports_shortening",
+                         "@value": "true"},
+                        {"name": "ext::ai::embedding_dimensions",
+                         "@value": "10"},
+                    ]),
+                    "subject_name": "default::Star"
+                }
+            ]
+        )
+
     async def test_ext_ai_indexing_01(self):
         # Index on non-computed pointer
         try:

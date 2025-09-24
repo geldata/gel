@@ -12957,6 +12957,41 @@ class EdgeQLAIMigrationTestCase(EdgeQLDataMigrationTestCase):
             };
         ''', explicit_modules=True)
 
+        await self.assert_query_result(
+            r"""
+                select schema::Index {
+                    annotations: {name, @value},
+                    subject_name := .<indexes[is schema::ObjectType].name
+                }
+                filter 'ext::ai::index' IN .ancestors.name
+                and .subject_name = 'default::Sub';
+            """,
+            [
+                {
+                    "annotations": tb.bag([
+                        {"name": "ext::ai::model_name",
+                         "@value": "text-embedding-3-small"},
+                        {"name": "ext::ai::model_provider",
+                         "@value": "builtin::openai"},
+                        {"name": "ext::ai::embedding_model_max_input_tokens",
+                         "@value": "8191"},
+                        {"name": "ext::ai::embedding_model_max_batch_tokens",
+                         "@value": "8191"},
+                        {
+                            "name":
+                            "ext::ai::embedding_model_max_output_dimensions",
+                            "@value": "1536"
+                        },
+                        {"name": "ext::ai::embedding_model_supports_shortening",
+                         "@value": "true"},
+                        {"name": "ext::ai::embedding_dimensions",
+                         "@value": "1536"}
+                    ]),
+                    "subject_name": "default::Sub"
+                }
+            ]
+        )
+
         await self.migrate('''
             using extension ai;
         ''', explicit_modules=True)
