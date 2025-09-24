@@ -2697,6 +2697,9 @@ def lookup_functions(
     if funcs is not so.NoDefault:
         return funcs
     else:
+        print(name)
+        # print(schema._top_schema.dump())
+        print(schema._base_schema.dump())
         return s_schema.Schema.raise_bad_reference(
             name=name, module_aliases=module_aliases, type=Function,
         )
