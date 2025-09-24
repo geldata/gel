@@ -156,8 +156,8 @@ class TestExtAI(tb.BaseHttpExtensionTest):
                             "ext::ai::embedding_model_max_output_dimensions",
                             "@value": "10"
                         },
-                        # {'name': 'ext::ai::embedding_model_max_batch_size',
-                        #  '@value': '<optional>'},
+                        {'name': 'ext::ai::embedding_model_max_batch_size',
+                         '@value': '<optional>'},
                         {"name": "ext::ai::embedding_model_supports_shortening",
                          "@value": "true"},
                         {"name": "ext::ai::embedding_dimensions",
