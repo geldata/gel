@@ -12985,7 +12985,9 @@ class EdgeQLAIMigrationTestCase(EdgeQLDataMigrationTestCase):
                         {"name": "ext::ai::embedding_model_supports_shortening",
                          "@value": "true"},
                         {"name": "ext::ai::embedding_dimensions",
-                         "@value": "1536"}
+                         "@value": "1536"},
+                        {'name': 'ext::ai::embedding_model_max_batch_size',
+                         '@value': '<optional>'},
                     ]),
                     "subject_name": "default::Sub"
                 }
