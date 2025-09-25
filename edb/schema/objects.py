@@ -791,8 +791,7 @@ class ObjectMeta(type):
                     ),
                     _fd: Callable[[], Any] = field.get_default,
                 ) -> Any:
-                    data = schema.get_obj_data_raw(self)
-                    v = data[_fi]
+                    v = schema.get_obj_data_raw(self, _fi)
                     if v is not None:
                         return _sr(v)
                     else:
@@ -819,8 +818,7 @@ class ObjectMeta(type):
                     _fi: int = findex,
                     _fd: Any = field.default,
                 ) -> Any:
-                    data = schema.get_obj_data_raw(self)
-                    v = data[_fi]
+                    v = schema.get_obj_data_raw(self, _fi)
                     if v is not None:
                         return v
                     else:
@@ -837,8 +835,7 @@ class ObjectMeta(type):
                     _fi: int = findex,
                     _fd: Callable[[], Any] = field.get_default,
                 ) -> Any:
-                    data = schema.get_obj_data_raw(self)
-                    v = data[_fi]
+                    v = schema.get_obj_data_raw(self, _fi)
                     if v is not None:
                         return v
                     else:
@@ -1261,8 +1258,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         field = type(self).get_field(field_name)
 
         if isinstance(field, SchemaField):
-            data = schema.get_obj_data_raw(self)
-            val = data[field.index]
+            val = schema.get_obj_data_raw(self, field.index)
             if val is not None:
                 if field.is_reducible:
                     return field.type.schema_restore(val)
@@ -1291,8 +1287,7 @@ class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
         field = type(self).get_field(field_name)
 
         if isinstance(field, SchemaField):
-            data = schema.get_obj_data_raw(self)
-            val = data[field.index]
+            val = schema.get_obj_data_raw(self, field.index)
             if val is not None:
                 if field.is_reducible:
                     return field.type.schema_restore(val)
