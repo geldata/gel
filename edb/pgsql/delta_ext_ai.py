@@ -100,6 +100,7 @@ from edb.edgeql import compiler as qlcompiler
 
 from . import codegen
 from . import common
+from . import deltadbops
 from . import dbops
 from . import compiler
 from . import types
@@ -375,23 +376,12 @@ def _refresh_ai_embeddings(
         sn.QualName("ext::ai", "embedding_dimensions"),
         int,
     )
-    module_name = index.get_name(schema).module
-    old_index_name = common.get_index_backend_name(
-        old_index.id, module_name, catenate=False, aspect=f'{dimensions}_index'
-    )
-    new_index_name = common.get_index_backend_name(
-        index.id, module_name, catenate=False, aspect=f'{dimensions}_index'
-    )
-
-    pg_index = dbops.Index(
-        name=old_index_name[1],
-        table_name=table_name,
-    )
     ops.add_command(
-        dbops.RenameIndex(
-            pg_index,
-            new_name=new_index_name[1],
-            conditional=True,
+        deltadbops.rename_pg_index(
+            old_index=old_index,
+            new_index=index,
+            schema=schema,
+            aspect=f'{dimensions}_index',
         )
     )
 

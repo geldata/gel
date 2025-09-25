@@ -33,6 +33,7 @@ from edb.edgeql import compiler as qlcompiler
 
 from . import common
 from . import dbops
+from . import deltadbops
 from . import compiler
 from . import codegen
 from . import types
@@ -68,7 +69,9 @@ def create_fts_index(
     # inherited from the parent, we don't need to create the index, but just
     # update the populating expressions.
     if has_overridden:
-        return _refresh_fts_document(index, options, schema, context)
+        return _refresh_fts_document(
+            index, has_overridden[0], options, schema, context
+        )
     else:
         return _create_fts_document(
             index,
@@ -106,7 +109,9 @@ def delete_fts_index(
         ).objects(schema)
 
         if is_eff_on_direct_parent:
-            return _refresh_fts_document(index, options, schema, context)
+            return _refresh_fts_document(
+                index, effective, options, schema, context
+            )
         else:
             return dbops.CommandGroup()
 
@@ -223,6 +228,7 @@ def update_fts_document(
 
 def _refresh_fts_document(
     index: s_indexes.Index,
+    old_index: s_indexes.Index,
     options: qlcompiler.CompilerOptions,
     schema: s_schema.Schema,
     context: sd.CommandContext,
@@ -249,6 +255,16 @@ def _refresh_fts_document(
     else:
         ops.add_command(_pg_drop_trigger(table_name))
         ops.add_command(_pg_create_trigger(table_name, exprs))
+
+    # Sigh, we need to rename the main index to match the new id,
+    # entirely for the purpose of having ANALYZE be able to pick it up
+    ops.add_command(
+        deltadbops.rename_pg_index(
+            old_index=old_index,
+            new_index=index,
+            schema=schema,
+        )
+    )
 
     return ops
 
