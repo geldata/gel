@@ -376,8 +376,9 @@ class RenameObject(SchemaObjectOperation):
 
     def generate_extra(self, block: base.PLBlock) -> None:
         super().generate_extra(block)
+        # FIXME?: This used to be here, in the original code, but it
+        # doesn't work anymore and probably isn't important.
         # if self.object.metadata:
-        #     breakpoint()
         #     mdata = UpdateMetadata(
         #         self.altered_object, self.altered_object.metadata)
         #     block.add_command(mdata.code_with_block(block))
