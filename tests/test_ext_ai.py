@@ -519,6 +519,25 @@ class TestExtAI(tb.BaseHttpExtensionTest):
             json.dumps(qv),
         )
 
+    async def test_ext_ai_indexing_05f(self):
+        async with self._run_and_rollback():
+            await self.con.execute('''
+                alter type Astronomy
+                drop index
+                  ext::ai::index(embedding_model := 'text-embedding-test')
+                on (.content);
+            ''')
+
+            qv = [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0, 9.0, -10.0]
+
+            await self._assert_index_use(
+                f'''
+                with vector := <array<float32>>$0
+                select ext::ai::search(OnExpression, vector) limit 5;
+                ''',
+                qv,
+            )
+
     async def test_ext_ai_indexing_06(self):
         # Index on mixed inherited types
         try:
