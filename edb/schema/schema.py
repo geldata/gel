@@ -537,8 +537,7 @@ class Schema(abc.ABC):
         return self.get_referrers(
             scls, scls_type=type(scls), field_name='ancestors')
 
-    @abc.abstractmethod
-    def get_objects(
+    def get_objects[Object_T: so.Object](
         self,
         *,
         exclude_stdlib: bool = False,
@@ -549,10 +548,23 @@ class Schema(abc.ABC):
         excluded_modules: Optional[Iterable[sn.Name]] = None,
         included_items: Optional[Iterable[sn.Name]] = None,
         excluded_items: Optional[Iterable[sn.Name]] = None,
-        type: Optional[type[so.Object_T]] = None,
-        extra_filters: Iterable[Callable[[Schema, so.Object_T], bool]] = (),
-    ) -> SchemaIterator[so.Object_T]:
-        raise NotImplementedError
+        type: Optional[type[Object_T]] = None,
+        extra_filters: Iterable[Callable[[Schema, Object_T], bool]] = (),
+    ) -> SchemaIterator[Object_T]:
+        return SchemaIterator[Object_T](
+            self,
+            self._get_object_ids(),
+            exclude_global=exclude_global,
+            exclude_stdlib=exclude_stdlib,
+            exclude_extensions=exclude_extensions,
+            exclude_internal=exclude_internal,
+            included_modules=included_modules,
+            excluded_modules=excluded_modules,
+            included_items=included_items,
+            excluded_items=excluded_items,
+            type=type,
+            extra_filters=extra_filters,
+        )
 
     @abc.abstractmethod
     def get_modules(self) -> tuple[s_mod.Module, ...]:
@@ -1799,35 +1811,6 @@ class ChainedSchema(Schema):
             self._base_schema.has_object(object_id)
             or self._top_schema.has_object(object_id)
             or self._global_schema.has_object(object_id)
-        )
-
-    def get_objects(
-        self,
-        *,
-        exclude_stdlib: bool = False,
-        exclude_global: bool = False,
-        exclude_extensions: bool = False,
-        exclude_internal: bool = True,
-        included_modules: Optional[Iterable[sn.Name]] = None,
-        excluded_modules: Optional[Iterable[sn.Name]] = None,
-        included_items: Optional[Iterable[sn.Name]] = None,
-        excluded_items: Optional[Iterable[sn.Name]] = None,
-        type: Optional[type[so.Object_T]] = None,
-        extra_filters: Iterable[Callable[[Schema, so.Object_T], bool]] = (),
-    ) -> SchemaIterator[so.Object_T]:
-        return SchemaIterator[so.Object_T](
-            self,
-            self._get_object_ids(),
-            exclude_global=exclude_global,
-            exclude_stdlib=exclude_stdlib,
-            exclude_extensions=exclude_extensions,
-            exclude_internal=exclude_internal,
-            included_modules=included_modules,
-            excluded_modules=excluded_modules,
-            included_items=included_items,
-            excluded_items=excluded_items,
-            type=type,
-            extra_filters=extra_filters,
         )
 
     def get_modules(self) -> tuple[s_mod.Module, ...]:
