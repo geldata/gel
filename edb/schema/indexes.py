@@ -1854,8 +1854,7 @@ def get_effective_object_index(
             )
         effective = object_indexes_defined_here[0]
         overridden = [
-            i.get_implicit_bases(schema)[0]
-            for i in object_indexes if i != effective
+            i for i in object_indexes if i != effective
         ]
 
     else:
