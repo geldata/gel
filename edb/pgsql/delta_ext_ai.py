@@ -100,6 +100,7 @@ from edb.edgeql import compiler as qlcompiler
 
 from . import codegen
 from . import common
+from . import deltadbops
 from . import dbops
 from . import compiler
 from . import types
@@ -151,6 +152,7 @@ def create_ext_ai_index(
     if has_overridden:
         return _refresh_ai_embeddings(
             index,
+            has_overridden[0],
             options,
             schema,
             context,
@@ -186,7 +188,16 @@ def delete_ext_ai_index(
             index, drop_index, schema, orig_schema, context)
     else:
         # effective index remains: don't drop the embeddings
-        return dbops.CommandGroup(), dbops.CommandGroup()
+        return (
+            dbops.CommandGroup(),
+            _refresh_ai_embeddings(
+                effective,
+                index,
+                options,
+                orig_schema,
+                context,
+            ),
+        )
 
 
 def _compile_ai_embeddings_source_view_expr(
@@ -335,6 +346,7 @@ def _create_ai_embeddings(
 
 def _refresh_ai_embeddings(
     index: s_indexes.Index,
+    old_index: s_indexes.Index,
     options: qlcompiler.CompilerOptions,
     schema: s_schema.Schema,
     context: sd.CommandContext,
@@ -356,6 +368,23 @@ def _refresh_ai_embeddings(
     ops.add_command(
         _pg_create_ai_embeddings_source_view(
             index, options, schema, context))
+
+    # Sigh, we need to rename the main index to match the new id,
+    # entirely for the purpose of having ANALYZE be able to pick it up
+    dimensions = index.must_get_json_annotation(
+        schema,
+        sn.QualName("ext::ai", "embedding_dimensions"),
+        int,
+    )
+    ops.add_command(
+        deltadbops.rename_pg_index(
+            old_index=old_index,
+            new_index=index,
+            schema=schema,
+            aspect=f'{dimensions}_index',
+        )
+    )
+
     return ops
 
 

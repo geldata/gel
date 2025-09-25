@@ -74,6 +74,9 @@ class Index(tables.InheritableTableObject):
                 raise NotImplementedError()
             self._columns.add(col)
 
+    def rename(self, new_name):
+        self.name = new_name
+
     def creation_code(
         self,
         concurrently: bool = False,
@@ -230,6 +233,34 @@ class CreateIndex(ddl.CreateObject):
         return self.index.creation_code(
             concurrently=self.concurrently,
             conditional=self.builtin_conditional,
+        )
+
+
+class RenameIndex(ddl.RenameObject):
+    def __init__(self, index, *, new_name, conditional=False, **kwargs):
+        super().__init__(index, new_name=new_name, **kwargs)
+        if conditional:
+            self.conditions.add(
+                IndexExists((index.table_name[0], index.name_in_catalog)))
+
+    def code(self) -> str:
+        name = qn(self.object.table_name[0], self.object.name_in_catalog)
+        new_name = qi(self.altered_object.name_in_catalog)
+        return f'ALTER INDEX {name} RENAME TO {new_name}'
+
+    @classmethod
+    def pl_code(cls, index_desc_var: str, block: base.PLBlock) -> str:
+        index_name = (
+            f"(quote_ident({index_desc_var}.table_name[0])"
+            f" || '.' || quote_ident({index_desc_var}.name))"
+        )
+        new_name = (
+            f"quote_ident({index_desc_var}.name)"
+        )
+
+        return (
+            f"EXECUTE 'ALTER INDEX ' || {index_name} "
+            f"|| ' RENAME TO ' || {new_name};"
         )
 
 
