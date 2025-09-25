@@ -22,7 +22,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    cast,
     Iterable,
     Iterator,
     Mapping,
@@ -509,6 +508,12 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def _get_global_name_ids(
+        self
+    ) -> Iterable[tuple[type[so.Object], uuid.UUID]]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def has_object(self, object_id: uuid.UUID) -> bool:
         raise NotImplementedError
 
@@ -566,13 +571,15 @@ class Schema(abc.ABC):
             extra_filters=extra_filters,
         )
 
-    @abc.abstractmethod
     def get_modules(self) -> tuple[s_mod.Module, ...]:
-        raise NotImplementedError
+        modules = []
+        for mcls, id in self._get_global_name_ids():
+            if mcls is s_mod.Module:
+                modules.append(mcls(_private_id=id))
+        return tuple(modules)  # type: ignore
 
-    @abc.abstractmethod
     def get_last_migration(self) -> Optional[s_migrations.Migration]:
-        raise NotImplementedError
+        return _get_last_migration(self)
 
     @staticmethod
     def raise_wrong_type(
@@ -657,6 +664,13 @@ class FlatSchema(Schema):
 
     def _get_object_ids(self) -> Iterable[uuid.UUID]:
         return self._id_to_type.keys()
+
+    def _get_global_name_ids(
+        self
+    ) -> Iterable[tuple[type[so.Object], uuid.UUID]]:
+        return (
+            (mcls, id) for (mcls, _name), id in self._globalname_to_id.items()
+        )
 
     def _replace(
         self,
@@ -1328,16 +1342,6 @@ class FlatSchema(Schema):
             extra_filters=extra_filters,
         )
 
-    def get_modules(self) -> tuple[s_mod.Module, ...]:
-        modules = []
-        for (objtype, _), objid in self._globalname_to_id.items():
-            if objtype is s_mod.Module:
-                modules.append(self.get_by_id(objid, type=s_mod.Module))
-        return tuple(modules)
-
-    def get_last_migration(self) -> Optional[s_migrations.Migration]:
-        return _get_last_migration(self)
-
     def __repr__(self) -> str:
         return (
             f'<{type(self).__name__} gen:{self._generation} at {id(self):#x}>')
@@ -1572,6 +1576,15 @@ class ChainedSchema(Schema):
             self._base_schema._get_object_ids(),
             self._top_schema._get_object_ids(),
             self._global_schema._get_object_ids(),
+        )
+
+    def _get_global_name_ids(
+        self
+    ) -> Iterable[tuple[type[so.Object], uuid.UUID]]:
+        return itertools.chain(
+            self._base_schema._get_global_name_ids(),
+            self._top_schema._get_global_name_ids(),
+            self._global_schema._get_global_name_ids(),
         )
 
     def get_top_schema(self) -> Schema:
@@ -1813,18 +1826,6 @@ class ChainedSchema(Schema):
             or self._global_schema.has_object(object_id)
         )
 
-    def get_modules(self) -> tuple[s_mod.Module, ...]:
-        return (
-            self._base_schema.get_modules()
-            + self._top_schema.get_modules()
-        )
-
-    def get_last_migration(self) -> Optional[s_migrations.Migration]:
-        migration = self._top_schema.get_last_migration()
-        if migration is None:
-            migration = self._base_schema.get_last_migration()
-        return migration
-
 
 @lru.per_job_lru_cache()
 def _get_operators(
@@ -1836,17 +1837,14 @@ def _get_operators(
 
 @lru.per_job_lru_cache()
 def _get_last_migration(
-    schema: FlatSchema,
+    schema: Schema,
 ) -> Optional[s_migrations.Migration]:
 
-    migrations = cast(
-        list[s_migrations.Migration],
-        [
-            schema.get_by_id(mid)
-            for (t, _), mid in schema._globalname_to_id.items()
-            if t is s_migrations.Migration
-        ],
-    )
+    migrations: list[s_migrations.Migration] = [
+        mcls(_private_id=id)  # type: ignore
+        for mcls, id in schema._get_global_name_ids()
+        if mcls is s_migrations.Migration
+    ]
 
     if not migrations:
         return None
