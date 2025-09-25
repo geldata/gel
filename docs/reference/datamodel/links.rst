@@ -437,9 +437,7 @@ or the *strength* of the relationship:
 .. note::
 
   Link properties can only be **primitive** data (scalars, enums,
-  arrays, or tuples) — *not* links to other objects. Also note that
-  link properties cannot be made required. They are always optional
-  by design.
+  arrays, or tuples) — *not* links to other objects.
 
 Link properties are especially useful with many-to-many relationships, where
 the link itself is a distinct concept with its own data. For relations
