@@ -49,7 +49,7 @@ On Ubuntu 24.04, these can be installed by running:
 
    $ apt install make gcc rust-all autotools-dev python3.12-dev \
      python3.12-venv bison flex libreadline-dev perl zlib1g-dev \
-     uuid-dev nodejs npm
+     protobuf-compiler libprotobuf-c-dev uuid-dev nodejs npm
    $ npm i -g corepack
    $ corepack enable && corepack prepare yarn@stable --activate
 
@@ -57,7 +57,7 @@ On macOS, these can be installed by running:
 
 .. code-block:: bash
 
-   $ brew install rustup autoconf libtool python@3.12 readline zlib nodejs icu4c
+   $ brew install rustup autoconf libtool python@3.12 readline zlib nodejs icu4c protobuf protobuf-c
 
 To build Postgres on macOS, you'll need to set ``PKG_CONFIG_PATH`` so it can find
 the ``icu4c`` libraries. This can be done manually each time you rebuild Postgres,
