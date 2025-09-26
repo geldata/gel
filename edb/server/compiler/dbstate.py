@@ -161,7 +161,7 @@ class SessionStateQuery(BaseQuery):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class DDLQuery(BaseQuery):
-    user_schema: Optional[s_schema.FlatSchema]
+    user_schema: Optional[s_schema.Schema]
     feature_used_metrics: Optional[dict[str, float]]
     global_schema: Optional[s_schema.Schema] = None
     cached_reflection: Any = None
@@ -203,7 +203,7 @@ class MigrationControlQuery(BaseQuery):
 
     modaliases: Optional[immutables.Map[Optional[str], str]]
 
-    user_schema: Optional[s_schema.FlatSchema] = None
+    user_schema: Optional[s_schema.Schema] = None
     cached_reflection: Any = None
     ddl_stmt_id: Optional[str] = None
 
@@ -890,7 +890,7 @@ class MigrationRewriteState(NamedTuple):
 class TransactionState(NamedTuple):
     id: int
     name: Optional[str]
-    local_user_schema: s_schema.FlatSchema | None
+    local_user_schema: s_schema.Schema | None
     global_schema: s_schema.Schema
     modaliases: immutables.Map[Optional[str], str]
     session_config: immutables.Map[str, config.SettingValue]
@@ -902,7 +902,7 @@ class TransactionState(NamedTuple):
     migration_rewrite_state: Optional[MigrationRewriteState] = None
 
     @property
-    def user_schema(self) -> s_schema.FlatSchema:
+    def user_schema(self) -> s_schema.Schema:
         if self.local_user_schema is None:
             return self.tx.root_user_schema
         else:
@@ -926,7 +926,7 @@ class Transaction:
         self,
         constate: CompilerConnectionState,
         *,
-        user_schema: s_schema.FlatSchema,
+        user_schema: s_schema.Schema,
         global_schema: s_schema.Schema,
         modaliases: immutables.Map[Optional[str], str],
         session_config: immutables.Map[str, config.SettingValue],
@@ -972,7 +972,7 @@ class Transaction:
         return self._id
 
     @property
-    def root_user_schema(self) -> s_schema.FlatSchema:
+    def root_user_schema(self) -> s_schema.Schema:
         return self._constate.root_user_schema
 
     def is_implicit(self) -> bool:
@@ -1055,18 +1055,17 @@ class Transaction:
         for sp_id in sp_ids_to_erase:
             self._savepoints.pop(sp_id)
 
-    def get_schema(self, std_schema: s_schema.FlatSchema) -> s_schema.Schema:
-        assert isinstance(std_schema, s_schema.FlatSchema)
+    def get_schema(self, std_schema: s_schema.Schema) -> s_schema.Schema:
         return s_schema.ChainedSchema(
             std_schema,
             self._current.user_schema,
             self._current.global_schema,
         )
 
-    def get_user_schema(self) -> s_schema.FlatSchema:
+    def get_user_schema(self) -> s_schema.Schema:
         return self._current.user_schema
 
-    def get_user_schema_if_updated(self) -> Optional[s_schema.FlatSchema]:
+    def get_user_schema_if_updated(self) -> Optional[s_schema.Schema]:
         if self._current.user_schema is self._state0.user_schema:
             return None
         else:
@@ -1113,8 +1112,9 @@ class Transaction:
     def update_schema(self, new_schema: s_schema.Schema) -> None:
         assert isinstance(new_schema, s_schema.ChainedSchema)
         user_schema = new_schema.get_top_schema()
-        assert isinstance(user_schema, s_schema.FlatSchema)
+        assert isinstance(user_schema, s_schema.Schema)
         global_schema = new_schema.get_global_schema()
+        assert isinstance(global_schema, s_schema.Schema)
         self._current = self._current._replace(
             local_user_schema=user_schema,
             global_schema=global_schema,
@@ -1164,7 +1164,7 @@ class CompilerConnectionState:
     _savepoints_log: dict[int, TransactionState]
     _current_tx: Transaction
 
-    _user_schema: Optional[s_schema.FlatSchema]
+    _user_schema: Optional[s_schema.Schema]
 
     def __init__(
         self,
@@ -1177,7 +1177,6 @@ class CompilerConnectionState:
         system_config: immutables.Map[str, config.SettingValue],
         cached_reflection: immutables.Map[str, tuple[str, ...]],
     ):
-        assert isinstance(user_schema, s_schema.FlatSchema)
         self._user_schema = user_schema
         self._tx_count = time.monotonic_ns()
         self._init_current_tx(
@@ -1209,11 +1208,11 @@ class CompilerConnectionState:
         self._user_schema = None
 
     @property
-    def root_user_schema(self) -> s_schema.FlatSchema:
+    def root_user_schema(self) -> s_schema.Schema:
         assert self._user_schema is not None
         return self._user_schema
 
-    def set_root_user_schema(self, user_schema: s_schema.FlatSchema) -> None:
+    def set_root_user_schema(self, user_schema: s_schema.Schema) -> None:
         self._user_schema = user_schema
 
     def _new_txid(self) -> int:
@@ -1231,8 +1230,6 @@ class CompilerConnectionState:
         system_config: immutables.Map[str, config.SettingValue],
         cached_reflection: immutables.Map[str, tuple[str, ...]],
     ) -> None:
-        assert isinstance(user_schema, s_schema.FlatSchema)
-        # assert isinstance(global_schema, s_schema.FlatSchema)
         self._current_tx = Transaction(
             self,
             user_schema=user_schema,

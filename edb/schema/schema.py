@@ -1501,10 +1501,10 @@ def apply_module_aliases(
     return module
 
 
-EMPTY_SCHEMA = FlatSchema()
+EMPTY_SCHEMA: Schema = FlatSchema()
 
 
-def upgrade_schema(schema: FlatSchema) -> FlatSchema:
+def upgrade_schema(schema: Schema) -> Schema:
     """Repair a schema object serialized by an older patch version
 
     When an edgeql+schema patch adds fields to schema types, old
@@ -1514,6 +1514,14 @@ def upgrade_schema(schema: FlatSchema) -> FlatSchema:
     In this situation, we run through all the data tuples and fill
     them out. The upgraded version will then be cached.
     """
+
+    if isinstance(schema, ChainedSchema):
+        return ChainedSchema(
+            base_schema=upgrade_schema(schema._base_schema),
+            top_schema=upgrade_schema(schema._top_schema),
+            global_schema=upgrade_schema(schema._global_schema),
+        )
+    assert isinstance(schema, FlatSchema)
 
     cls_fields = {}
     for py_cls in so.ObjectMeta.get_schema_metaclasses():
