@@ -65,7 +65,9 @@ any individual ``CanBark`` objects.
 
 
 For details on querying polymorphic data, see :ref:`EdgeQL > Select >
-Polymorphic queries <ref_eql_select_polymorphic>`.
+Polymorphic queries <ref_eql_select_polymorphic>`. When using the SQL adapter,
+see :ref:`SQL adapter <ref_sql_adapter>` for information about using ``ONLY``
+to query parent tables without including child objects.
 
 .. _ref_datamodel_inheritance_multiple:
 
