@@ -40,7 +40,6 @@ import logging
 import uuid
 
 import tiktoken
-from mistral_common.tokens.tokenizers import mistral as mistral_tokenizer
 
 from edb import errors
 from edb.common import asyncutil
@@ -168,35 +167,53 @@ class OpenAITokenizer(Tokenizer):
         return cast(str, self.encoding.decode(tokens))
 
 
-class MistralTokenizer(Tokenizer):
+class DumbTokenizer(Tokenizer):
+    """
+    A dumb (wrong) tokenizer that just counts numbers of characters
+    """
 
-    _instances: dict[str, MistralTokenizer] = {}
-
-    tokenizer: Any
+    _instances: dict[str, Tokenizer] = {}
 
     @classmethod
-    def for_model(cls, model_name: str) -> MistralTokenizer:
+    def for_model(cls, model_name: str) -> Tokenizer:
         if model_name in cls._instances:
             return cls._instances[model_name]
 
-        assert model_name == 'mistral-embed'
-
-        tokenizer = MistralTokenizer()
-        tokenizer.tokenizer = mistral_tokenizer.MistralTokenizer.v1()
+        tokenizer = DumbTokenizer()
         cls._instances[model_name] = tokenizer
 
         return tokenizer
 
     def encode(self, text: str) -> list[int]:
-        # V1 tokenizer wraps input text with control tokens [INST] [/INST].
-        #
-        # While these count towards the overal token limit, how special tokens
-        # are applied to embedding requests is not documented. For now, directly
-        # pass the text into the inner tokenizer.
-        tokenized = self.tokenizer.instruct_tokenizer.tokenizer.encode(
-            text, bos=False, eos=False
-        )
-        return cast(list[int], tokenized)
+        return [ord(c) for c in text]
+
+    def encode_padding(self) -> int:
+        return 0
+
+    def decode(self, tokens: list[int]) -> str:
+        return ''.join(chr(c) for c in tokens)
+
+
+class OllamaTokenizer(DumbTokenizer):
+
+    """
+    Simply counts the number of characters.
+    A tokenizer API is in progress, but unlikely to be released soon.
+    """
+
+    _instances: dict[str, Tokenizer] = {}
+
+
+class MistralTokenizer(DumbTokenizer):
+
+    """Dump mistral tokenizer.
+
+    Mistral *has* a library for tokenization, but it has *vast*
+    dependencies that a database server has no business depending on.
+    Shame.
+    """
+
+    _instances: dict[str, Tokenizer] = {}
 
     def encode_padding(self) -> int:
         # V1 tokenizer wraps input text with control tokens [INST] [/INST].
@@ -208,67 +225,12 @@ class MistralTokenizer(Tokenizer):
         # Note, other models may use significantly more control tokens.
         return 16
 
-    def decode(self, tokens: list[int]) -> str:
-        return cast(str, self.tokenizer.decode(tokens))
-
-
-class OllamaTokenizer(Tokenizer):
-
-    """
-    Simply counts the number of characters.
-    A tokenizer API is in progress, but unlikely to be released soon.
-    """
-
-    _instances: dict[str, OllamaTokenizer] = {}
-
-    @classmethod
-    def for_model(cls, model_name: str) -> OllamaTokenizer:
-        if model_name in cls._instances:
-            return cls._instances[model_name]
-
-        tokenizer = OllamaTokenizer()
-        cls._instances[model_name] = tokenizer
-
-        return tokenizer
-
-    def encode(self, text: str) -> list[int]:
-        return [ord(c) for c in text]
-
-    def encode_padding(self) -> int:
-        return 0
-
-    def decode(self, tokens: list[int]) -> str:
-        return ''.join(chr(c) for c in tokens)
-
-
-class TestTokenizer(Tokenizer):
-
-    _instances: dict[str, TestTokenizer] = {}
-
-    @classmethod
-    def for_model(cls, model_name: str) -> TestTokenizer:
-        if model_name in cls._instances:
-            return cls._instances[model_name]
-
-        tokenizer = TestTokenizer()
-        cls._instances[model_name] = tokenizer
-
-        return tokenizer
-
-    def encode(self, text: str) -> list[int]:
-        return [ord(c) for c in text]
-
-    def encode_padding(self) -> int:
-        return 0
-
-    def decode(self, tokens: list[int]) -> str:
-        return ''.join(chr(c) for c in tokens)
-
 
 def get_model_tokenizer(
     provider_name: str,
     model_name: str,
 ) -> Optional[Tokenizer]:
+
     """Get the tokenizer for a given provider and model"""
     if provider_name == 'builtin::openai':
         return OpenAITokenizer.for_model(model_name)
@@ -277,7 +239,7 @@ def get_model_tokenizer(
     if provider_name == 'builtin::ollama':
         return OllamaTokenizer.for_model(model_name)
     elif provider_name == 'custom::test':
-        return TestTokenizer.for_model(model_name)
+        return DumbTokenizer.for_model(model_name)
     else:
         return None
 
