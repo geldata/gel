@@ -174,10 +174,10 @@ PATCHES: list[tuple[str, str]] = [
     create abstract inheritable annotation
         ext::ai::embedding_model_max_batch_size;
 
-    alter abstract type ext::ai::EmbeddingModel {
+    alter type ext::ai::EmbeddingModel {
         create annotation
             ext::ai::embedding_model_max_batch_size := "<optional>";
     };
-    ''')
-    # ('repair', ''), we already have repair in rc3
+    '''),
+    ('repair', ''),
 ]
