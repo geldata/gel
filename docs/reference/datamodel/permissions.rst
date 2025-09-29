@@ -134,18 +134,20 @@ These permissions can be assigned to roles, similar to built-in permissions:
 
 .. note::
 
-    Role's permissions are applied to all branches in the instance.
-    If branches are using different schemas, make sure that names of permissions
-    do not overlap.
+    Role permissions are instance-wide.
 
-    Additionally, permission names of the role are not validated to actually
-    exist in any schema. This allows of creation of roles before schema is
-    applied the database.
+    If an unrelated branch defines ``default::data_export``, the ``warehouse``
+    role will receive it as well. This happens even if the unrelated branch
+    adds the permission after ``alter role``.
+
+    Additionally, a role may be given permissions which do not yet exist in
+    any schema. This is useful for creating roles before any schemas are
+    applied.
 
 
-To access the possession of permission by the role of current database
-connection, use :ref:`global variable<ref_datamodel_globals>` with the same name
-as the permission. This global is of boolean type and cannot be manually set.
+To check if the current database connection's role has a permission, use
+:ref:`global variable<ref_datamodel_globals>` with the same name
+as the permission. This global is a boolean and cannot be manually set.
 
 .. code-block:: edgeql
 

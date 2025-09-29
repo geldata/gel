@@ -58,11 +58,13 @@ The following subcommands are allowed in the ``create role`` block:
         Value is a set of identifiers of either built-in permissions or
         permissions defined in schema.
 
+        Roles also gain the permissions of their base Roles. 
+
         Roles that are *superusers* are implicitly granted all permissions, so
         setting this does not have any effect.
 
         Note that permission names are not validated and it is possible to
-        reference a permission that does not yet exist in the schema.
+        reference a permission that does not yet exist in any schema.
 
 
 Examples
