@@ -180,4 +180,14 @@ PATCHES: list[tuple[str, str]] = [
     };
     '''),
     ('repair', ''),
+
+    # For #9053
+    ('edgeql+schema', '''
+    ALTER TYPE sys::Role {
+        DROP ACCESS POLICY ap_read;
+        CREATE ACCESS POLICY ap_read DENY SELECT USING (
+            NOT global sys::perm::superuser
+        );
+    };
+    '''),
 ]

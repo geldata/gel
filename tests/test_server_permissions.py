@@ -252,6 +252,86 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                 DROP PERMISSION default::perm_c;
             ''')
 
+    async def test_server_permissions_role_06(self):
+        # Check that superusers can read Role data
+
+        await self.con.query('''
+            CREATE SUPERUSER ROLE foo {
+                SET password := 'secret';
+                SET permissions := default::perm_a;
+            };
+            CREATE PERMISSION default::perm_a;
+        ''')
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
+            qry = """
+                SELECT sys::Role.name;
+            """
+            result = await conn.query(qry)
+            print(result)
+            self.assert_data_shape(result, tb.bag(['admin', 'foo']))
+
+            result, _ = self.edgeql_query(
+                qry,
+                user='foo',
+                password='secret',
+            )
+            print(result)
+            self.assert_data_shape(result, tb.bag(['admin', 'foo']))
+            print('\n\n\n')
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP ROLE foo;
+                DROP PERMISSION default::perm_a;
+            ''')
+
+    async def test_server_permissions_role_07(self):
+        # Check that non-superusers cannot read Role data
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := default::perm_a;
+            };
+            CREATE PERMISSION default::perm_a;
+        ''')
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
+            qry = """
+                SELECT sys::Role;
+            """
+            result = await conn.query(qry)
+            print(result)
+            self.assert_data_shape(result, [])
+
+            result, _ = self.edgeql_query(
+                qry,
+                user='foo',
+                password='secret',
+            )
+            print(result)
+            self.assert_data_shape(result, [])
+            print('\n\n\n')
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP ROLE foo;
+                DROP PERMISSION default::perm_a;
+            ''')
+
     async def test_server_permissions_function_01(self):
         await self.con.query('''
             CREATE PERMISSION default::perm_a;
