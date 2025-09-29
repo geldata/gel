@@ -84,8 +84,6 @@ DEF PREP_STMTS_CACHE = 100
 
 DEF COPY_SIGNATURE = b"PGCOPY\n\377\r\n\0"
 
-DEF TEXT_OID = 25
-
 cdef object CARD_NO_RESULT = compiler.Cardinality.NO_RESULT
 cdef object FMT_NONE = compiler.OutputFormat.NONE
 cdef dict POSTGRES_SHUTDOWN_ERR_CODES = {

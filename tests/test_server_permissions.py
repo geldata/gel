@@ -273,7 +273,6 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                 SELECT sys::Role.name;
             """
             result = await conn.query(qry)
-            print(result)
             self.assert_data_shape(result, tb.bag(['admin', 'foo']))
 
             result, _ = self.edgeql_query(
@@ -281,9 +280,7 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                 user='foo',
                 password='secret',
             )
-            print(result)
             self.assert_data_shape(result, tb.bag(['admin', 'foo']))
-            print('\n\n\n')
 
         finally:
             await conn.aclose()
@@ -313,7 +310,6 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                 SELECT sys::Role;
             """
             result = await conn.query(qry)
-            print(result)
             self.assert_data_shape(result, [])
 
             result, _ = self.edgeql_query(
@@ -321,9 +317,7 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                 user='foo',
                 password='secret',
             )
-            print(result)
             self.assert_data_shape(result, [])
-            print('\n\n\n')
 
         finally:
             await conn.aclose()
@@ -1073,6 +1067,55 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
         finally:
             await self.con.query('''
                 DROP ROLE foo;
+            ''')
+
+    async def test_server_permissions_current_permissions_01(self):
+        # Check that sys::current_permissions works
+
+        await self.con.query('''
+            CREATE ROLE foo {
+                SET password := 'secret';
+                SET permissions := {
+                    sys::perm::data_modification,
+                    default::perm_a,
+                    default::perm_b,
+                };
+            };
+            CREATE PERMISSION default::perm_a;
+        ''')
+
+        try:
+            conn = await self.connect(
+                user='foo',
+                password='secret',
+            )
+
+            qry = """
+                SELECT global sys::current_permissions;
+            """
+            result = await conn.query(qry)
+            self.assert_data_shape(result, [tb.bag([
+                'sys::perm::data_modification',
+                'default::perm_a',
+                'default::perm_b',
+            ])])
+
+            result, _ = self.edgeql_query(
+                qry,
+                user='foo',
+                password='secret',
+            )
+            self.assert_data_shape(result, [tb.bag([
+                'sys::perm::data_modification',
+                'default::perm_a',
+                'default::perm_b',
+            ])])
+
+        finally:
+            await conn.aclose()
+            await self.con.query('''
+                DROP ROLE foo;
+                DROP PERMISSION default::perm_a;
             ''')
 
 
