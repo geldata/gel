@@ -830,7 +830,12 @@ def prepare_patch(
     updates: dict[str, Any] = {}
 
     global_schema_update = kind == 'ext-pkg'
-    sys_update_only = global_schema_update or kind.endswith('+globalonly')
+    # XXX: Actually we execute ext-pkg on every branch, because we
+    # want to make sure it is executed before any repair...
+    # FIXME: We should be able get it executed or threaded through
+    # without needing to run it on each branch...
+    # sys_update_only = global_schema_update or kind.endswith('+globalonly')
+    sys_update_only = kind.endswith('+globalonly')
 
     if kind == 'ext-pkg':
         # N.B: We process this without actually having the global
