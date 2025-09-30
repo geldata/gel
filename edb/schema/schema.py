@@ -121,6 +121,52 @@ _raw_schema_restore = so.Object.raw_schema_restore
 
 
 class Schema(abc.ABC):
+    '''
+    Data store for objects and their data.
+
+    Objects have:
+    - a class (also called mcls for meta class or scls for schema class),
+    - an id (of type UUID),
+    - data (a tuple of python values),
+    - name (of type sn.Name).
+
+    Objects can be retrieved by:
+    - id,
+    - name (fully qualified),
+    - shortname (only for function and operator class),
+    - references.
+
+    A bit of terminology:
+    - `get_*` methods are for low-level data retrieval,
+    - `fetch` methods are wrappers for `get_` with nicer interface (name
+       parsing, default values, raising exceptions),
+    - `lookup` performs name resolution (looking in "current" module, applying
+       of module aliases and applying implicit `std::` prefix),
+    - `*_raw` methods imply that object data is reduced
+       (see `.schema_reduce` methods on schema objects).
+    This terminology is not yet fully applied.
+    '''
+
+    @abc.abstractmethod
+    def get_by_name(
+        self,
+        name: sn.Name,
+    ) -> Optional[so.Object]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_by_shortname[T: so.Object](
+        self,
+        mcls: type[T],
+        shortname: sn.Name,
+    ) -> Optional[tuple[T, ...]]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_by_globalname[T: so.Object](
+        self, mcls: type[T], name: sn.Name,
+    ) -> Optional[T]:
+        raise NotImplementedError
 
     @abc.abstractmethod
     def add_raw(
@@ -195,98 +241,15 @@ class Schema(abc.ABC):
     ) -> Self:
         raise NotImplementedError
 
-    def get_casts_to_type(
-        self,
-        to_type: s_types.Type,
-        *,
-        implicit: bool = False,
-        assignment: bool = False,
-    ) -> frozenset[s_casts.Cast]:
-        return self._get_casts(
-            to_type,
-            disposition='to_type',
-            implicit=implicit,
-            assignment=assignment,
-        )
-
-    def get_casts_from_type(
-        self,
-        from_type: s_types.Type,
-        *,
-        implicit: bool = False,
-        assignment: bool = False,
-    ) -> frozenset[s_casts.Cast]:
-        return self._get_casts(
-            from_type,
-            disposition='from_type',
-            implicit=implicit,
-            assignment=assignment,
-        )
-
-    @lru.lru_method_cache()
-    def _get_casts(
-        self,
-        stype: s_types.Type,
-        *,
-        disposition: str,
-        implicit: bool = False,
-        assignment: bool = False,
-    ) -> frozenset[s_casts.Cast]:
-        all_casts = self.get_referrers(
-            stype, scls_type=s_casts.Cast, field_name=disposition
-        )
-
-        casts = []
-        for castobj in all_casts:
-            if implicit and not castobj.get_allow_implicit(self):
-                continue
-            if assignment and not castobj.get_allow_assignment(self):
-                continue
-            casts.append(castobj)
-
-        return frozenset(casts)
-
-    @overload
-    def get_referrers[T: so.Object](
-        self,
-        scls: so.Object,
-        *,
-        scls_type: type[T],
-        field_name: Optional[str] = None,
-    ) -> frozenset[T]:
-        ...
-
-    @overload
-    def get_referrers(
-        self,
-        scls: so.Object,
-        *,
-        scls_type: None = None,
-        field_name: Optional[str] = None,
-    ) -> frozenset[so.Object]:
-        ...
-
     @abc.abstractmethod
-    def get_referrers(
-        self,
-        scls: so.Object,
-        *,
-        scls_type: Optional[type[so.Object]] = None,
-        field_name: Optional[str] = None,
-    ) -> frozenset[so.Object]:
+    def has_object(self, object_id: uuid.UUID) -> bool:
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def get_referrers_ex(
-        self,
-        scls: so.Object,
-        *,
-        scls_type: Optional[type[so.Object_T]] = None,
-    ) -> dict[
-        tuple[type[so.Object_T], str],
-        frozenset[so.Object_T],
-    ]:
-        raise NotImplementedError
+    def has_module(self, name: str) -> bool:
+        return self.get_global(s_mod.Module, name, None) is not None
+
+    def has_migration(self, name: str) -> bool:
+        return self.get_global(s_migrations.Migration, name, None) is not None
 
     @overload
     def get_by_id(
@@ -370,12 +333,6 @@ class Schema(abc.ABC):
             return default
         else:
             Schema.raise_bad_reference(name, type=mcls)
-
-    @abc.abstractmethod
-    def get_by_globalname[T: so.Object](
-        self, mcls: type[T], name: sn.Name,
-    ) -> Optional[T]:
-        raise NotImplementedError
 
     @overload
     def get(
@@ -489,21 +446,6 @@ class Schema(abc.ABC):
             )
 
     @abc.abstractmethod
-    def get_by_shortname[T: so.Object](
-        self,
-        mcls: type[T],
-        shortname: sn.Name,
-    ) -> Optional[tuple[T, ...]]:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def get_by_name(
-        self,
-        name: sn.Name,
-    ) -> Optional[so.Object]:
-        raise NotImplementedError
-
-    @abc.abstractmethod
     def _get_object_ids(self) -> Iterable[uuid.UUID]:
         raise NotImplementedError
 
@@ -512,16 +454,6 @@ class Schema(abc.ABC):
         self
     ) -> Iterable[tuple[type[so.Object], uuid.UUID]]:
         raise NotImplementedError
-
-    @abc.abstractmethod
-    def has_object(self, object_id: uuid.UUID) -> bool:
-        raise NotImplementedError
-
-    def has_module(self, name: str) -> bool:
-        return self.get_global(s_mod.Module, name, None) is not None
-
-    def has_migration(self, name: str) -> bool:
-        return self.get_global(s_migrations.Migration, name, None) is not None
 
     def get_children(
         self,
@@ -580,6 +512,99 @@ class Schema(abc.ABC):
 
     def get_last_migration(self) -> Optional[s_migrations.Migration]:
         return _get_last_migration(self)
+
+    def get_casts_to_type(
+        self,
+        to_type: s_types.Type,
+        *,
+        implicit: bool = False,
+        assignment: bool = False,
+    ) -> frozenset[s_casts.Cast]:
+        return self._get_casts(
+            to_type,
+            disposition='to_type',
+            implicit=implicit,
+            assignment=assignment,
+        )
+
+    def get_casts_from_type(
+        self,
+        from_type: s_types.Type,
+        *,
+        implicit: bool = False,
+        assignment: bool = False,
+    ) -> frozenset[s_casts.Cast]:
+        return self._get_casts(
+            from_type,
+            disposition='from_type',
+            implicit=implicit,
+            assignment=assignment,
+        )
+
+    @lru.lru_method_cache()
+    def _get_casts(
+        self,
+        stype: s_types.Type,
+        *,
+        disposition: str,
+        implicit: bool = False,
+        assignment: bool = False,
+    ) -> frozenset[s_casts.Cast]:
+        all_casts = self.get_referrers(
+            stype, scls_type=s_casts.Cast, field_name=disposition
+        )
+
+        casts = []
+        for castobj in all_casts:
+            if implicit and not castobj.get_allow_implicit(self):
+                continue
+            if assignment and not castobj.get_allow_assignment(self):
+                continue
+            casts.append(castobj)
+
+        return frozenset(casts)
+
+    @overload
+    def get_referrers[T: so.Object](
+        self,
+        scls: so.Object,
+        *,
+        scls_type: type[T],
+        field_name: Optional[str] = None,
+    ) -> frozenset[T]:
+        ...
+
+    @overload
+    def get_referrers(
+        self,
+        scls: so.Object,
+        *,
+        scls_type: None = None,
+        field_name: Optional[str] = None,
+    ) -> frozenset[so.Object]:
+        ...
+
+    @abc.abstractmethod
+    def get_referrers(
+        self,
+        scls: so.Object,
+        *,
+        scls_type: Optional[type[so.Object]] = None,
+        field_name: Optional[str] = None,
+    ) -> frozenset[so.Object]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_referrers_ex(
+        self,
+        scls: so.Object,
+        *,
+        scls_type: Optional[type[so.Object_T]] = None,
+    ) -> dict[
+        tuple[type[so.Object_T], str],
+        frozenset[so.Object_T],
+    ]:
+        raise NotImplementedError
 
     @staticmethod
     def raise_wrong_type(
