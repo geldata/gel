@@ -447,7 +447,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
 
         async with self.assertRaisesRegexTx(
             edgedb.ConfigurationError,
-            "system global 'sys::current_permissions' may not be explicitly"
+            "system global 'sys::current_permissions' may not be explicitly "
             "specified"
         ):
             await self.con.execute(
@@ -638,7 +638,9 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
                 r"got {'sys::current_permissions'}, "
                 r"extra {'sys::current_permissions'}",
             ):
-                await scon.query_single('select global sys::current_permissions')
+                await scon.query_single(
+                    'select global sys::current_permissions'
+                )
         finally:
             await con.aclose()
 
