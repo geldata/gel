@@ -138,7 +138,7 @@ class Schema(abc.ABC):
 
     A bit of terminology:
     - `get_*` methods are for low-level data retrieval,
-    - `fetch` methods are wrappers for `get_` with nicer interface (name
+    - `fetch_*` methods are wrappers for `get_` with nicer interface (name
        parsing, default values, raising exceptions),
     - `lookup` performs name resolution (looking in "current" module, applying
        of module aliases and applying implicit `std::` prefix),
@@ -301,6 +301,47 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @overload
+    def fetch[T: so.Object](
+        self,
+        name: sn.Name | str,
+        default: T | so.NoDefaultT = so.NoDefault,
+        type: Optional[type[T]] = None,
+        span: Optional[parsing.Span] = None
+    ) -> T: ...
+
+    @overload
+    def fetch[T: so.Object](
+        self,
+        name: sn.Name | str,
+        default: None = None,
+        type: Optional[type[T]] = None,
+        span: Optional[parsing.Span] = None
+    ) -> Optional[T]: ...
+
+    def fetch[T: so.Object](
+        self,
+        name: sn.Name | str,
+        default: T | so.NoDefaultT | None = so.NoDefault,
+        type: Optional[type[T]] = None,
+        span: Optional[parsing.Span] = None
+    ) -> Optional[T]:
+        """Retrieve object by name (not global name or short name)"""
+
+        if isinstance(name, str):
+            name = sn.QualName.from_string(name)
+        obj = self.get_by_name(name)
+        if obj is not None:
+            if type is not None:
+                if not isinstance(obj, type):
+                    Schema.raise_wrong_type(name, obj.__class__, type, span)
+            return obj  # type: ignore
+        elif default is not so.NoDefault:
+            return default
+        else:
+            Schema.raise_bad_reference(name, type=type)
+
+    # TODO: rename to fetch_global
+    @overload
     def get_global[T: so.Object](
         self,
         mcls: type[T],
@@ -309,6 +350,7 @@ class Schema(abc.ABC):
     ) -> T:
         ...
 
+    # TODO: rename to fetch_global
     @overload
     def get_global[T: so.Object](
         self,
@@ -318,6 +360,7 @@ class Schema(abc.ABC):
     ) -> Optional[T]:
         ...
 
+    # TODO: rename to fetch_global
     def get_global[T: so.Object](
         self,
         mcls: type[T],
@@ -334,6 +377,7 @@ class Schema(abc.ABC):
         else:
             Schema.raise_bad_reference(name, type=mcls)
 
+    # TODO: rename to lookup
     @overload
     def get(
         self,
@@ -347,6 +391,7 @@ class Schema(abc.ABC):
     ) -> so.Object:
         ...
 
+    # TODO: rename to lookup
     @overload
     def get(
         self,
@@ -360,6 +405,7 @@ class Schema(abc.ABC):
     ) -> Optional[so.Object]:
         ...
 
+    # TODO: rename to lookup
     @overload
     def get[T: so.Object](
         self,
@@ -374,6 +420,7 @@ class Schema(abc.ABC):
     ) -> T:
         ...
 
+    # TODO: rename to lookup
     @overload
     def get[T: so.Object](
         self,
@@ -388,6 +435,7 @@ class Schema(abc.ABC):
     ) -> Optional[T]:
         ...
 
+    # TODO: rename to lookup
     @overload
     def get(
         self,
@@ -402,6 +450,7 @@ class Schema(abc.ABC):
     ) -> Optional[so.Object]:
         ...
 
+    # TODO: rename to lookup
     def get(
         self,
         name: str | sn.Name,
