@@ -37,6 +37,15 @@ Additionally, permissions of current role can be accessed via
 
     select global sys::perm::data_modification;
 
+
+Note that roles are instance-wide object, which means that they exist
+independent of branches and their schemas. This means that role's permissions
+apply to all branches.
+
+
+Superuser roles
+---------------
+
 Roles that are qualified as *superuser* are implicitly granted all permissions.
 
 Some commands are currently limited to *superuser* roles only. These include
