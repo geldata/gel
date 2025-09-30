@@ -5818,6 +5818,8 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
         )
 
     async def test_edgeql_functions_math_exp_01(self):
+        # test math::exp basics
+
         await self.assert_query_result(
             r'''SELECT math::exp(0);''',
             {1.0},
@@ -5844,6 +5846,8 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
         )
 
     async def test_edgeql_functions_math_exp_02(self):
+        # test return type of math::exp
+
         await self.assert_query_result(
             r'''SELECT math::exp(<int64>1) IS float64;''',
             {True},
@@ -5860,6 +5864,8 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
         )
 
     async def test_edgeql_functions_math_exp_03(self):
+        # test math::exp edge cases
+
         await self.assert_query_result(
             r'''SELECT math::exp(-1);''',
             {1 / math.e},
@@ -5872,15 +5878,40 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
             abs_tol=1e-5,
         )
 
-        with self.assertRaises(edgedb.NumericOutOfRangeError):
+        async with self.assertRaisesRegexTx(
+            edgedb.NumericOutOfRangeError, 'value out of range: overflow'
+        ):
             await self.con.query(r'''SELECT math::exp(1000);''')
 
         await self.assert_query_result(
+            r'''SELECT math::exp(<decimal>1000);''',
+            {
+                int(
+                    '1970071114017046993888879352243323125316937985323845789952'
+                    '8029913850638507824411934749780765630268899309638179875202'
+                    '2693598298173054461289923262783660152825232320535169584566'
+                    '7561922715676027880714224668263140068551685086534979416603'
+                    '1604536781793809290529972858013286994585647028653437590045'
+                    '6564355589156220422320260518826112288638358372248724725214'
+                    '5061504188819374941008712642322484363157605603774399306239'
+                    '59705844189509050047074217568'
+                )
+            }
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<decimal>100);''',
+            {math.e ** 100}
+        )
+
+        await self.assert_query_result(
             r'''SELECT math::exp(<float64>'inf');''',
-            {math.inf}
+            {'Infinity'},
+            {math.inf},
         )
         await self.assert_query_result(
             r'''SELECT math::exp(<float64>'nan');''',
+            {'NaN'},
             {math.nan}
         )
 
