@@ -994,3 +994,46 @@ Fixes
 
 * Fix updating of two single links with linkprops at once
   (:eql:gh:`#8932`)
+
+
+6.11
+====
+
+* Fix ``__default__`` when nested statements have defaults, and for link properties
+  (:eql:gh:`#9006`)
+
+* Fix casting to multi-ranges accidentally aggregating
+  (:eql:gh:`#8995`)
+
+* Fix losing overlays when iterating over DML with ``FOR``
+  (:eql:gh:`#8994`)
+
+* Fix some new simple_scoping + inline functions regressions
+  (:eql:gh:`#8987`)
+
+* Fix ``reindex(Obj.ptr)`` with ``future simple_scoping``
+  (:eql:gh:`#8986`)
+
+* Fix some optimizations in simple_scoping mode
+  (:eql:gh:`#8985`)
+
+* Fix referencing a computed pointer in a conversion ``USING`` expression
+  (:eql:gh:`#8981`)
+
+* Fix introspection of ``cfg::AuthMethod.transports``
+  (:eql:gh:`#8971`)
+
+* Improve SQL adapter fallback for ``has_column_privilege``
+  (:eql:gh:`#8962`)
+
+* Fix handling of SQL syntax error over gel protocol
+  (:eql:gh:`#8961`)
+
+* Fix SQL ``COLLATE`` clauses that require quotation
+  (:eql:gh:`#8960`)
+
+* Bump the compatible extension version for pgvector
+  (:eql:gh:`#9028`)
+
+* Fix auth extension email header and alternative content bug
+  (:eql:gh:`#8919`)
