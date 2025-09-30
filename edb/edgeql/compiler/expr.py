@@ -913,25 +913,27 @@ def _infer_type_introspection(
     env: context.Environment,
     span: Optional[parsing.Span]=None,
 ) -> s_types.Type:
-    name: sn.QualName
     if irtyputils.is_scalar(typeref):
-        name = sn.QualName('schema', 'ScalarType')
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::ScalarType'))
     elif irtyputils.is_object(typeref):
-        name = sn.QualName('schema', 'ObjectType')
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::ObjectType'))
     elif irtyputils.is_array(typeref):
-        name = sn.QualName('schema', 'Array')
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::Array'))
     elif irtyputils.is_tuple(typeref):
-        name = sn.QualName('schema', 'Tuple')
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::Tuple'))
     elif irtyputils.is_range(typeref):
-        name = sn.QualName('schema', 'Range')
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::Range'))
     elif irtyputils.is_multirange(typeref):
-        name = sn.QualName('schema', 'MultiRange')
+        return cast(s_objtypes.ObjectType,
+                    env.schema.get('schema::MultiRange'))
     else:
         raise errors.QueryError(
             'unexpected type in INTROSPECT', span=span)
-    obj = env.schema.get_by_name(name)
-    assert isinstance(obj, s_objtypes.ObjectType)
-    return obj
 
 
 @dispatch.compile.register(qlast.Introspect)
@@ -983,14 +985,10 @@ def _infer_index_type(
     node_type = setgen.get_expr_type(expr, ctx=ctx)
     index_type = setgen.get_set_type(index, ctx=ctx)
 
-    str_t = env.schema.get_fully_qualified(sn.Name('std', 'str'))
-    assert isinstance(str_t, s_scalars.ScalarType)
-    bytes_t = env.schema.get_fully_qualified(sn.Name('std', 'bytes'))
-    assert isinstance(bytes_t, s_scalars.ScalarType)
-    int_t = env.schema.get_fully_qualified(sn.Name('std', 'int64'))
-    assert isinstance(int_t, s_scalars.ScalarType)
-    json_t = env.schema.get_fully_qualified(sn.Name('std', 'json'))
-    assert isinstance(json_t, s_scalars.ScalarType)
+    str_t = env.schema.get('std::str', type=s_scalars.ScalarType)
+    bytes_t = env.schema.get('std::bytes', type=s_scalars.ScalarType)
+    int_t = env.schema.get('std::int64', type=s_scalars.ScalarType)
+    json_t = env.schema.get('std::json', type=s_scalars.ScalarType)
 
     result: s_types.Type
 
@@ -1066,14 +1064,10 @@ def _infer_slice_type(
     env = ctx.env
     node_type = setgen.get_set_type(expr, ctx=ctx)
 
-    str_t = env.schema.get_fully_qualified(sn.Name('std', 'str'))
-    assert isinstance(str_t, s_scalars.ScalarType)
-    bytes_t = env.schema.get_fully_qualified(sn.Name('std', 'bytes'))
-    assert isinstance(bytes_t, s_scalars.ScalarType)
-    int_t = env.schema.get_fully_qualified(sn.Name('std', 'int64'))
-    assert isinstance(int_t, s_scalars.ScalarType)
-    json_t = env.schema.get_fully_qualified(sn.Name('std', 'json'))
-    assert isinstance(json_t, s_scalars.ScalarType)
+    str_t = env.schema.get('std::str', type=s_scalars.ScalarType)
+    int_t = env.schema.get('std::int64', type=s_scalars.ScalarType)
+    json_t = env.schema.get('std::json', type=s_scalars.ScalarType)
+    bytes_t = env.schema.get('std::bytes', type=s_scalars.ScalarType)
 
     if node_type.issubclass(env.schema, str_t):
         base_name = 'string'
