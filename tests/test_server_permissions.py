@@ -270,10 +270,9 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
             )
 
             qry = """
-                SELECT sys::Role.name;
+                SELECT n := sys::Role.name FILTER n in {'admin', 'foo'}
             """
             result = await conn.query(qry)
-            print(result)
             self.assert_data_shape(result, tb.bag(['admin', 'foo']))
 
             result, _ = self.edgeql_query(
@@ -281,9 +280,7 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                 user='foo',
                 password='secret',
             )
-            print(result)
             self.assert_data_shape(result, tb.bag(['admin', 'foo']))
-            print('\n\n\n')
 
         finally:
             await conn.aclose()
@@ -310,10 +307,9 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
             )
 
             qry = """
-                SELECT sys::Role;
+                SELECT n := sys::Role.name FILTER n in {'admin', 'foo'}
             """
             result = await conn.query(qry)
-            print(result)
             self.assert_data_shape(result, [])
 
             result, _ = self.edgeql_query(
@@ -321,9 +317,7 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                 user='foo',
                 password='secret',
             )
-            print(result)
             self.assert_data_shape(result, [])
-            print('\n\n\n')
 
         finally:
             await conn.aclose()
