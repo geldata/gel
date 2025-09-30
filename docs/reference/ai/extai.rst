@@ -524,6 +524,8 @@ Example custom prompt configuration:
 Permissions
 ===========
 
+.. _ref_ai_extai_reference_permissions:
+
 .. versionadded:: 7.0
 
 .. list-table::

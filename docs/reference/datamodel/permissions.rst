@@ -101,13 +101,8 @@ Permissions for :ref:`auth <ref_guide_auth>` extension:
 :eql:synopsis:`ext::auth::perm::auth_read_user`
 
 
-Permissions for :ref:`ai <ref_ai_extai_reference>` extension:
-
-:eql:synopsis:`ext::ai::perm::provider_call`
-
-:eql:synopsis:`ext::ai::perm::chat_prompt_read`
-
-:eql:synopsis:`ext::ai::perm::chat_prompt_write`
+Permissions for ``ai`` extension are described
+in :ref:`AI extension reference <ref_ai_extai_reference_permissions>`.
 
 
 Custom permissions
