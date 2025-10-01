@@ -220,7 +220,7 @@ have use super user role, or some other role with ``server_access`` permission:
 
     create role api_server {
         set password := 'strong_password';
-        set permissions := {sys::dml, default::server_access};
+        set permissions := {sys::perm::dml, default::server_access};
     };
 
 
@@ -246,7 +246,7 @@ every object:
 
     type Posts {  # read-only
         ...
-        access polict everyone_can_read allow select using (true);
+        access policy everyone_can_read allow select using (true);
         access policy server_can_do_everything
             allow select, insert, update, delete
             using (global server_access);
