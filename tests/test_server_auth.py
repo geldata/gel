@@ -95,6 +95,14 @@ class TestServerAuth(tb.ConnectedTestCase):
                 database='auth_failure',
             )
 
+        # __edgedbsys__ on a role with a whitelist -- should still work
+        syscon = await self.connect(
+            user='foo',
+            password='foo-pass',
+            database='__edgedbsys__',
+        )
+        await syscon.aclose()
+
         body, code = await self._basic_http_request(
             None, 'foo', 'foo-pass', db='auth_failure')
         self.assertEqual(code, 401, f"Wrong result: {body}")
