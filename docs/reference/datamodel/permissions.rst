@@ -188,7 +188,7 @@ Public readonly database
 
 Gel server can be exposed to public internet, with clients connecting directy
 from browsers. In such scenarios, it is recommended to create a separate role
-that will be used by the JavaScript client (e.g. ``webapp```) and give it
+that will be used by the JavaScript client (e.g. ``webapp``) and give it
 a restricted set of permissions.
 
 For example, if the webapp only needs read access and no data modification,
@@ -269,7 +269,7 @@ every object:
 
 
 Again, we can then use superuser role for server to fully access the database,
-or setup a separate role with ``server_access`` permission.`
+or setup a separate role with ``server_access`` permission.
 
 
 .. list-table::
