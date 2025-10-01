@@ -196,4 +196,33 @@ PATCHES: list[tuple[str, str]] = [
         SET default := <array<str>>[];
     };
     '''),
+    # For #8982
+    ('edgeql+schema', '''
+    CREATE FUNCTION
+    std::math::exp(x: std::int64) -> std::float64
+    {
+        CREATE ANNOTATION std::description :=
+            'Return the exponential of the input value.';
+        SET volatility := 'Immutable';
+        USING SQL FUNCTION 'exp';
+    };
+
+    CREATE FUNCTION
+    std::math::exp(x: std::float64) -> std::float64
+    {
+        CREATE ANNOTATION std::description :=
+            'Return the exponential of the input value.';
+        SET volatility := 'Immutable';
+        USING SQL FUNCTION 'exp';
+    };
+
+    CREATE FUNCTION
+    std::math::exp(x: std::decimal) -> std::decimal
+    {
+        CREATE ANNOTATION std::description :=
+            'Return the exponential of the input value.';
+        SET volatility := 'Immutable';
+        USING SQL FUNCTION 'exp';
+    };
+    '''),
 ]
