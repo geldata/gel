@@ -231,7 +231,7 @@ A similar example to the previous one is a public database, with a JavaScript
 client that need write access to some object types.
 
 In such scenarios, it is recommended to create a separate role for it
-(e.g. ``webapp``) and assign it ``sys::ddl`` permission.
+(e.g. ``webapp``) and assign it ``sys::perm::ddl`` permission.
 
 Such role will be able to connect to the database, read all data and modify
 all types. For obvious reasons, this is undesirable, since client credentials
