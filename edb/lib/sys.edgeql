@@ -474,6 +474,10 @@ CREATE REQUIRED GLOBAL sys::current_role -> str {
     SET default := '';
 };
 
+CREATE REQUIRED GLOBAL sys::current_permissions -> array<str> {
+    SET default := <array<str>>[];
+};
+
 # Add permissions to schema and std.
 
 # These modules are populated before sys permissions so we need to

@@ -190,4 +190,10 @@ PATCHES: list[tuple[str, str]] = [
         );
     };
     '''),
+    # For #9054
+    ('edgeql+schema', '''
+    CREATE REQUIRED GLOBAL sys::current_permissions -> array<str> {
+        SET default := <array<str>>[];
+    };
+    '''),
 ]

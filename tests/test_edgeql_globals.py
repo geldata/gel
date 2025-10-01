@@ -447,6 +447,17 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
 
         async with self.assertRaisesRegexTx(
             edgedb.ConfigurationError,
+            "system global 'sys::current_permissions' may not be explicitly "
+            "specified"
+        ):
+            await self.con.execute(
+                '''
+                set global sys::current_permissions := ['yay!']
+                ''',
+            )
+
+        async with self.assertRaisesRegexTx(
+            edgedb.ConfigurationError,
             "global 'def_cur_user_excited' is computed from an expression "
             "and cannot be modified",
         ):
@@ -610,6 +621,26 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
                 r"extra {'sys::current_role'}",
             ):
                 await scon.query_single('select global sys::current_role')
+        finally:
+            await con.aclose()
+
+    async def test_edgeql_globals_client_06(self):
+        con = edgedb.create_async_client(
+            **self.get_connect_args()
+        )
+        try:
+            globs = {
+                'sys::current_permissions': ['lol']
+            }
+            scon = con.with_globals(**globs)
+            with self.assertRaisesRegex(
+                edgedb.QueryArgumentError,
+                r"got {'sys::current_permissions'}, "
+                r"extra {'sys::current_permissions'}",
+            ):
+                await scon.query_single(
+                    'select global sys::current_permissions'
+                )
         finally:
             await con.aclose()
 
