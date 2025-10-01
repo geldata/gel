@@ -179,6 +179,99 @@ insert new log entries. But reading is allowed only to roles that posses
 ``data_export`` permission (or are qualified as a *superuser*).
 
 
+Common patterns
+===============
+
+
+Public readonly database
+------------------------
+
+Gel server can be exposed to public internet, with clients connecting directy
+from browsers. In such scenarios, it is recommended to create a separate role
+that will be used by the JavaScript client (e.g. ``webapp```) and give it
+a restricted set of permissions.
+
+For example, if the webapp only needs read access and no data modification,
+it doesn't need any permissions set. This way, it will not be able to issue
+``DROP TYPE`` or ``DELETE`` commands, but will be able to read all data in the
+database.
+
+If we want to limit that access further, for example read access to type
+``Secrets``, we can use this schema:
+
+.. code-block:: sdl
+
+    permission server_access;
+
+    type Secret {
+        ...
+
+        access policy all_access
+            allow select, insert, update, delete
+            using (global server_access);
+    };
+
+
+Now, ``webapp`` will not possess permission ``server_access``, which is
+required to read or modify ``Secret``. To be able to use the ``Secrets``, we
+have use super user role, or some other role with ``server_access`` permission:
+
+.. code-block:: edgeql
+
+    create role api_server {
+        set password := 'strong_password';
+        set permissions := {sys::dml, default::server_access};
+    };
+
+
+Public partially writable database
+----------------------------------
+
+A similar example to the previous one is a public database, with a JavaScript
+client that need write access to some object types.
+
+In such scenarios, it is recommended to create a separate role for it
+(e.g. ``webapp``) and assign it ``sys::ddl`` permission.
+
+Such role will be able to connect to the database, read all data and modify
+all types. For obvious reasons, this is undesirable, since client credentials
+could be extracted and used to delete all data in the database.
+
+To further limit access, the access policies must be used on
+every object:
+
+.. code-block:: sdl
+
+    permission server_access;
+
+    type Posts {  # read-only
+        ...
+        access polict everyone_can_read allow select using (true);
+        access policy server_can_do_everything
+            allow select, insert, update, delete
+            using (global server_access);
+    }
+
+    type Events {  # insert-only
+        ...
+        access policy everyone_can_insert allow insert using (true);
+        access policy server_can_do_everything
+            allow select, insert, update, delete
+            using (global server_access);
+    }
+
+    type Secrets {  # no access
+        ...
+        access policy server_can_do_everything
+            allow select, insert, update, delete
+            using (global server_access);
+    };
+
+
+Again, we can then use superuser role for server to fully access the database,
+or setup a separate role with ``server_access`` permission.`
+
+
 .. list-table::
   :class: seealso
 
