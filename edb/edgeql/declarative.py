@@ -673,7 +673,7 @@ def _trace_item_layout(
             target_expr: Optional[qlast.Expr]
             if isinstance(decl.target, qlast.TypeExpr):
                 target = _resolve_type_expr(decl.target, ctx=ctx)
-                target_expr = None
+                target_expr = _get_expr_field(decl)
             else:
                 target = None
                 target_expr = decl.target
@@ -868,11 +868,8 @@ def trace_ConcreteConstraint(
     if node.except_expr:
         exprs.append(ExprDependency(expr=node.except_expr))
 
-    for cmd in node.commands:
-        if isinstance(cmd, qlast.SetField) and cmd.name == "expr":
-            assert cmd.value, "sdl SetField should always have value"
-            assert isinstance(cmd.value, qlast.Expr)
-            exprs.append(ExprDependency(expr=cmd.value))
+    if (expr := _get_expr_field(node)):
+        exprs.append(ExprDependency(expr=expr))
 
     loop_control: Optional[s_name.QualName]
     if isinstance(ctx.depstack[-1][0], qlast.AlterScalarType):
@@ -1006,6 +1003,9 @@ def trace_ConcretePointer(
         raise AssertionError(
             f'unexpected CreateConcretePointer.target: {node.target!r}')
 
+    if (target_expr := _get_expr_field(node)):
+        deps.append(ExprDependency(expr=target_expr))
+
     _register_item(
         node,
         hard_dep_exprs=deps,
@@ -1022,12 +1022,8 @@ def trace_Alias(
 ) -> None:
     hard_dep_exprs = []
 
-    for cmd in node.commands:
-        if isinstance(cmd, qlast.SetField) and cmd.name == "expr":
-            assert cmd.value, "sdl SetField should always have value"
-            assert isinstance(cmd.value, qlast.Expr)
-            hard_dep_exprs.append(ExprDependency(expr=cmd.value))
-            break
+    if (expr := _get_expr_field(node)):
+        hard_dep_exprs.append(ExprDependency(expr=expr))
 
     _register_item(node, hard_dep_exprs=hard_dep_exprs, ctx=ctx)
 
@@ -1681,3 +1677,12 @@ def _resolve_schema_ref(
             span=span,
         )
         raise
+
+
+def _get_expr_field(decl: qlast.DDLOperation) -> Optional[qlast.Expr]:
+    for cmd in decl.commands:
+        if isinstance(cmd, qlast.SetField) and cmd.name == "expr":
+            assert cmd.value, "sdl SetField should always have value"
+            assert isinstance(cmd.value, qlast.Expr)
+            return cmd.value
+    return None
