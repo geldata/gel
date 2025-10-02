@@ -187,17 +187,20 @@ Public readonly database
 ------------------------
 
 Gel server can be exposed to public internet, with clients connecting directy
-from browsers. In such scenarios, it is recommended to create a separate role
-that will be used by the JavaScript client (e.g. ``webapp``) and give it
-a restricted set of permissions.
+from browsers. Let's assume that only want to grant read access to the public
+browser client.
 
-For example, if the webapp only needs read access and no data modification,
-it doesn't need any permissions set. This way, it will not be able to issue
-``DROP TYPE`` or ``DELETE`` commands, but will be able to read all data in the
-database.
+In such scenarios, it is recommended to create a separate role
+that will be used by the JavaScript client (e.g. ``webapp``) and not grant it
+any permissions.
 
-If we want to limit that access further, for example read access to type
-``Secrets``, we can use this schema:
+This way, it will not be able to issue ``DROP TYPE`` or ``DELETE`` commands,
+but will be able to read all data in the database. More importantly, it will
+not be able to configure ``apply_access_policies`` to ``false`` to bypass
+our restrictions.
+
+If we want to limit that access further, for example limit read access to type
+``Secrets``, we can use such schema:
 
 .. code-block:: sdl
 
@@ -210,9 +213,10 @@ If we want to limit that access further, for example read access to type
     };
 
 
-Now, ``webapp`` will not possess permission ``server_access``, which is
-required to read or modify ``Secret``. To be able to use the ``Secrets``, we
-have use super user role, or some other role with ``server_access`` permission:
+Because ``webapp`` role will not possess permission ``server_access`` it will
+not be able to read (or modify) ``Secret``. For other, trusted clients, which
+should be able to access ``Secrets``, we have use *superuser* role, or some
+other role with ``server_access`` permission:
 
 .. code-block:: edgeql
 
@@ -226,7 +230,7 @@ Public partially writable database
 ----------------------------------
 
 A similar example to the previous one is a public database, with a JavaScript
-client that need write access to some object types.
+client that needs write access to some, but not all, object types.
 
 In such scenarios, it is recommended to create a separate role for it
 (e.g. ``webapp``) and assign it ``sys::perm::ddl`` permission.
@@ -265,6 +269,26 @@ every object:
 
 Again, we can then use superuser role for server to fully access the database,
 or setup a separate role with ``server_access`` permission.
+
+
+Restricting branches
+--------------------
+
+To control access by branches instead of by object type, we can use
+``Role.branches`` setting.
+
+For example, let's assume we have an instance with ``staging`` and ``prod``
+branches. We want the role ``dev`` to have full access to ``staging``, but not
+``prod``.
+
+.. code-block:: edgeql
+
+    create role dev {
+        set password := 'strong_password';
+        set branches := {'staging'};
+    };
+
+For more about this, see :ref:`Roles <ref_admin_roles>`. 
 
 
 .. list-table::
