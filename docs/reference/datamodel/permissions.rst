@@ -204,8 +204,6 @@ If we want to limit that access further, for example read access to type
     permission server_access;
 
     type Secret {
-        ...
-
         access policy all_access
             allow select, insert, update, delete
             using (global server_access);
@@ -245,7 +243,6 @@ every object:
     permission server_access;
 
     type Posts {  # read-only
-        ...
         access policy everyone_can_read allow select using (true);
         access policy server_can_do_everything
             allow select, insert, update, delete
@@ -253,7 +250,6 @@ every object:
     }
 
     type Events {  # insert-only
-        ...
         access policy everyone_can_insert allow insert using (true);
         access policy server_can_do_everything
             allow select, insert, update, delete
@@ -261,7 +257,6 @@ every object:
     }
 
     type Secrets {  # no access
-        ...
         access policy server_can_do_everything
             allow select, insert, update, delete
             using (global server_access);

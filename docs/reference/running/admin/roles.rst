@@ -66,6 +66,12 @@ The following subcommands are allowed in the ``create role`` block:
         Note that permission names are not validated and it is possible to
         reference a permission that does not yet exist in any schema.
 
+    :eql:synopsis:`set branches := <branches>`
+        Set of branches that this role is allowed to access. When connecting
+        to instance branch that is not in this set, connection will be refused.
+        If set to ``*``, this branch can connect to all branches of the
+        instance. Defaults to ``**``.
+
 
 Examples
 --------
@@ -84,6 +90,7 @@ Create a new role:
           ext::auth::perm::auth_read,
           ext::auth::perm::auth_write,
       };
+      set branches := {'main', 'staging'};
     };
 
 
@@ -154,6 +161,12 @@ The following subcommands are allowed in the ``alter role`` block:
         Note that permission names are not validated and it is possible to
         reference a permission that does not yet exist in the schema.
 
+    :eql:synopsis:`set branches := <branches>`
+        Set of branches that this role is allowed to access. When connecting
+        to instance branch that is not in this set, connection will be refused.
+        If set to ``*``, this branch can connect to all branches of the
+        instance. Defaults to ``**``.
+
 
 Examples
 --------
@@ -164,6 +177,7 @@ Alter a role:
 
     alter role alice {
         set password := 'new password';
+        set branches := {'*'};
     };
 
 
