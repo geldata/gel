@@ -627,9 +627,17 @@ def resolve_FuncCall(
     # Effectively, this exposes all non-remapped functions.
     name = func_calls_remapping.get(call.name, call.name)
 
+    args = dispatch.resolve_list(call.args, ctx=ctx)
+
+    # If arg is a param, add type annotations, so function can be resolved.
+    # For example, `json_build_object($1, $2)` must be injected with annotations
+    args = [
+        maybe_annotate_param(a, ctx=ctx) for a in args
+    ]
+
     res = pgast.FuncCall(
         name=name,
-        args=dispatch.resolve_list(call.args, ctx=ctx),
+        args=args,
         agg_order=dispatch.resolve_opt_list(call.agg_order, ctx=ctx),
         agg_filter=dispatch.resolve_opt(call.agg_filter, ctx=ctx),
         agg_star=call.agg_star,

@@ -1445,6 +1445,30 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             '''
         )
 
+    async def test_sql_query_60(self):
+        await self.squery_values(
+            "SELECT json_build_object('hello', TRUE)"
+        )
+        with self.assertRaisesRegex(
+            asyncpg.exceptions.IndeterminateDatatypeError,
+            'could not determine data type of parameter \\$1',
+        ):
+            await self.squery_values(
+                "SELECT 'a', json_build_object($1, TRUE)", 'hello'
+            )
+
+    async def test_sql_query_61(self):
+        await self.squery_values(
+            "SELECT ROW('hello')"
+        )
+        with self.assertRaisesRegex(
+            asyncpg.exceptions.IndeterminateDatatypeError,
+            'could not determine data type of parameter \\$1',
+        ):
+            await self.squery_values(
+                "SELECT 'a', ROW($1)", 'hello'
+            )
+
     async def test_sql_query_introspection_00(self):
         dbname = self.con.dbname
         res = await self.squery_values(
