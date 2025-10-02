@@ -26,7 +26,7 @@ pub fn normalize(py: Python<'_>, text: &Bound<PyString>) -> PyResult<Entry> {
             py.None(),
         ))),
         Err(Error::Assertion(msg, pos)) => {
-            Err(PyAssertionError::new_err(format!("{}: {}", pos, msg)))
+            Err(PyAssertionError::new_err(format!("{pos}: {msg}")))
         }
     }
 }
@@ -112,38 +112,38 @@ pub fn serialize_extra(variables: &[Variable]) -> Result<Bytes, String> {
             Value::Int(v) => {
                 codec::Int64
                     .encode(&mut buf, &P::Int64(v))
-                    .map_err(|e| format!("int cannot be encoded: {}", e))?;
+                    .map_err(|e| format!("int cannot be encoded: {e}"))?;
             }
             Value::String(ref v) => {
                 codec::Str
                     .encode(&mut buf, &P::Str(v.clone()))
-                    .map_err(|e| format!("str cannot be encoded: {}", e))?;
+                    .map_err(|e| format!("str cannot be encoded: {e}"))?;
             }
             Value::Float(ref v) => {
                 codec::Float64
                     .encode(&mut buf, &P::Float64(*v))
-                    .map_err(|e| format!("float cannot be encoded: {}", e))?;
+                    .map_err(|e| format!("float cannot be encoded: {e}"))?;
             }
             Value::BigInt(ref v) => {
                 // We have two different versions of BigInt implementations here.
                 // We have to use bigdecimal::num_bigint::BigInt because it can parse with radix 16.
 
                 let val = bigdecimal::num_bigint::BigInt::from_str_radix(v, 16)
-                    .map_err(|e| format!("bigint cannot be encoded: {}", e))
+                    .map_err(|e| format!("bigint cannot be encoded: {e}"))
                     .and_then(|x| {
-                        BigInt::try_from(x).map_err(|e| format!("bigint cannot be encoded: {}", e))
+                        BigInt::try_from(x).map_err(|e| format!("bigint cannot be encoded: {e}"))
                     })?;
 
                 codec::BigInt
                     .encode(&mut buf, &P::BigInt(val))
-                    .map_err(|e| format!("bigint cannot be encoded: {}", e))?;
+                    .map_err(|e| format!("bigint cannot be encoded: {e}"))?;
             }
             Value::Decimal(ref v) => {
                 let val = Decimal::try_from(v.clone())
-                    .map_err(|e| format!("decimal cannot be encoded: {}", e))?;
+                    .map_err(|e| format!("decimal cannot be encoded: {e}"))?;
                 codec::Decimal
                     .encode(&mut buf, &P::Decimal(val))
-                    .map_err(|e| format!("decimal cannot be encoded: {}", e))?;
+                    .map_err(|e| format!("decimal cannot be encoded: {e}"))?;
             }
             Value::Bytes(_) => {
                 // bytes literals should not be extracted during normalization

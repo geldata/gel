@@ -4,7 +4,7 @@ fn test_statement(data: &[u8], len: usize) {
     for i in 0..len - 1 {
         let c = full_statement(&data[..i], None).unwrap_err();
         let parsed_len = full_statement(data, Some(c)).unwrap();
-        assert_eq!(len, parsed_len, "at {}", i);
+        assert_eq!(len, parsed_len, "at {i}");
     }
     for i in len..data.len() {
         let parsed_len = full_statement(&data[..i], None).unwrap();

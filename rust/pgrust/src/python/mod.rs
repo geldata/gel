@@ -226,7 +226,7 @@ impl PyConnectionParams {
             let Some(value) = value else {
                 continue;
             };
-            repr.push_str(&format!(" {}={}", field_name, value));
+            repr.push_str(&format!(" {field_name}={value}"));
         }
         if let Some(server_settings) = &self.inner.server_settings {
             repr.push_str(&format!(" server_settings={server_settings:?}"));
@@ -399,7 +399,7 @@ impl ConnectionStateSend for PyConnectionStateUpdate {
         Python::attach(|py| {
             let bytes = PyByteArray::new(py, &message.to_vec());
             if let Err(e) = self.py_update.call_method1(py, "send", (bytes,)) {
-                eprintln!("Error in send_initial: {:?}", e);
+                eprintln!("Error in send_initial: {e:?}");
                 e.print(py);
             }
         });
@@ -410,7 +410,7 @@ impl ConnectionStateSend for PyConnectionStateUpdate {
         Python::attach(|py| {
             let bytes = PyBytes::new(py, &message.to_vec());
             if let Err(e) = self.py_update.call_method1(py, "send", (bytes,)) {
-                eprintln!("Error in send: {:?}", e);
+                eprintln!("Error in send: {e:?}");
                 e.print(py);
             }
         });
@@ -420,7 +420,7 @@ impl ConnectionStateSend for PyConnectionStateUpdate {
     fn upgrade(&mut self) -> Result<(), std::io::Error> {
         Python::attach(|py| {
             if let Err(e) = self.py_update.call_method0(py, "upgrade") {
-                eprintln!("Error in upgrade: {:?}", e);
+                eprintln!("Error in upgrade: {e:?}");
                 e.print(py);
             }
         });
@@ -432,7 +432,7 @@ impl ConnectionStateUpdate for PyConnectionStateUpdate {
     fn parameter(&mut self, name: &str, value: &str) {
         Python::attach(|py| {
             if let Err(e) = self.py_update.call_method1(py, "parameter", (name, value)) {
-                eprintln!("Error in parameter: {:?}", e);
+                eprintln!("Error in parameter: {e:?}");
                 e.print(py);
             }
         });
@@ -444,7 +444,7 @@ impl ConnectionStateUpdate for PyConnectionStateUpdate {
                 .py_update
                 .call_method1(py, "cancellation_key", (pid, key))
             {
-                eprintln!("Error in cancellation_key: {:?}", e);
+                eprintln!("Error in cancellation_key: {e:?}");
                 e.print(py);
             }
         });
@@ -456,7 +456,7 @@ impl ConnectionStateUpdate for PyConnectionStateUpdate {
                 .py_update
                 .call_method1(py, "state_changed", (state as u8,))
             {
-                eprintln!("Error in state_changed: {:?}", e);
+                eprintln!("Error in state_changed: {e:?}");
                 e.print(py);
             }
         });
@@ -465,7 +465,7 @@ impl ConnectionStateUpdate for PyConnectionStateUpdate {
     fn auth(&mut self, auth: gel_auth::AuthType) {
         Python::attach(|py| {
             if let Err(e) = self.py_update.call_method1(py, "auth", (auth as u8,)) {
-                eprintln!("Error in auth: {:?}", e);
+                eprintln!("Error in auth: {e:?}");
                 e.print(py);
             }
         });
@@ -484,7 +484,7 @@ impl ConnectionStateUpdate for PyConnectionStateUpdate {
                 fields.push((etype, message));
             }
             if let Err(e) = self.py_update.call_method1(py, "server_error", (fields,)) {
-                eprintln!("Error in server_error: {:?}", e);
+                eprintln!("Error in server_error: {e:?}");
                 e.print(py);
             }
         });

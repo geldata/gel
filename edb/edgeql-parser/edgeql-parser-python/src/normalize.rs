@@ -91,9 +91,9 @@ pub fn normalize(text: &str) -> Result<Entry, Error> {
         let n = counter;
         counter += 1;
         if named_args {
-            format!("$__edb_arg_{}", n)
+            format!("$__edb_arg_{n}")
         } else {
-            format!("${}", n)
+            format!("${n}")
         }
     };
     let mut last_was_set = false;

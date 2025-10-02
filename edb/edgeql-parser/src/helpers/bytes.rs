@@ -4,7 +4,7 @@ pub fn unquote_bytes(value: &str) -> Result<Vec<u8>, String> {
         .ok_or_else(|| "invalid bytes literal: missing quotes".to_string())?;
     let prefix = &value[..idx];
     match prefix {
-        "br" | "rb" => Ok(value[3..value.len() - 1].as_bytes().to_vec()),
+        "br" | "rb" => Ok(value.as_bytes()[3..value.len() - 1].to_vec()),
         "b" => Ok(unquote_bytes_inner(&value[2..value.len() - 1])?),
         _ => Err(
             format_args!("prefix {prefix:?} is not allowed for bytes, allowed: `b`, `rb`",)

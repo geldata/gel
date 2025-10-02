@@ -283,7 +283,7 @@ mod tests {
         let mut cache_items = CacheItems::<()>::new(NonZero::new(100).unwrap(), 1024 * 1024);
         for i in 0..120 {
             cache_items.insert(
-                Uri::from_str(&format!("https://www.example.com/{}", i)).unwrap(),
+                Uri::from_str(&format!("https://www.example.com/{i}")).unwrap(),
                 (),
                 vec![0; 10].into(),
             );
