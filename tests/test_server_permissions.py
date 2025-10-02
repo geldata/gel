@@ -975,6 +975,7 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
             await self.con.query('''
                 DROP TYPE Widget;
                 DROP ROLE foo;
+                DROP PERMISSION data_export;
             ''')
 
     async def test_server_permissions_admin_01(self):
