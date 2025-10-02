@@ -42,15 +42,8 @@ Note that roles are instance-wide object, which means that they exist
 independent of branches and their schemas. This means that role's permissions
 apply to all branches.
 
-
-Superuser roles
----------------
-
-Roles that are qualified as *superuser* are implicitly granted all permissions.
-
-Some commands are currently limited to *superuser* roles only. These include
-commands to manage branches, extensions and roles.
-
+Roles that are qualified as *superuser* are implicitly granted
+:ref:`all permissions<_ref_datamodel_permissions_superuser>`.
 
 Built-in permissions
 ====================
@@ -289,6 +282,32 @@ branches. We want the role ``dev`` to have full access to ``staging``, but not
     };
 
 For more about this, see :ref:`Roles <ref_admin_roles>`. 
+
+
+Superuser permissions
+=====================
+
+.. _ref_datamodel_permissions_superuser:
+
+Roles with *superuser* status are exempt from permission checks and have full
+access over the instance.
+
+This includes some commands that are not covered by any permission and are thus
+allowed *only* to *superuser* roles.
+
+These commands include:
+
+:eql:synopsis:`ROLE` commands
+
+:eql:synopsis:`BRANCH` commands
+
+:eql:synopsis:`EXTENSION PACKAGE` commands
+
+:eql:synopsis:`CONFIGURE INSTANCE` command
+
+:eql:synopsis:`DESCRIBE` command
+
+:eql:synopsis:`ADMINISTER` command
 
 
 .. list-table::

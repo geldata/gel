@@ -34,7 +34,8 @@ The command ``create role`` defines a new database role.
 
 :eql:synopsis:`superuser`
     If specified, the created role will have the *superuser* status, and
-    will be exempt from all permission checks.
+    will be exempt from
+    :ref:`all permission checks<_ref_datamodel_permissions_superuser>`.
 
     Prior to version 7.0, ``superuser`` qualifier was mandatory, i.e. it was not
     possible to create non-superuser roles.
