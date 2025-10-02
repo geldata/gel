@@ -25,9 +25,7 @@ pub fn normalize(py: Python<'_>, text: &Bound<PyString>) -> PyResult<Entry> {
             py.None(),
             py.None(),
         ))),
-        Err(Error::Assertion(msg, pos)) => {
-            Err(PyAssertionError::new_err(format!("{pos}: {msg}")))
-        }
+        Err(Error::Assertion(msg, pos)) => Err(PyAssertionError::new_err(format!("{pos}: {msg}"))),
     }
 }
 
