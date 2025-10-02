@@ -966,6 +966,10 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                     CREATE EMPTY BRANCH bar
                 """)
 
+            await conn.execute("""
+                CREATE PERMISSION data_export;
+            """)
+
         finally:
             await conn.aclose()
             await self.con.query('''
