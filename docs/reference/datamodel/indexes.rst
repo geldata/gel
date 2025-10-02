@@ -189,7 +189,7 @@ Concurrent index building
 When creating an index, the object type will be locked for writes. This means
 that until the index is created, all ``insert``, ``update`` and ``delete``
 queries will be put on hold.
-On types containing many objects, this can span minutes or ever hours.
+On types containing many objects, this can span minutes or even hours.
 
 Instead, index building can be deferred from migration application to a later
 time. To do this, set ``build_concurrently`` index property to ``true``:
@@ -199,7 +199,7 @@ time. To do this, set ``build_concurrently`` index property to ``true``:
    type User {
      name: str;
      index on (.name) {
-	   build_concurrently := true;
+       build_concurrently := true;
      };
    }
 
@@ -207,21 +207,22 @@ When this schema in applied to an instance, the index will be created, but it
 will not yet be active. The migration will not attempt to read any objects to
 build the index.
 
-As the last step of ``gel migration apply`` (and ``gel migrate``), index will
-actually be built. During this time, the object type will not be locked for
-reads or writes.
+As the last step of :gelcmd:`migration apply` (and :gelcmd:`migrate`), index
+will actually be built. During this time, the object type will not be locked
+for reads or writes.
 
 This means that migration will lock for significantly less time and allow index
 the be created while new writes are applied to the database.
 
-If you want to skip index building as a part of ``gel migration apply``,
-use ``--no-index-build`` flag. This allows index building to be triggered at a
-later time, via using ``gel migration apply`` again.`
+To apply migrations, but not build indexes at all, use
+:gelcmd:`migration apply --no-index-build` flag.
+This allows index building to be triggered at a later time,
+by using :gelcmd:`migration apply` again.
 
-Until the index is created, it will not be used to speedup queries.
+Until the index is created, it will not be used to speed up queries.
 
 For tradeoffs of concurrent index building, refer to
-`PostgreSQL documentation <https://www.postgresql.org/docs/current/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY>`.
+`PostgreSQL documentation <https://www.postgresql.org/docs/current/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY>`_.
 
 
 Annotate an index

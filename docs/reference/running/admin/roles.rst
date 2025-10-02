@@ -35,7 +35,7 @@ The command ``create role`` defines a new database role.
 :eql:synopsis:`superuser`
     If specified, the created role will have the *superuser* status, and
     will be exempt from
-    :ref:`all permission checks<_ref_datamodel_permissions_superuser>`.
+    :ref:`all permission checks<ref_datamodel_permissions_superuser>`.
 
     Prior to version 7.0, ``superuser`` qualifier was mandatory, i.e. it was not
     possible to create non-superuser roles.
@@ -68,10 +68,12 @@ The following subcommands are allowed in the ``create role`` block:
         reference a permission that does not yet exist in any schema.
 
     :eql:synopsis:`set branches := <branches>`
-        Set of branches that this role is allowed to access. When connecting
-        to instance branch that is not in this set, connection will be refused.
-        If set to ``*``, this branch can connect to all branches of the
-        instance. Defaults to ``**``.
+        Configure a set of branches that this role is allowed to access.
+        When connecting to instance branch that is not in this set, connection
+        will be refused.
+
+        If set to ``'*'``, this branch can connect to all branches of the
+        instance. Defaults to ``'*'``.
 
 
 Examples
@@ -163,10 +165,12 @@ The following subcommands are allowed in the ``alter role`` block:
         reference a permission that does not yet exist in the schema.
 
     :eql:synopsis:`set branches := <branches>`
-        Set of branches that this role is allowed to access. When connecting
-        to instance branch that is not in this set, connection will be refused.
-        If set to ``*``, this branch can connect to all branches of the
-        instance. Defaults to ``**``.
+        Configure a set of branches that this role is allowed to access.
+        When connecting to instance branch that is not in this set, connection
+        will be refused.
+
+        If set to ``'*'``, this branch can connect to all branches of the
+        instance. Defaults to ``'*'``.
 
 
 Examples

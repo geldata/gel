@@ -43,7 +43,7 @@ independent of branches and their schemas. This means that role's permissions
 apply to all branches.
 
 Roles that are qualified as *superuser* are implicitly granted
-:ref:`all permissions<_ref_datamodel_permissions_superuser>`.
+:ref:`all permissions<ref_datamodel_permissions_superuser>`.
 
 Built-in permissions
 ====================
@@ -297,17 +297,17 @@ allowed *only* to *superuser* roles.
 
 These commands include:
 
-:eql:synopsis:`ROLE` commands
+* :eql:synopsis:`ROLE` commands
 
-:eql:synopsis:`BRANCH` commands
+* :eql:synopsis:`BRANCH` commands
 
-:eql:synopsis:`EXTENSION PACKAGE` commands
+* :eql:synopsis:`EXTENSION PACKAGE` commands
 
-:eql:synopsis:`CONFIGURE INSTANCE` command
+* :eql:synopsis:`CONFIGURE INSTANCE` command
 
-:eql:synopsis:`DESCRIBE` command
+* :eql:synopsis:`DESCRIBE` command
 
-:eql:synopsis:`ADMINISTER` command
+* :eql:synopsis:`ADMINISTER` command
 
 
 .. list-table::
