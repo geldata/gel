@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Optional, Sequence
 
 from edb.edgeql import ast as qlast
+from edb.ir import ast as irast
 
 from edb import errors
 from edb.schema import name as sn
@@ -35,7 +36,6 @@ from . import polyres
 from . import schemactx
 from . import setgen
 from . import pathctx
-from edb.ir import ast as irast
 from edb.ir import typeutils as irtyputils
 
 
@@ -115,8 +115,7 @@ def compile_orderby_clause(
                 exprctx.path_scope.unnest_fence = True
                 ir_sortexpr = dispatch.compile(sortexpr.path, ctx=exprctx)
                 ir_sortexpr = setgen.scoped_set(
-                    ir_sortexpr, force_reassign=True, ctx=exprctx
-                )
+                    ir_sortexpr, force_reassign=True, ctx=exprctx)
                 ir_sortexpr.span = sortexpr.span
 
                 # Check that the sortexpr type is actually orderable
@@ -131,8 +130,7 @@ def compile_orderby_clause(
                 else:
                     op_name = '<'
                 opers = env.schema.get_operators(
-                    op_name, module_aliases=exprctx.modaliases
-                )
+                    op_name, module_aliases=exprctx.modaliases)
 
                 # Verify that a comparison operator is defined for 2
                 # sort_type expressions.
@@ -140,8 +138,7 @@ def compile_orderby_clause(
                     opers,
                     args=[(sort_type, ir_sortexpr), (sort_type, ir_sortexpr)],
                     kwargs={},
-                    ctx=exprctx,
-                )
+                    ctx=exprctx)
                 if len(matched) != 1:
                     sort_type_name = schemactx.get_material_type(
                         sort_type, ctx=ctx
@@ -149,8 +146,8 @@ def compile_orderby_clause(
                     if len(matched) == 0:
                         raise errors.QueryError(
                             f'type {sort_type_name!r} cannot be used in '
-                            f'ORDER BY clause because ordering is '
-                            f'ambiguous for it',
+                            f'ORDER BY clause because ordering is not '
+                            f'defined for it',
                             span=sortexpr.span,
                         )
                     elif len(matched) > 1:
@@ -179,9 +176,7 @@ def compile_orderby_clause(
                 irast.SortExpr(
                     expr=ir_sortexpr,
                     direction=sortexpr.direction,
-                    nones_order=sortexpr.nones_order,
-                )
-            )
+                    nones_order=sortexpr.nones_order))
 
     return result
 
@@ -200,11 +195,9 @@ def compile_limit_offset_clause(
 
             ir_expr = dispatch.compile(expr, ctx=subctx)
             int_t = ctx.env.get_schema_type_and_track(
-                sn.QualName('std', 'int64')
-            )
+                sn.QualName('std', 'int64'))
             ir_set = setgen.scoped_set(
-                ir_expr, force_reassign=True, typehint=int_t, ctx=subctx
-            )
+                ir_expr, force_reassign=True, typehint=int_t, ctx=subctx)
             ir_set.span = expr.span
 
     return ir_set
