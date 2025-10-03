@@ -30,7 +30,6 @@ from edb.ir import ast as irast
 from edb.ir import typeutils as irtyputils
 from edb.ir import utils as irutils
 
-from edb.schema import abc as s_abc
 from edb.schema import name as s_name
 from edb.schema import objtypes as s_objtypes
 from edb.schema import pointers as s_pointers
@@ -84,7 +83,7 @@ def infer_common_type(
             continue
 
         t = env.set_types[arg]
-        if isinstance(t, s_abc.Collection):
+        if isinstance(t, s_types.Collection):
             seen_coll = True
         elif isinstance(t, s_scalars.ScalarType):
             seen_scalar = True
@@ -263,7 +262,7 @@ def _ql_typename_to_type(
         coll = s_types.Collection.get_class(ql_t.maintype.name)
         ct: s_types.Type
 
-        if issubclass(coll, s_abc.Tuple):
+        if issubclass(coll, s_types.Tuple):
             t_subtypes = {}
             named = False
             for si, st in enumerate(ql_t.subtypes):

@@ -147,7 +147,7 @@ def param_is_inherited(
     return qualname != param_name.name
 
 
-class ParameterLike(s_abc.Parameter):
+class ParameterLike:
 
     def get_parameter_name(self, schema: s_schema.Schema) -> str:
         raise NotImplementedError
@@ -361,6 +361,7 @@ def make_func_param(
 class Parameter(
     so.ObjectFragment,
     so.Object,  # Help reflection figure out the right db MRO
+    s_abc.Parameter,
     ParameterLike,
     qlkind=ft.SchemaObjectClass.PARAMETER,
     data_safe=True,

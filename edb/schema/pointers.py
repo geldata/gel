@@ -27,6 +27,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
+import abc
 import collections.abc
 import enum
 import json
@@ -300,15 +301,15 @@ def _merge_types(
 
     # When two pointers are merged, check target compatibility
     # and return a target that satisfies both specified targets.
-    elif (isinstance(t1, s_abc.ScalarType) !=
-            isinstance(t2, s_abc.ScalarType)):
+    elif (isinstance(t1, s_types.ScalarType) !=
+            isinstance(t2, s_types.ScalarType)):
         # Mixing a property with a link.
         vnp = ptr.get_verbosename(schema, with_parent=True)
         vn = ptr.get_verbosename(schema)
         t1_vn = t1.get_verbosename(schema)
         t2_vn = t2.get_verbosename(schema)
-        t1_cls = 'property' if isinstance(t1, s_abc.ScalarType) else 'link'
-        t2_cls = 'property' if isinstance(t2, s_abc.ScalarType) else 'link'
+        t1_cls = 'property' if isinstance(t1, s_types.ScalarType) else 'link'
+        t2_cls = 'property' if isinstance(t2, s_types.ScalarType) else 'link'
 
         t1_source_vn = t1_source.get_verbosename(schema, with_parent=True)
         if t2_source is None:
@@ -1013,7 +1014,7 @@ class Pointer(referencing.NamedReferencedInheritingObject,
         return None
 
 
-class PseudoPointer(s_abc.Pointer):
+class PseudoPointer(abc.ABC):
     # An abstract base class for pointer-like objects, i.e.
     # pseudo-links used by the compiler to represent things like
     # tuple and type intersection.
@@ -1029,6 +1030,7 @@ class PseudoPointer(s_abc.Pointer):
     def get_ancestors(self, schema: s_schema.Schema) -> so.ObjectList[Pointer]:
         return so.ObjectList.create(schema, [])
 
+    @abc.abstractmethod
     def get_name(self, schema: s_schema.Schema) -> sn.QualName:
         raise NotImplementedError
 
@@ -1044,6 +1046,7 @@ class PseudoPointer(s_abc.Pointer):
     def get_required(self, schema: s_schema.Schema) -> bool:
         return True
 
+    @abc.abstractmethod
     def get_cardinality(
         self, schema: s_schema.Schema
     ) -> qltypes.SchemaCardinality:
@@ -1079,9 +1082,11 @@ class PseudoPointer(s_abc.Pointer):
     def get_expr(self, schema: s_schema.Schema) -> Optional[s_expr.Expression]:
         return None
 
+    @abc.abstractmethod
     def get_source(self, schema: s_schema.Schema) -> so.Object:
         raise NotImplementedError
 
+    @abc.abstractmethod
     def get_target(self, schema: s_schema.Schema) -> s_types.Type:
         raise NotImplementedError
 
@@ -1115,6 +1120,7 @@ class PseudoPointer(s_abc.Pointer):
     def is_non_concrete(self, schema: s_schema.Schema) -> bool:
         return False
 
+    @abc.abstractmethod
     def singular(
         self,
         schema: s_schema.Schema,
