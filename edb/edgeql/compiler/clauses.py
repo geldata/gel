@@ -148,15 +148,13 @@ def compile_orderby_clause(
                             f'type {sort_type_name!r} cannot be used in '
                             f'ORDER BY clause because ordering is not '
                             f'defined for it',
-                            span=sortexpr.span,
-                        )
+                            span=sortexpr.span)
                     elif len(matched) > 1:
                         raise errors.QueryError(
                             f'type {sort_type_name!r} cannot be used in '
                             f'ORDER BY clause because ordering is '
                             f'ambiguous for it',
-                            span=sortexpr.span,
-                        )
+                            span=sortexpr.span)
 
             # If ordering by the builtin id pointer without specifying
             # EMPTY FIRST/LAST, emit a performance hint.
@@ -168,8 +166,7 @@ def compile_orderby_clause(
                             "Consider adding 'empty last' to the ORDER BY, "
                             "for example: ORDER BY .id EMPTY LAST"
                         ),
-                        span=sortexpr.span,
-                    )
+                        span=sortexpr.span)
                 )
 
             result.append(
