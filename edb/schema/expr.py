@@ -41,7 +41,6 @@ from edb.edgeql import compiler as qlcompiler
 from edb.edgeql import parser as qlparser
 from edb.edgeql import qltypes
 
-from . import abc as s_abc
 from . import objects as so
 from . import name as sn
 from . import delta as sd
@@ -54,7 +53,7 @@ if TYPE_CHECKING:
     from edb.ir import ast as irast_
 
 
-class Expression(struct.MixedRTStruct, so.ObjectContainer, s_abc.Expression):
+class Expression(struct.MixedRTStruct, so.ObjectContainer):
 
     text = struct.Field(str, frozen=True)
     # mypy wants an argument to the ObjectSet generic, but

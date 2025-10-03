@@ -48,7 +48,6 @@ from edb.edgeql import parser as qlparser
 from edb.edgeql import qltypes
 from edb.common import uuidgen
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import delta as sd
 from . import expr as s_expr
@@ -361,7 +360,6 @@ def make_func_param(
 class Parameter(
     so.ObjectFragment,
     so.Object,  # Help reflection figure out the right db MRO
-    s_abc.Parameter,
     ParameterLike,
     qlkind=ft.SchemaObjectClass.PARAMETER,
     data_safe=True,
@@ -1247,7 +1245,6 @@ class DeleteCallableObject(
 class Function(
     CallableObject,
     VolatilitySubject,
-    s_abc.Function,
     qlkind=ft.SchemaObjectClass.FUNCTION,
     data_safe=True,
 ):

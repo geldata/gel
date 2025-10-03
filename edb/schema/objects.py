@@ -1043,7 +1043,7 @@ class FieldValueNotFoundError(Exception):
     pass
 
 
-class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
+class Object(ObjectContainer, metaclass=ObjectMeta):
     """Base schema item class."""
 
     __slots__ = ('id',)

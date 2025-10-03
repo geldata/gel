@@ -21,10 +21,6 @@ from __future__ import annotations
 import typing
 
 
-class Schema:
-    pass
-
-
 class Reducible:
     """An interface implemented by all non-builtin objects stored in schema."""
 
@@ -42,87 +38,3 @@ class Reducible:
     ) -> Reducible:
         """Restore object from data returned by *schema_reduce*."""
         raise NotImplementedError
-
-
-class Object:
-    pass
-
-
-class Branch(Object):
-    pass
-
-
-class Migration(Object):
-    pass
-
-
-class Constraint(Object):
-    pass
-
-
-class Callable(Object):
-    pass
-
-
-class Function(Callable):
-    pass
-
-
-class Operator(Callable):
-    pass
-
-
-class Cast(Callable):
-    pass
-
-
-class Parameter(Object):
-    pass
-
-
-class Type(Object):
-    pass
-
-
-class ScalarType(Type):
-    pass
-
-
-class ObjectType(Type):
-    pass
-
-
-class Collection(Type):
-    pass
-
-
-class Tuple(Collection):
-    pass
-
-
-class Array(Collection):
-    pass
-
-
-class Range(Collection):
-    pass
-
-
-class MultiRange(Collection):
-    pass
-
-
-class Pointer(Object):
-    pass
-
-
-class Property(Pointer):
-    pass
-
-
-class Link(Pointer):
-    pass
-
-
-class Expression:
-    pass

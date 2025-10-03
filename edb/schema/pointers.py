@@ -47,7 +47,6 @@ from edb.edgeql import compiler as qlcompiler
 from edb.edgeql import qltypes
 from edb.edgeql import quote as qlquote
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import constraints
 from . import delta as sd
@@ -418,10 +417,11 @@ def _get_target_name_in_diff(
         return not_none(target).get_name(schema)
 
 
-class Pointer(referencing.NamedReferencedInheritingObject,
-              constraints.ConsistencySubject,
-              s_anno.AnnotationSubject,
-              s_abc.Pointer):
+class Pointer(
+    referencing.NamedReferencedInheritingObject,
+    constraints.ConsistencySubject,
+    s_anno.AnnotationSubject,
+):
 
     source = so.SchemaField(
         so.InheritingObject,

@@ -26,7 +26,6 @@ from edb.common import checked
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes as ft
 
-from . import abc as s_abc
 from . import delta as sd
 from . import functions as s_func
 from . import name as sn
@@ -40,7 +39,6 @@ if TYPE_CHECKING:
 class Operator(
     s_func.CallableObject,
     s_func.VolatilitySubject,
-    s_abc.Operator,
     qlkind=ft.SchemaObjectClass.OPERATOR,
     data_safe=True,
 ):

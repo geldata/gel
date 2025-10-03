@@ -26,7 +26,6 @@ from edb.edgeql import qltypes
 
 from edb import errors
 
-from . import abc as s_abc
 from . import constraints
 from . import delta as sd
 from . import inheriting
@@ -107,7 +106,6 @@ def merge_actions(
 class Link(
     s_sources.Source,
     pointers.Pointer,
-    s_abc.Link,
     qlkind=qltypes.SchemaObjectClass.LINK,
     data_safe=False,
 ):

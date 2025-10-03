@@ -26,7 +26,6 @@ from edb.common import lru
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import delta as sd
 from . import functions as s_func
@@ -208,7 +207,6 @@ class Cast(
     so.QualifiedObject,
     s_anno.AnnotationSubject,
     s_func.VolatilitySubject,
-    s_abc.Cast,
     qlkind=qltypes.SchemaObjectClass.CAST,
     data_safe=True,
 ):
