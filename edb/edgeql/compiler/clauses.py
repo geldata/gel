@@ -58,7 +58,20 @@ def _is_sort_on_id(ir_sortexpr: irast.Set, sortexpr: qlast.SortExpr) -> bool:
             if pid_rptr is not None:
                 ptrref = pid_rptr
 
-    return bool(ptrref is not None and irtyputils.is_id_ptrref(ptrref))
+    if ptrref is not None and irtyputils.is_id_ptrref(ptrref):
+        return True
+
+    # Syntactic fallback: if the original qlast path ends with `.id`.
+    steps = getattr(getattr(sortexpr, 'path', None), 'steps', None)
+    if steps:
+        last = steps[-1]
+        name = getattr(last, 'ptr', None) or getattr(last, 'name', None)
+        if hasattr(name, 'name'):
+            name = name.name
+        if isinstance(name, str) and name == 'id':
+            return True
+
+    return False
 
 
 def compile_where_clause(

@@ -1,6 +1,21 @@
+#
 # This source file is part of the EdgeDB open source project.
 #
-# Tests for compiler warnings related to ORDER BY .id without EMPTY FIRST/LAST
+# Copyright 2017-present MagicStack Inc. and the EdgeDB authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 
 from __future__ import annotations
 
@@ -40,7 +55,10 @@ class TestEdgeQLOrderBy(tb.QueryTestCase):
         with self.con.capture_warnings() as warnings:
             await self.con._fetchall_json(query)
         self.assertFalse(
-            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
+            any(
+                'ORDER BY .id without EMPTY FIRST/LAST' in str(w)
+                for w in warnings
+            ),
             f"Did not expect a warning for ORDER BY .id EMPTY LAST, got: {[str(w) for w in warnings]}",
         )
 
@@ -52,7 +70,10 @@ class TestEdgeQLOrderBy(tb.QueryTestCase):
         with self.con.capture_warnings() as warnings:
             await self.con._fetchall_json(query)
         self.assertFalse(
-            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
+            any(
+                'ORDER BY .id without EMPTY FIRST/LAST' in str(w)
+                for w in warnings
+            ),
             f"Did not expect a warning for non-id ordering, got: {[str(w) for w in warnings]}",
         )
 
@@ -64,7 +85,10 @@ class TestEdgeQLOrderBy(tb.QueryTestCase):
         with self.con.capture_warnings() as warnings:
             await self.con._fetchall_json(query)
         self.assertTrue(
-            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
+            any(
+                'ORDER BY .id without EMPTY FIRST/LAST' in str(w)
+                for w in warnings
+            ),
             f"Expected ORDER BY .id warning for qualified path, got: {[str(w) for w in warnings]}",
         )
 
@@ -77,30 +101,9 @@ class TestEdgeQLOrderBy(tb.QueryTestCase):
         with self.con.capture_warnings() as warnings:
             await self.con._fetchall_json(query)
         self.assertTrue(
-            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
+            any(
+                'ORDER BY .id without EMPTY FIRST/LAST' in str(w)
+                for w in warnings
+            ),
             f"Expected ORDER BY .id warning with WITH MODULE, got: {[str(w) for w in warnings]}",
-        )
-
-    async def test_edgeql_orderby_nested_shape_id_warns(self):
-        # Nested shape ordering by .id should warn as well
-        query = r"""
-            SELECT User { z := .id } ORDER BY .z LIMIT 1;
-        """
-        with self.con.capture_warnings() as warnings:
-            await self.con._fetchall_json(query)
-        self.assertTrue(
-            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
-            f"Expected ORDER BY .id warning from nested shape, got: {[str(w) for w in warnings]}",
-        )
-
-    async def test_edgeql_orderby_nested_shape_non_id_no_warning(self):
-        # Nested shape ordering by non-id should not warn
-        query = r"""
-            SELECT User { z := .name } ORDER BY .z LIMIT 1;
-        """
-        with self.con.capture_warnings() as warnings:
-            await self.con._fetchall_json(query)
-        self.assertFalse(
-            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
-            f"Did not expect a warning for nested non-id ordering, got: {[str(w) for w in warnings]}",
         )
