@@ -210,7 +210,6 @@ def resolve_column_kind(
         case context.ColumnPgExpr(expr=e):
             return e
         case context.ColumnComputable(pointer=pointer):
-
             expr = pointer.get_expr(ctx.schema)
             assert expr
 
@@ -266,7 +265,7 @@ def resolve_column_kind(
                 external_rvars={
                     (subject_id, pgce.PathAspect.SOURCE): subject_rel_var,
                     (subject_id, pgce.PathAspect.VALUE): subject_rel_var,
-                    (source_id, pgce.PathAspect.IDENTITY): subject_rel_var
+                    (source_id, pgce.PathAspect.IDENTITY): subject_rel_var,
                 },
                 output_format=pgcompiler.OutputFormat.NATIVE_INTERNAL,
                 alias_generator=ctx.alias_generator,
@@ -491,7 +490,6 @@ def resolve_TypeCast(
     *,
     ctx: Context,
 ) -> pgast.BaseExpr:
-
     pg_catalog_name = static.name_in_pg_catalog(expr.type_name.name)
     if pg_catalog_name == 'regclass' and not expr.type_name.array_bounds:
         return static.cast_to_regclass(expr.arg, ctx)
@@ -555,7 +553,6 @@ def resolve_LockingClause(
     *,
     ctx: Context,
 ) -> pgast.LockingClause:
-
     tables: list[context.Table] = []
     if expr.locked_rels is not None:
         for rvar in expr.locked_rels:
@@ -611,6 +608,8 @@ func_calls_remapping: dict[tuple[str, ...], tuple[str, ...]] = {
     ),
 }
 
+funcs_with_text_args: set[str] = {'json_build_object'}
+
 
 @dispatch._resolve.register
 def resolve_FuncCall(
@@ -631,8 +630,11 @@ def resolve_FuncCall(
 
     # If arg is a param, add type annotations, so function can be resolved.
     # For example, `json_build_object($1, $2)` must be injected with annotations
+    # See maybe_annotate_param for more info
+    name_in_pg = static.name_in_pg_catalog(call.name)
+    unknown_as = 'text' if name_in_pg in funcs_with_text_args else 'unknown'
     args = [
-        maybe_annotate_param(a, ctx=ctx) for a in args
+        maybe_annotate_param(a, unknown_as=unknown_as, ctx=ctx) for a in args
     ]
 
     res = pgast.FuncCall(
@@ -726,12 +728,23 @@ def construct_row_expr(
 ) -> pgast.RowExpr:
     # Constructs a ROW and maybe injects type casts for params.
 
-    return pgast.RowExpr(args=[maybe_annotate_param(a, ctx=ctx) for a in args])
+    return pgast.RowExpr(
+        args=[maybe_annotate_param(a, unknown_as='text', ctx=ctx) for a in args]
+    )
 
 
-def maybe_annotate_param(expr: pgast.BaseExpr, *, ctx: Context):
-    # If the expression is a param whose type is `unknown` we inject a type cast
-    # saying it is actually text.
+def maybe_annotate_param(
+    expr: pgast.BaseExpr,
+    *,
+    unknown_as: str = 'unknown',
+    ctx: Context,
+):
+    # If the expression is a param whose type is `unknown`, we need to inject a
+    # type cast that passes this information to Postgres.
+    # Ideally, we could inject type `unknown`, but that would not work for some
+    # cases, such as ROW('hello') or json_build_object('hello', TRUE).
+    # So for special cases, where string literals are known to represent text,
+    # we inject text and otherwise, we inject unknown.
 
     if isinstance(expr, pgast.ParamRef):
         param = ctx.query_params[expr.number - 1]
@@ -740,7 +753,7 @@ def maybe_annotate_param(expr: pgast.BaseExpr, *, ctx: Context):
             and param.type_oid == pg_parser.PgLiteralTypeOID.UNKNOWN
         ):
             return pgast.TypeCast(
-                arg=expr, type_name=pgast.TypeName(name=('text',))
+                arg=expr, type_name=pgast.TypeName(name=(unknown_as,))
             )
     return expr
 
