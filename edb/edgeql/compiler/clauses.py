@@ -36,6 +36,42 @@ from . import polyres
 from . import schemactx
 from . import setgen
 from . import pathctx
+from edb.ir import typeutils as irtyputils
+
+
+def _is_sort_on_id(ir_sortexpr: irast.Set, sortexpr: qlast.SortExpr) -> bool:
+    """Return True if the sort expression is ordering by the builtin .id.
+
+    Uses IR-level detection only:
+    - direct pointer in ir_sortexpr.expr
+    - path-id rptr fallback via ir_sortexpr.path_id
+    """
+    # Direct IR expr pointer
+    rptr = getattr(ir_sortexpr, 'expr', None)
+    ptrref = rptr.ptrref if isinstance(rptr, irast.Pointer) else None
+
+    # IR path-id rptr fallback
+    if ptrref is None:
+        pid = getattr(ir_sortexpr, 'path_id', None)
+        if pid is not None:
+            pid_rptr = pid.rptr()
+            if pid_rptr is not None:
+                ptrref = pid_rptr
+
+    if ptrref is not None and irtyputils.is_id_ptrref(ptrref):
+        return True
+
+    # Syntactic fallback: if the original qlast path ends with `.id`.
+    steps = getattr(getattr(sortexpr, 'path', None), 'steps', None)
+    if steps:
+        last = steps[-1]
+        name = getattr(last, 'ptr', None) or getattr(last, 'name', None)
+        if hasattr(name, 'name'):
+            name = name.name
+        if isinstance(name, str) and name == 'id':
+            return True
+
+    return False
 
 
 def compile_where_clause(
@@ -105,20 +141,36 @@ def compile_orderby_clause(
                     ctx=exprctx)
                 if len(matched) != 1:
                     sort_type_name = schemactx.get_material_type(
-                        sort_type, ctx=ctx).get_displayname(env.schema)
+                        sort_type, ctx=ctx
+                    ).get_displayname(env.schema)
                     if len(matched) == 0:
                         raise errors.QueryError(
                             f'type {sort_type_name!r} cannot be used in '
                             f'ORDER BY clause because ordering is not '
                             f'defined for it',
-                            span=sortexpr.span)
-
+                            span=sortexpr.span,
+                        )
                     elif len(matched) > 1:
                         raise errors.QueryError(
                             f'type {sort_type_name!r} cannot be used in '
                             f'ORDER BY clause because ordering is '
                             f'ambiguous for it',
-                            span=sortexpr.span)
+                            span=sortexpr.span,
+                        )
+
+            # If ordering by the builtin id pointer without specifying
+            # EMPTY FIRST/LAST, emit a performance hint.
+            if sortexpr.nones_order is None and _is_sort_on_id(ir_sortexpr, sortexpr):
+                ctx.log_warning(
+                    errors.QueryError(
+                        'ORDER BY .id without EMPTY FIRST/LAST may be slow',
+                        hint=(
+                            "Consider adding 'empty last' to the ORDER BY, "
+                            "for example: ORDER BY .id EMPTY LAST"
+                        ),
+                        span=sortexpr.span,
+                    )
+                )
 
             result.append(
                 irast.SortExpr(
