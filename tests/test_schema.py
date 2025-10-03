@@ -2703,6 +2703,32 @@ class TestSchema(tb.BaseSchemaLoadTest):
             }
         """
 
+    def test_schema_computed_06(self):
+        """
+            global some_user := ((
+              select User limit 1
+            ));
+
+            type User {
+              required foo: bool;
+
+              # Bug
+              required computed_bug: bool {
+                using (
+                  .foo
+                );
+              }
+
+              # These work
+              required computed_working_1 := .foo;  # Non-extended form
+              required computed_working_2 { # No explicit type
+                using (
+                  .foo
+                );
+              }
+            }
+        """
+
     def test_schema_alias_01(self):
         """
             type User {
