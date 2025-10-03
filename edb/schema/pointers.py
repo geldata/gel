@@ -60,6 +60,7 @@ from . import referencing
 from . import rewrites as s_rewrites
 from . import schema as s_schema
 from . import types as s_types
+from . import scalars as s_scalars
 from . import utils
 
 
@@ -300,15 +301,15 @@ def _merge_types(
 
     # When two pointers are merged, check target compatibility
     # and return a target that satisfies both specified targets.
-    elif (isinstance(t1, s_types.ScalarType) !=
-            isinstance(t2, s_types.ScalarType)):
+    elif (isinstance(t1, s_scalars.ScalarType) !=
+            isinstance(t2, s_scalars.ScalarType)):
         # Mixing a property with a link.
         vnp = ptr.get_verbosename(schema, with_parent=True)
         vn = ptr.get_verbosename(schema)
         t1_vn = t1.get_verbosename(schema)
         t2_vn = t2.get_verbosename(schema)
-        t1_cls = 'property' if isinstance(t1, s_types.ScalarType) else 'link'
-        t2_cls = 'property' if isinstance(t2, s_types.ScalarType) else 'link'
+        t1_cls = 'property' if isinstance(t1, s_scalars.ScalarType) else 'link'
+        t2_cls = 'property' if isinstance(t2, s_scalars.ScalarType) else 'link'
 
         t1_source_vn = t1_source.get_verbosename(schema, with_parent=True)
         if t2_source is None:
