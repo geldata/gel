@@ -301,8 +301,9 @@ def _merge_types(
 
     # When two pointers are merged, check target compatibility
     # and return a target that satisfies both specified targets.
-    elif (isinstance(t1, s_scalars.ScalarType) !=
-            isinstance(t2, s_scalars.ScalarType)):
+    elif isinstance(t1, s_scalars.ScalarType) != isinstance(
+        t2, s_scalars.ScalarType
+    ):
         # Mixing a property with a link.
         vnp = ptr.get_verbosename(schema, with_parent=True)
         vn = ptr.get_verbosename(schema)
