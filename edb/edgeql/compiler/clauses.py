@@ -25,7 +25,6 @@ from __future__ import annotations
 from typing import Optional, Sequence
 
 from edb.edgeql import ast as qlast
-from edb.ir import ast as irast
 
 from edb import errors
 from edb.schema import name as sn
@@ -36,6 +35,8 @@ from . import polyres
 from . import schemactx
 from . import setgen
 from . import pathctx
+from edb.ir import ast as irast
+from edb.ir import typeutils as irtyputils
 
 
 def compile_where_clause(
@@ -119,6 +120,30 @@ def compile_orderby_clause(
                             f'ORDER BY clause because ordering is '
                             f'ambiguous for it',
                             span=sortexpr.span)
+
+            # If ordering directly by the builtin id pointer without
+            # specifying how to place empty values, emit a performance hint.
+            # We only warn when no explicit EMPTY FIRST/LAST was given.
+            try:
+                rptr = getattr(ir_sortexpr, 'expr', None)
+                if (
+                    isinstance(rptr, irast.Pointer)
+                    and irtyputils.is_id_ptrref(rptr.ptrref)
+                    and sortexpr.nones_order is None
+                ):
+                    ctx.log_warning(
+                        errors.QueryError(
+                            'ORDER BY .id without EMPTY FIRST/LAST may be slow',
+                            hint=(
+                                "Consider adding 'empty last' to the ORDER BY, "
+                                "for example: ORDER BY .id EMPTY LAST"
+                            ),
+                            span=sortexpr.span,
+                        )
+                    )
+            except Exception:
+                # Best-effort warning; ignore any unexpected structure.
+                pass
 
             result.append(
                 irast.SortExpr(
