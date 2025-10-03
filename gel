@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Wrapper to ensure the test harness finds the venv Gel CLI
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$DIR/.venv/bin/gel" "$@"

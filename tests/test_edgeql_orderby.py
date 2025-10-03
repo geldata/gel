@@ -4,10 +4,17 @@
 
 from __future__ import annotations
 
-from edb.testbase.server import ConnectedTestCase
+import os
+from edb.testbase import server as tb
 
 
-class TestEdgeQLOrderBy(ConnectedTestCase):
+class TestEdgeQLOrderBy(tb.QueryTestCase):
+
+    # Use the standard cards test schema so `User` exists.
+    SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas', 'cards.esdl')
+    SETUP = os.path.join(
+        os.path.dirname(__file__), 'schemas', 'cards_setup.edgeql'
+    )
 
     async def test_edgeql_orderby_id_warns_without_empty(self):
         # Ordering by .id with no EMPTY FIRST/LAST should emit a warning
