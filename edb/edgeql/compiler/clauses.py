@@ -141,14 +141,14 @@ def compile_orderby_clause(
                     ctx=exprctx)
                 if len(matched) != 1:
                     sort_type_name = schemactx.get_material_type(
-                        sort_type, ctx=ctx
-                    ).get_displayname(env.schema)
+                        sort_type, ctx=ctx).get_displayname(env.schema)
                     if len(matched) == 0:
                         raise errors.QueryError(
                             f'type {sort_type_name!r} cannot be used in '
                             f'ORDER BY clause because ordering is not '
                             f'defined for it',
                             span=sortexpr.span)
+
                     elif len(matched) > 1:
                         raise errors.QueryError(
                             f'type {sort_type_name!r} cannot be used in '
