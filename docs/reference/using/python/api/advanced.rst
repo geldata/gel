@@ -37,6 +37,11 @@ Transactions can be customized with different options:
 
         Repeatable read isolation level (supported in read-only transactions)
 
+    .. py:attribute:: PreferRepeatableRead
+
+        Uses repeatable read isolation level if server analysis concludes that it is supported for a given query.
+        Otherwise, uses serializable isolation level.
+
 :py:class:`TransactionOptions` can be set on :py:class:`~gel.Client` or :py:class:`~gel.AsyncIOClient` using one of these methods:
 
 * :py:meth:`gel.Client.with_transaction_options`
