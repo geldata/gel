@@ -42,9 +42,11 @@ from edb.ir import typeutils as irtyputils
 def _is_sort_on_id(ir_sortexpr: irast.Set, sortexpr: qlast.SortExpr) -> bool:
     """Return True if the sort expression is ordering by the builtin .id.
 
-    Uses IR-level detection only:
+    Primarily uses IR-level detection:
     - direct pointer in ir_sortexpr.expr
     - path-id rptr fallback via ir_sortexpr.path_id
+    Also includes a minimal syntactic fallback: if the qlast path's terminal
+    step is literally `id`.
     """
     # Direct IR expr pointer
     rptr = getattr(ir_sortexpr, 'expr', None)
