@@ -23,14 +23,13 @@ class TestEdgeQLOrderBy(tb.QueryTestCase):
         """
         with self.con.capture_warnings() as warnings:
             await self.con._fetchall_json(query)
-        # Expect at least one warning mentioning ORDER BY .id and suggesting
-        # adding EMPTY LAST
+        # Expect at least one warning message about ORDER BY .id without EMPTY
         self.assertTrue(
             any(
-                ('ORDER BY .id' in str(w) and 'empty last' in (w.hint or '').lower())
+                'ORDER BY .id without EMPTY FIRST/LAST' in str(w)
                 for w in warnings
             ),
-            f"Expected ORDER BY .id empty-last warning, got: {[str(w) for w in warnings]}",
+            f"Expected ORDER BY .id warning, got: {[str(w) for w in warnings]}",
         )
 
     async def test_edgeql_orderby_id_empty_last_no_warning(self):
@@ -41,7 +40,7 @@ class TestEdgeQLOrderBy(tb.QueryTestCase):
         with self.con.capture_warnings() as warnings:
             await self.con._fetchall_json(query)
         self.assertFalse(
-            any('ORDER BY .id' in str(w) for w in warnings),
+            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
             f"Did not expect a warning for ORDER BY .id EMPTY LAST, got: {[str(w) for w in warnings]}",
         )
 
@@ -53,6 +52,55 @@ class TestEdgeQLOrderBy(tb.QueryTestCase):
         with self.con.capture_warnings() as warnings:
             await self.con._fetchall_json(query)
         self.assertFalse(
-            any('ORDER BY .id' in str(w) for w in warnings),
+            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
             f"Did not expect a warning for non-id ordering, got: {[str(w) for w in warnings]}",
+        )
+
+    async def test_edgeql_orderby_user_id_warns(self):
+        # Qualified path to id should also warn
+        query = r"""
+            SELECT User ORDER BY User.id LIMIT 1;
+        """
+        with self.con.capture_warnings() as warnings:
+            await self.con._fetchall_json(query)
+        self.assertTrue(
+            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
+            f"Expected ORDER BY .id warning for qualified path, got: {[str(w) for w in warnings]}",
+        )
+
+    async def test_edgeql_orderby_with_module_id_warns(self):
+        # Using WITH module default and qualified id
+        query = r"""
+            WITH MODULE default
+            SELECT User ORDER BY User.id LIMIT 1;
+        """
+        with self.con.capture_warnings() as warnings:
+            await self.con._fetchall_json(query)
+        self.assertTrue(
+            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
+            f"Expected ORDER BY .id warning with WITH MODULE, got: {[str(w) for w in warnings]}",
+        )
+
+    async def test_edgeql_orderby_nested_shape_id_warns(self):
+        # Nested shape ordering by .id should warn as well
+        query = r"""
+            SELECT User { z := .id } ORDER BY .z LIMIT 1;
+        """
+        with self.con.capture_warnings() as warnings:
+            await self.con._fetchall_json(query)
+        self.assertTrue(
+            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
+            f"Expected ORDER BY .id warning from nested shape, got: {[str(w) for w in warnings]}",
+        )
+
+    async def test_edgeql_orderby_nested_shape_non_id_no_warning(self):
+        # Nested shape ordering by non-id should not warn
+        query = r"""
+            SELECT User { z := .name } ORDER BY .z LIMIT 1;
+        """
+        with self.con.capture_warnings() as warnings:
+            await self.con._fetchall_json(query)
+        self.assertFalse(
+            any('ORDER BY .id without EMPTY FIRST/LAST' in str(w) for w in warnings),
+            f"Did not expect a warning for nested non-id ordering, got: {[str(w) for w in warnings]}",
         )
