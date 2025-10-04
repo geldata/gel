@@ -88,23 +88,9 @@ Performance analysis statement:
     cardinality
     volatility
 
-    select
-    insert
     update
-    delete
     for
     group
     with
-    analyze
-
-    tx_start
-    tx_commit
-    tx_rollback
-    tx_sp_declare
-    tx_sp_release
-    tx_sp_rollback
-
-    sess_set_alias
-    sess_reset_alias
 
     describe

@@ -3,10 +3,14 @@
 Insert
 ======
 
+:eql-statement:
+:eql-haswith:
+
 .. api-index:: insert, :=
 
-The ``insert`` command is used to create instances of object types. The code
-samples on this page assume the following schema:
+``insert`` -- create a new object in a database
+
+The code samples on this page assume the following schema:
 
 .. code-block:: sdl
 
@@ -271,6 +275,7 @@ can reference earlier ones.
 
 
 .. _ref_eql_insert_conflicts:
+.. _ref_eql_statements_insert_unless:
 
 Conflicts
 ---------
@@ -453,9 +458,120 @@ using a :ref:`for loop <ref_eql_for>` to insert the objects.
   }
 
 
+.. _ref_eql_statements_insert:
+
+EdgeQL Syntax
+-------------
+
+.. eql:synopsis::
+
+    [ with <with-spec> [ ,  ... ] ]
+    insert <expression> [ <insert-shape> ]
+    [ unless conflict
+        [ on <property-expr> [ else <alternative> ] ]
+    ] ;
+
+
+Overview
+^^^^^^^^
+
+When evaluating an ``insert`` statement, *expression* is used solely to
+determine the *type* of the inserted object and is not evaluated in any
+other way.
+
+If a value for a *required* link is evaluated to an empty set, an error is
+raised.
+
+It is possible to insert multiple objects by putting the ``insert``
+into a :eql:stmt:`for` statement.
+
+See :ref:`ref_eql_forstatement` for more details.
+
+:eql:synopsis:`with`
+    Alias declarations.
+
+    The ``with`` clause allows specifying module aliases as well
+    as expression aliases that can be referenced by the :eql:stmt:`update`
+    statement.  See :ref:`ref_eql_statements_with` for more information.
+
+:eql:synopsis:`<expression>`
+    An arbitrary expression returning a set of objects to be updated.
+
+    .. eql:synopsis::
+
+        insert <expression>
+        [ "{" <link> := <insert-value-expr> [, ...]  "}" ]
+
+.. _ref_eql_statements_conflict:
+
+:eql:synopsis:`unless conflict [ on <property-expr> ]`
+    :index: unless conflict
+
+    Handler of conflicts.
+
+    This clause allows to handle specific conflicts arising during
+    execution of ``insert`` without producing an error.  If the
+    conflict arises due to exclusive constraints on the properties
+    specified by *property-expr*, then instead of failing with an
+    error the ``insert`` statement produces an empty set (or an
+    alternative result).
+
+    The exclusive constraint on ``<property-expr>`` cannot be defined on a
+    parent type.
+
+    The specified *property-expr* may be either a reference to a property (or
+    link) or a tuple of references to properties (or links).
+
+    A caveat, however, is that ``unless conflict`` will not prevent
+    conflicts caused between multiple DML operations in the same
+    query; inserting two conflicting objects (through use of ``for``
+    or simply with two ``insert`` statements) will cause a constraint
+    error.
+
+    Example:
+
+    .. code-block:: edgeql
+
+        insert User { email := 'user@example.org' }
+        unless conflict on .email
+
+    .. code-block:: edgeql
+
+        insert User { first := 'Jason', last := 'Momoa' }
+        unless conflict on (.first, .last)
+
+:eql:synopsis:`else <alternative>`
+    Alternative result in case of conflict.
+
+    This clause can only appear after ``unless conflict`` clause. Any
+    valid expression can be specified as the *alternative*. When a
+    conflict arises, the result of the ``insert`` becomes the
+    *alternative* expression (instead of the default ``{}``).
+
+    In order to refer to the conflicting object in the *alternative*
+    expression, the name used in the ``insert`` must be used (see
+    the :ref:`example <ref_eql_statements_insert_unless>`.)
+
+Output
+^^^^^^
+
+The result of an ``insert`` statement used as an *expression* is a
+singleton set containing the inserted object.
+
+
+.. note::
+
+    Statements in EdgeQL represent an atomic interaction with the
+    database. From the point of view of a statement all side-effects
+    (such as database updates) happen after the statement is executed.
+    So as far as each statement is concerned, it is some purely
+    functional expression evaluated on some specific input (database
+    state).
+
+
+
 .. list-table::
   :class: seealso
 
   * - **See also**
-  * - :ref:`Reference > Commands > Insert <ref_eql_statements_insert>`
   * - :ref:`Cheatsheets > Inserting data <ref_cheatsheet_insert>`
