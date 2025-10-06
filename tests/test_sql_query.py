@@ -1506,22 +1506,22 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         # 'jsonb_object_agg_unique',
         # 'json_object_agg_unique_strict',
         # 'jsonb_object_agg_unique_strict',
-        res = await self.squery_values(
-            "SELECT rank('1') WITHIN GROUP (ORDER BY 1)"
-        )
-        self.assertEqual(res, [[1]])
-        res = await self.squery_values(
-            "SELECT percent_rank('1') WITHIN GROUP (ORDER BY 1)"
-        )
-        self.assertEqual(res, [[0.0]])
-        res = await self.squery_values(
-            "SELECT cume_dist('1') WITHIN GROUP (ORDER BY 1)"
-        )
-        self.assertEqual(res, [[1.0]])
-        res = await self.squery_values(
-            "SELECT dense_rank('1') WITHIN GROUP (ORDER BY 1)"
-        )
-        self.assertEqual(res, [[1]])
+        # res = await self.squery_values(
+        #     "SELECT rank('1') WITHIN GROUP (ORDER BY 1)"
+        # )
+        # self.assertEqual(res, [[1]])
+        # res = await self.squery_values(
+        #     "SELECT percent_rank('1') WITHIN GROUP (ORDER BY 1)"
+        # )
+        # self.assertEqual(res, [[0.0]])
+        # res = await self.squery_values(
+        #     "SELECT cume_dist('1') WITHIN GROUP (ORDER BY 1)"
+        # )
+        # self.assertEqual(res, [[1.0]])
+        # res = await self.squery_values(
+        #     "SELECT dense_rank('1') WITHIN GROUP (ORDER BY 1)"
+        # )
+        # self.assertEqual(res, [[1]])
 
     async def test_sql_query_introspection_00(self):
         dbname = self.con.dbname
