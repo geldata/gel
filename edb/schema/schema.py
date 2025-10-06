@@ -2068,15 +2068,21 @@ class ChainedSchema(Schema):
         name: str | sn.Name,
         default: so.Object_T | so.NoDefaultT | None,
     ) -> Optional[so.Object_T]:
-        if issubclass(objtype, so.GlobalObject):
-            return self._global_schema.get_global(  # type: ignore
+        obj: Optional[so.Object_T]
+        if (
+            issubclass(objtype, so.GlobalObject)
+            and self._global_schema is not EMPTY_SCHEMA
+        ):
+            obj = self._global_schema.get_global(  # type: ignore
+                objtype, name, default=None)
+            if obj is not None:
+                return obj
+
+        obj = self._top_schema.get_global(objtype, name, default=None)
+        if obj is None:
+            obj = self._base_schema.get_global(
                 objtype, name, default=default)
-        else:
-            obj = self._top_schema.get_global(objtype, name, default=None)
-            if obj is None:
-                obj = self._base_schema.get_global(
-                    objtype, name, default=default)
-            return obj
+        return obj
 
     def _get(
         self,

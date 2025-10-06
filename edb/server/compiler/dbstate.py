@@ -163,7 +163,7 @@ class SessionStateQuery(BaseQuery):
 class DDLQuery(BaseQuery):
     user_schema: Optional[s_schema.FlatSchema]
     feature_used_metrics: Optional[dict[str, float]]
-    global_schema: Optional[s_schema.FlatSchema] = None
+    global_schema: Optional[s_schema.Schema] = None
     cached_reflection: Any = None
     is_transactional: bool = True
     create_db: Optional[str] = None
@@ -891,7 +891,7 @@ class TransactionState(NamedTuple):
     id: int
     name: Optional[str]
     local_user_schema: s_schema.FlatSchema | None
-    global_schema: s_schema.FlatSchema
+    global_schema: s_schema.Schema
     modaliases: immutables.Map[Optional[str], str]
     session_config: immutables.Map[str, config.SettingValue]
     database_config: immutables.Map[str, config.SettingValue]
@@ -927,7 +927,7 @@ class Transaction:
         constate: CompilerConnectionState,
         *,
         user_schema: s_schema.FlatSchema,
-        global_schema: s_schema.FlatSchema,
+        global_schema: s_schema.Schema,
         modaliases: immutables.Map[Optional[str], str],
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
@@ -1072,10 +1072,10 @@ class Transaction:
         else:
             return self._current.user_schema
 
-    def get_global_schema(self) -> s_schema.FlatSchema:
+    def get_global_schema(self) -> s_schema.Schema:
         return self._current.global_schema
 
-    def get_global_schema_if_updated(self) -> Optional[s_schema.FlatSchema]:
+    def get_global_schema_if_updated(self) -> Optional[s_schema.Schema]:
         if self._current.global_schema is self._state0.global_schema:
             return None
         else:
@@ -1115,7 +1115,6 @@ class Transaction:
         user_schema = new_schema.get_top_schema()
         assert isinstance(user_schema, s_schema.FlatSchema)
         global_schema = new_schema.get_global_schema()
-        assert isinstance(global_schema, s_schema.FlatSchema)
         self._current = self._current._replace(
             local_user_schema=user_schema,
             global_schema=global_schema,
@@ -1233,7 +1232,7 @@ class CompilerConnectionState:
         cached_reflection: immutables.Map[str, tuple[str, ...]],
     ) -> None:
         assert isinstance(user_schema, s_schema.FlatSchema)
-        assert isinstance(global_schema, s_schema.FlatSchema)
+        # assert isinstance(global_schema, s_schema.FlatSchema)
         self._current_tx = Transaction(
             self,
             user_schema=user_schema,

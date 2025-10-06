@@ -246,8 +246,7 @@ async def _collect_6x_upgrade_patches(
     # default value) that requires a repair to sync the user schema up
     # with, since ai index annotations get copied into objects.
     needs_repair = bool(
-        jnum <= patches_6x.PATCHES.index(('ext-pkg', 'ai'))
-        and schema.get_global(s_exts.Extension, 'ai', default=None)
+        schema.get_global(s_exts.Extension, 'ai', default=None)
     )
 
     return cmds, needs_repair, needs_config
@@ -348,6 +347,7 @@ async def _upgrade_one(
     ctx: bootstrap.BootstrapContext,
     state: edbcompiler.CompilerState,
     global_schema: s_schema.Schema,
+    std_global_schema: s_schema.Schema,
     upgrade_data: Optional[Any],
 ) -> None:
     if not upgrade_data:
@@ -425,13 +425,23 @@ async def _upgrade_one(
             cfg_block)
         schema_fixup += cfg_block.to_string()
 
-    # If we need to do a schema, repair... do it
+    # If we need to do a schema repair... do it
     if needs_repair:
+        # We want to do the repair against the *new* global schema
+        # (which is std_global_schema), but there might be non-std
+        # extensions installed, so we chain it with the original
+        # global_schema to get it to work.
+        confused_global_schema = s_schema.ChainedSchema(
+            global_schema,
+            std_global_schema,
+            s_schema.EMPTY_SCHEMA,
+        )
+
         repair = bootstrap.prepare_repair_patch(
             state.std_schema,
             state.refl_schema,
             schema.get_top_schema(),
-            schema.get_global_schema(),
+            confused_global_schema,
             state.schema_class_layout,
             backend_params,
         )
@@ -729,6 +739,7 @@ async def _upgrade_all(
     state = compiler.state
     databases = await _get_databases(ctx)
 
+    std_global_schema = stdlib.global_schema
     global_schema = await _get_global_schema(ctx, state)
 
     assert ctx.args.inplace_upgrade_prepare
@@ -755,6 +766,7 @@ async def _upgrade_all(
                 ctx=subctx,
                 state=state,
                 global_schema=global_schema,
+                std_global_schema=std_global_schema,
                 upgrade_data=upgrade_data.get(database),
             )
         finally:
@@ -778,6 +790,13 @@ async def _finalize_all(
                 source_description="inplace upgrade: finish",
                 database=cluster.get_db_name(database)
             )
+
+            tmp_table_query = (
+                pgcon.SETUP_TEMP_TABLE_SCRIPT
+                + pgcon.SETUP_DML_DUMMY_TABLE_SCRIPT
+            )
+            await conn.sql_execute(tmp_table_query.encode('utf-8'))
+
             try:
                 subctx = dataclasses.replace(ctx, conn=conn)
 

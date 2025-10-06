@@ -42,8 +42,12 @@ for obj in data['packages'] + data_testing['packages']:
             base + obj['installrefs'][0]['ref'],
         ))
 
+prerelease_versions.sort(key=lambda x: x[0])
 if not versions:
-    versions = prerelease_versions
+    # Some 7.x prerelease versions are busted due to having taken
+    # extension patches that we don't intend to bundle with 8.x.
+    # Only look at the last.
+    versions = prerelease_versions[-1:]
 
 versions.sort(key=lambda x: x[0])
 if len(versions) > 3:
