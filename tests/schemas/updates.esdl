@@ -169,3 +169,19 @@ type DunderDefaultTest04_B {
         )
     };
 };
+
+type AuditLog {
+    property rawModelResponse -> json;
+    single link model -> FoundationModel;
+    property cost -> float64;
+}
+type FoundationModel {
+    single link activePrice := (
+        select .<FoundationModel[is FoundationModelPrice]
+        limit 1
+    );
+}
+type FoundationModelPrice {
+    required single link FoundationModel -> FoundationModel;
+    required property dollar_price_per_thousand_prompt_tokens -> float64;
+}
