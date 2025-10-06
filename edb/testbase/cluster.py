@@ -71,7 +71,7 @@ class BaseCluster:
             edgedb_args.NetWorkerMode
         ] = None,
     ):
-        self._edgedb_cmd = [sys.executable, '-m', 'edb.server.main']
+        self._edgedb_cmd = [sys.executable, '-I', '-m', 'edb.server.main']
 
         if "EDGEDB_SERVER_MULTITENANT_CONFIG_FILE" not in os.environ:
             self._edgedb_cmd.append('--instance-name=localtest')

@@ -768,7 +768,7 @@ class TestConnection(ClusterTestCase):
         """)
         try:
             subprocess.check_output(
-                [sys.executable, "-c", script],
+                [sys.executable, "-I", "-c", script],
                 stderr=subprocess.STDOUT,
                 text=True,
             )

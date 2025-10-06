@@ -603,6 +603,7 @@ class TestDocSnippets(unittest.TestCase):
             proc = subprocess.run(
                 [
                     sys.executable,
+                    '-I',
                     '-m', 'sphinx',
                     '-n',
                     '-b', 'xml',
