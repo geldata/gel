@@ -69,12 +69,23 @@ The :eql:synopsis:`<transaction-mode>` can be one of the following:
     If a pattern of reads and writes among concurrent serializable
     transactions creates a situation that could not have occurred
     in any serial (one-at-a-time) execution of those transactions,
-    one of them will be rolled back with a serialization_failure error.
+    one of them will be rolled back with a serialization failure.
+
+    This level is the default isolation level.
+
+    Note that, compared to ``repeatable read``, serializable level has a
+    significantly higher probability of resulting in serialization failures,
+    requires the whole transaction to be retried. If acceptable, consider using
+    ``repeatable read`` or
+    :ref:`prefer repeatable read <prefer_repeatable_read>`.
 
 :eql:synopsis:`isolation repeatable read`
     All statements in the current transaction can only see data
     changes that were committed before the first query or data
     modification statement was executed within this transaction.
+
+    Compared to ``serializable``, this level is less likely to result in
+    serialization failures.
 
     It is however possible for this level to allow serialization anomalies.
     This constitutes a series of transactions that would not be allowed if they
@@ -91,10 +102,9 @@ The :eql:synopsis:`<transaction-mode>` can be one of the following:
         update X filter not .is_selected set { is_selected := true };
 
     Running these two transactions serially would result in either all ``X``
-    being select or none being selected.
-
-    But if executed concurrently, even with the ``repeatable read`` isolation
-    level, we can end up with some ``X`` being selected and some not.
+    being select or none being selected. But if executed concurrently, even with
+    the ``repeatable read`` isolation level, we can end up with some ``X`` being
+    selected and some not.
 
     To avoid this, we can use the ``serializable`` isolation level.
 
@@ -137,6 +147,8 @@ Start a serializable deferrable transaction:
 
     start transaction isolation serializable, read only, deferrable;
 
+
+.. _prefer_repeatable_read:
 
 Prefer repeatable read
 ----------------------
