@@ -843,6 +843,8 @@ class FuncCall(ImmutableBaseExpr):
     agg_star: bool
     # Arguments were labeled DISTINCT
     agg_distinct: bool
+    # arg_order is in WITHIN GROUP (...)
+    agg_within_group: bool = False
     # OVER clause, if any
     over: typing.Optional[WindowDef]
     # WITH ORDINALITY

@@ -668,6 +668,7 @@ def resolve_FuncCall(
         agg_filter=dispatch.resolve_opt(call.agg_filter, ctx=ctx),
         agg_star=call.agg_star,
         agg_distinct=call.agg_distinct,
+        agg_within_group=call.agg_within_group,
         over=dispatch.resolve_opt(call.over, ctx=ctx),
         with_ordinality=call.with_ordinality,
     )

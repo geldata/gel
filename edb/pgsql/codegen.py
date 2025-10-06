@@ -847,11 +847,16 @@ class SQLSourceGenerator(codegen.SourceGenerator):
             self.write('DISTINCT ')
         self.visit_list(node.args, newlines=False)
 
-        if node.agg_order:
+        if node.agg_order and not node.agg_within_group:
             self.write(' ORDER BY ')
             self.visit_list(node.agg_order, newlines=False)
 
         self.write(')')
+
+        if node.agg_order and node.agg_within_group:
+            self.write(' WITHIN GROUP (ORDER BY ')
+            self.visit_list(node.agg_order, newlines=False)
+            self.write(')')
 
         if node.agg_filter:
             self.write(' FILTER (WHERE ')

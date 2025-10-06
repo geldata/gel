@@ -1498,30 +1498,43 @@ class TestSQLQuery(tb.SQLQueryTestCase):
         self.assertEqual(res, [['{"a" : "b"}']])
         res = await self.squery_values("SELECT jsonb_build_object('a', 'b')")
         self.assertEqual(res, [['{"a": "b"}']])
-        # 'json_object_agg'
-        # 'jsonb_object_agg'
-        # 'json_object_agg_strict',
-        # 'jsonb_object_agg_strict',
-        # 'json_object_agg_unique',
-        # 'jsonb_object_agg_unique',
-        # 'json_object_agg_unique_strict',
-        # 'jsonb_object_agg_unique_strict',
-        # res = await self.squery_values(
-        #     "SELECT rank('1') WITHIN GROUP (ORDER BY 1)"
-        # )
-        # self.assertEqual(res, [[1]])
-        # res = await self.squery_values(
-        #     "SELECT percent_rank('1') WITHIN GROUP (ORDER BY 1)"
-        # )
-        # self.assertEqual(res, [[0.0]])
-        # res = await self.squery_values(
-        #     "SELECT cume_dist('1') WITHIN GROUP (ORDER BY 1)"
-        # )
-        # self.assertEqual(res, [[1.0]])
-        # res = await self.squery_values(
-        #     "SELECT dense_rank('1') WITHIN GROUP (ORDER BY 1)"
-        # )
-        # self.assertEqual(res, [[1]])
+
+        res = await self.squery_values("SELECT json_object_agg('a', 'b')")
+        self.assertEqual(res, [['{ "a" : "b" }']])
+        res = await self.squery_values("SELECT jsonb_object_agg('a', 'b')")
+        self.assertEqual(res, [['{"a": "b"}']])
+
+        res = await self.squery_values(
+            "SELECT rank('1') WITHIN GROUP (ORDER BY 1)"
+        )
+        self.assertEqual(res, [[1]])
+        res = await self.squery_values(
+            "SELECT percent_rank('1') WITHIN GROUP (ORDER BY 1)"
+        )
+        self.assertEqual(res, [[0.0]])
+        res = await self.squery_values(
+            "SELECT cume_dist('1') WITHIN GROUP (ORDER BY 1)"
+        )
+        self.assertEqual(res, [[1.0]])
+        res = await self.squery_values(
+            "SELECT dense_rank('1') WITHIN GROUP (ORDER BY 1)"
+        )
+        self.assertEqual(res, [[1]])
+
+    async def test_sql_query_63(self):
+        # aggregation of ordered sets
+
+        res = await self.squery_values(
+            """
+            SELECT rank('c') WITHIN GROUP (ORDER BY x) FROM (
+                SELECT 'a' as x
+                UNION SELECT 'b'
+                UNION SELECT 'd'
+                UNION SELECT 'e'
+            )
+            """
+        )
+        self.assertEqual(res, [[3]])
 
     async def test_sql_query_introspection_00(self):
         dbname = self.con.dbname
