@@ -608,7 +608,31 @@ func_calls_remapping: dict[tuple[str, ...], tuple[str, ...]] = {
     ),
 }
 
-funcs_with_text_args: set[str] = {'json_build_object'}
+funcs_with_text_args: set[str] = {
+    'num_nulls',
+    'num_nonnulls',
+    'int8inc_any',
+    'int8dec_any',
+    'pg_typeof',
+    'pg_collation_for',
+    'concat',
+    'concat_ws',
+    'format',
+    'count',
+    'pg_column_size',
+    'json_build_array',
+    'jsonb_build_array',
+    'json_build_object',
+    'jsonb_build_object',
+    'json_object_agg',
+    'jsonb_object_agg',
+    'json_object_agg_strict',
+    'jsonb_object_agg_strict',
+    'json_object_agg_unique',
+    'jsonb_object_agg_unique',
+    'json_object_agg_unique_strict',
+    'jsonb_object_agg_unique_strict',
+}
 
 
 @dispatch._resolve.register

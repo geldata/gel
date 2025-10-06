@@ -69,9 +69,9 @@ def eval_list(
 
 def name_in_pg_catalog(name: Sequence[str]) -> Optional[str]:
     """
-    Strips `pg_catalog.` schema name from an SQL ident. Because pg_catalog is
-    always the first schema in search_path, every ident without schema name
-    defaults to is treaded
+    Strips `pg_catalog.` schema name from an SQL ident that resides in
+    pg_catalog. If name is unqualified, it is deemed to be in pg_catalog,
+    because pg_catalog is always the first schema in search_path.
     """
 
     if len(name) == 1 or name[0] == 'pg_catalog':
