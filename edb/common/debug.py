@@ -181,6 +181,10 @@ class flags(metaclass=FlagsMeta):
             "(pg compiler output)."
     )
 
+    sql_text_in_sql = Flag(
+        doc="Include the original SQL query text in the SQL sent to Postgres."
+    )
+
     zombodb = Flag(doc="Enabled zombodb and disables postgres FTS")
 
     ast_span = Flag(doc="Enables spans in markup of ASTs")

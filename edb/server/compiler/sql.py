@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Mapping, Sequence, TYPE_CHECKING, Optional
+from typing import Mapping, Sequence, TYPE_CHECKING, Optional, Any
 
 import dataclasses
 import functools
@@ -29,6 +29,7 @@ import json
 from edb import errors
 from edb.common import ast
 from edb.common import uuidgen
+from edb.common import debug
 from edb.server import defines
 
 from edb.schema import schema as s_schema
@@ -487,6 +488,7 @@ def _compile_sql(
 
         unit.stmt_name = compute_stmt_name(unit.query, tx_state).encode("utf-8")
 
+        sql_info: dict[str, Any] = {}
         if track_stats and backend_runtime_params.has_stat_statements:
             cconfig: dict[str, dbstate.SQLSetting] = {
                 k: v for k, v in fe_settings.items()
@@ -511,16 +513,19 @@ def _compile_sql(
                 'pv': protocol_version,  # protocol_version
                 'dn': ', '.join(search_path),  # default_namespace
             }
-            sql_info = {
-                'query': orig_text,
-                'type': defines.QueryType.SQL,
-                'extras': json.dumps(extras),
-            }
+            sql_info['query'] = orig_text,
+            sql_info['type'] = defines.QueryType.SQL,
+            sql_info['extras'] = json.dumps(extras),
             id_hash = hashlib.blake2b(digest_size=16)
             id_hash.update(
                 json.dumps(sql_info).encode(defines.EDGEDB_ENCODING)
             )
             sql_info['id'] = str(uuidgen.from_bytes(id_hash.digest()))
+
+        if debug.flags.sql_text_in_sql:
+            sql_info['sql'] = orig_query_str or query_str
+
+        if sql_info:
             prefix = ''.join([
                 '-- ',
                 json.dumps(sql_info),
