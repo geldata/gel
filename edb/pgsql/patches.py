@@ -179,7 +179,7 @@ PATCHES: list[tuple[str, str]] = [
             ext::ai::embedding_model_max_batch_size := "<optional>";
     };
     '''),
-    ('repair', ''),
+    ('repair+user_ext|ai', ''),
 
     # For #9053
     ('edgeql+schema', '''
@@ -225,4 +225,6 @@ PATCHES: list[tuple[str, str]] = [
         USING SQL FUNCTION 'exp';
     };
     '''),
+    # 7.0rc4 or 7.0-final
+    ('repair+user_ext|ai', ''),
 ]
