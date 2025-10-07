@@ -2182,6 +2182,7 @@ def compile_sys_queries(
         FILTER
             NOT (.abstract ?? False)
             AND NOT (.transient ?? False)
+            AND NOT .element_type IS schema::Array
         SET {
             backend_id := sys::_get_pg_type_for_edgedb_type(
                 .id,
