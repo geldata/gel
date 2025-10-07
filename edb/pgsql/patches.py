@@ -226,5 +226,6 @@ PATCHES: list[tuple[str, str]] = [
     };
     '''),
     # 7.0rc4 or 7.0-final
-    ('repair+user_ext|ai', ''),
+    ('repair+user_ext|ai', ''),  # For #9073
+    ('edgeql+schema', ''),  # For #9074
 ]

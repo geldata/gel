@@ -33,3 +33,5 @@ function g() -> bool {
   using (global foo);
   required_permissions := bar;
 }
+
+alias Nested := [[1]];
