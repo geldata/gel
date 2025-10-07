@@ -122,6 +122,14 @@ class LspRunner:
         self.stream_in.flush()
 
     def recv(self, timeout_sec=5) -> dict:
+        """
+        Receive a message over LSP. Timeout after X seconds.
+
+        When server is supposed to do just light work
+        (parsing and such), timeout should be 10sec (some of our CI workers are
+        slow). When server is compiling it should be 50sec.
+        """
+
         while True:
             msg = self.stream_reader.get_next(timeout_sec)
             if msg.get("method", None) == "window/logMessage":
@@ -573,7 +581,7 @@ class TestLanguageServer(unittest.TestCase):
                 }
             )
             self.assertEqual(
-                runner.recv(timeout_sec=10),
+                runner.recv(timeout_sec=50),
                 {
                     "jsonrpc": "2.0",
                     "method": "textDocument/publishDiagnostics",
