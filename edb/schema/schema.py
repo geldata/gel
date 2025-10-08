@@ -1865,14 +1865,13 @@ class ChainedSchema(Schema):
         self, mcls: type[T], name: sn.Name,
     ) -> Optional[T]:
         if issubclass(mcls, so.GlobalObject):
-            return self._global_schema.get_by_globalname(  # type: ignore
+            if o := self._global_schema.get_by_globalname(
                 mcls, name
-            )
-        else:
-            obj = self._top_schema.get_by_globalname(mcls, name)
-            if obj is None:
-                obj = self._base_schema.get_by_globalname(mcls, name)
+            ):
+                return o  # type: ignore
+        if obj := self._top_schema.get_by_globalname(mcls, name):
             return obj
+        return self._base_schema.get_by_globalname(mcls, name)
 
     def get_by_shortname[T: so.Object](
         self,

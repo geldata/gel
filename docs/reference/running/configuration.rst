@@ -555,7 +555,7 @@ The ``_FILE`` and ``_ENV`` variants are also supported.
 GEL_SERVER_TENANT_ID
 --------------------
 
-Specifies the tenant ID of this server when hosting multiple Gel instances on one Postgres cluster. Must be an alphanumeric ASCII string, maximum 10 characters long.
+Specifies the tenant ID of this server. When using multiple Gel instances with one Postgres cluster each Gel instance must have a unique tenant ID. Must be an alphanumeric ASCII string, maximum 10 characters long. Defaults to "E" if not set.
 
 
 GEL_SERVER_UID

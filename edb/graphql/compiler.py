@@ -29,9 +29,9 @@ from graphql.language import lexer as gql_lexer
 
 
 def _get_gqlcore(
-    std_schema: s_schema.FlatSchema,
-    user_schema: s_schema.FlatSchema,
-    global_schema: s_schema.FlatSchema,
+    std_schema: s_schema.Schema,
+    user_schema: s_schema.Schema,
+    global_schema: s_schema.Schema,
 ) -> graphql.GQLCoreSchema:
     return graphql.GQLCoreSchema(
         s_schema.ChainedSchema(
@@ -45,7 +45,7 @@ def _get_gqlcore(
 def compile_graphql(
     std_schema: s_schema.FlatSchema,
     user_schema: s_schema.FlatSchema,
-    global_schema: s_schema.FlatSchema,
+    global_schema: s_schema.Schema,
     database_config: Mapping[str, Any],
     system_config: Mapping[str, Any],
     gql: str,
