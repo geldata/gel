@@ -994,3 +994,35 @@ Fixes
 
 * Fix updating of two single links with linkprops at once
   (:eql:gh:`#8932`)
+
+
+6.11
+====
+
+* Improve auth email headers and alt content
+  (:eql:gh:`#8919`)
+
+* Fix SQL ``COLLATE`` clauses that require quotation
+  (:eql:gh:`#8960`)
+
+* Improve SQL adapter fallback for ``has_column_privilege``
+  (:eql:gh:`#8962`)
+
+* Fix introspection of ``cfg::AuthMethod.transports``
+  (:eql:gh:`#8971`)
+
+* Fix referencing a computed from a conversion ``USING`` expression
+  (:eql:gh:`#8981`)
+
+* Fix ``FOR`` iteration over a set of DML expressions
+  (:eql:gh:`#8994`)
+
+* Fix casting to multi-ranges accidentally aggregating
+  (:eql:gh:`#8995`)
+
+* Fix ``__default__`` when nested statements have defaults
+  (:eql:gh:`#9006`)
+
+* Bump the compatible extension version for pgvector.
+  (:eql:gh:`#9028`)
+

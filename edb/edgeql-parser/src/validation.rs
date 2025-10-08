@@ -155,13 +155,13 @@ pub fn parse_value(token: &Token) -> Result<Option<Value>, String> {
                 .parse()
                 .map(Value::Decimal)
                 .map(Some)
-                .map_err(|e| format!("can't parse decimal: {}", e))
+                .map_err(|e| format!("can't parse decimal: {e}"))
         }
         FloatConst => {
             return text
                 .replace('_', "")
                 .parse::<f64>()
-                .map_err(|e| format!("can't parse std::float64: {}", e))
+                .map_err(|e| format!("can't parse std::float64: {e}"))
                 .and_then(|num| {
                     if num.is_infinite() {
                         return Err("number is out of range for std::float64".to_string());
@@ -187,13 +187,13 @@ pub fn parse_value(token: &Token) -> Result<Option<Value>, String> {
             // value, though.
             return u64::from_str(&text.replace('_', ""))
                 .map(|x| Some(Value::Int(x as i64)))
-                .map_err(|e| format!("error reading int: {}", e));
+                .map_err(|e| format!("error reading int: {e}"));
         }
         BigIntConst => {
             return text[..text.len() - 1]
                 .replace('_', "")
                 .parse::<BigDecimal>()
-                .map_err(|e| format!("error reading bigint: {}", e))
+                .map_err(|e| format!("error reading bigint: {e}"))
                 // this conversion to decimal and back to string
                 // fixes thing like `1e2n` which we support for bigints
                 .and_then(|x| {

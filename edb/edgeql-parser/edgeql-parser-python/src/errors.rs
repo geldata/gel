@@ -11,15 +11,15 @@ create_exception!(_edgeql_parser, SyntaxError, exceptions::PyException);
 #[pyclass]
 pub struct ParserResult {
     #[pyo3(get)]
-    pub out: PyObject,
+    pub out: Py<PyAny>,
 
     #[pyo3(get)]
-    pub errors: PyObject,
+    pub errors: Py<PyAny>,
 }
 
 #[pymethods]
 impl ParserResult {
-    fn pack(&self, py: Python) -> PyResult<PyObject> {
+    fn pack(&self, py: Python) -> PyResult<Py<PyAny>> {
         let tokens = self.out.downcast_bound::<PyList>(py)?;
         let mut rv = Vec::with_capacity(tokens.len());
         for token in tokens {

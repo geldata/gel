@@ -155,7 +155,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
         # * "--bootstrap-command"
 
         cmd = [
-            sys.executable, '-m', 'edb.server.main',
+            sys.executable, '-I', '-m', 'edb.server.main',
             '--port', 'auto',
             '--testmode',
             '--temp-dir',
@@ -226,7 +226,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
         os.close(status_fd)
 
         cmd = [
-            sys.executable, '-m', 'edb.server.main',
+            sys.executable, '-I', '-m', 'edb.server.main',
             '--port', 'auto',
             '--testmode',
             '--temp-dir',
@@ -290,7 +290,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
         os.close(status_fd)
 
         cmd = [
-            sys.executable, '-m', 'edb.server.main',
+            sys.executable, '-I', '-m', 'edb.server.main',
             '--port', 'auto',
             '--testmode',
             '--log-level=debug',

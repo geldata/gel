@@ -79,6 +79,8 @@ cdef object logger = logging.getLogger('edb.server')
 cdef uint64_t DML_CAPABILITIES = compiler.Capability.MODIFICATIONS
 cdef uint64_t DDL_CAPABILITIES = compiler.Capability.DDL
 
+DEF TEXT_OID = 25
+
 # Mapping from oids of PostgreSQL types into corresponding EdgeQL type.
 # Needed only for pg types that do not exist in EdgeQL, such as pg_catalog.name
 cdef TYPES_SQL_ONLY = immutables.Map({
@@ -622,10 +624,11 @@ cdef class DatabaseConnectionView:
         self._state_serializer = None
         self._role_name = role_name
 
-        # N.B: If we add anything that is not a string, we'll need to
-        # adjust get_global_value to encode differently.
+        # N.B: If we add anything that is not a string or list of string, we'll
+        # need to adjust get_global_value to encode differently.
         self._sys_globals = {
             'sys::current_role': self._role_name,
+            'sys::current_permissions': list(self.get_permissions()[1])
         }
 
         if db.name == defines.EDGEDB_SYSTEM_DB:
@@ -732,8 +735,25 @@ cdef class DatabaseConnectionView:
 
     cpdef get_global_value(self, k):
         if k in self._sys_globals:
-            # N.B: Currently only strings
-            return self._sys_globals[k].encode('utf-8'), True
+            # N.B: Currently only str and list[str]
+            sys_global = self._sys_globals[k]
+            encoded: bytes
+            if isinstance(sys_global, str):
+                encoded = sys_global.encode('utf-8')
+            elif isinstance(sys_global, list):
+                encoded = b''
+                encoded += b'\x00\x00\x00\x01' # ndims
+                encoded += b'\x00\x00\x00\x00' # flags
+                encoded += TEXT_OID.to_bytes(4, 'big') # array_tid
+                encoded += len(sys_global).to_bytes(4, 'big') # count
+                encoded += b'\x00\x00\x00\x01' # bound
+                for elem in sys_global:
+                    elem_encoded = elem.encode('utf-8')
+                    encoded += len(elem_encoded).to_bytes(4, 'big')
+                    encoded += elem_encoded
+            else:
+                raise NotImplementedError
+            return encoded, True
         else:
             entry = self.get_globals().get(k)
             if entry:

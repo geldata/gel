@@ -926,9 +926,8 @@ class Compiler:
                 base_schema,
             )
 
-        return s_refl.parse_into(
+        return s_refl.parse_schema(
             base_schema=base_schema,
-            schema=s_schema.EMPTY_SCHEMA,
             data=schema_json,
             schema_class_layout=self.state.schema_class_layout,
         )
@@ -2605,9 +2604,7 @@ def _compile_dispatch_ql(
     elif isinstance(ql, qlast.DDLCommand):
         query = ddl.compile_and_apply_ddl_stmt(ctx, ql, source=source)
         capability = enums.Capability.DDL
-        if isinstance(
-            ql, (qlast.GlobalObjectCommand, qlast.PermissionCommand)
-        ):
+        if isinstance(ql, (qlast.GlobalObjectCommand)):
             capability |= enums.Capability.GLOBAL_DDL
 
         return (query, capability)

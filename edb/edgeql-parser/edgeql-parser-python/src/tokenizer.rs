@@ -45,7 +45,7 @@ impl OpaqueToken {
     fn __repr__(&self) -> PyResult<String> {
         Ok(self.inner.to_string())
     }
-    fn __reduce__(&self, py: Python) -> PyResult<(PyObject, (PyObject,))> {
+    fn __reduce__(&self, py: Python) -> PyResult<(Py<PyAny>, (Py<PyAny>,))> {
         let data = bincode::serialize(&self.inner)
             .map_err(|e| PyValueError::new_err(format!("Failed to reduce: {e}")))?;
 
@@ -83,7 +83,7 @@ pub fn tokens_to_py(py: Python<'_>, rust_tokens: Vec<Token>) -> PyResult<Py<PyLi
 /// (`unpickle_token`) and save reference to is in the `FN_UNPICKLE_TOKEN`.
 ///
 /// A bit hackly, but it works.
-static FN_UNPICKLE_TOKEN: OnceCell<PyObject> = OnceCell::new();
+static FN_UNPICKLE_TOKEN: OnceCell<Py<PyAny>> = OnceCell::new();
 
 pub fn fini_module(m: &Bound<PyModule>) {
     let _unpickle_token = m.getattr("unpickle_token").unwrap();
@@ -99,7 +99,7 @@ pub fn unpickle_token(bytes: &Bound<PyBytes>) -> PyResult<OpaqueToken> {
     Ok(OpaqueToken { inner: token })
 }
 
-fn get_unpickle_token_fn(py: Python) -> PyObject {
+fn get_unpickle_token_fn(py: Python) -> Py<PyAny> {
     let py_function = FN_UNPICKLE_TOKEN.get().expect("module uninitialized");
     py_function.clone_ref(py)
 }

@@ -40,7 +40,7 @@ impl std::fmt::Display for Terminal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if (self.is_placeholder && self.kind == Kind::Ident) || self.text.is_empty() {
             if let Some(user_friendly) = self.kind.user_friendly_text() {
-                return write!(f, "{}", user_friendly);
+                return write!(f, "{user_friendly}");
             }
         }
 

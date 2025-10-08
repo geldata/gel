@@ -133,8 +133,8 @@ CREATE TYPE sys::Role EXTENDING
     CREATE MULTI PROPERTY branches -> std::str;
     CREATE PROPERTY apply_access_policies_pg_default -> std::bool;
 
-    CREATE ACCESS POLICY ap_read allow select using (
-        global sys::perm::superuser
+    CREATE ACCESS POLICY ap_read deny select using (
+        not global sys::perm::superuser
     );
 };
 
@@ -472,6 +472,10 @@ sys::approximate_count(
 
 CREATE REQUIRED GLOBAL sys::current_role -> str {
     SET default := '';
+};
+
+CREATE REQUIRED GLOBAL sys::current_permissions -> array<str> {
+    SET default := <array<str>>[];
 };
 
 # Add permissions to schema and std.

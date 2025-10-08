@@ -2520,7 +2520,7 @@ class _EdgeDBServer:
         status_r, status_w = socket.socketpair()
 
         cmd = [
-            sys.executable, '-m', 'edb.server.main',
+            sys.executable, '-I', '-m', 'edb.server.main',
             '--port', 'auto',
             '--testmode',
             '--emit-server-status', f'fd://{status_w.fileno()}',

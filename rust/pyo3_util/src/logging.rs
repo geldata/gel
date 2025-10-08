@@ -101,24 +101,24 @@ def spawn_log_reader(fd):
                 data, _ = sock.recvfrom(65536) # Max UDP datagram size
                 if not data:
                     break
-                    
+
                 # Parse level (first 4 bytes) in big-endian
                 level = struct.unpack('>I', data[:4])[0]
-                
+
                 # Parse first string length and data in big-endian
                 str1_len = struct.unpack('>I', data[4:8])[0]
                 logger_name = data[8:8+str1_len].decode('utf-8')
-                
+
                 # Parse second string length and data in big-endian
                 str2_start = 8 + str1_len
                 str2_len = struct.unpack('>I', data[str2_start:str2_start+4])[0]
                 msg = data[str2_start+4:str2_start+4+str2_len].decode('utf-8')
-                
+
                 logger = log_cache.get(logger_name, None);
                 if logger is None:
                     log_cache[logger_name] = logger = logging.getLogger(logger_name)
                 logger.log(level, msg)
-                
+
             except socket.error:
                 break
         sock.close()
@@ -224,7 +224,7 @@ fn get_logging_socket() -> std::os::unix::net::UnixDatagram {
             let (tx, rx) =
                 std::os::unix::net::UnixDatagram::pair().expect("Failed to create logging socket");
             let rx = rx.into_raw_fd();
-            Python::with_gil(|py| {
+            Python::attach(|py| {
                 debug_log_method!("get_logging_socket", "Running thread script");
                 let locals = PyDict::new(py);
                 locals

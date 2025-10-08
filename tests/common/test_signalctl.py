@@ -35,6 +35,7 @@ class ChildProcess:
     def __init__(self, test_prog, global_prog=""):
         self._args = (
             sys.executable,
+            "-I",
             "-m",
             "edb.testbase.proc",
             textwrap.dedent(global_prog)

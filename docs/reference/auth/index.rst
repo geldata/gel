@@ -191,7 +191,7 @@ The easiest way to configure SMTP is to use the built-in UI. Here is an example 
       insert cfg::SMTPProviderConfig {
         # This name must be unique and is used to reference the provider
         name := 'local_mailpit',
-        sender := 'hello@example.com',
+        sender := '"Display Name" <hello@example.com>',
         host := 'localhost',
         port := <int32>1025,
         username := 'smtpuser',
@@ -207,6 +207,9 @@ The easiest way to configure SMTP is to use the built-in UI. Here is an example 
     configure current branch
       set current_email_provider_name := 'local_mailpit';
 
+.. note::
+
+  The ``sender`` property follows the `RFC 5322 <https://datatracker.ietf.org/doc/html/rfc5322#section-3.4>`_ specification, so you can include a display name in the email address or use a bare email address. Including a display name is recommended as it provides a more user-friendly experience. Email clients will show the display name (e.g., "Display Name" from the example above) instead of just the raw email address in the sender field, making your emails appear more professional and trustworthy to recipients.
 
 Enabling authentication providers
 =================================

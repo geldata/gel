@@ -90,6 +90,7 @@ class TestCodeQuality(unittest.TestCase):
                 subprocess.run(
                     [
                         sys.executable,
+                        '-I',
                         '-m',
                         'mypy',
                         '--config-file',

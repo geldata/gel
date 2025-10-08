@@ -913,11 +913,6 @@ class GlobalObjectCommand(UnqualifiedObjectCommand):
     __abstract_node__ = True
 
 
-class ExternalObjectCommand(GlobalObjectCommand):
-
-    __abstract_node__ = True
-
-
 class BranchType(s_enum.StrEnum):
     EMPTY = 'EMPTY'
     SCHEMA = 'SCHEMA'
@@ -925,7 +920,7 @@ class BranchType(s_enum.StrEnum):
     TEMPLATE = 'TEMPLATE'
 
 
-class DatabaseCommand(ExternalObjectCommand, NonTransactionalDDLCommand):
+class DatabaseCommand(GlobalObjectCommand, NonTransactionalDDLCommand):
 
     __abstract_node__ = True
     flavor: qltypes.SchemaObjectClass = qltypes.SchemaObjectClass.BRANCH
@@ -1344,7 +1339,7 @@ class ConcreteIndexCommand(IndexCommand):
     kwargs: dict[str, Expr] = ast.field(factory=dict)
     expr: Expr
     except_expr: typing.Optional[Expr] = None
-    deferred: typing.Optional[bool] = None
+    deferred: bool = False
 
 
 class CreateConcreteIndex(ConcreteIndexCommand, CreateObject):

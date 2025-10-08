@@ -64,6 +64,20 @@ Math
 ----------
 
 
+.. eql:function:: math::exp(x: int64) -> float64
+                  math::exp(x: float64) -> float64
+                  math::exp(x: decimal) -> decimal
+
+    Returns the natural logarithm of a given value.
+
+    .. code-block:: edgeql-repl
+
+        db> select math::exp(1);
+        {2.718281829}
+
+----------
+
+
 .. eql:function:: math::ln(x: int64) -> float64
                   math::ln(x: float64) -> float64
                   math::ln(x: decimal) -> decimal
@@ -72,7 +86,7 @@ Math
 
     .. code-block:: edgeql-repl
 
-        db> select 2.718281829 ^ math::ln(100);
+        db> select math::exp(math::ln(100));
         {100.00000009164575}
 
 
@@ -197,6 +211,18 @@ Math
 
         db> select math::pi();
         {3.141592653589793}
+
+-----------
+
+
+.. eql:function:: math::e() -> float64
+
+    Returns the value of e (euler's number).
+
+    .. code-block:: edgeql-repl
+
+        db> select math::e();
+        {2.718281828459045}
 
 
 -----------

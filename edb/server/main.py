@@ -135,7 +135,7 @@ def _ensure_runstate_dir(
 @contextlib.contextmanager
 def _internal_state_dir(
     runstate_dir: pathlib.Path, args: srvargs.ServerConfig
-) -> Iterator[tuple[str, srvargs.ServerConfig]]:
+) -> Iterator[tuple[pathlib.Path, srvargs.ServerConfig]]:
     try:
         with tempfile.TemporaryDirectory(prefix="", dir=runstate_dir) as td:
             if (
@@ -162,7 +162,8 @@ def _internal_state_dir(
                             '<runstate>', td)
                     ),
                 )
-            yield td, args
+            tdp = pathlib.Path(td)
+            yield tdp, args
     except PermissionError as ex:
         abort(f'cannot write to the runstate directory: '
               f'{ex!s}; please fix the permissions or use '
@@ -170,7 +171,7 @@ def _internal_state_dir(
 
 
 async def _init_cluster(
-    cluster, args: srvargs.ServerConfig
+    cluster: pgcluster.BaseCluster, args: srvargs.ServerConfig
 ) -> tuple[bool, edbcompiler.Compiler]:
     from edb.server import bootstrap
 
@@ -189,10 +190,10 @@ def _init_parsers():
 
 
 async def _run_server(
-    cluster,
+    cluster: pgcluster.BaseCluster,
     args: srvargs.ServerConfig,
-    runstate_dir,
-    internal_runstate_dir,
+    runstate_dir: pathlib.Path,
+    internal_runstate_dir: pathlib.Path,
     *,
     do_setproctitle: bool,
     new_instance: bool,

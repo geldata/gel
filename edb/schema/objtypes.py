@@ -28,7 +28,6 @@ from edb import errors
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import constraints
 from . import delta as sd
@@ -86,7 +85,6 @@ class ObjectType(
     s_types.Type,  # Help reflection figure out the right db MRO
     s_anno.AnnotationSubject,  # Help reflection figure out the right db MRO
     ObjectTypeRefMixin,
-    s_abc.ObjectType,
     qlkind=qltypes.SchemaObjectClass.TYPE,
     data_safe=False,
 ):

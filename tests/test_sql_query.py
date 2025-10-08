@@ -1445,6 +1445,97 @@ class TestSQLQuery(tb.SQLQueryTestCase):
             '''
         )
 
+    async def test_sql_query_60(self):
+        await self.squery_values(
+            "SELECT json_build_object('hello', TRUE)"
+        )
+        with self.assertRaisesRegex(
+            asyncpg.exceptions.IndeterminateDatatypeError,
+            'could not determine data type of parameter \\$1',
+        ):
+            await self.squery_values(
+                "SELECT 'a', json_build_object($1, TRUE)", 'hello'
+            )
+
+    async def test_sql_query_61(self):
+        await self.squery_values(
+            "SELECT ROW('hello')"
+        )
+        with self.assertRaisesRegex(
+            asyncpg.exceptions.IndeterminateDatatypeError,
+            'could not determine data type of parameter \\$1',
+        ):
+            await self.squery_values(
+                "SELECT 'a', ROW($1)", 'hello'
+            )
+
+    async def test_sql_query_62(self):
+        # calls of various functions with constants that are extracted
+
+        res = await self.squery_values("SELECT num_nulls('a')")
+        self.assertEqual(res, [[0]])
+        res = await self.squery_values("SELECT num_nonnulls('a')")
+        self.assertEqual(res, [[1]])
+        res = await self.squery_values("SELECT int8inc_any(4, '1')")
+        self.assertEqual(res, [[5]])
+        res = await self.squery_values("SELECT int8dec_any(4, '1')")
+        self.assertEqual(res, [[3]])
+        res = await self.squery_values("SELECT pg_typeof('1')")
+        self.assertEqual(res, [['text']])
+        res = await self.squery_values("SELECT concat('hello')")
+        self.assertEqual(res, [['hello']])
+        res = await self.squery_values("SELECT concat_ws(',', 'a', 'b')")
+        self.assertEqual(res, [['a,b']])
+        res = await self.squery_values("SELECT format('%s', 'b')")
+        self.assertEqual(res, [['b']])
+        res = await self.squery_values("SELECT count('only')")
+        self.assertEqual(res, [[1]])
+        res = await self.squery_values("SELECT json_build_array('a')")
+        self.assertEqual(res, [['["a"]']])
+        res = await self.squery_values("SELECT jsonb_build_array('a')")
+        self.assertEqual(res, [['["a"]']])
+        res = await self.squery_values("SELECT json_build_object('a', 'b')")
+        self.assertEqual(res, [['{"a" : "b"}']])
+        res = await self.squery_values("SELECT jsonb_build_object('a', 'b')")
+        self.assertEqual(res, [['{"a": "b"}']])
+
+        res = await self.squery_values("SELECT json_object_agg('a', 'b')")
+        self.assertEqual(res, [['{ "a" : "b" }']])
+        res = await self.squery_values("SELECT jsonb_object_agg('a', 'b')")
+        self.assertEqual(res, [['{"a": "b"}']])
+
+        res = await self.squery_values(
+            "SELECT rank('1') WITHIN GROUP (ORDER BY 1)"
+        )
+        self.assertEqual(res, [[1]])
+        res = await self.squery_values(
+            "SELECT percent_rank('1') WITHIN GROUP (ORDER BY 1)"
+        )
+        self.assertEqual(res, [[0.0]])
+        res = await self.squery_values(
+            "SELECT cume_dist('1') WITHIN GROUP (ORDER BY 1)"
+        )
+        self.assertEqual(res, [[1.0]])
+        res = await self.squery_values(
+            "SELECT dense_rank('1') WITHIN GROUP (ORDER BY 1)"
+        )
+        self.assertEqual(res, [[1]])
+
+    async def test_sql_query_63(self):
+        # aggregation of ordered sets
+
+        res = await self.squery_values(
+            """
+            SELECT rank('c') WITHIN GROUP (ORDER BY x) FROM (
+                SELECT 'a' as x
+                UNION SELECT 'b'
+                UNION SELECT 'd'
+                UNION SELECT 'e'
+            )
+            """
+        )
+        self.assertEqual(res, [[3]])
+
     async def test_sql_query_introspection_00(self):
         dbname = self.con.dbname
         res = await self.squery_values(

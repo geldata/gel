@@ -75,6 +75,7 @@ from . import cli  # noqa
 from . import config  # noqa
 from . import rm_data_dir  # noqa
 from . import dflags  # noqa
+from . import fake_ai_server  # noqa
 from . import gen_errors  # noqa
 from . import gen_types  # noqa
 from . import gen_meta_grammars  # noqa

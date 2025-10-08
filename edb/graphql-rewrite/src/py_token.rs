@@ -77,7 +77,7 @@ pub fn convert_tokens<'py>(
     py: Python<'py>,
     tokens: &[PyToken],
     end_pos: &Pos,
-    kinds: PyObject,
+    kinds: Py<PyAny>,
 ) -> PyResult<impl IntoPyObject<'py>> {
     use PyTokenKind as K;
 
@@ -115,7 +115,7 @@ pub fn convert_tokens<'py>(
     let string = kinds.getattr(py, "STRING")?;
     let block_string = kinds.getattr(py, "BLOCK_STRING")?;
 
-    let mut elems: Vec<PyObject> = Vec::with_capacity(tokens.len());
+    let mut elems: Vec<Py<PyAny>> = Vec::with_capacity(tokens.len());
 
     let zero = 0u32.into_pyobject(py).unwrap();
     let start_of_file = [

@@ -680,9 +680,8 @@ impl<V: VisitPoolAlgoData> AlgoState<'_, V> {
 
         debug_assert!(
             allocated <= max,
-            "Attempted to allocate more than we were allowed: {allocated} > {} \
-                (req={total_demand}, target={total_target})",
-            max
+            "Attempted to allocate more than we were allowed: {allocated} > {max} \
+                (req={total_demand}, target={total_target})"
         );
     }
 

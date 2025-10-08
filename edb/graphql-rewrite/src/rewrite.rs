@@ -59,7 +59,7 @@ pub fn rewrite(operation: Option<&str>, s: &str) -> Result<Entry, Error> {
     let document: Document<'_, &str> = parse_query(s).map_err(Error::Syntax)?;
     let oper = if let Some(oper_name) = operation {
         find_operation(&document, oper_name)
-            .ok_or_else(|| Error::NotFound(format!("no operation {:?} found", operation)))?
+            .ok_or_else(|| Error::NotFound(format!("no operation {operation:?} found")))?
     } else {
         let mut oper = None;
         for def in &document.definitions {

@@ -33,7 +33,6 @@ from edb.ir import ast as irast
 from edb.ir import typeutils as irtyputils
 from edb.ir import utils as irutils
 
-from edb.schema import abc as s_abc
 from edb.schema import constraints as s_constr
 from edb.schema import functions as s_func
 from edb.schema import globals as s_globals
@@ -1080,7 +1079,7 @@ def _infer_slice_type(
         base_name = 'JSON array'
     elif node_type.issubclass(env.schema, bytes_t):
         base_name = 'bytes'
-    elif isinstance(node_type, s_abc.Array):
+    elif isinstance(node_type, s_types.Array):
         base_name = 'array'
     elif node_type.is_any(env.schema):
         base_name = 'anytype'

@@ -609,9 +609,7 @@ def _build_base_expr(node: Node, c: Context) -> pgast.BaseExpr:
     )
 
 
-def _build_distinct(
-    nodes: list[Node], c: Context
-) -> list[pgast.Base]:
+def _build_distinct(nodes: list[Node], c: Context) -> list[pgast.Base]:
     # For some reason, plain DISTINCT is parsed as [{}]
     # In our AST this is represented by [pgast.Star()]
     if len(nodes) == 1 and len(nodes[0]) == 0:
@@ -1045,10 +1043,14 @@ def _build_func_call(n: Node, c: Context) -> pgast.FuncCall:
     return pgast.FuncCall(
         name=tuple(_list(n, c, "funcname", _build_str)),
         args=_maybe_list(n, c, "args", _build_base_expr) or [],
-        agg_order=_maybe_list(n, c, "aggOrder", _build_sort_by),
+        agg_order=(
+            _maybe_list(n, c, "aggOrder", _build_sort_by)
+            or _maybe_list(n, c, "agg_order", _build_sort_by)
+        ),
         agg_filter=_maybe(n, c, "aggFilter", _build_base_expr),
         agg_star=_bool_or_false(n, "agg_star"),
         agg_distinct=_bool_or_false(n, "agg_distinct"),
+        agg_within_group=_bool_or_false(n, "agg_within_group"),
         over=_maybe(n, c, "over", _build_window_def),
         with_ordinality=_bool_or_false(n, "withOrdinality"),
         span=_build_span(n, c),

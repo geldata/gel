@@ -1040,7 +1040,7 @@ class FieldValueNotFoundError(Exception):
     pass
 
 
-class Object(s_abc.Object, ObjectContainer, metaclass=ObjectMeta):
+class Object(ObjectContainer, metaclass=ObjectMeta):
     """Base schema item class."""
 
     __slots__ = ('id',)
@@ -2494,7 +2494,7 @@ class ObjectCollection[Object_T: "Object"](
         else:
             raise TypeError(f'object {v!r} has no ID!')
 
-    def ids(self, schema: s_schema.Schema) -> tuple[uuid.UUID, ...]:
+    def ids(self) -> tuple[uuid.UUID, ...]:
         return tuple(self._ids)
 
     def names(self, schema: s_schema.Schema) -> Collection[sn.Name]:

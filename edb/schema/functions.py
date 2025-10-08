@@ -42,7 +42,6 @@ from edb.edgeql import parser as qlparser
 from edb.edgeql import qltypes
 from edb.common import uuidgen
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import delta as sd
 from . import expr as s_expr
@@ -141,7 +140,7 @@ def param_is_inherited(
     return qualname != param_name.name
 
 
-class ParameterLike(s_abc.Parameter):
+class ParameterLike:
 
     def get_parameter_name(self, schema: s_schema.Schema) -> str:
         raise NotImplementedError
@@ -1240,7 +1239,6 @@ class DeleteCallableObject(
 class Function(
     CallableObject,
     VolatilitySubject,
-    s_abc.Function,
     qlkind=ft.SchemaObjectClass.FUNCTION,
     data_safe=True,
 ):

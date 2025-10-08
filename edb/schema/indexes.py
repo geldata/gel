@@ -756,7 +756,7 @@ class IndexCommand(
                 context=context,
             )
         )
-        if kwargs:
+        if kwargs and astnode:
             assert isinstance(astnode, (qlast.CreateIndex,
                                         qlast.ConcreteIndexCommand))
             astnode.kwargs = {
@@ -1078,7 +1078,7 @@ class CreateIndex(
                     ),
                 )
 
-            if astnode.deferred is not None:
+            if astnode.deferred:
                 cmd.set_attribute_value(
                     'deferred',
                     astnode.deferred,
@@ -1092,6 +1092,31 @@ class CreateIndex(
                     span=astnode.span,
                 )
 
+        return cmd
+
+    @classmethod
+    def as_inherited_ref_cmd(
+        cls,
+        *,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+        astnode: qlast.ObjectDDL,
+        bases: list[Index],
+        referrer: so.Object,
+    ) -> sd.ObjectCommand[Index]:
+        cmd = super().as_inherited_ref_cmd(
+            schema=schema,
+            context=context,
+            astnode=astnode,
+            bases=bases,
+            referrer=referrer,
+        )
+        assert isinstance(astnode, qlast.ConcreteIndexCommand), astnode
+        if astnode.kwargs:
+            cmd.set_attribute_value(
+                'kwargs',
+                cls._index_kwargs_from_ast(schema, astnode, context),
+            )
         return cmd
 
     @classmethod
@@ -1829,8 +1854,7 @@ def get_effective_object_index(
             )
         effective = object_indexes_defined_here[0]
         overridden = [
-            i.get_implicit_bases(schema)[0]
-            for i in object_indexes if i != effective
+            i for i in object_indexes if i != effective
         ]
 
     else:

@@ -26,7 +26,9 @@ import itertools
 
 from edb.common import adapter
 
+from edb.schema import indexes as s_indexes
 from edb.schema import objects as s_obj
+from edb.schema import schema as s_schema
 
 from edb.pgsql import common
 from edb.pgsql import dbops
@@ -663,3 +665,28 @@ class AlterTableUpdateConstraintTriggerFixup(AlterTableConstraintBase):
         ):
             self.drop_constraint_trigger_and_fuction(self._constraint)
         super().generate(block)
+
+
+def rename_pg_index(
+    old_index: s_indexes.Index,
+    new_index: s_indexes.Index,
+    schema: s_schema.Schema,
+    aspect: str = 'index'
+) -> dbops.Command:
+    table_name = common.get_index_table_backend_name(new_index, schema)
+    module_name = new_index.get_name(schema).module
+    old_index_name = common.get_index_backend_name(
+        old_index.id, module_name, catenate=False, aspect=aspect
+    )
+    new_index_name = common.get_index_backend_name(
+        new_index.id, module_name, catenate=False, aspect=aspect
+    )
+    pg_index = dbops.Index(
+        name=old_index_name[1],
+        table_name=table_name,  # type: ignore
+    )
+    return dbops.RenameIndex(
+        pg_index,
+        new_name=new_index_name[1],
+        conditional=True,
+    )

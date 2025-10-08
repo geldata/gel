@@ -664,9 +664,8 @@ async def _get_global_schema(
     finally:
         conn.terminate()
 
-    return s_refl.parse_into(
+    return s_refl.parse_schema(
         base_schema=state.std_schema,
-        schema=s_schema.EMPTY_SCHEMA,
         data=json_data,
         schema_class_layout=state.schema_class_layout,
     )

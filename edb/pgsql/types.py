@@ -29,7 +29,6 @@ from edb.common import lru
 from edb.ir import ast as irast
 from edb.ir import typeutils as irtyputils
 
-from edb.schema import abc as s_abc
 from edb.schema import scalars as s_scalars
 from edb.schema import objtypes as s_objtypes
 from edb.schema import name as sn
@@ -324,7 +323,7 @@ def pg_type_from_object(
     elif isinstance(obj, s_types.Type) and obj.is_anytuple(schema):
         return ('record',)
 
-    elif isinstance(obj, s_abc.Tuple):
+    elif isinstance(obj, s_types.Tuple):
         if persistent_tuples:
             return cast(
                 tuple[str, ...],

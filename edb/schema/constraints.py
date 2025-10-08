@@ -39,7 +39,6 @@ from edb.edgeql import parser as qlparser
 from edb.edgeql import utils as qlutils
 from edb.edgeql import qltypes
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import delta as sd
 from . import expr as s_expr
@@ -114,7 +113,7 @@ class ObjectIndexByConstraintName(
 
 class Constraint(
     referencing.ReferencedInheritingObject,
-    s_func.CallableObject, s_abc.Constraint,
+    s_func.CallableObject,
     qlkind=ft.SchemaObjectClass.CONSTRAINT,
     data_safe=True,
 ):

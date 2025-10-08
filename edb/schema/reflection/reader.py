@@ -45,9 +45,8 @@ from . import structure as sr_struct
 SchemaClassLayout = dict[type[s_obj.Object], sr_struct.SchemaTypeLayout]
 
 
-def parse_into(
+def parse_schema(
     base_schema: s_schema.Schema,
-    schema: s_schema.FlatSchema,
     data: str | bytes,
     schema_class_layout: SchemaClassLayout,
 ) -> s_schema.FlatSchema:
@@ -170,14 +169,14 @@ def parse_into(
                     if val is not None and type(val) is not ftype:
                         if issubclass(ftype, s_expr.Expression):
                             val = _parse_expression(val, objid, k)
-                            for refid in val.refs.ids(schema):
+                            for refid in val.refs.ids():
                                 refs_to[refid][mcls, fn][objid] = None
                         elif issubclass(ftype, s_expr.ExpressionList):
                             exprs = []
                             for e_dict in val:
                                 e = _parse_expression(e_dict, objid, k)
                                 assert e.refs is not None
-                                for refid in e.refs.ids(schema):
+                                for refid in e.refs.ids():
                                     refs_to[refid][mcls, fn][objid] = None
                                 exprs.append(e)
                             val = ftype(exprs)
@@ -187,7 +186,7 @@ def parse_into(
                                 e = _parse_expression(
                                     e_dict['expr'], objid, k)
                                 assert e.refs is not None
-                                for refid in e.refs.ids(schema):
+                                for refid in e.refs.ids():
                                     refs_to[refid][mcls, fn][objid] = None
                                 expr_dict[e_dict['name']] = e
                             val = ftype(expr_dict)
@@ -254,41 +253,22 @@ def parse_into(
                 updated_data[field.index] = v
             id_to_data[objid] = tuple(updated_data)
 
-    with schema._refs_to.mutate() as mm:
-        for referred_id, refdata in refs_to.items():
-            try:
-                refs = mm[referred_id]
-            except KeyError:
-                refs = immutables.Map((
-                    (k, immutables.Map(r)) for k, r in refdata.items()
-                ))
-            else:
-                refs_update = {}
-                for k, referrers in refdata.items():
-                    try:
-                        rt = refs[k]
-                    except KeyError:
-                        rt = immutables.Map(referrers)
-                    else:
-                        rt = rt.update(referrers)
-                    refs_update[k] = rt
+    refs_to_im = {}
+    for referred_id, ref_data in refs_to.items():
+        refs_to_im[referred_id] = immutables.Map((
+            (k, immutables.Map(r)) for k, r in ref_data.items()
+        ))
 
-                refs = refs.update(refs_update)
-
-            mm[referred_id] = refs
-
-    schema = schema._replace(
-        id_to_type=schema._id_to_type.update(id_to_type),
-        id_to_data=schema._id_to_data.update(id_to_data),
-        name_to_id=schema._name_to_id.update(name_to_id),
-        shortname_to_id=schema._shortname_to_id.update(
+    return s_schema.EMPTY_SCHEMA._replace(
+        id_to_type=immutables.Map(id_to_type),
+        id_to_data=immutables.Map(id_to_data),
+        name_to_id=immutables.Map(name_to_id),
+        shortname_to_id=immutables.Map({
             (k, frozenset(v)) for k, v in shortname_to_id.items()
-        ),
-        globalname_to_id=schema._globalname_to_id.update(globalname_to_id),
-        refs_to=mm.finish(),
+        }),
+        globalname_to_id=immutables.Map(globalname_to_id),
+        refs_to=immutables.Map(refs_to_im),
     )
-
-    return schema
 
 
 def _parse_expression(

@@ -26,7 +26,6 @@ from edb.edgeql import qltypes
 
 from edb import errors
 
-from . import abc as s_abc
 from . import constraints
 from . import delta as sd
 from . import inheriting
@@ -46,7 +45,6 @@ if TYPE_CHECKING:
 
 class Property(
     pointers.Pointer,
-    s_abc.Property,
     qlkind=qltypes.SchemaObjectClass.PROPERTY,
     data_safe=False,
 ):

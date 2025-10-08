@@ -34,7 +34,6 @@ from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
 from edb.edgeql import compiler as qlcompiler
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import casts as s_casts
 from . import delta as sd
@@ -85,7 +84,6 @@ CollectionExprAliasT = typing.TypeVar(
 class Type(
     so.SubclassableObject,
     s_anno.AnnotationSubject,
-    s_abc.Type,
 ):
     """A schema item that is a valid *type*."""
 
@@ -1050,7 +1048,7 @@ class IntersectionTypeShell(TypeExprShell[TypeT_co]):
 _collection_impls: dict[str, type[Collection]] = {}
 
 
-class Collection(Type, s_abc.Collection):
+class Collection(Type):
 
     _schema_name: typing.ClassVar[typing.Optional[str]] = None
 
@@ -1323,7 +1321,6 @@ class CollectionExprAlias(QualifiedType, Collection):
 
 class Array(
     Collection,
-    s_abc.Array,
     qlkind=qltypes.SchemaObjectClass.ARRAY_TYPE,
     schema_name='array',
 ):
@@ -1711,7 +1708,6 @@ Tuple_T_co = typing.TypeVar('Tuple_T_co', bound='Tuple', covariant=True)
 
 class Tuple(
     Collection,
-    s_abc.Tuple,
     qlkind=qltypes.SchemaObjectClass.TUPLE_TYPE,
     schema_name='tuple',
 ):
@@ -2281,7 +2277,6 @@ Range_T_co = typing.TypeVar('Range_T_co', bound='Range', covariant=True)
 
 class Range(
     Collection,
-    s_abc.Range,
     qlkind=qltypes.SchemaObjectClass.RANGE_TYPE,
     schema_name='range',
 ):
@@ -2644,7 +2639,6 @@ MultiRange_T_co = typing.TypeVar(
 
 class MultiRange(
     Collection,
-    s_abc.MultiRange,
     qlkind=qltypes.SchemaObjectClass.MULTIRANGE_TYPE,
     schema_name='multirange',
 ):

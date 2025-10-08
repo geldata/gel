@@ -111,9 +111,8 @@ fn _unquote_string(s: &str) -> Result<String, String> {
                         if code > 0x7f || code == 0 {
                             return Err(format!(
                                 "invalid string literal: \
-                                 invalid escape sequence '\\x{:x}' \
-                                 (only non-null ascii allowed)",
-                                code
+                                 invalid escape sequence '\\x{code:x}' \
+                                 (only non-null ascii allowed)"
                             ));
                         }
                         res.push(code as char);

@@ -340,7 +340,12 @@ def assert_data_shape(
             elif isinstance(shape, type):
                 return _assert_type_shape(path, data, shape)
             elif isinstance(shape, float):
-                if not math.isclose(data, shape,
+                if math.isnan(shape):
+                    if not math.isnan(shape):
+                        fail(
+                            f'NaN mismatch {_format_path(path)}'
+                        )
+                elif not math.isclose(data, shape,
                                     rel_tol=rel_tol, abs_tol=abs_tol):
                     fail(
                         f'{message}: not isclose({data}, {shape}) '

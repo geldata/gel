@@ -19,7 +19,7 @@
 
 create extension package pgvector version '0.7.4' {
     set ext_module := "ext::pgvector";
-    set sql_extensions := ["vector >=0.7.4,<0.8.0"];
+    set sql_extensions := ["vector >=0.7.4,<0.9.0"];
 
     set sql_setup_script := $script$
         -- Rename the vector_norm to be consistent with l2_norm
