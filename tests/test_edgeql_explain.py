@@ -66,6 +66,27 @@ class TestEdgeQLExplain(tb.QueryTestCase):
             f'analyze {no_ex}{query}'
         ))
 
+    async def _assert_index_use(self, query):
+        def look(obj):
+            if (
+                isinstance(obj, dict)
+                and obj.get('plan_type') in ['IndexScan', 'BitmapHeapScan']
+            ):
+                # TODO: could add a param to check for  index name
+                return True
+
+            if isinstance(obj, dict):
+                return any([look(v) for v in obj.values()])
+            elif isinstance(obj, list):
+                return any(look(v) for v in obj)
+            else:
+                return False
+
+        plan = await self.explain(query)
+
+        if not look(plan):
+            raise AssertionError(f'query did not use an index')
+
     async def test_edgeql_explain_simple_01(self):
         res = await self.explain('''
             select User { id, name } filter .name = 'Elvis'
@@ -1924,12 +1945,32 @@ class TestEdgeQLExplain(tb.QueryTestCase):
         )
 
     async def test_edgeql_explain_user_func_index_01(self):
-        res = await self.explain('''
+        await self._assert_index_use('''
             select Issue {id}
             filter .number2 = '500!'
         ''')
-        plan_type = res['fine_grained']['pipeline'][0]['plan_type']
-        self.assertIn(plan_type, ['IndexScan', 'BitmapHeapScan'])
+
+    async def test_edgeql_explain_order_index_01(self):
+        # name has a regular index
+        await self._assert_index_use('''
+            select User {id, name, rank}
+            order by .name limit 1
+        ''')
+
+    async def test_edgeql_explain_order_index_02(self):
+        # id's index is via an exclusive constraint
+        await self._assert_index_use('''
+            select User {id, name, rank}
+            order by .id limit 1
+        ''')
+
+    async def test_edgeql_explain_order_index_03(self):
+        # id's index is via an exclusive constraint
+        await self._assert_index_use('''
+            select User {id, name, rank}
+            filter .id > <uuid>'611155ee-9fe9-11f0-a8be-91239325009b'
+            order by .id empty last limit 1
+        ''')
 
     async def test_edgeql_explain_bug_5758(self):
         # Issue #5758
