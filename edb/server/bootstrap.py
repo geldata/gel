@@ -790,11 +790,21 @@ def prepare_patch(
         create.generate(block)
         return (block.to_string(), update), (), {}
 
-    if kind == 'repair':
+    if kind.startswith('repair'):
         assert not patch
         if not user_schema:
             return (update,), (), dict(is_user_update=True)
         assert global_schema
+
+        if kind.startswith('repair+user_ext'):
+            # Only run a userext update if the extension we are trying to
+            # update is installed.
+            extension_name = kind.split('|')[-1]
+            extension = user_schema.get_global(
+                s_exts.Extension, extension_name, default=None)
+
+            if not extension:
+                return (update,), (), {}
 
         # TODO: Implement the last-repair-only optimization?
         try:
