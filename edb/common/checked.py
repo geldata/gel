@@ -28,7 +28,6 @@ from typing import (
     MutableSequence,
     MutableSet,
     Sequence,
-    cast,
     overload,
 )
 
@@ -36,7 +35,6 @@ import collections.abc
 import itertools
 import types
 
-from edb.common import debug
 from edb.common import parametric
 
 
@@ -77,16 +75,6 @@ class ParametricContainer:
 class AbstractCheckedList[T]:
     type: type
     _container: list[T]
-
-    @classmethod
-    def _check_type(cls, value: Any) -> T:
-        """Ensure `value` is of type T and return it."""
-        if not isinstance(value, cls.type):
-            raise ValueError(
-                f"{cls!r} accepts only values of type {cls.type!r}, "
-                f"got {type(value)!r}"
-            )
-        return cast(T, value)
 
     def __init__(self, iterable: Iterable[T] = ()) -> None:
         pass
@@ -129,7 +117,7 @@ class FrozenCheckedList[T](
 ):
     def __init__(self, iterable: Iterable[T] = ()) -> None:
         super().__init__()
-        self._container = [self._check_type(element) for element in iterable]
+        self._container = [element for element in iterable]
         self._hash_cache = -1
 
     def __hash__(self) -> int:
@@ -180,7 +168,7 @@ class CheckedList[T](
 ):
     def __init__(self, iterable: Iterable[T] = ()) -> None:
         super().__init__()
-        self._container = [self._check_type(element) for element in iterable]
+        self._container = [element for element in iterable]
 
     #
     # Sequence
@@ -210,11 +198,11 @@ class CheckedList[T](
 
     def __setitem__(self, index: int | slice, value: Any) -> None:
         if isinstance(index, int):
-            self._container[index] = self._check_type(value)
+            self._container[index] = value
             return
 
         _slice = index
-        self._container[_slice] = filter(self._check_type, value)
+        self._container[_slice] = value
 
     @overload
     def __delitem__(self, index: int) -> None: ...
@@ -226,7 +214,7 @@ class CheckedList[T](
         del self._container[index]
 
     def insert(self, index: int, value: T) -> None:
-        self._container.insert(index, self._check_type(value))
+        self._container.insert(index, value)
 
     def __len__(self) -> int:
         return len(self._container)
@@ -242,7 +230,7 @@ class CheckedList[T](
         return self.__class__(itertools.chain(other, self))
 
     def __iadd__(self, other: Iterable[T]) -> CheckedList[T]:
-        self._container.extend(filter(self._check_type, other))
+        self._container.extend(other)
         return self
 
     def __mul__(self, n: int) -> CheckedList[T]:
@@ -264,16 +252,6 @@ class AbstractCheckedSet[T](AbstractSet[T]):
 
     def __init__(self, iterable: Iterable[T] = ()) -> None:
         pass
-
-    @classmethod
-    def _check_type(cls, value: Any) -> T:
-        """Ensure `value` is of type T and return it."""
-        if not isinstance(value, cls.type):
-            raise ValueError(
-                f"{cls!r} accepts only values of type {cls.type!r}, "
-                f"got {type(value)!r}"
-            )
-        return cast(T, value)
 
     def _cast(self, other: Any) -> AbstractSet[T]:
         if isinstance(other, (FrozenCheckedSet, CheckedSet)):
@@ -326,7 +304,7 @@ class FrozenCheckedSet[T](
 ):
     def __init__(self, iterable: Iterable[T] = ()) -> None:
         super().__init__()
-        self._container = {self._check_type(element) for element in iterable}
+        self._container = {element for element in iterable}
         self._hash_cache = -1
 
     def __hash__(self) -> int:
@@ -347,10 +325,6 @@ class FrozenCheckedSet[T](
 
     def __and__(self, other: AbstractSet[T]) -> FrozenCheckedSet[T]:
         other_set = self._cast(other)
-        for elem in other_set:
-            # We need the explicit type check to reject nonsensical
-            # & operations that must always result in an empty new set.
-            self._check_type(elem)
         return self.__class__(other_set & self._container)
 
     __rand__ = __and__
@@ -365,10 +339,6 @@ class FrozenCheckedSet[T](
 
     def __sub__(self, other: AbstractSet[T]) -> FrozenCheckedSet[T]:
         other_set = self._cast(other)
-        for elem in other_set:
-            # We need the explicit type check to reject nonsensical
-            # - operations that always return the original checked set.
-            self._check_type(elem)
         return self.__class__(self._container - other_set)
 
     def __rsub__(self, other: AbstractSet[T]) -> FrozenCheckedSet[T]:
@@ -403,7 +373,7 @@ class CheckedSet[T](
 
     def __init__(self, iterable: Iterable[T] = ()) -> None:
         super().__init__()
-        self._container = {self._check_type(element) for element in iterable}
+        self._container = {element for element in iterable}
 
     #
     # Replaced mixins of collections.abc.Set
@@ -418,10 +388,6 @@ class CheckedSet[T](
 
     def __and__(self, other: AbstractSet[T]) -> CheckedSet[T]:
         other_set = self._cast(other)
-        for elem in other_set:
-            # We need the explicit type check to reject nonsensical
-            # & operations that must always result in an empty new set.
-            self._check_type(elem)
         return self.__class__(other_set & self._container)
 
     __rand__ = __and__
@@ -434,10 +400,6 @@ class CheckedSet[T](
 
     def __sub__(self, other: AbstractSet[T]) -> CheckedSet[T]:
         other_set = self._cast(other)
-        for elem in other_set:
-            # We need the explicit type check to reject nonsensical
-            # - operations that always return the original checked set.
-            self._check_type(elem)
         return self.__class__(self._container - other_set)
 
     def __rsub__(self, other: AbstractSet[T]) -> CheckedSet[T]:
@@ -455,33 +417,29 @@ class CheckedSet[T](
     #
 
     def add(self, value: T) -> None:
-        self._container.add(self._check_type(value))
+        self._container.add(value)
 
     def discard(self, value: T) -> None:
-        self._container.discard(self._check_type(value))
+        self._container.discard(value)
 
     #
     # Replaced mixins of collections.abc.MutableSet
     #
 
     def __ior__(self, other: AbstractSet[T]) -> CheckedSet[T]:  # type: ignore
-        self._container |= set(filter(self._check_type, other))
+        self._container |= set(other)
         return self
 
     def __iand__(self, other: AbstractSet[T]) -> CheckedSet[T]:
-        # We do the type check here to reject nonsensical
-        # & operations that always clear the checked set.
-        self._container &= set(filter(self._check_type, other))
+        self._container &= set(other)
         return self
 
     def __ixor__(self, other: AbstractSet[T]) -> CheckedSet[T]:  # type: ignore
-        self._container ^= set(filter(self._check_type, other))
+        self._container ^= set(other)
         return self
 
     def __isub__(self, other: AbstractSet[T]) -> CheckedSet[T]:
-        # We do the type check here to reject nonsensical
-        # - operations that could never affect the checked set.
-        self._container -= set(filter(self._check_type, other))
+        self._container -= set(other)
         return self
 
     #
@@ -517,26 +475,6 @@ class AbstractCheckedDict[K, V]:
     keytype: type
     valuetype: type
     _container: dict[K, V]
-
-    @classmethod
-    def _check_key_type(cls, key: Any) -> K:
-        """Ensure `key` is of type K and return it."""
-        if not isinstance(key, cls.keytype):
-            raise KeyError(
-                f"{cls!r} accepts only keys of type {cls.keytype!r}, "
-                f"got {type(key)!r}"
-            )
-        return cast(K, key)
-
-    @classmethod
-    def _check_value_type(cls, value: Any) -> V:
-        """Ensure `value` is of type V and return it."""
-        if not isinstance(value, cls.valuetype):
-            raise ValueError(
-                f"{cls!r} accepts only values of type "
-                "{cls.valuetype!r}, got {type(value)!r}"
-            )
-        return cast(V, value)
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, CheckedDict):
@@ -590,8 +528,7 @@ class CheckedDict[K, V](
     #
 
     def __setitem__(self, key: K, value: V) -> None:
-        self._check_key_type(key)
-        self._container[key] = self._check_value_type(value)
+        self._container[key] = value
 
     def __delitem__(self, key: K) -> None:
         del self._container[key]
@@ -603,40 +540,8 @@ class CheckedDict[K, V](
     @classmethod
     def fromkeys(
         cls, iterable: Iterable[K], value: Optional[V] = None
-    ) -> CheckedDict[K, V]:
-        new: CheckedDict[K, V] = cls()
+    ) -> CheckedDict[K, V | None]:
+        new: CheckedDict[K, V | None] = cls()  # type: ignore
         for key in iterable:
-            new[cls._check_key_type(key)] = cls._check_value_type(value)
+            new[key] = value
         return new
-
-
-def _identity[T](cls: type, value: T) -> T:
-    return value
-
-
-_type_checking = {
-    CheckedList: ["_check_type"],
-    CheckedDict: ["_check_key_type", "_check_value_type"],
-    CheckedSet: ["_check_type"],
-    FrozenCheckedList: ["_check_type"],
-    FrozenCheckedSet: ["_check_type"],
-}
-
-
-def disable_typechecks() -> None:
-    for type_, methods in _type_checking.items():
-        for method in methods:
-            setattr(type_, method, _identity)
-
-
-def enable_typechecks() -> None:
-    for type_, methods in _type_checking.items():
-        for method in methods:
-            try:
-                delattr(type_, method)
-            except AttributeError:
-                continue
-
-
-if not debug.flags.typecheck:
-    disable_typechecks()

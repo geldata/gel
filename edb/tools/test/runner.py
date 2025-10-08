@@ -32,7 +32,6 @@ import itertools
 import json
 import multiprocessing
 import multiprocessing.reduction
-import multiprocessing.util
 import os
 import pathlib
 import random
@@ -46,7 +45,6 @@ import time
 import types
 import unittest.case
 import unittest.result
-import unittest.runner
 import unittest.signals
 import warnings
 

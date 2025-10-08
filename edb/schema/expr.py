@@ -448,7 +448,7 @@ class ExpressionShell(so.Shell):
         return f'<ExpressionShell {self.text} refs=({refs})>'
 
 
-class ExpressionList(checked.FrozenCheckedList[Expression]):
+class ExpressionList(list[Expression]):
 
     @staticmethod
     def merge_values(
