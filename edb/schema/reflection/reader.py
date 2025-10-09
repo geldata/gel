@@ -49,7 +49,7 @@ def parse_schema(
     base_schema: s_schema.Schema,
     data: str | bytes,
     schema_class_layout: SchemaClassLayout,
-) -> s_schema.FlatSchema:
+) -> s_schema.Schema:
     """Parse JSON-encoded schema objects and populate the schema with them.
 
     Args:

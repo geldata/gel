@@ -52,6 +52,7 @@ from . import objects as so
 from . import operators as s_oper
 from . import pseudo as s_pseudo
 from . import types as s_types
+from . import _schema as rust_schema
 
 if TYPE_CHECKING:
     import uuid
@@ -1506,9 +1507,6 @@ def apply_module_aliases(
     return module
 
 
-EMPTY_SCHEMA: Schema = FlatSchema()
-
-
 def upgrade_schema(schema: Schema) -> Schema:
     """Repair a schema object serialized by an older patch version
 
@@ -1970,3 +1968,161 @@ def _get_last_migration(
         latest = children[0]
 
     return latest
+
+
+class RustSchema(Schema):
+    def __init__(self, inner: rust_schema.Schema):
+        self.inner = inner
+
+    @staticmethod
+    def empty() -> RustSchema:
+        return RustSchema(rust_schema.Schema.empty())
+
+    @staticmethod
+    def parse_reflection(
+        base_schema: RustSchema, reflected_json: str
+    ) -> Schema:
+        return RustSchema(
+            rust_schema.Schema.parse_reflection(
+                base_schema.inner, reflected_json
+            )
+        )
+
+    def dump(self, pretty: bool = False) -> str:
+        return self.inner.dump(pretty=pretty)
+
+    def has_object(self, id: uuid.UUID) -> bool:
+        return self.inner.has_object(id)
+
+    def _get_by_id(
+        self,
+        obj_id: uuid.UUID,
+        default: so.Object_T | so.NoDefaultT | None = so.NoDefault,
+        *,
+        type: Optional[type[so.Object_T]] = None,
+    ) -> Optional[so.Object_T]:
+        obj = self.inner.get_by_id(obj_id)
+        if obj is None:
+            if default is so.NoDefault:
+                raise LookupError(
+                    f'reference to a non-existent schema item {obj_id}'
+                    f' in schema {self!r}'
+                ) from None
+            else:
+                return default
+
+        if type is not None and not isinstance(obj, type):
+            raise TypeError(
+                f'schema object {obj_id!r} exists, but is a '
+                f'{obj.__class__.get_schema_class_displayname()!r}, '
+                f'not a {type.get_schema_class_displayname()!r}'
+            )
+        return obj  # type: ignore
+
+    def get_by_name(
+        self, name: sn.Name
+    ) -> Optional[so.Object]:
+        return self.inner.get_by_name(name)
+
+    def get_by_globalname[T: so.Object](
+        self, cls: type[T], name: sn.Name
+    ) -> Optional[T]:
+        return self.inner.get_by_global_name(cls, name)
+
+    def get_by_shortname[T: so.Object](
+        self, cls: type[T], name: sn.Name
+    ) -> Optional[tuple[T, ...]]:
+        return self.inner.get_by_short_name(cls, name)
+
+    def get_obj_data_raw(self, obj: so.Object) -> Optional[tuple[Any, ...]]:
+        return self.inner.get_obj_data_raw(obj)
+
+    def get_obj_field_raw(
+        self, obj: so.Object, field_index: int
+    ) -> Optional[Any]:
+        return self.inner.get_obj_field_raw(obj, field_index)
+
+    def _get_object_ids(self) -> Iterable[uuid.UUID]:
+        return self.inner._get_object_ids()
+
+    def _get_global_name_ids(
+        self,
+    ) -> Iterable[tuple[type[so.Object], uuid.UUID]]:
+        return self.inner._get_global_name_ids()
+
+    def get_referrers(
+        self,
+        scls: so.Object,
+        *,
+        scls_type: Optional[type[so.Object_T]] = None,
+        field_name: Optional[str] = None,
+    ) -> frozenset[so.Object_T]:
+        return self.inner.get_referrers(  # type: ignore
+            scls, scls_type, field_name
+        )
+
+    def get_referrers_ex(
+        self,
+        scls: so.Object,
+        *,
+        scls_type: Optional[type[so.Object_T]] = None,
+    ) -> dict[
+        tuple[type[so.Object_T], str],
+        frozenset[so.Object_T],
+    ]:
+        return self.inner.get_referrers_ex(scls, scls_type)  # type: ignore
+
+    def add_raw(
+        self, id: uuid.UUID, sclass: type[so.Object], data: tuple[Any]
+    ) -> RustSchema:
+        # print('add_raw', sclass, data)
+        return RustSchema(self.inner.add_raw(id, sclass, data))
+
+    def delete(self, obj: so.Object) -> RustSchema:
+        return RustSchema(self.inner.delete(obj))
+
+    def delist(self, name: sn.Name) -> RustSchema:
+        return RustSchema(self.inner.delist(name))
+
+    def set_obj_field(
+        self,
+        obj: so.Object,
+        fieldname: str,
+        value: Any,
+    ) -> RustSchema:
+        scls = type(obj)
+        field = scls.get_schema_field(fieldname)
+        if value is not None and field in scls.get_reducible_fields():
+            value = value.schema_reduce()
+        # print('set_obj_field', scls, fieldname, value)
+        return RustSchema(self.inner.set_obj_field(obj, fieldname, value))
+
+    def unset_obj_field(self, obj: so.Object, fieldname: str) -> RustSchema:
+        return RustSchema(self.inner.unset_obj_field(obj, fieldname))
+
+    def update_obj(
+        self,
+        obj: so.Object,
+        updates: Mapping[str, Any],
+    ) -> RustSchema:
+        if not updates:
+            return self
+
+        scls = type(obj)
+        reducible_fields = scls.get_reducible_fields()
+        if reducible_fields:
+            updates_reduced = {}
+            for field_name, value in updates.items():
+                field = scls.get_schema_field(field_name)
+                if value is not None and field in reducible_fields:
+                    value = value.schema_reduce()
+                updates_reduced[field_name] = value
+        else:
+            updates_reduced = dict(updates)
+
+        # print('update_obj', obj, updates_reduced)
+
+        return RustSchema(self.inner.update_obj(obj, updates_reduced))
+
+
+EMPTY_SCHEMA: Schema = RustSchema.empty()
