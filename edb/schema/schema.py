@@ -155,7 +155,7 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_by_shortname[T: so.Object](
+    def get_by_shortname[T: s_func.Function | s_oper.Operator](
         self,
         mcls: type[T],
         shortname: sn.Name,
@@ -346,6 +346,22 @@ class Schema(abc.ABC):
             return default
         else:
             Schema.raise_bad_reference(name, type=type)
+
+    def fetch_by_shortname[T: s_func.Function | s_oper.Operator](
+        self,
+        mcls: type[T],
+        shortname: str | sn.Name,
+        span: Optional[parsing.Span] = None
+    ) -> tuple[T, ...]:
+        """Retrieve object by shortname"""
+
+        if isinstance(shortname, str):
+            shortname = sn.QualName.from_string(shortname)
+        objs = self.get_by_shortname(mcls, shortname)
+        if objs is not None:
+            return objs
+        else:
+            Schema.raise_bad_reference(shortname, type=mcls)
 
     # TODO: rename to fetch_global
     @overload
@@ -1375,7 +1391,7 @@ class FlatSchema(Schema):
             return None
         return _raw_schema_restore(mcls.__name__, obj_id)  # type: ignore
 
-    def get_by_shortname[T: so.Object](
+    def get_by_shortname[T: s_func.Function | s_oper.Operator](
         self,
         mcls: type[T],
         shortname: sn.Name,
@@ -1906,7 +1922,7 @@ class ChainedSchema(Schema):
             return obj
         return self._base_schema.get_by_globalname(mcls, name)
 
-    def get_by_shortname[T: so.Object](
+    def get_by_shortname[T: s_func.Function | s_oper.Operator](
         self,
         mcls: type[T],
         shortname: sn.Name,

@@ -1285,11 +1285,9 @@ def compile_ext_ai_search(
             case _:
                 raise RuntimeError(f"unsupported distance_function: {df}")
 
-        distance_funcs = schema.get_by_shortname(
+        distance_func, = schema.fetch_by_shortname(
             s_func.Function, sn.QualName("ext::pgvector", distance_fname)
         )
-        assert distance_funcs
-        distance_func = distance_funcs[0]
 
         index_metadata[typeref] = {
             "id": s_indexes.get_ai_index_id(schema, index),
