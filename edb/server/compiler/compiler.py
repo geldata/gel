@@ -247,10 +247,6 @@ def new_compiler(
 ) -> Compiler:
     """Create and return a compiler instance."""
 
-    # XXX: THIS IS NOT GREAT
-    assert isinstance(std_schema, s_schema.FlatSchema)
-    assert isinstance(reflection_schema, s_schema.FlatSchema)
-
     if not backend_runtime_params:
         backend_runtime_params = pg_params.get_default_runtime_params()
 
@@ -357,8 +353,8 @@ async def load_std_and_reflection_schema(
     key = f"std_and_reflection_schema{vkey}"
     data = await instdata.get_instdata(backend_conn, key, 'bin')
     try:
-        std_schema: s_schema.FlatSchema
-        refl_schema: s_schema.FlatSchema
+        std_schema: s_schema.Schema
+        refl_schema: s_schema.Schema
         std_schema, refl_schema = pickle.loads(data)
         if vkey != pg_patches.get_version_key(len(pg_patches.PATCHES)):
             std_schema = s_schema.upgrade_schema(std_schema)
@@ -396,8 +392,8 @@ async def load_schema_class_layout(
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CompilerState:
 
-    std_schema: s_schema.FlatSchema
-    refl_schema: s_schema.FlatSchema
+    std_schema: s_schema.Schema
+    refl_schema: s_schema.Schema
     schema_class_layout: s_refl.SchemaClassLayout
 
     backend_runtime_params: pg_params.BackendRuntimeParams

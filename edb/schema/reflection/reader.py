@@ -259,7 +259,7 @@ def parse_schema(
             (k, immutables.Map(r)) for k, r in ref_data.items()
         ))
 
-    return s_schema.EMPTY_SCHEMA._replace(
+    return s_schema.FlatSchema()._replace(
         id_to_type=immutables.Map(id_to_type),
         id_to_data=immutables.Map(id_to_data),
         name_to_id=immutables.Map(name_to_id),

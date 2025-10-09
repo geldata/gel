@@ -417,7 +417,7 @@ def resolve_name(
 
     This takes into account the current module and modaliases.
 
-    This function mostly mirrors schema.FlatSchema._search_with_getter
+    This function mostly mirrors schema.lookup
     except:
     - If no module and no default module was set, try the current module
     - When searching in std, ensure module is not a local module
@@ -434,10 +434,8 @@ def resolve_name(
     orig_module = module
 
     # Apply module aliases
-    is_current, module = s_schema.apply_module_aliases(
-        module, modaliases, current_module,
-    )
-    no_std = declaration or is_current
+    module = s_schema.apply_module_aliases(module, modaliases)
+    no_std = declaration
 
     # Check if something matches the name
     if module is not None:
@@ -451,7 +449,7 @@ def resolve_name(
         if exists(fqname):
             return fqname
 
-    # Try something in std if __current__ was not specified
+    # Try something in std
     if not no_std:
         # If module == None, look in std
         if orig_module is None:
