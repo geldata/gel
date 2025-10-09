@@ -220,6 +220,13 @@ class Schema(abc.ABC):
     def get_obj_data_raw(
         self,
         obj: so.Object,
+    ) -> Optional[tuple[Any, ...]]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_obj_field_raw(
+        self,
+        obj: so.Object,
         field_index: int,
     ) -> Optional[Any]:
         raise NotImplementedError
@@ -939,6 +946,12 @@ class FlatSchema(Schema):
                              refs_to=refs_to)
 
     def get_obj_data_raw(
+        self,
+        obj: so.Object,
+    ) -> Optional[tuple[Any, ...]]:
+        return self._id_to_data.get(obj.id)
+
+    def get_obj_field_raw(
         self,
         obj: so.Object,
         field_index: int
@@ -1739,7 +1752,7 @@ class ChainedSchema(Schema):
                 top_schema = self._top_schema.add_raw(
                     obj_id,
                     type(base_obj),
-                    self._base_schema._id_to_data[obj_id],
+                    self._base_schema.get_obj_data_raw(base_obj),
                 )
             else:
                 top_schema = self._top_schema
@@ -1753,14 +1766,26 @@ class ChainedSchema(Schema):
     def get_obj_data_raw(
         self,
         obj: so.Object,
+    ) -> Optional[tuple[Any, ...]]:
+        data = self._top_schema.get_obj_data_raw(obj)
+        if data is not None:
+            return data
+        data = self._base_schema.get_obj_data_raw(obj)
+        if data is not None:
+            return data
+        return self._global_schema.get_obj_data_raw(obj)
+
+    def get_obj_field_raw(
+        self,
+        obj: so.Object,
         field_index: int,
     ) -> Optional[Any]:
         if self._top_schema.has_object(obj.id):
-            return self._top_schema.get_obj_data_raw(obj, field_index)
+            return self._top_schema.get_obj_field_raw(obj, field_index)
         if self._base_schema.has_object(obj.id):
-            return self._base_schema.get_obj_data_raw(obj, field_index)
+            return self._base_schema.get_obj_field_raw(obj, field_index)
         if self._global_schema.has_object(obj.id):
-            return self._global_schema.get_obj_data_raw(obj, field_index)
+            return self._global_schema.get_obj_field_raw(obj, field_index)
         raise AssertionError(
             f'cannot get item data: item {str(obj.id)!r} '
             f'is not present in the schema {self!r}'
