@@ -319,10 +319,8 @@ fn cls_from_py(ty: Bound<PyType>) -> PyResult<gel_schema::Class> {
 }
 
 fn cls_into_py<'p>(py: Python<'p>, cls: Class) -> Bound<'p, PyAny> {
-    let object_meta = import_fq(py, "edb.schema.objects.ObjectMeta").unwrap();
-    object_meta
-        .call_method("get_schema_class", (cls.as_ref(),), None)
-        .unwrap()
+    let get_schema_class = imports::get_schema_class(py).unwrap();
+    get_schema_class.call1((cls.as_ref(),)).unwrap()
 }
 
 fn name_from_py(name: Bound<PyAny>) -> PyResult<gel_schema::Name> {
@@ -346,17 +344,15 @@ fn name_from_py(name: Bound<PyAny>) -> PyResult<gel_schema::Name> {
 }
 
 fn name_into_py<'p>(py: Python<'p>, name: &gel_schema::Name) -> PyResult<Bound<'p, PyAny>> {
-    let name_mod = py.import("edb.schema.name")?;
-
     if let Some(module) = &name.module {
-        let name_cls = name_mod.getattr("QualName")?;
+        let name_cls = imports::QualName(py)?;
 
         let args = PyDict::new(py);
         args.set_item("module", module)?;
         args.set_item("name", &name.object)?;
         name_cls.call((), Some(&args))
     } else {
-        let name_cls = name_mod.getattr("UnqualName")?;
+        let name_cls = imports::UnqualName(py)?;
         name_cls.call((&name.object,), None)
     }
 }
@@ -364,8 +360,7 @@ fn name_into_py<'p>(py: Python<'p>, name: &gel_schema::Name) -> PyResult<Bound<'
 fn object_into_py<'p>(py: Python<'p>, obj: &gel_schema::Object) -> PyResult<Bound<'p, PyAny>> {
     let cls_name: &str = obj.class().as_ref();
 
-    let object_mod = py.import("edb.schema.objects")?;
-    let object_cls = object_mod.getattr("Object")?;
+    let object_cls = imports::Object(py)?;
     let raw_schema_restore = object_cls.getattr("raw_schema_restore")?;
 
     raw_schema_restore.call((cls_name, obj.id()), Default::default())
@@ -463,8 +458,8 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
         gel_schema::Value::Expression(expression) => expr_into_py(py, expression),
 
         gel_schema::Value::ExpressionList(exprs) => {
-            let expr_cls = import_fq(py, "edb.schema.expr.Expression")?;
-            let list_cls = import_fq(py, "edb.schema.expr.ExpressionList")?;
+            let expr_cls = imports::Expression(py)?;
+            let list_cls = imports::ExpressionList(py)?;
 
             let mut values_py = Vec::new();
             for expr in exprs {
@@ -486,12 +481,13 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
             value_ty,
             values,
         } => {
-            let module = match *ty {
-                ContainerTy::MultiPropSet => py.import("edb.schema.objects"),
-                ContainerTy::ExpressionList => py.import("edb.schema.expr"),
-                _ => py.import("edb.common.checked"),
-            }?;
-            let cls = module.getattr(ty.as_ref())?;
+            let cls = match *ty {
+                ContainerTy::FrozenCheckedList => imports::FrozenCheckedList(py)?,
+                ContainerTy::FrozenCheckedSet => imports::FrozenCheckedSet(py)?,
+                ContainerTy::ExpressionList => imports::ExpressionList(py)?,
+                ContainerTy::CheckedList => imports::CheckedList(py)?,
+                ContainerTy::MultiPropSet => imports::MultiPropSet(py)?,
+            };
 
             // parametrize
             let value_ty = ty_to_py(py, &value_ty)?;
@@ -503,20 +499,33 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
             }
             cls.call1((values_py,))
         }
-        gel_schema::Value::Enum(enum_name, variant_name) => {
-            let module = match *enum_name {
-                EnumTy::Language => py.import("edb.edgeql.ast")?,
-                EnumTy::ExprType => py.import("edb.schema.types")?,
-                _ => py.import("edb.edgeql.qltypes")?,
+        gel_schema::Value::Enum(enum_ty, variant_name) => {
+            let enum_cls = match *enum_ty {
+                EnumTy::Language => imports::Language(py)?,
+                EnumTy::ExprType => imports::ExprType(py)?,
+                EnumTy::SchemaCardinality => imports::SchemaCardinality(py)?,
+                EnumTy::LinkTargetDeleteAction => imports::LinkTargetDeleteAction(py)?,
+                EnumTy::LinkSourceDeleteAction => imports::LinkSourceDeleteAction(py)?,
+                EnumTy::OperatorKind => imports::OperatorKind(py)?,
+                EnumTy::Volatility => imports::Volatility(py)?,
+                EnumTy::ParameterKind => imports::ParameterKind(py)?,
+                EnumTy::TypeModifier => imports::TypeModifier(py)?,
+                EnumTy::AccessPolicyAction => imports::AccessPolicyAction(py)?,
+                EnumTy::AccessKind => imports::AccessKind(py)?,
+                EnumTy::TriggerTiming => imports::TriggerTiming(py)?,
+                EnumTy::TriggerKind => imports::TriggerKind(py)?,
+                EnumTy::TriggerScope => imports::TriggerScope(py)?,
+                EnumTy::RewriteKind => imports::RewriteKind(py)?,
+                EnumTy::MigrationGeneratedBy => imports::MigrationGeneratedBy(py)?,
+                EnumTy::IndexDeferrability => imports::IndexDeferrability(py)?,
+                EnumTy::SplatStrategy => imports::SplatStrategy(py)?,
             };
-
-            let enum_cls = module.getattr(enum_name.as_ref())?;
             enum_cls.getattr(variant_name)
         }
         gel_schema::Value::Version(version) => {
-            let cls = import_fq(py, "edb.common.verutils.Version")?;
+            let cls = imports::Version(py)?;
 
-            let stage_cls = import_fq(py, "edb.common.verutils.VersionStage")?;
+            let stage_cls = imports::VersionStage(py)?;
             let stage = stage_cls.getattr(version.stage.as_ref())?;
 
             cls.call(
@@ -695,17 +704,17 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         });
     }
 
-    let name = import_fq(py, "edb.schema.name.Name")?;
+    let name = imports::Name(py)?;
     if val.is_instance(&name)? {
         return Ok(Value::Name(name_from_py(val)?));
     }
 
-    let span = import_fq(py, "edb.common.span.Span")?;
+    let span = imports::Span(py)?;
     if val.is_instance(&span)? {
         return Ok(Value::None);
     }
 
-    let expr_list = import_fq(py, "edb.schema.expr.ExpressionList")?;
+    let expr_list = imports::ExpressionList(py)?;
     if val.is_instance(&expr_list)? {
         // values
         let list = val.getattr("_container")?.cast_into_exact::<PyList>()?;
@@ -720,7 +729,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         return Ok(Value::ExpressionList(exprs));
     }
 
-    let checked_list = import_fq(py, "edb.common.checked.AbstractCheckedList")?;
+    let checked_list = imports::AbstractCheckedList(py)?;
     if val.is_instance(&checked_list)? {
         let ty_name = val.get_type().getattr("__name__")?.to_string();
         let ty_name = ty_name.split_once('[').map(|(n, _)| n).unwrap_or(&ty_name);
@@ -742,7 +751,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         });
     }
 
-    let checked_set = import_fq(py, "edb.common.checked.FrozenCheckedSet")?;
+    let checked_set = imports::FrozenCheckedSet(py)?;
     if val.is_instance(&checked_set)? {
         let value_ty = val.getattr("type")?.getattr("__name__")?.to_string();
 
@@ -760,12 +769,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         });
     }
 
-    let object_index_base = import_fq(py, "edb.schema.objects.ObjectIndexBase")?;
-    if val.is_instance(&object_index_base)? {
-        panic!()
-    }
-
-    let str_enum = import_fq(py, "edb.common.enum.StrEnum")?;
+    let str_enum = imports::StrEnum(py)?;
     if val.is_instance(&str_enum)? {
         let bound = val.get_type().name()?;
         let enum_name = bound.to_str()?;
@@ -774,7 +778,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             .unwrap_or_else(|| panic!("Unknown enum variant: {enum_name}.{variant_name}",));
         return Ok(val);
     }
-    let int_enum = import_fq(py, "enum.IntEnum")?;
+    let int_enum = imports::IntEnum(py)?;
     if val.is_instance(&int_enum)? {
         let ty_name = val.get_type().name()?;
         let enum_name = ty_name.to_str()?;
@@ -786,8 +790,8 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         return Ok(val);
     }
 
-    let expr_cls = import_fq(py, "edb.schema.expr.Expression")?;
-    if val.is_instance(&expr_cls)? {
+    let expr_cls = imports::Expression(py)?;
+    if val.is_instance(expr_cls)? {
         let text = val.getattr("text")?.to_string();
         let refs_object_set = val.getattr("refs")?;
         let refs = if refs_object_set.is_none() {
@@ -799,8 +803,8 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         return Ok(Value::Expression(Expression { text, refs, origin }));
     }
 
-    let version_cls = import_fq(py, "edb.common.verutils.Version")?;
-    if val.is_instance(&version_cls)? {
+    let version_cls = imports::Version(py)?;
+    if val.is_instance(version_cls)? {
         let stage = val.getattr("stage")?.getattr("_name_")?.to_string();
         let local: Vec<String> = val.getattr("local")?.extract()?;
 
@@ -859,20 +863,21 @@ fn ty_to_py<'p>(py: Python<'p>, reference: &str) -> PyResult<Bound<'p, PyAny>> {
         match ty_name {
             "int" => Ok(PyInt::type_object(py).into_any()),
             "str" => Ok(PyString::type_object(py).into_any()),
-            "Object" => import_fq(py, "edb.schema.objects.Object"),
-            "Type" => import_fq(py, "edb.schema.types.Type"),
-            "AnnotationValue" => import_fq(py, "edb.schema.annos.AnnotationValue"),
-            "Pointer" => import_fq(py, "edb.schema.pointers.Pointer"),
-            "Constraint" => import_fq(py, "edb.schema.constraints.Constraint"),
-            "AccessKind" => import_fq(py, "edb.edgeql.qltypes.AccessKind"),
-            "AccessPolicy" => import_fq(py, "edb.schema.policies.AccessPolicy"),
-            "Global" => import_fq(py, "edb.schema.globals.Global"),
-            "Permission" => import_fq(py, "edb.schema.permissions.Permission"),
-            "ObjectType" => import_fq(py, "edb.schema.objtypes.ObjectType"),
-            "Extension" => import_fq(py, "edb.schema.extensions.Extension"),
-            "Index" => import_fq(py, "edb.schema.indexes.Index"),
-            "Migration" => import_fq(py, "edb.schema.migrations.Migration"),
-            "Expression" => import_fq(py, "edb.schema.expr.Expression"),
+            "Object" => imports::Object(py).cloned(),
+            "Type" => imports::Type(py).cloned(),
+            "AnnotationValue" => imports::AnnotationValue(py).cloned(),
+            "Pointer" => imports::Pointer(py).cloned(),
+            "Constraint" => imports::Constraint(py).cloned(),
+            "AccessKind" => imports::AccessKind(py).cloned(),
+            "AccessPolicy" => imports::AccessPolicy(py).cloned(),
+            "Global" => imports::Global(py).cloned(),
+            "Permission" => imports::Permission(py).cloned(),
+            "ObjectType" => imports::ObjectType(py).cloned(),
+            "Extension" => imports::Extension(py).cloned(),
+            "Index" => imports::Index(py).cloned(),
+            "Migration" => imports::Migration(py).cloned(),
+            "Expression" => imports::Expression(py).cloned(),
+            "Version" => imports::Version(py).cloned(),
             _ => panic!("todo import of type: {ty_name}"),
         }
     } else {
@@ -890,3 +895,209 @@ fn import_fq<'p>(py: Python<'p>, fq: &str) -> PyResult<Bound<'p, PyAny>> {
 }
 
 pyo3::import_exception!(edb.errors, SchemaError);
+
+mod imports {
+    #![allow(non_snake_case)]
+
+    use pyo3::prelude::*;
+    use pyo3::sync::PyOnceLock;
+
+    pub fn Object(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objects", "Object")
+    }
+
+    pub fn get_schema_class(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.get_or_try_init(py, || {
+            let s_obj = py.import("edb.schema.objects")?;
+            let obj_meta_cls = s_obj.getattr("ObjectMeta")?;
+            let method = obj_meta_cls.getattr("get_schema_class")?;
+            Ok(method.unbind())
+        })
+        .map(|o| o.bind(py))
+    }
+    pub fn MultiPropSet(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objects", "MultiPropSet")
+    }
+    pub fn Type(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.types", "Type")
+    }
+    pub fn AnnotationValue(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.annos", "AnnotationValue")
+    }
+    pub fn Pointer(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.pointers", "Pointer")
+    }
+    pub fn Constraint(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.constraints", "Constraint")
+    }
+    pub fn AccessPolicy(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.policies", "AccessPolicy")
+    }
+    pub fn Global(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.globals", "Global")
+    }
+    pub fn Permission(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.permissions", "Permission")
+    }
+    pub fn ObjectType(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objtypes", "ObjectType")
+    }
+    pub fn Extension(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.extensions", "Extension")
+    }
+    pub fn Index(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.indexes", "Index")
+    }
+    pub fn Migration(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.migrations", "Migration")
+    }
+    pub fn Expression(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.expr", "Expression")
+    }
+    pub fn ExpressionList(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.expr", "ExpressionList")
+    }
+
+    pub fn StrEnum(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.common.enum", "StrEnum")
+    }
+    pub fn IntEnum(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "enum", "IntEnum")
+    }
+
+    pub fn Name(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.name", "Name")
+    }
+    pub fn QualName(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.name", "QualName")
+    }
+    pub fn UnqualName(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.name", "UnqualName")
+    }
+
+    pub fn Span(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.common.span", "Span")
+    }
+
+    pub fn AbstractCheckedList(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.common.checked", "AbstractCheckedList")
+    }
+    pub fn FrozenCheckedSet(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.common.checked", "FrozenCheckedSet")
+    }
+    pub fn FrozenCheckedList(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.common.checked", "FrozenCheckedList")
+    }
+    pub fn CheckedList(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.common.checked", "CheckedList")
+    }
+
+    pub fn Version(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.common.verutils", "Version")
+    }
+    pub fn VersionStage(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.common.verutils", "VersionStage")
+    }
+
+    pub fn Language(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.ast", "Language")
+    }
+    pub fn ExprType(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.types", "ExprType")
+    }
+
+    pub fn SchemaCardinality(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "SchemaCardinality")
+    }
+    pub fn LinkTargetDeleteAction(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "LinkTargetDeleteAction")
+    }
+    pub fn LinkSourceDeleteAction(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "LinkSourceDeleteAction")
+    }
+    pub fn OperatorKind(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "OperatorKind")
+    }
+    pub fn Volatility(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "Volatility")
+    }
+    pub fn ParameterKind(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "ParameterKind")
+    }
+    pub fn TypeModifier(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "TypeModifier")
+    }
+    pub fn AccessPolicyAction(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "AccessPolicyAction")
+    }
+    pub fn AccessKind(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "AccessKind")
+    }
+    pub fn TriggerTiming(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "TriggerTiming")
+    }
+    pub fn TriggerKind(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "TriggerKind")
+    }
+    pub fn TriggerScope(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "TriggerScope")
+    }
+    pub fn RewriteKind(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "RewriteKind")
+    }
+    pub fn MigrationGeneratedBy(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "MigrationGeneratedBy")
+    }
+    pub fn IndexDeferrability(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "IndexDeferrability")
+    }
+    pub fn SplatStrategy(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.edgeql.qltypes", "SplatStrategy")
+    }
+}
