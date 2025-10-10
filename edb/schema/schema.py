@@ -2072,9 +2072,18 @@ class RustSchema(Schema):
     ]:
         return self.inner.get_referrers_ex(scls, scls_type)  # type: ignore
 
-    def add_raw(
+    def add(
         self, id: uuid.UUID, sclass: type[so.Object], data: tuple[Any]
     ) -> RustSchema:
+        reducible_fields = sclass.get_reducible_fields()
+        if reducible_fields:
+            data_list = list(data)
+            for field in reducible_fields:
+                val = data[field.index]
+                if val is not None:
+                    data_list[field.index] = val.schema_reduce()
+            data = tuple(data_list)
+
         # print('add_raw', sclass, data)
         return RustSchema(self.inner.add_raw(id, sclass, data))
 
