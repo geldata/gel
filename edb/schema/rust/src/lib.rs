@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use gel_schema::{
-    Class, ContainerTy, EnumTy, Expression, ObjectListTy, Value, Version, VersionStage,
+    Class, Container, ContainerTy, EnumTy, Expression, ObjectDict, ObjectIndex, ObjectList,
+    ObjectListTy, ObjectSet, Value, Version, VersionStage,
 };
 use pyo3::exceptions::PyAssertionError;
 use pyo3::types::{
@@ -393,48 +395,45 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
             (cls_name, obj.id()).into_bound_py_any(py)
         }
 
-        gel_schema::Value::ObjectDict {
-            keys,
-            values,
-            value_ty,
-        } => {
-            let value_cls = ty_to_py(py, value_ty)?;
+        gel_schema::Value::ObjectDict(dict) => {
+            let value_cls = ty_to_py(py, &dict.value_ty)?;
 
             (
                 "ObjectDict",
                 (PyString::type_object(py), value_cls),
-                PyTuple::new(py, values)?,
-                (("_keys", PyTuple::new(py, keys)?),),
+                PyTuple::new(py, &dict.values)?,
+                (("_keys", PyTuple::new(py, &dict.keys)?),),
             )
                 .into_bound_py_any(py)
         }
 
-        gel_schema::Value::ObjectList {
-            ty,
-            values,
-            value_ty,
-        } => {
-            let value_cls = value_ty.as_ref().map(|v| ty_ref_to_py(py, v)).transpose()?;
+        gel_schema::Value::ObjectList(list) => {
+            let value_cls = list
+                .value_ty
+                .as_ref()
+                .map(|v| ty_ref_to_py(py, v))
+                .transpose()?;
             let value_cls = value_cls.unwrap_or_else(|| py.None().bind(py).clone());
 
-            (ty.as_ref(), value_cls, PyTuple::new(py, values)?, ()).into_bound_py_any(py)
+            (
+                list.ty.as_ref(),
+                value_cls,
+                PyTuple::new(py, &list.values)?,
+                (),
+            )
+                .into_bound_py_any(py)
         }
 
-        gel_schema::Value::ObjectSet { values, value_ty } => {
-            let value_cls = value_ty.as_ref().map(|t| ty_to_py(py, t)).transpose()?;
+        gel_schema::Value::ObjectSet(set) => {
+            let value_cls = set.value_ty.as_ref().map(|t| ty_to_py(py, t)).transpose()?;
 
-            ("ObjectSet", value_cls, PyTuple::new(py, values)?, ()).into_bound_py_any(py)
+            ("ObjectSet", value_cls, PyTuple::new(py, &set.values)?, ()).into_bound_py_any(py)
         }
 
-        gel_schema::Value::ObjectIndex {
-            ty,
-            value_ty,
-            values,
-            keys,
-        } => {
-            let value_cls = ty_to_py(py, value_ty)?;
+        gel_schema::Value::ObjectIndex(index) => {
+            let value_cls = ty_to_py(py, &index.value_ty)?;
 
-            let keys = if let Some(keys) = keys {
+            let keys = if let Some(keys) = &index.keys {
                 let keys: Vec<_> = keys
                     .iter()
                     .map(|n| name_into_py(py, n))
@@ -445,9 +444,9 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
             };
 
             (
-                ty.as_ref(),
+                index.ty.as_ref(),
                 value_cls,
-                PyTuple::new(py, values)?,
+                PyTuple::new(py, &index.values)?,
                 (("_keys", keys),),
             )
                 .into_bound_py_any(py)
@@ -476,12 +475,8 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
         gel_schema::Value::Int(v) => v.into_bound_py_any(py),
         gel_schema::Value::Float(v) => v.into_bound_py_any(py),
         gel_schema::Value::Str(v) => v.into_bound_py_any(py),
-        gel_schema::Value::Container {
-            ty,
-            value_ty,
-            values,
-        } => {
-            let cls = match *ty {
+        gel_schema::Value::Container(container) => {
+            let cls = match container.ty {
                 ContainerTy::FrozenCheckedList => imports::FrozenCheckedList(py)?,
                 ContainerTy::FrozenCheckedSet => imports::FrozenCheckedSet(py)?,
                 ContainerTy::ExpressionList => imports::ExpressionList(py)?,
@@ -490,11 +485,11 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
             };
 
             // parametrize
-            let value_ty = ty_to_py(py, &value_ty)?;
+            let value_ty = ty_to_py(py, &container.value_ty)?;
             let cls = cls.call_method("__class_getitem__", (value_ty,), None)?;
 
             let mut values_py = Vec::new();
-            for item in values {
+            for item in &container.values {
                 values_py.push(value_into_py(py, item)?);
             }
             cls.call1((values_py,))
@@ -584,24 +579,24 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         let ty_name = ty_name.cast_exact::<PyString>()?.to_str()?;
 
         if ty_name == "ObjectList" {
-            return Ok(Value::ObjectList {
+            return Ok(Value::ObjectList(Arc::new(ObjectList {
                 ty: ObjectListTy::ObjectList,
                 value_ty: ty_name_from_py(val.get_item(1)?)?,
                 values: uuids_from_py(val.get_item(2)?)?,
-            });
+            })));
         }
         if ty_name == "FuncParameterList" {
-            return Ok(Value::ObjectList {
+            return Ok(Value::ObjectList(Arc::new(ObjectList {
                 ty: ObjectListTy::FuncParameterList,
                 value_ty: ty_name_from_py(val.get_item(1)?)?,
                 values: uuids_from_py(val.get_item(2)?)?,
-            });
+            })));
         }
         if ty_name == "ObjectSet" {
-            return Ok(Value::ObjectSet {
+            return Ok(Value::ObjectSet(Arc::new(ObjectSet {
                 value_ty: ty_name_from_py(val.get_item(1)?)?,
                 values: uuids_from_py(val.get_item(2)?)?,
-            });
+            })));
         }
         if ty_name == "ObjectDict" {
             let ty_args = val.get_item(1)?;
@@ -618,11 +613,11 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
                 .iter()
                 .map(|x| x.to_string())
                 .collect();
-            return Ok(Value::ObjectDict {
+            return Ok(Value::ObjectDict(Arc::new(ObjectDict {
                 keys,
                 values,
                 value_ty,
-            });
+            })));
         }
 
         const OBJECT_INDEXES: &[&str] = &[
@@ -652,12 +647,12 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
                 )
             };
 
-            return Ok(Value::ObjectIndex {
+            return Ok(Value::ObjectIndex(Arc::new(ObjectIndex {
                 ty,
                 value_ty,
                 values,
                 keys,
-            });
+            })));
         }
 
         // Expression: this is dodgy matching, we should remove schema_reduce
@@ -694,14 +689,14 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     // weird: this shouldn't be necessary, because nothing is reduced as a list
     // nevertheless Object.bases, is sometimes reduced to a list of uuids
     if let Ok(val) = val.cast_exact::<PyList>() {
-        return Ok(Value::ObjectList {
+        return Ok(Value::ObjectList(Arc::new(ObjectList {
             ty: ObjectListTy::ObjectList,
             value_ty: Some("InheritingObject".into()),
             values: val
                 .iter()
                 .map(|v| v.extract())
                 .collect::<PyResult<Vec<Uuid>>>()?,
-        });
+        })));
     }
 
     let name = imports::Name(py)?;
@@ -744,11 +739,11 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             values.push(value_from_py(py, item)?);
         }
 
-        return Ok(Value::Container {
+        return Ok(Value::Container(Arc::new(Container {
             ty,
             values,
             value_ty,
-        });
+        })));
     }
 
     let checked_set = imports::FrozenCheckedSet(py)?;
@@ -762,11 +757,11 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             values.push(value_from_py(py, item)?);
         }
 
-        return Ok(Value::Container {
+        return Ok(Value::Container(Arc::new(Container {
             ty: gel_schema::ContainerTy::FrozenCheckedSet,
             values,
             value_ty,
-        });
+        })));
     }
 
     let str_enum = imports::StrEnum(py)?;

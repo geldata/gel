@@ -878,7 +878,7 @@ def render_svg_section(
     javascript: str = "",
     invert: bool = False,
 ) -> str:
-    maxlevel = max(r.level for r in blocks) + 1
+    maxlevel = max((r.level for r in blocks), default=1) + 1
     height = (maxlevel + 1) * block_height
     top = 0 if not invert else 3 * block_height
     content = []
