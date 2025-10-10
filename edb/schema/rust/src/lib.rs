@@ -3,8 +3,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use gel_schema::{
-    Class, Container, ContainerTy, EnumTy, Expression, ObjectDict, ObjectIndex, ObjectList,
-    ObjectListTy, ObjectSet, Value, Version, VersionStage,
+    Class, Container, ContainerTy, EnumTy, Expression, ObjectDict, ObjectIndex, ObjectIndexTy,
+    ObjectList, ObjectListTy, ObjectSet, Value, Version, VersionStage,
 };
 use pyo3::exceptions::PyAssertionError;
 use pyo3::types::{
@@ -132,7 +132,7 @@ impl Schema {
         }
     }
 
-    pub fn get_obj_data_raw<'p>(
+    pub fn get_data_raw<'p>(
         &self,
         py: Python<'p>,
         obj: Bound<'p, PyAny>,
@@ -150,7 +150,7 @@ impl Schema {
         PyTuple::new(py, data_py).map(Some)
     }
 
-    pub fn get_obj_field_raw<'p>(
+    pub fn get_field_raw<'p>(
         &self,
         py: Python<'p>,
         obj: Bound<'p, PyAny>,
@@ -181,7 +181,7 @@ impl Schema {
         )
     }
 
-    pub fn add_raw<'p>(
+    pub fn add<'p>(
         &self,
         py: Python<'p>,
         id: Uuid,
@@ -219,7 +219,7 @@ impl Schema {
         Ok(Schema { inner })
     }
 
-    pub fn set_obj_field<'p>(
+    pub fn set_field<'p>(
         &self,
         py: Python<'p>,
         obj: Bound<PyAny>,
@@ -236,7 +236,7 @@ impl Schema {
         Ok(Schema { inner })
     }
 
-    pub fn unset_obj_field<'p>(&self, obj: Bound<PyAny>, fieldname: &str) -> PyResult<Schema> {
+    pub fn unset_field<'p>(&self, obj: Bound<PyAny>, fieldname: &str) -> PyResult<Schema> {
         let obj = object_from_py(obj)?;
 
         let mut inner = self.inner.clone();
@@ -246,7 +246,7 @@ impl Schema {
         Ok(Schema { inner })
     }
 
-    pub fn update_obj<'p>(
+    pub fn set_fields<'p>(
         &self,
         py: Python<'p>,
         obj: Bound<PyAny>,
@@ -411,9 +411,9 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
             let value_cls = list
                 .value_ty
                 .as_ref()
-                .map(|v| ty_ref_to_py(py, v))
-                .transpose()?;
-            let value_cls = value_cls.unwrap_or_else(|| py.None().bind(py).clone());
+                .map(|v| ty_to_py(py, v))
+                .transpose()?
+                .unwrap_or_else(|| py.None().bind(py).clone());
 
             (
                 list.ty.as_ref(),
@@ -574,116 +574,153 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         return Ok(Value::Uuid(uuid));
     }
 
-    if let Ok(val) = val.cast_exact::<PyTuple>() {
-        let ty_name = val.get_item(0)?;
-        let ty_name = ty_name.cast_exact::<PyString>()?.to_str()?;
+    if val.is_exact_instance(imports::QualName(py)?)
+        || val.is_exact_instance(imports::UnqualName(py)?)
+    {
+        return Ok(Value::Name(name_from_py(val)?));
+    }
 
-        if ty_name == "ObjectList" {
-            return Ok(Value::ObjectList(Arc::new(ObjectList {
-                ty: ObjectListTy::ObjectList,
-                value_ty: ty_name_from_py(val.get_item(1)?)?,
-                values: uuids_from_py(val.get_item(2)?)?,
-            })));
-        }
-        if ty_name == "FuncParameterList" {
-            return Ok(Value::ObjectList(Arc::new(ObjectList {
-                ty: ObjectListTy::FuncParameterList,
-                value_ty: ty_name_from_py(val.get_item(1)?)?,
-                values: uuids_from_py(val.get_item(2)?)?,
-            })));
-        }
-        if ty_name == "ObjectSet" {
-            return Ok(Value::ObjectSet(Arc::new(ObjectSet {
-                value_ty: ty_name_from_py(val.get_item(1)?)?,
-                values: uuids_from_py(val.get_item(2)?)?,
-            })));
-        }
-        if ty_name == "ObjectDict" {
-            let ty_args = val.get_item(1)?;
+    let span = imports::Span(py)?;
+    if val.is_instance(&span)? {
+        return Ok(Value::None);
+    }
 
-            // let key_ty = ty_args.get_item(0)?.to_string();
-            let value_ty = ty_name_from_py(ty_args.get_item(1)?)?.unwrap();
+    if let Some(id) = val.getattr_opt("id")? {
+        let cls_name = val
+            .get_type()
+            .getattr("__name__")?
+            .cast_into_exact::<PyString>()?;
+        let class = Class::from_str(cls_name.to_str()?).unwrap();
 
-            let values = uuids_from_py(val.get_item(2)?)?;
+        let id = id.extract()?;
+        return Ok(Value::Object(gel_schema::Object::new(class, id)));
+    }
 
-            let attrs = val.get_item(3)?;
-            let keys = attrs.get_item(0)?.get_item(1)?;
-            let keys = keys
-                .cast_into_exact::<PyTuple>()?
-                .iter()
-                .map(|x| x.to_string())
-                .collect();
-            return Ok(Value::ObjectDict(Arc::new(ObjectDict {
-                keys,
-                values,
-                value_ty,
-            })));
-        }
+    let func_param_list = imports::FuncParameterList(py)?;
+    if val.is_exact_instance(func_param_list) {
+        return Ok(Value::ObjectList(Arc::new(ObjectList {
+            ty: ObjectListTy::FuncParameterList,
+            value_ty: None,
+            values: uuids_from_py(val.getattr("_ids")?)?,
+        })));
+    }
 
-        const OBJECT_INDEXES: &[&str] = &[
-            "ObjectIndexByShortname",
-            "ObjectIndexByFullname",
-            "ObjectIndexByUnqualifiedName",
-            "ObjectIndexByConstraintName",
-        ];
-        if OBJECT_INDEXES.contains(&ty_name) {
-            let ty = Value::get_object_index_ty_name(ty_name);
+    let expr_list = imports::ExpressionList(py)?;
+    if val.is_exact_instance(&expr_list) {
+        // values
+        let list = val.getattr("_container")?.cast_into_exact::<PyList>()?;
 
-            let ty_arg = val.get_item(1)?;
-            let value_ty = ty_arg.getattr("__name__")?.to_string();
-
-            let values = uuids_from_py(val.get_item(2)?)?;
-
-            let attrs = val.get_item(3)?;
-            let keys = attrs.get_item(0)?.get_item(1)?;
-            let keys = if keys.is_none() {
-                None
-            } else {
-                let keys = keys.cast_into_exact::<PyTuple>()?;
-                Some(
-                    keys.iter()
-                        .map(|x| name_from_py(x))
-                        .collect::<PyResult<Vec<_>>>()?,
-                )
+        let mut exprs = Vec::with_capacity(list.len());
+        for item in list {
+            let Value::Expression(expr) = value_from_py(py, item)? else {
+                panic!()
             };
-
-            return Ok(Value::ObjectIndex(Arc::new(ObjectIndex {
-                ty,
-                value_ty,
-                values,
-                keys,
-            })));
+            exprs.push(expr);
         }
+        return Ok(Value::ExpressionList(exprs));
+    }
 
-        // Expression: this is dodgy matching, we should remove schema_reduce
-        if val.len() == 3 {
-            let text = val.get_item(0)?;
-            let refs = val.get_item(1)?;
-            let origin = val.get_item(2)?;
+    if val.is_exact_instance(imports::Expression(py)?)
+        || val.is_exact_instance(imports::CompiledExpression(py)?)
+    {
+        let text = val.getattr("text")?.to_string();
+        let refs_object_set = val.getattr("refs")?;
+        let refs = if refs_object_set.is_none() {
+            Vec::new()
+        } else {
+            uuids_from_py(refs_object_set.getattr("_ids")?)?
+        };
+        let origin = opt_str_from_py(val.getattr("origin")?)?;
+        return Ok(Value::Expression(Expression { text, refs, origin }));
+    }
 
-            if let (Ok(text), Ok(refs)) =
-                (text.cast_exact::<PyString>(), refs.cast_exact::<PyTuple>())
-            {
-                let refs = refs.get_item(2)?.cast_into_exact::<PyTuple>()?;
-                let refs: Vec<uuid::Uuid> =
-                    refs.iter().map(|r| r.extract()).collect::<PyResult<_>>()?;
+    let ty_bases = val.get_type().as_any().getattr("__bases__")?;
+    let ty_base_0 = if ty_bases.len()? >= 1 {
+        Some(ty_bases.get_item(0)?)
+    } else {
+        None
+    };
 
-                return Ok(Value::Expression(Expression {
-                    text: text.to_string(),
-                    refs,
-                    origin: if origin.is_none() {
-                        None
-                    } else {
-                        Some(origin.to_string())
-                    },
-                }));
-            }
-        }
+    let object_list = imports::ObjectList(py)?;
+    if ty_base_0.as_ref().map_or(false, |t| t.is(object_list)) {
+        return Ok(Value::ObjectList(Arc::new(ObjectList {
+            ty: ObjectListTy::ObjectList,
+            value_ty: parametric_arg_from_py(&val)?,
+            values: uuids_from_py(val.getattr("_ids")?)?,
+        })));
+    }
 
-        if let Ok(class) = gel_schema::Class::from_str(ty_name) {
-            let id = val.get_item(1)?.extract()?;
-            return Ok(Value::Object(gel_schema::Object::new(class, id)));
-        }
+    let object_set = imports::ObjectSet(py)?;
+    if ty_base_0.as_ref().map_or(false, |t| t.is(object_set)) {
+        return Ok(Value::ObjectSet(Arc::new(ObjectSet {
+            value_ty: parametric_arg_from_py(&val)?,
+            values: uuids_from_py(val.getattr("_ids")?)?,
+        })));
+    }
+
+    let object_dict = imports::ObjectDict(py)?;
+    if ty_base_0.as_ref().map_or(false, |t| t.is(object_dict)) {
+        let mut ty_args = parametric_args_from_py(&val)?.into_iter();
+
+        let _key_ty = ty_args.next();
+        let value_ty = ty_args.next().unwrap();
+
+        let values = uuids_from_py(val.getattr("_ids")?)?;
+        let keys = val.getattr("_keys")?;
+        let keys = keys
+            .cast_into_exact::<PyTuple>()?
+            .iter()
+            .map(|x| x.to_string())
+            .collect();
+
+        return Ok(Value::ObjectDict(Arc::new(ObjectDict {
+            keys,
+            values,
+            value_ty,
+        })));
+    }
+
+    let object_index_ty = ty_base_0.and_then(|t| {
+        None.or_else(|| {
+            t.is(imports::ObjectIndexByShortname(py).unwrap())
+                .then_some(ObjectIndexTy::ObjectIndexByShortname)
+        })
+        .or_else(|| {
+            t.is(imports::ObjectIndexByFullname(py).unwrap())
+                .then_some(ObjectIndexTy::ObjectIndexByFullname)
+        })
+        .or_else(|| {
+            t.is(imports::ObjectIndexByUnqualifiedName(py).unwrap())
+                .then_some(ObjectIndexTy::ObjectIndexByUnqualifiedName)
+        })
+        .or_else(|| {
+            t.is(imports::ObjectIndexByConstraintName(py).unwrap())
+                .then_some(ObjectIndexTy::ObjectIndexByConstraintName)
+        })
+    });
+    if let Some(object_index_ty) = object_index_ty {
+        let value_ty = parametric_arg_from_py(&val)?.unwrap();
+
+        let values = uuids_from_py(val.getattr("_ids")?)?;
+
+        let keys = val.getattr("_keys")?;
+        let keys = if keys.is_none() {
+            None
+        } else {
+            let keys = keys.cast_into_exact::<PyTuple>()?;
+            Some(
+                keys.iter()
+                    .map(|x| name_from_py(x))
+                    .collect::<PyResult<Vec<_>>>()?,
+            )
+        };
+
+        return Ok(Value::ObjectIndex(Arc::new(ObjectIndex {
+            ty: object_index_ty,
+            value_ty,
+            values,
+            keys,
+        })));
     }
 
     // weird: this shouldn't be necessary, because nothing is reduced as a list
@@ -699,38 +736,12 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         })));
     }
 
-    let name = imports::Name(py)?;
-    if val.is_instance(&name)? {
-        return Ok(Value::Name(name_from_py(val)?));
-    }
-
-    let span = imports::Span(py)?;
-    if val.is_instance(&span)? {
-        return Ok(Value::None);
-    }
-
-    let expr_list = imports::ExpressionList(py)?;
-    if val.is_instance(&expr_list)? {
-        // values
-        let list = val.getattr("_container")?.cast_into_exact::<PyList>()?;
-
-        let mut exprs = Vec::with_capacity(list.len());
-        for item in list {
-            let Value::Expression(expr) = value_from_py(py, item)? else {
-                panic!()
-            };
-            exprs.push(expr);
-        }
-        return Ok(Value::ExpressionList(exprs));
-    }
-
     let checked_list = imports::AbstractCheckedList(py)?;
     if val.is_instance(&checked_list)? {
-        let ty_name = val.get_type().getattr("__name__")?.to_string();
-        let ty_name = ty_name.split_once('[').map(|(n, _)| n).unwrap_or(&ty_name);
-        let ty = Value::get_container_ty_name(ty_name);
+        let ty_name = ty_from_py(val.get_type().as_any())?;
+        let ty = Value::get_container_ty_name(&ty_name);
 
-        let value_ty = val.getattr("type")?.getattr("__name__")?.to_string();
+        let value_ty = ty_from_py(val.get_type().as_any())?;
 
         // values
         let list = val.getattr("_container")?.cast_into_exact::<PyList>()?;
@@ -748,7 +759,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
 
     let checked_set = imports::FrozenCheckedSet(py)?;
     if val.is_instance(&checked_set)? {
-        let value_ty = val.getattr("type")?.getattr("__name__")?.to_string();
+        let value_ty = ty_from_py(val.get_type().as_any())?;
 
         // values
         let set = val.getattr("_container")?.cast_into_exact::<PySet>()?;
@@ -785,19 +796,6 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         return Ok(val);
     }
 
-    let expr_cls = imports::Expression(py)?;
-    if val.is_instance(expr_cls)? {
-        let text = val.getattr("text")?.to_string();
-        let refs_object_set = val.getattr("refs")?;
-        let refs = if refs_object_set.is_none() {
-            Vec::new()
-        } else {
-            uuids_from_py(refs_object_set.call_method0("ids")?)?
-        };
-        let origin = opt_str_from_py(val.getattr("origin")?)?;
-        return Ok(Value::Expression(Expression { text, refs, origin }));
-    }
-
     let version_cls = imports::Version(py)?;
     if val.is_instance(version_cls)? {
         let stage = val.getattr("stage")?.getattr("_name_")?.to_string();
@@ -816,12 +814,39 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     Err(pyo3::exceptions::PyNotImplementedError::new_err(msg))
 }
 
+fn parametric_arg_from_py(val: &Bound<'_, PyAny>) -> Result<Option<String>, PyErr> {
+    let ty_args = val.getattr("orig_args")?;
+    let ty_args = ty_args.cast_into::<PyTuple>().unwrap();
+
+    if ty_args.len() != 1 {
+        return Ok(None);
+    }
+
+    Ok(Some(ty_from_py(&ty_args.get_item(0)?)?))
+}
+
+fn parametric_args_from_py(val: &Bound<'_, PyAny>) -> Result<Vec<String>, PyErr> {
+    let ty_args = val.getattr("orig_args")?;
+    let ty_args = ty_args.cast_into::<PyTuple>().unwrap();
+
+    let mut args = Vec::with_capacity(ty_args.len());
+    for ty_arg in ty_args {
+        args.push(ty_from_py(&ty_arg)?);
+    }
+    Ok(args)
+}
+
 fn uuids_from_py(val: Bound<'_, PyAny>) -> Result<Vec<Uuid>, PyErr> {
-    Ok(val
-        .cast_into_exact::<PyTuple>()?
-        .iter()
-        .map(|v| v.extract())
-        .collect::<PyResult<Vec<Uuid>>>()?)
+    if let Ok(val) = val.cast_exact::<PyTuple>() {
+        val.iter()
+            .map(|v| v.extract())
+            .collect::<PyResult<Vec<Uuid>>>()
+    } else {
+        let val = val.cast_into_exact::<PyFrozenSet>().unwrap();
+        val.iter()
+            .map(|v| v.extract())
+            .collect::<PyResult<Vec<Uuid>>>()
+    }
 }
 
 fn opt_str_from_py(val: Bound<PyAny>) -> PyResult<Option<String>> {
@@ -832,24 +857,16 @@ fn opt_str_from_py(val: Bound<PyAny>) -> PyResult<Option<String>> {
     }
 }
 
-fn ty_name_from_py(val: Bound<'_, PyAny>) -> Result<Option<String>, PyErr> {
-    if val.is_none() {
-        Ok(None)
-    } else if let Ok(val_str) = val.cast_exact::<PyString>() {
-        Ok(Some(val_str.to_string()))
+fn ty_from_py(val: &Bound<'_, PyAny>) -> Result<String, PyErr> {
+    Ok(if let Ok(val) = val.cast::<PyString>() {
+        val.to_string()
     } else {
-        // it must be an instance of type, invoke __name__
-        let name = val.getattr("__name__")?;
-        Ok(Some(name.to_string()))
-    }
-}
-
-fn ty_ref_to_py<'p>(py: Python<'p>, reference: &str) -> PyResult<Bound<'p, PyAny>> {
-    if !reference.contains('.') {
-        reference.trim_matches('\'').into_bound_py_any(py)
-    } else {
-        import_fq(py, reference)
-    }
+        let ty_name = val.getattr("__name__")?.to_string();
+        ty_name
+            .split_once('[')
+            .map(|(n, _)| n.to_string())
+            .unwrap_or(ty_name)
+    })
 }
 
 fn ty_to_py<'p>(py: Python<'p>, reference: &str) -> PyResult<Bound<'p, PyAny>> {
@@ -859,11 +876,20 @@ fn ty_to_py<'p>(py: Python<'p>, reference: &str) -> PyResult<Bound<'p, PyAny>> {
             "int" => Ok(PyInt::type_object(py).into_any()),
             "str" => Ok(PyString::type_object(py).into_any()),
             "Object" => imports::Object(py).cloned(),
+            "InheritingObject" => imports::InheritingObject(py).cloned(),
+            "ObjectList" => imports::ObjectList(py).cloned(),
+            "ObjectSet" => imports::ObjectSet(py).cloned(),
+            "ObjectDict" => imports::ObjectDict(py).cloned(),
+            "ObjectIndexBase" => imports::ObjectIndexBase(py).cloned(),
+            "ObjectIndexByShortname" => imports::ObjectIndexByShortname(py).cloned(),
+            "ObjectIndexByFullname" => imports::ObjectIndexByFullname(py).cloned(),
+            "ObjectIndexByUnqualifiedName" => imports::ObjectIndexByUnqualifiedName(py).cloned(),
+            "ObjectIndexByConstraintName" => imports::ObjectIndexByConstraintName(py).cloned(),
+            "MultiPropSet" => imports::MultiPropSet(py).cloned(),
             "Type" => imports::Type(py).cloned(),
             "AnnotationValue" => imports::AnnotationValue(py).cloned(),
             "Pointer" => imports::Pointer(py).cloned(),
             "Constraint" => imports::Constraint(py).cloned(),
-            "AccessKind" => imports::AccessKind(py).cloned(),
             "AccessPolicy" => imports::AccessPolicy(py).cloned(),
             "Global" => imports::Global(py).cloned(),
             "Permission" => imports::Permission(py).cloned(),
@@ -871,8 +897,23 @@ fn ty_to_py<'p>(py: Python<'p>, reference: &str) -> PyResult<Bound<'p, PyAny>> {
             "Extension" => imports::Extension(py).cloned(),
             "Index" => imports::Index(py).cloned(),
             "Migration" => imports::Migration(py).cloned(),
+            "FuncParameterList" => imports::FuncParameterList(py).cloned(),
+            "Parameter" => imports::Parameter(py).cloned(),
             "Expression" => imports::Expression(py).cloned(),
+            "ExpressionList" => imports::ExpressionList(py).cloned(),
+            "StrEnum" => imports::StrEnum(py).cloned(),
+            "IntEnum" => imports::IntEnum(py).cloned(),
+            "Name" => imports::Name(py).cloned(),
+            "QualName" => imports::QualName(py).cloned(),
+            "UnqualName" => imports::UnqualName(py).cloned(),
+            "Span" => imports::Span(py).cloned(),
+            "AbstractCheckedList" => imports::AbstractCheckedList(py).cloned(),
+            "FrozenCheckedSet" => imports::FrozenCheckedSet(py).cloned(),
+            "FrozenCheckedList" => imports::FrozenCheckedList(py).cloned(),
+            "CheckedList" => imports::CheckedList(py).cloned(),
             "Version" => imports::Version(py).cloned(),
+            "VersionStage" => imports::VersionStage(py).cloned(),
+
             _ => panic!("todo import of type: {ty_name}"),
         }
     } else {
@@ -901,6 +942,10 @@ mod imports {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.objects", "Object")
     }
+    pub fn InheritingObject(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objects", "InheritingObject")
+    }
 
     pub fn get_schema_class(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
@@ -912,6 +957,41 @@ mod imports {
         })
         .map(|o| o.bind(py))
     }
+
+    pub fn ObjectList(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objects", "ObjectList")
+    }
+    pub fn ObjectSet(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objects", "ObjectSet")
+    }
+    pub fn ObjectDict(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objects", "ObjectDict")
+    }
+    pub fn ObjectIndexBase(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objects", "ObjectIndexBase")
+    }
+
+    pub fn ObjectIndexByShortname(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objects", "ObjectIndexByShortname")
+    }
+    pub fn ObjectIndexByFullname(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objects", "ObjectIndexByFullname")
+    }
+    pub fn ObjectIndexByUnqualifiedName(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objects", "ObjectIndexByUnqualifiedName")
+    }
+    pub fn ObjectIndexByConstraintName(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.constraints", "ObjectIndexByConstraintName")
+    }
+
     pub fn MultiPropSet(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.objects", "MultiPropSet")
@@ -960,9 +1040,22 @@ mod imports {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.migrations", "Migration")
     }
+    pub fn FuncParameterList(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.functions", "FuncParameterList")
+    }
+    pub fn Parameter(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.functions", "Parameter")
+    }
+
     pub fn Expression(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.expr", "Expression")
+    }
+    pub fn CompiledExpression(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.expr", "CompiledExpression")
     }
     pub fn ExpressionList(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();

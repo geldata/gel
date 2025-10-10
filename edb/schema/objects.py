@@ -3023,7 +3023,8 @@ class ObjectList[Object_T: Object](
 ):
 
     def __repr__(self) -> str:
-        return f'ObjectList([{", ".join(str(id) for id in self._ids)}])'
+        cls_name = self.__type__.__name__
+        return f'{cls_name}([{", ".join(str(id) for id in self._ids)}])'
 
     def first(self, schema: s_schema.Schema, default: Any = NoDefault) -> Any:
         # The `Any` return type is so that using methods on Object subclasses
