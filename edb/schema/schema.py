@@ -170,30 +170,13 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def add_raw(
-        self: Self,
-        id: uuid.UUID,
-        sclass: type[so.Object],
-        data: tuple[Any, ...],
-    ) -> Self:
-        raise NotImplementedError
-
     def add(
         self,
         id: uuid.UUID,
         sclass: type[so.Object],
         data: tuple[Any, ...],
     ) -> Self:
-        reducible_fields = sclass.get_reducible_fields()
-        if reducible_fields:
-            data_list = list(data)
-            for field in reducible_fields:
-                val = data[field.index]
-                if val is not None:
-                    data_list[field.index] = val.schema_reduce()
-            data = tuple(data_list)
-
-        return self.add_raw(id, sclass, data)
+        raise NotImplementedError
 
     def discard(self: Self, obj: so.Object) -> Self:
         if self.has_object(obj.id):
@@ -1169,12 +1152,21 @@ class FlatSchema(Schema):
 
         return result
 
-    def add_raw(
+    def add(
         self,
         id: uuid.UUID,
         sclass: type[so.Object],
         data: tuple[Any, ...],
     ) -> FlatSchema:
+        reducible_fields = sclass.get_reducible_fields()
+        if reducible_fields:
+            data_list = list(data)
+            for field in reducible_fields:
+                val = data[field.index]
+                if val is not None:
+                    data_list[field.index] = val.schema_reduce()
+            data = tuple(data_list)
+
         name_field = sclass.get_schema_field('name')
         name = data[name_field.index]
 
@@ -1702,7 +1694,7 @@ class ChainedSchema(Schema):
     def get_global_schema(self) -> Schema:
         return self._global_schema
 
-    def add_raw(
+    def add(
         self,
         id: uuid.UUID,
         sclass: type[so.Object],
@@ -1712,12 +1704,12 @@ class ChainedSchema(Schema):
             return ChainedSchema(
                 self._base_schema,
                 self._top_schema,
-                self._global_schema.add_raw(id, sclass, data),
+                self._global_schema.add(id, sclass, data),
             )
         else:
             return ChainedSchema(
                 self._base_schema,
-                self._top_schema.add_raw(id, sclass, data),
+                self._top_schema.add(id, sclass, data),
                 self._global_schema,
             )
 
@@ -2096,9 +2088,18 @@ class RustSchema(Schema):
     ]:
         return self.inner.get_referrers_ex(scls, scls_type)  # type: ignore
 
-    def add_raw(
+    def add(
         self, id: uuid.UUID, sclass: type[so.Object], data: tuple[Any]
     ) -> RustSchema:
+        reducible_fields = sclass.get_reducible_fields()
+        if reducible_fields:
+            data_list = list(data)
+            for field in reducible_fields:
+                val = data[field.index]
+                if val is not None:
+                    data_list[field.index] = val.schema_reduce()
+            data = tuple(data_list)
+
         # print('add_raw', sclass, data)
         return RustSchema(self.inner.add_raw(id, sclass, data))
 
