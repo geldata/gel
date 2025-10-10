@@ -2035,12 +2035,12 @@ class RustSchema(Schema):
         return self.inner.get_by_short_name(cls, name)
 
     def get_obj_data_raw(self, obj: so.Object) -> Optional[tuple[Any, ...]]:
-        return self.inner.get_obj_data_raw(obj)
+        return self.inner.get_data_raw(obj)
 
     def get_obj_field_raw(
         self, obj: so.Object, field_index: int
     ) -> Optional[Any]:
-        return self.inner.get_obj_field_raw(obj, field_index)
+        return self.inner.get_field_raw(obj, field_index)
 
     def _get_object_ids(self) -> Iterable[uuid.UUID]:
         return self.inner._get_object_ids()
@@ -2075,17 +2075,8 @@ class RustSchema(Schema):
     def add(
         self, id: uuid.UUID, sclass: type[so.Object], data: tuple[Any]
     ) -> RustSchema:
-        reducible_fields = sclass.get_reducible_fields()
-        if reducible_fields:
-            data_list = list(data)
-            for field in reducible_fields:
-                val = data[field.index]
-                if val is not None:
-                    data_list[field.index] = val.schema_reduce()
-            data = tuple(data_list)
-
         # print('add_raw', sclass, data)
-        return RustSchema(self.inner.add_raw(id, sclass, data))
+        return RustSchema(self.inner.add(id, sclass, data))
 
     def delete(self, obj: so.Object) -> RustSchema:
         return RustSchema(self.inner.delete(obj))
@@ -2099,15 +2090,11 @@ class RustSchema(Schema):
         fieldname: str,
         value: Any,
     ) -> RustSchema:
-        scls = type(obj)
-        field = scls.get_schema_field(fieldname)
-        if value is not None and field in scls.get_reducible_fields():
-            value = value.schema_reduce()
         # print('set_obj_field', scls, fieldname, value)
-        return RustSchema(self.inner.set_obj_field(obj, fieldname, value))
+        return RustSchema(self.inner.set_field(obj, fieldname, value))
 
     def unset_obj_field(self, obj: so.Object, fieldname: str) -> RustSchema:
-        return RustSchema(self.inner.unset_obj_field(obj, fieldname))
+        return RustSchema(self.inner.unset_field(obj, fieldname))
 
     def update_obj(
         self,
@@ -2117,21 +2104,8 @@ class RustSchema(Schema):
         if not updates:
             return self
 
-        scls = type(obj)
-        reducible_fields = scls.get_reducible_fields()
-        if reducible_fields:
-            updates_reduced = {}
-            for field_name, value in updates.items():
-                field = scls.get_schema_field(field_name)
-                if value is not None and field in reducible_fields:
-                    value = value.schema_reduce()
-                updates_reduced[field_name] = value
-        else:
-            updates_reduced = dict(updates)
-
-        # print('update_obj', obj, updates_reduced)
-
-        return RustSchema(self.inner.update_obj(obj, updates_reduced))
+        # print('update_obj', obj, updates)
+        return RustSchema(self.inner.set_fields(obj, updates))
 
 
 EMPTY_SCHEMA: Schema = RustSchema.empty()
