@@ -282,3 +282,14 @@ Health Checks
 Using an HTTP client, you can perform health checks to monitor the status of
 your Gel instance. Learn how to use them with our :ref:`health checks guide
 <ref_guide_deployment_health_checks>`.
+
+Separate Postgres instance
+==========================
+
+Although not recommended Gel also works with an external Postgres instance.
+
+Use :gelenv:`GEL_SERVER_BACKEND_DSN` and point it to the Postgres instance.
+Make sure that :gelenv:`GEL_SERVER_DATADIR` is not set.
+
+It's also possible to use multiple Gel instances with a single Postgres instance to achieve isolation.
+Each Gel instance must have :gelenv:`GEL_SERVER_TENANT_ID` set to a unique value.
