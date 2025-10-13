@@ -619,7 +619,7 @@ class RefDict(struct.RTStruct):
         type, frozen=True)
 
 
-class ObjectContainer(s_abc.Reducible):
+class ObjectContainer:
 
     @classmethod
     def schema_refs_from_data(
@@ -775,39 +775,10 @@ class ObjectMeta(type):
                 # The getter was defined explicitly, move on.
                 continue
 
-            ftype = field.type
             # The field getters are hot code as they're essentially
             # attribute access, so be mindful about what you are adding
             # into the callables below.
-            if issubclass(ftype, s_abc.Reducible):
-                def reducible_getter(
-                    self: Any,
-                    schema: s_schema.Schema,
-                    *,
-                    _fn: str = field.name,
-                    _fi: int = findex,
-                    _sr: Callable[[Any], s_abc.Reducible] = (
-                        ftype.schema_restore
-                    ),
-                    _fd: Callable[[], Any] = field.get_default,
-                ) -> Any:
-                    v = schema.get_field_raw(self, _fi)
-                    if v is not None:
-                        return _sr(v)
-                    else:
-                        try:
-                            return _fd()
-                        except ValueError:
-                            pass
-
-                        raise FieldValueNotFoundError(
-                            f'{self!r} object has no value '
-                            f'for field {_fn!r}'
-                        )
-
-                setattr(cls, getter_name, reducible_getter)
-
-            elif (
+            if (
                 field.default is not NoDefault
                 and field.default is not DEFAULT_CONSTRUCTOR
             ):
@@ -1108,13 +1079,6 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
         sclass = ObjectMeta.get_schema_class(sclass_name)
         return sclass(_private_id=obj_id)
 
-    @staticmethod
-    def schema_restore(
-        data: tuple[str, uuid.UUID],
-    ) -> Object:
-        sclass_name, obj_id = data
-        return Object.raw_schema_restore(sclass_name, obj_id)
-
     @classmethod
     def schema_refs_from_data(
         cls,
@@ -1260,10 +1224,7 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
         if isinstance(field, SchemaField):
             val = schema.get_field_raw(self, field.index)
             if val is not None:
-                if field.is_reducible:
-                    return field.type.schema_restore(val)
-                else:
-                    return val
+                return val
             else:
                 try:
                     return field.get_default()
@@ -1289,10 +1250,7 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
         if isinstance(field, SchemaField):
             val = schema.get_field_raw(self, field.index)
             if val is not None:
-                if field.is_reducible:
-                    return field.type.schema_restore(val)
-                else:
-                    return val
+                return val
             elif default is not NoDefault:
                 return default
 
@@ -2374,36 +2332,6 @@ class ObjectCollection[Object_T: "Object"](
     def __hash__(self) -> int:
         return hash(self._ids)
 
-    def schema_reduce(
-        self,
-    ) -> tuple[
-        str,
-        Optional[tuple[builtins.type, ...] | builtins.type],
-        tuple[uuid.UUID, ...],
-        tuple[tuple[str, Any], ...],
-    ]:
-        cls = type(self)
-        _, (typeargs, ids, attrs) = self.__reduce__()
-        if cls.is_anon_parametrized():
-            clsname = cls.__bases__[0].__name__
-        else:
-            clsname = cls.__name__
-        return (clsname, typeargs, ids, tuple(attrs.items()))
-
-    @staticmethod
-    @lru.per_job_lru_cache(maxsize=10240)
-    def schema_restore(
-        data: tuple[
-            str,
-            Optional[tuple[builtins.type, ...] | builtins.type],
-            tuple[uuid.UUID, ...],
-            tuple[tuple[str, Any], ...],
-        ],
-    ) -> ObjectCollection[Object]:
-        clsname, typeargs, ids, attrs = data
-        scoll_class = ObjectCollection.get_subclass(clsname)
-        return scoll_class.__restore__(typeargs, ids, dict(attrs))
-
     @classmethod
     def schema_refs_from_data(
         cls,
@@ -2415,44 +2343,6 @@ class ObjectCollection[Object_T: "Object"](
         ],
     ) -> frozenset[uuid.UUID]:
         return frozenset(data[2])
-
-    def __reduce__(self) -> tuple[
-        Callable[..., ObjectCollection[Any]],
-        tuple[
-            Optional[tuple[builtins.type, ...] | builtins.type],
-            tuple[uuid.UUID, ...],
-            dict[str, Any],
-        ],
-    ]:
-        assert type(self).is_fully_resolved(), \
-            f'{type(self)} parameters are not resolved'
-
-        cls: type[ObjectCollection[Object_T]] = self.__class__
-        types: Optional[tuple[type, ...]] = self.orig_args
-        if types is None or not cls.is_anon_parametrized():
-            typeargs = None
-        else:
-            typeargs = types[0] if len(types) == 1 else types
-        attrs = {k: getattr(self, k) for k in self.__slots__ if k != '_ids'}
-        return (
-            cls.__restore__,
-            (typeargs, tuple(self._ids), attrs)
-        )
-
-    @classmethod
-    def __restore__(
-        cls,
-        typeargs: Optional[tuple[builtins.type, ...] | builtins.type],
-        ids: tuple[uuid.UUID, ...],
-        attrs: dict[str, Any],
-    ) -> ObjectCollection[Object_T]:
-        if typeargs is None or cls.is_anon_parametrized():
-            obj = cls(_ids=ids, **attrs, _private_init=True)
-        else:
-            obj = cls[typeargs](  # type: ignore
-                _ids=ids, **attrs, _private_init=True)
-
-        return obj
 
     def dump(self, schema: s_schema.Schema) -> str:
         return (
@@ -3023,7 +2913,7 @@ class ObjectList[Object_T: Object](
 ):
 
     def __repr__(self) -> str:
-        cls_name = self.__type__.__name__
+        cls_name = type(self).__name__
         return f'{cls_name}([{", ".join(str(id) for id in self._ids)}])'
 
     def first(self, schema: s_schema.Schema, default: Any = NoDefault) -> Any:

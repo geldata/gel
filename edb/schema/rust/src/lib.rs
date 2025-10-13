@@ -287,7 +287,7 @@ impl Schema {
         let referrers = self.inner.get_referrers(obj, cls, referrer_field);
 
         // to py
-        object_set_into_py(py, referrers.iter())
+        set_of_objects_into_py(py, referrers.iter())
     }
 
     pub fn get_referrers_ex<'p>(
@@ -307,7 +307,7 @@ impl Schema {
         let res = PyDict::new(py);
         for ((cls, f), r) in referrers {
             let cls = cls_into_py(py, cls);
-            res.set_item((cls, f), object_set_into_py(py, r.iter())?)?;
+            res.set_item((cls, f), set_of_objects_into_py(py, r.iter())?)?;
         }
         Ok(res)
     }
@@ -360,12 +360,56 @@ fn name_into_py<'p>(py: Python<'p>, name: &gel_schema::Name) -> PyResult<Bound<'
 }
 
 fn object_into_py<'p>(py: Python<'p>, obj: &gel_schema::Object) -> PyResult<Bound<'p, PyAny>> {
-    let cls_name: &str = obj.class().as_ref();
+    let cls = match obj.class() {
+        Class::Object => imports::Object(py)?,
+        Class::InheritingObject => imports::InheritingObject(py)?,
+        Class::AnnotationValue => imports::AnnotationValue(py)?,
+        Class::Annotation => imports::Annotation(py)?,
+        Class::Type => imports::Type(py)?,
+        Class::Array => imports::Array(py)?,
+        Class::ArrayExprAlias => imports::ArrayExprAlias(py)?,
+        Class::Tuple => imports::Tuple(py)?,
+        Class::TupleExprAlias => imports::TupleExprAlias(py)?,
+        Class::Range => imports::Range(py)?,
+        Class::RangeExprAlias => imports::RangeExprAlias(py)?,
+        Class::MultiRange => imports::MultiRange(py)?,
+        Class::MultiRangeExprAlias => imports::MultiRangeExprAlias(py)?,
+        Class::Alias => imports::Alias(py)?,
+        Class::Global => imports::Global(py)?,
+        Class::Permission => imports::Permission(py)?,
+        Class::Parameter => imports::Parameter(py)?,
+        Class::Function => imports::Function(py)?,
+        Class::Cast => imports::Cast(py)?,
+        Class::Migration => imports::Migration(py)?,
+        Class::Module => imports::Module(py)?,
+        Class::Operator => imports::Operator(py)?,
+        Class::PseudoType => imports::PseudoType(py)?,
+        Class::SchemaVersion => imports::SchemaVersion(py)?,
+        Class::GlobalSchemaVersion => imports::GlobalSchemaVersion(py)?,
+        Class::Constraint => imports::Constraint(py)?,
+        Class::FutureBehavior => imports::FutureBehavior(py)?,
+        Class::Rewrite => imports::Rewrite(py)?,
+        Class::Pointer => imports::Pointer(py)?,
+        Class::ScalarType => imports::ScalarType(py)?,
+        Class::Index => imports::Index(py)?,
+        Class::IndexMatch => imports::IndexMatch(py)?,
+        Class::Source => imports::Source(py)?,
+        Class::Property => imports::Property(py)?,
+        Class::Link => imports::Link(py)?,
+        Class::AccessPolicy => imports::AccessPolicy(py)?,
+        Class::Trigger => imports::Trigger(py)?,
+        Class::ObjectType => imports::ObjectType(py)?,
+        Class::ExtensionPackage => imports::ExtensionPackage(py)?,
+        Class::ExtensionPackageMigration => imports::ExtensionPackageMigration(py)?,
+        Class::Extension => imports::Extension(py)?,
+        Class::Role => imports::Role(py)?,
+        Class::Branch => imports::Branch(py)?,
+        cls => todo!("import of schema class: {cls:?}"),
+    };
 
-    let object_cls = imports::Object(py)?;
-    let raw_schema_restore = object_cls.getattr("raw_schema_restore")?;
-
-    raw_schema_restore.call((cls_name, obj.id()), Default::default())
+    let kw_args = PyDict::new(py);
+    kw_args.set_item("_private_id", obj.id())?;
+    cls.call((), Some(&kw_args))
 }
 
 fn object_from_py(obj: Bound<'_, PyAny>) -> PyResult<gel_schema::Object> {
@@ -375,7 +419,7 @@ fn object_from_py(obj: Bound<'_, PyAny>) -> PyResult<gel_schema::Object> {
     Ok(gel_schema::Object::new(cls, id))
 }
 
-fn object_set_into_py<'p, 'a>(
+fn set_of_objects_into_py<'p, 'a>(
     py: Python<'p>,
     objects: impl Iterator<Item = &'a gel_schema::Object>,
 ) -> PyResult<Bound<'p, PyFrozenSet>> {
@@ -389,49 +433,65 @@ fn object_set_into_py<'p, 'a>(
 
 fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<'p, PyAny>> {
     match val {
-        gel_schema::Value::Object(obj) => {
-            let cls_name: &str = obj.class().as_ref();
-
-            (cls_name, obj.id()).into_bound_py_any(py)
-        }
+        gel_schema::Value::Object(obj) => object_into_py(py, obj),
 
         gel_schema::Value::ObjectDict(dict) => {
             let value_cls = ty_to_py(py, &dict.value_ty)?;
 
-            (
-                "ObjectDict",
-                (PyString::type_object(py), value_cls),
-                PyTuple::new(py, &dict.values)?,
-                (("_keys", PyTuple::new(py, &dict.keys)?),),
-            )
+            let dict_cls = imports::ObjectDict(py)?.call_method1(
+                "__class_getitem__",
+                ((PyString::type_object(py), value_cls),),
+            )?;
+
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("_private_init", true)?;
+            dict_cls
+                .call(
+                    (
+                        PyTuple::new(py, &dict.values)?,
+                        PyTuple::new(py, &dict.keys)?,
+                    ),
+                    Some(&kwargs),
+                )?
                 .into_bound_py_any(py)
         }
 
         gel_schema::Value::ObjectList(list) => {
-            let value_cls = list
-                .value_ty
-                .as_ref()
-                .map(|v| ty_to_py(py, v))
-                .transpose()?
-                .unwrap_or_else(|| py.None().bind(py).clone());
+            let cls = match list.ty {
+                ObjectListTy::ObjectList => imports::ObjectList(py)?,
+                ObjectListTy::FuncParameterList => imports::FuncParameterList(py)?,
+            };
 
-            (
-                list.ty.as_ref(),
-                value_cls,
-                PyTuple::new(py, &list.values)?,
-                (),
-            )
+            let cls = if let Some(value_ty) = &list.value_ty {
+                let value_cls = ty_to_py(py, value_ty)?;
+                cls.call_method1("__class_getitem__", (value_cls,))?
+            } else {
+                cls.clone()
+            };
+
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("_private_init", true)?;
+            cls.call((PyTuple::new(py, &list.values)?,), Some(&kwargs))?
                 .into_bound_py_any(py)
         }
 
         gel_schema::Value::ObjectSet(set) => {
-            let value_cls = set.value_ty.as_ref().map(|t| ty_to_py(py, t)).transpose()?;
-
-            ("ObjectSet", value_cls, PyTuple::new(py, &set.values)?, ()).into_bound_py_any(py)
+            object_set_into_py(py, set.value_ty.as_ref(), &set.values)
         }
 
         gel_schema::Value::ObjectIndex(index) => {
+            let cls = match index.ty {
+                ObjectIndexTy::ObjectIndexByFullname => imports::ObjectIndexByFullname(py)?,
+                ObjectIndexTy::ObjectIndexByShortname => imports::ObjectIndexByShortname(py)?,
+                ObjectIndexTy::ObjectIndexByUnqualifiedName => {
+                    imports::ObjectIndexByUnqualifiedName(py)?
+                }
+                ObjectIndexTy::ObjectIndexByConstraintName => {
+                    imports::ObjectIndexByConstraintName(py)?
+                }
+            };
             let value_cls = ty_to_py(py, &index.value_ty)?;
+            let cls = cls.call_method1("__class_getitem__", (value_cls,))?;
 
             let keys = if let Some(keys) = &index.keys {
                 let keys: Vec<_> = keys
@@ -443,12 +503,9 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
                 py.None().into_bound_py_any(py)?
             };
 
-            (
-                index.ty.as_ref(),
-                value_cls,
-                PyTuple::new(py, &index.values)?,
-                (("_keys", keys),),
-            )
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("_private_init", true)?;
+            cls.call((PyTuple::new(py, &index.values)?, keys), Some(&kwargs))?
                 .into_bound_py_any(py)
         }
 
@@ -457,16 +514,11 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
         gel_schema::Value::Expression(expression) => expr_into_py(py, expression),
 
         gel_schema::Value::ExpressionList(exprs) => {
-            let expr_cls = imports::Expression(py)?;
-            let list_cls = imports::ExpressionList(py)?;
-
             let mut values_py = Vec::new();
             for expr in exprs {
-                let expr_data = expr_into_py(py, expr)?;
-                let expr = expr_cls.call_method("schema_restore", (expr_data,), None)?;
-                values_py.push(expr);
+                values_py.push(expr_into_py(py, expr)?);
             }
-            list_cls.call1((values_py,))
+            imports::ExpressionList(py)?.call1((values_py,))
         }
         gel_schema::Value::ExpressionDict(_btree_map) => todo!(),
 
@@ -486,7 +538,7 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
 
             // parametrize
             let value_ty = ty_to_py(py, &container.value_ty)?;
-            let cls = cls.call_method("__class_getitem__", (value_ty,), None)?;
+            let cls = cls.call_method1("__class_getitem__", (value_ty,))?;
 
             let mut values_py = Vec::new();
             for item in &container.values {
@@ -539,17 +591,33 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
     }
 }
 
+fn object_set_into_py<'p>(
+    py: Python<'p>,
+    value_ty: Option<&String>,
+    ids: &[Uuid],
+) -> PyResult<Bound<'p, PyAny>> {
+    let set_cls = if let Some(value_ty) = value_ty {
+        let value_cls = ty_to_py(py, value_ty)?;
+        imports::ObjectSet(py)?.call_method1("__class_getitem__", (value_cls,))?
+    } else {
+        imports::ObjectSet(py)?.clone()
+    };
+
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("_private_init", true)?;
+    set_cls
+        .call((PyTuple::new(py, ids)?,), Some(&kwargs))?
+        .into_bound_py_any(py)
+}
+
 fn expr_into_py<'p>(py: Python<'p>, expression: &Expression) -> PyResult<Bound<'p, PyAny>> {
-    (
-        &expression.text,
-        (
-            "ObjectSet",
-            None::<&str>,
-            PyTuple::new(py, &expression.refs)?,
-            (),
-        ),
-        &expression.origin,
-    )
+    let kw_args = PyDict::new(py);
+    kw_args.set_item("text", &expression.text)?;
+    kw_args.set_item("refs", object_set_into_py(py, None, &expression.refs)?)?;
+    kw_args.set_item("origin", &expression.origin)?;
+
+    imports::Expression(py)?
+        .call((), Some(&kw_args))?
         .into_bound_py_any(py)
 }
 
@@ -942,6 +1010,7 @@ mod imports {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.objects", "Object")
     }
+
     pub fn InheritingObject(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.objects", "InheritingObject")
@@ -996,25 +1065,54 @@ mod imports {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.objects", "MultiPropSet")
     }
-    pub fn Type(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
-        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.schema.types", "Type")
-    }
+
     pub fn AnnotationValue(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.annos", "AnnotationValue")
     }
-    pub fn Pointer(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+    pub fn Annotation(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.schema.pointers", "Pointer")
+        CELL.import(py, "edb.schema.annos", "Annotation")
     }
-    pub fn Constraint(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+    pub fn Type(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.schema.constraints", "Constraint")
+        CELL.import(py, "edb.schema.types", "Type")
     }
-    pub fn AccessPolicy(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+    pub fn Array(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.schema.policies", "AccessPolicy")
+        CELL.import(py, "edb.schema.types", "Array")
+    }
+    pub fn ArrayExprAlias(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.types", "ArrayExprAlias")
+    }
+    pub fn Tuple(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.types", "Tuple")
+    }
+    pub fn TupleExprAlias(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.types", "TupleExprAlias")
+    }
+    pub fn Range(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.types", "Range")
+    }
+    pub fn RangeExprAlias(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.types", "RangeExprAlias")
+    }
+    pub fn MultiRange(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.types", "MultiRange")
+    }
+    pub fn MultiRangeExprAlias(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.types", "MultiRangeExprAlias")
+    }
+    pub fn Alias(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.expraliases", "Alias")
     }
     pub fn Global(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
@@ -1024,29 +1122,119 @@ mod imports {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.permissions", "Permission")
     }
-    pub fn ObjectType(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+    pub fn Parameter(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.schema.objtypes", "ObjectType")
+        CELL.import(py, "edb.schema.functions", "Parameter")
     }
-    pub fn Extension(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+    pub fn Function(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.schema.extensions", "Extension")
-    }
-    pub fn Index(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
-        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.schema.indexes", "Index")
-    }
-    pub fn Migration(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
-        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.schema.migrations", "Migration")
+        CELL.import(py, "edb.schema.functions", "Function")
     }
     pub fn FuncParameterList(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.functions", "FuncParameterList")
     }
-    pub fn Parameter(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+
+    pub fn Cast(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.schema.functions", "Parameter")
+        CELL.import(py, "edb.schema.casts", "Cast")
+    }
+    pub fn Migration(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.migrations", "Migration")
+    }
+    pub fn Module(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.modules", "Module")
+    }
+    pub fn Operator(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.operators", "Operator")
+    }
+    pub fn PseudoType(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.pseudo", "PseudoType")
+    }
+    pub fn SchemaVersion(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.version", "SchemaVersion")
+    }
+    pub fn GlobalSchemaVersion(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.version", "GlobalSchemaVersion")
+    }
+
+    pub fn Constraint(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.constraints", "Constraint")
+    }
+    pub fn FutureBehavior(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.futures", "FutureBehavior")
+    }
+    pub fn Rewrite(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.rewrites", "Rewrite")
+    }
+    pub fn Pointer(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.pointers", "Pointer")
+    }
+    pub fn ScalarType(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.scalars", "ScalarType")
+    }
+    pub fn Index(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.indexes", "Index")
+    }
+    pub fn IndexMatch(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.indexes", "IndexMatch")
+    }
+    pub fn Source(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.sources", "Source")
+    }
+    pub fn Property(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.properties", "Property")
+    }
+    pub fn Link(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.links", "Link")
+    }
+    pub fn AccessPolicy(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.policies", "AccessPolicy")
+    }
+    pub fn Trigger(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.triggers", "Trigger")
+    }
+    pub fn ObjectType(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.objtypes", "ObjectType")
+    }
+    pub fn ExtensionPackage(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.extensions", "ExtensionPackage")
+    }
+    pub fn ExtensionPackageMigration(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.extensions", "ExtensionPackageMigration")
+    }
+    pub fn Extension(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.extensions", "Extension")
+    }
+    pub fn Role(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.roles", "Role")
+    }
+    pub fn Branch(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.databases", "Branch")
     }
 
     pub fn Expression(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
