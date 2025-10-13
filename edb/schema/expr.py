@@ -302,21 +302,6 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer):
             _qlast=self._qlast,
         )
 
-    @classmethod
-    def schema_refs_from_data(
-        cls,
-        data: tuple[
-            str,
-            tuple[
-                str,
-                Optional[tuple[type, ...] | type],
-                tuple[uuid.UUID, ...],
-                tuple[tuple[str, Any], ...],
-            ],
-        ],
-    ) -> frozenset[uuid.UUID]:
-        return so.ObjectCollection.schema_refs_from_data(data[1])
-
     @property
     def ir_statement(self) -> irast_.Statement:
         """Assert this expr is a compiled EdgeQL statement and return its IR"""
