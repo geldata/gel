@@ -50,7 +50,6 @@ from edb.edgeql import qltypes
 from edb.common.typeutils import not_none
 
 from edb.common import checked
-from edb.common import lru
 from edb.common import markup
 from edb.common import ordered
 from edb.common import parametric
@@ -59,7 +58,6 @@ from edb.common import struct
 from edb.common import topological
 from edb.common import uuidgen
 
-from . import abc as s_abc
 from . import name as sn
 from . import _types
 
@@ -285,7 +283,6 @@ class Field[T](struct.ProtoField):
         'merge_fn',
         'reflection_method',
         'reflection_proxy',
-        'is_reducible',
         'patch_level',
         'obj_names_as_string',
     )
@@ -400,7 +397,6 @@ class Field[T](struct.ProtoField):
         self.weak_ref = weak_ref
         self.reflection_method = reflection_method
         self.reflection_proxy = reflection_proxy
-        self.is_reducible = issubclass(type_, s_abc.Reducible)
         self.patch_level = patch_level
         self.obj_names_as_string = obj_names_as_string
 
@@ -620,13 +616,7 @@ class RefDict(struct.RTStruct):
 
 
 class ObjectContainer:
-
-    @classmethod
-    def schema_refs_from_data(
-        cls,
-        data: Any,
-    ) -> frozenset[uuid.UUID]:
-        raise NotImplementedError
+    pass
 
 
 class ObjectMeta(type):
@@ -647,7 +637,6 @@ class ObjectMeta(type):
     #: Fields that contain references to objects either directly or
     #: indirectly.
     _objref_fields: frozenset[SchemaField[Any]]
-    _reducible_fields: frozenset[SchemaField[Any]]
     _aux_cmd_data_fields: frozenset[SchemaField[Any]]  # if f.aux_cmd_data
     _refdicts: collections.OrderedDict[str, RefDict]
     _refdicts_by_refclass: dict[type, RefDict]
@@ -759,10 +748,6 @@ class ObjectMeta(type):
         cls._objref_fields = frozenset(
             f for f in cls._schema_fields.values()
             if issubclass(f.type, ObjectContainer)
-        )
-        cls._reducible_fields = frozenset(
-            f for f in cls._schema_fields.values()
-            if issubclass(f.type, s_abc.Reducible)
         )
 
         fa = '{}.{}_fields'.format(cls.__module__, cls.__name__)
@@ -891,9 +876,6 @@ class ObjectMeta(type):
 
     def get_object_reference_fields(cls) -> frozenset[SchemaField[Any]]:
         return cls._objref_fields
-
-    def get_reducible_fields(cls) -> frozenset[SchemaField[Any]]:
-        return cls._reducible_fields
 
     def get_aux_cmd_data_fields(cls) -> frozenset[SchemaField[Any]]:
         return cls._aux_cmd_data_fields
@@ -1066,25 +1048,6 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
     )
 
     _fields: dict[str, SchemaField[Any]]
-
-    def schema_reduce(self) -> tuple[str, uuid.UUID]:
-        return type(self).__name__, self.id
-
-    @staticmethod
-    @lru.per_job_lru_cache(maxsize=10240)
-    def raw_schema_restore(
-        sclass_name: str,
-        obj_id: uuid.UUID,
-    ) -> Object:
-        sclass = ObjectMeta.get_schema_class(sclass_name)
-        return sclass(_private_id=obj_id)
-
-    @classmethod
-    def schema_refs_from_data(
-        cls,
-        data: tuple[str, uuid.UUID],
-    ) -> frozenset[uuid.UUID]:
-        return frozenset((data[1],))
 
     def get_id(self, schema: s_schema.Schema) -> uuid.UUID:
         return self.id
@@ -2331,18 +2294,6 @@ class ObjectCollection[Object_T: "Object"](
 
     def __hash__(self) -> int:
         return hash(self._ids)
-
-    @classmethod
-    def schema_refs_from_data(
-        cls,
-        data: tuple[
-            str,
-            Optional[tuple[builtins.type, ...] | builtins.type],
-            tuple[uuid.UUID, ...],
-            tuple[tuple[str, Any], ...],
-        ],
-    ) -> frozenset[uuid.UUID]:
-        return frozenset(data[2])
 
     def dump(self, schema: s_schema.Schema) -> str:
         return (
