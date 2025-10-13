@@ -18,23 +18,7 @@
 
 
 from __future__ import annotations
-import typing
 
 
 class Reducible:
-    """An interface implemented by all non-builtin objects stored in schema."""
-
-    def schema_reduce(self) -> typing.Any:
-        """Return a primitive representation of the object.
-
-        The return value must consist of primitive Python objects.
-        """
-        raise NotImplementedError
-
-    @classmethod
-    def schema_restore(
-        cls,
-        data: typing.Any,
-    ) -> Reducible:
-        """Restore object from data returned by *schema_reduce*."""
-        raise NotImplementedError
+    pass

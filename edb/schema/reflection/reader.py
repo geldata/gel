@@ -68,6 +68,13 @@ def parse_schema(
         JSON sequence.
     """
 
+    if isinstance(data, bytes):
+        data = str(data, 'utf-8')
+    if isinstance(base_schema, s_schema.ChainedSchema):
+        base_schema = base_schema._base_schema
+    assert isinstance(base_schema, s_schema.RustSchema)
+    return s_schema.RustSchema.parse_reflection(base_schema, data)
+
     id_to_type = {}
     id_to_data = {}
     name_to_id = {}
@@ -221,7 +228,8 @@ def parse_schema(
                             # XXX: Or should we do it in the container?
                             subtyp = ftype.types[0]
                             objdata[findex] = ftype(
-                                subtyp(x) for x in v)  # type: ignore
+                                subtyp(x) for x in v
+                            )
                         else:
                             objdata[findex] = ftype(v)
                     else:

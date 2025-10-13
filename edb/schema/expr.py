@@ -302,46 +302,6 @@ class Expression(struct.MixedRTStruct, so.ObjectContainer):
             _qlast=self._qlast,
         )
 
-    def schema_reduce(
-        self,
-    ) -> tuple[
-        str,
-        tuple[
-            str,
-            Optional[tuple[type, ...] | type],
-            tuple[uuid.UUID, ...],
-            tuple[tuple[str, Any], ...],
-        ],
-        Optional[str],
-    ]:
-        assert self.refs is not None, 'expected expression to be compiled'
-        return (
-            self.text,
-            self.refs.schema_reduce(),
-            self.origin,
-        )
-
-    @classmethod
-    def schema_restore(
-        cls,
-        data: tuple[
-            str,
-            tuple[
-                str,
-                Optional[tuple[type, ...] | type],
-                tuple[uuid.UUID, ...],
-                tuple[tuple[str, Any], ...],
-            ],
-            Optional[str],
-        ],
-    ) -> Expression:
-        text, refs_data, origin = data
-        return Expression(
-            text=text,
-            refs=so.ObjectCollection.schema_restore(refs_data),
-            origin=origin,
-        )
-
     @classmethod
     def schema_refs_from_data(
         cls,
