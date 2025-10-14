@@ -4151,3 +4151,20 @@ class TestUpdate(tb.QueryTestCase):
                         )
         finally:
             await con.aclose()
+
+    async def test_edgeql_update_filter_by_id_repeatable_read(self):
+        # Test that UPDATE with filter .id = <uuid>$id doesn't incorrectly
+        # trigger an UnsafeIsolationLevelError due to the inherited constraint
+        # from std::BaseObject (which is abstract and has no real postgres table)
+        obj_id = uuid.uuid4()
+        
+        # This should compile without raising UnsafeIsolationLevelError
+        # even though .id has an exclusive constraint inherited from BaseObject
+        await self.con.query(
+            r"""
+                UPDATE UpdateTest
+                FILTER .id = <uuid>$id
+                SET { comment := 'updated' }
+            """,
+            id=obj_id
+        )

@@ -938,6 +938,12 @@ def check_for_isolation_conflicts(
                     root_subject_obj = root_subject
 
                 if isinstance(root_subject_obj, s_objtypes.ObjectType):
+                    # Skip abstract types like BaseObject or Object, as they
+                    # don't have real postgres tables and their constraints
+                    # don't require cross-table trigger validation.
+                    if root_subject_obj.get_abstract(schema):
+                        continue
+                    
                     all_objs = list(
                         schemactx.get_all_concrete(root_subject_obj, ctx=ctx)
                     )
