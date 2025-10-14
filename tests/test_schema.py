@@ -1349,9 +1349,9 @@ class TestSchema(tb.BaseSchemaLoadTest):
 
         my_scalar_t = schema.get('test::my_scalar_t')
         constr = my_scalar_t.get_constraints(schema).objects(schema)[0]
-        my_contains, = schema.fetch_by_shortname(
+        my_contains = schema.fetch_by_shortname(
             s_func.Function, 'test::my_contains',
-        )
+        )[0]
         self.assertEqual(
             schema.get_referrers(my_contains),
             frozenset({
@@ -1955,7 +1955,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
             "abstract constraint 'std::max_len_value'",
         )
 
-        fn, = schema.fetch_by_shortname(s_func.Function, 'std::json_typeof')
+        fn = schema.fetch_by_shortname(s_func.Function, 'std::json_typeof')[0]
         self.assertEqual(
             fn.get_verbosename(schema),
             "function 'std::json_typeof(json: std::json)'",
@@ -1967,7 +1967,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
             "parameter 'json' of function 'std::json_typeof(json: std::json)'",
         )
 
-        op, = schema.fetch_by_shortname(s_oper.Operator, 'std::AND')
+        op = schema.fetch_by_shortname(s_oper.Operator, 'std::AND')[0]
         self.assertEqual(
             op.get_verbosename(schema),
             'operator "std::bool AND std::bool"',
