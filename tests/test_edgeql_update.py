@@ -4157,7 +4157,7 @@ class TestUpdate(tb.QueryTestCase):
         # trigger an UnsafeIsolationLevelError due to the inherited constraint
         # from std::BaseObject (which is abstract and has no real postgres table)
         obj_id = uuid.uuid4()
-        
+
         # This should compile without raising UnsafeIsolationLevelError
         # even though .id has an exclusive constraint inherited from BaseObject
         await self.con.query(

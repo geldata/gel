@@ -943,7 +943,7 @@ def check_for_isolation_conflicts(
                     # don't require cross-table trigger validation.
                     if root_subject_obj.get_abstract(schema):
                         continue
-                    
+
                     all_objs = list(
                         schemactx.get_all_concrete(root_subject_obj, ctx=ctx)
                     )
