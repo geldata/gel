@@ -74,7 +74,7 @@ Set the ``listen_addresses`` parameter:
 
     configure instance set listen_addresses := {'127.0.0.1', '::1'};
 
-Set the ``query_work_mem`` parameter for the duration of the session:
+Set the ``query_work_mem`` parameter:
 
 .. code-block:: edgeql
 
