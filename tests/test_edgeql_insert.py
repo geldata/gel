@@ -8185,3 +8185,14 @@ class TestRepeatableReadInsert(tb.QueryTestCase):
                     name := "test"
                 };
             """)
+
+    async def test_edgeql_rr_update_04(self):
+        # should be fine
+        await self.con.query(
+            r"""
+                update (
+                    select Person
+                    filter .name = 'adsf'
+                ).note set {};
+            """,
+        )

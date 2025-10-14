@@ -654,7 +654,13 @@ def compile_insert_unless_conflict_on(
 def _has_explicit_id_write(stmt: irast.MutatingStmt) -> bool:
     for elem, _ in stmt.subject.shape:
         if elem.expr.ptrref.shortname.name == 'id':
-            return elem.span is not None
+            # We want to make sure it isn't an implicit id (which
+            # won't have an expr) or a default value (which won't have
+            # a span).
+            #
+            # ... it is at least a little dodgy to check for default
+            # value by span presence.
+            return elem.span is not None and elem.expr.expr is not None
     return False
 
 
