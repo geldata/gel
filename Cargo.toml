@@ -3,6 +3,7 @@ members = [
     "edb/edgeql-parser",
     "edb/edgeql-parser/edgeql-parser-derive",
     "edb/edgeql-parser/edgeql-parser-python",
+    "edb/schema/rust",
     "edb/graphql-rewrite",
     "edb/server/_rust_native",
     "rust/conn_pool",
