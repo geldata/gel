@@ -593,9 +593,9 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
         alter annotation
             ext::ai::model_provider := "builtin::ollama";
         alter annotation
-            ext::ai::embedding_model_max_input_tokens := "8192";
+            ext::ai::embedding_model_max_input_tokens := "2048";
         alter annotation
-            ext::ai::embedding_model_max_batch_tokens := "8192";
+            ext::ai::embedding_model_max_batch_tokens := "2048";
         alter annotation
             ext::ai::embedding_model_max_output_dimensions := "768";
     };
@@ -605,6 +605,21 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
     {
         alter annotation
             ext::ai::model_name := "bge-m3";
+        alter annotation
+            ext::ai::model_provider := "builtin::ollama";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "8192";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "1024";
+    };
+
+    create abstract type ext::ai::OllamaSnowflakeArcticEmbed2Model
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "snowflake-arctic-embed2";
         alter annotation
             ext::ai::model_provider := "builtin::ollama";
         alter annotation

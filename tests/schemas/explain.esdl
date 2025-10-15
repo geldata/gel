@@ -45,6 +45,9 @@ type User extending Dictionary {
         }
     }
     multi link owned_issues := .<owner[is Issue];
+    rank: int64 {
+        default := 0;
+    }
 }
 
 abstract type Owned {
