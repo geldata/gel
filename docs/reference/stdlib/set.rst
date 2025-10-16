@@ -544,7 +544,7 @@ Sets
 
     .. index:: cardinality, singleton
 
-    Checks that the input set contains no more than one element.
+    Checks that the input set is empty or contains no more than one element.
 
     If the input set contains more than one element, ``assert_single`` raises
     a ``CardinalityViolationError``. Otherwise, this function returns the
