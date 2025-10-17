@@ -470,11 +470,8 @@ def _find_rvar_in_intersection_by_typeref(
 
     assert component_rvars
 
-    pid_rptr = path_id.rptr()
-    if pid_rptr is not None:
-        if pid_rptr.material_ptr is not None:
-            pid_rptr = pid_rptr.material_ptr
-        tref = pid_rptr.out_source
+    if src_path := path_id.src_path():
+        tref = src_path.target
     else:
         tref = path_id.target
 
