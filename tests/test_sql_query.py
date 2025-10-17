@@ -3735,21 +3735,20 @@ class TestSQLQueryNonTransactional(tb.SQLQueryTestCase):
 
     async def test_sql_query_set_05(self):
         # IntervalStyle
-
         await self.scon.execute('SET IntervalStyle TO ISO_8601;')
-        [[res]] = await self.squery_values(
+        res = await self.scon.fetchval(
             "SELECT '2 years 15 months 100 weeks 99 hours'::interval::text;"
         )
         self.assertEqual(res, 'P3Y3M700DT99H')
 
         await self.scon.execute('SET IntervalStyle TO postgres_verbose;')
-        [[res]] = await self.squery_values(
+        res = await self.scon.fetchval(
             "SELECT '2 years 15 months 100 weeks 99 hours'::interval::text;"
         )
         self.assertEqual(res, '@ 3 years 3 mons 700 days 99 hours')
 
         await self.scon.execute('SET IntervalStyle TO sql_standard;')
-        [[res]] = await self.squery_values(
+        res = await self.scon.fetchval(
             "SELECT '2 years 15 months 100 weeks 99 hours'::interval::text;"
         )
         self.assertEqual(res, '+3-3 +700 +99:00:00')
@@ -3758,31 +3757,36 @@ class TestSQLQueryNonTransactional(tb.SQLQueryTestCase):
         # bytea_output
 
         await self.scon.execute('SET bytea_output TO hex')
-        [[res]] = await self.squery_values(
+        res = await self.scon.fetchval(
             "SELECT '\\x01abcdef01'::bytea::text"
         )
         self.assertEqual(res, r'\x01abcdef01')
 
         await self.scon.execute('SET bytea_output TO escape')
-        [[res]] = await self.squery_values(
+        res = await self.scon.fetchval(
             "SELECT '\\x01abcdef01'::bytea::text"
         )
         self.assertEqual(res, r'\001\253\315\357\001')
 
     async def test_sql_query_set_07(self):
         # enable_memoize
-
         await self.scon.execute('SET enable_memoize TO ye')
-        [[res]] = await self.squery_values(
-            "SELECT 'hello'"
-        )
+        res = await self.scon.fetchval("SELECT 'hello'")
         self.assertEqual(res, 'hello')
 
         await self.scon.execute('SET enable_memoize TO off')
-        [[res]] = await self.squery_values(
-            "SELECT 'hello'"
-        )
+        res = await self.scon.fetchval("SELECT 'hello'")
         self.assertEqual(res, 'hello')
+
+    async def test_sql_query_set_08(self):
+        # SET work_mem
+        await self.scon.execute("SET work_mem TO '32MB'")
+        res = await self.scon.fetchval("SHOW work_mem")
+        self.assertEqual(res, '32768kB')
+
+        await self.scon.execute("SET work_mem TO 16000")
+        res = await self.scon.fetchval("SHOW work_mem")
+        self.assertEqual(res, '16000kB')
 
     @test.skip(
         'blocking the connection causes other tests which trigger a '

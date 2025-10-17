@@ -613,7 +613,7 @@ def get_sql_value_function_op(op: pgast.SQLValueFunctionOP) -> str:
 
 
 # Settings that are enums or bools and should not be quoted.
-# Can be retrived from PostgreSQL with:
+# Can be retrieved from PostgreSQL with:
 #   SELECt name FROM pg_catalog.pg_settings WHERE vartype IN ('enum', 'bool');
 ENUM_SETTINGS = {
     'allow_alter_system',
@@ -765,6 +765,9 @@ ENUM_SETTINGS = {
     'xmlbinary',
     'xmloption',
     'zero_damaged_pages',
+
+    # additionally, there are some settings that also should not be quoted
+    'work_mem',
 }
 
 
