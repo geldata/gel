@@ -46,12 +46,12 @@ BACKEND_RUNTIME_PARAMS: pgparams.BackendRuntimeParams = (
 )
 COMPILER: compiler.Compiler
 LAST_STATE: Optional[compiler.dbstate.CompilerConnectionState] = None
-STD_SCHEMA: s_schema.FlatSchema
+STD_SCHEMA: s_schema.Schema
 
 
 class ClientSchema(NamedTuple):
     dbs: state.DatabasesState
-    global_schema: s_schema.FlatSchema
+    global_schema: s_schema.Schema
     instance_config: immutables.Map[str, config.SettingValue]
 
 

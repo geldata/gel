@@ -31,6 +31,7 @@ from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
 
 from edb.schema import name as sn
+from edb.schema import functions as s_func
 
 if TYPE_CHECKING:
 
@@ -248,8 +249,9 @@ def _get_functions_from_call(
     else:
         funcname = sn.QualName(*expr.func)
 
-    return ctx.env.schema.get_functions(
+    return s_func.lookup_functions(
         funcname,
         default=(),
         module_aliases=ctx.modaliases,
+        schema=ctx.env.schema,
     )

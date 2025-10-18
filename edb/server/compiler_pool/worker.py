@@ -44,8 +44,8 @@ BACKEND_RUNTIME_PARAMS: pgparams.BackendRuntimeParams = \
 COMPILER: compiler.Compiler
 LAST_STATE: Optional[compiler.dbstate.CompilerConnectionState] = None
 LAST_STATE_PICKLE: Optional[bytes] = None
-STD_SCHEMA: s_schema.FlatSchema
-GLOBAL_SCHEMA: s_schema.FlatSchema
+STD_SCHEMA: s_schema.Schema
+GLOBAL_SCHEMA: s_schema.Schema
 INSTANCE_CONFIG: immutables.Map[str, config.SettingValue]
 
 

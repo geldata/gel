@@ -43,8 +43,8 @@ def _get_gqlcore(
 
 
 def compile_graphql(
-    std_schema: s_schema.FlatSchema,
-    user_schema: s_schema.FlatSchema,
+    std_schema: s_schema.Schema,
+    user_schema: s_schema.Schema,
     global_schema: s_schema.Schema,
     database_config: Mapping[str, Any],
     system_config: Mapping[str, Any],
