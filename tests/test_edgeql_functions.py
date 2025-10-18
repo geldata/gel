@@ -24,8 +24,10 @@ import math
 import os.path
 import random
 import uuid
+from datetime import timedelta
 
 import edgedb
+import gel
 
 from edb.testbase import server as tb
 from edb.tools import test
