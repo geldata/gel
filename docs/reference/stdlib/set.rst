@@ -638,10 +638,13 @@ Sets
                   std::sum(s: set of float64) -> float64
                   std::sum(s: set of bigint) -> bigint
                   std::sum(s: set of decimal) -> decimal
+                  std::sum(s: set of duration) -> duration
+                  std::sum(s: set of cal::relative_duration) -> cal::relative_duration
+                  std::sum(s: set of cal::date_duration) -> cal::date_duration
 
     .. index:: aggregate
 
-    Returns the sum of the set of numbers.
+    Returns the sum of the set.
 
     The result type depends on the input set type. The general rule of thumb
     is that the type of the input set is preserved (as if a simple

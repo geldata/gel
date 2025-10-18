@@ -73,6 +73,7 @@ def _stringify(o):
 @serialize.register(decimal.Decimal)
 @serialize.register(datetime.timedelta)
 @serialize.register(edgedb.RelativeDuration)
+@serialize.register(edgedb.DateDuration)
 def _scalar(o):
     return o
 

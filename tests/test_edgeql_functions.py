@@ -24,8 +24,10 @@ import math
 import os.path
 import random
 import uuid
+from datetime import timedelta
 
 import edgedb
+import gel
 
 from edb.testbase import server as tb
 from edb.tools import test
@@ -1817,6 +1819,54 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
         await self.assert_query_result(
             r'''SELECT sum(<decimal>2) IS decimal;''',
             [True],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT sum(<duration>"PT5S") IS duration;''',
+            [True],
+        )
+
+        await self.assert_query_result(
+            r'''
+                SELECT sum(<std::cal::relative_duration>"PT5S")
+                IS std::cal::relative_duration;
+            ''',
+            [True],
+        )
+
+        await self.assert_query_result(
+            r'''
+                SELECT sum(<cal::date_duration>"PT5S")
+                IS std::cal::date_duration;
+            ''',
+            [True],
+        )
+
+    async def test_edgeql_functions_sum_05(self):
+        await self.assert_query_result(
+            r'''SELECT sum({<duration>"PT5S", <duration>"PT10S"})''',
+            ["PT15S"],
+            [timedelta(seconds=15)],
+        )
+
+    async def test_edgeql_functions_sum_07(self):
+        await self.assert_query_result(
+            r'''
+                SELECT sum({<cal::relative_duration>"PT5S",
+                            <cal::relative_duration>"PT10S"})
+            ''',
+            ["PT15S"],
+            [gel.RelativeDuration(microseconds=15_000_000)],
+        )
+
+    async def test_edgeql_functions_sum_08(self):
+        await self.assert_query_result(
+            r'''
+                SELECT sum({<cal::date_duration>"5 days",
+                            <cal::date_duration>"10 days"})
+            ''',
+            ["P15D"],
+            [gel.DateDuration(days=15)]
         )
 
     async def test_edgeql_functions_unix_to_datetime_01(self):
