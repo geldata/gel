@@ -421,7 +421,7 @@ class AlterAliasLike(
                 # the type has to be done as a prereq, since it needs
                 # to precede the creation of the replacement type
                 # with the same name.)
-                schema = schema.unset_obj_field(
+                schema = schema.unset_field(
                     self.scls, self.TYPE_FIELD_NAME)
             else:
                 # there is no expr

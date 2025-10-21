@@ -200,14 +200,14 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_obj_data_raw(
+    def get_data_raw(
         self,
         obj: so.Object,
     ) -> Optional[tuple[Any, ...]]:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_obj_field_raw(
+    def get_field_raw(
         self,
         obj: so.Object,
         field_index: int,
@@ -215,7 +215,7 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def set_obj_field(
+    def set_field(
         self: Self,
         obj: so.Object,
         field: str,
@@ -224,7 +224,7 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def unset_obj_field(
+    def unset_field(
         self: Self,
         obj: so.Object,
         field: str,
@@ -944,13 +944,13 @@ class FlatSchema(Schema):
                              id_to_data=id_to_data,
                              refs_to=refs_to)
 
-    def get_obj_data_raw(
+    def get_data_raw(
         self,
         obj: so.Object,
     ) -> Optional[tuple[Any, ...]]:
         return self._id_to_data.get(obj.id)
 
-    def get_obj_field_raw(
+    def get_field_raw(
         self,
         obj: so.Object,
         field_index: int
@@ -962,7 +962,7 @@ class FlatSchema(Schema):
         )
         return data[field_index]
 
-    def set_obj_field(
+    def set_field(
         self,
         obj: so.Object,
         fieldname: str,
@@ -1023,7 +1023,7 @@ class FlatSchema(Schema):
             refs_to=refs_to,
         )
 
-    def unset_obj_field(
+    def unset_field(
         self,
         obj: so.Object,
         fieldname: str,
@@ -1757,10 +1757,10 @@ class ChainedSchema(Schema):
                 base_obj is not None
                 and not self._top_schema.has_object(obj_id)
             ):
-                top_schema = self._top_schema.add_raw(
+                top_schema = self._top_schema.add(
                     obj_id,
                     type(base_obj),
-                    self._base_schema.get_obj_data_raw(base_obj),
+                    self._base_schema.get_data_raw(base_obj),
                 )
             else:
                 top_schema = self._top_schema
@@ -1771,35 +1771,35 @@ class ChainedSchema(Schema):
                 self._global_schema,
             )
 
-    def get_obj_data_raw(
+    def get_data_raw(
         self,
         obj: so.Object,
     ) -> Optional[tuple[Any, ...]]:
-        data = self._top_schema.get_obj_data_raw(obj)
+        data = self._top_schema.get_data_raw(obj)
         if data is not None:
             return data
-        data = self._base_schema.get_obj_data_raw(obj)
+        data = self._base_schema.get_data_raw(obj)
         if data is not None:
             return data
-        return self._global_schema.get_obj_data_raw(obj)
+        return self._global_schema.get_data_raw(obj)
 
-    def get_obj_field_raw(
+    def get_field_raw(
         self,
         obj: so.Object,
         field_index: int,
     ) -> Optional[Any]:
         if self._top_schema.has_object(obj.id):
-            return self._top_schema.get_obj_field_raw(obj, field_index)
+            return self._top_schema.get_field_raw(obj, field_index)
         if self._base_schema.has_object(obj.id):
-            return self._base_schema.get_obj_field_raw(obj, field_index)
+            return self._base_schema.get_field_raw(obj, field_index)
         if self._global_schema.has_object(obj.id):
-            return self._global_schema.get_obj_field_raw(obj, field_index)
+            return self._global_schema.get_field_raw(obj, field_index)
         raise AssertionError(
             f'cannot get item data: item {str(obj.id)!r} '
             f'is not present in the schema {self!r}'
         )
 
-    def set_obj_field(
+    def set_field(
         self,
         obj: so.Object,
         fieldname: str,
@@ -1809,16 +1809,16 @@ class ChainedSchema(Schema):
             return ChainedSchema(
                 self._base_schema,
                 self._top_schema,
-                self._global_schema.set_obj_field(obj, fieldname, value),
+                self._global_schema.set_field(obj, fieldname, value),
             )
         else:
             return ChainedSchema(
                 self._base_schema,
-                self._top_schema.set_obj_field(obj, fieldname, value),
+                self._top_schema.set_field(obj, fieldname, value),
                 self._global_schema,
             )
 
-    def unset_obj_field(
+    def unset_field(
         self,
         obj: so.Object,
         field: str,
@@ -1827,12 +1827,12 @@ class ChainedSchema(Schema):
             return ChainedSchema(
                 self._base_schema,
                 self._top_schema,
-                self._global_schema.unset_obj_field(obj, field),
+                self._global_schema.unset_field(obj, field),
             )
         else:
             return ChainedSchema(
                 self._base_schema,
-                self._top_schema.unset_obj_field(obj, field),
+                self._top_schema.unset_field(obj, field),
                 self._global_schema,
             )
 

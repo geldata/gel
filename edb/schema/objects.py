@@ -791,7 +791,7 @@ class ObjectMeta(type):
                     ),
                     _fd: Callable[[], Any] = field.get_default,
                 ) -> Any:
-                    v = schema.get_obj_field_raw(self, _fi)
+                    v = schema.get_field_raw(self, _fi)
                     if v is not None:
                         return _sr(v)
                     else:
@@ -818,7 +818,7 @@ class ObjectMeta(type):
                     _fi: int = findex,
                     _fd: Any = field.default,
                 ) -> Any:
-                    v = schema.get_obj_field_raw(self, _fi)
+                    v = schema.get_field_raw(self, _fi)
                     if v is not None:
                         return v
                     else:
@@ -835,7 +835,7 @@ class ObjectMeta(type):
                     _fi: int = findex,
                     _fd: Callable[[], Any] = field.get_default,
                 ) -> Any:
-                    v = schema.get_obj_field_raw(self, _fi)
+                    v = schema.get_field_raw(self, _fi)
                     if v is not None:
                         return v
                     else:
@@ -1258,7 +1258,7 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
         field = type(self).get_field(field_name)
 
         if isinstance(field, SchemaField):
-            val = schema.get_obj_field_raw(self, field.index)
+            val = schema.get_field_raw(self, field.index)
             if val is not None:
                 if field.is_reducible:
                     return field.type.schema_restore(val)
@@ -1287,7 +1287,7 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
         field = type(self).get_field(field_name)
 
         if isinstance(field, SchemaField):
-            val = schema.get_obj_field_raw(self, field.index)
+            val = schema.get_field_raw(self, field.index)
             if val is not None:
                 if field.is_reducible:
                     return field.type.schema_restore(val)
@@ -1316,10 +1316,10 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
         assert field.is_schema_field
 
         if value is None:
-            return schema.unset_obj_field(self, name)
+            return schema.unset_field(self, name)
         else:
             value = field.coerce_value(schema, value)
-            return schema.set_obj_field(self, name, value)
+            return schema.set_field(self, name, value)
 
     def update(
         self, schema: s_schema.Schema, updates: dict[str, Any]
