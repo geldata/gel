@@ -644,7 +644,7 @@ Sets
 
     .. index:: aggregate
 
-    Returns the sum of the set.
+    Return the arithmetic sum of values in a set.
 
     The result type depends on the input set type. The general rule of thumb
     is that the type of the input set is preserved (as if a simple
