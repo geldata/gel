@@ -78,7 +78,7 @@ pub enum Kind {
     Coalesce,         // ??
     Namespace,        // ::
     BackwardLink,     // .<
-    OptionalLink,     // .?
+    OptionalLink,     // .?>
     FloorDiv,         // //
     Concat,           // ++
     GreaterEq,        // >=
