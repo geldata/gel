@@ -1257,7 +1257,7 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
                 new_val = field.coerce_value(schema, new_val)
                 updates[field_name] = new_val
 
-        return schema.update_obj(self, updates)
+        return schema.set_fields(self, updates)
 
     def hash_criteria(
         self: Self, schema: s_schema.Schema

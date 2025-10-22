@@ -178,7 +178,7 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def update_obj(
+    def set_fields(
         self: Self,
         obj: so.Object,
         updates: Mapping[str, Any],
@@ -967,7 +967,7 @@ class ChainedSchema(Schema):
             self._global_schema,
         )
 
-    def update_obj(
+    def set_fields(
         self,
         obj: so.Object,
         updates: Mapping[str, Any],
@@ -976,7 +976,7 @@ class ChainedSchema(Schema):
             return ChainedSchema(
                 self._base_schema,
                 self._top_schema,
-                self._global_schema.update_obj(obj, updates),
+                self._global_schema.set_fields(obj, updates),
             )
         else:
             obj_id = obj.id
@@ -995,7 +995,7 @@ class ChainedSchema(Schema):
 
             return ChainedSchema(
                 self._base_schema,
-                top_schema.update_obj(obj, updates),
+                top_schema.set_fields(obj, updates),
                 self._global_schema,
             )
 
@@ -1280,10 +1280,10 @@ class RustSchema(Schema):
     ) -> Optional[tuple[T, ...]]:
         return self.inner.get_by_short_name(cls, name)
 
-    def get_obj_data_raw(self, obj: so.Object) -> Optional[tuple[Any, ...]]:
+    def get_data_raw(self, obj: so.Object) -> Optional[tuple[Any, ...]]:
         return self.inner.get_data_raw(obj)
 
-    def get_obj_field_raw(
+    def get_field_raw(
         self, obj: so.Object, field_index: int
     ) -> Optional[Any]:
         return self.inner.get_field_raw(obj, field_index)
@@ -1321,7 +1321,7 @@ class RustSchema(Schema):
     def add(
         self, id: uuid.UUID, sclass: type[so.Object], data: tuple[Any]
     ) -> RustSchema:
-        # print('add_raw', sclass, data)
+        # print('add', sclass, data)
         return RustSchema(self.inner.add(id, sclass, data))
 
     def delete(self, obj: so.Object) -> RustSchema:
@@ -1330,7 +1330,7 @@ class RustSchema(Schema):
     def delist(self, name: sn.Name) -> RustSchema:
         return RustSchema(self.inner.delist(name))
 
-    def set_obj_field(
+    def set_field(
         self,
         obj: so.Object,
         fieldname: str,
@@ -1339,10 +1339,10 @@ class RustSchema(Schema):
         # print('set_obj_field', scls, fieldname, value)
         return RustSchema(self.inner.set_field(obj, fieldname, value))
 
-    def unset_obj_field(self, obj: so.Object, fieldname: str) -> RustSchema:
+    def unset_field(self, obj: so.Object, fieldname: str) -> RustSchema:
         return RustSchema(self.inner.unset_field(obj, fieldname))
 
-    def update_obj(
+    def set_fields(
         self,
         obj: so.Object,
         updates: Mapping[str, Any],
@@ -1350,7 +1350,7 @@ class RustSchema(Schema):
         if not updates:
             return self
 
-        # print('update_obj', obj, updates)
+        # print('set_fields', obj, updates)
         return RustSchema(self.inner.set_fields(obj, updates))
 
 

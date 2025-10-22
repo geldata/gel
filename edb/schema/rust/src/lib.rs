@@ -141,7 +141,7 @@ impl Schema {
     ) -> PyResult<Option<Bound<'p, PyTuple>>> {
         let obj = object_from_py(obj)?;
 
-        let Some(data) = self.inner.get_obj_data_raw(&obj) else {
+        let Some(data) = self.inner.get_data(&obj) else {
             return Ok(None);
         };
 
@@ -160,7 +160,7 @@ impl Schema {
     ) -> PyResult<Option<Bound<'p, PyAny>>> {
         let obj = object_from_py(obj)?;
 
-        let Some(data) = self.inner.get_obj_data_raw(&obj) else {
+        let Some(data) = self.inner.get_data(&obj) else {
             return Err(PyAssertionError::new_err(format!(
                 "cannot get data: schema object {obj:?} does not exist in this schema"
             )));
@@ -199,9 +199,7 @@ impl Schema {
         }
 
         let mut inner = self.inner.clone();
-        inner
-            .add_raw(&obj, data_vec)
-            .map_err(SchemaError::new_err)?;
+        inner.add(&obj, data_vec).map_err(SchemaError::new_err)?;
         Ok(Schema { inner })
     }
 
@@ -233,7 +231,7 @@ impl Schema {
 
         let mut inner = self.inner.clone();
         inner
-            .set_obj_field(obj, fieldname, value)
+            .set_field(obj, fieldname, value)
             .map_err(SchemaError::new_err)?;
         Ok(Schema { inner })
     }
@@ -243,7 +241,7 @@ impl Schema {
 
         let mut inner = self.inner.clone();
         inner
-            .unset_obj_field(obj, fieldname)
+            .unset_field(obj, fieldname)
             .map_err(SchemaError::new_err)?;
         Ok(Schema { inner })
     }
@@ -269,7 +267,7 @@ impl Schema {
 
         let mut inner = self.inner.clone();
         inner
-            .update_obj(obj, updates_rs)
+            .set_fields(obj, updates_rs)
             .map_err(SchemaError::new_err)?;
         Ok(Schema { inner })
     }
