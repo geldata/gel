@@ -22,7 +22,7 @@ pub fn _schema(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-#[pyclass(frozen, module = "edb.schema._schema")]
+#[pyclass(frozen, unsendable, module = "edb.schema._schema")]
 #[derive(Clone, Default)]
 struct Schema {
     inner: gel_schema::Schema,
@@ -64,7 +64,7 @@ impl Schema {
     fn __reduce__<'p>(self_: Bound<'p, Self>, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let decode_fn = self_.get_type().getattr("decode")?;
 
-        let encoded = bincode::serialize(&self_.get().inner)
+        let encoded = bincode::serialize(&self_.borrow().inner)
             .map_err(|x| SchemaError::new_err(x.to_string()))?;
 
         (decode_fn, (encoded,)).into_bound_py_any(py)
