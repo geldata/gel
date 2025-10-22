@@ -69,7 +69,7 @@ Setting up your environment
       :caption: gel.toml
 
       [instance]
-      server-version = 6.1
+      server-version = "6.11"
 
       [hooks]
       schema.update.after = "uvx gel-py"
