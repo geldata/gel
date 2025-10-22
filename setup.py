@@ -1186,6 +1186,7 @@ setuptools.setup(
             path="edb/schema/rust/Cargo.toml",
             features=["python_extension"],
             binding=setuptools_rust.Binding.PyO3,
+            debug=False,
         ),
         setuptools_rust.RustExtension(
             "edb._graphql_rewrite",
