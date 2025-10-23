@@ -77,16 +77,16 @@ SyncFinalizer = Callable[[], None]
 Config = immutables.Map[str, config.SettingValue]
 InitArgs = tuple[
     pgparams.BackendRuntimeParams,
-    s_schema.FlatSchema,
-    s_schema.FlatSchema,
+    s_schema.Schema,
+    s_schema.Schema,
     s_refl.SchemaClassLayout,
     bytes,
     Config,
 ]
 MultiTenantInitArgs = tuple[
     pgparams.BackendRuntimeParams,
-    s_schema.FlatSchema,
-    s_schema.FlatSchema,
+    s_schema.Schema,
+    s_schema.Schema,
     s_refl.SchemaClassLayout,
 ]
 RemoteInitArgsPickle = tuple[bytes, bytes, bytes, bytes]
@@ -128,8 +128,8 @@ class BaseWorker:
 
     _dbs: collections.OrderedDict[str, state.PickledDatabaseState]
     _backend_runtime_params: pgparams.BackendRuntimeParams
-    _std_schema: s_schema.FlatSchema
-    _refl_schema: s_schema.FlatSchema
+    _std_schema: s_schema.Schema
+    _refl_schema: s_schema.Schema
     _schema_class_layout: s_refl.SchemaClassLayout
     _global_schema_pickle: bytes
     _system_config: Config
@@ -142,8 +142,8 @@ class BaseWorker:
     def __init__(
         self,
         backend_runtime_params: pgparams.BackendRuntimeParams,
-        std_schema: s_schema.FlatSchema,
-        refl_schema: s_schema.FlatSchema,
+        std_schema: s_schema.Schema,
+        refl_schema: s_schema.Schema,
         schema_class_layout: s_refl.SchemaClassLayout,
         global_schema_pickle: bytes,
         system_config: Config,
@@ -332,8 +332,8 @@ class AbstractPool[
     _loop: asyncio.AbstractEventLoop
     _worker_branch_limit: int
     _backend_runtime_params: pgparams.BackendRuntimeParams
-    _std_schema: s_schema.FlatSchema
-    _refl_schema: s_schema.FlatSchema
+    _std_schema: s_schema.Schema
+    _refl_schema: s_schema.Schema
     _schema_class_layout: s_refl.SchemaClassLayout
     _dbindex: Optional[dbview.DatabaseIndex] = None
     _last_active_time: float
@@ -1852,8 +1852,8 @@ class BaseMultiTenantWorker[
         server: amsg.Server,
         pid: int,
         backend_runtime_params: pgparams.BackendRuntimeParams,
-        std_schema: s_schema.FlatSchema,
-        refl_schema: s_schema.FlatSchema,
+        std_schema: s_schema.Schema,
+        refl_schema: s_schema.Schema,
         schema_class_layout: s_refl.SchemaClassLayout,
     ):
         super().__init__(
@@ -2344,8 +2344,8 @@ async def create_compiler_pool[AbstractPool_T: AbstractPool](
     pool_size: int,
     worker_branch_limit: int,
     backend_runtime_params: pgparams.BackendRuntimeParams,
-    std_schema: s_schema.FlatSchema,
-    refl_schema: s_schema.FlatSchema,
+    std_schema: s_schema.Schema,
+    refl_schema: s_schema.Schema,
     schema_class_layout: s_refl.SchemaClassLayout,
     pool_class: type[AbstractPool_T],
     **kwargs: Any,

@@ -1523,7 +1523,7 @@ class Server(BaseServer):
             await self._maybe_apply_patches(
                 defines.EDGEDB_SYSTEM_DB, syscon, patches, sys=True)
 
-    def _load_schema(self, result, version_key) -> s_schema.FlatSchema:
+    def _load_schema(self, result, version_key) -> s_schema.Schema:
         res = pickle.loads(result[2:])
         if version_key != pg_patches.get_version_key(len(pg_patches.PATCHES)):
             res = s_schema.upgrade_schema(res)

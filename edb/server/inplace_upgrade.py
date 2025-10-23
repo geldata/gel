@@ -657,7 +657,7 @@ async def _get_databases(
 async def _get_global_schema(
     ctx: bootstrap.BootstrapContext,
     state: edbcompiler.CompilerState,
-) -> s_schema.FlatSchema:
+) -> s_schema.Schema:
     cluster = ctx.cluster
 
     tpl_db = cluster.get_db_name(edbdef.EDGEDB_TEMPLATE_DB)

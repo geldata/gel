@@ -497,8 +497,6 @@ class ConstraintCommand(
 
         parent_args = parent.get_args(schema)
         if parent_args:
-            parent_args = parent.get_args(schema)
-            assert parent_args is not None
             for arg_expr in parent_args:
                 arg = edgeql.parse_fragment(arg_expr.text)
                 args.append(arg)
