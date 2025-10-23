@@ -353,7 +353,7 @@ fn name_into_py<'p>(py: Python<'p>, name: &gel_schema::Name) -> PyResult<Bound<'
         name_cls.call((), Some(&args))
     } else {
         let name_cls = imports::UnqualName(py)?;
-        name_cls.call((&name.object,), None)
+        name_cls.call1((&name.object,))
     }
 }
 
@@ -513,7 +513,7 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
 
         gel_schema::Value::ExpressionList(exprs) => {
             let mut values_py = Vec::new();
-            for expr in exprs {
+            for expr in exprs.as_slice() {
                 values_py.push(expr_into_py(py, expr)?);
             }
             imports::ExpressionList(py)?.call1((values_py,))
@@ -524,7 +524,7 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
         gel_schema::Value::Bool(v) => v.into_bound_py_any(py),
         gel_schema::Value::Int(v) => v.into_bound_py_any(py),
         gel_schema::Value::Float(v) => v.into_bound_py_any(py),
-        gel_schema::Value::Str(v) => v.into_bound_py_any(py),
+        gel_schema::Value::Str(v) => v.as_ref().into_bound_py_any(py),
         gel_schema::Value::Container(container) => {
             let cls = match container.ty {
                 ContainerTy::FrozenCheckedList => imports::FrozenCheckedList(py)?,
@@ -573,16 +573,13 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
             let stage_cls = imports::VersionStage(py)?;
             let stage = stage_cls.getattr(version.stage.as_ref())?;
 
-            cls.call(
-                (
-                    version.major,
-                    version.minor,
-                    stage,
-                    version.stage_no,
-                    PyTuple::new(py, &version.local)?,
-                ),
-                None,
-            )
+            cls.call1((
+                version.major,
+                version.minor,
+                stage,
+                version.stage_no,
+                PyTuple::new(py, &version.local)?,
+            ))
         }
 
         gel_schema::Value::None => Ok(py.None().bind(py).clone()),
@@ -634,7 +631,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         return Ok(Value::Float(val.extract()?));
     }
     if let Ok(val) = val.cast_exact::<PyString>() {
-        return Ok(Value::Str(val.to_string()));
+        return Ok(Value::Str(Rc::new(val.to_string())));
     }
     if let Ok(uuid) = val.extract() {
         return Ok(Value::Uuid(uuid));
@@ -643,7 +640,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     if val.is_exact_instance(imports::QualName(py)?)
         || val.is_exact_instance(imports::UnqualName(py)?)
     {
-        return Ok(Value::Name(name_from_py(val)?));
+        return Ok(Value::Name(Rc::new(name_from_py(val)?)));
     }
 
     let span = imports::Span(py)?;
@@ -681,9 +678,9 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             let Value::Expression(expr) = value_from_py(py, item)? else {
                 panic!()
             };
-            exprs.push(expr);
+            exprs.push(Rc::into_inner(expr).unwrap());
         }
-        return Ok(Value::ExpressionList(exprs));
+        return Ok(Value::ExpressionList(Rc::new(exprs)));
     }
 
     if val.is_exact_instance(imports::Expression(py)?)
@@ -697,7 +694,11 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             uuids_from_py(refs_object_set.getattr("_ids")?)?
         };
         let origin = opt_str_from_py(val.getattr("origin")?)?;
-        return Ok(Value::Expression(Expression { text, refs, origin }));
+        return Ok(Value::Expression(Rc::new(Expression {
+            text,
+            refs,
+            origin,
+        })));
     }
 
     let ty_bases = val.get_type().as_any().getattr("__bases__")?;
