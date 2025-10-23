@@ -50,7 +50,6 @@ from edb.edgeql import qltypes
 from edb.common.typeutils import not_none
 
 from edb.common import checked
-from edb.common import lru
 from edb.common import markup
 from edb.common import ordered
 from edb.common import parametric
@@ -59,7 +58,6 @@ from edb.common import struct
 from edb.common import topological
 from edb.common import uuidgen
 
-from . import abc as s_abc
 from . import name as sn
 from . import _types
 
@@ -285,7 +283,6 @@ class Field[T](struct.ProtoField):
         'merge_fn',
         'reflection_method',
         'reflection_proxy',
-        'is_reducible',
         'patch_level',
         'obj_names_as_string',
     )
@@ -400,7 +397,6 @@ class Field[T](struct.ProtoField):
         self.weak_ref = weak_ref
         self.reflection_method = reflection_method
         self.reflection_proxy = reflection_proxy
-        self.is_reducible = issubclass(type_, s_abc.Reducible)
         self.patch_level = patch_level
         self.obj_names_as_string = obj_names_as_string
 
@@ -619,14 +615,8 @@ class RefDict(struct.RTStruct):
         type, frozen=True)
 
 
-class ObjectContainer(s_abc.Reducible):
-
-    @classmethod
-    def schema_refs_from_data(
-        cls,
-        data: Any,
-    ) -> frozenset[uuid.UUID]:
-        raise NotImplementedError
+class ObjectContainer:
+    pass
 
 
 class ObjectMeta(type):
@@ -647,7 +637,6 @@ class ObjectMeta(type):
     #: Fields that contain references to objects either directly or
     #: indirectly.
     _objref_fields: frozenset[SchemaField[Any]]
-    _reducible_fields: frozenset[SchemaField[Any]]
     _aux_cmd_data_fields: frozenset[SchemaField[Any]]  # if f.aux_cmd_data
     _refdicts: collections.OrderedDict[str, RefDict]
     _refdicts_by_refclass: dict[type, RefDict]
@@ -760,10 +749,6 @@ class ObjectMeta(type):
             f for f in cls._schema_fields.values()
             if issubclass(f.type, ObjectContainer)
         )
-        cls._reducible_fields = frozenset(
-            f for f in cls._schema_fields.values()
-            if issubclass(f.type, s_abc.Reducible)
-        )
 
         fa = '{}.{}_fields'.format(cls.__module__, cls.__name__)
         setattr(cls, fa, myfields)
@@ -775,39 +760,10 @@ class ObjectMeta(type):
                 # The getter was defined explicitly, move on.
                 continue
 
-            ftype = field.type
             # The field getters are hot code as they're essentially
             # attribute access, so be mindful about what you are adding
             # into the callables below.
-            if issubclass(ftype, s_abc.Reducible):
-                def reducible_getter(
-                    self: Any,
-                    schema: s_schema.Schema,
-                    *,
-                    _fn: str = field.name,
-                    _fi: int = findex,
-                    _sr: Callable[[Any], s_abc.Reducible] = (
-                        ftype.schema_restore
-                    ),
-                    _fd: Callable[[], Any] = field.get_default,
-                ) -> Any:
-                    v = schema.get_field_raw(self, _fi)
-                    if v is not None:
-                        return _sr(v)
-                    else:
-                        try:
-                            return _fd()
-                        except ValueError:
-                            pass
-
-                        raise FieldValueNotFoundError(
-                            f'{self!r} object has no value '
-                            f'for field {_fn!r}'
-                        )
-
-                setattr(cls, getter_name, reducible_getter)
-
-            elif (
+            if (
                 field.default is not NoDefault
                 and field.default is not DEFAULT_CONSTRUCTOR
             ):
@@ -920,9 +876,6 @@ class ObjectMeta(type):
 
     def get_object_reference_fields(cls) -> frozenset[SchemaField[Any]]:
         return cls._objref_fields
-
-    def get_reducible_fields(cls) -> frozenset[SchemaField[Any]]:
-        return cls._reducible_fields
 
     def get_aux_cmd_data_fields(cls) -> frozenset[SchemaField[Any]]:
         return cls._aux_cmd_data_fields
@@ -1096,32 +1049,6 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
 
     _fields: dict[str, SchemaField[Any]]
 
-    def schema_reduce(self) -> tuple[str, uuid.UUID]:
-        return type(self).__name__, self.id
-
-    @staticmethod
-    @lru.per_job_lru_cache(maxsize=10240)
-    def raw_schema_restore(
-        sclass_name: str,
-        obj_id: uuid.UUID,
-    ) -> Object:
-        sclass = ObjectMeta.get_schema_class(sclass_name)
-        return sclass(_private_id=obj_id)
-
-    @staticmethod
-    def schema_restore(
-        data: tuple[str, uuid.UUID],
-    ) -> Object:
-        sclass_name, obj_id = data
-        return Object.raw_schema_restore(sclass_name, obj_id)
-
-    @classmethod
-    def schema_refs_from_data(
-        cls,
-        data: tuple[str, uuid.UUID],
-    ) -> frozenset[uuid.UUID]:
-        return frozenset((data[1],))
-
     def get_id(self, schema: s_schema.Schema) -> uuid.UUID:
         return self.id
 
@@ -1260,10 +1187,7 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
         if isinstance(field, SchemaField):
             val = schema.get_field_raw(self, field.index)
             if val is not None:
-                if field.is_reducible:
-                    return field.type.schema_restore(val)
-                else:
-                    return val
+                return val
             else:
                 try:
                     return field.get_default()
@@ -1289,10 +1213,7 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
         if isinstance(field, SchemaField):
             val = schema.get_field_raw(self, field.index)
             if val is not None:
-                if field.is_reducible:
-                    return field.type.schema_restore(val)
-                else:
-                    return val
+                return val
             elif default is not NoDefault:
                 return default
 
@@ -1336,7 +1257,7 @@ class Object(ObjectContainer, metaclass=ObjectMeta):
                 new_val = field.coerce_value(schema, new_val)
                 updates[field_name] = new_val
 
-        return schema.update_obj(self, updates)
+        return schema.set_fields(self, updates)
 
     def hash_criteria(
         self: Self, schema: s_schema.Schema
@@ -2374,86 +2295,6 @@ class ObjectCollection[Object_T: "Object"](
     def __hash__(self) -> int:
         return hash(self._ids)
 
-    def schema_reduce(
-        self,
-    ) -> tuple[
-        str,
-        Optional[tuple[builtins.type, ...] | builtins.type],
-        tuple[uuid.UUID, ...],
-        tuple[tuple[str, Any], ...],
-    ]:
-        cls = type(self)
-        _, (typeargs, ids, attrs) = self.__reduce__()
-        if cls.is_anon_parametrized():
-            clsname = cls.__bases__[0].__name__
-        else:
-            clsname = cls.__name__
-        return (clsname, typeargs, ids, tuple(attrs.items()))
-
-    @staticmethod
-    @lru.per_job_lru_cache(maxsize=10240)
-    def schema_restore(
-        data: tuple[
-            str,
-            Optional[tuple[builtins.type, ...] | builtins.type],
-            tuple[uuid.UUID, ...],
-            tuple[tuple[str, Any], ...],
-        ],
-    ) -> ObjectCollection[Object]:
-        clsname, typeargs, ids, attrs = data
-        scoll_class = ObjectCollection.get_subclass(clsname)
-        return scoll_class.__restore__(typeargs, ids, dict(attrs))
-
-    @classmethod
-    def schema_refs_from_data(
-        cls,
-        data: tuple[
-            str,
-            Optional[tuple[builtins.type, ...] | builtins.type],
-            tuple[uuid.UUID, ...],
-            tuple[tuple[str, Any], ...],
-        ],
-    ) -> frozenset[uuid.UUID]:
-        return frozenset(data[2])
-
-    def __reduce__(self) -> tuple[
-        Callable[..., ObjectCollection[Any]],
-        tuple[
-            Optional[tuple[builtins.type, ...] | builtins.type],
-            tuple[uuid.UUID, ...],
-            dict[str, Any],
-        ],
-    ]:
-        assert type(self).is_fully_resolved(), \
-            f'{type(self)} parameters are not resolved'
-
-        cls: type[ObjectCollection[Object_T]] = self.__class__
-        types: Optional[tuple[type, ...]] = self.orig_args
-        if types is None or not cls.is_anon_parametrized():
-            typeargs = None
-        else:
-            typeargs = types[0] if len(types) == 1 else types
-        attrs = {k: getattr(self, k) for k in self.__slots__ if k != '_ids'}
-        return (
-            cls.__restore__,
-            (typeargs, tuple(self._ids), attrs)
-        )
-
-    @classmethod
-    def __restore__(
-        cls,
-        typeargs: Optional[tuple[builtins.type, ...] | builtins.type],
-        ids: tuple[uuid.UUID, ...],
-        attrs: dict[str, Any],
-    ) -> ObjectCollection[Object_T]:
-        if typeargs is None or cls.is_anon_parametrized():
-            obj = cls(_ids=ids, **attrs, _private_init=True)
-        else:
-            obj = cls[typeargs](  # type: ignore
-                _ids=ids, **attrs, _private_init=True)
-
-        return obj
-
     def dump(self, schema: s_schema.Schema) -> str:
         return (
             f'<{type(self).__name__} objects='
@@ -3023,7 +2864,8 @@ class ObjectList[Object_T: Object](
 ):
 
     def __repr__(self) -> str:
-        return f'ObjectList([{", ".join(str(id) for id in self._ids)}])'
+        cls_name = type(self).__name__
+        return f'{cls_name}([{", ".join(str(id) for id in self._ids)}])'
 
     def first(self, schema: s_schema.Schema, default: Any = NoDefault) -> Any:
         # The `Any` return type is so that using methods on Object subclasses
