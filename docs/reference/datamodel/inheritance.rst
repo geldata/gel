@@ -143,6 +143,20 @@ are declared independent of a source or target, can contain :ref:`annotations
     readonly := false;
   }
 
+When extending a base object type, you can modify its properties, for example, by adding a constraint or a default value by using the ``overloaded`` keyword:
+
+.. code-block:: sdl
+
+  abstract type Named {
+    optional name: str;
+  }
+
+  abstract type UniquelyNamed extending Named {
+    overloaded required name: str {
+      constraint exclusive;
+    }
+  }
+
 .. _ref_datamodel_inheritance_links:
 
 Links
