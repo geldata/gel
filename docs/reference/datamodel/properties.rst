@@ -265,6 +265,10 @@ overloading due to a name clash:
         overloaded required name: str;
     }
 
+.. note::
+
+  ``overloaded`` can only be used to modify properties of the object type, not computed properties.
+
 
 .. _ref_eql_sdl_props:
 .. _ref_eql_sdl_props_syntax:

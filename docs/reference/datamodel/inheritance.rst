@@ -157,6 +157,10 @@ When extending a base object type, you can modify its properties, for example, b
     }
   }
 
+.. note::
+
+  ``overloaded`` can only be used to modify properties of the object type, not computed properties.
+
 .. _ref_datamodel_inheritance_links:
 
 Links
