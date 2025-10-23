@@ -21,7 +21,7 @@ import pathlib
 import os
 
 from pygls import uris as pygls_uris
-import pygls
+import pygls.workspace
 from lsprotocol import types as lsp_types
 
 
@@ -32,7 +32,6 @@ from edb.edgeql import ast as qlast
 from edb.schema import schema as s_schema
 from edb.schema import std as s_std
 from edb.schema import ddl as s_ddl
-import pygls.workspace
 
 from . import parsing as ls_parsing
 from . import is_schema_file
