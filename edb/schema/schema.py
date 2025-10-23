@@ -135,27 +135,17 @@ class Schema(abc.ABC):
     - name (fully qualified),
     - shortname (only for function and operator class),
     - references.
-
-    A bit of terminology:
-    - `get_*` methods are for low-level data retrieval,
-    - `fetch_*` methods are wrappers for `get_` with nicer interface (name
-       parsing, default values, raising exceptions),
-    - `lookup` performs name resolution (looking in "current" module, applying
-       of module aliases and applying implicit `std::` prefix),
-    - `*_raw` methods imply that object data is reduced
-       (see `.schema_reduce` methods on schema objects).
-    This terminology is not yet fully applied.
     '''
 
     @abc.abstractmethod
-    def get_by_name(
+    def _get_by_name(
         self,
         name: sn.Name,
     ) -> Optional[so.Object]:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_by_shortname[T: s_func.Function | s_oper.Operator](
+    def _get_by_shortname[T: s_func.Function | s_oper.Operator](
         self,
         mcls: type[T],
         shortname: sn.Name,
@@ -163,7 +153,7 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_by_globalname[T: so.Object](
+    def _get_by_globalname[T: so.Object](
         self, mcls: type[T], name: sn.Name,
     ) -> Optional[T]:
         raise NotImplementedError
@@ -291,7 +281,7 @@ class Schema(abc.ABC):
         raise NotImplementedError
 
     @overload
-    def fetch[T: so.Object](
+    def get_by_name[T: so.Object](
         self,
         name: sn.Name | str,
         default: T | so.NoDefaultT = so.NoDefault,
@@ -300,7 +290,7 @@ class Schema(abc.ABC):
     ) -> T: ...
 
     @overload
-    def fetch[T: so.Object](
+    def get_by_name[T: so.Object](
         self,
         name: sn.Name | str,
         default: None = None,
@@ -308,7 +298,7 @@ class Schema(abc.ABC):
         span: Optional[parsing.Span] = None
     ) -> Optional[T]: ...
 
-    def fetch[T: so.Object](
+    def get_by_name[T: so.Object](
         self,
         name: sn.Name | str,
         default: T | so.NoDefaultT | None = so.NoDefault,
@@ -319,7 +309,7 @@ class Schema(abc.ABC):
 
         if isinstance(name, str):
             name = sn.QualName.from_string(name)
-        obj = self.get_by_name(name)
+        obj = self._get_by_name(name)
         if obj is not None:
             if type is not None:
                 if not isinstance(obj, type):
@@ -330,7 +320,7 @@ class Schema(abc.ABC):
         else:
             Schema.raise_bad_reference(name, type=type)
 
-    def fetch_by_shortname[T: s_func.Function | s_oper.Operator](
+    def get_by_shortname[T: s_func.Function | s_oper.Operator](
         self,
         mcls: type[T],
         shortname: str | sn.Name,
@@ -340,13 +330,13 @@ class Schema(abc.ABC):
 
         if isinstance(shortname, str):
             shortname = sn.QualName.from_string(shortname)
-        objs = self.get_by_shortname(mcls, shortname)
+        objs = self._get_by_shortname(mcls, shortname)
         if objs is not None:
             return objs
         else:
             Schema.raise_bad_reference(shortname, type=mcls)
 
-    # TODO: rename to fetch_global
+    # TODO: rename to get_by_globalname
     @overload
     def get_global[T: so.Object](
         self,
@@ -356,7 +346,7 @@ class Schema(abc.ABC):
     ) -> T:
         ...
 
-    # TODO: rename to fetch_global
+    # TODO: rename to get_by_globalname
     @overload
     def get_global[T: so.Object](
         self,
@@ -366,7 +356,7 @@ class Schema(abc.ABC):
     ) -> Optional[T]:
         ...
 
-    # TODO: rename to fetch_global
+    # TODO: rename to get_by_globalname
     def get_global[T: so.Object](
         self,
         mcls: type[T],
@@ -375,7 +365,7 @@ class Schema(abc.ABC):
     ) -> Optional[T]:
         if isinstance(name, str):
             name = sn.UnqualName(name)
-        obj = self.get_by_globalname(mcls, name)
+        obj = self._get_by_globalname(mcls, name)
         if obj is not None:
             return obj
         elif default is not so.NoDefault:
@@ -383,7 +373,6 @@ class Schema(abc.ABC):
         else:
             Schema.raise_bad_reference(name, type=mcls)
 
-    # TODO: rename to lookup
     @overload
     def get(
         self,
@@ -397,7 +386,6 @@ class Schema(abc.ABC):
     ) -> so.Object:
         ...
 
-    # TODO: rename to lookup
     @overload
     def get(
         self,
@@ -411,7 +399,6 @@ class Schema(abc.ABC):
     ) -> Optional[so.Object]:
         ...
 
-    # TODO: rename to lookup
     @overload
     def get[T: so.Object](
         self,
@@ -426,7 +413,6 @@ class Schema(abc.ABC):
     ) -> T:
         ...
 
-    # TODO: rename to lookup
     @overload
     def get[T: so.Object](
         self,
@@ -441,7 +427,6 @@ class Schema(abc.ABC):
     ) -> Optional[T]:
         ...
 
-    # TODO: rename to lookup
     @overload
     def get(
         self,
@@ -456,7 +441,6 @@ class Schema(abc.ABC):
     ) -> Optional[so.Object]:
         ...
 
-    # TODO: rename to lookup
     def get(
         self,
         name: str | sn.Name,
@@ -470,7 +454,7 @@ class Schema(abc.ABC):
     ) -> Optional[so.Object]:
 
         def getter(schema: Schema, name: sn.Name) -> Optional[so.Object]:
-            obj = schema.get_by_name(name)
+            obj = schema._get_by_name(name)
             if obj is not None and condition is not None:
                 if not condition(obj):
                     obj = None
@@ -1373,7 +1357,7 @@ class FlatSchema(Schema):
     if not TYPE_CHECKING:
         get_by_id = _get_by_id
 
-    def get_by_globalname[T: so.Object](
+    def _get_by_globalname[T: so.Object](
         self, mcls: type[T], name: sn.Name,
     ) -> Optional[T]:
         if isinstance(name, str):
@@ -1383,7 +1367,7 @@ class FlatSchema(Schema):
             return None
         return _raw_schema_restore(mcls.__name__, obj_id)  # type: ignore
 
-    def get_by_shortname[T: s_func.Function | s_oper.Operator](
+    def _get_by_shortname[T: s_func.Function | s_oper.Operator](
         self,
         mcls: type[T],
         shortname: sn.Name,
@@ -1396,7 +1380,7 @@ class FlatSchema(Schema):
             for i in obj_ids
         )
 
-    def get_by_name(
+    def _get_by_name(
         self,
         name: sn.Name,
     ) -> Optional[so.Object]:
@@ -1902,36 +1886,36 @@ class ChainedSchema(Schema):
     if not TYPE_CHECKING:
         get_by_id = _get_by_id
 
-    def get_by_globalname[T: so.Object](
+    def _get_by_globalname[T: so.Object](
         self, mcls: type[T], name: sn.Name,
     ) -> Optional[T]:
         if issubclass(mcls, so.GlobalObject):
-            if o := self._global_schema.get_by_globalname(
+            if o := self._global_schema._get_by_globalname(
                 mcls, name
             ):
                 return o  # type: ignore
-        if obj := self._top_schema.get_by_globalname(mcls, name):
+        if obj := self._top_schema._get_by_globalname(mcls, name):
             return obj
-        return self._base_schema.get_by_globalname(mcls, name)
+        return self._base_schema._get_by_globalname(mcls, name)
 
-    def get_by_shortname[T: s_func.Function | s_oper.Operator](
+    def _get_by_shortname[T: s_func.Function | s_oper.Operator](
         self,
         mcls: type[T],
         shortname: sn.Name,
     ) -> Optional[tuple[T, ...]]:
-        objs = self._base_schema.get_by_shortname(mcls, shortname)
+        objs = self._base_schema._get_by_shortname(mcls, shortname)
         if objs is not None:
             return objs
-        return self._top_schema.get_by_shortname(mcls, shortname)
+        return self._top_schema._get_by_shortname(mcls, shortname)
 
-    def get_by_name(
+    def _get_by_name(
         self,
         name: sn.Name,
     ) -> Optional[so.Object]:
-        objs = self._base_schema.get_by_name(name)
+        objs = self._base_schema._get_by_name(name)
         if objs is not None:
             return objs
-        return self._top_schema.get_by_name(name)
+        return self._top_schema._get_by_name(name)
 
     def has_object(self, object_id: uuid.UUID) -> bool:
         return (
@@ -1946,7 +1930,7 @@ def _get_operators(
     schema: Schema,
     name: sn.Name,
 ) -> tuple[s_oper.Operator, ...] | None:
-    return schema.get_by_shortname(s_oper.Operator, name)
+    return schema._get_by_shortname(s_oper.Operator, name)
 
 
 @lru.per_job_lru_cache()

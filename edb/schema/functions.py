@@ -2198,7 +2198,7 @@ class AlterFunction(AlterCallableObject[Function], FunctionCommand):
             return schema
 
         if self.has_attribute_value("fallback"):
-            overloaded_funcs = schema.get_by_shortname(
+            overloaded_funcs = schema._get_by_shortname(
                 Function, self.scls.get_shortname(schema)
             ) or ()
 
@@ -2707,4 +2707,4 @@ def _get_functions(
     schema: s_schema.Schema,
     name: sn.Name,
 ) -> tuple[Function, ...] | None:
-    return schema.get_by_shortname(Function, name)
+    return schema._get_by_shortname(Function, name)

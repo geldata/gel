@@ -839,7 +839,7 @@ def _trace_op(
             deps.add(('rename', this_name_str))
 
             if isinstance(obj, s_func.Function) and old_schema is not None:
-                old_funcs = old_schema.get_by_shortname(
+                old_funcs = old_schema._get_by_shortname(
                     s_func.Function,
                     sn.shortname_from_fullname(op.classname),
                 ) or ()
