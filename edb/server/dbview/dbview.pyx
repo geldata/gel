@@ -174,10 +174,12 @@ cdef class Database:
         self._introspection_lock = asyncio.Lock()
 
         self._eql_to_compiled = stmt_cache.StatementsCache(
-            maxsize=defines._MAX_QUERIES_CACHE_DB)
+            maxsize=self.lookup_config('query_cache_size')
+        )
         self._cache_locks = {}
         self._sql_to_compiled = lru.LRUMapping(
-            maxsize=defines._MAX_QUERIES_CACHE)
+            maxsize=self.lookup_config('query_cache_size')
+        )
 
         # Tracks the active transactions and their creation sequence. The
         # sequence ID is incremental-only. ID 0 is reserved as a non-exist ID.
