@@ -1265,17 +1265,17 @@ class RustSchema(Schema):
             )
         return obj  # type: ignore
 
-    def get_by_name(
+    def _get_by_name(
         self, name: sn.Name
     ) -> Optional[so.Object]:
         return self.inner.get_by_name(name)
 
-    def get_by_globalname[T: so.Object](
+    def _get_by_globalname[T: so.Object](
         self, cls: type[T], name: sn.Name
     ) -> Optional[T]:
         return self.inner.get_by_global_name(cls, name)
 
-    def get_by_shortname[T: so.Object](
+    def _get_by_shortname[T: so.Object](
         self, cls: type[T], name: sn.Name
     ) -> Optional[tuple[T, ...]]:
         return self.inner.get_by_short_name(cls, name)
