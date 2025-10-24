@@ -149,6 +149,81 @@ You can use the standard |Gel| client created by either :py:func:`~gel.create_cl
 
     There are also some common methods and fields available to all reflected models.
 
+    .. py:attribute:: __defs__
+
+        Field definitions for a given model.
+
+        Every field present in the current model has a corresponding field *definition* in ``__defs__``. These definitions can be used when declaring custom models that may be cherry-picking the specific fields they need to reflect.
+
+        .. code-block:: python
+
+            class NewPerson(default.Person.__shapes__.NoId):
+                # define a single field
+                name: default.Person.__defs__.name
+
+
+            client = create_client()
+
+            def make_person(name):
+                person = NewPerson(name=name)
+                client.save(person)
+                # id is always populated after saving a new object
+                return person.id
+
+    .. py:attribute:: __shapes__
+
+        Various ``GelModel`` mixin types based on the current model.
+
+        There are several template types available via ``__shapes__``, each of which can be used to construct a custom model type. These custom types are useful for validating data (prior to :py:meth:`Client.sync`), working with partial data (so that ``sync()`` does not attempt to re-fetch unnecessary fields), or working with ad-hoc computed fields that aren't represented in the schema and thus aren't part of regular reflected types.
+
+        Here's a list of available ``__shapes__``:
+
+        * ``Base`` - marks this as the specific type, no field definitions.
+        * ``NoId`` - an alias to ``Base``.
+        * ``RequiredId`` - this model must have an ``id``.
+        * ``OptionalId`` - this model may have an ``id``.
+        * ``PropsAsDeclared`` - this model includes all properties (except ``id``) as declared in the schema.
+        * ``PropsAsOptional`` - this model includes all properties (except ``id``) as optional fields.
+        * ``LinksAsDeclared`` - this model includes all links as declared in the schema.
+        * ``LinksAsOptional`` - this model includes all links as optional fields.
+        * ``Create`` - a combination of ``NoId``, ``PropsAsDeclared`` and ``LinksAsDeclared``; useful for validating new objects.
+        * ``Read`` - a combination of ``RequiredId`` and ``PropsAsDeclared``; useful for reading shallow objects (such as given by ``.select("*")``).
+        * ``Update`` - a combination of ``RequiredId``, ``PropsAsOptional``, and ``LinksAsOptional``; useful for validating objects that need to be updated, but only some fields are expected to be provided.
+
+        The following is an example of using a custom model to validate a new ``Person`` that's only given the required ``name``:
+
+        .. code-block:: python
+
+            class NewPerson(default.Person.__shapes__.NoId):
+                # define a single field
+                name: default.Person.__defs__.name
+
+
+            client = create_client()
+
+            def make_person(name):
+                person = NewPerson(name=name)
+                client.save(person)
+                # id is always populated after saving a new object
+                return person.id
+
+        A different example of using a custom computed field:
+
+        .. code-block:: python
+
+            class CustomPerson(default.Person.__shapes__.Read):
+                # custom field
+                name_length: std.int64
+
+
+            client = create_client()
+            res = client.query(
+                CustomPerson.select(
+                    "*",
+                    name_length=lambda p: std.len(p.name)
+                ).order_by(name=True)
+            )
+
     .. py:method:: __init__(self, /, id, **kwargs):
 
         Constructs a new or per-existing Gel object.

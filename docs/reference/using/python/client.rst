@@ -657,6 +657,35 @@ Client
 
         See :py:meth:`State.without_globals` for details.
 
+    .. py:method:: save(*objs)
+
+        Persist objects without refetching updated data back.
+
+        :param GelModel objs: Objects that need to be persisted.
+
+        It applies all the changes in that appear in *objs*, whether this means creating new objects in |Gel| or updating existing ones. This method is a low-level method that provides a subset of ``sync()`` functionality. It is specifically optimized to avoid refetching data. So the passed objects will not be updated after being persisted. One exception to that is the ``id`` field of new objects which will be populated.
+
+        .. code-block:: python
+
+            alice = Person(name='Alice')
+            billie = Person(
+                name='Billie',
+                email='billie@gel.com',
+            )
+            cameron = Person(
+                name='Cameron',
+                email='cameron@gel.com',
+                friends=[alice, billie],
+            )
+
+            # Even though we only save(cameron), the alice and billie
+            # objects will also be saved, since they are linked to
+            # cameron.
+            client.save(cameron)
+
+            # We can expect ids to be populated by save()
+            print(alice.id, billie.id, cameron.id)
+
     .. py:method:: sync(*objs, warn_on_large_sync=True)
 
         Persist objects and refetch updated data back into them.
@@ -1153,6 +1182,66 @@ Client
 
         See :py:meth:`State.without_globals` for details.
 
+    .. py:coroutinemethod:: save(*objs)
+
+        Persist objects without refetching updated data back.
+
+        :param GelModel objs: Objects that need to be persisted.
+
+        It applies all the changes in that appear in *objs*, whether this means creating new objects in |Gel| or updating existing ones. This method is a low-level method that provides a subset of ``sync()`` functionality. It is specifically optimized to avoid refetching data. So the passed objects will not be updated after being persisted. One exception to that is the ``id`` field of new objects which will be populated.
+
+        .. code-block:: python
+
+            alice = Person(name='Alice')
+            billie = Person(
+                name='Billie',
+                email='billie@gel.com',
+            )
+            cameron = Person(
+                name='Cameron',
+                email='cameron@gel.com',
+                friends=[alice, billie],
+            )
+
+            # Even though we only save(cameron), the alice and billie
+            # objects will also be saved, since they are linked to
+            # cameron.
+            await client.save(cameron)
+
+            # We can expect ids to be populated by save()
+            print(alice.id, billie.id, cameron.id)
+
+    .. py:coroutinemethod:: sync(*objs, warn_on_large_sync=True)
+
+        Persist objects and refetch updated data back into them.
+
+        :param GelModel objs: Objects that need to be persisted.
+        :param bool warn_on_large_sync: Warn if ``sync()`` is creating too many objects.
+
+        This is the preferred method for persisting the data from Python to the |Gel| backend.
+
+        It applies all the changes in that appear in *objs*, whether this means creating new objects in |Gel| or updating existing ones. It also re-fetches the model fields afterwards. This is useful in case there are any changes to them that occurred, such as populating the server-side default values or updating computed values. In particular this also populated the ``id`` for new objects.
+
+        .. code-block:: python
+
+            alice = Person(name='Alice')
+            billie = Person(
+                name='Billie',
+                email='billie@gel.com',
+            )
+            cameron = Person(
+                name='Cameron',
+                email='cameron@gel.com',
+                friends=[alice, billie],
+            )
+
+            # Even though we only sync(cameron), the alice and billie
+            # objects will also be synced, since they are linked to
+            # cameron.
+            await client.sync(cameron)
+
+            # We can expect ids to be populated by sync()
+            print(alice.id, billie.id, cameron.id)
 
 .. _gel-python-asyncio-api-transaction:
 
