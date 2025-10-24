@@ -1912,6 +1912,15 @@ class PathStep(Nonterm):
             direction=s_pointers.PointerDirection.Inbound
         )
 
+    def reduce_DOTQ_PathStepName(self, *kids):
+        from edb.schema import pointers as s_pointers
+
+        self.val = qlast.Ptr(
+            name=kids[1].val.name,
+            direction=s_pointers.PointerDirection.Outbound,
+            type='optional',
+        )
+
     def reduce_AT_PathNodeName(self, *kids):
         from edb.schema import pointers as s_pointers
 

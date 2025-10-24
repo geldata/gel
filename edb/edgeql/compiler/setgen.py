@@ -621,12 +621,13 @@ def compile_path(expr: qlast.Path, *, ctx: context.ContextLevel) -> irast.Set:
                     direction=direction,
                     upcoming_intersections=upcoming_intersections,
                     ignore_computable=True,
+                    optional_deref=step.type == 'optional',
                     span=step.span, ctx=ctx)
 
                 assert isinstance(path_tip.expr, irast.Pointer)
                 ptrcls = typegen.ptrcls_from_ptrref(
                     path_tip.expr.ptrref, ctx=ctx)
-                if _is_computable_ptr(ptrcls, direction, ctx=ctx):
+                if _is_computable_ptr(ptrcls, path_tip.expr, ctx=ctx):
                     is_computable = True
 
         elif isinstance(step, qlast.TypeIntersection):
@@ -815,6 +816,7 @@ def ptr_step_set(
     direction: PtrDir = PtrDir.Outbound,
     span: Optional[qlast.Span],
     ignore_computable: bool = False,
+    optional_deref: bool = False,
     ctx: context.ContextLevel,
 ) -> irast.Set:
     ptrcls, path_id_ptrcls = resolve_ptr_with_intersections(
@@ -829,7 +831,9 @@ def ptr_step_set(
     return extend_path(
         path_tip, ptrcls, direction,
         path_id_ptrcls=path_id_ptrcls,
-        ignore_computable=ignore_computable, span=span,
+        ignore_computable=ignore_computable,
+        optional_deref=optional_deref,
+        span=span,
         ctx=ctx)
 
 
@@ -1116,6 +1120,7 @@ def extend_path(
     path_id_ptrcls: Optional[s_pointers.Pointer] = None,
     ignore_computable: bool = False,
     same_computable_scope: bool = False,
+    optional_deref: bool = False,
     span: Optional[qlast.Span]=None,
     ctx: context.ContextLevel,
 ) -> irast.SetE[irast.Pointer]:
@@ -1169,11 +1174,12 @@ def extend_path(
         direction=direction,
         ptrref=typegen.ptr_to_ptrref(ptrcls, ctx=ctx),
         is_definition=False,
+        optional_deref=optional_deref,
     )
     target_set = new_set(
         stype=target, path_id=path_id, span=span, expr=ptr, ctx=ctx)
 
-    is_computable = _is_computable_ptr(ptrcls, direction, ctx=ctx)
+    is_computable = _is_computable_ptr(ptrcls, ptr, ctx=ctx)
     if not ignore_computable and is_computable:
         target_set = computable_ptr_set(
             ptr,
@@ -1189,7 +1195,7 @@ def extend_path(
 
 def needs_rewrite_existence_assertion(
     ptrcls: s_pointers.PointerLike,
-    direction: PtrDir,
+    rptr: irast.Pointer,
     *,
     ctx: context.ContextLevel,
 ) -> bool:
@@ -1201,8 +1207,10 @@ def needs_rewrite_existence_assertion(
 
     return bool(
         not ctx.suppress_rewrites
+        # We *don't* need to do the rewrite when using .?>
+        and not rptr.optional_deref
         and ptrcls.get_required(ctx.env.schema)
-        and direction == PtrDir.Outbound
+        and rptr.direction == PtrDir.Outbound
         and (target := ptrcls.get_target(ctx.env.schema))
         and ctx.env.type_rewrites.get((target, False))
         and ptrcls.get_shortname(ctx.env.schema).name != '__type__'
@@ -1211,7 +1219,7 @@ def needs_rewrite_existence_assertion(
 
 def is_injected_computable_ptr(
     ptrcls: s_pointers.PointerLike,
-    direction: PtrDir,
+    rptr: irast.Pointer,
     *,
     ctx: context.ContextLevel,
 ) -> bool:
@@ -1220,14 +1228,14 @@ def is_injected_computable_ptr(
         and ptrcls not in ctx.active_computeds
         and (
             bool(ptrcls.get_schema_reflection_default(ctx.env.schema))
-            or needs_rewrite_existence_assertion(ptrcls, direction, ctx=ctx)
+            or needs_rewrite_existence_assertion(ptrcls, rptr, ctx=ctx)
         )
     )
 
 
 def _is_computable_ptr(
     ptrcls: s_pointers.PointerLike,
-    direction: PtrDir,
+    rptr: irast.Pointer,
     *,
     ctx: context.ContextLevel,
 ) -> bool:
@@ -1240,7 +1248,7 @@ def _is_computable_ptr(
 
     return (
         bool(ptrcls.get_expr(ctx.env.schema))
-        or is_injected_computable_ptr(ptrcls, direction, ctx=ctx)
+        or is_injected_computable_ptr(ptrcls, rptr, ctx=ctx)
     )
 
 
@@ -1711,8 +1719,7 @@ def computable_ptr_set(
                     op='??',
                 )
 
-            if needs_rewrite_existence_assertion(
-                    ptrcls, PtrDir.Outbound, ctx=ctx):
+            if needs_rewrite_existence_assertion(ptrcls, rptr, ctx=ctx):
                 # Wrap it in a dummy select so that we can't optimize away
                 # the assert_exists.
                 # TODO: do something less bad

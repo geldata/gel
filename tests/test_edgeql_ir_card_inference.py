@@ -1449,3 +1449,10 @@ class TestEdgeQLCardinalityInference(tb.BaseEdgeQLCompilerTest):
 % OK %
         AT_LEAST_ONE
         """
+
+    def test_edgeql_ir_card_inference_170(self):
+        """
+        select Report { u := .?>user }
+% OK %
+        u: AT_MOST_ONE
+        """

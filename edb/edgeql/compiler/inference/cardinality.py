@@ -629,6 +629,10 @@ def _infer_set_inner(
 
         card = cartesian_cardinality((source_card, rptrref_card))
 
+        # "Optional derefs" (.?>) always produce an optional result.
+        if ptr.optional_deref:
+            card = cartesian_cardinality((AT_MOST_ONE, card))
+
     elif sub_expr is not None:
         card = expr_card
     else:
