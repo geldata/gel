@@ -518,7 +518,13 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
             }
             imports::ExpressionList(py)?.call1((values_py,))
         }
-        gel_schema::Value::ExpressionDict(_btree_map) => todo!(),
+        gel_schema::Value::ExpressionDict(map) => {
+            let items = PyList::empty(py);
+            for (key, val) in map.iter() {
+                items.append((key, expr_into_py(py, val)?))?;
+            }
+            imports::ExpressionDict(py)?.call1((items,))
+        }
 
         gel_schema::Value::Uuid(v) => v.into_bound_py_any(py),
         gel_schema::Value::Bool(v) => v.into_bound_py_any(py),
@@ -681,6 +687,22 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             exprs.push(Rc::into_inner(expr).unwrap());
         }
         return Ok(Value::ExpressionList(Rc::new(exprs)));
+    }
+
+    let expr_dict = imports::ExpressionDict(py)?;
+    if val.is_exact_instance(&expr_dict) {
+        let dict = val.getattr("_container")?.cast_into_exact::<PyDict>()?;
+
+        let mut map = indexmap::IndexMap::with_capacity(dict.len());
+        for (key, val) in dict {
+            let key: String = key.extract()?;
+
+            let Value::Expression(expr) = value_from_py(py, val)? else {
+                panic!()
+            };
+            map.insert(key, Rc::into_inner(expr).unwrap());
+        }
+        return Ok(Value::ExpressionDict(Rc::new(map)));
     }
 
     if val.is_exact_instance(imports::Expression(py)?)
@@ -956,6 +978,7 @@ fn ty_to_py<'p>(py: Python<'p>, reference: &str) -> PyResult<Bound<'p, PyAny>> {
             "Type" => imports::Type(py).cloned(),
             "AnnotationValue" => imports::AnnotationValue(py).cloned(),
             "Pointer" => imports::Pointer(py).cloned(),
+            "Rewrite" => imports::Rewrite(py).cloned(),
             "Constraint" => imports::Constraint(py).cloned(),
             "AccessPolicy" => imports::AccessPolicy(py).cloned(),
             "Global" => imports::Global(py).cloned(),
@@ -1233,7 +1256,7 @@ mod imports {
     }
     pub fn Branch(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.schema.databases", "Branch")
+        CELL.import(py, "edb.schema.database", "Branch")
     }
 
     pub fn Expression(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
@@ -1247,6 +1270,10 @@ mod imports {
     pub fn ExpressionList(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.schema.expr", "ExpressionList")
+    }
+    pub fn ExpressionDict(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
+        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+        CELL.import(py, "edb.schema.expr", "ExpressionDict")
     }
 
     pub fn StrEnum(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {

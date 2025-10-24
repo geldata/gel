@@ -20,6 +20,7 @@ pyo3 = { workspace = true, features = ["uuid"] }
 tracing.workspace = true
 uuid = "1"
 bincode = { version = "1.3.3" }
+indexmap = "2.12.0"
 
 [lib]
 crate-type = ["cdylib"]
