@@ -197,7 +197,7 @@ class BaseServer:
         self._compiler_pool_addr = compiler_pool_addr
         self._compiler_worker_max_rss = compiler_worker_max_rss
         self._system_compile_cache = lru.LRUMapping(
-            maxsize=defines._MAX_QUERIES_CACHE
+            maxsize=defines._MAX_QUERIES_CACHE_SYSTEM
         )
         self._system_compile_cache_locks: dict[Any, Any] = {}
 
