@@ -727,6 +727,23 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
             ext::ai::embedding_model_max_output_dimensions := "1536";
     };
 
+    create abstract type ext::ai::VoyageContext3EmbedModel
+        extending ext::ai::EmbeddingModel
+    {
+        alter annotation
+            ext::ai::model_name := "voyage-context-3";
+        alter annotation
+            ext::ai::model_provider := "builtin::voyageai";
+        alter annotation
+            ext::ai::embedding_model_max_input_tokens := "32000";
+        alter annotation
+            ext::ai::embedding_model_max_batch_tokens := "320000";
+        alter annotation
+            ext::ai::embedding_model_max_output_dimensions := "1024";
+        alter annotation
+            ext::ai::embedding_model_supports_shortening := "true";
+    };
+
     # Ollama embedding models
     create abstract type ext::ai::OllamaLlama_3_2_Model
         extending ext::ai::TextGenerationModel

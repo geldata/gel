@@ -1356,13 +1356,27 @@ async def _generate_voyageai_embeddings(
         base_url=provider.api_url,
     )
 
-    params: dict[str, Any] = {
-        "input": inputs,
-        "model": model_name,
-    }
+    # Check if this is a contextualized embedding model
+    is_contextualized = "context" in model_name
+
+    if is_contextualized:
+        # For contextualized embeddings, treat each input as a single-chunk document
+        params: dict[str, Any] = {
+            "inputs": [[inp] for inp in inputs],
+            "input_type": "document",
+            "model": model_name,
+        }
+        endpoint = "/contextualizedembeddings"
+    else:
+        # Standard embeddings
+        params = {
+            "input": inputs,
+            "model": model_name,
+        }
+        endpoint = "/embeddings"
 
     result = await client.post(
-        "/embeddings",
+        endpoint,
         json=params,
     )
 
@@ -1379,6 +1393,19 @@ async def _generate_voyageai_embeddings(
                 result.status_code == 429
             ),
         )
+
+    # For contextualized embeddings, we need to flatten the response
+    if is_contextualized and not error:
+        import json
+        response_data = json.loads(result.bytes())
+        # Flatten the nested structure: data[doc][chunk] -> data[chunk]
+        flattened_data = []
+        for doc_idx, doc in enumerate(response_data.get("data", [])):
+            for chunk in doc.get("data", []):
+                flattened_data.append(chunk)
+        response_data["data"] = flattened_data
+        flattened_bytes = json.dumps(response_data).encode()
+        return EmbeddingsResult(data=EmbeddingsData(flattened_bytes))
 
     return EmbeddingsResult(
         data=(error if error else EmbeddingsData(result.bytes())),
