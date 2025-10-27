@@ -29,6 +29,7 @@ from typing import (
     Optional,
     overload,
     Self,
+    Never,
     TYPE_CHECKING,
 )
 
@@ -1322,10 +1323,16 @@ class RustSchema(Schema):
         self, id: uuid.UUID, sclass: type[so.Object], data: tuple[Any]
     ) -> RustSchema:
         # print('add', sclass, data)
-        return RustSchema(self.inner.add(id, sclass, data))
+        try:
+            return RustSchema(self.inner.add(id, sclass, data))
+        except rust_schema.RustSchemaError as e:
+            _handle_rust_error(e, self, 'add')
 
     def delete(self, obj: so.Object) -> RustSchema:
-        return RustSchema(self.inner.delete(obj))
+        try:
+            return RustSchema(self.inner.delete(obj))
+        except rust_schema.RustSchemaError as e:
+            _handle_rust_error(e, self, 'delete')
 
     def delist(self, name: sn.Name) -> RustSchema:
         return RustSchema(self.inner.delist(name))
@@ -1336,11 +1343,17 @@ class RustSchema(Schema):
         fieldname: str,
         value: Any,
     ) -> RustSchema:
-        # print('set_obj_field', scls, fieldname, value)
-        return RustSchema(self.inner.set_field(obj, fieldname, value))
+        try:
+            # print('set_obj_field', scls, fieldname, value)
+            return RustSchema(self.inner.set_field(obj, fieldname, value))
+        except rust_schema.RustSchemaError as e:
+            _handle_rust_error(e, self, 'set field of')
 
     def unset_field(self, obj: so.Object, fieldname: str) -> RustSchema:
-        return RustSchema(self.inner.unset_field(obj, fieldname))
+        try:
+            return RustSchema(self.inner.unset_field(obj, fieldname))
+        except rust_schema.RustSchemaError as e:
+            _handle_rust_error(e, self, 'set fields of')
 
     def set_fields(
         self,
@@ -1350,8 +1363,35 @@ class RustSchema(Schema):
         if not updates:
             return self
 
-        # print('set_fields', obj, updates)
-        return RustSchema(self.inner.set_fields(obj, updates))
+        try:
+            # print('set_fields', obj, updates)
+            return RustSchema(self.inner.set_fields(obj, updates))
+        except rust_schema.RustSchemaError as e:
+            _handle_rust_error(e, self, 'set fields of')
 
 
 EMPTY_SCHEMA: Schema = RustSchema.empty()
+
+
+def _handle_rust_error(
+    e: rust_schema.RustSchemaError,
+    schema: RustSchema,
+    action: str
+) -> Never:
+    if other_obj := e.as_duplicate_name():
+        vn = other_obj.get_verbosename(schema, with_parent=True)
+        raise errors.SchemaError(f'{vn} already exists')
+    if obj := e.as_duplicate_id():
+        raise errors.SchemaError(
+            f'{type(obj)} ({str(obj.id)!r}) is already present '
+            f'in the schema {schema!r}'
+        )
+    if module := e.as_missing_module():
+        raise errors.UnknownModuleError(
+            f'module {module!r} is not in this schema'
+        )
+    if e.as_missing_object():
+        raise errors.InvalidReferenceError(
+            f'cannot {action} {obj!r}: not in this schema'
+        )
+    raise NotImplementedError()

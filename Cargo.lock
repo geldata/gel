@@ -1174,9 +1174,9 @@ dependencies = [
 [[package]]
 name = "gel-schema"
 version = "0.1.0"
-source = "git+https://github.com/geldata/gel-rust.git?rev=6fcf4acde3270ee7bb93beda4a38fc9bf007619e#6fcf4acde3270ee7bb93beda4a38fc9bf007619e"
+source = "git+https://github.com/geldata/gel-rust.git?rev=4e13086db25b7236e4a73263471d292a643e7f1a#4e13086db25b7236e4a73263471d292a643e7f1a"
 dependencies = [
- "im",
+ "im-rc",
  "indexmap",
  "regex",
  "serde",
@@ -1613,10 +1613,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "im"
+name = "im-rc"
 version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0acd33ff0285af998aaf9b57342af478078f53492322fafc47450e09397e0e9"
+checksum = "af1955a75fa080c677d3972822ec4bad316169ab1cfc6c257a942c2265dbe5fe"
 dependencies = [
  "bitmaps",
  "rand_core 0.6.4",

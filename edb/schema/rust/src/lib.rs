@@ -6,7 +6,7 @@ use gel_schema::{
     Class, Container, ContainerTy, EnumTy, Expression, ObjectDict, ObjectIndex, ObjectIndexTy,
     ObjectList, ObjectListTy, ObjectSet, Value, Version, VersionStage,
 };
-use pyo3::exceptions::PyAssertionError;
+use pyo3::exceptions::{PyAssertionError, PyException};
 use pyo3::types::{
     PyBool, PyDict, PyFloat, PyFrozenSet, PyInt, PyList, PySet, PyString, PyTuple, PyType,
 };
@@ -17,6 +17,7 @@ use uuid::Uuid;
 #[pymodule]
 pub fn _schema(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Schema>()?;
+    m.add_class::<RustSchemaError>()?;
     Ok(())
 }
 
@@ -59,11 +60,11 @@ impl Schema {
         Ok(Schema { inner })
     }
 
-    fn __reduce__<'p>(self_: Bound<'p, Self>, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
-        let decode_fn = self_.get_type().getattr("decode")?;
+    fn __reduce__<'p>(&self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
+        let decode_fn = py.get_type::<Schema>().getattr("decode")?;
 
-        let encoded = bincode::serialize(&self_.borrow().inner)
-            .map_err(|x| SchemaError::new_err(x.to_string()))?;
+        let encoded =
+            bincode::serialize(&self.inner).map_err(|x| SchemaError::new_err(x.to_string()))?;
 
         (decode_fn, (encoded,)).into_bound_py_any(py)
     }
@@ -197,15 +198,15 @@ impl Schema {
         }
 
         let mut inner = self.inner.clone();
-        inner.add(&obj, data_vec).map_err(SchemaError::new_err)?;
+        inner.add(&obj, data_vec).map_err(err_to_py(py))?;
         Ok(Schema { inner })
     }
 
-    pub fn delete<'p>(&self, obj: Bound<'p, PyAny>) -> PyResult<Schema> {
+    pub fn delete<'p>(&self, py: Python<'p>, obj: Bound<'p, PyAny>) -> PyResult<Schema> {
         let obj = object_from_py(obj)?;
 
         let mut inner = self.inner.clone();
-        inner.delete(&obj).map_err(SchemaError::new_err)?;
+        inner.delete(&obj).map_err(err_to_py(py))?;
         Ok(Schema { inner })
     }
 
@@ -230,17 +231,20 @@ impl Schema {
         let mut inner = self.inner.clone();
         inner
             .set_field(obj, fieldname, value)
-            .map_err(SchemaError::new_err)?;
+            .map_err(err_to_py(py))?;
         Ok(Schema { inner })
     }
 
-    pub fn unset_field<'p>(&self, obj: Bound<PyAny>, fieldname: &str) -> PyResult<Schema> {
+    pub fn unset_field<'p>(
+        &self,
+        py: Python<'p>,
+        obj: Bound<PyAny>,
+        fieldname: &str,
+    ) -> PyResult<Schema> {
         let obj = object_from_py(obj)?;
 
         let mut inner = self.inner.clone();
-        inner
-            .unset_field(obj, fieldname)
-            .map_err(SchemaError::new_err)?;
+        inner.unset_field(obj, fieldname).map_err(err_to_py(py))?;
         Ok(Schema { inner })
     }
 
@@ -264,9 +268,7 @@ impl Schema {
         }
 
         let mut inner = self.inner.clone();
-        inner
-            .set_fields(obj, updates_rs)
-            .map_err(SchemaError::new_err)?;
+        inner.set_fields(obj, updates_rs).map_err(err_to_py(py))?;
         Ok(Schema { inner })
     }
 
@@ -299,7 +301,8 @@ impl Schema {
         let referrer_class = referrer_class.map(cls_from_py).transpose()?;
 
         // inner
-        let referrers = self.inner.get_referrers_ex(obj, referrer_class);
+        let referrers: HashMap<(Class, String), std::collections::HashSet<gel_schema::Object>> =
+            self.inner.get_referrers_ex(obj, referrer_class);
 
         // into py
         let res = PyDict::new(py);
@@ -567,7 +570,9 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
                 EnumTy::TriggerKind => imports::TriggerKind(py)?,
                 EnumTy::TriggerScope => imports::TriggerScope(py)?,
                 EnumTy::RewriteKind => imports::RewriteKind(py)?,
-                EnumTy::MigrationGeneratedBy => imports::MigrationGeneratedBy(py)?,
+                EnumTy::MigrationGeneratedBy => {
+                    return variant_name.into_bound_py_any(py);
+                }
                 EnumTy::IndexDeferrability => imports::IndexDeferrability(py)?,
                 EnumTy::SplatStrategy => imports::SplatStrategy(py)?,
             };
@@ -979,6 +984,7 @@ fn ty_to_py<'p>(py: Python<'p>, reference: &str) -> PyResult<Bound<'p, PyAny>> {
             "AnnotationValue" => imports::AnnotationValue(py).cloned(),
             "Pointer" => imports::Pointer(py).cloned(),
             "Rewrite" => imports::Rewrite(py).cloned(),
+            "Trigger" => imports::Trigger(py).cloned(),
             "Constraint" => imports::Constraint(py).cloned(),
             "AccessPolicy" => imports::AccessPolicy(py).cloned(),
             "Global" => imports::Global(py).cloned(),
@@ -1021,6 +1027,50 @@ fn import_fq<'p>(py: Python<'p>, fq: &str) -> PyResult<Bound<'p, PyAny>> {
 }
 
 pyo3::import_exception!(edb.errors, SchemaError);
+
+fn err_to_py<'p>(py: Python<'p>) -> impl Fn(gel_schema::SchemaError) -> pyo3::PyErr {
+    move |inner| {
+        PyErr::from_value(
+            Py::new(py, RustSchemaError { inner })
+                .unwrap()
+                .into_bound_py_any(py)
+                .unwrap(),
+        )
+    }
+}
+
+#[pyclass(frozen, unsendable, module = "edb.schema._schema", extends=PyException)]
+struct RustSchemaError {
+    inner: gel_schema::SchemaError,
+}
+
+#[pymethods]
+impl RustSchemaError {
+    fn as_duplicate_id<'p>(&self, py: Python<'p>) -> PyResult<Option<Bound<'p, PyAny>>> {
+        let gel_schema::SchemaError::DuplicateId(obj) = &self.inner else {
+            return Ok(None);
+        };
+        object_into_py(py, obj).map(Some)
+    }
+    fn as_duplicate_name<'p>(&self, py: Python<'p>) -> PyResult<Option<Bound<'p, PyAny>>> {
+        let gel_schema::SchemaError::DuplicateName(obj) = &self.inner else {
+            return Ok(None);
+        };
+        object_into_py(py, obj).map(Some)
+    }
+    fn as_missing_module<'p>(&self) -> Option<&'_ str> {
+        let gel_schema::SchemaError::MissingModule(module) = &self.inner else {
+            return None;
+        };
+        Some(module)
+    }
+    fn as_missing_object<'p>(&self) -> bool {
+        let gel_schema::SchemaError::MissingObject = &self.inner else {
+            return false;
+        };
+        true
+    }
+}
 
 mod imports {
     #![allow(non_snake_case)]
@@ -1389,10 +1439,6 @@ mod imports {
     pub fn RewriteKind(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
         CELL.import(py, "edb.edgeql.qltypes", "RewriteKind")
-    }
-    pub fn MigrationGeneratedBy(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
-        static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-        CELL.import(py, "edb.edgeql.qltypes", "MigrationGeneratedBy")
     }
     pub fn IndexDeferrability(py: Python<'_>) -> PyResult<&Bound<'_, PyAny>> {
         static CELL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
