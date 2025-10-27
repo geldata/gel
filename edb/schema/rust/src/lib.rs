@@ -40,7 +40,7 @@ impl Schema {
     pub fn parse_reflection(base_schema: &Schema, reflected_json: &str) -> Self {
         let layouts = gel_schema::get_structures();
 
-        let schema = gel_schema::parse_reflection(&base_schema.inner, reflected_json, &layouts);
+        let schema = gel_schema::parse_reflection(&base_schema.inner, reflected_json, layouts);
         Schema { inner: schema }
     }
 
@@ -332,7 +332,7 @@ fn name_from_py(name: Bound<PyAny>) -> PyResult<gel_schema::Name> {
     let first = name.get_item(0)?;
     let first = String::from_py_object_bound(first.as_borrowed())?;
 
-    Ok(if let Some(second) = name.get_item(1).ok() {
+    Ok(if let Ok(second) = name.get_item(1) {
         let second = String::from_py_object_bound(second.as_borrowed())?;
         gel_schema::Name {
             module: Some(first),
@@ -655,7 +655,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     }
 
     let span = imports::Span(py)?;
-    if val.is_instance(&span)? {
+    if val.is_instance(span)? {
         return Ok(Value::None);
     }
 
@@ -680,7 +680,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     }
 
     let expr_list = imports::ExpressionList(py)?;
-    if val.is_exact_instance(&expr_list) {
+    if val.is_exact_instance(expr_list) {
         // values
         let list = val.getattr("_container")?.cast_into_exact::<PyList>()?;
 
@@ -695,7 +695,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     }
 
     let expr_dict = imports::ExpressionDict(py)?;
-    if val.is_exact_instance(&expr_dict) {
+    if val.is_exact_instance(expr_dict) {
         let dict = val.getattr("_container")?.cast_into_exact::<PyDict>()?;
 
         let mut map = indexmap::IndexMap::with_capacity(dict.len());
@@ -736,7 +736,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     };
 
     let object_list = imports::ObjectList(py)?;
-    if ty_base_0.as_ref().map_or(false, |t| t.is(object_list)) {
+    if ty_base_0.as_ref().is_some_and(|t| t.is(object_list)) {
         return Ok(Value::ObjectList(Rc::new(ObjectList {
             ty: ObjectListTy::ObjectList,
             value_ty: parametric_arg_from_py(&val)?,
@@ -745,7 +745,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     }
 
     let object_set = imports::ObjectSet(py)?;
-    if ty_base_0.as_ref().map_or(false, |t| t.is(object_set)) {
+    if ty_base_0.as_ref().is_some_and(|t| t.is(object_set)) {
         return Ok(Value::ObjectSet(Rc::new(ObjectSet {
             value_ty: parametric_arg_from_py(&val)?,
             values: uuids_from_py(val.getattr("_ids")?)?,
@@ -753,7 +753,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     }
 
     let object_dict = imports::ObjectDict(py)?;
-    if ty_base_0.as_ref().map_or(false, |t| t.is(object_dict)) {
+    if ty_base_0.as_ref().is_some_and(|t| t.is(object_dict)) {
         let mut ty_args = parametric_args_from_py(&val)?.into_iter();
 
         let _key_ty = ty_args.next();
@@ -831,7 +831,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     }
 
     let checked_list = imports::AbstractCheckedList(py)?;
-    if val.is_instance(&checked_list)? {
+    if val.is_instance(checked_list)? {
         let ty_name = ty_from_py(val.get_type().as_any())?;
         let ty = Value::get_container_ty_name(&ty_name);
 
@@ -852,7 +852,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     }
 
     let checked_set = imports::FrozenCheckedSet(py)?;
-    if val.is_instance(&checked_set)? {
+    if val.is_instance(checked_set)? {
         let value_ty = ty_from_py(val.get_type().as_any())?;
 
         // values
@@ -870,7 +870,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     }
 
     let str_enum = imports::StrEnum(py)?;
-    if val.is_instance(&str_enum)? {
+    if val.is_instance(str_enum)? {
         let bound = val.get_type().name()?;
         let enum_name = bound.to_str()?;
         let variant_name = val.to_string();
@@ -879,7 +879,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         return Ok(val);
     }
     let int_enum = imports::IntEnum(py)?;
-    if val.is_instance(&int_enum)? {
+    if val.is_instance(int_enum)? {
         let ty_name = val.get_type().name()?;
         let enum_name = ty_name.to_str()?;
 
@@ -1058,13 +1058,13 @@ impl RustSchemaError {
         };
         object_into_py(py, obj).map(Some)
     }
-    fn as_missing_module<'p>(&self) -> Option<&'_ str> {
+    fn as_missing_module(&self) -> Option<&'_ str> {
         let gel_schema::SchemaError::MissingModule(module) = &self.inner else {
             return None;
         };
         Some(module)
     }
-    fn as_missing_object<'p>(&self) -> bool {
+    fn as_missing_object(&self) -> bool {
         let gel_schema::SchemaError::MissingObject = &self.inner else {
             return false;
         };
