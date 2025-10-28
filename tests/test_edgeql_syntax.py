@@ -2332,6 +2332,19 @@ aa';
         select Foo.bar@intersect;
         """
 
+    def test_edgeql_syntax_path_34(self):
+        """
+        SELECT Foo.?>bar;
+        SELECT Foo.?>bar@spam;
+        SELECT Foo.?>bar[IS Baz];
+
+% OK %
+
+        SELECT Foo.?>bar;
+        SELECT Foo.?>bar@spam;
+        SELECT Foo.?>bar[IS Baz];
+        """
+
     def test_edgeql_syntax_type_interpretation_01(self):
         """
         SELECT Foo[IS Bar].spam;

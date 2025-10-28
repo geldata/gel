@@ -215,10 +215,10 @@ fn is_operator(token: &Token) -> bool {
     use edgeql_parser::tokenizer::Kind::*;
     match token.kind {
         Assign | SubAssign | AddAssign | Arrow | Coalesce | Namespace | DoubleSplat
-        | BackwardLink | FloorDiv | Concat | GreaterEq | LessEq | NotEq | NotDistinctFrom
-        | DistinctFrom | Comma | OpenParen | CloseParen | OpenBracket | CloseBracket
-        | OpenBrace | CloseBrace | Dot | Semicolon | Colon | Add | Sub | Mul | Div | Modulo
-        | Pow | Less | Greater | Eq | Ampersand | Pipe | At => true,
+        | BackwardLink | OptionalLink | FloorDiv | Concat | GreaterEq | LessEq | NotEq
+        | NotDistinctFrom | DistinctFrom | Comma | OpenParen | CloseParen | OpenBracket
+        | CloseBracket | OpenBrace | CloseBrace | Dot | Semicolon | Colon | Add | Sub | Mul
+        | Div | Modulo | Pow | Less | Greater | Eq | Ampersand | Pipe | At => true,
         DecimalConst | FloatConst | IntConst | BigIntConst | BinStr | Parameter
         | ParameterAndType | Str | BacktickName | Keyword(_) | Ident | Substitution | EOI
         | Epsilon | StartBlock | StartExtension | StartFragment | StartMigration

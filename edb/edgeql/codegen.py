@@ -600,6 +600,8 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
     def visit_Ptr(self, node: qlast.Ptr, *, quote: bool = True) -> None:
         if node.type == 'property':
             self.write('@')
+        elif node.type == 'optional':
+            self.write('?>')
         elif node.direction and node.direction != '>':
             self.write(node.direction)
 
