@@ -1174,7 +1174,7 @@ dependencies = [
 [[package]]
 name = "gel-schema"
 version = "0.1.0"
-source = "git+https://github.com/geldata/gel-rust.git?rev=4e13086db25b7236e4a73263471d292a643e7f1a#4e13086db25b7236e4a73263471d292a643e7f1a"
+source = "git+https://github.com/geldata/gel-rust.git?rev=e162dbbf22d05b785aaa31e03cbbe78296cdbe1e#e162dbbf22d05b785aaa31e03cbbe78296cdbe1e"
 dependencies = [
  "im-rc",
  "indexmap",

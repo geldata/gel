@@ -592,6 +592,10 @@ fn value_into_py<'p>(py: Python<'p>, val: &gel_schema::Value) -> PyResult<Bound<
                 PyTuple::new(py, &version.local)?,
             ))
         }
+        gel_schema::Value::Span(span) => {
+            let span_cls = imports::Span(py)?;
+            span_cls.call1((&span.filename, "", span.start, span.end))
+        }
 
         gel_schema::Value::None => Ok(py.None().bind(py).clone()),
     }
@@ -656,7 +660,11 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
 
     let span = imports::Span(py)?;
     if val.is_instance(span)? {
-        return Ok(Value::None);
+        return Ok(Value::Span(Rc::new(gel_schema::Span {
+            filename: val.getattr("filename")?.extract()?,
+            start: val.getattr("start")?.extract()?,
+            end: val.getattr("end")?.extract()?,
+        })));
     }
 
     if let Some(id) = val.getattr_opt("id")? {
