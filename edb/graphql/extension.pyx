@@ -102,6 +102,7 @@ async def handle_request(
     operation_name = None
     variables = None
     globals = None
+    config = None
     deprecated_globals = None
     query = None
     query_bytes_len = 0
@@ -179,6 +180,12 @@ async def handle_request(
         if variables is not None:
             globals = variables.get('__globals__')
 
+        if variables is not None:
+            config = variables.get('__config__')
+
+        if config is not None and not isinstance(config, dict):
+            raise TypeError('"__config__" must be a JSON object')
+
         if globals is not None and not isinstance(globals, dict):
             raise TypeError('"__globals__" must be a JSON object')
         if (
@@ -210,7 +217,9 @@ async def handle_request(
     response.content_type = b'application/json'
     try:
         result = await _execute(
-            db, role_name, tenant, query, operation_name, variables, globals)
+            db, role_name, tenant, query, operation_name, variables, globals,
+            config,
+        )
     except Exception as ex:
         if debug.flags.server:
             markup.dump(ex)
@@ -239,7 +248,7 @@ async def handle_request(
 
 
 async def compile(
-    dbview.Database db,
+    dbview.DatabaseConnectionView dbv,
     tenant,
     query: str,
     tokens: Optional[List[Tuple[int, int, int, str]]],
@@ -247,6 +256,7 @@ async def compile(
     operation_name: Optional[str],
     variables: Dict[str, Any],
 ):
+    db = dbv._db
     server = tenant.server
     compiler_pool = server.get_compiler_pool()
     started_at = time.monotonic()
@@ -256,8 +266,9 @@ async def compile(
             db.user_schema_pickle,
             tenant.get_global_schema_pickle(),
             db.reflection_cache,
-            db.db_config,
-            db._index.get_compilation_system_config(),
+            dbv.get_database_config(),
+            dbv.get_compilation_system_config(),
+            dbv.get_session_config(),
             query,
             tokens,
             substitutions,
@@ -274,7 +285,7 @@ async def compile(
         )
 
 async def _execute(
-    db, role_name, tenant, query, operation_name, variables, globals
+    db, role_name, tenant, query, operation_name, variables, globals, config
 ):
     dbver = db.dbver
     query_cache = tenant.server._http_query_cache
@@ -316,7 +327,27 @@ async def _execute(
             print(rewritten)
             print(f'variables: {vars}')
 
-    cache_key = ('graphql', prepared_query, (), operation_name, dbver)
+    await db.introspection()
+
+    dbv = await tenant.new_dbview(
+        dbname=db.name,
+        query_cache=False,
+        protocol_version=edbdef.CURRENT_PROTOCOL,
+        role_name=role_name,
+    )
+    dbv.is_transient = True
+    await dbv.decode_json_session_config(config)
+
+    # Put the compilation-affecting session config into the cache key.
+    # N.B: We skip putting system/database config in here, since dbver
+    # gets bumped whenever those change.
+    config_key = db.server.compilation_config_serializer.encode_configs(
+        dbv.get_session_config()
+    )
+
+    cache_key = (
+        'graphql', prepared_query, (), operation_name, dbver, config_key
+    )
     use_prep_stmt = False
 
     entry: CacheEntry = None
@@ -328,15 +359,15 @@ async def _execute(
             print("REDIRECT", entry.key_vars)
 
         key_vars2 = tuple(vars[k] for k in entry.key_vars)
-        cache_key2 = (prepared_query, key_vars2, operation_name, dbver)
+        cache_key2 = (
+            prepared_query, key_vars2, operation_name, dbver, config_key
+        )
         entry = query_cache.get(cache_key2, None)
-
-    await db.introspection()
 
     if entry is None:
         if rewritten is not None:
             qug, gql_op = await compile(
-                db,
+                dbv,
                 tenant,
                 query,
                 rewritten.tokens(gql_lexer.TokenKind),
@@ -346,7 +377,7 @@ async def _execute(
             )
         else:
             qug, gql_op = await compile(
-                db,
+                dbv,
                 tenant,
                 query,
                 None,
@@ -380,13 +411,6 @@ async def _execute(
         )
 
     compiled = dbview.CompiledQuery(query_unit_group=qug)
-
-    dbv = await tenant.new_dbview(
-        dbname=db.name,
-        query_cache=False,
-        protocol_version=edbdef.CURRENT_PROTOCOL,
-        role_name=role_name,
-    )
 
     async with tenant.with_pgcon(db.name) as pgcon:
         try:

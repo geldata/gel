@@ -109,6 +109,7 @@ Requests can contain the following fields:
   keys must be the fully qualified names of the globals to set (e.g.,
   ``default::current_user`` for the global ``current_user`` in the ``default``
   module).
+- ``variables["__config__"]`` - a JSON object containing session configuration values. **Optional**.  **Added in 7.0.**
 - ``operationName`` - the name of the operation that must be
   executed. **Optional** If the GraphQL query contains several named
   operations, it is required.

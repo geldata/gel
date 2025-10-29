@@ -94,15 +94,17 @@ Querying
 |Gel| supports GET and POST methods for handling EdgeQL over HTTP protocol. Both GET and POST methods use the following fields:
 
 - ``query`` - contains the EdgeQL query string
-- ``variables``- contains a JSON object where the keys are the parameter names from the query and the values are the arguments to be used in this execution of the query.
-- ``globals``- contains a JSON object where the keys are the fully qualified global names and the values are the desired values for those globals.
+- ``variables``- contains a JSON object where the keys are the parameter names from the query and the values are the arguments to be used in this execution of the query.  **Optional**
+- ``globals``- contains a JSON object where the keys are the fully qualified global names and the values are the desired values for those globals.  **Optional**
+
+- ``config`` - contains a JSON object where the keys are configuration option names and the values are the desired values for those configs.  **Optional**. **Added in 7.0.**
 
 The protocol supports HTTP Keep-Alive.
 
 GET request
 -----------
 
-The HTTP GET request passes the fields as query parameters: ``query`` string and JSON-encoded ``variables`` mapping.
+The HTTP GET request passes the fields as query parameters: ``query`` string and JSON-encoded ``variables``, ``globals``, and ``config`` mappings.
 
 
 POST request
@@ -115,7 +117,8 @@ The POST request should use ``application/json`` content type and submit the fol
   {
     "query": "select Person {*} filter .name = <str>$name;",
     "variables": { "name": "John" },
-    "globals": { "default::global_name": "value" }
+    "globals": { "default::global_name": "value" },
+    "config": { "default_transaction_isolation": "RepeatableRead" }
   }
 
 

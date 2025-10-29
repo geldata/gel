@@ -367,6 +367,31 @@ class TestHttpEdgeQL(tb.EdgeQLTestCase):
                 use_http_post=use_http_post,
             )
 
+    def test_http_edgeql_query_config_01(self):
+        Q = r'''select sys::get_transaction_isolation();'''
+
+        for val in ['RepeatableRead', 'Serializable']:
+            for use_http_post in [True, False]:
+                self.assert_edgeql_query_result(
+                    Q,
+                    [val],
+                    config={"default_transaction_isolation": val},
+                    use_http_post=use_http_post,
+                )
+
+    def test_http_edgeql_query_config_02(self):
+        # make sure that changing compilation-affecting policies works
+        Q = r'''select not (exists Missing)'''
+
+        for val in [True, False, True]:
+            for use_http_post in [True, False]:
+                self.assert_edgeql_query_result(
+                    Q,
+                    [val],
+                    config={"apply_access_policies": val},
+                    use_http_post=use_http_post,
+                )
+
     def test_http_edgeql_query_globals_05(self):
         Q = r'''select get_glob_inline()'''
 

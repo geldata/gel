@@ -143,6 +143,7 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
         use_http_post=True,
         variables=None,
         globals=None,
+        config=None,
         origin=None,
 
         user=None,
@@ -155,6 +156,8 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
                 req_data["variables"] = variables
             if globals is not None:
                 req_data["globals"] = globals
+            if config is not None:
+                req_data["config"] = config
             req = urllib.request.Request(self.http_addr, method="POST")
             req.add_header("Content-Type", "application/json")
             req.add_header(
@@ -171,6 +174,8 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
                 req_data["variables"] = json.dumps(variables)
             if globals is not None:
                 req_data["globals"] = json.dumps(globals)
+            if config is not None:
+                req_data["config"] = json.dumps(config)
             req = urllib.request.Request(
                 f"{self.http_addr}/?{urllib.parse.urlencode(req_data)}",
             )
@@ -203,12 +208,14 @@ class EdgeQLTestCase(BaseHttpExtensionTest):
         use_http_post=True,
         variables=None,
         globals=None,
+        config=None,
     ):
         res, _ = self.edgeql_query(
             query,
             use_http_post=use_http_post,
             variables=variables,
             globals=globals,
+            config=config,
         )
 
         if sort is not None:
@@ -237,6 +244,7 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         variables=None,
         globals=None,
         deprecated_globals=None,
+        config=None,
 
         user=None,
         password=None,
@@ -249,6 +257,7 @@ class GraphQLTestCase(BaseHttpExtensionTest):
                 variables=variables,
                 globals=globals,
                 deprecated_globals=deprecated_globals,
+                config=config,
                 user=user,
                 password=password,
             )
@@ -279,6 +288,7 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         variables=None,
         globals=None,
         deprecated_globals=None,
+        config=None,
         user=None,
         password=None,
     ):
@@ -294,6 +304,10 @@ class GraphQLTestCase(BaseHttpExtensionTest):
                 if variables is None:
                     req_data["variables"] = dict()
                 req_data["variables"]["__globals__"] = globals
+            if config is not None:
+                if variables is None:
+                    req_data["variables"] = dict()
+                req_data["variables"]["__config__"] = config
             # Support testing the old way of sending globals.
             if deprecated_globals is not None:
                 req_data["globals"] = deprecated_globals
@@ -312,6 +326,10 @@ class GraphQLTestCase(BaseHttpExtensionTest):
                 if variables is None:
                     variables = dict()
                 variables["__globals__"] = globals
+            if config is not None:
+                if variables is None:
+                    variables = dict()
+                variables["__config__"] = config
             # Support testing the old way of sending globals.
             if deprecated_globals is not None:
                 req_data["globals"] = json.dumps(deprecated_globals)
@@ -417,9 +435,10 @@ class GraphQLTestCase(BaseHttpExtensionTest):
         variables=None,
         globals=None,
         deprecated_globals=None,
+        config=None,
     ):
         # Try to use the native protocol first!
-        if operation_name is None:
+        if operation_name is None and config is None:
             try:
                 res = asyncio.run(self._native_graphql_query(
                     query,
@@ -453,6 +472,7 @@ class GraphQLTestCase(BaseHttpExtensionTest):
             variables=variables,
             globals=globals,
             deprecated_globals=deprecated_globals,
+            config=config,
         )
 
         if sort is not None:

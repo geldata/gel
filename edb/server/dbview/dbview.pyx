@@ -1038,6 +1038,25 @@ cdef class DatabaseConnectionView:
             aliases, session_config, globals_, type_id, data
         )
 
+    # XXX: this really shouldn't be async
+    async def decode_json_session_config(self, session_config):
+        if not session_config:
+            return
+
+        # If there is a session_config json dict passed in, turn it into a
+        # series of config so that we can use dbv.apply_config_ops to both
+        # apply them and check that we have the permissions to do so.
+        config_ops = [
+            config.Operation(
+                config.OpCode.CONFIG_SET,
+                qltypes.ConfigScope.SESSION,
+                k,
+                v,
+            )
+            for k, v in session_config.items()
+        ]
+        await self.apply_config_ops(conn=None, ops=config_ops)
+
     cdef bint needs_commit_after_state_sync(self):
         return any(
             tx_conf in self._config
@@ -1402,6 +1421,7 @@ cdef class DatabaseConnectionView:
 
         for op in ops:
             if op.scope is config.ConfigScope.INSTANCE:
+                assert conn is not None
                 await self._db._index.apply_system_config_op(conn, op)
             elif op.scope is config.ConfigScope.DATABASE:
                 self.set_database_config(
