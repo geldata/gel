@@ -329,14 +329,14 @@ async def _execute(
 
     await db.introspection()
 
-    dbv = await tenant.new_dbview(
+    dbv: dbview.DatabaseConnectionView = await tenant.new_dbview(
         dbname=db.name,
         query_cache=False,
         protocol_version=edbdef.CURRENT_PROTOCOL,
         role_name=role_name,
     )
     dbv.is_transient = True
-    await dbv.decode_json_session_config(config)
+    dbv.decode_json_session_config(config)
 
     # Put the compilation-affecting session config into the cache key.
     # N.B: We skip putting system/database config in here, since dbver

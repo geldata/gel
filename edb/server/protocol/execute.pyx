@@ -1031,12 +1031,12 @@ async def parse_execute_json(
     if role_name is None:
         role_name = edbdef.EDGEDB_SUPERUSER
 
-    dbv = await _get_transient_dbv(
+    dbv: dbview.DatabaseConnectionView = await _get_transient_dbv(
         db,
         query_cache_enabled=query_cache_enabled,
         role_name=role_name,
     )
-    await dbv.decode_json_session_config(session_config)
+    dbv.decode_json_session_config(session_config)
     query_req, compiled = await _parse(
         dbv,
         query,
