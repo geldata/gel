@@ -54,6 +54,11 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             create global CurUser := (
                 select User filter .name = global cur_user);
 
+            create alias DumbAlias := {
+                cur_user := global cur_user,
+                cur_card := global cur_card,
+            };
+
             create function get_current_user() -> OPTIONAL User using (
                 select User filter .name = global cur_user
             );
@@ -914,3 +919,12 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ''',
             []
         )
+
+    async def test_edgeql_globals_unused_01(self):
+        # Make sure it works when selecting something
+        # that has "unused" optional globals with a default.
+        # (There previously was a bug where we'd choke because
+        # of confusion about the "present" argument.)
+        await self.con.query('''
+            select DumbAlias { cur_user }
+        ''')
