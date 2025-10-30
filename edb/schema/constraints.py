@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    TypeVar,
     Mapping,
     cast,
     Iterable,
@@ -40,7 +39,6 @@ from edb.edgeql import parser as qlparser
 from edb.edgeql import utils as qlutils
 from edb.edgeql import qltypes
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import delta as sd
 from . import expr as s_expr
@@ -59,10 +57,7 @@ if TYPE_CHECKING:
     from edb.schema import schema as s_schema
 
 
-T = TypeVar('T')
-
-
-def _assert_not_none(value: Optional[T]) -> T:
+def _assert_not_none[T](value: Optional[T]) -> T:
     if value is None:
         raise TypeError("A value is expected")
     return value
@@ -118,7 +113,7 @@ class ObjectIndexByConstraintName(
 
 class Constraint(
     referencing.ReferencedInheritingObject,
-    s_func.CallableObject, s_abc.Constraint,
+    s_func.CallableObject,
     qlkind=ft.SchemaObjectClass.CONSTRAINT,
     data_safe=True,
 ):
@@ -502,8 +497,6 @@ class ConstraintCommand(
 
         parent_args = parent.get_args(schema)
         if parent_args:
-            parent_args = parent.get_args(schema)
-            assert parent_args is not None
             for arg_expr in parent_args:
                 arg = edgeql.parse_fragment(arg_expr.text)
                 args.append(arg)
@@ -1346,7 +1339,7 @@ class CreateConstraint(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         node: qlast.DDLOperation,
-    ) -> list[tuple[int, qlast.FuncParam]]:
+    ) -> list[tuple[int, qlast.FuncParamDecl]]:
         if isinstance(node, qlast.CreateConstraint):
             return super()._get_params_ast(schema, context, node)
         else:

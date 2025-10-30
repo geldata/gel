@@ -17,7 +17,7 @@
 #
 
 
-from .reader import parse_into, SchemaClassLayout
+from .reader import parse_schema, SchemaClassLayout
 from .structure import generate_structure
 from .structure import SchemaTypeLayout, SchemaReflectionParts
 from .writer import generate_metadata_write_edgeql
@@ -25,7 +25,7 @@ from .writer import generate_metadata_write_edgeql
 __all__ = (
     'generate_structure',
     'generate_metadata_write_edgeql',
-    'parse_into',
+    'parse_schema',
     'SchemaTypeLayout',
     'SchemaClassLayout',
     'SchemaReflectionParts'

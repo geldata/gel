@@ -1,13 +1,19 @@
-<% macro init() -%>
+<% macro init(ref='') -%>
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         submodules: false
+<%- if ref != "" %>
+        ref: << ref >>
+<%- endif %>
 
     - uses: actions/checkout@v4
       with:
         fetch-depth: 50
         submodules: true
+<%- if ref != "" %>
+        ref: << ref >>
+<%- endif %>
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -34,8 +40,8 @@
 
 <%- endmacro %>
 
-<% macro build() %>
-    << init() >>
+<% macro build(ref="") %>
+    << init(ref) >>
 
     - name: Cached requirements.txt
       uses: actions/cache@v4
@@ -308,8 +314,8 @@
 
 <%- endmacro %>
 
-<% macro restore_cache() %>
-    << init() >>
+<% macro restore_cache(ref="") %>
+    << init(ref) >>
     << install_python_requirements() >>
 
     # Restore the artifacts and environment variables

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 # Import specific things to avoid name clashes
 from typing import (Generator, Mapping, Optional,
-                    Iterable, Generic, TypeVar, Sequence,
+                    Iterable, TypeVar, Sequence,
                     AbstractSet)
 
 import functools
@@ -124,7 +124,7 @@ TypeLike = Type | s_types.Type
 T = TypeVar('T')
 
 
-class UnqualObjectIndex(Generic[T]):
+class UnqualObjectIndex[T]:
 
     def __init__(self, items: Mapping[sn.UnqualName, T]) -> None:
         self._items = items
@@ -191,14 +191,45 @@ class Alias(ObjectType):
     pass
 
 
-class UnionType(Type):
+class CompositeType(Type):
 
-    def __init__(self, types: list[Type | UnionType | so.Object]) -> None:
+    types: list[Type | CompositeType | s_types.Type]
+
+    def __init__(
+        self,
+        types: list[Type | CompositeType | s_types.Type],
+    ) -> None:
         self.types = types
+
+
+class UnionType(CompositeType):
+
+    def __init__(
+        self,
+        types: list[Type | CompositeType | s_types.Type],
+    ) -> None:
+        super().__init__(types)
 
     def get_name(self, schema: s_schema.Schema) -> sn.QualName:
         component_ids = sorted(str(t.get_name(schema)) for t in self.types)
         nqname = f"({' | '.join(component_ids)})"
+        return sn.QualName(name=nqname, module='__derived__')
+
+    def is_object_type(self) -> bool:
+        return True
+
+
+class IntersectionType(CompositeType):
+
+    def __init__(
+        self,
+        types: list[Type | CompositeType | s_types.Type],
+    ) -> None:
+        super().__init__(types)
+
+    def get_name(self, schema: s_schema.Schema) -> sn.QualName:
+        component_ids = sorted(str(t.get_name(schema)) for t in self.types)
+        nqname = f"({' & '.join(component_ids)})"
         return sn.QualName(name=nqname, module='__derived__')
 
     def is_object_type(self) -> bool:
@@ -347,7 +378,7 @@ def trace_refs(
     module: str,
     objects: dict[sn.QualName, Optional[ObjectLike]],
     pointers: Mapping[sn.UnqualName, set[sn.QualName]],
-    params: Mapping[str, sn.QualName],
+    params: Mapping[str, qlast.TypeExpr],
     local_modules: AbstractSet[str]
 ) -> tuple[frozenset[sn.QualName], frozenset[sn.QualName]]:
 
@@ -386,7 +417,7 @@ def resolve_name(
 
     This takes into account the current module and modaliases.
 
-    This function mostly mirrors schema.FlatSchema._search_with_getter
+    This function mostly mirrors schema.lookup
     except:
     - If no module and no default module was set, try the current module
     - When searching in std, ensure module is not a local module
@@ -403,10 +434,8 @@ def resolve_name(
     orig_module = module
 
     # Apply module aliases
-    is_current, module = s_schema.apply_module_aliases(
-        module, modaliases, current_module,
-    )
-    no_std = declaration or is_current
+    module = s_schema.apply_module_aliases(module, modaliases)
+    no_std = declaration
 
     # Check if something matches the name
     if module is not None:
@@ -420,7 +449,7 @@ def resolve_name(
         if exists(fqname):
             return fqname
 
-    # Try something in std if __current__ was not specified
+    # Try something in std
     if not no_std:
         # If module == None, look in std
         if orig_module is None:
@@ -455,7 +484,7 @@ class TracerContext:
         anchors: Mapping[str, sn.QualName],
         path_prefix: Optional[sn.QualName],
         modaliases: dict[Optional[str], str],
-        params: Mapping[str, sn.QualName],
+        params: Mapping[str, qlast.TypeExpr],
         visited: set[s_pointers.Pointer | Pointer],
         local_modules: AbstractSet[str],
     ) -> None:
@@ -476,9 +505,6 @@ class TracerContext:
         # We don't actually expect to handle anything other than
         # ObjectRef here.
         assert isinstance(ref, qlast.ObjectRef)
-
-        if not ref.module and ref.name in self.params:
-            return self.params[ref.name]
 
         return resolve_name(
             ref,
@@ -619,10 +645,22 @@ def trace_Constant(node: qlast.BaseConstant, *, ctx: TracerContext) -> None:
 
 
 @trace.register
-def trace_Parameter(node: qlast.Parameter, *, ctx: TracerContext) -> None:
+def trace_QueryParameter(
+    node: qlast.QueryParameter, *, ctx: TracerContext
+) -> None:
     raise errors.SchemaError(
         'query parameters are not allowed in schemas',
         span=node.span,
+    )
+
+
+@trace.register
+def trace_FunctionParameter(
+    node: qlast.FunctionParameter, *, ctx: TracerContext
+) -> None:
+    raise AssertionError(
+        'function parameters are expected to be substituted for paths '
+        'in schemas',
     )
 
 
@@ -812,6 +850,23 @@ def trace_Path(
             aname = sn.QualName('__alias__', step.name)
             if not step.module and aname in ctx.objects:
                 tip = ctx.objects[aname]
+
+            elif not step.module and step.name in ctx.params:
+                param_type = ctx.params[step.name]
+                if (
+                    isinstance(param_type, qlast.TypeName)
+                    and isinstance(param_type.maintype, qlast.PseudoObjectRef)
+                ):
+                    # Pretend pseudotypes (eg. `anytype`) have a fully
+                    # qualified name.
+                    refname = sn.QualName('std', param_type.maintype.name)
+                    ctx.refs.add(refname)
+
+                    tip = ctx.objects[refname]
+
+                else:
+                    tip = _resolve_type_expr(param_type, ctx=ctx)
+
             else:
                 refname = ctx.get_ref_name(step)
                 if refname in ctx.objects:
@@ -1021,15 +1076,25 @@ def _resolve_type_expr(
 
     elif isinstance(texpr, qlast.TypeOp):
 
-        if texpr.op == '|':
-            return UnionType([
-                _resolve_type_expr(texpr.left, ctx=ctx),
-                _resolve_type_expr(texpr.right, ctx=ctx),
-            ])
+        left = _resolve_type_expr(texpr.left, ctx=ctx)
+        right = _resolve_type_expr(texpr.right, ctx=ctx)
 
+        ThisCompositeType: type[CompositeType] = (
+            UnionType
+            if texpr.op == qlast.TypeOpName.OR else
+            IntersectionType
+        )
+
+        if isinstance(left, ThisCompositeType):
+            if isinstance(right, ThisCompositeType):
+                return ThisCompositeType(left.types + right.types)
+            else:
+                return ThisCompositeType(left.types + [right])
         else:
-            raise NotImplementedError(
-                f'unsupported type operation: {texpr.op}')
+            if isinstance(right, ThisCompositeType):
+                return ThisCompositeType([left] + right.types)
+            else:
+                return ThisCompositeType([left, right])
 
     else:
         raise NotImplementedError(

@@ -125,6 +125,9 @@ class Query(BaseQuery):
     in_type_args: Optional[list[Param]] = None
 
     globals: Optional[list[tuple[str, bool]]] = None
+    permissions: Optional[list[str]] = None
+    json_permissions: Optional[list[str]] = None
+    required_permissions: Optional[list[str]] = None
 
     server_param_conversions: Optional[list[ServerParamConversion]] = None
 
@@ -158,9 +161,9 @@ class SessionStateQuery(BaseQuery):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class DDLQuery(BaseQuery):
-    user_schema: Optional[s_schema.FlatSchema]
+    user_schema: Optional[s_schema.Schema]
     feature_used_metrics: Optional[dict[str, float]]
-    global_schema: Optional[s_schema.FlatSchema] = None
+    global_schema: Optional[s_schema.Schema] = None
     cached_reflection: Any = None
     is_transactional: bool = True
     create_db: Optional[str] = None
@@ -171,6 +174,7 @@ class DDLQuery(BaseQuery):
     db_op_trailer: tuple[bytes, ...] = ()
     ddl_stmt_id: Optional[str] = None
     config_ops: list[config.Operation] = dataclasses.field(default_factory=list)
+    early_non_tx_sql: Optional[tuple[bytes, ...]] = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -199,7 +203,7 @@ class MigrationControlQuery(BaseQuery):
 
     modaliases: Optional[immutables.Map[Optional[str], str]]
 
-    user_schema: Optional[s_schema.FlatSchema] = None
+    user_schema: Optional[s_schema.Schema] = None
     cached_reflection: Any = None
     ddl_stmt_id: Optional[str] = None
 
@@ -216,6 +220,7 @@ class Param:
     array_type_id: Optional[uuid.UUID]
     outer_idx: Optional[int]
     sub_params: Optional[tuple[list[Optional[uuid.UUID]], tuple[Any, ...]]]
+    typename: str
 
 
 #############################
@@ -247,6 +252,9 @@ class QueryUnit:
     # True if all statements in *sql* can be executed inside a transaction.
     # If False, they will be executed separately.
     is_transactional: bool = True
+
+    # SQL to run *before* the main command, non transactionally
+    early_non_tx_sql: Optional[tuple[bytes, ...]] = None
 
     # Capabilities used in this query
     capabilities: enums.Capability = enums.Capability(0)
@@ -318,6 +326,9 @@ class QueryUnit:
     in_type_args: Optional[list[Param]] = None
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
+    permissions: Optional[list[str]] = None
+    json_permissions: Optional[list[str]] = None
+    required_permissions: Optional[list[str]] = None
 
     server_param_conversions: Optional[list[ServerParamConversion]] = None
 
@@ -432,6 +443,9 @@ class QueryUnitGroup:
     in_type_args: Optional[list[Param]] = None
     in_type_args_real_count: int = 0
     globals: Optional[list[tuple[str, bool]]] = None
+    permissions: Optional[list[str]] = None
+    json_permissions: Optional[list[str]] = None
+    required_permissions: Optional[list[str]] = None
 
     server_param_conversions: Optional[list[ServerParamConversion]] = None
     unit_converted_param_indexes: Optional[dict[int, list[int]]] = None
@@ -453,6 +467,8 @@ class QueryUnitGroup:
     tx_seq_id: int = 0
 
     force_non_normalized: bool = False
+
+    graphql_key_variables: Optional[list[str]] = None
 
     @property
     def units(self) -> list[QueryUnit]:
@@ -502,6 +518,20 @@ class QueryUnitGroup:
             if self.globals is None:
                 self.globals = []
             self.globals.extend(query_unit.globals)
+        if query_unit.permissions is not None:
+            if self.permissions is None:
+                self.permissions = []
+            self.permissions.extend(query_unit.permissions)
+        if query_unit.json_permissions is not None:
+            if self.json_permissions is None:
+                self.json_permissions = []
+            self.json_permissions.extend(query_unit.json_permissions)
+        if query_unit.required_permissions is not None:
+            if self.required_permissions is None:
+                self.required_permissions = []
+            for perm in query_unit.required_permissions:
+                if perm not in self.required_permissions:
+                    self.required_permissions.append(perm)
         if query_unit.server_param_conversions is not None:
             if self.server_param_conversions is None:
                 self.server_param_conversions = []
@@ -692,6 +722,10 @@ class SQLParamGlobal(SQLParam):
 
     pg_type: tuple[str, ...]
 
+    is_permission: bool
+
+    internal_index: int
+
 
 @dataclasses.dataclass
 class ParsedDatabase:
@@ -856,8 +890,8 @@ class MigrationRewriteState(NamedTuple):
 class TransactionState(NamedTuple):
     id: int
     name: Optional[str]
-    local_user_schema: s_schema.FlatSchema | None
-    global_schema: s_schema.FlatSchema
+    local_user_schema: s_schema.Schema | None
+    global_schema: s_schema.Schema
     modaliases: immutables.Map[Optional[str], str]
     session_config: immutables.Map[str, config.SettingValue]
     database_config: immutables.Map[str, config.SettingValue]
@@ -868,7 +902,7 @@ class TransactionState(NamedTuple):
     migration_rewrite_state: Optional[MigrationRewriteState] = None
 
     @property
-    def user_schema(self) -> s_schema.FlatSchema:
+    def user_schema(self) -> s_schema.Schema:
         if self.local_user_schema is None:
             return self.tx.root_user_schema
         else:
@@ -892,8 +926,8 @@ class Transaction:
         self,
         constate: CompilerConnectionState,
         *,
-        user_schema: s_schema.FlatSchema,
-        global_schema: s_schema.FlatSchema,
+        user_schema: s_schema.Schema,
+        global_schema: s_schema.Schema,
         modaliases: immutables.Map[Optional[str], str],
         session_config: immutables.Map[str, config.SettingValue],
         database_config: immutables.Map[str, config.SettingValue],
@@ -938,7 +972,7 @@ class Transaction:
         return self._id
 
     @property
-    def root_user_schema(self) -> s_schema.FlatSchema:
+    def root_user_schema(self) -> s_schema.Schema:
         return self._constate.root_user_schema
 
     def is_implicit(self) -> bool:
@@ -1021,27 +1055,26 @@ class Transaction:
         for sp_id in sp_ids_to_erase:
             self._savepoints.pop(sp_id)
 
-    def get_schema(self, std_schema: s_schema.FlatSchema) -> s_schema.Schema:
-        assert isinstance(std_schema, s_schema.FlatSchema)
+    def get_schema(self, std_schema: s_schema.Schema) -> s_schema.Schema:
         return s_schema.ChainedSchema(
             std_schema,
             self._current.user_schema,
             self._current.global_schema,
         )
 
-    def get_user_schema(self) -> s_schema.FlatSchema:
+    def get_user_schema(self) -> s_schema.Schema:
         return self._current.user_schema
 
-    def get_user_schema_if_updated(self) -> Optional[s_schema.FlatSchema]:
+    def get_user_schema_if_updated(self) -> Optional[s_schema.Schema]:
         if self._current.user_schema is self._state0.user_schema:
             return None
         else:
             return self._current.user_schema
 
-    def get_global_schema(self) -> s_schema.FlatSchema:
+    def get_global_schema(self) -> s_schema.Schema:
         return self._current.global_schema
 
-    def get_global_schema_if_updated(self) -> Optional[s_schema.FlatSchema]:
+    def get_global_schema_if_updated(self) -> Optional[s_schema.Schema]:
         if self._current.global_schema is self._state0.global_schema:
             return None
         else:
@@ -1079,9 +1112,9 @@ class Transaction:
     def update_schema(self, new_schema: s_schema.Schema) -> None:
         assert isinstance(new_schema, s_schema.ChainedSchema)
         user_schema = new_schema.get_top_schema()
-        assert isinstance(user_schema, s_schema.FlatSchema)
+        assert isinstance(user_schema, s_schema.Schema)
         global_schema = new_schema.get_global_schema()
-        assert isinstance(global_schema, s_schema.FlatSchema)
+        assert isinstance(global_schema, s_schema.Schema)
         self._current = self._current._replace(
             local_user_schema=user_schema,
             global_schema=global_schema,
@@ -1131,7 +1164,7 @@ class CompilerConnectionState:
     _savepoints_log: dict[int, TransactionState]
     _current_tx: Transaction
 
-    _user_schema: Optional[s_schema.FlatSchema]
+    _user_schema: Optional[s_schema.Schema]
 
     def __init__(
         self,
@@ -1144,7 +1177,6 @@ class CompilerConnectionState:
         system_config: immutables.Map[str, config.SettingValue],
         cached_reflection: immutables.Map[str, tuple[str, ...]],
     ):
-        assert isinstance(user_schema, s_schema.FlatSchema)
         self._user_schema = user_schema
         self._tx_count = time.monotonic_ns()
         self._init_current_tx(
@@ -1176,11 +1208,11 @@ class CompilerConnectionState:
         self._user_schema = None
 
     @property
-    def root_user_schema(self) -> s_schema.FlatSchema:
+    def root_user_schema(self) -> s_schema.Schema:
         assert self._user_schema is not None
         return self._user_schema
 
-    def set_root_user_schema(self, user_schema: s_schema.FlatSchema) -> None:
+    def set_root_user_schema(self, user_schema: s_schema.Schema) -> None:
         self._user_schema = user_schema
 
     def _new_txid(self) -> int:
@@ -1198,8 +1230,6 @@ class CompilerConnectionState:
         system_config: immutables.Map[str, config.SettingValue],
         cached_reflection: immutables.Map[str, tuple[str, ...]],
     ) -> None:
-        assert isinstance(user_schema, s_schema.FlatSchema)
-        assert isinstance(global_schema, s_schema.FlatSchema)
         self._current_tx = Transaction(
             self,
             user_schema=user_schema,

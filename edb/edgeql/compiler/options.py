@@ -86,7 +86,8 @@ class GlobalCompilerOptions:
     #: error. When this is not None, any DML should cause an error.
     in_ddl_context_name: Optional[str] = None
 
-    #: Whether to just treat all globals as empty instead of compiling them
+    #: Whether to just treat all globals as empty instead of compiling them.
+    #: This is used when populating something using `SET default` in DDL.
     make_globals_empty: bool = False
 
     #: Is the compiler running in testmode
@@ -153,9 +154,3 @@ class CompilerOptions(GlobalCompilerOptions):
     #: schema_object_context is set to Trigger.
     trigger_type: Optional[s_types.Type] = None
     trigger_kinds: Optional[Collection[qltypes.TriggerKind]] = None
-
-    #: These represent the *configured* values of
-    #: simple_scoping/warn_old_scoping. If they are None, we check the
-    #: presence of the futures in the schema.
-    simple_scoping: Optional[bool] = None
-    warn_old_scoping: Optional[bool] = None

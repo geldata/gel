@@ -66,14 +66,15 @@ def compile_trigger(
     source = trigger.get_subject(schema)
 
     with ctx.detached() as tc, tc.newscope(fenced=True) as sctx:
-        sctx.schema_factoring()
         sctx.anchors = sctx.anchors.copy()
 
         anchors = {}
         new_path = irast.PathId.from_type(
             schema,
             source,
-            typename=sn.QualName(module='__derived__', name='__new__'),
+            typename=sn.QualName(
+                module='__derived__', name=ctx.aliases.get('__new__')
+            ),
             env=ctx.env,
         )
         new_set = setgen.class_set(
@@ -85,7 +86,9 @@ def compile_trigger(
             old_path = irast.PathId.from_type(
                 schema,
                 source,
-                typename=sn.QualName(module='__derived__', name='__old__'),
+                typename=sn.QualName(
+                    module='__derived__', name=ctx.aliases.get('__old__')
+                ),
                 env=ctx.env,
             )
             old_set = setgen.class_set(

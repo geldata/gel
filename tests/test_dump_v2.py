@@ -51,6 +51,7 @@ class DumpTestCaseMixin:
             SELECT schema::Global {
                 name, tgt := .target.name, required, default
             }
+            FILTER NOT .name LIKE 'sys::%'
             ORDER BY .name
             ''',
             [

@@ -31,7 +31,6 @@ from edb.edgeql import qltypes
 from edb.edgeql import parser as qlparser
 import edb._edgeql_parser as ql_parser
 
-from . import abc as s_abc
 from . import delta as sd
 from . import name as sn
 from . import objects as so
@@ -43,7 +42,6 @@ if TYPE_CHECKING:
 
 class Migration(
     so.Object,
-    s_abc.Migration,
     qlkind=qltypes.SchemaObjectClass.MIGRATION,
     data_safe=False,
 ):

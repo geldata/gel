@@ -23,6 +23,7 @@ from typing import Any, Optional
 import dataclasses
 import json
 import textwrap
+import uuid
 
 from edb import errors
 
@@ -44,6 +45,7 @@ from edb.schema import database as s_db
 from edb.schema import ddl as s_ddl
 from edb.schema import delta as s_delta
 from edb.schema import expraliases as s_expraliases
+from edb.schema import futures as s_futures
 from edb.schema import functions as s_func
 from edb.schema import globals as s_globals
 from edb.schema import indexes as s_indexes
@@ -532,6 +534,20 @@ def _start_migration(
             base_schema=base_schema,
             testmode=ctx.is_testmode(),
         )
+
+        if not (
+            s_futures.future_enabled(target_schema, 'simple_scoping')
+            or s_futures.future_enabled(target_schema, 'warn_old_scoping')
+        ):
+            warnings += (
+                errors.DeprecatedScopingError(
+                    f"\nSchema does not have 'using future simple_scoping'.\n"
+                    f"Non-simple_scoping will be removed in Gel 8.0.\n"
+                    f"See https://docs.geldata.com/reference/edgeql/"
+                    f"path_resolution\n"
+                ),
+            )
+
         query = dataclasses.replace(query, warnings=tuple(warnings))
 
     current_tx.update_migration_state(
@@ -1415,6 +1431,38 @@ def administer_repair_schema(
     )
 
 
+def administer_fixup_backend_upgrade(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    if ql.expr.args or ql.expr.kwargs:
+        raise errors.QueryError(
+            'fixup_backend_upgrade() does not take arguments',
+            span=ql.expr.span,
+        )
+
+    from edb.pgsql import metaschema
+
+    block = pg_dbops.PLTopBlock()
+
+    cmds = metaschema._generate_sql_information_schema(
+        ctx.compiler_state.backend_runtime_params.instance_params.version
+    )
+    metaschema.generate_drop_views(cmds, block)
+
+    cmd_group = pg_dbops.CommandGroup()
+    cmd_group.add_commands(cmds)
+    cmd_group.generate(block)
+
+    assert block.is_transactional()
+
+    return dbstate.DDLQuery(
+        sql=block.to_string().encode('utf-8'),
+        user_schema=None,
+        feature_used_metrics=None,
+    )
+
+
 def remove_pointless_triggers(
     schema: s_schema.Schema,
 ) -> pg_dbops.CommandGroup:
@@ -1485,6 +1533,7 @@ def administer_reindex(
 ) -> dbstate.BaseQuery:
     from edb.ir import ast as irast
     from edb.ir import typeutils as irtypeutils
+    from edb.ir import utils as irutils
 
     from edb.schema import objtypes as s_objtypes
     from edb.schema import constraints as s_constraints
@@ -1525,18 +1574,17 @@ def administer_reindex(
             modaliases=modaliases
         ),
     )
-    expr = ir.expr
+    expr = irutils.unwrap_set(ir.expr)
     if ptr:
         if (
             not expr.expr
-            or not isinstance(expr.expr, irast.SelectStmt)
-            or not isinstance(expr.expr.result.expr, irast.Pointer)
+            or not isinstance(expr.expr, irast.Pointer)
         ):
             raise errors.QueryError(
                 'invalid pointer argument to reindex()',
                 span=arg.span,
             )
-        rptr = expr.expr.result.expr
+        rptr = expr.expr
         source = rptr.source
     else:
         rptr = None
@@ -1590,7 +1638,7 @@ def administer_reindex(
         })
 
         # For links, collect any single link indexes and any link table indexes
-        if not ptrcls.is_property(schema):
+        if not ptrcls.is_property():
             ptrclses = {ptrcls} | {
                 desc for desc in ptrcls.descendants(schema)
                 if isinstance(
@@ -1714,7 +1762,7 @@ def _identify_administer_tables_and_cols(
                 card.is_multi() or ptrcls.has_user_defined_properties(schema)
             ):
                 vn = ptrcls.get_verbosename(schema, with_parent=True)
-                if ptrcls.is_property(schema):
+                if ptrcls.is_property():
                     raise errors.QueryError(
                         f'{vn} is not a valid argument to vacuum() '
                         f'because it is not a multi property',
@@ -1839,11 +1887,121 @@ def administer_prepare_upgrade(
     )
 
 
+def _get_index(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> tuple[s_indexes.Index, s_schema.Schema]:
+    if len(ql.expr.args) != 1 or ql.expr.kwargs:
+        raise errors.QueryError(
+            f'{ql.expr.func}() takes exactly one positional argument',
+            span=ql.expr.span,
+        )
+
+    # This is janky, and we shouldn't do it.
+    arg = ql.expr.args[0]
+    match arg:
+        case qlast.TypeCast(
+            type=qlast.TypeName(
+                maintype=qlast.ObjectRef(
+                    name='uuid',
+                    module='std' | None,
+                ),
+                subtypes=None,
+            ),
+            expr=qlast.Constant(
+                kind=qlast.ConstantKind.STRING,
+                value=id_string,
+            )
+        ):
+            pass
+        case _:
+            raise errors.QueryError(
+                f'argument to {ql.expr.func}() must be a uuid literal',
+                span=arg.span,
+            )
+
+    try:
+        id = uuid.UUID(id_string)
+    except ValueError:
+        raise errors.QueryError("Invalid index id")
+
+    user_schema = ctx.state.current_tx().get_user_schema()
+    global_schema = ctx.state.current_tx().get_global_schema()
+
+    schema = s_schema.ChainedSchema(
+        ctx.compiler_state.std_schema,
+        user_schema,
+        global_schema
+    )
+
+    index = schema.get_by_id(id, type=s_indexes.Index)
+    return index, schema
+
+
+def administer_concurrent_index_build(
+    ctx: compiler.CompileContext,
+    ql: qlast.AdministerStmt,
+) -> dbstate.BaseQuery:
+    index, schema = _get_index(ctx, ql)
+
+    if not index.get_build_concurrently(schema):
+        raise errors.QueryError("Index was not created concurrently")
+    if index.get_active(schema):
+        raise errors.QueryError("Index is already active")
+
+    delta_context = _new_delta_context(ctx)
+
+    create_index = pg_delta.CreateIndex.create_index(
+        index, schema, delta_context
+    )
+
+    block = pg_dbops.SQLBlock()
+    block.set_non_transactional()
+    create_index.generate(block)
+    # HACK: Separate out the real index command and the comments
+    # (where do the comments even get done??)
+    assert isinstance(block.commands[0], pg_dbops.PLBlock)
+    statements = block.commands[0].get_statements()
+    index_command, comments = statements
+
+    # Update the schema::Index to set `active = true`
+    block = pg_dbops.PLTopBlock()
+    context = s_delta.CommandContext()
+    delta_root = s_delta.DeltaRoot()
+    root, alter_index, _ = index.init_delta_branch(
+        schema, context, s_delta.AlterObject
+    )
+    alter_index.set_attribute_value('active', True)
+    delta_root.add(root)
+
+    nschema = delta_root.apply(schema, context)
+
+    # Construct the command
+    compiler.compile_schema_storage_in_delta(ctx, delta_root, block, context)
+    block.add_command(comments)
+    sql = block.to_string().encode('utf-8')
+
+    if debug.flags.delta_execute_ddl:
+        debug.header('ADMINISTER concurrent_index_build(...)')
+        debug.dump_code(index_command, lexer='sql')
+        debug.dump_code(sql, lexer='sql')
+
+    assert isinstance(nschema, s_schema.ChainedSchema)
+
+    return dbstate.DDLQuery(
+        early_non_tx_sql=(index_command.encode('utf-8'),),
+        sql=sql,
+        is_transactional=False,
+        feature_used_metrics=None,
+        user_schema=nschema.get_top_schema(),
+    )
+
+
 def validate_schema_equivalence(
     state: compiler.CompilerState,
-    schema_a: s_schema.FlatSchema,
-    schema_b: s_schema.FlatSchema,
-    global_schema: s_schema.FlatSchema,
+    schema_a: s_schema.Schema,
+    schema_b: s_schema.Schema,
+    global_schema: s_schema.Schema,
 ) -> None:
     schema_a_full = s_schema.ChainedSchema(
         state.std_schema,

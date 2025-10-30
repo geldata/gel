@@ -84,6 +84,12 @@ compiler_pool_wait_time = registry.new_histogram(
     unit=prom.Unit.SECONDS,
 )
 
+compiler_pool_queue_errors = registry.new_labeled_counter(
+    'compiler_pool_queue_errors_total',
+    'Number of compiler pool errors in queue.',
+    labels=('type',),
+)
+
 current_branches = registry.new_labeled_gauge(
     'branches_current',
     'Current number of branches.',
@@ -299,6 +305,24 @@ auth_provider_token_validation_errors = registry.new_labeled_counter(
     "auth_provider_token_validation_errors_total",
     "Number of failed Auth extension provider token validations.",
     labels=("provider",),
+)
+
+otc_initiated_total = registry.new_labeled_counter(
+    "otc_initiated_total",
+    "Number of one-time codes initiated.",
+    labels=("tenant",),
+)
+
+otc_verified_total = registry.new_labeled_counter(
+    "otc_verified_total",
+    "Number of one-time codes successfully verified.",
+    labels=("tenant",),
+)
+
+otc_failed_total = registry.new_labeled_counter(
+    "otc_failed_total",
+    "Number of one-time code verification failures.",
+    labels=("tenant", "reason"),
 )
 
 mt_tenants_total = registry.new_gauge(

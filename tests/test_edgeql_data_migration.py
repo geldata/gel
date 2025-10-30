@@ -48,6 +48,17 @@ class EdgeQLDataMigrationTestCase(tb.DDLTestCase):
 
     DEFAULT_MODULE = 'test'
 
+    def setUp(self):
+        super().setUp()
+        self._ignore = self.ignore_warnings(
+            'Non-simple_scoping will be removed'
+        )
+        self._ignore.__enter__()
+
+    def tearDown(self):
+        super().tearDown()
+        self._ignore.__exit__(None, None, None)
+
     def normalize_statement(self, s: str) -> str:
         re_filter = re.compile(r'[\s]+|(#.*?(\n|$))|(,(?=\s*[})]))')
         stripped = textwrap.dedent(s.lstrip('\n')).rstrip('\n')
@@ -3436,6 +3447,29 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
             }],
         )
 
+    async def test_edgeql_migration_computed_07(self):
+        await self.migrate(r'''
+            type T;
+            type S {
+                multi ts: T;
+                val := count(.ts);
+            };
+        ''', module='default')
+        await self.migrate(r'''
+            type T;
+            type S {
+                multi ts: T;
+                val := 0;
+            };
+        ''', module='default')
+        await self.migrate(r'''
+            type T;
+            type S {
+                multi ts: T;
+                val := count(.ts);
+            };
+        ''', module='default')
+
     async def test_edgeql_migration_reject_prop_01(self):
         await self.migrate('''
             type User {
@@ -6101,6 +6135,49 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
             };
         """)
         await self.migrate(r"")
+
+    async def test_edgeql_migration_permissions_03a(self):
+        # Check tracing dependency works
+        await self.migrate(r"""
+          function test(x: int64) -> int64 {
+              using (x);
+              required_permissions := foo;
+          };
+          permission foo;
+       """)
+
+    async def test_edgeql_migration_permissions_03b(self):
+        # Check tracing dependency works
+        await self.migrate(r"""
+          function test(x: int64) -> int64 {
+              using (1);
+              required_permissions := {foo, bar};
+          };
+          permission foo;
+          permission bar;
+       """)
+
+    async def test_edgeql_migration_permissions_03c(self):
+        # Check tracing dependency works
+        await self.migrate(r"""
+          permission foo;
+          permission bar;
+          function test(x: int64) -> int64 {
+              using (1);
+              required_permissions := {foo, bar};
+          };
+       """)
+
+    async def test_edgeql_migration_permissions_03d(self):
+        # Sigh... test using POPULATE MIGRATION also...
+        # Check tracing dependency works
+        await tb.DDLTestCase.migrate(self, r"""
+          permission foo;
+          function test(x: int64) -> int64 {
+              using (x);
+              required_permissions := foo;
+          };
+       """)
 
     async def test_edgeql_migration_index_01(self):
         await self.migrate('''
@@ -12326,9 +12403,10 @@ class TestEdgeQLDataMigrationNonisolated(EdgeQLDataMigrationTestCase):
         await self.migrate('')
 
     async def test_edgeql_migration_recovery_commit_fail(self):
-        con2 = await self.connect(database=self.con.dbname)
+        con2 = await self.connect()
         try:
-            await con2.execute('START MIGRATION TO {}')
+            with con2.capture_warnings():
+                await con2.execute('START MIGRATION TO {}')
             await con2.execute('POPULATE MIGRATION')
 
             await self.migrate("type Base;")
@@ -12878,6 +12956,43 @@ class EdgeQLAIMigrationTestCase(EdgeQLDataMigrationTestCase):
 
             };
         ''', explicit_modules=True)
+
+        await self.assert_query_result(
+            r"""
+                select schema::Index {
+                    annotations: {name, @value},
+                    subject_name := .<indexes[is schema::ObjectType].name
+                }
+                filter 'ext::ai::index' IN .ancestors.name
+                and .subject_name = 'default::Sub';
+            """,
+            [
+                {
+                    "annotations": tb.bag([
+                        {"name": "ext::ai::model_name",
+                         "@value": "text-embedding-3-small"},
+                        {"name": "ext::ai::model_provider",
+                         "@value": "builtin::openai"},
+                        {"name": "ext::ai::embedding_model_max_input_tokens",
+                         "@value": "8191"},
+                        {"name": "ext::ai::embedding_model_max_batch_tokens",
+                         "@value": "8191"},
+                        {
+                            "name":
+                            "ext::ai::embedding_model_max_output_dimensions",
+                            "@value": "1536"
+                        },
+                        {"name": "ext::ai::embedding_model_supports_shortening",
+                         "@value": "true"},
+                        {"name": "ext::ai::embedding_dimensions",
+                         "@value": "1536"},
+                        {'name': 'ext::ai::embedding_model_max_batch_size',
+                         '@value': '<optional>'},
+                    ]),
+                    "subject_name": "default::Sub"
+                }
+            ]
+        )
 
         await self.migrate('''
             using extension ai;

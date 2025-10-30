@@ -23,7 +23,6 @@ from __future__ import annotations
 from typing import (
     Any,
     Optional,
-    TypeVar,
     AbstractSet,
     Mapping,
     Sequence,
@@ -71,9 +70,9 @@ def get_longest_paths(ir: irast.Base) -> set[irast.Set]:
     return result - parents
 
 
-def get_parameters(ir: irast.Base) -> set[irast.Parameter]:
+def get_parameters(ir: irast.Base) -> set[irast.QueryParameter]:
     """Return all parameters found in *ir*."""
-    return set(ast.find_children(ir, irast.Parameter))
+    return set(ast.find_children(ir, irast.QueryParameter))
 
 
 def is_const(ir: irast.Base) -> bool:
@@ -257,8 +256,12 @@ def collapse_type_intersection(
 class CollectDMLSourceVisitor(ast.NodeVisitor):
     skip_hidden = True
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        binding_dml: Mapping[irast.PathId, Sequence[irast.MutatingLikeStmt]],
+    ) -> None:
         super().__init__()
+        self.binding_dml = binding_dml
         self.dml: list[irast.MutatingLikeStmt] = []
 
     def visit_MutatingLikeStmt(self, stmt: irast.MutatingLikeStmt) -> None:
@@ -270,6 +273,8 @@ class CollectDMLSourceVisitor(ast.NodeVisitor):
         # Visit sub-trees
         if node.expr:
             self.visit(node.expr)
+        if node.is_binding:
+            self.dml.extend(self.binding_dml.get(node.path_id, ()))
 
     def visit_Pointer(self, node: irast.Pointer) -> None:
         if node.expr:
@@ -278,13 +283,16 @@ class CollectDMLSourceVisitor(ast.NodeVisitor):
             self.visit(node.source)
 
 
-def get_dml_sources(ir_set: irast.Set) -> Sequence[irast.MutatingLikeStmt]:
+def get_dml_sources(
+    ir_set: irast.Set,
+    binding_dml: Mapping[irast.PathId, Sequence[irast.MutatingLikeStmt]],
+) -> Sequence[irast.MutatingLikeStmt]:
     """Find the DML expressions that can contribute to the value of a set
 
     This is used to compute which overlays to use during SQL compilation.
     """
     # TODO: Make this caching.
-    visitor = CollectDMLSourceVisitor()
+    visitor = CollectDMLSourceVisitor(binding_dml)
     visitor.visit(ir_set)
     # Deduplicate, but preserve order. It shouldn't matter for
     # *correctness* but it helps keep the nondeterminism in the output
@@ -532,10 +540,7 @@ def find_set_of_op(
     return next(iter(calls or []), None)
 
 
-ExprT = TypeVar('ExprT', bound=irast.Expr)
-
-
-def is_set_instance(
+def is_set_instance[ExprT: irast.Expr](
     ir: irast.Set,
     typ: type[ExprT],
 ) -> TypeGuard[irast.SetE[ExprT]]:
@@ -590,3 +595,10 @@ def collect_schema_types(stmt: irast.Base) -> set[uuid.UUID]:
     visitor = CollectSchemaTypesVisitor()
     visitor.visit(stmt)
     return visitor.types
+
+
+def is_linkful(ir: irast.Base) -> bool:
+    def flt(p: irast.Pointer) -> bool:
+        return typeutils.is_object(p.typeref)
+
+    return bool(ast.find_children(ir, irast.Pointer, flt, terminate_early=True))

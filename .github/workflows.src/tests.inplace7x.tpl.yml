@@ -1,0 +1,108 @@
+<% from "tests.inc.yml" import build, calc_cache_key, restore_cache -%>
+
+name: Tests of in-place upgrades to 7.x
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs: {}
+  push:
+    branches:
+      - "A-inplace*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    <%- call build("release/7.x") -%>
+    - name: Compute cache keys
+      run: |
+        << calc_cache_key()|indent >>
+    <%- endcall %>
+
+  test-inplace:
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flags:
+            tests:
+          - flags: --rollback-and-test
+            tests:
+          # Do the reapply test on a smaller selection of tests, since
+          # it is slower.
+          - flags: --rollback-and-reapply
+            tests: -k test_link_on_target_delete -k test_edgeql_select -k test_dump
+
+    steps:
+    <<- restore_cache("release/7.x") >>
+
+    # Run the test
+    # TODO: Would it be better to split this up into multiple jobs?
+    - name: Test performing in-place upgrades
+      run: |
+        ./tests/inplace-testing/test.sh ${{ matrix.flags }} vt ${{ matrix.tests }}
+
+  compute-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: false
+        ref: release/7.x
+    - id: set-matrix
+      name: Compute versions to run on
+      run: python3 .github/scripts/patches/compute-ipu-versions.py
+
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [build, compute-versions]
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJSON(needs.compute-versions.outputs.matrix)}}
+
+    steps:
+    <<- restore_cache("release/7.x") >>
+
+    # Run the test
+
+    - name: Download an earlier database version
+      run: |
+        wget -q "${{ matrix.edgedb-url }}"
+        tar xzf ${{ matrix.edgedb-basename }}-${{ matrix.edgedb-version }}.tar.gz
+
+    - name: Make sure a CLI named "edgedb" exists (sigh)
+      run: |
+        ln -s gel $(dirname $(which gel))/edgedb
+
+    - name: Test inplace upgrades from previous major version
+      run: |
+        ./tests/inplace-testing/test-old.sh vt ${{ matrix.edgedb-basename }}-${{ matrix.edgedb-version }}
+
+
+  workflow-notifications:
+    if: failure() && github.event_name != 'pull_request'
+    name: Notify in Slack on failures
+    needs:
+      - build
+      - test-inplace
+    runs-on: ubuntu-latest
+    permissions:
+      actions: 'read'
+    steps:
+      - name: Slack Workflow Notification
+        uses: Gamesight/slack-workflow-status@26a36836c887f260477432e4314ec3490a84f309
+        with:
+          repo_token: ${{secrets.GITHUB_TOKEN}}
+          slack_webhook_url: ${{secrets.ACTIONS_SLACK_WEBHOOK_URL}}
+          name: 'Workflow notifications'
+          icon_emoji: ':hammer:'
+          include_jobs: 'on-failure'

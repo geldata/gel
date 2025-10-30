@@ -25,6 +25,9 @@ import urllib.parse
 from edb.ir import statypes
 
 
+VerificationMethod = Literal['Link', 'Code']
+
+
 class UIConfig:
     app_name: Optional[str]
     logo_url: Optional[str]
@@ -61,6 +64,7 @@ class OAuthProviderConfig(ProviderConfig):
 class WebAuthnProviderConfig(ProviderConfig):
     relying_party_origin: str
     require_verification: bool
+    verification_method: VerificationMethod
 
 
 @dataclass
@@ -68,13 +72,19 @@ class WebAuthnProvider:
     name: str
     relying_party_origin: str
     require_verification: bool
+    verification_method: VerificationMethod
 
     def __init__(
-        self, name: str, relying_party_origin: str, require_verification: bool
+        self,
+        name: str,
+        relying_party_origin: str,
+        require_verification: bool,
+        verification_method: VerificationMethod,
     ):
         self.name = name
         self.relying_party_origin = relying_party_origin
         self.require_verification = require_verification
+        self.verification_method = verification_method
         parsed_url = urllib.parse.urlparse(self.relying_party_origin)
         if parsed_url.hostname is None:
             raise ValueError(
@@ -84,9 +94,18 @@ class WebAuthnProvider:
 
 
 @dataclass
+class EmailPasswordProviderConfig(ProviderConfig):
+    name: Literal["builtin::local_emailpassword"]
+    require_verification: bool
+    verification_method: VerificationMethod
+
+
+@dataclass
 class MagicLinkProviderConfig(ProviderConfig):
     name: Literal["builtin::local_magic_link"]
     token_time_to_live: statypes.Duration
+    verification_method: VerificationMethod
+    auto_signup: bool
 
 
 @dataclass

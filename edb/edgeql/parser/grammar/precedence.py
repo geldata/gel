@@ -147,7 +147,7 @@ class P_PAREN(Precedence, assoc='left', tokens=('LPAREN', 'RPAREN')):
     pass
 
 
-class P_DOT(Precedence, assoc='left', tokens=('DOT', 'DOTBW')):
+class P_DOT(Precedence, assoc='left', tokens=('DOT', 'DOTBW', 'DOTQ')):
     pass
 
 

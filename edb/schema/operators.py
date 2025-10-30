@@ -19,28 +19,24 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional, Mapping
 
 from edb import errors
 from edb.common import checked
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes as ft
 
-from . import abc as s_abc
 from . import delta as sd
 from . import functions as s_func
 from . import name as sn
 from . import objects as so
+from . import schema as s_schema
 from . import utils
-
-if TYPE_CHECKING:
-    from edb.schema import schema as s_schema
 
 
 class Operator(
     s_func.CallableObject,
     s_func.VolatilitySubject,
-    s_abc.Operator,
     qlkind=ft.SchemaObjectClass.OPERATOR,
     data_safe=True,
 ):
@@ -229,7 +225,7 @@ class CreateOperator(
                 f'all arrays or all tuples',
                 span=self.span)
 
-        for oper in schema.get_operators(shortname, ()):
+        for oper in lookup_operators(shortname, (), schema=schema):
             if oper == self.scls:
                 continue
 
@@ -391,3 +387,28 @@ class AlterOperator(s_func.AlterCallableObject[Operator], OperatorCommand):
 
 class DeleteOperator(s_func.DeleteCallableObject[Operator], OperatorCommand):
     astnode = qlast.DropOperator
+
+
+def lookup_operators(
+    name: sn.Name | str,
+    default: tuple[Operator, ...] | so.NoDefaultT = so.NoDefault,
+    *,
+    module_aliases: Optional[Mapping[Optional[str], str]] = None,
+    schema: s_schema.Schema,
+) -> tuple[Operator, ...]:
+    funcs: tuple[Operator, ...] | so.NoDefaultT = s_schema.lookup(
+        schema,
+        name,
+        getter=s_schema._get_operators,
+        module_aliases=module_aliases,
+        default=default,
+    )
+
+    if funcs is not so.NoDefault:
+        return funcs
+    else:
+        return s_schema.Schema.raise_bad_reference(
+            name=name,
+            module_aliases=module_aliases,
+            type=Operator,
+        )

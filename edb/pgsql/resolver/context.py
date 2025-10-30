@@ -28,7 +28,7 @@ from edb.pgsql import ast as pgast
 from edb.pgsql.compiler import aliases
 
 from edb.common import compiler
-from edb.server.compiler import dbstate
+from edb.server.compiler import dbstate, enums
 
 from edb.schema import schema as s_schema
 from edb.schema import objects as s_objects
@@ -38,8 +38,6 @@ from edb.schema import pointers as s_pointers
 @dataclass(frozen=True, kw_only=True, repr=False, match_args=False)
 class Options:
     current_database: str
-
-    current_user: str
 
     current_query: str
 
@@ -230,7 +228,19 @@ class ContextSwitchMode(enum.Enum):
     LATERAL = enum.auto()
 
 
+@dataclass(kw_only=True)
+class Environment:
+    """Static compilation environment."""
+
+    # Capabilities required by the query
+    capabilities: enums.Capability = enums.Capability.NONE
+
+
 class ResolverContextLevel(compiler.ContextLevel):
+
+    # Compilation environment common for all context levels.
+    env: Environment
+
     schema: s_schema.Schema
     alias_generator: aliases.AliasGenerator
 
@@ -271,6 +281,7 @@ class ResolverContextLevel(compiler.ContextLevel):
             assert schema
             assert options
 
+            self.env = Environment()
             self.schema = schema
             self.options = options
             self.scope = Scope()
@@ -282,6 +293,7 @@ class ResolverContextLevel(compiler.ContextLevel):
             self.query_params = []
 
         else:
+            self.env = prevlevel.env
             self.schema = prevlevel.schema
             self.options = prevlevel.options
             self.alias_generator = prevlevel.alias_generator

@@ -54,10 +54,11 @@ class TestServerAuth(tb.ConnectedTestCase):
         await self.con.query('''
             CREATE EXTENSION edgeql_http;
         ''')
-        await self.con.query('''
-            CREATE SUPERUSER ROLE foo {
+        await self.con.query(f'''
+            CREATE SUPERUSER ROLE foo {{
                 SET password := 'foo-pass';
-            }
+                SET branches := 'main';
+            }}
         ''')
 
         # bad password
@@ -82,6 +83,30 @@ class TestServerAuth(tb.ConnectedTestCase):
         body, code = await self._basic_http_request(None, 'foo', 'foo-pass')
         self.assertEqual(code, 200, f"Wrong result: {body}")
 
+        # good password, non-allowed database
+        with self.assertRaisesRegex(
+            edgedb.AuthenticationError,
+            "authentication failed: user does not have permission for "
+            "database branch 'auth_failure'"
+        ):
+            await self.connect(
+                user='foo',
+                password='foo-pass',
+                database='auth_failure',
+            )
+
+        # __edgedbsys__ on a role with a whitelist -- should still work
+        syscon = await self.connect(
+            user='foo',
+            password='foo-pass',
+            database='__edgedbsys__',
+        )
+        await syscon.aclose()
+
+        body, code = await self._basic_http_request(
+            None, 'foo', 'foo-pass', db='auth_failure')
+        self.assertEqual(code, 401, f"Wrong result: {body}")
+
         # Force foo to use a JWT so auth fails
         await self.con.query('''
             CONFIGURE INSTANCE INSERT Auth {
@@ -93,6 +118,18 @@ class TestServerAuth(tb.ConnectedTestCase):
                 }),
             }
         ''')
+
+        await self.assert_query_result(
+            r"""
+                SELECT cfg::Auth {
+                    method: { transports },
+                }
+                FILTER any(.user = 'foo')
+            """,
+            [
+                {'method': {'transports': ['SIMPLE_HTTP']}}
+            ],
+        )
 
         # Should fail now
         body, code = await self._basic_http_request(None, 'foo', 'foo-pass')
@@ -414,6 +451,7 @@ class TestServerAuth(tb.ConnectedTestCase):
         proto='edgeql',
         client_cert_file=None,
         client_key_file=None,
+        query=None,
     ):
         with self.http_con(
             server,
@@ -427,12 +465,15 @@ class TestServerAuth(tb.ConnectedTestCase):
             elif password is not None:
                 headers['Authorization'] = self.make_auth_header(
                     username, password)
+            # ... the graphql ones will produce an error, but that's
+            # still a 200
+            if query is None:
+                query = 'select 1'
+
             return self.http_con_request(
                 con,
                 path=f'/db/{db}/{proto}',
-                # ... the graphql ones will produce an error, but that's
-                # still a 200
-                params=dict(query='select 1'),
+                params=dict(query=query),
                 headers=headers,
             )
 

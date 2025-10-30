@@ -157,7 +157,7 @@ CREATE FUNCTION
 std::sum(s: SET OF std::bigint) -> std::bigint
 {
     CREATE ANNOTATION std::description :=
-        'Return the sum of the set of numbers.';
+        'Return the arithmetic sum of values in a set.';
     SET volatility := 'Immutable';
     SET initial_value := 0;
     SET force_return_cast := true;
@@ -169,7 +169,7 @@ CREATE FUNCTION
 std::sum(s: SET OF std::decimal) -> std::decimal
 {
     CREATE ANNOTATION std::description :=
-        'Return the sum of the set of numbers.';
+        'Return the arithmetic sum of values in a set.';
     SET volatility := 'Immutable';
     SET initial_value := 0;
     USING SQL FUNCTION 'sum';
@@ -180,7 +180,7 @@ CREATE FUNCTION
 std::sum(s: SET OF std::int32) -> std::int64
 {
     CREATE ANNOTATION std::description :=
-        'Return the sum of the set of numbers.';
+        'Return the arithmetic sum of values in a set.';
     SET volatility := 'Immutable';
     SET initial_value := 0;
     SET force_return_cast := true;
@@ -192,7 +192,7 @@ CREATE FUNCTION
 std::sum(s: SET OF std::int64) -> std::int64
 {
     CREATE ANNOTATION std::description :=
-        'Return the sum of the set of numbers.';
+        'Return the arithmetic sum of values in a set.';
     SET volatility := 'Immutable';
     SET initial_value := 0;
     SET force_return_cast := true;
@@ -204,7 +204,7 @@ CREATE FUNCTION
 std::sum(s: SET OF std::float32) -> std::float32
 {
     CREATE ANNOTATION std::description :=
-        'Return the sum of the set of numbers.';
+        'Return the arithmetic sum of values in a set.';
     SET volatility := 'Immutable';
     SET initial_value := 0;
     USING SQL FUNCTION 'sum';
@@ -215,7 +215,7 @@ CREATE FUNCTION
 std::sum(s: SET OF std::float64) -> std::float64
 {
     CREATE ANNOTATION std::description :=
-        'Return the sum of the set of numbers.';
+        'Return the arithmetic sum of values in a set.';
     SET volatility := 'Immutable';
     SET initial_value := 0;
     USING SQL FUNCTION 'sum';

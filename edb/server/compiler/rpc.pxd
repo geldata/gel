@@ -55,6 +55,7 @@ cdef class CompilationRequest:
         object database_config
         object system_config
         object schema_version
+        readonly object key_params
 
         bytes serialized_cache
         object cache_key

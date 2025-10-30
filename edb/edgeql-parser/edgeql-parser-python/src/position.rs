@@ -14,7 +14,7 @@ pub struct SourcePoint {
 #[pymethods]
 impl SourcePoint {
     #[staticmethod]
-    fn from_offsets(py: Python, data: &Bound<PyBytes>, offsets: PyObject) -> PyResult<Py<PyList>> {
+    fn from_offsets(py: Python, data: &Bound<PyBytes>, offsets: Py<PyAny>) -> PyResult<Py<PyList>> {
         let mut list: Vec<usize> = offsets.extract(py)?;
         let data: &[u8] = data.as_bytes();
         list.sort();
@@ -34,7 +34,7 @@ impl SourcePoint {
     fn from_lines_cols(
         py: Python,
         data: &Bound<PyBytes>,
-        lines_cols: PyObject,
+        lines_cols: Py<PyAny>,
     ) -> PyResult<Py<PyList>> {
         let mut list: Vec<(u64, u64)> = lines_cols.extract(py)?;
         let data: &[u8] = data.as_bytes();

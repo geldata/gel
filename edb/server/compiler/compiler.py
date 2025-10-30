@@ -24,6 +24,7 @@ from typing import (
     AbstractSet,
     Iterable,
     Mapping,
+    MutableMapping,
     Sequence,
     NamedTuple,
     cast,
@@ -52,6 +53,7 @@ from edb.server import instdata
 
 from edb import edgeql
 from edb.common import debug
+from edb import graphql
 from edb.common import turbo_uuid
 from edb.common import verutils
 from edb.common import uuidgen
@@ -142,7 +144,7 @@ class CompileContext:
     inline_objectids: bool = True
     schema_object_ids: Optional[
         Mapping[tuple[s_name.Name, Optional[str]], uuid.UUID]] = None
-    source: Optional[edgeql.Source] = None
+    source: Optional[edgeql.Source | graphql.Source | pg_parser.Source] = None
     backend_runtime_params: pg_params.BackendRuntimeParams = dataclasses.field(
         default_factory=pg_params.get_default_runtime_params
     )
@@ -244,10 +246,6 @@ def new_compiler(
     config_spec: Optional[config.Spec] = None,
 ) -> Compiler:
     """Create and return a compiler instance."""
-
-    # XXX: THIS IS NOT GREAT
-    assert isinstance(std_schema, s_schema.FlatSchema)
-    assert isinstance(reflection_schema, s_schema.FlatSchema)
 
     if not backend_runtime_params:
         backend_runtime_params = pg_params.get_default_runtime_params()
@@ -355,8 +353,8 @@ async def load_std_and_reflection_schema(
     key = f"std_and_reflection_schema{vkey}"
     data = await instdata.get_instdata(backend_conn, key, 'bin')
     try:
-        std_schema: s_schema.FlatSchema
-        refl_schema: s_schema.FlatSchema
+        std_schema: s_schema.Schema
+        refl_schema: s_schema.Schema
         std_schema, refl_schema = pickle.loads(data)
         if vkey != pg_patches.get_version_key(len(pg_patches.PATCHES)):
             std_schema = s_schema.upgrade_schema(std_schema)
@@ -394,8 +392,8 @@ async def load_schema_class_layout(
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class CompilerState:
 
-    std_schema: s_schema.FlatSchema
-    refl_schema: s_schema.FlatSchema
+    std_schema: s_schema.Schema
+    refl_schema: s_schema.Schema
     schema_class_layout: s_refl.SchemaClassLayout
 
     backend_runtime_params: pg_params.BackendRuntimeParams
@@ -567,7 +565,7 @@ class Compiler:
 
         setting = database_config.get('apply_access_policies_pg', None)
         apply_access_policies_pg = None
-        if setting and setting.value:
+        if setting is not None:
             apply_access_policies_pg = sql.is_setting_truthy(setting.value)
 
         return sql.compile_sql(
@@ -576,7 +574,6 @@ class Compiler:
             tx_state=tx_state,
             prepared_stmt_map=prepared_stmt_map,
             current_database=current_database,
-            current_user=current_user,
             allow_user_specified_id=allow_user_specified_id,
             apply_access_policies=apply_access_policies_pg,
             disambiguate_column_names=False,
@@ -682,8 +679,17 @@ class Compiler:
 
         match request.input_language:
             case enums.InputLanguage.EDGEQL:
+                assert isinstance(request.source, edgeql.Source)
                 unit_group = compile(ctx=ctx, source=request.source)
+            case enums.InputLanguage.GRAPHQL:
+                assert isinstance(request.source, graphql.Source)
+                unit_group = compile_graphql(
+                    ctx=ctx,
+                    source=request.source,
+                    variables=request.key_params,
+                )
             case enums.InputLanguage.SQL:
+                assert isinstance(request.source, pg_parser.Source)
                 unit_group = compile_sql_as_unit_group(
                     ctx=ctx, source=request.source)
             case _:
@@ -768,6 +774,7 @@ class Compiler:
         ):
             # This is a special case when COMMIT MIGRATION fails, the compiler
             # doesn't have the right transaction state, so we just roll back.
+            assert isinstance(request.source, edgeql.Source)
             return self._try_compile_rollback(request.source)[0], state
         else:
             state.sync_tx(txid)
@@ -790,8 +797,17 @@ class Compiler:
 
         match request.input_language:
             case enums.InputLanguage.EDGEQL:
+                assert isinstance(request.source, edgeql.Source)
                 unit_group = compile(ctx=ctx, source=request.source)
+            case enums.InputLanguage.GRAPHQL:
+                assert isinstance(request.source, graphql.Source)
+                unit_group = compile_graphql(
+                    ctx=ctx,
+                    source=request.source,
+                    variables=request.key_params,
+                )
             case enums.InputLanguage.SQL:
+                assert isinstance(request.source, pg_parser.Source)
                 unit_group = compile_sql_as_unit_group(
                     ctx=ctx, source=request.source)
             case _:
@@ -846,6 +862,7 @@ class Compiler:
                         array_type_id=array_type_id,
                         outer_idx=None,  # no script support for SQL
                         sub_params=None,  # no tuple args support for SQL
+                        typename=str(param_type.get_name(schema)),
                     )
                 )
 
@@ -905,9 +922,8 @@ class Compiler:
                 base_schema,
             )
 
-        return s_refl.parse_into(
+        return s_refl.parse_schema(
             base_schema=base_schema,
-            schema=s_schema.EMPTY_SCHEMA,
             data=schema_json,
             schema_class_layout=self.state.schema_class_layout,
         )
@@ -1049,7 +1065,7 @@ class Compiler:
 
     def _reprocess_restore_config(
         self,
-        stmts: list[qlast.Base],
+        stmts: Iterable[qlast.Base],
     ) -> list[qlast.Base]:
         '''Do any rewrites to the restore script needed.
 
@@ -1182,8 +1198,8 @@ class Compiler:
 
         # The state serializer generated below is somehow inappropriate,
         # so it's simply ignored here and the I/O process will do it on its own
-        statements = edgeql.parse_block(ddl_source)
-        statements = self._reprocess_restore_config(statements)
+        commands = edgeql.parse_block(ddl_source)
+        statements = self._reprocess_restore_config(commands)
         units = _try_compile_ast(
             ctx=ctx, source=ddl_source, statements=statements
         ).units
@@ -1507,6 +1523,7 @@ def compile_schema_storage_in_delta(
 def _compile_schema_storage_stmt(
     ctx: CompileContext,
     eql: str,
+    output_format: enums.OutputFormat = enums.OutputFormat.JSON,
 ) -> tuple[str, Sequence[dbstate.Param]]:
 
     schema = ctx.state.current_tx().get_schema(ctx.compiler_state.std_schema)
@@ -1528,7 +1545,7 @@ def _compile_schema_storage_stmt(
             state=ctx.state,
             json_parameters=True,
             schema_reflection_mode=True,
-            output_format=enums.OutputFormat.JSON,
+            output_format=output_format,
             expected_cardinality_one=False,
             bootstrap_mode=ctx.bootstrap_mode,
             protocol_version=ctx.protocol_version,
@@ -1616,6 +1633,7 @@ def _get_compile_options(
         apply_query_rewrites=(
             not ctx.bootstrap_mode
             and not ctx.schema_reflection_mode
+            and not ctx.dump_restore_mode  # HMMM
             and not bool(
                 _get_config_val(ctx, '__internal_no_apply_query_rewrites'))
         ),
@@ -1628,14 +1646,6 @@ def _get_compile_options(
         schema_reflection_mode=(
             ctx.schema_reflection_mode
             or _get_config_val(ctx, '__internal_query_reflschema')
-        ),
-        simple_scoping=(
-            _get_config_val(ctx, 'simple_scoping')
-        ),
-        warn_old_scoping=(
-            ctx.schema_reflection_mode or
-            ctx.bootstrap_mode or
-            _get_config_val(ctx, 'warn_old_scoping')
         ),
     )
 
@@ -1745,22 +1755,32 @@ def _compile_ql_administer(
     script_info: Optional[irast.ScriptInfo] = None,
 ) -> dbstate.BaseQuery:
     if ql.expr.func == 'statistics_update':
-        return ddl.administer_statistics_update(ctx, ql)
+        res = ddl.administer_statistics_update(ctx, ql)
     elif ql.expr.func == 'schema_repair':
-        return ddl.administer_repair_schema(ctx, ql)
+        res = ddl.administer_repair_schema(ctx, ql)
     elif ql.expr.func == 'reindex':
-        return ddl.administer_reindex(ctx, ql)
+        res = ddl.administer_reindex(ctx, ql)
     elif ql.expr.func == 'vacuum':
-        return ddl.administer_vacuum(ctx, ql)
+        res = ddl.administer_vacuum(ctx, ql)
     elif ql.expr.func == 'prepare_upgrade':
-        return ddl.administer_prepare_upgrade(ctx, ql)
+        res = ddl.administer_prepare_upgrade(ctx, ql)
     elif ql.expr.func == '_remove_pointless_triggers':
-        return ddl.administer_remove_pointless_triggers(ctx, ql)
+        res = ddl.administer_remove_pointless_triggers(ctx, ql)
+    elif ql.expr.func == 'concurrent_index_build':
+        res = ddl.administer_concurrent_index_build(ctx, ql)
+    elif ql.expr.func == 'fixup_backend_upgrade':
+        res = ddl.administer_fixup_backend_upgrade(ctx, ql)
     else:
         raise errors.QueryError(
             'Unknown ADMINISTER function',
             span=ql.expr.span,
         )
+
+    if debug.flags.delta_execute or debug.flags.delta_execute_ddl:
+        debug.header('ADMINISTER script')
+        debug.dump_code(res.sql, lexer='sql')
+
+    return res
 
 
 def _compile_ql_query(
@@ -1853,6 +1873,7 @@ def _compile_ql_query(
         ir,
         expected_cardinality_one=ctx.expected_cardinality_one,
         output_format=_convert_format(ctx.output_format),
+        json_parameters=options.json_parameters,
         backend_runtime_params=ctx.backend_runtime_params,
         is_explain=options.is_explain,
         cache_as_function=(use_persistent_cache
@@ -1898,10 +1919,31 @@ def _compile_ql_query(
         sql_info_prefix = ''
 
     globals = None
+    permissions = None
+    json_permissions = None
     if ir.globals:
         globals = [
             (str(glob.global_name), glob.has_present_arg)
             for glob in ir.globals
+            if not glob.is_permission
+        ]
+        permissions = [
+            str(glob.global_name)
+            for glob in ir.globals
+            if glob.is_permission
+        ]
+    if options.json_parameters:
+        # In JSON parameters mode, keep only the synthetic globals,
+        # and report the permissions as needing to be injected into
+        # the JSON.
+        if globals:
+            globals = [g for g in globals if g[0].startswith('__::')]
+        json_permissions, permissions = permissions, []
+
+    required_permissions = None
+    if ir.required_permissions:
+        required_permissions = [
+            str(perm.get_name(schema)) for perm in ir.required_permissions
         ]
 
     out_type_id: uuid.UUID
@@ -1987,6 +2029,9 @@ def _compile_ql_query(
         cache_func_call=cache_func_call,
         cardinality=result_cardinality,
         globals=globals,
+        permissions=permissions,
+        required_permissions=required_permissions,
+        json_permissions=json_permissions,
         in_type_id=in_type_id.bytes,
         in_type_data=in_type_data,
         in_type_args=in_type_args,
@@ -2443,6 +2488,7 @@ def _compile_ql_config_op(
         globals = [
             (str(glob.global_name), glob.has_present_arg)
             for glob in ir.globals
+            if not glob.is_permission
         ]
 
     if isinstance(ir, irast.Statement):
@@ -2552,10 +2598,12 @@ def _compile_dispatch_ql(
             return query, enums.Capability(0)
 
     elif isinstance(ql, qlast.DDLCommand):
-        return (
-            ddl.compile_and_apply_ddl_stmt(ctx, ql, source=source),
-            enums.Capability.DDL,
-        )
+        query = ddl.compile_and_apply_ddl_stmt(ctx, ql, source=source)
+        capability = enums.Capability.DDL
+        if isinstance(ql, (qlast.GlobalObjectCommand)):
+            capability |= enums.Capability.GLOBAL_DDL
+
+        return (query, capability)
 
     elif isinstance(ql, qlast.Transaction):
         return (
@@ -2582,8 +2630,16 @@ def _compile_dispatch_ql(
                 capability = enums.Capability(0)
             else:
                 capability = enums.Capability.SESSION_CONFIG
+        elif ql.scope is qltypes.ConfigScope.DATABASE:
+            capability = (
+                enums.Capability.PERSISTENT_CONFIG
+                | enums.Capability.BRANCH_CONFIG
+            )
         else:
-            capability = enums.Capability.PERSISTENT_CONFIG
+            capability = (
+                enums.Capability.PERSISTENT_CONFIG
+                | enums.Capability.INSTANCE_CONFIG
+            )
         return (
             _compile_ql_config_op(ctx, ql),
             capability,
@@ -2591,7 +2647,7 @@ def _compile_dispatch_ql(
 
     elif isinstance(ql, qlast.ExplainStmt):
         query = _compile_ql_explain(ctx, ql, script_info=script_info)
-        caps = enums.Capability(0)
+        caps = enums.Capability.ANALYZE
         if (
             isinstance(query, (dbstate.Query, dbstate.SimpleQuery))
             and query.has_dml
@@ -2601,7 +2657,7 @@ def _compile_dispatch_ql(
 
     elif isinstance(ql, qlast.AdministerStmt):
         query = _compile_ql_administer(ctx, ql, script_info=script_info)
-        caps = enums.Capability(0)
+        caps = enums.Capability.ADMINISTER
         return (query, caps)
 
     else:
@@ -2609,12 +2665,51 @@ def _compile_dispatch_ql(
         query = _compile_ql_query(
             ctx, ql, source=source, script_info=script_info)
         caps = enums.Capability(0)
+        if isinstance(ql, qlast.DescribeStmt):
+            caps |= enums.Capability.DESCRIBE
         if (
             isinstance(query, (dbstate.Query, dbstate.SimpleQuery))
             and query.has_dml
         ):
             caps |= enums.Capability.MODIFICATIONS
         return (query, caps)
+
+
+def compile_graphql(
+    *,
+    ctx: CompileContext,
+    source: graphql.Source,
+    variables: Optional[Mapping[str, object]],
+) -> dbstate.QueryUnitGroup:
+    current_tx = ctx.state.current_tx()
+
+    gql_op = graphql.compile_graphql(
+        ctx.compiler_state.std_schema,
+        current_tx.get_user_schema(),
+        current_tx.get_global_schema(),
+        current_tx.get_database_config(),
+        current_tx.get_system_config(),
+        source.text(),
+        tokens=source.tokens(),
+        substitutions=source.substitutions(),
+        extracted_variables=source.variables(),
+        variables=variables,
+        native_input=True,
+    )
+    eql_source = edgeql.Source.from_string(
+        edgeql.generate_source(gql_op.edgeql_ast, pretty=True),
+    )
+
+    qug = compile(ctx=ctx, source=eql_source)
+    if gql_op.cache_deps_vars:
+        qug.graphql_key_variables = sorted(gql_op.cache_deps_vars)
+
+    # No warnings in graphql, yet
+    for qu in qug:
+        qu.warnings = ()
+    qug.warnings = None
+
+    return qug
 
 
 def compile(
@@ -2667,7 +2762,7 @@ def compile_sql_as_unit_group(
     # the general access policy toggle, not the SQL-specific one.
     apply_access_policies = None
     setting = _get_config_val(ctx, 'apply_access_policies')
-    if setting:
+    if setting is not None:
         apply_access_policies = sql.is_setting_truthy(setting)
 
     tx_state = ctx.state.current_tx()
@@ -2691,7 +2786,6 @@ def compile_sql_as_unit_group(
         tx_state=sql_tx_state,
         prepared_stmt_map={},
         current_database=ctx.branch_name or "<unknown>",
-        current_user=ctx.role_name or "<unknown>",
         allow_user_specified_id=allow_user_specified_id,
         apply_access_policies=apply_access_policies,
         include_edgeql_io_format_alternative=True,
@@ -2730,6 +2824,17 @@ def compile_sql_as_unit_group(
                 f"{sql_unit.command_complete_tag}"
             )
 
+        globals = []
+        permissions = []
+        for sp in sql_unit.params or ():
+            if not isinstance(sp, dbstate.SQLParamGlobal):
+                continue
+
+            if not sp.is_permission:
+                globals.append((str(sp.global_name), False))
+            else:
+                permissions.append(str(sp.global_name))
+
         unit = dbstate.QueryUnit(
             sql=value_sql,
             introspection_sql=intro_sql,
@@ -2740,10 +2845,8 @@ def compile_sql_as_unit_group(
                 else sql_unit.cardinality
             ),
             capabilities=sql_unit.capabilities,
-            globals=[
-                (str(sp.global_name), False) for sp in sql_unit.params
-                if isinstance(sp, dbstate.SQLParamGlobal)
-            ] if sql_unit.params else [],
+            globals=globals,
+            permissions=permissions,
             output_format=(
                 enums.OutputFormat.NONE
                 if (
@@ -2813,7 +2916,7 @@ def _try_compile(
 def _try_compile_ast(
     *,
     ctx: CompileContext,
-    statements: list[qlast.Base],
+    statements: Sequence[qlast.Base],
     source: edgeql.Source,
 ) -> dbstate.QueryUnitGroup:
     if ctx.is_testmode():
@@ -3008,6 +3111,9 @@ def _make_query_unit(
         unit.cache_sql = comp.cache_sql
         unit.cache_func_call = comp.cache_func_call
         unit.globals = comp.globals
+        unit.permissions = comp.permissions
+        unit.json_permissions = comp.json_permissions
+        unit.required_permissions = comp.required_permissions
         unit.in_type_args = comp.in_type_args
 
         unit.sql_hash = comp.sql_hash
@@ -3044,6 +3150,7 @@ def _make_query_unit(
         unit.create_db_template = comp.create_db_template
         unit.create_db_mode = comp.create_db_mode
         unit.ddl_stmt_id = comp.ddl_stmt_id
+        unit.early_non_tx_sql = comp.early_non_tx_sql
         if not ctx.dump_restore_mode:
             if comp.user_schema is not None:
                 final_user_schema = comp.user_schema
@@ -3281,7 +3388,6 @@ def _extract_params(
         )
 
         if param.sub_params:
-            assert not ctx.json_parameters
             array_tids: list[Optional[uuid.UUID]] = []
             for p in param.sub_params.params:
                 if isinstance(p.schema_type, s_types.Array):
@@ -3301,6 +3407,7 @@ def _extract_params(
             array_type_id=array_tid,
             outer_idx=outer_mapping[param.name] if outer_mapping else None,
             sub_params=sub_params,
+            typename=str(schema_type.get_name(schema)),
         )
 
     return oparams, in_type_args  # type: ignore[return-value]
@@ -3682,15 +3789,45 @@ def _extract_extensions(
 def _extract_roles(
     global_schema: s_schema.Schema,
 ) -> immutables.Map[str, immutables.Map[str, Any]]:
-    roles = {}
-    for role in global_schema.get_objects(type=s_role.Role):
+    extracted_roles = {}
+    schema_roles = global_schema.get_objects(type=s_role.Role)
+    for role in schema_roles:
         role_name = str(role.get_name(global_schema))
-        roles[role_name] = immutables.Map(
+        extracted_roles[role_name] = dict(
             name=role_name,
             superuser=role.get_superuser(global_schema),
             password=role.get_password(global_schema),
+            branches=list(sorted(role.get_branches(global_schema))),
+            apply_access_policies_pg_default=(
+                role.get_apply_access_policies_pg_default(global_schema)
+            ),
         )
-    return immutables.Map(roles)
+
+    # To populate all_permissions, combine the permissions of each role
+    # and its ancestors.
+    role_memberships: MutableMapping[s_role.Role, list[s_role.Role]] = {}
+    role_permissions: MutableMapping[s_role.Role, Sequence[str]] = {}
+    for role in schema_roles:
+        role_memberships[role] = list(
+            role.get_ancestors(global_schema).objects(global_schema)
+        )
+        role_permissions[role] = list(sorted(
+            role.get_permissions(global_schema) or ()
+        ))
+
+    for role in schema_roles:
+        role_name = str(role.get_name(global_schema))
+        extracted_roles[role_name]['all_permissions'] = tuple(set(
+            p
+            for m in [role] + role_memberships.get(role, [])
+            for p in role_permissions[m]
+        ))
+
+    # Convert everything into immutable maps
+    return immutables.Map({
+        name: immutables.Map(role)
+        for name, role in extracted_roles.items()
+    })
 
 
 class DumpDescriptor(NamedTuple):

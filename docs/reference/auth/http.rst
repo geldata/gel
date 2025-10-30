@@ -91,6 +91,13 @@ Register a new user with email and password.
 *   ``verify_url`` (string, optional): The base URL for the email verification link. If not provided, it defaults to ``<auth_server_base_url>/ui/verify``, the built-in UI endpoint for verifying email addresses. The verification token will be appended as a query parameter to this URL.
 *   ``redirect_on_failure`` (string, optional): A URL to redirect to if registration fails.
 
+.. note::
+
+  The verification email sent after registration depends on your provider's verification method:
+
+  - **Code**: users receive a one-time code and must call ``POST /verify`` with ``provider``, ``email`` and the ``code``.
+  - **Link**: users receive a verification link that carries a ``verification_token`` and must call ``POST /verify`` with ``provider`` and the ``verification_token`` (often done by following the link).
+
 **Response:**
 
 The behavior of the response depends on the request parameters and server-side provider configuration (specifically, ``require_verification``).
@@ -238,10 +245,17 @@ Send a password reset email to a user.
 
 *   ``provider`` (string, required): The name of the provider: ``builtin::local_emailpassword``.
 *   ``email`` (string, required): The email address of the user requesting the password reset.
-*   ``reset_url`` (string, required): The base URL for the password reset link that will be emailed to the user. The ``reset_token`` will be appended as a query parameter. This URL must be an allowed redirect URI in the server configuration.
-*   ``challenge`` (string, required): A PKCE code challenge. This challenge is embedded in the reset token and will be used when the user resets their password to issue a new authorization code.
+*   ``reset_url`` (string, required): The base URL for the password reset page (used for the Link method). The ``reset_token`` will be appended as a query parameter. This URL must be an allowed redirect URI in the server configuration.
+*   ``challenge`` (string, required): A PKCE code challenge. For the Link method it is embedded in the ``reset_token``; for the Code method it can be re-used later when completing the reset to obtain a PKCE code.
 *   ``redirect_to`` (string, optional): A URL to redirect to after the reset email has been successfully queued for sending.
 *   ``redirect_on_failure`` (string, optional): A URL to redirect to if there's an error during the process. If not provided, but ``redirect_to`` is, ``redirect_to`` will be used as the fallback for failure redirection.
+
+.. note::
+
+  The email sent depends on your provider's configuration:
+
+  - **Link**: a reset link is sent containing a ``reset_token``; the user should then call ``POST /reset-password`` with this token.
+  - **Code**: a one-time code is sent to the email address; the user should then call ``POST /reset-password`` with ``email`` and ``code`` (and optionally ``challenge`` to receive a PKCE code).
 
 **Response:**
 
@@ -292,46 +306,43 @@ Resets a user's password using a reset token and a new password. This endpoint c
 **Request Body (JSON):**
 
 *   ``provider`` (string, required): The name of the provider: ``builtin::local_emailpassword``.
-*   ``reset_token`` (string, required): The token that was emailed to the user.
 *   ``password`` (string, required): The new password for the user's account.
-*   ``redirect_to`` (string, optional): A URL to redirect to after the password has been successfully reset. If provided, a PKCE ``code`` will be appended to this URL.
+
+Choose one of the following modes:
+
+-  **Token mode (Link method)**
+
+   *   ``reset_token`` (string, required): The token that was emailed to the user.
+
+-  **Code mode**
+
+   *   ``email`` (string, required): The user's email address.
+   *   ``code`` (string, required): The one-time code sent by email.
+   *   ``challenge`` (string, optional): If provided, a PKCE authorization code will be generated upon success.
+
+Optional for both modes:
+
+*   ``redirect_to`` (string, optional): A URL to redirect to after the password has been successfully reset. If provided and a PKCE code is generated, it will be appended as a query parameter.
 *   ``redirect_on_failure`` (string, optional): A URL to redirect to if the password reset process fails. If not provided, but ``redirect_to`` is, ``redirect_to`` will be used as the fallback.
 
 **Response:**
 
-1.  **Successful Password Reset:**
+-  **Token mode (Link method)**
 
-    *   The ``reset_token`` is validated, and the user's password is updated.
-    *   A new PKCE authorization ``code`` is generated using the challenge embedded in the ``reset_token``.
-    *   If ``redirect_to`` is provided in the request:
+   *   The ``reset_token`` is validated, and the user's password is updated.
+   *   A PKCE authorization ``code`` is generated using the challenge embedded in the token.
+   *   If ``redirect_to`` is provided, a 302 redirect occurs with ``code`` appended; otherwise, a 200 OK JSON response is returned with ``{"code": "..."}``.
 
-        *   A 302 redirect to the ``redirect_to`` URL occurs.
-        *   The redirect URL will have the new PKCE ``code`` appended as a query parameter. This ``code`` can then be exchanged for a session token at the ``POST /token`` endpoint.
-            Example: ``https://app.example.com/password-reset-success?code=new_pkce_code``
+-  **Code mode**
 
-    *   If ``redirect_to`` is NOT provided:
+   *   The ``email``/``code`` are validated, and the user's password is updated.
+   *   If a ``challenge`` is provided, a PKCE authorization ``code`` is generated.
+   *   If ``redirect_to`` is provided and a PKCE code was generated, a 302 redirect occurs with ``code`` appended; if ``challenge`` was not provided, a 200 OK JSON response is returned with ``{"status": "password_reset"}``.
 
-        *   A 200 OK response is returned with a JSON body containing the new PKCE ``code``:
+-  **Failure (invalid inputs or server error)**
 
-            .. code-block:: json
-
-                {
-                  "code": "new_pkce_code"
-                }
-
-            This ``code`` can then be exchanged for a session token at the ``POST /token`` endpoint.
-
-2.  **Password Reset Failure (e.g., invalid/expired token, server error):**
-
-    *   This can occur if the ``reset_token`` is invalid, expired, or if there's an issue updating the password on the server.
-    *   If ``redirect_on_failure`` (or ``redirect_to`` as a fallback) is provided and is an allowed URL:
-
-        *   A 302 redirect to this URL occurs.
-        *   The redirect URL will include ``error`` (a description of the error) and the submitted ``reset_token`` as query parameters.
-
-    *   Otherwise (no applicable redirect URL or it's not allowed):
-
-        *   An HTTP error response (e.g., 400 Bad Request, 403 Forbidden for token issues) is returned with a JSON body describing the error.
+   *   If ``redirect_on_failure`` (or ``redirect_to`` as a fallback) is provided and is an allowed URL, a 302 redirect occurs with an ``error`` parameter (and submitted ``reset_token``/``email`` where applicable).
+   *   Otherwise, an HTTP error response is returned with a JSON error body (e.g., 400, 403, 500).
 
 **Common Error Scenarios:**
 
@@ -347,52 +358,84 @@ These endpoints apply to the Email and password provider, as well as the WebAuth
 POST /verify
 ------------
 
-Verify a user's email address using a verification token.
+Verify a user's email address. Supports both Link and Code methods.
 
 **Request Body (JSON):**
 
-*   ``provider`` (string, required): The name of the provider associated with the email, e.g., ``builtin::local_emailpassword``.
-*   ``verification_token`` (string, required): The JWT sent to the user (typically via an email link) to verify their email.
+*   ``provider`` (string, required): The provider name, e.g., ``builtin::local_emailpassword`` or ``builtin::local_webauthn``.
+
+Choose exactly one verification mode:
+
+-  **Link mode**
+
+   *   ``verification_token`` (string, required): The JWT sent to the user (typically via an email link) to verify their email.
+
+-  **Code mode**
+
+   *   ``email`` (string, required): The user's email address to verify.
+   *   ``code`` (string, required): The one-time code sent via email.
+   *   ``challenge`` (string, optional, also accepts ``code_challenge``): If provided, a PKCE authorization code will be generated upon success.
+   *   ``redirect_to`` (string, optional): If provided, a redirect response will be sent upon success. This URL must be in the server's list of allowed redirect URIs.
 
 **Response:**
 
-The primary action is to validate the ``verification_token`` and mark the associated email as verified. The exact response depends on the contents of the ``verification_token`` itself, which may include a PKCE challenge and/or a redirect URL specified during its creation (e.g., at registration).
+-  **Link mode**
 
-1.  **Token Valid & Email Verified - With Challenge & Redirect URL in Token:**
+   The primary action is to validate the ``verification_token`` and mark the associated email as verified. The exact response depends on the contents of the ``verification_token`` (it may include a PKCE challenge and/or a redirect URL specified during its creation):
 
-    *   A PKCE authorization code is generated using the challenge from the token.
-    *   A 302 redirect to the URL specified in the token (``maybe_redirect_to``) occurs.
-    *   The redirect URL will have the generated ``code`` appended as a query parameter.
-        Example: ``https://app.example.com/redirect-after-verify?code=generated_pkce_code``
+   1.  With challenge and redirect URL in token
 
-2.  **Token Valid & Email Verified - With Challenge Only in Token:**
+       *   A PKCE authorization code is generated using the challenge from the token.
+       *   A 302 redirect to the URL specified in the token (``maybe_redirect_to``) occurs, with ``code`` appended as a query parameter.
 
-    *   A PKCE authorization code is generated using the challenge from the token.
-    *   A 200 OK response is returned with a JSON body:
+   2.  With challenge only in token
 
-        .. code-block:: json
+       *   A PKCE authorization code is generated using the challenge from the token.
+       *   A 200 OK response is returned with a JSON body:
 
-            {
-              "code": "generated_pkce_code"
-            }
+           .. code-block:: json
 
-3.  **Token Valid & Email Verified - With Redirect URL Only in Token:**
+               {
+                 "code": "generated_pkce_code"
+               }
 
-    *   A 302 redirect to the URL specified in the token (``maybe_redirect_to``) occurs (no ``code`` is added in this case).
+   3.  With redirect URL only in token
 
-4.  **Token Valid & Email Verified - No Challenge or Redirect URL in Token:**
+       *   A 302 redirect to the URL specified in the token (``maybe_redirect_to``) occurs (no ``code`` is added).
 
-    *   A 204 No Content response is returned. The email is verified, but no further redirect or code generation was requested by the token's context.
+   4.  No challenge or redirect URL in token
 
-5.  **Token Invalid or Expired:**
+       *   A 204 No Content response is returned.
 
-    *   A 403 Forbidden response is returned with a JSON body. Example for an expired token:
+   5.  Invalid or expired token
 
-        .. code-block:: json
+       *   A 403 Forbidden response is returned with a JSON body (e.g., token expired).
 
-            {
-              "message": "The 'iat' claim in verification token is older than 24 hours"
-            }
+-  **Code mode**
+
+   After validating ``email`` and ``code`` and marking the email as verified, behavior depends on optional ``challenge`` and ``redirect_to``:
+
+   1.  ``challenge`` and ``redirect_to`` provided
+
+       *   A PKCE authorization code is generated and a 302 redirect to ``redirect_to`` occurs with ``code`` appended as a query parameter.
+
+   2.  Only ``challenge`` provided
+
+       *   A PKCE authorization code is generated and a 200 OK response is returned with a JSON body:
+
+           .. code-block:: json
+
+               {
+                 "code": "generated_pkce_code"
+               }
+
+   3.  Only ``redirect_to`` provided
+
+       *   A 302 redirect to ``redirect_to`` occurs (no PKCE code is generated).
+
+   4.  Neither provided
+
+       *   A 204 No Content response is returned.
 
 **Common Error Scenarios:**
 
@@ -452,6 +495,10 @@ The endpoint aims to prevent email enumeration by always returning a successful 
 *   Missing ``verification_token`` when it's the chosen method, or missing ``email`` / ``credential_id`` for other methods.
 *   Providing a ``redirect_to`` URL that is not in the allowed list.
 *   Internal SMTP errors preventing email dispatch.
+
+.. note::
+
+  If the provider uses the **Code** verification method, the resend email will contain a one-time code instead of a link. In this case, ``verify_url``, ``challenge``, and ``redirect_to`` are not included in the email and are only relevant for the Link method.
 
 OAuth
 =====
@@ -681,49 +728,56 @@ Registers a new user with a magic link credential and sends a magic link email t
 
 **Request Body (JSON or application/x-www-form-urlencoded):**
 
-*   ``provider`` (string, required): The name of the provider to use: ``builtin::local_magiclink``.
-*   ``email`` (string, required): The user's email address.
-*   ``challenge`` (string, required): A PKCE code challenge. This challenge will be embedded in the magic link token.
-*   ``callback_url`` (string, required): The URL that the user will be redirected to after clicking the magic link in the email. A PKCE authorization ``code`` will be appended to this URL. This URL must be in the server's list of allowed redirect URIs.
-*   ``redirect_on_failure`` (string, required): A URL to redirect to if there's an error during the registration or email sending process. Error details will be appended as query parameters. This URL must be in the server's list of allowed redirect URIs.
-*   ``redirect_to`` (string, optional): A URL to redirect to *after* the server has successfully queued the email for sending (before the user clicks the link). If provided, a JSON response will not be returned, and parameters like ``email_sent`` will be appended as query parameters. This URL must be in the server's list of allowed redirect URIs.
-*   ``link_url`` (string, optional): The base URL for the magic link itself (the endpoint the link in the email will point to). If not provided, it defaults to ``<auth_server_base_url>/magic-link/authenticate``. This URL must be in the server's list of allowed redirect URIs.
+The required fields depend on the provider's verification method.
+
+-  **Code method**
+
+   *   ``email`` (string, required): The user's email address.
+   *   ``redirect_to`` (string, optional): A URL to redirect to after the email has been queued. If omitted, the request must accept ``application/json``.
+
+-  **Link method**
+
+   *   ``email`` (string, required): The user's email address.
+   *   ``challenge`` (string, required): A PKCE code challenge that will be embedded in the magic link token.
+   *   ``callback_url`` (string, required): The URL that the user will be redirected to after clicking the magic link in the email. A PKCE authorization ``code`` will be appended to this URL. This URL must be in the server's list of allowed redirect URIs.
+   *   ``redirect_on_failure`` (string, required): A URL to redirect to if there's an error during the registration or email sending process. Error details will be appended as query parameters. This URL must be in the server's list of allowed redirect URIs.
+   *   ``redirect_to`` (string, optional): A URL to redirect to *after* the server has successfully queued the email for sending (before the user clicks the link). If provided, a JSON response will not be returned, and parameters like ``email_sent`` (or ``code=true`` in Code method) will be appended as query parameters. This URL must be in the server's list of allowed redirect URIs.
+   *   ``link_url`` (string, optional): The base URL for the magic link itself (the endpoint the link in the email will point to). If not provided, it defaults to ``<auth_server_base_url>/magic-link/authenticate``. This URL must be in the server's list of allowed redirect URIs.
 
 **Response:**
 
-The response depends on whether a ``redirect_to`` URL was provided and whether the request's ``Accept`` header includes ``application/json``. The endpoint attempts to prevent email enumeration by always returning a success status if the request format is valid, even if the email address is not found.
+The endpoint attempts to prevent email enumeration by always returning a success status if the request format is valid.
 
-1.  **Successful Registration and Email Queued (JSON Response):**
+-  **Code method**
 
-    *   This occurs if ``redirect_to`` is NOT provided and the request accepts ``application/json``.
-    *   A new identity and magic link credential are created (or an existing one is used).
-    *   A magic link email is queued to be sent.
-    *   A 200 OK response is returned with a JSON body:
+   *   If the request accepts ``application/json`` and ``redirect_to`` is not provided, a 200 OK JSON response is returned:
 
-        .. code-block:: json
+       .. code-block:: json
 
-            {
-              "email_sent": "user@example.com"
-            }
+           {
+             "code": "true",
+             "signup": "true",
+             "email": "user@example.com"
+           }
 
-2.  **Successful Registration and Email Queued (Redirect Response):**
+   *   If ``redirect_to`` is provided, a 302 Found redirect occurs to ``redirect_to`` with ``code=true``, ``signup=true`` and ``email`` as query parameters.
 
-    *   This occurs if ``redirect_to`` is provided.
-    *   A new identity and magic link credential are created (or an existing one is used).
-    *   A magic link email is queued to be sent.
-    *   A 302 Found redirect response is returned to the ``redirect_to`` URL.
-    *   The redirect URL will include ``email_sent`` as a query parameter.
+-  **Link method**
 
-3.  **Failure (JSON Response):**
+   *   If the request accepts ``application/json`` and ``redirect_to`` is not provided, a 200 OK JSON response is returned:
 
-    *   This occurs if an error happens *before* a redirect would occur (e.g., invalid request data, unsupported provider) and the request accepts ``application/json``.
-    *   An HTTP error response (e.g., 400 Bad Request) is returned with a JSON body describing the error.
+       .. code-block:: json
 
-4.  **Failure (Redirect Response):**
+           {
+             "email_sent": "user@example.com"
+           }
 
-    *   This occurs if an error happens and a ``redirect_on_failure`` URL was provided (and the request did not accept JSON, or the error occurred after parsing the body).
-    *   A 302 Found redirect response is returned to the ``redirect_on_failure`` URL.
-    *   The redirect URL will include ``error`` and the submitted ``email`` as query parameters.
+   *   If ``redirect_to`` is provided, a 302 Found redirect occurs to ``redirect_to`` with ``email_sent`` as a query parameter.
+
+-  **Failure**
+
+   *   If an error occurs before a redirect would occur and the request accepts JSON, an HTTP error response (e.g., 400 Bad Request) is returned with a JSON body.
+   *   Otherwise, if ``redirect_on_failure`` was provided (Link method), a 302 Found redirect occurs to that URL with ``error`` and ``email`` query parameters.
 
 **Common Error Scenarios (leading to failure responses):**
 
@@ -739,42 +793,54 @@ Sends a magic link email to a user with an *existing* magic link credential. Thi
 
 **Request Body (JSON or application/x-www-form-urlencoded):**
 
-*   ``provider`` (string, required): The name of the provider to use: ``builtin::local_magiclink``.
-*   ``email`` (string, required): The user's email address.
-*   ``challenge`` (string, required): A PKCE code challenge. This challenge will be embedded in the magic link token.
-*   ``callback_url`` (string, required): The URL that the user will be redirected to after clicking the magic link in the email. A PKCE authorization ``code`` will be appended to this URL. This URL must be in the server's list of allowed redirect URIs.
-*   ``redirect_on_failure`` (string, required): A URL to redirect to if there's an error during the email sending process. Error details will be appended as query parameters. This URL must be in the server's list of allowed redirect URIs.
-*   ``redirect_to`` (string, optional): A URL to redirect to *after* the server has successfully queued the email for sending (before the user clicks the link). If provided, a JSON response will not be returned, and parameters like ``email_sent`` will be appended as query parameters. This URL must be in the server's list of allowed redirect URIs.
-*   ``link_url`` (string, optional): The base URL for the magic link itself. If not provided, it defaults to ``<auth_server_base_url>/magic-link/authenticate``. This URL must be in the server's list of allowed redirect URIs.
+The required fields depend on the provider's verification method.
+
+-  **Code method**
+
+   *   ``email`` (string, required): The user's email address.
+   *   ``redirect_to`` (string, optional): A URL to redirect to after the email has been queued. If omitted, the response will be JSON.
+
+-  **Link method**
+
+   *   ``email`` (string, required): The user's email address.
+   *   ``challenge`` (string, required): A PKCE code challenge that will be embedded in the magic link token.
+   *   ``callback_url`` (string, required): The URL that the user will be redirected to after clicking the magic link in the email. A PKCE authorization ``code`` will be appended to this URL. This URL must be in the server's list of allowed redirect URIs.
+   *   ``redirect_on_failure`` (string, required): A URL to redirect to if there's an error during the email sending process. Error details will be appended as query parameters. This URL must be in the server's list of allowed redirect URIs.
+   *   ``redirect_to`` (string, optional): A URL to redirect to *after* the server has successfully queued the email for sending (before the user clicks the link). If provided, a JSON response will not be returned.
+   *   ``link_url`` (string, optional): The base URL for the magic link itself. If not provided, it defaults to ``<auth_server_base_url>/magic-link/authenticate``. This URL must be in the server's list of allowed redirect URIs.
 
 **Response:**
 
-The response depends on whether a ``redirect_to`` URL was provided. The endpoint attempts to prevent email enumeration by always returning a success status if the request format is valid, even if the email address is not found.
+The endpoint attempts to prevent email enumeration by always returning a success status if the request format is valid, even if the email address is not found.
 
-1.  **Magic Link Email Queued (or User Not Found) (JSON Response):**
+-  **Code method**
 
-    *   This occurs if ``redirect_to`` is NOT provided.
-    *   If the email is found, a magic link email is queued to be sent. If not found, a fake email send is simulated.
-    *   A 200 OK response is returned with a JSON body:
+   *   If ``redirect_to`` is NOT provided, a 200 OK JSON response is returned:
 
-        .. code-block:: json
+       .. code-block:: json
 
-            {
-              "email_sent": "user@example.com"
-            }
+           {
+             "code": "true",
+             "email": "user@example.com"
+           }
 
-2.  **Magic Link Email Queued (or User Not Found) (Redirect Response):**
+   *   If ``redirect_to`` is provided, a 302 Found redirect occurs to the ``redirect_to`` URL with ``code=true`` and ``email`` as query parameters.
 
-    *   This occurs if ``redirect_to`` is provided.
-    *   If the email is found, a magic link email is queued to be sent. If not found, a fake email send is simulated.
-    *   A 302 Found redirect response is returned to the ``redirect_to`` URL.
-    *   The redirect URL will include ``email_sent`` as a query parameter.
+-  **Link method**
 
-3.  **Failure (Redirect Response):**
+   *   If ``redirect_to`` is NOT provided, a 200 OK JSON response is returned:
 
-    *   This occurs if an error happens (e.g., invalid request data, unsupported provider, internal SMTP error) and a ``redirect_on_failure`` URL was provided.
-    *   A 302 Found redirect response is returned to the ``redirect_on_failure`` URL.
-    *   The redirect URL will include ``error`` and the submitted ``email`` as query parameters.
+       .. code-block:: json
+
+           {
+             "email_sent": "user@example.com"
+           }
+
+   *   If ``redirect_to`` is provided, a 302 Found redirect occurs to the ``redirect_to`` URL with ``email_sent`` as a query parameter.
+
+-  **Failure**
+
+   *   If an error happens and a ``redirect_on_failure`` URL was provided (Link method), a 302 Found redirect is returned to that URL with ``error`` and the submitted ``email`` as query parameters. Otherwise, an HTTP error response is returned with a JSON body.
 
 **Common Error Scenarios (leading to failure responses):**
 
@@ -788,27 +854,31 @@ POST /magic-link/authenticate
 
 Authenticates a user by validating a magic link token received from an email. This endpoint is typically the target of the magic link URL sent to the user.
 
-**Request Parameters (Query String):**
+This endpoint supports both Link and Code methods.
+
+**Link method (Query String):**
 
 *   ``token`` (string, required): The magic link token (a signed JWT) extracted from the magic link URL. This token contains the identity ID, the original PKCE challenge, and the callback URL.
 *   ``redirect_on_failure`` (string, optional): A URL to redirect to if the authentication process fails (e.g., invalid or expired token). Error details will be appended as query parameters. If not provided, an HTTP error response will be returned on failure.
 
+**Code method (JSON body):**
+
+*   ``email`` (string, required): The user's email address.
+*   ``code`` (string, required): The one-time code sent via email.
+*   ``callback_url`` (string, required): The URL to redirect to after successful authentication. Must be an allowed redirect URI.
+*   ``challenge`` (string, required): A PKCE code challenge. A PKCE authorization ``code`` will be generated upon success.
+
 **Response:**
 
-1.  **Successful Authentication:**
+-  **Link method**
 
-    *   This occurs when the provided ``token`` is valid and not expired.
-    *   The user's email factor is marked as verified.
-    *   A PKCE authorization ``code`` is generated using the challenge embedded in the token and linked to the authenticated identity.
-    *   A 302 Found redirect response is returned.
-    *   The ``Location`` header will contain the ``callback_url`` extracted from the token.
-    *   The redirect URL will include the generated PKCE ``code`` as a query parameter (e.g., ``https://app.example.com/callback?code=generated_pkce_code``). This code can then be exchanged for a session token at the ``POST /token`` endpoint.
+   *   If the provided ``token`` is valid, the user's email factor is marked as verified and a PKCE authorization ``code`` is generated using the challenge embedded in the token. A 302 Found redirect is returned to the token's ``callback_url`` with ``code`` appended.
+   *   On failure, if ``redirect_on_failure`` is provided, a 302 redirect occurs to that URL with an ``error`` parameter; otherwise, an HTTP error response is returned with a JSON body.
 
-2.  **Authentication Failure:**
+-  **Code method**
 
-    *   This occurs if the provided ``token`` is invalid, expired, or if an internal server error occurs.
-    *   If a ``redirect_on_failure`` URL was provided, a 302 Found redirect response is returned to that URL, with an ``error`` parameter.
-    *   If no ``redirect_on_failure`` URL was provided, an HTTP error response (e.g., 403 Forbidden) is returned with a JSON body describing the error.
+   *   On success, the one-time code is validated, the email factor is marked as verified, and a PKCE authorization ``code`` is generated using the provided ``challenge``. A 302 Found redirect occurs to ``callback_url`` with ``code`` appended.
+   *   On failure, if a ``redirect_on_failure`` query parameter is present, a 302 redirect occurs to that URL with an ``error`` parameter; otherwise, a 400 Bad Request JSON response is returned with an error body.
 
 **Common Error Scenarios (leading to failure responses):**
 

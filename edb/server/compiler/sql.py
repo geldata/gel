@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Mapping, Sequence, TYPE_CHECKING, Optional
+from typing import Mapping, Sequence, TYPE_CHECKING, Optional, Any
 
 import dataclasses
 import functools
@@ -29,6 +29,7 @@ import json
 from edb import errors
 from edb.common import ast
 from edb.common import uuidgen
+from edb.common import debug
 from edb.server import defines
 
 from edb.schema import schema as s_schema
@@ -72,7 +73,6 @@ def compile_sql(
     tx_state: dbstate.SQLTransactionState,
     prepared_stmt_map: Mapping[str, str],
     current_database: str,
-    current_user: str,
     allow_user_specified_id: Optional[bool],
     apply_access_policies: Optional[bool],
     include_edgeql_io_format_alternative: bool = False,
@@ -92,7 +92,6 @@ def compile_sql(
             tx_state=tx_state,
             prepared_stmt_map=prepared_stmt_map,
             current_database=current_database,
-            current_user=current_user,
             allow_user_specified_id=allow_user_specified_id,
             apply_access_policies=apply_access_policies,
             include_edgeql_io_format_alternative=(
@@ -200,7 +199,6 @@ def _compile_sql(
     tx_state: dbstate.SQLTransactionState,
     prepared_stmt_map: Mapping[str, str],
     current_database: str,
-    current_user: str,
     allow_user_specified_id: Optional[bool],
     apply_access_policies: Optional[bool],
     include_edgeql_io_format_alternative: bool = False,
@@ -214,7 +212,6 @@ def _compile_sql(
     opts = ResolverOptionsPartial(
         query_str=query_str,
         current_database=current_database,
-        current_user=current_user,
         allow_user_specified_id=allow_user_specified_id,
         apply_access_policies=apply_access_policies,
         include_edgeql_io_format_alternative=(
@@ -241,7 +238,7 @@ def _compile_sql(
         extract_data = _build_constant_extraction_map(orig_stmt, stmt)
 
         unit = dbstate.SQLQueryUnit(
-            orig_query=orig_text,
+            orig_query=pg_codegen.generate_source(orig_stmt),
             fe_settings=fe_settings,
             # by default, the query is sent to PostgreSQL unchanged
             query=orig_text,
@@ -288,6 +285,8 @@ def _compile_sql(
             if not unit.is_local:
                 unit.capabilities |= enums.Capability.SESSION_CONFIG
 
+            unit.capabilities |= enums.Capability.SQL_SESSION_CONFIG
+
         elif isinstance(stmt, pgast.VariableShowStmt):
             if protocol_version != defines.POSTGRES_PROTOCOL:
                 from edb.pgsql import resolver as pg_resolver
@@ -314,10 +313,16 @@ def _compile_sql(
                     for name, value in stmt.options.options.items()
                 }
 
+            unit.capabilities |= enums.Capability.SQL_SESSION_CONFIG
+
         elif isinstance(stmt, (pgast.BeginStmt, pgast.StartStmt)):
             unit.tx_action = dbstate.TxAction.START
             unit.command_complete_tag = dbstate.TagPlain(
-                tag=b"START TRANSACTION"
+                tag=(
+                    b"START TRANSACTION"
+                    if isinstance(stmt, pgast.StartStmt)
+                    else b"BEGIN"
+                )
             )
         elif isinstance(stmt, pgast.CommitStmt):
             unit.tx_action = dbstate.TxAction.COMMIT
@@ -390,6 +395,7 @@ def _compile_sql(
                 source_map=stmt_source.source_map,
             )
             unit.command_complete_tag = dbstate.TagPlain(tag=b"PREPARE")
+            unit.capabilities |= stmt_resolved.capabilities
             track_stats = True
 
         elif isinstance(stmt, pgast.ExecuteStmt):
@@ -474,6 +480,7 @@ def _compile_sql(
                 unit.cardinality = enums.Cardinality.NO_RESULT
             else:
                 unit.cardinality = enums.Cardinality.MANY
+            unit.capabilities |= stmt_resolved.capabilities
             track_stats = True
         else:
             from edb.pgsql import resolver as pg_resolver
@@ -481,6 +488,7 @@ def _compile_sql(
 
         unit.stmt_name = compute_stmt_name(unit.query, tx_state).encode("utf-8")
 
+        sql_info: dict[str, Any] = {}
         if track_stats and backend_runtime_params.has_stat_statements:
             cconfig: dict[str, dbstate.SQLSetting] = {
                 k: v for k, v in fe_settings.items()
@@ -505,16 +513,19 @@ def _compile_sql(
                 'pv': protocol_version,  # protocol_version
                 'dn': ', '.join(search_path),  # default_namespace
             }
-            sql_info = {
-                'query': orig_text,
-                'type': defines.QueryType.SQL,
-                'extras': json.dumps(extras),
-            }
+            sql_info['query'] = orig_text,
+            sql_info['type'] = defines.QueryType.SQL,
+            sql_info['extras'] = json.dumps(extras),
             id_hash = hashlib.blake2b(digest_size=16)
             id_hash.update(
                 json.dumps(sql_info).encode(defines.EDGEDB_ENCODING)
             )
             sql_info['id'] = str(uuidgen.from_bytes(id_hash.digest()))
+
+        if debug.flags.sql_text_in_sql:
+            sql_info['sql'] = orig_query_str or query_str
+
+        if sql_info:
             prefix = ''.join([
                 '-- ',
                 json.dumps(sql_info),
@@ -524,9 +535,6 @@ def _compile_sql(
             unit.query = prefix + unit.query
             if unit.eql_format_query is not None:
                 unit.eql_format_query = prefix + unit.eql_format_query
-
-        if isinstance(stmt, pgast.DMLQuery):
-            unit.capabilities |= enums.Capability.MODIFICATIONS
 
         if unit.tx_action is not None:
             unit.capabilities |= enums.Capability.TRANSACTION
@@ -641,7 +649,6 @@ def _compile_show_command(stmt: pgast.VariableShowStmt) -> pgast.Query:
 
 @dataclasses.dataclass(kw_only=True, eq=False, repr=False)
 class ResolverOptionsPartial:
-    current_user: str
     current_database: str
     query_str: str
     allow_user_specified_id: Optional[bool]
@@ -685,10 +692,9 @@ def resolve_query(
     if apply_access_policies is None:
         apply_access_policies = opts.apply_access_policies
     if apply_access_policies is None:
-        apply_access_policies = False
+        apply_access_policies = True
 
     options = pg_resolver.Options(
-        current_user=opts.current_user,
         current_database=opts.current_database,
         current_query=opts.query_str,
         search_path=search_path,

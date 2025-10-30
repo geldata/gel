@@ -24,7 +24,6 @@ import dataclasses
 
 from typing import Any, Optional
 from edb.errors import ConstraintViolationError
-from edb.server.protocol import execute
 
 from . import errors, util, data, local
 
@@ -35,6 +34,7 @@ ph = argon2.PasswordHasher()
 class EmailPasswordProviderConfig:
     name: str
     require_verification: bool
+    verification_method: str
 
 
 class Client(local.Client):
@@ -53,7 +53,7 @@ class Client(local.Client):
                 )
 
         try:
-            r = await execute.parse_execute_json(
+            r = await util.json_query(
                 db=self.db,
                 query="""\
     with
@@ -81,15 +81,9 @@ class Client(local.Client):
                     "email": email,
                     "password_hash": ph.hash(password),
                 },
-                cached_globally=True,
-                query_tag='gel/auth',
             )
-        except Exception as e:
-            exc = await execute.interpret_error(e, self.db)
-            if isinstance(exc, ConstraintViolationError):
-                raise errors.UserAlreadyRegistered()
-            else:
-                raise exc
+        except ConstraintViolationError:
+            raise errors.UserAlreadyRegistered()
 
         result_json = json.loads(r.decode())
         assert len(result_json) == 1
@@ -98,7 +92,7 @@ class Client(local.Client):
     async def authenticate(
         self, email: str, password: str
     ) -> data.LocalIdentity:
-        r = await execute.parse_execute_json(
+        r = await util.json_query(
             db=self.db,
             query="""\
 with
@@ -108,8 +102,6 @@ filter .email = email;""",
             variables={
                 "email": email,
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
 
         password_credential_dicts = json.loads(r.decode())
@@ -129,7 +121,7 @@ filter .email = email;""",
 
         if ph.check_needs_rehash(password_hash):
             new_hash = ph.hash(password)
-            await execute.parse_execute_json(
+            await util.json_query(
                 db=self.db,
                 query="""\
 with
@@ -143,8 +135,6 @@ set { password_hash := new_hash };""",
                     "email": email,
                     "new_hash": new_hash,
                 },
-                cached_globally=True,
-                query_tag='gel/auth',
             )
 
         return local_identity
@@ -153,7 +143,7 @@ set { password_hash := new_hash };""",
         self,
         email: str,
     ) -> tuple[data.EmailFactor, str]:
-        r = await execute.parse_execute_json(
+        r = await util.json_query(
             db=self.db,
             query="""
 with
@@ -162,8 +152,6 @@ select ext::auth::EmailPasswordFactor { ** } filter .email = email""",
             variables={
                 "email": email,
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
 
         result_json = json.loads(r.decode())
@@ -185,7 +173,7 @@ select ext::auth::EmailPasswordFactor { ** } filter .email = email""",
         identity_id: str,
         secret: str,
     ) -> Optional[data.LocalIdentity]:
-        r = await execute.parse_execute_json(
+        r = await util.json_query(
             db=self.db,
             query="""\
 with
@@ -195,8 +183,6 @@ filter .identity.id = identity_id;""",
             variables={
                 "identity_id": identity_id,
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
 
         result_json = json.loads(r.decode())
@@ -222,7 +208,7 @@ filter .identity.id = identity_id;""",
 
         # TODO: check if race between validating secret and updating password
         #       is a problem
-        await execute.parse_execute_json(
+        await util.json_query(
             db=self.db,
             query="""\
 with
@@ -238,8 +224,6 @@ set {
                 'identity_id': identity_id,
                 'new_hash': ph.hash(password),
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
 
         return local_identity
@@ -255,6 +239,7 @@ set {
                 return EmailPasswordProviderConfig(
                     name=cfg.name,
                     require_verification=cfg.require_verification,
+                    verification_method=cfg.verification_method,
                 )
 
         raise errors.MissingConfiguration(

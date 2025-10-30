@@ -164,12 +164,14 @@ async def describe(
     query_cache_enabled: Optional[bool] = None,
     allow_capabilities: compiler.Capability = compiler.Capability.MODIFICATIONS,
     query_tag: str | None = None,
+    role_name: str,
 ) -> sertypes.TypeDesc:
     _, compiled, dbv = await _parse(
         db,
         query,
         query_cache_enabled=query_cache_enabled,
         allow_capabilities=allow_capabilities,
+        role_name=role_name,
     )
     if query_tag:
         compiled.tag = query_tag
@@ -195,6 +197,7 @@ async def _parse(
     use_metrics: bool = True,
     cached_globally: bool = False,
     query_cache_enabled: Optional[bool] = None,
+    role_name: str,
 ) -> tuple[
     rpc.CompilationRequest,
     dbview.CompiledQuery,
@@ -208,6 +211,7 @@ async def _parse(
         dbname=db.name,
         query_cache=query_cache_enabled,
         protocol_version=edbdef.CURRENT_PROTOCOL,
+        role_name=role_name,
     )
     dbv.is_transient = True
     if use_metrics:
@@ -222,6 +226,7 @@ async def _parse(
         compilation_config_serializer=db.server.compilation_config_serializer,
         input_format=input_format,
         output_format=output_format,
+        role_name=role_name,
     )
 
     compiled = await dbv.parse(
@@ -281,6 +286,13 @@ async def execute(
                 dbv.dbname,
                 close_frontend_conns=query_unit.drop_db_reset_connections,
             )
+
+        if query_unit.early_non_tx_sql:
+            # Sync state non transactionally
+            await be_conn.sql_fetch(b'select 1', state=state)
+            for sql in query_unit.early_non_tx_sql:
+                await be_conn.sql_execute(sql)
+
         if query_unit.system_config:
             # execute_system_config() always sync state in a separate tx,
             # so we don't need to pass down the needs_commit_state here
@@ -311,7 +323,12 @@ async def execute(
 
                     data_types = []
                     bound_args_buf = args_ser.recode_bind_args(
-                        dbv, compiled, bind_args, converted_args, None, data_types,
+                        dbv,
+                        compiled,
+                        bind_args,
+                        converted_args,
+                        None,
+                        data_types,
                     )
 
                     assert not (query_unit.database_config
@@ -987,8 +1004,12 @@ async def parse_execute_json(
     cached_globally: bool = False,
     use_metrics: bool = True,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
-    query_tag: str | None = None
+    query_tag: str | None = None,
+    role_name: str | None = None,
 ) -> bytes:
+    if role_name is None:
+        role_name = edbdef.EDGEDB_SUPERUSER
+
     # WARNING: only set cached_globally to True when the query is
     # strictly referring to only shared stable objects in user schema
     # or anything from std schema, for example:
@@ -1003,6 +1024,7 @@ async def parse_execute_json(
         use_metrics=use_metrics,
         cached_globally=cached_globally,
         query_cache_enabled=query_cache_enabled,
+        role_name=role_name,
     )
     if query_tag:
         compiled.tag = query_tag
@@ -1035,6 +1057,32 @@ async def execute_json(
     tx_isolation: edbdef.TxIsolationLevel | None = None,
     query_req: Optional[rpc.CompilationRequest] = None,
 ) -> bytes:
+    if globals_ is None:
+        globals_ = {}
+
+    if compiled.query_unit_group.json_permissions:
+        # Inject any required permissions into the globals json.
+
+        superuser, available_permissions = dbv.get_permissions()
+
+        for permission in compiled.query_unit_group.json_permissions:
+            if permission in globals_:
+                raise RuntimeError(
+                    f"Permission cannot be passed as globals: '{permission}'"
+                )
+
+            globals_[permission] = (
+                superuser or permission in available_permissions
+            )
+
+    # TODO: only when needed? in a less dodgy way??
+    for k, v in dbv._sys_globals.items():
+        if k in globals_:
+            raise RuntimeError(
+                f"System global '{k}' cannot be explicitly specified"
+            )
+        globals_[k] = v
+
     dbv.set_globals(immutables.Map({
         "__::__edb_json_globals__": config.SettingValue(
             name="__::__edb_json_globals__",

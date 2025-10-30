@@ -67,7 +67,7 @@ class AnalyzeContext:
 def analyze_explain_output(
     query_asts_pickled: bytes,
     data: list[list[bytes]],
-    std_schema: s_schema.FlatSchema,
+    std_schema: s_schema.Schema,
 ) -> bytes:
     if debug.flags.edgeql_explain:
         debug.header('Explain')
@@ -116,7 +116,9 @@ def analyze_explain_output(
     config_vals = {
         k: v for k, v in config_vals.items() if k not in OMITTED_CONFIG_VALS
     }
-    globals_used = sorted([str(k) for k in ir.globals])
+    globals_used = sorted([
+        str(k) for k in ir.globals if not k.is_permission
+    ])
 
     if info:
         buffers = info.buffers

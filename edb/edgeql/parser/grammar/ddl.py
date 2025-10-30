@@ -392,12 +392,16 @@ def commands_block(parent, *commands, opt=True, production_tpl=ProductionTpl):
 
 
 class NestedQLBlockStmt(Nonterm):
+    val: qlast.DDLOperation
 
-    def reduce_Stmt(self, *kids):
-        self.val = qlast.DDLQuery(query=kids[0].val)
+    def reduce_Stmt(self, stmt):
+        if isinstance(stmt.val, qlast.Query):
+            self.val = qlast.DDLQuery(query=stmt.val)
+        else:
+            self.val = stmt.val
 
     @parsing.inline(0)
-    def reduce_OptWithDDLStmt(self, *kids):
+    def reduce_OptWithDDLStmt(self, *_):
         pass
 
     @parsing.inline(0)
@@ -487,13 +491,6 @@ class NestedQLBlock(ProductionTpl):
         self.val = self.result(body=body, fields=[])
 
 
-def nested_ql_block(parent, *commands, opt=True, production_tpl):
-    if not commands:
-        commands = (NestedQLBlockStmt,)
-
-    commands_block(parent, *commands, opt=opt, production_tpl=production_tpl)
-
-
 class UsingStmt(Nonterm):
 
     def reduce_USING_ParenExpr(self, *kids):
@@ -513,7 +510,7 @@ class UsingStmt(Nonterm):
 
 class SetFieldStmt(Nonterm):
     # field := <expr>
-    def reduce_SET_Identifier_ASSIGN_Expr(self, *kids):
+    def reduce_SET_Identifier_ASSIGN_GenExpr(self, *kids):
         self.val = qlast.SetField(
             name=kids[1].val.lower(),
             value=kids[3].val,
@@ -536,7 +533,7 @@ class ResetFieldStmt(Nonterm):
 
 
 class CreateAnnotationValueStmt(Nonterm):
-    def reduce_CREATE_ANNOTATION_NodeName_ASSIGN_Expr(self, *kids):
+    def reduce_CREATE_ANNOTATION_NodeName_ASSIGN_GenExpr(self, *kids):
         self.val = qlast.CreateAnnotationValue(
             name=kids[2].val,
             value=kids[4].val,
@@ -544,7 +541,7 @@ class CreateAnnotationValueStmt(Nonterm):
 
 
 class AlterAnnotationValueStmt(Nonterm):
-    def reduce_ALTER_ANNOTATION_NodeName_ASSIGN_Expr(self, *kids):
+    def reduce_ALTER_ANNOTATION_NodeName_ASSIGN_GenExpr(self, *kids):
         self.val = qlast.AlterAnnotationValue(
             name=kids[2].val,
             value=kids[4].val,
@@ -966,8 +963,10 @@ class CreateExtensionPackageBodyBlock(NestedQLBlock):
         return ExtensionPackageBody
 
 
-nested_ql_block(
+commands_block(
     'CreateExtensionPackage',
+    NestedQLBlockStmt,
+    opt=True,
     production_tpl=CreateExtensionPackageBodyBlock,
 )
 
@@ -1017,8 +1016,10 @@ class CreateExtensionPackageMigrationBodyBlock(NestedQLBlock):
         return ExtensionPackageBody
 
 
-nested_ql_block(
+commands_block(
     'CreateExtensionPackage',
+    NestedQLBlockStmt,
+    opt=True,
     production_tpl=CreateExtensionPackageBodyBlock,
 )
 
@@ -1108,12 +1109,6 @@ class CreateExtensionStmt(Nonterm):
 #
 # ALTER EXTENSION
 #
-
-
-commands_block(
-    'AlterExtension',
-    SetFieldStmt,
-)
 
 
 class AlterExtensionStmt(Nonterm):
@@ -2041,7 +2036,7 @@ class CreateConcretePropertyStmt(Nonterm):
 
     def reduce_CreateComputableProperty(self, *kids):
         """%reduce
-            CREATE OptPtrQuals PROPERTY UnqualifiedPointerName ASSIGN Expr
+            CREATE OptPtrQuals PROPERTY UnqualifiedPointerName ASSIGN GenExpr
         """
         self.val = qlast.CreateConcreteProperty(
             name=kids[3].val,
@@ -2382,7 +2377,7 @@ class CreateConcreteLinkStmt(Nonterm):
 
     def reduce_CreateComputableLink(self, *kids):
         """%reduce
-            CREATE OptPtrQuals LINK UnqualifiedPointerName ASSIGN Expr
+            CREATE OptPtrQuals LINK UnqualifiedPointerName ASSIGN GenExpr
         """
         self.val = qlast.CreateConcreteLink(
             name=kids[3].val,
@@ -2816,7 +2811,7 @@ commands_block(
 class CreateAliasStmt(Nonterm):
     def reduce_CreateAliasShortStmt(self, *kids):
         r"""%reduce
-            CREATE ALIAS NodeName ASSIGN Expr
+            CREATE ALIAS NodeName ASSIGN GenExpr
         """
         self.val = qlast.CreateAlias(
             name=kids[2].val,
@@ -2943,15 +2938,14 @@ commands_block(
 class CreateFunctionStmt(Nonterm, commondl.ProcessFunctionBlockMixin):
     def reduce_CreateFunction(self, *kids):
         r"""%reduce CREATE FUNCTION NodeName CreateFunctionArgs \
-                ARROW OptTypeQualifier FunctionType \
-                CreateFunctionCommandsBlock
+                FunctionResult CreateFunctionCommandsBlock
         """
         self.val = qlast.CreateFunction(
             name=kids[2].val,
             params=kids[3].val,
-            returning=kids[6].val,
-            returning_typemod=kids[5].val,
-            **self._process_function_body(kids[7])
+            returning=kids[4].val.result_type,
+            returning_typemod=kids[4].val.type_qualifier,
+            **self._process_function_body(kids[5])
         )
 
 
@@ -3102,32 +3096,30 @@ class CreateOperatorStmt(Nonterm):
     def reduce_CreateOperatorStmt(self, *kids):
         r"""%reduce
             CREATE OperatorKind OPERATOR NodeName CreateFunctionArgs
-            ARROW OptTypeQualifier FunctionType
-            CreateOperatorCommandsBlock
+            FunctionResult CreateOperatorCommandsBlock
         """
         self.val = qlast.CreateOperator(
             kind=kids[1].val,
             name=kids[3].val,
             params=kids[4].val,
-            returning_typemod=kids[6].val,
-            returning=kids[7].val,
-            **self._process_operator_body(kids[8])
+            returning_typemod=kids[5].val.type_qualifier,
+            returning=kids[5].val.result_type,
+            **self._process_operator_body(kids[6])
         )
 
     def reduce_CreateAbstractOperatorStmt(self, *kids):
         r"""%reduce
             CREATE ABSTRACT OperatorKind OPERATOR NodeName CreateFunctionArgs
-            ARROW OptTypeQualifier FunctionType
-            OptCreateOperatorCommandsBlock
+            FunctionResult OptCreateOperatorCommandsBlock
         """
         self.val = qlast.CreateOperator(
             kind=kids[2].val,
             name=kids[4].val,
             params=kids[5].val,
-            returning_typemod=kids[7].val,
-            returning=kids[8].val,
+            returning_typemod=kids[6].val.type_qualifier,
+            returning=kids[6].val.result_type,
             abstract=True,
-            **self._process_operator_body(kids[9], abstract=True)
+            **self._process_operator_body(kids[7], abstract=True)
         )
 
     def _process_operator_body(self, block, abstract: bool = False):
@@ -3518,7 +3510,7 @@ class CreateGlobalStmt(Nonterm):
 
     def reduce_CreateComputableGlobal(self, *kids):
         """%reduce
-            CREATE OptPtrQuals GLOBAL NodeName ASSIGN Expr
+            CREATE OptPtrQuals GLOBAL NodeName ASSIGN GenExpr
         """
         self.val = qlast.CreateGlobal(
             name=kids[3].val,
@@ -3734,8 +3726,10 @@ class CreateMigrationBodyBlock(NestedQLBlock):
         return MigrationBody
 
 
-nested_ql_block(
+commands_block(
     'CreateMigration',
+    NestedQLBlockStmt,
+    opt=True,
     production_tpl=CreateMigrationBodyBlock,
 )
 

@@ -470,11 +470,8 @@ def _find_rvar_in_intersection_by_typeref(
 
     assert component_rvars
 
-    pid_rptr = path_id.rptr()
-    if pid_rptr is not None:
-        if pid_rptr.material_ptr is not None:
-            pid_rptr = pid_rptr.material_ptr
-        tref = pid_rptr.out_source
+    if src_path := path_id.src_path():
+        tref = src_path.target
     else:
         tref = path_id.target
 
@@ -1108,7 +1105,10 @@ def _get_rel_path_output(
     ptr_info = None
     if ptrref and not isinstance(ptrref, irast.TypeIntersectionPointerRef):
         ptr_info = pg_types.get_ptrref_storage_info(
-            ptrref, resolve_type=False, link_bias=False)
+            ptrref,
+            resolve_type=False,
+            link_bias=bool(rel.path_id and rel.path_id.is_ptr_path()),
+        )
 
     if (rptr_dir is not None and
             rptr_dir != s_pointers.PointerDirection.Outbound):

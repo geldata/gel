@@ -55,6 +55,7 @@ def ui(args: tuple[str, ...]):
     subprocess.check_call(
         [
             sys.executable,
+            "-I",
             "-m",
             "edb.cli",
             "ui",
@@ -78,6 +79,7 @@ def _ensure_linked(args: tuple[str, ...]) -> list[str]:
     ):
         subprocess.check_call([
             sys.executable,
+            "-I",
             "-m",
             "edb.cli",
             "instance",

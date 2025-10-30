@@ -51,6 +51,9 @@ class Function(base.DBObject):
         strict: bool = False,
         parallel_safe: bool = False,
         set_returning: bool = False,
+
+        # Unused for Function, used in VersionedFunction.
+        wrapper_volatility: Optional[str] = None,
     ):
         if volatility.lower() == 'modifying':
             volatility = 'volatile'

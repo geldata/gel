@@ -17,7 +17,6 @@
 #
 
 
-import contextlib
 import os.path
 import uuid
 
@@ -29,8 +28,6 @@ from edb.tools import test
 
 class TestInsert(tb.DDLTestCase):
     '''The scope of the tests is testing various modes of Object creation.'''
-    NO_FACTOR = False
-    WARN_FACTOR = True
     INTERNAL_TESTMODE = False
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
@@ -38,8 +35,7 @@ class TestInsert(tb.DDLTestCase):
 
     def assertRaisesRegex(self, exc, r, **kwargs):
         if (
-            (self.NO_FACTOR or self.WARN_FACTOR)
-            and "cannot reference correlated set" in r
+            "cannot reference correlated set" in r
         ):
             r = ""
         return super().assertRaisesRegex(exc, r, **kwargs)
@@ -1824,6 +1820,28 @@ class TestInsert(tb.DDLTestCase):
                                   INSERT Note {name := y ++ x.name}))))));
             """)
 
+    async def test_edgeql_insert_for_iterator_01(self):
+        await self.assert_query_result(
+            r'''
+                with noobs := {
+                  (insert InsertTest { l2 := 1 }),
+                },
+                for n in noobs select assert_exists((select n filter true));
+            ''',
+            [{}],
+        )
+
+        await self.assert_query_result(
+            r'''
+                with noobs := {
+                  ((insert InsertTest { l2 := 1 }), "bar"),
+                  ((insert InsertTest { l2 := 2 }), "eggs"),
+                },
+                for n in noobs select n.0;
+            ''',
+            [{}, {}],
+        )
+
     @tb.ignore_warnings('more than one.* in a FILTER clause')
     async def test_edgeql_insert_default_01(self):
         await self.con.execute(r'''
@@ -2193,6 +2211,71 @@ class TestInsert(tb.DDLTestCase):
             [
                 {'a': [4]},
             ]
+        )
+
+    async def test_edgeql_insert_dunder_default_03(self):
+        # insert with inner stmt using __default__
+
+        # prop doesn't have __default
+        await self.con.execute(r'''
+            INSERT DunderDefaultTest03_A {
+                x := (
+                    INSERT DunderDefaultTest03_C { x := __default__ }
+                ).x
+            };
+        ''')
+        await self.assert_query_result(
+            r'''
+                SELECT DunderDefaultTest03_A { x };
+            ''',
+            [{'x': 2}]
+        )
+
+        # prop has __default
+        await self.con.execute(r'''
+            INSERT DunderDefaultTest03_B {
+                x := (
+                    INSERT DunderDefaultTest03_C { x := __default__ }
+                ).x
+            };
+        ''')
+        await self.assert_query_result(
+            r'''
+                SELECT DunderDefaultTest03_B { x };
+            ''',
+            [{'x': 2}]
+        )
+
+        # inner statement does not have __default
+        async with self.assertRaisesRegexTx(
+            edgedb.InvalidReferenceError,
+            r"__default__ cannot be used in this expression",
+            _hint='No default expression exists',
+        ):
+            await self.con.execute(r'''
+                INSERT DunderDefaultTest03_B {
+                    x := (
+                        INSERT DunderDefaultTest03_A { x := __default__ }
+                    ).x
+                };
+            ''')
+
+    async def test_edgeql_insert_dunder_default_04(self):
+        await self.con.execute(r'''
+            INSERT DunderDefaultTest04_A { x := 1 };
+        ''')
+
+        await self.con.execute(r'''
+            INSERT DunderDefaultTest04_B {
+                x := 2,
+                l := __default__,
+            };
+        ''')
+        await self.assert_query_result(
+            r'''
+                SELECT DunderDefaultTest04_B { x, l: { x } };
+            ''',
+            [{'x': 2, 'l': {'x': 1}}]
         )
 
     async def test_edgeql_insert_as_expr_01(self):
@@ -7514,21 +7597,13 @@ class TestInsert(tb.DDLTestCase):
         )
 
     async def test_edgeql_insert_conditional_02(self):
-        ctxmgr = (
-            contextlib.nullcontext() if self.NO_FACTOR
-            else self.assertRaisesRegexTx(
-                edgedb.errors.QueryError,
-                "cannot reference correlated set",
-            )
-        )
-        async with ctxmgr:
-            await self.con.execute('''
-                select ((if ExceptTest.deleted then (
-                    insert InsertTest { l2 := 2 }
-                ) else (
-                    insert DerivedTest { l2 := 200 }
-                )), (select ExceptTest.deleted limit 1));
-            ''')
+        await self.con.execute('''
+            select ((if ExceptTest.deleted then (
+                insert InsertTest { l2 := 2 }
+            ) else (
+                insert DerivedTest { l2 := 200 }
+            )), (select ExceptTest.deleted limit 1));
+        ''')
 
     async def test_edgeql_insert_conditional_03(self):
         await self.assert_query_result(
@@ -7951,7 +8026,7 @@ class TestInsert(tb.DDLTestCase):
     async def test_edgeql_insert_read_only_tx_01(self):
         con = (
             edgedb.create_async_client(
-                **self.get_connect_args(database=self.con.dbname)
+                **self.get_connect_args()
             ).with_transaction_options(
                 edgedb.TransactionOptions(readonly=True)
             )
@@ -7974,7 +8049,7 @@ class TestInsert(tb.DDLTestCase):
 
         con = (
             edgedb.create_async_client(
-                **self.get_connect_args(database=self.con.dbname)
+                **self.get_connect_args()
             ).with_transaction_options(
                 edgedb.TransactionOptions(readonly=True)
             )
@@ -7993,7 +8068,6 @@ class TestInsert(tb.DDLTestCase):
 
 class TestRepeatableReadInsert(tb.QueryTestCase):
     '''The scope of the tests is testing various modes of Object creation.'''
-    NO_FACTOR = True
     INTERNAL_TESTMODE = False
 
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
@@ -8111,3 +8185,14 @@ class TestRepeatableReadInsert(tb.QueryTestCase):
                     name := "test"
                 };
             """)
+
+    async def test_edgeql_rr_update_04(self):
+        # should be fine
+        await self.con.query(
+            r"""
+                update (
+                    select Person
+                    filter .name = 'adsf'
+                ).note set {};
+            """,
+        )

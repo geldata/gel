@@ -113,9 +113,9 @@ type DefaultTest2 {
     required property num -> int64 {
         # XXX: circumventing sequence deficiency
         default := (
-            SELECT DefaultTest1.num + 1
-            ORDER BY DefaultTest1.num DESC
-            LIMIT 1
+          (SELECT DefaultTest1
+            ORDER BY .num DESC
+           LIMIT 1).num + 1
         );
     }
 }
@@ -197,7 +197,6 @@ type DunderDefaultTest02_A {
         default := 1
     };
 }
-
 type DunderDefaultTest02_B {
     multi default_with_insert: DunderDefaultTest02_A {
         default := (
@@ -228,6 +227,33 @@ type DunderDefaultTest02_B {
         )
     };
 }
+
+type DunderDefaultTest03_A {
+    required x: int64;
+}
+type DunderDefaultTest03_B {
+    required x: int64 {
+        default := 1
+    };
+}
+type DunderDefaultTest03_C {
+    required x: int64 {
+        default := 2
+    };
+}
+
+type DunderDefaultTest04_A {
+    required x: int64;
+};
+type DunderDefaultTest04_B {
+    required x: int64;
+    l: DunderDefaultTest04_A {
+        default := (
+            select DunderDefaultTest04_A
+            limit 1
+        )
+    };
+};
 
 # types to test some inheritance issues
 type InputValue {

@@ -62,6 +62,8 @@ from . import (
     magic_link,
     webhook,
     jwt,
+    otc,
+    local,
 )
 from .data import EmailFactor
 
@@ -383,7 +385,7 @@ class Router:
 
         if state is None:
             raise errors.InvalidData(
-                "Provider did not include the 'state' parameter in " "callback"
+                "Provider did not include the 'state' parameter in callback"
             )
 
         if error is not None:
@@ -409,7 +411,7 @@ class Router:
 
         if code is None:
             raise errors.InvalidData(
-                "Provider did not include the 'code' parameter in " "callback"
+                "Provider did not include the 'code' parameter in callback"
             )
 
         try:
@@ -491,7 +493,7 @@ class Router:
             )
         if verifier_size > 128:
             raise errors.InvalidData(
-                "Verifier must be shorter than 128 " "characters long"
+                "Verifier must be shorter than 128 characters long"
             )
         try:
             pkce_object = await pkce.get_by_id(self.db, code)
@@ -610,6 +612,7 @@ class Router:
             if require_verification:
                 response_dict = {
                     "identity_id": identity.id,
+                    "email": email_factor.email,
                     "verification_email_sent_at": datetime.datetime.now(
                         datetime.timezone.utc
                     ).isoformat(),
@@ -623,6 +626,7 @@ class Router:
                 )
                 response_dict = {
                     "code": pkce_code,
+                    "email": email_factor.email,
                     "provider": register_provider_name,
                 }
 
@@ -753,63 +757,147 @@ class Router:
     ) -> None:
         data = self._get_data_from_request(request)
 
-        _check_keyset(data, {"verification_token", "provider"})
+        verification_token = data.get("verification_token")
+        email = data.get("email")
+        code = data.get("code")
+        provider = data.get("provider")
 
-        token = jwt.VerificationToken.verify(
-            data["verification_token"],
-            self.signing_key,
-        )
+        if not provider:
+            raise errors.InvalidData('Missing "provider" in verify request')
 
-        try:
-            email_factor = await self._try_verify_email(
-                provider=data["provider"],
-                identity_id=token.subject,
-            )
-            await self._maybe_send_webhook(
-                webhook.EmailVerified(
-                    event_id=str(uuid.uuid4()),
-                    timestamp=datetime.datetime.now(datetime.timezone.utc),
-                    identity_id=token.subject,
-                    email_factor_id=email_factor.id,
+        if verification_token:
+            try:
+                token = jwt.VerificationToken.verify(
+                    verification_token,
+                    self.signing_key,
                 )
-            )
-        except errors.VerificationTokenExpired:
-            response.status = http.HTTPStatus.FORBIDDEN
-            response.content_type = b"application/json"
-            error_message = (
-                "The 'iat' claim in verification token is older than 24 hours"
-            )
-            logger.error(f"Verification token expired: {error_message}")
-            response.body = json.dumps({"message": error_message}).encode()
-            return
 
-        logger.info(
-            f"Email verified: identity_id={token.subject}, "
-            f"email_factor_id={email_factor.id}, "
-            f"email={email_factor.email}"
-        )
-        match (token.maybe_challenge, token.maybe_redirect_to):
-            case (str(challenge), str(redirect_to)):
+                email_factor = await self._try_verify_email(
+                    provider=provider,
+                    identity_id=token.subject,
+                )
+                await self._maybe_send_webhook(
+                    webhook.EmailVerified(
+                        event_id=str(uuid.uuid4()),
+                        timestamp=datetime.datetime.now(datetime.timezone.utc),
+                        identity_id=token.subject,
+                        email_factor_id=email_factor.id,
+                    )
+                )
+            except errors.VerificationTokenExpired:
+                response.status = http.HTTPStatus.FORBIDDEN
+                response.content_type = b"application/json"
+                error_message = "The verification token is older than 24 hours"
+                logger.error(f"Verification token expired: {error_message}")
+                response.body = json.dumps({"message": error_message}).encode()
+                return
+
+            logger.info(
+                f"Email verified via token: identity_id={token.subject}, "
+                f"email_factor_id={email_factor.id}, "
+                f"email={email_factor.email}"
+            )
+            identity_id = token.subject
+            challenge = token.maybe_challenge
+            redirect_to = token.maybe_redirect_to
+
+        elif email and code:
+            _check_keyset(
+                data,
+                {
+                    "email",
+                    "code",
+                    "provider",
+                },
+            )
+            email_client: local.Client
+            if provider == "builtin::local_emailpassword":
+                email_client = email_password.Client(db=self.db)
+            elif provider == "builtin::local_webauthn":
+                email_client = webauthn.Client(db=self.db)
+            else:
+                raise errors.InvalidData(f"Unsupported provider: {provider}")
+
+            try:
+                maybe_email_factor = (
+                    await email_client.get_email_factor_by_email(email)
+                )
+                if maybe_email_factor is None:
+                    raise errors.NoIdentityFound("Invalid email")
+
+                email_factor = maybe_email_factor
+
+                otc_id = await otc.verify(self.db, str(email_factor.id), code)
+
+                await self._handle_otc_verified(
+                    identity_id=str(email_factor.identity.id),
+                    email_factor_id=str(email_factor.id),
+                    otc_id=str(otc_id),
+                )
+
+                await self._try_verify_email(
+                    provider=provider,
+                    identity_id=email_factor.identity.id,
+                )
+
+                await self._maybe_send_webhook(
+                    webhook.EmailVerified(
+                        event_id=str(uuid.uuid4()),
+                        timestamp=datetime.datetime.now(datetime.timezone.utc),
+                        identity_id=email_factor.identity.id,
+                        email_factor_id=email_factor.id,
+                    )
+                )
+
+                logger.info(
+                    f"Email verified via OTC: "
+                    f"identity_id={email_factor.identity.id}, "
+                    f"email_factor_id={email_factor.id}, "
+                    f"email={email}"
+                )
+
+                identity_id = email_factor.identity.id
+                challenge = data.get("challenge")
+                redirect_to = data.get("redirect_to")
+
+            except Exception as ex:
+                self._handle_otc_failed(ex)
+                response.status = http.HTTPStatus.BAD_REQUEST
+                response.content_type = b"application/json"
+                response.body = json.dumps(
+                    {"error": str(ex), "error_code": "verification_failed"}
+                ).encode()
+                return
+
+        else:
+            raise errors.InvalidData(
+                'Must provide either "verification_token" (Link mode) '
+                'or "email" + "code" (OTC mode)'
+            )
+
+        logger.info(f"Challenge: {challenge}, Redirect to: {redirect_to}")
+        match (challenge, redirect_to):
+            case (str(), str()):
                 await pkce.create(self.db, challenge)
                 code = await pkce.link_identity_challenge(
-                    self.db, token.subject, challenge
+                    self.db, identity_id, challenge
                 )
                 return self._try_redirect(
                     response,
                     util.join_url_params(redirect_to, {"code": code}),
                 )
-            case (str(challenge), _):
+            case (str(), None):
                 await pkce.create(self.db, challenge)
                 code = await pkce.link_identity_challenge(
-                    self.db, token.subject, challenge
+                    self.db, identity_id, challenge
                 )
                 response.status = http.HTTPStatus.OK
                 response.content_type = b"application/json"
                 response.body = json.dumps({"code": code}).encode()
                 return
-            case (_, str(redirect_to)):
+            case (None, str()):
                 return self._try_redirect(response, redirect_to)
-            case (_, _):
+            case (None, None):
                 response.status = http.HTTPStatus.NO_CONTENT
                 return
 
@@ -952,33 +1040,62 @@ class Router:
                 )
                 identity_id = email_factor.identity.id
 
-                new_reset_token = jwt.ResetToken(
-                    subject=identity_id,
-                    secret=secret,
-                    challenge=data["challenge"],
-                ).sign(self.signing_key)
-
-                reset_token_params = {"reset_token": new_reset_token}
-                reset_url = util.join_url_params(
-                    data['reset_url'], reset_token_params
-                )
-                await self._maybe_send_webhook(
-                    webhook.PasswordResetRequested(
-                        event_id=str(uuid.uuid4()),
-                        timestamp=datetime.datetime.now(datetime.timezone.utc),
-                        identity_id=identity_id,
-                        reset_token=new_reset_token,
-                        email_factor_id=email_factor.id,
+                if email_password_client.config.verification_method == "Code":
+                    code, otc_id = await otc.create(
+                        self.db,
+                        str(email_factor.id),
+                        datetime.timedelta(minutes=10),
                     )
-                )
+                    await auth_emails.send_password_reset_code_email(
+                        db=self.db,
+                        tenant=self.tenant,
+                        to_addr=email,
+                        code=code,
+                        test_mode=self.test_mode,
+                    )
 
-                await auth_emails.send_password_reset_email(
-                    db=self.db,
-                    tenant=self.tenant,
-                    to_addr=email,
-                    reset_url=reset_url,
-                    test_mode=self.test_mode,
-                )
+                    await self._handle_otc_initiated(
+                        identity_id=identity_id,
+                        email_factor_id=str(email_factor.id),
+                        otc_id=str(otc_id),
+                        one_time_code=code,
+                    )
+
+                    logger.info(
+                        "Sent OTC password reset email: "
+                        f"email={email}, otc_id={otc_id}"
+                    )
+                else:
+                    new_reset_token = jwt.ResetToken(
+                        subject=identity_id,
+                        secret=secret,
+                        challenge=data["challenge"],
+                    ).sign(self.signing_key)
+
+                    reset_token_params = {"reset_token": new_reset_token}
+                    reset_url = util.join_url_params(
+                        data['reset_url'], reset_token_params
+                    )
+                    await self._maybe_send_webhook(
+                        webhook.PasswordResetRequested(
+                            event_id=str(uuid.uuid4()),
+                            timestamp=datetime.datetime.now(
+                                datetime.timezone.utc
+                            ),
+                            identity_id=identity_id,
+                            reset_token=new_reset_token,
+                            email_factor_id=email_factor.id,
+                        )
+                    )
+
+                    await auth_emails.send_password_reset_email(
+                        db=self.db,
+                        tenant=self.tenant,
+                        to_addr=email,
+                        reset_url=reset_url,
+                        test_mode=self.test_mode,
+                    )
+
             except errors.NoIdentityFound:
                 logger.debug(
                     f"Failed to find identity for send reset email: "
@@ -1039,32 +1156,93 @@ class Router:
     ) -> None:
         data = self._get_data_from_request(request)
 
-        _check_keyset(data, {"provider", "reset_token", "password"})
-        reset_token = data['reset_token']
-        password = data['password']
-        email_password_client = email_password.Client(db=self.db)
-
-        allowed_redirect_to = self._maybe_make_allowed_url(
-            data.get("redirect_to")
-        )
-
         try:
-            token = jwt.ResetToken.verify(
-                reset_token,
-                self.signing_key,
+            _check_keyset(data, {"password", "provider"})
+            password = data['password']
+
+            reset_token = data.get('reset_token')
+            email = data.get('email')
+            code = data.get('code')
+
+            allowed_redirect_to = self._maybe_make_allowed_url(
+                data.get("redirect_to")
             )
 
-            await email_password_client.update_password(
-                token.subject, token.secret, password
-            )
-            await pkce.create(self.db, token.challenge)
-            code = await pkce.link_identity_challenge(
-                self.db, token.subject, token.challenge
-            )
-            response_dict = {"code": code}
-            logger.info(
-                f"Reset password: identity_id={token.subject}, pkce_id={code}"
-            )
+            email_password_client = email_password.Client(db=self.db)
+
+            if reset_token:
+                token = jwt.ResetToken.verify(
+                    reset_token,
+                    self.signing_key,
+                )
+
+                await email_password_client.update_password(
+                    token.subject, token.secret, password
+                )
+                await pkce.create(self.db, token.challenge)
+                code = await pkce.link_identity_challenge(
+                    self.db, token.subject, token.challenge
+                )
+                response_dict = {"code": code}
+                logger.info(
+                    "Reset password via token: "
+                    f"identity_id={token.subject}, pkce_id={code}"
+                )
+
+            elif email and code:
+                try:
+                    (
+                        email_factor,
+                        secret,
+                    ) = await email_password_client.get_email_factor_and_secret(
+                        email
+                    )
+
+                    otc_id = await otc.verify(
+                        self.db, str(email_factor.id), code
+                    )
+                    logger.info(
+                        "OTC verified for password reset: "
+                        f"otc_id={otc_id}, email={email}"
+                    )
+
+                    await self._handle_otc_verified(
+                        identity_id=email_factor.identity.id,
+                        email_factor_id=str(email_factor.id),
+                        otc_id=str(otc_id),
+                    )
+                except Exception as ex:
+                    self._handle_otc_failed(ex)
+                    raise
+
+                try:
+                    await email_password_client.update_password(
+                        email_factor.identity.id, secret, password
+                    )
+                except Exception as ex:
+                    raise errors.InvalidData(
+                        f"Failed to reset password: {str(ex)}"
+                    )
+
+                challenge = data.get('challenge')
+                if challenge:
+                    await pkce.create(self.db, challenge)
+                    auth_code = await pkce.link_identity_challenge(
+                        self.db, email_factor.identity.id, challenge
+                    )
+                    response_dict = {"code": auth_code}
+                    logger.info(
+                        "Reset password via OTC: "
+                        f"identity_id={email_factor.identity.id}, email={email}"
+                    )
+                else:
+                    response_dict = {"status": "password_reset"}
+
+            else:
+                raise errors.InvalidData(
+                    'Must provide either "reset_token" (Token mode) '
+                    'or "email" + "code" (OTC mode)'
+                )
 
             if allowed_redirect_to:
                 return self._do_redirect(
@@ -1077,6 +1255,7 @@ class Router:
                 response.status = http.HTTPStatus.OK
                 response.content_type = b"application/json"
                 response.body = json.dumps(response_dict).encode()
+
         except Exception as ex:
             redirect_on_failure = data.get(
                 "redirect_on_failure", data.get("redirect_to")
@@ -1085,14 +1264,18 @@ class Router:
                 error_message = str(ex)
                 logger.error(
                     f"Error resetting password: error={error_message}, "
-                    f"reset_token={reset_token}"
+                    f"reset_token={reset_token}, email={email}"
                 )
+                error_params = {
+                    "error": error_message,
+                }
+                if reset_token:
+                    error_params["reset_token"] = reset_token
+                if email:
+                    error_params["email"] = email
                 redirect_url = util.join_url_params(
                     redirect_on_failure,
-                    {
-                        "error": error_message,
-                        "reset_token": reset_token,
-                    },
+                    error_params,
                 )
                 return self._try_redirect(response, redirect_url)
             else:
@@ -1104,57 +1287,28 @@ class Router:
         response: protocol.HttpResponse,
     ) -> None:
         data = self._get_data_from_request(request)
-
-        _check_keyset(
-            data,
-            {
-                "provider",
-                "email",
-                "challenge",
-                "callback_url",
-                "redirect_on_failure",
-            },
-        )
-
-        email = data["email"]
-        challenge = data["challenge"]
-        callback_url = data["callback_url"]
-        if not self._is_url_allowed(callback_url):
-            raise errors.InvalidData(
-                "Callback URL does not match any allowed URLs.",
-            )
-
-        allowed_redirect_on_failure = self._make_allowed_url(
-            data["redirect_on_failure"]
-        )
-
-        allowed_redirect_to = self._maybe_make_allowed_url(
-            data.get("redirect_to")
-        )
-
-        allowed_link_url = self._maybe_make_allowed_url(data.get("link_url"))
-        link_url = (
-            allowed_link_url.url
-            if allowed_link_url
-            else f"{self.base_path}/magic-link/authenticate"
-        )
-
-        magic_link_client = magic_link.Client(
-            db=self.db,
-            issuer=self.base_path,
-            tenant=self.tenant,
-            test_mode=self.test_mode,
-            signing_key=self.signing_key,
-        )
-
-        request_accepts_json: bool = request.accept == b"application/json"
-
-        if not request_accepts_json and not allowed_redirect_to:
-            raise errors.InvalidData(
-                "Request must accept JSON or provide a redirect URL."
-            )
+        email: str | None = None
 
         try:
+            _check_keyset(data, {"email"})
+
+            email = cast(str, data["email"])
+            allowed_redirect_to = self._maybe_make_allowed_url(
+                data.get("redirect_to")
+            )
+
+            magic_link_client = magic_link.Client(
+                db=self.db,
+                issuer=self.base_path,
+                tenant=self.tenant,
+                test_mode=self.test_mode,
+                signing_key=self.signing_key,
+            )
+
+            if not _accepts_json(request) and not allowed_redirect_to:
+                raise errors.InvalidData(
+                    "Request must accept JSON or provide a redirect URL."
+                )
             email_factor = await magic_link_client.register(
                 email=email,
             )
@@ -1173,37 +1327,96 @@ class Router:
                     email_factor_id=email_factor.id,
                 )
             )
-            magic_link_token = magic_link_client.make_magic_link_token(
-                identity_id=email_factor.identity.id,
-                callback_url=callback_url,
-                challenge=challenge,
-            )
-            await self._maybe_send_webhook(
-                webhook.MagicLinkRequested(
-                    event_id=str(uuid.uuid4()),
-                    timestamp=datetime.datetime.now(datetime.timezone.utc),
-                    identity_id=email_factor.identity.id,
-                    email_factor_id=email_factor.id,
-                    magic_link_token=magic_link_token,
-                    magic_link_url=link_url,
+            if magic_link_client.provider.verification_method == "Code":
+                code, otc_id = await otc.create(
+                    self.db,
+                    str(email_factor.id),
+                    datetime.timedelta(minutes=10),
                 )
-            )
-            logger.info(
-                f"Sending magic link: identity_id={email_factor.identity.id}, "
-                f"email={email}"
-            )
-            await magic_link_client.send_magic_link(
-                email=email,
-                link_url=link_url,
-                redirect_on_failure=allowed_redirect_on_failure.url,
-                token=magic_link_token,
-            )
+                await auth_emails.send_one_time_code_email(
+                    db=self.db,
+                    tenant=self.tenant,
+                    to_addr=email,
+                    code=code,
+                    test_mode=self.test_mode,
+                )
 
-            return_data = {
-                "email_sent": email,
-            }
+                await self._handle_otc_initiated(
+                    identity_id=str(email_factor.identity.id),
+                    email_factor_id=str(email_factor.id),
+                    otc_id=str(otc_id),
+                    one_time_code=code,
+                )
 
-            if request_accepts_json:
+                logger.info(
+                    "Sent OTC email: "
+                    f"identity_id={email_factor.identity.id}, "
+                    f"email={email}, otc_id={otc_id}"
+                )
+
+                return_data = {
+                    "code": "true",
+                    "signup": "true",
+                    "identity_id": str(email_factor.identity.id),
+                    "email": email,
+                }
+
+            else:
+                _check_keyset(
+                    data, {"challenge", "callback_url", "redirect_on_failure"}
+                )
+
+                challenge = data["challenge"]
+                callback_url = data["callback_url"]
+                if not self._is_url_allowed(callback_url):
+                    raise errors.InvalidData(
+                        "Callback URL does not match any allowed URLs.",
+                    )
+
+                allowed_redirect_on_failure = self._make_allowed_url(
+                    data["redirect_on_failure"]
+                )
+                allowed_link_url = self._maybe_make_allowed_url(
+                    data.get("link_url")
+                )
+                link_url = (
+                    allowed_link_url.url
+                    if allowed_link_url
+                    else f"{self.base_path}/magic-link/authenticate"
+                )
+
+                magic_link_token = magic_link_client.make_magic_link_token(
+                    identity_id=email_factor.identity.id,
+                    callback_url=callback_url,
+                    challenge=challenge,
+                )
+                await self._maybe_send_webhook(
+                    webhook.MagicLinkRequested(
+                        event_id=str(uuid.uuid4()),
+                        timestamp=datetime.datetime.now(datetime.timezone.utc),
+                        identity_id=email_factor.identity.id,
+                        email_factor_id=email_factor.id,
+                        magic_link_token=magic_link_token,
+                        magic_link_url=link_url,
+                    )
+                )
+                logger.info(
+                    "Sending magic link: "
+                    f"identity_id={email_factor.identity.id}, email={email}"
+                )
+
+                await magic_link_client.send_magic_link(
+                    email=email,
+                    link_url=link_url,
+                    redirect_on_failure=allowed_redirect_on_failure.url,
+                    token=magic_link_token,
+                )
+
+                return_data = {
+                    "email_sent": email,
+                }
+
+            if _accepts_json(request):
                 response.status = http.HTTPStatus.OK
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
@@ -1221,24 +1434,29 @@ class Router:
                     "Request must accept JSON or provide a redirect URL."
                 )
         except Exception as ex:
-            if request_accepts_json:
+            if _accepts_json(request):
                 raise ex
 
+            redirect_on_failure = data.get(
+                "redirect_on_failure", data.get("redirect_to")
+            )
             error_message = str(ex)
+            email = email or ""
             logger.error(
-                f"Error sending magic link: error={error_message}, "
+                f"Error sending magic link email: error={error_message}, "
                 f"email={email}"
             )
-            redirect_url = allowed_redirect_on_failure.map(
-                lambda u: util.join_url_params(
-                    u,
-                    {
-                        "error": error_message,
-                        "email": email,
-                    },
-                )
+
+            if redirect_on_failure is None:
+                raise ex
+            error_redirect_url = util.join_url_params(
+                redirect_on_failure,
+                {
+                    "error": error_message,
+                    "email": email,
+                },
             )
-            return self._do_redirect(response, redirect_url)
+            self._try_redirect(response, error_redirect_url)
 
     async def handle_magic_link_email(
         self,
@@ -1246,43 +1464,15 @@ class Router:
         response: protocol.HttpResponse,
     ) -> None:
         data = self._get_data_from_request(request)
+        email: str | None = None
+        return_data: dict[str, Any] = {}
 
         try:
-            _check_keyset(
-                data,
-                {
-                    "provider",
-                    "email",
-                    "challenge",
-                    "callback_url",
-                    "redirect_on_failure",
-                },
-            )
-
-            email = data["email"]
-            challenge = data["challenge"]
-            callback_url = data["callback_url"]
-            redirect_on_failure = data["redirect_on_failure"]
-            if not self._is_url_allowed(callback_url):
-                raise errors.InvalidData(
-                    "Callback URL does not match any allowed URLs.",
-                )
-            if not self._is_url_allowed(redirect_on_failure):
-                raise errors.InvalidData(
-                    "Error redirect URL does not match any allowed URLs.",
-                )
+            _check_keyset(data, {"email"})
+            email = cast(str, data["email"])
 
             allowed_redirect_to = self._maybe_make_allowed_url(
                 data.get("redirect_to")
-            )
-
-            allowed_link_url = self._maybe_make_allowed_url(
-                data.get("link_url")
-            )
-            link_url = (
-                allowed_link_url.url
-                if allowed_link_url
-                else f"{self.base_path}/magic-link/authenticate"
             )
 
             magic_link_client = magic_link.Client(
@@ -1295,43 +1485,138 @@ class Router:
             email_factor = await magic_link_client.get_email_factor_by_email(
                 email
             )
+            is_signup = False
             if email_factor is None:
-                logger.error(
-                    f"Cannot send magic link email: no email factor found for "
-                    f"email={email}"
-                )
-                await auth_emails.send_fake_email(self.tenant)
-            else:
-                identity_id = email_factor.identity.id
-                magic_link_token = magic_link_client.make_magic_link_token(
-                    identity_id=identity_id,
-                    callback_url=callback_url,
-                    challenge=challenge,
-                )
-                await self._maybe_send_webhook(
-                    webhook.MagicLinkRequested(
-                        event_id=str(uuid.uuid4()),
-                        timestamp=datetime.datetime.now(datetime.timezone.utc),
-                        identity_id=identity_id,
-                        email_factor_id=email_factor.id,
-                        magic_link_token=magic_link_token,
-                        magic_link_url=link_url,
+                if magic_link_client.provider.auto_signup:
+                    # Auto-signup is enabled, create a new user
+                    is_signup = True
+                    email_factor = await magic_link_client.register(
+                        email=email,
                     )
-                )
-                await magic_link_client.send_magic_link(
-                    email=email,
-                    token=magic_link_token,
-                    link_url=link_url,
-                    redirect_on_failure=redirect_on_failure,
-                )
-                logger.info(
-                    "Sent magic link email: "
-                    f"identity_id={identity_id}, email={email}"
-                )
+                    await self._maybe_send_webhook(
+                        webhook.IdentityCreated(
+                            event_id=str(uuid.uuid4()),
+                            timestamp=datetime.datetime.now(datetime.timezone.utc),
+                            identity_id=email_factor.identity.id,
+                        )
+                    )
+                    await self._maybe_send_webhook(
+                        webhook.EmailFactorCreated(
+                            event_id=str(uuid.uuid4()),
+                            timestamp=datetime.datetime.now(datetime.timezone.utc),
+                            identity_id=email_factor.identity.id,
+                            email_factor_id=email_factor.id,
+                        )
+                    )
+                else:
+                    logger.error(
+                        "Cannot send magic link email: no email factor found "
+                        f"for email={email}"
+                    )
+                    await auth_emails.send_fake_email(self.tenant)
+                    if magic_link_client.provider.verification_method == "Code":
+                        return_data = {
+                            "code": "true",
+                            "email": email,
+                        }
+                    else:
+                        return_data = {
+                            "email_sent": email,
+                        }
+            if email_factor is not None:
+                identity_id = email_factor.identity.id
+                if magic_link_client.provider.verification_method == "Code":
+                    code, otc_id = await otc.create(
+                        self.db,
+                        str(email_factor.id),
+                        datetime.timedelta(minutes=10),
+                    )
+                    await auth_emails.send_one_time_code_email(
+                        db=self.db,
+                        tenant=self.tenant,
+                        to_addr=email,
+                        code=code,
+                        test_mode=self.test_mode,
+                    )
 
-            return_data = {
-                "email_sent": email,
-            }
+                    await self._handle_otc_initiated(
+                        identity_id=str(identity_id),
+                        email_factor_id=str(email_factor.id),
+                        otc_id=str(otc_id),
+                        one_time_code=code,
+                    )
+
+                    logger.info(
+                        f"Sent OTC email: identity_id={identity_id}, "
+                        f"email={email}, otc_id={otc_id}"
+                    )
+
+                    return_data = {
+                        "code": "true",
+                        "email": email,
+                    }
+                    if is_signup:
+                        return_data["identity_id"] = str(identity_id)
+                        return_data["signup"] = "true"
+                else:
+                    _check_keyset(
+                        data,
+                        {"challenge", "callback_url", "redirect_on_failure"},
+                    )
+                    challenge = data["challenge"]
+                    callback_url = data["callback_url"]
+                    if not self._is_url_allowed(callback_url):
+                        raise errors.InvalidData(
+                            "callback_url does not match any allowed URLs.",
+                        )
+                    redirect_on_failure = data["redirect_on_failure"]
+                    if not self._is_url_allowed(redirect_on_failure):
+                        raise errors.InvalidData(
+                            "redirect_on_failure"
+                            " does not match any allowed URLs.",
+                        )
+
+                    allowed_link_url = self._maybe_make_allowed_url(
+                        data.get("link_url")
+                    )
+                    link_url = (
+                        allowed_link_url.url
+                        if allowed_link_url
+                        else f"{self.base_path}/magic-link/authenticate"
+                    )
+                    magic_link_token = magic_link_client.make_magic_link_token(
+                        identity_id=identity_id,
+                        callback_url=callback_url,
+                        challenge=challenge,
+                    )
+                    await self._maybe_send_webhook(
+                        webhook.MagicLinkRequested(
+                            event_id=str(uuid.uuid4()),
+                            timestamp=datetime.datetime.now(
+                                datetime.timezone.utc
+                            ),
+                            identity_id=identity_id,
+                            email_factor_id=email_factor.id,
+                            magic_link_token=magic_link_token,
+                            magic_link_url=link_url,
+                        )
+                    )
+                    await magic_link_client.send_magic_link(
+                        email=email,
+                        token=magic_link_token,
+                        link_url=link_url,
+                        redirect_on_failure=redirect_on_failure,
+                    )
+                    logger.info(
+                        "Sent magic link email: "
+                        f"identity_id={identity_id}, email={email}"
+                    )
+
+                    return_data = {
+                        "email_sent": email,
+                    }
+                    if is_signup:
+                        return_data["signup"] = "true"
 
             if allowed_redirect_to:
                 return self._do_redirect(
@@ -1345,25 +1630,29 @@ class Router:
                 response.content_type = b"application/json"
                 response.body = json.dumps(return_data).encode()
         except Exception as ex:
+            if _accepts_json(request):
+                raise ex
+
             redirect_on_failure = data.get(
                 "redirect_on_failure", data.get("redirect_to")
             )
+            error_message = str(ex)
+            email = email or ""
+            logger.error(
+                f"Error sending magic link email: error={error_message}, "
+                f"email={email}"
+            )
+
             if redirect_on_failure is None:
                 raise ex
-            else:
-                error_message = str(ex)
-                logger.error(
-                    f"Error sending magic link email: error={error_message}, "
-                    f"email={email}"
-                )
-                error_redirect_url = util.join_url_params(
-                    redirect_on_failure,
-                    {
-                        "error": error_message,
-                        "email": email,
-                    },
-                )
-                self._try_redirect(response, error_redirect_url)
+            error_redirect_url = util.join_url_params(
+                redirect_on_failure,
+                {
+                    "error": error_message,
+                    "email": email,
+                },
+            )
+            self._try_redirect(response, error_redirect_url)
 
     async def handle_magic_link_authenticate(
         self,
@@ -1373,49 +1662,149 @@ class Router:
         query = urllib.parse.parse_qs(
             request.url.query.decode("ascii") if request.url.query else ""
         )
-        token_str = _get_search_param(query, "token")
 
-        try:
-            token = jwt.MagicLinkToken.verify(token_str, self.signing_key)
-            await pkce.create(self.db, token.challenge)
-            code = await pkce.link_identity_challenge(
-                self.db, token.subject, token.challenge
-            )
-            local_client = magic_link.Client(
-                db=self.db,
-                tenant=self.tenant,
-                test_mode=self.test_mode,
-                issuer=self.base_path,
-                signing_key=self.signing_key,
-            )
-            await local_client.verify_email(
-                token.subject, datetime.datetime.now(datetime.timezone.utc)
-            )
+        token_str = _maybe_get_search_param(query, "token")
 
-            return self._try_redirect(
-                response,
-                util.join_url_params(token.callback_url, {"code": code}),
-            )
-
-        except Exception as ex:
-            redirect_on_failure = _maybe_get_search_param(
-                query, "redirect_on_failure"
-            )
-            if redirect_on_failure is None:
-                raise ex
-            else:
-                error_message = str(ex)
-                logger.error(
-                    f"Error authenticating magic link: error={error_message}, "
-                    f"token={token}"
+        if token_str:
+            try:
+                token = jwt.MagicLinkToken.verify(token_str, self.signing_key)
+                await pkce.create(self.db, token.challenge)
+                code = await pkce.link_identity_challenge(
+                    self.db, token.subject, token.challenge
                 )
-                redirect_url = util.join_url_params(
-                    redirect_on_failure,
-                    {
-                        "error": error_message,
-                    },
+                local_client = magic_link.Client(
+                    db=self.db,
+                    tenant=self.tenant,
+                    test_mode=self.test_mode,
+                    issuer=self.base_path,
+                    signing_key=self.signing_key,
                 )
-                return self._try_redirect(response, redirect_url)
+                await local_client.verify_email(
+                    token.subject, datetime.datetime.now(datetime.timezone.utc)
+                )
+
+                return self._try_redirect(
+                    response,
+                    util.join_url_params(token.callback_url, {"code": code}),
+                )
+
+            except Exception as ex:
+                redirect_on_failure = _maybe_get_search_param(
+                    query, "redirect_on_failure"
+                )
+                if redirect_on_failure is None:
+                    raise ex
+                else:
+                    error_message = str(ex)
+                    logger.error(
+                        "Error authenticating magic link: "
+                        f"error={error_message}, token={token_str}"
+                    )
+                    redirect_url = util.join_url_params(
+                        redirect_on_failure,
+                        {
+                            "error": error_message,
+                        },
+                    )
+                    return self._try_redirect(response, redirect_url)
+        else:
+            try:
+                data = self._get_data_from_request(request)
+
+                _check_keyset(
+                    data, {"email", "code", "challenge"}
+                )
+
+                email = data["email"]
+                code_str = data["code"]
+                challenge = data["challenge"]
+
+                maybe_callback_url = cast(
+                    Optional[str], data.get("callback_url")
+                )
+
+                if (
+                    maybe_callback_url and
+                    not self._is_url_allowed(maybe_callback_url)
+                ):
+                    raise errors.InvalidData(
+                        "Callback URL does not match any allowed URLs.",
+                    )
+
+                magic_link_client = magic_link.Client(
+                    db=self.db,
+                    tenant=self.tenant,
+                    test_mode=self.test_mode,
+                    issuer=self.base_path,
+                    signing_key=self.signing_key,
+                )
+
+                email_factor = (
+                    await magic_link_client.get_email_factor_by_email(email)
+                )
+                if email_factor is None:
+                    raise errors.NoIdentityFound("Invalid email")
+
+                try:
+                    otc_id = await otc.verify(
+                        self.db, str(email_factor.id), code_str
+                    )
+
+                    await self._handle_otc_verified(
+                        identity_id=str(email_factor.identity.id),
+                        email_factor_id=str(email_factor.id),
+                        otc_id=str(otc_id),
+                    )
+                except Exception as ex:
+                    self._handle_otc_failed(ex)
+                    raise
+
+                await pkce.create(self.db, challenge)
+                auth_code = await pkce.link_identity_challenge(
+                    self.db, email_factor.identity.id, challenge
+                )
+
+                await magic_link_client.verify_email(
+                    email_factor.identity.id,
+                    datetime.datetime.now(datetime.timezone.utc),
+                )
+
+                response_dict = {"code": auth_code}
+
+                if maybe_callback_url:
+                    return self._try_redirect(
+                        response,
+                        util.join_url_params(maybe_callback_url, response_dict),
+                    )
+                else:
+                    response.status = http.HTTPStatus.OK
+                    response.content_type = b"application/json"
+                    response.body = json.dumps(response_dict).encode()
+
+            except Exception as ex:
+                redirect_on_failure = _maybe_get_search_param(
+                    query, "redirect_on_failure"
+                )
+                if redirect_on_failure is None:
+                    response.status = http.HTTPStatus.BAD_REQUEST
+                    response.content_type = b"application/json"
+                    response.body = json.dumps(
+                        {"error": str(ex), "error_code": "verification_failed"}
+                    ).encode()
+                    return
+                else:
+                    error_message = str(ex)
+                    logger.error(
+                        f"Error authenticating OTC: error={error_message}, "
+                        f"email={_maybe_get_search_param(query, 'email')}"
+                    )
+                    redirect_url = util.join_url_params(
+                        redirect_on_failure,
+                        {
+                            "error": error_message,
+                        },
+                    )
+                    return self._try_redirect(response, redirect_url)
 
     async def handle_webauthn_register_options(
         self,
@@ -1429,10 +1818,11 @@ class Router:
         webauthn_client = webauthn.Client(self.db)
 
         try:
-            (user_handle, registration_options) = (
-                await webauthn_client.create_registration_options_for_email(
-                    email=email,
-                )
+            (
+                user_handle,
+                registration_options,
+            ) = await webauthn_client.create_registration_options_for_email(
+                email=email,
             )
         except Exception as e:
             raise errors.WebAuthnRegistrationFailed(
@@ -1563,6 +1953,7 @@ class Router:
             response.body = json.dumps(
                 {
                     "identity_id": identity_id,
+                    "email": email_factor.email,
                     "verification_email_sent_at": now_iso8601,
                 }
             ).encode()
@@ -1574,7 +1965,11 @@ class Router:
             if pkce_code is None:
                 raise errors.PKCECreationFailed
             response.body = json.dumps(
-                {"code": pkce_code, "provider": provider_name}
+                {
+                    "code": pkce_code,
+                    "provider": provider_name,
+                    "email": email_factor.email,
+                }
             ).encode()
             logger.info(
                 f"WebAuthn registration successful: identity_id={identity_id}, "
@@ -1600,10 +1995,11 @@ class Router:
         webauthn_client = webauthn.Client(self.db)
 
         try:
-            (_, registration_options) = (
-                await webauthn_client.create_authentication_options_for_email(
-                    email=email, webauthn_provider=webauthn_provider
-                )
+            (
+                _,
+                registration_options,
+            ) = await webauthn_client.create_authentication_options_for_email(
+                email=email, webauthn_provider=webauthn_provider
             )
         except Exception as e:
             raise errors.WebAuthnAuthenticationFailed(
@@ -1792,29 +2188,46 @@ class Router:
                 if ui_config
                 else b'Auth UI not enabled'
             )
-        else:
-            query = urllib.parse.parse_qs(
-                request.url.query.decode("ascii") if request.url.query else ""
-            )
-            challenge = _get_search_param(
-                query, "challenge", fallback_keys=["code_challenge"]
-            )
-            app_details_config = self._get_app_details_config()
+            return
 
-            response.status = http.HTTPStatus.OK
-            response.content_type = b'text/html'
-            response.body = ui.render_forgot_password_page(
-                base_path=self.base_path,
-                provider_name=password_provider.name,
-                error_message=_maybe_get_search_param(query, 'error'),
-                email=_maybe_get_search_param(query, 'email'),
-                email_sent=_maybe_get_search_param(query, 'email_sent'),
-                challenge=challenge,
-                app_name=app_details_config.app_name,
-                logo_url=app_details_config.logo_url,
-                dark_logo_url=app_details_config.dark_logo_url,
-                brand_color=app_details_config.brand_color,
+        query = urllib.parse.parse_qs(
+            request.url.query.decode("ascii") if request.url.query else ""
+        )
+        challenge = _get_search_param(
+            query, "challenge", fallback_keys=["code_challenge"]
+        )
+        app_details_config = self._get_app_details_config()
+
+        redirect_on_failure = (
+            f"{self.base_path}/ui/forgot-password?challenge={challenge}"
+        )
+        reset_url = f"{self.base_path}/ui/reset-password"
+        if password_provider.verification_method == "Code":
+            redirect_to = (
+                f"{self.base_path}/ui/reset-password?"
+                f"code=true&challenge={challenge}"
             )
+        else:
+            redirect_to = (
+                f"{self.base_path}/ui/forgot-password?challenge={challenge}"
+            )
+
+        response.status = http.HTTPStatus.OK
+        response.content_type = b'text/html'
+        response.body = ui.render_forgot_password_page(
+            redirect_to=redirect_to,
+            redirect_on_failure=redirect_on_failure,
+            reset_url=reset_url,
+            provider_name=password_provider.name,
+            error_message=_maybe_get_search_param(query, 'error'),
+            email=_maybe_get_search_param(query, 'email'),
+            email_sent=_maybe_get_search_param(query, 'email_sent'),
+            challenge=challenge,
+            app_name=app_details_config.app_name,
+            logo_url=app_details_config.logo_url,
+            dark_logo_url=app_details_config.dark_logo_url,
+            brand_color=app_details_config.brand_color,
+        )
 
     async def handle_ui_reset_password(
         self,
@@ -1825,57 +2238,92 @@ class Router:
         password_provider = (
             self._get_password_provider() if ui_config is not None else None
         )
-        challenge: Optional[str] = None
 
         if ui_config is None or password_provider is None:
-            response.status = http.HTTPStatus.NOT_FOUND
-            response.body = (
-                b'Password provider not configured'
+            raise errors.NotFound(
+                'Password provider not configured'
                 if ui_config
-                else b'Auth UI not enabled'
-            )
-        else:
-            query = urllib.parse.parse_qs(
-                request.url.query.decode("ascii") if request.url.query else ""
+                else 'Auth UI not enabled'
             )
 
-            reset_token = _maybe_get_search_param(query, 'reset_token')
+        query = urllib.parse.parse_qs(
+            request.url.query.decode("ascii") if request.url.query else ""
+        )
 
-            if reset_token is not None:
-                try:
-                    token = jwt.ResetToken.verify(reset_token, self.signing_key)
+        challenge = _get_pkce_challenge(
+            response=response,
+            cookies=request.cookies,
+            query_dict=query,
+        )
 
-                    email_password_client = email_password.Client(
-                        db=self.db,
-                    )
+        if challenge is None:
+            raise errors.InvalidData(
+                'Missing "challenge" in reset password request'
+            )
 
-                    is_valid = (
-                        await email_password_client.validate_reset_secret(
-                            token.subject, token.secret
-                        )
-                        is not None
-                    )
-                except Exception:
-                    is_valid = False
-            else:
-                is_valid = False
+        error_message = _maybe_get_search_param(query, "error")
 
+        if password_provider.verification_method == "Code":
+            maybe_email = _maybe_get_search_param(
+                query, "email", fallback_keys=["email_sent"]
+            )
+            if maybe_email is None:
+                raise errors.InvalidData('Missing "email" for reset code flow')
             app_details_config = self._get_app_details_config()
             response.status = http.HTTPStatus.OK
             response.content_type = b'text/html'
             response.body = ui.render_reset_password_page(
                 base_path=self.base_path,
                 provider_name=password_provider.name,
-                is_valid=is_valid,
+                is_valid=True,  # Code flow is always valid to show the form
                 redirect_to=ui_config.redirect_to,
-                reset_token=reset_token,
                 challenge=challenge,
-                error_message=_maybe_get_search_param(query, 'error'),
+                reset_token=None,
+                error_message=error_message,
+                is_code_flow=True,
+                email=maybe_email,
                 app_name=app_details_config.app_name,
                 logo_url=app_details_config.logo_url,
                 dark_logo_url=app_details_config.dark_logo_url,
                 brand_color=app_details_config.brand_color,
             )
+            return
+
+        try:
+            reset_token = _get_search_param(query, 'reset_token')
+            token = jwt.ResetToken.verify(reset_token, self.signing_key)
+
+            email_password_client = email_password.Client(
+                db=self.db,
+            )
+
+            is_valid = (
+                await email_password_client.validate_reset_secret(
+                    token.subject, token.secret
+                )
+                is not None
+            )
+        except Exception:
+            is_valid = False
+
+        app_details_config = self._get_app_details_config()
+        response.status = http.HTTPStatus.OK
+        response.content_type = b'text/html'
+        response.body = ui.render_reset_password_page(
+            base_path=self.base_path,
+            provider_name=password_provider.name,
+            is_valid=is_valid,
+            redirect_to=ui_config.redirect_to,
+            reset_token=reset_token,
+            challenge=challenge,
+            error_message=error_message,
+            is_code_flow=False,
+            email=None,
+            app_name=app_details_config.app_name,
+            logo_url=app_details_config.logo_url,
+            dark_logo_url=app_details_config.dark_logo_url,
+            brand_color=app_details_config.brand_color,
+        )
 
     async def handle_ui_verify(
         self,
@@ -1883,21 +2331,82 @@ class Router:
         response: protocol.HttpResponse,
     ) -> None:
         error_messages: list[str] = []
+        is_valid = True
+        is_code_method: bool = False
+
         ui_config = self._get_ui_config()
         if ui_config is None:
             response.status = http.HTTPStatus.NOT_FOUND
             response.body = b'Auth UI not enabled'
             return
 
-        is_valid = True
-        maybe_pkce_code: str | None = None
-        redirect_to = ui_config.redirect_to_on_signup or ui_config.redirect_to
-
         query = urllib.parse.parse_qs(
             request.url.query.decode("ascii") if request.url.query else ""
         )
 
         maybe_provider_name = _maybe_get_search_param(query, "provider")
+        provider: (
+            config.WebAuthnProvider | config.EmailPasswordProviderConfig | None
+        ) = None
+
+        # Decide flow by provider config
+        match maybe_provider_name:
+            case "builtin::local_emailpassword":
+                provider = self._get_password_provider()
+                if provider is None:
+                    raise errors.MissingConfiguration(
+                        "ext::auth::AuthConfig::providers",
+                        "EmailPassword provider is not configured",
+                    )
+                is_code_method = provider.verification_method == "Code"
+            case "builtin::local_webauthn":
+                provider = self._get_webauthn_provider()
+                if provider is None:
+                    raise errors.MissingConfiguration(
+                        "ext::auth::AuthConfig::providers",
+                        "WebAuthn provider is not configured",
+                    )
+                is_code_method = provider.verification_method == "Code"
+            case _:
+                raise errors.InvalidData(
+                    f"Unknown provider: {maybe_provider_name}"
+                )
+
+        if is_code_method:
+            email = _get_search_param(query, "email")
+            error_message = _maybe_get_search_param(query, "error")
+            challenge = _get_pkce_challenge(
+                cookies=request.cookies,
+                response=response,
+                query_dict=query,
+            )
+            if challenge is None:
+                raise errors.InvalidData(
+                    'Missing "challenge" in email verification request'
+                )
+
+            app_details_config = self._get_app_details_config()
+            response.status = http.HTTPStatus.OK
+            response.content_type = b'text/html'
+            response.body = ui.render_email_verification_page_code_flow(
+                challenge=challenge,
+                email=email,
+                provider=maybe_provider_name,
+                base_path=self.base_path,
+                callback_url=(
+                    ui_config.redirect_to_on_signup or ui_config.redirect_to
+                ),
+                error_message=error_message,
+                app_name=app_details_config.app_name,
+                logo_url=app_details_config.logo_url,
+                dark_logo_url=app_details_config.dark_logo_url,
+                brand_color=app_details_config.brand_color,
+            )
+            return
+
+        maybe_pkce_code: str | None = None
+        redirect_to = ui_config.redirect_to_on_signup or ui_config.redirect_to
+
         maybe_verification_token = _maybe_get_search_param(
             query, "verification_token"
         )
@@ -1974,7 +2483,7 @@ class Router:
         app_details_config = self._get_app_details_config()
         response.status = http.HTTPStatus.OK
         response.content_type = b'text/html'
-        response.body = ui.render_email_verification_page(
+        response.body = ui.render_email_verification_page_link_flow(
             verification_token=maybe_verification_token,
             is_valid=is_valid,
             error_messages=error_messages,
@@ -2057,19 +2566,72 @@ class Router:
         request: protocol.HttpRequest,
         response: protocol.HttpResponse,
     ) -> None:
-        """
-        Success page for when a magic link is sent
-        """
-
+        ui_config = self._get_ui_config()
+        if ui_config is None:
+            response.status = http.HTTPStatus.NOT_FOUND
+            response.body = b'Auth UI not enabled'
+            return
         app_details = self._get_app_details_config()
+
+        query = urllib.parse.parse_qs(
+            request.url.query.decode("ascii") if request.url.query else ""
+        )
+
+        # Use magic link provider to decide display mode
+        magic_link_provider = None
+        providers = util.maybe_get_config(
+            self.db,
+            "ext::auth::AuthConfig::providers",
+            frozenset,
+        )
+        if providers is not None:
+            for p in providers:
+                if getattr(p, 'name', None) == 'builtin::local_magic_link':
+                    magic_link_provider = p
+                    break
+
+        is_code_method = (
+            getattr(magic_link_provider, 'verification_method', 'Link')
+            == 'Code'
+        )
+
+        if is_code_method:
+            is_signup = _maybe_get_search_param(query, "signup") == "true"
+            email = _get_search_param(query, "email")
+            challenge = _get_pkce_challenge(
+                cookies=request.cookies, response=response, query_dict=query
+            )
+            if challenge is None:
+                response.status = http.HTTPStatus.BAD_REQUEST
+                response.body = b'Missing challenge from cookie or query params'
+                return
+
+            error_message = _maybe_get_search_param(query, "error")
+            callback_url = ui_config.redirect_to
+            if is_signup and ui_config.redirect_to_on_signup:
+                callback_url = ui_config.redirect_to_on_signup
+
+            content = ui.render_magic_link_sent_page_code_flow(
+                app_name=app_details.app_name,
+                logo_url=app_details.logo_url,
+                dark_logo_url=app_details.dark_logo_url,
+                brand_color=app_details.brand_color,
+                email=email,
+                challenge=challenge,
+                callback_url=callback_url,
+                error_message=error_message,
+            )
+        else:
+            content = ui.render_magic_link_sent_page_link_flow(
+                app_name=app_details.app_name,
+                logo_url=app_details.logo_url,
+                dark_logo_url=app_details.dark_logo_url,
+                brand_color=app_details.brand_color,
+            )
+
         response.status = http.HTTPStatus.OK
         response.content_type = b"text/html"
-        response.body = ui.render_magic_link_sent_page(
-            app_name=app_details.app_name,
-            logo_url=app_details.logo_url,
-            dark_logo_url=app_details.dark_logo_url,
-            brand_color=app_details.brand_color,
-        )
+        response.body = content
 
     def _get_webhook_config(self) -> list[config.WebhookConfig]:
         raw_webhook_configs = util.get_config(
@@ -2100,6 +2662,66 @@ class Router:
                     f"Sent webhook request {request_id} "
                     f"to {webhook_config.url} for event {event!r}"
                 )
+
+    async def _handle_otc_initiated(
+        self,
+        identity_id: str,
+        email_factor_id: str,
+        otc_id: str,
+        one_time_code: str,
+    ) -> None:
+        metrics.otc_initiated_total.inc(1.0, self.tenant.get_instance_name())
+
+        await self._maybe_send_webhook(
+            webhook.OneTimeCodeRequested(
+                event_id=str(uuid.uuid4()),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
+                identity_id=identity_id,
+                email_factor_id=email_factor_id,
+                otc_id=str(otc_id),
+                one_time_code=one_time_code,
+            )
+        )
+
+        logger.info(
+            f"OTC initiated: identity_id={identity_id}, otc_id={otc_id}"
+        )
+
+    async def _handle_otc_verified(
+        self, identity_id: str, email_factor_id: str, otc_id: str
+    ) -> None:
+        metrics.otc_verified_total.inc(1.0, self.tenant.get_instance_name())
+
+        await self._maybe_send_webhook(
+            webhook.OneTimeCodeVerified(
+                event_id=str(uuid.uuid4()),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
+                identity_id=identity_id,
+                email_factor_id=email_factor_id,
+                otc_id=str(otc_id),
+            )
+        )
+
+        logger.info(f"OTC verified: identity_id={identity_id}, otc_id={otc_id}")
+
+    def _handle_otc_failed(self, ex: Exception) -> None:
+        match ex:
+            case errors.OTCRateLimited():
+                failure_reason = "rate_limited"
+            case errors.OTCInvalidCode():
+                failure_reason = "invalid_code"
+            case errors.OTCExpired():
+                failure_reason = "expired"
+            case errors.OTCVerificationFailed():
+                failure_reason = "verification_failed"
+            case _:
+                failure_reason = "unknown"
+
+        metrics.otc_failed_total.inc(
+            1.0, self.tenant.get_instance_name(), failure_reason
+        )
+
+        logger.info(f"OTC verification failed: reason={failure_reason}")
 
     def _get_callback_url(self) -> str:
         return f"{self.base_path}/callback"
@@ -2140,7 +2762,9 @@ class Router:
     def _get_app_details_config(self) -> config.AppDetailsConfig:
         return util.get_app_details_config(self.db)
 
-    def _get_password_provider(self) -> Optional[config.ProviderConfig]:
+    def _get_password_provider(
+        self,
+    ) -> Optional[config.EmailPasswordProviderConfig]:
         providers = cast(
             list[config.ProviderConfig],
             util.get_config(
@@ -2150,7 +2774,9 @@ class Router:
             ),
         )
         password_providers = [
-            p for p in providers if (p.name == 'builtin::local_emailpassword')
+            cast(config.EmailPasswordProviderConfig, p)
+            for p in providers
+            if (p.name == 'builtin::local_emailpassword')
         ]
 
         return password_providers[0] if len(password_providers) == 1 else None
@@ -2175,6 +2801,7 @@ class Router:
                 name=provider.name,
                 relying_party_origin=provider.relying_party_origin,
                 require_verification=provider.require_verification,
+                verification_method=provider.verification_method,
             )
         else:
             return None
@@ -2185,6 +2812,8 @@ class Router:
         verify_url: str,
         maybe_challenge: str | None,
         maybe_redirect_to: str | None,
+        *,
+        maybe_provider: str | None = None,
     ) -> str:
         if not self._is_url_allowed(verify_url):
             raise errors.InvalidData(
@@ -2206,6 +2835,42 @@ class Router:
         provider: str,
         to_addr: str,
     ) -> None:
+        client: email_password.Client | webauthn.Client | None = None
+        match provider:
+            case "builtin::local_emailpassword":
+                client = email_password.Client(db=self.db)
+            case "builtin::local_webauthn":
+                client = webauthn.Client(self.db)
+        if client is not None:
+            if client.config.verification_method == "Code":
+                email_factor = await client.get_email_factor_by_email(to_addr)
+                if email_factor is not None:
+                    code, otc_id = await otc.create(
+                        self.db,
+                        str(email_factor.id),
+                        datetime.timedelta(minutes=10),
+                    )
+                    await auth_emails.send_one_time_code_email(
+                        db=self.db,
+                        tenant=self.tenant,
+                        to_addr=to_addr,
+                        code=code,
+                        test_mode=self.test_mode,
+                    )
+
+                    await self._handle_otc_initiated(
+                        identity_id=email_factor.identity.id,
+                        email_factor_id=str(email_factor.id),
+                        otc_id=str(otc_id),
+                        one_time_code=code,
+                    )
+
+                    logger.info(
+                        "Sent OTC verification email: "
+                        f"email={to_addr}, otc_id={otc_id}"
+                    )
+                    return
+
         await auth_emails.send_verification_email(
             db=self.db,
             tenant=self.tenant,
@@ -2333,9 +2998,17 @@ def _fail_with_error(
 
 
 def _maybe_get_search_param(
-    query_dict: dict[str, list[str]], key: str
+    query_dict: dict[str, list[str]],
+    key: str,
+    *,
+    fallback_keys: Optional[list[str]] = None,
 ) -> str | None:
     params = query_dict.get(key)
+    if params is None and fallback_keys is not None:
+        for fallback_key in fallback_keys:
+            params = query_dict.get(fallback_key)
+            if params is not None:
+                break
     return params[0] if params else None
 
 
@@ -2345,12 +3018,7 @@ def _get_search_param(
     *,
     fallback_keys: Optional[list[str]] = None,
 ) -> str:
-    val = _maybe_get_search_param(query_dict, key)
-    if val is None and fallback_keys is not None:
-        for fallback_key in fallback_keys:
-            val = _maybe_get_search_param(query_dict, fallback_key)
-            if val is not None:
-                break
+    val = _maybe_get_search_param(query_dict, key, fallback_keys=fallback_keys)
     if val is None:
         raise errors.InvalidData(f"Missing query parameter: {key}")
     return val
@@ -2372,14 +3040,28 @@ def _get_pkce_challenge(
     query_dict: dict[str, list[str]],
 ) -> str | None:
     cookie_name = 'edgedb-pkce-challenge'
-    challenge: str | None = _maybe_get_search_param(
-        query_dict, 'challenge'
-    ) or _maybe_get_search_param(query_dict, "code_challenge")
+    challenge: str | None = _maybe_get_search_param(query_dict, 'challenge')
+    if challenge is not None:
+        logger.info(
+            f"PKCE challenge found in query param 'challenge': {challenge!r}"
+        )
+    else:
+        challenge = _maybe_get_search_param(query_dict, "code_challenge")
+        if challenge is not None:
+            logger.info(
+                "PKCE challenge found in query param 'code_challenge':"
+                f" {challenge!r}"
+            )
     if challenge is not None:
         _set_cookie(response, cookie_name, challenge)
     else:
         if 'edgedb-pkce-challenge' in cookies:
             challenge = cookies['edgedb-pkce-challenge'].value
+            logger.info(f"PKCE challenge found in cookie: {challenge!r}")
+        else:
+            logger.info("No PKCE challenge found in query params or cookies.")
+            logger.info(f"Query params: {query_dict}")
+            logger.info(f"Cookies: {cookies}")
     return challenge
 
 
@@ -2410,3 +3092,7 @@ def _check_keyset(candidate: dict[str, Any], keyset: set[str]) -> None:
         raise errors.InvalidData(
             f"Missing required fields: {', '.join(missing_fields)}"
         )
+
+
+def _accepts_json(request: protocol.HttpRequest) -> bool:
+    return request.accept == b"application/json"

@@ -847,11 +847,16 @@ class SQLSourceGenerator(codegen.SourceGenerator):
             self.write('DISTINCT ')
         self.visit_list(node.args, newlines=False)
 
-        if node.agg_order:
+        if node.agg_order and not node.agg_within_group:
             self.write(' ORDER BY ')
             self.visit_list(node.agg_order, newlines=False)
 
         self.write(')')
+
+        if node.agg_order and node.agg_within_group:
+            self.write(' WITHIN GROUP (ORDER BY ')
+            self.visit_list(node.agg_order, newlines=False)
+            self.write(')')
 
         if node.agg_filter:
             self.write(' FILTER (WHERE ')
@@ -1019,7 +1024,7 @@ class SQLSourceGenerator(codegen.SourceGenerator):
 
     def visit_CollateClause(self, node: pgast.CollateClause) -> None:
         self.visit(node.arg)
-        self.write(f' COLLATE {node.collname}')
+        self.write(f' COLLATE {common.qname(*node.collname)}')
 
     def visit_CoalesceExpr(self, node: pgast.CoalesceExpr) -> None:
         self.write('COALESCE(')

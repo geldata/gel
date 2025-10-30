@@ -140,14 +140,14 @@ class BaseServer:
     def __init__(
         self,
         *,
-        runstate_dir,
-        internal_runstate_dir,
-        compiler_pool_size,
+        runstate_dir: pathlib.Path,
+        internal_runstate_dir: pathlib.Path,
+        compiler_pool_size: int,
         compiler_worker_branch_limit,
         compiler_pool_mode: srvargs.CompilerPoolMode,
-        compiler_pool_addr,
-        nethosts,
-        netport,
+        compiler_pool_addr: tuple[str, int],
+        nethosts: Sequence[str],
+        netport: int,
         compiler_worker_max_rss: Optional[int] = None,
         listen_sockets: tuple[socket.socket, ...] = (),
         testmode: bool = False,
@@ -635,9 +635,8 @@ class BaseServer:
     def _parse_global_schema(
         self, json_data: Any
     ) -> s_schema.Schema:
-        return s_refl.parse_into(
+        return s_refl.parse_schema(
             base_schema=self._std_schema,
-            schema=s_schema.EMPTY_SCHEMA,
             data=json_data,
             schema_class_layout=self._schema_class_layout,
         )
@@ -665,9 +664,8 @@ class BaseServer:
             global_schema,
         )
 
-        return s_refl.parse_into(
+        return s_refl.parse_schema(
             base_schema=base_schema,
-            schema=s_schema.EMPTY_SCHEMA,
             data=json_data,
             schema_class_layout=self._schema_class_layout,
         )
@@ -1525,7 +1523,7 @@ class Server(BaseServer):
             await self._maybe_apply_patches(
                 defines.EDGEDB_SYSTEM_DB, syscon, patches, sys=True)
 
-    def _load_schema(self, result, version_key) -> s_schema.FlatSchema:
+    def _load_schema(self, result, version_key) -> s_schema.Schema:
         res = pickle.loads(result[2:])
         if version_key != pg_patches.get_version_key(len(pg_patches.PATCHES)):
             res = s_schema.upgrade_schema(res)

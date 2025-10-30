@@ -24,14 +24,7 @@ import types
 import uuid
 import builtins
 from typing import (
-    Any,
-    Optional,
-    TypeVar,
-    Iterable,
-    Mapping,
-    Sequence,
-    cast,
-    TYPE_CHECKING,
+    Any, Optional, TypeVar, Iterable, Mapping, Sequence, cast, TYPE_CHECKING,
 )
 
 from edb import errors
@@ -40,6 +33,7 @@ from edb.common import ast
 from edb.common import parsing
 from edb.common import struct
 from edb.common import verutils
+from edb.common import lru
 
 from edb.edgeql import ast as qlast
 from edb.edgeql import compiler as qlcompiler
@@ -48,24 +42,22 @@ from edb.edgeql import parser as qlparser
 from edb.edgeql import qltypes
 from edb.common import uuidgen
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import delta as sd
 from . import expr as s_expr
 from . import globals as s_globals
 from . import name as sn
 from . import objects as so
+from . import permissions as s_permissions
 from . import referencing
 from . import types as s_types
 from . import utils
+from . import schema as s_schema
 
 
 if TYPE_CHECKING:
     from edb.edgeql.compiler import context as qlcontext
     from edb.ir import ast as irast
-    from . import schema as s_schema
-
-    ParameterLike_T = TypeVar("ParameterLike_T", bound="ParameterLike")
 
 
 FUNC_NAMESPACE = uuidgen.UUID('80cd3b19-bb51-4659-952d-6bb03e3347d7')
@@ -104,7 +96,7 @@ def param_as_str(
     return ''.join(ret)
 
 
-def canonical_param_sort(
+def canonical_param_sort[ParameterLike_T: "ParameterLike"](
     schema: s_schema.Schema,
     params: Iterable[ParameterLike_T],
 ) -> tuple[ParameterLike_T, ...]:
@@ -148,7 +140,7 @@ def param_is_inherited(
     return qualname != param_name.name
 
 
-class ParameterLike(s_abc.Parameter):
+class ParameterLike:
 
     def get_parameter_name(self, schema: s_schema.Schema) -> str:
         raise NotImplementedError
@@ -205,7 +197,7 @@ class ParameterDesc(ParameterLike):
         schema: s_schema.Schema,
         modaliases: Mapping[Optional[str], str],
         num: int,
-        astnode: qlast.FuncParam,
+        astnode: qlast.FuncParamDecl,
     ) -> ParameterDesc:
 
         paramd = None
@@ -339,7 +331,7 @@ def make_func_param(
     typemod: qltypes.TypeModifier = qltypes.TypeModifier.SingletonType,
     kind: qltypes.ParameterKind,
     default: Optional[qlast.Expr] = None,
-) -> qlast.FuncParam:
+) -> qlast.FuncParamDecl:
     # If the param is variadic, strip the array from the type in the schema
     if kind is ft.ParameterKind.VariadicParam:
         assert (
@@ -350,7 +342,7 @@ def make_func_param(
         )
         type = type.subtypes[0]
 
-    return qlast.FuncParam(
+    return qlast.FuncParamDecl(
         name=name,
         type=type,
         typemod=typemod,
@@ -448,11 +440,11 @@ class Parameter(
         return param_as_str(schema, self)
 
     @classmethod
-    def compare_field_value(
+    def compare_field_value[T](
         cls,
-        field: so.Field[builtins.type[so.T]],
-        our_value: so.T,
-        their_value: so.T,
+        field: so.Field[builtins.type[T]],
+        our_value: T,
+        their_value: T,
         *,
         our_schema: s_schema.Schema,
         their_schema: s_schema.Schema,
@@ -477,7 +469,7 @@ class Parameter(
             context=context,
         )
 
-    def get_ast(self, schema: s_schema.Schema) -> qlast.FuncParam:
+    def get_ast(self, schema: s_schema.Schema) -> qlast.FuncParamDecl:
         default = self.get_default(schema)
         kind = self.get_kind(schema)
 
@@ -736,7 +728,7 @@ class FuncParameterList(so.ObjectList[Parameter], ParameterLikeList):
     ) -> tuple[Parameter, ...]:
         return canonical_param_sort(schema, self.objects(schema))
 
-    def get_ast(self, schema: s_schema.Schema) -> list[qlast.FuncParam]:
+    def get_ast(self, schema: s_schema.Schema) -> list[qlast.FuncParamDecl]:
         result = []
         for param in self.objects(schema):
             result.append(param.get_ast(schema))
@@ -990,7 +982,7 @@ class ParametrizedCommand(sd.ObjectCommand[so.Object_T]):
         cls,
         schema: s_schema.Schema,
         modaliases: Mapping[Optional[str], str],
-        params: list[qlast.FuncParam],
+        params: list[qlast.FuncParamDecl],
         *,
         param_offset: int=0,
     ) -> list[ParameterDesc]:
@@ -1182,8 +1174,8 @@ class CreateCallableObject(
         schema: s_schema.Schema,
         context: sd.CommandContext,
         node: qlast.DDLOperation,
-    ) -> list[tuple[int, qlast.FuncParam]]:
-        params: list[tuple[int, qlast.FuncParam]] = []
+    ) -> list[tuple[int, qlast.FuncParamDecl]]:
+        params: list[tuple[int, qlast.FuncParamDecl]] = []
         for op in self.get_subcommands(type=ParameterCommand):
             props = op.get_resolved_attributes(schema, context)
             if self._skip_param(props):
@@ -1247,15 +1239,32 @@ class DeleteCallableObject(
 class Function(
     CallableObject,
     VolatilitySubject,
-    s_abc.Function,
     qlkind=ft.SchemaObjectClass.FUNCTION,
     data_safe=True,
 ):
 
     used_globals = so.SchemaField(
         so.ObjectSet[s_globals.Global],
-        coerce=True, default=so.DEFAULT_CONSTRUCTOR,
-        inheritable=False)
+        coerce=True,
+        default=so.DEFAULT_CONSTRUCTOR,
+        inheritable=False
+    )
+
+    used_permissions = so.SchemaField(
+        so.ObjectSet[s_permissions.Permission],
+        coerce=True,
+        default=so.DEFAULT_CONSTRUCTOR,
+        inheritable=False,
+    )
+
+    required_permissions = so.SchemaField(
+        so.ObjectSet[s_permissions.Permission],
+        coerce=True,
+        default=so.DEFAULT_CONSTRUCTOR,
+        inheritable=False,
+        allow_ddl_set=True,
+        compcoef=0.8,
+    )
 
     # A backend_name that is shared between all overloads of the same
     # function, to make them independent from the actual name.
@@ -1399,7 +1408,7 @@ class Function(
         diff_param = -1
         overloads = []
         sn = self.get_shortname(schema)
-        for f in schema.get_functions(sn):
+        for f in lookup_functions(sn, schema=schema):
             if f == self:
                 continue
 
@@ -1713,9 +1722,19 @@ class FunctionCommand(
                     span=body.parse().span,
                 )
 
-        globs = {schema.get(glob.global_name, type=s_globals.Global)
-                 for glob in ir.globals}
+        globs = {
+            schema.get(glob.global_name, type=s_globals.Global)
+            for glob in ir.globals
+            if not glob.is_permission
+        }
         self.set_attribute_value('used_globals', globs)
+
+        permissions = {
+            schema.get(glob.global_name, type=s_permissions.Permission)
+            for glob in ir.globals
+            if glob.is_permission
+        }
+        self.set_attribute_value('used_permissions', permissions)
 
         return expr
 
@@ -1763,8 +1782,9 @@ class CreateFunction(CreateCallableObject[Function], FunctionCommand):
             if backend_name := self.get_prespecified_id(
                     context, id_field='backend_name'):
                 pass
-            elif others := schema.get_functions(
-                    sn.QualName(fullname.module, shortname.name), ()):
+            elif others := lookup_functions(
+                sn.QualName(fullname.module, shortname.name), (), schema=schema
+            ):
                 backend_name = others[0].get_backend_name(schema)
             elif context.stdmode:
                 backend_name = uuidgen.uuid5(FUNC_NAMESPACE, str(fullname))
@@ -1859,7 +1879,7 @@ class CreateFunction(CreateCallableObject[Function], FunctionCommand):
                 f'generic parameters',
                 span=self.span)
 
-        overloaded_funcs = schema.get_functions(shortname, ())
+        overloaded_funcs = lookup_functions(shortname, (), schema=schema)
         has_from_function = from_function
 
         for func in overloaded_funcs:
@@ -2147,13 +2167,13 @@ class RenameFunction(RenameCallableObject[Function], FunctionCommand):
         if cur_name == new_name:
             return
 
-        existing = schema.get_functions(cur_name)
+        existing = lookup_functions(cur_name, schema=schema)
         if len(existing) > 1:
             raise errors.SchemaError(
                 'renaming an overloaded function is not allowed',
                 span=self.span)
 
-        target = schema.get_functions(new_name, ())
+        target = lookup_functions(new_name, (), schema=schema)
         if target:
             raise errors.SchemaError(
                 f"can not rename function to '{new_name!s}' because "
@@ -2178,8 +2198,9 @@ class AlterFunction(AlterCallableObject[Function], FunctionCommand):
             return schema
 
         if self.has_attribute_value("fallback"):
-            overloaded_funcs = schema.get_functions(
-                self.scls.get_shortname(schema), ())
+            overloaded_funcs = schema._get_by_shortname(
+                Function, self.scls.get_shortname(schema)
+            ) or ()
 
             if len([func for func in overloaded_funcs
                     if func.get_fallback(schema)]) > 1:
@@ -2363,7 +2384,7 @@ def get_params_symtable(
     anchors: dict[str, qlast.Expr] = {}
 
     defaults_mask = qlast.TypeCast(
-        expr=qlast.Parameter(name='__defaults_mask__'),
+        expr=qlast.FunctionParameter(name='__defaults_mask__'),
         type=qlast.TypeName(
             maintype=qlast.ObjectRef(
                 module='std',
@@ -2378,7 +2399,7 @@ def get_params_symtable(
             p.get_typemod(schema) is not ft.TypeModifier.SingletonType
         )
         anchors[p_shortname] = qlast.TypeCast(
-            expr=qlast.Parameter(name=p_shortname),
+            expr=qlast.FunctionParameter(name=p_shortname),
             cardinality_mod=(
                 qlast.CardinalityModifier.Optional if p_is_optional else None
             ),
@@ -2648,6 +2669,42 @@ def get_compiler_options(
             if inlining_context is not None else
             params
         ),
+        json_parameters=(
+            inlining_context.env.options.json_parameters
+            if inlining_context is not None else
+            False
+        ),
         apply_query_rewrites=not context.stdmode,
         track_schema_ref_exprs=track_schema_ref_exprs,
     )
+
+
+def lookup_functions(
+    name: str | sn.Name,
+    default: tuple[Function, ...] | so.NoDefaultT = so.NoDefault,
+    *,
+    module_aliases: Optional[Mapping[Optional[str], str]] = None,
+    schema: s_schema.Schema,
+) -> tuple[Function, ...]:
+    funcs = s_schema.lookup(
+        schema,
+        name,
+        getter=_get_functions,
+        module_aliases=module_aliases,
+        default=default,
+    )
+
+    if funcs is not so.NoDefault:
+        return funcs
+    else:
+        return s_schema.Schema.raise_bad_reference(
+            name=name, module_aliases=module_aliases, type=Function,
+        )
+
+
+@lru.per_job_lru_cache()
+def _get_functions(
+    schema: s_schema.Schema,
+    name: sn.Name,
+) -> tuple[Function, ...] | None:
+    return schema._get_by_shortname(Function, name)

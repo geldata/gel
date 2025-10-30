@@ -67,6 +67,9 @@ class Setting:
     secret: bool = False
     protected: bool = False
 
+    session_restricted: bool = False
+    session_permission: Optional[str] = None
+
     def __post_init__(self) -> None:
         if (
             self.type not in SETTING_TYPES
@@ -320,6 +323,11 @@ def _load_spec_from_type(
         if not is_root:
             pn = f'{cfg_name}::{pn}'
 
+        session_cfg_permissions = attributes.get(
+            sn.QualName('cfg', 'session_cfg_permissions'), None
+        )
+        session_restricted = session_cfg_permissions != '*'
+
         setting = Setting(
             pn,
             type=pytype,
@@ -343,6 +351,11 @@ def _load_spec_from_type(
             required=required,
             secret=p.get_secret(schema),
             protected=p.get_protected(schema),
+
+            session_restricted=session_restricted,
+            session_permission=(
+                session_cfg_permissions if session_restricted else None
+            ),
         )
 
         settings.append(setting)

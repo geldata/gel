@@ -127,6 +127,7 @@ The ``cli.toml`` has the following structure. All fields are optional:
     gel_connopts
     network
     gel
+    gel_init
     gel_project/index
     gel_ui
     gel_watch

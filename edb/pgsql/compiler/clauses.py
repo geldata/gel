@@ -190,6 +190,10 @@ def compile_iterator_expr(
 
     assert isinstance(iterator_expr.expr, (irast.GroupStmt, irast.SelectStmt))
 
+    ctx.env.binding_dml[iterator_expr.path_id] = irutils.get_dml_sources(
+        iterator_expr, ctx.env.binding_dml
+    )
+
     with ctx.new() as subctx:
         subctx.expr_exposed = False
         subctx.rel = query
@@ -543,6 +547,12 @@ def fini_toplevel(
                     name=pg_types.pg_type_from_ir_typeref(param.ir_type)
                 )
             )))
+            if isinstance(param, irast.Global) and param.has_present_arg:
+                targets.append(pgast.ResTarget(val=pgast.TypeCast(
+                    arg=pgast.ParamRef(number=pgparam.index + 1),
+                    type_name=pgast.TypeName(name=('bool',)),
+                )))
+
         if targets:
             stmt.append_cte(
                 pgast.CommonTableExpr(

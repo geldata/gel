@@ -187,14 +187,14 @@ Both ``execute`` and the ``query*`` methods support scripts (queries containing 
   });
   result; // { id: string }[]: the result of the `insert Person` statement
 
-For more fine grained control of atomic exectution of multiple statements, use the ``transaction()`` API.
+For more fine grained control of atomic execution of multiple statements, use the ``transaction()`` API.
 
 .. _gel-js-api-transaction:
 
 Transactions
 ------------
 
-For more fine grained control of atomic exectution of multiple statements, use the ``transaction()`` API.
+For more fine grained control of atomic execution of multiple statements, use the ``transaction()`` API.
 
 .. code-block:: typescript
 
@@ -212,6 +212,8 @@ The ``transaction()`` API guarantees that:
 3. If any other, non-retryable error occurs, the transaction is rolled back and the ``transaction()`` block throws.
 
 The *transaction* object exposes ``query()``, ``execute()``, ``querySQL()``, ``executeSQL()``, and other ``query*()`` methods that *clients* expose, with the only difference that queries will run within the current transaction and can be retried automatically.
+
+Default isolation level is serializable. You can change it via ``Client.withTransactionOptions``.
 
 .. warning::
 
@@ -628,6 +630,9 @@ Client Reference
               );
             });
 
+        By default, transactions will be executed in the strictest, serializable isolation level.
+        To change the isolation level, use the ``Client.withTransactionOptions``.
+
     .. js:method:: ensureConnected(): Promise<Client>
 
         If the client does not yet have any open connections in its pool, attempts to open a connection, else returns immediately.
@@ -740,6 +745,40 @@ Client Reference
 
             // This transaction will not retry
             await nonRetryingClient.transaction(async (tx) => {
+              // ...
+            });
+
+    .. js:method:: withTransactionOptions(opts: {
+          isolation?: IsolationLevel, \
+          readonly?: boolean, \
+          deferrable?: boolean, \
+        }): Client
+
+        Returns a clone of the ``Client`` instance with the specified transaction options.
+
+        Available isolation levels are ``Serializable``, ``RepeatableRead``, and ``PreferRepeatableRead``. ``PreferRepeatableRead`` uses repeatable read isolation level if server analysis concludes that it is supported for a given query. Otherwise, uses serializable isolation level.
+
+        When readonly is set, the transaction is now allowed to execute ``insert``, ``update``, or ``delete`` statements.
+
+        When deferrable is set, and isolation is serializable and readonly is set, the transaction only block when first acquiring its snapshot, after which it is able to run without the normal overhead of a serializable transaction and without any risk of contributing to or being canceled by a serialization failure. This mode is well suited for long-running reports or backups.
+
+        For more information, see :ref:`the transaction options reference <ref_eql_statements_start_tx>`.
+
+        :arg opts: An object mapping transaction options to values.
+
+        :returns: ``Client``
+
+        Example:
+
+        .. code-block:: javascript
+
+            const readonlyClient = client.withTransactionOptions({
+              isolation: IsolationLevel.PreferRepeatableRead,
+              readonly: true,
+            });
+
+            // This transaction is less likely to raise a serialization error
+            await readonlyClient.transaction(async (tx) => {
               // ...
             });
 

@@ -22,7 +22,8 @@ eventsource-stream = "0.2.3"
 http-cache-semantics = { version = "2", features = [] }
 http = "1"
 http-body-util = "0.1.2"
-lru = "0.13"
+lru = "0.16"
+bytes = "1"
 
 # We want to use rustls to avoid setenv issues w/ OpenSSL and the system certs. As long
 # as we don't call `openssl_probe::*init*env*()` functions (functions that call setenv
@@ -37,10 +38,10 @@ lru = "0.13"
 # - stream: to support streaming responses
 # - rustls-tls-native-roots: to use the native root certificates (rather than WebPKI)
 reqwest = { version = "0.12", default-features = false, features = ["http2", "charset", "gzip", "deflate", "brotli", "stream", "rustls-tls-native-roots"] }
-futures = "0"
+futures = "0.3"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
-rstest = "0.23"
+rstest = "0.26"
 
 [lib]

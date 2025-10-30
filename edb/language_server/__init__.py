@@ -17,15 +17,11 @@
 #
 
 import dataclasses
-from typing import Generic, Optional, TypeVar, Any
-
-
-T = TypeVar('T', covariant=True)
-E = TypeVar('E', covariant=True)
+from typing import Optional, Any
 
 
 @dataclasses.dataclass(kw_only=True, slots=True, frozen=True)
-class Result(Generic[T, E]):
+class Result[T, E]:
     ok: Optional[T] = None
     err: Optional[E] = None
 

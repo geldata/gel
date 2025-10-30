@@ -27,7 +27,6 @@ from edb.tools import test
 class TestEdgeQLGroup(tb.QueryTestCase):
     '''These tests are focused on using the internal GROUP statement.'''
 
-    NO_FACTOR = False
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 
@@ -4044,17 +4043,7 @@ class TestEdgeQLGroup(tb.QueryTestCase):
             [{"minCost": 1}, {"minCost": 1}, {"minCost": 1}, {"minCost": 2}],
         )
 
-    @test.xerror("""
-        Issue #6481
-
-        assert stype.is_view(ctx.env.schema) when in _inline_type_computable
-    """)
     async def test_edgeql_group_issue_6481(self):
-        # NO_FACTOR makes it pass but we don't want it to unexpected
-        # pass since it still fails on other modes
-        if self.NO_FACTOR:
-            raise RuntimeError('sigh')
-
         await self.assert_query_result(
             r'''
             select (
@@ -4168,12 +4157,3 @@ class TestEdgeQLGroup(tb.QueryTestCase):
                 }
             ])
         )
-
-
-class TestEdgeQLGroupNoFactor(TestEdgeQLGroup):
-    NO_FACTOR = True
-
-
-class TestEdgeQLGroupWarnFactor(TestEdgeQLGroup):
-    NO_FACTOR = False
-    WARN_FACTOR = True

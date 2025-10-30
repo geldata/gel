@@ -109,7 +109,10 @@ Factory functions
        Keyword arguments that are passed to the ``RAGOptions`` data class to
        configure AI-specific options. These options are:
 
-       * ``model``: The name of the model to be used. (required)
+       * ``model``: The name of the model to be used. It is possible to specify
+         the model name as a URI, eg. ``openai:gpt-5``.  See: :ref:`text
+         generation models <ref_ai_extai_reference_text_generation_models>`.
+         (required)
        * ``prompt``: An optional prompt to guide the model's behavior. (default: None)
 
 

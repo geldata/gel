@@ -87,6 +87,10 @@ class T_DOTBW(Token, lextoken='.<'):
     pass
 
 
+class T_DOTQ(Token, lextoken='.?>'):
+    pass
+
+
 class T_LBRACKET(Token, lextoken='['):
     pass
 

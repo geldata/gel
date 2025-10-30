@@ -196,10 +196,12 @@ def derive_view(
 ) -> s_types.Type:
 
     if derived_name is None:
-        assert isinstance(stype, s_obj.DerivableObject)
-        derived_name = derive_view_name(
-            stype=stype, derived_name_quals=derived_name_quals,
-            ctx=ctx)
+        if isinstance(stype, s_obj.DerivableObject):
+            derived_name = derive_view_name(
+                stype=stype, derived_name_quals=derived_name_quals,
+                ctx=ctx)
+        else:
+            derived_name = sn.QualName('__derived__', ctx.aliases.get('v'))
 
     if attrs is None:
         attrs = {}
@@ -388,14 +390,14 @@ def derive_view_name(
     )
 
 
-def get_union_type(
-    types: Sequence[s_types.TypeT],
+def get_union_type[TypeT: s_types.Type](
+    types: Sequence[TypeT],
     *,
     opaque: bool = False,
     preserve_derived: bool = False,
     ctx: context.ContextLevel,
     span: Optional[parsing.Span] = None,
-) -> s_types.TypeT:
+) -> TypeT:
 
     targets: Sequence[s_types.Type]
     if preserve_derived:
@@ -431,18 +433,18 @@ def get_union_type(
     ):
         ctx.env.add_schema_ref(union, expr=None)
 
-    return cast(s_types.TypeT, union)
+    return cast(TypeT, union)
 
 
-def get_intersection_type(
-    types: Sequence[s_types.TypeT],
+def get_intersection_type[TypeT: s_types.Type](
+    types: Sequence[TypeT],
     *,
     ctx: context.ContextLevel,
-) -> s_types.TypeT:
+) -> TypeT:
 
     targets: Sequence[s_types.Type]
     targets = s_utils.simplify_intersection_types(ctx.env.schema, types)
-    ctx.env.schema, intersection = s_utils.ensure_intersection_type(
+    ctx.env.schema, intersection, _ = s_utils.ensure_intersection_type(
         ctx.env.schema, targets, transient=True
     )
 
@@ -452,24 +454,24 @@ def get_intersection_type(
     ):
         ctx.env.add_schema_ref(intersection, expr=None)
 
-    return cast(s_types.TypeT, intersection)
+    return cast(TypeT, intersection)
 
 
-def get_material_type(
-    t: s_types.TypeT,
+def get_material_type[TypeT: s_types.Type](
+    t: TypeT,
     *,
     ctx: context.ContextLevel,
-) -> s_types.TypeT:
+) -> TypeT:
 
     ctx.env.schema, mtype = t.material_type(ctx.env.schema)
     return mtype
 
 
-def concretify(
-    t: s_types.TypeT,
+def concretify[TypeT: s_types.Type](
+    t: TypeT,
     *,
     ctx: context.ContextLevel,
-) -> s_types.TypeT:
+) -> TypeT:
     """Produce a version of t with all views removed.
 
     This procedes recursively through unions and intersections,

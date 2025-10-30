@@ -22,13 +22,11 @@ from __future__ import annotations
 import collections
 import textwrap
 from typing import (
-    Generic,
     Iterable,
     Iterator,
     Optional,
     Sequence,
     TypeAlias,
-    TypeVar,
 )
 
 from edb.common import ordered
@@ -45,7 +43,6 @@ from . import constraints
 from . import ddl
 
 
-TableConstraint_T = TypeVar("TableConstraint_T", bound="TableConstraint")
 TableName: TypeAlias = tuple[str, ...]
 ColumnName: TypeAlias = str
 
@@ -617,10 +614,9 @@ class TableConstraintExists(base.Condition):
         ''')
 
 
-class AlterTableAddConstraint(
+class AlterTableAddConstraint[TableConstraint_T: "TableConstraint"](
     AlterTableFragment,
     TableConstraintCommand,
-    Generic[TableConstraint_T],
 ):
     constraint: TableConstraint_T
 

@@ -107,6 +107,13 @@ QUERIES = [
     }
     ''',
     '''
-    CREATE MIGRATION { ;;; CREATE TYPE Foo ;;; CREATE TYPE Bar ;;; };
+    CREATE MIGRATION
+    {
+        set global foo := "test";
+        alter type Foo {
+            create required property name -> str {
+            set default := (global foo);
+        }
+    }; }
     '''
 ]

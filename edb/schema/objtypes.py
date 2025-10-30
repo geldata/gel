@@ -28,7 +28,6 @@ from edb import errors
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import constraints
 from . import delta as sd
@@ -86,7 +85,6 @@ class ObjectType(
     s_types.Type,  # Help reflection figure out the right db MRO
     s_anno.AnnotationSubject,  # Help reflection figure out the right db MRO
     ObjectTypeRefMixin,
-    s_abc.ObjectType,
     qlkind=qltypes.SchemaObjectClass.TYPE,
     data_safe=False,
 ):
@@ -412,7 +410,7 @@ def get_or_create_intersection_type(
     *,
     module: Optional[str] = None,
     transient: bool = False,
-) -> tuple[s_schema.Schema, ObjectType]:
+) -> tuple[s_schema.Schema, ObjectType, bool]:
 
     name = s_types.get_intersection_type_name(
         (c.get_name(schema) for c in components),
@@ -420,6 +418,7 @@ def get_or_create_intersection_type(
     )
 
     objtype = schema.get(name, default=None, type=ObjectType)
+    created = objtype is None
     if objtype is None:
         components = list(components)
 
@@ -463,7 +462,7 @@ def get_or_create_intersection_type(
                 schema = objtype.add_pointer(schema, ptr)
 
     assert isinstance(objtype, ObjectType)
-    return schema, objtype
+    return schema, objtype, created
 
 
 class ObjectTypeCommandContext(

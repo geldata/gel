@@ -29,9 +29,9 @@ from graphql.language import lexer as gql_lexer
 
 
 def _get_gqlcore(
-    std_schema: s_schema.FlatSchema,
-    user_schema: s_schema.FlatSchema,
-    global_schema: s_schema.FlatSchema,
+    std_schema: s_schema.Schema,
+    user_schema: s_schema.Schema,
+    global_schema: s_schema.Schema,
 ) -> graphql.GQLCoreSchema:
     return graphql.GQLCoreSchema(
         s_schema.ChainedSchema(
@@ -43,9 +43,9 @@ def _get_gqlcore(
 
 
 def compile_graphql(
-    std_schema: s_schema.FlatSchema,
-    user_schema: s_schema.FlatSchema,
-    global_schema: s_schema.FlatSchema,
+    std_schema: s_schema.Schema,
+    user_schema: s_schema.Schema,
+    global_schema: s_schema.Schema,
     database_config: Mapping[str, Any],
     system_config: Mapping[str, Any],
     gql: str,
@@ -54,6 +54,8 @@ def compile_graphql(
     substitutions: Optional[dict[str, tuple[str, int, int]]],
     operation_name: Optional[str] = None,
     variables: Optional[Mapping[str, object]] = None,
+    native_input: bool = False,
+    extracted_variables: Optional[Mapping[str, object]] = None,
 ) -> graphql.TranspiledOperation:
     if tokens is None:
         ast = graphql.parse_text(gql)
@@ -66,6 +68,8 @@ def compile_graphql(
         gqlcore,
         ast,
         variables=variables,
+        extracted_variables=extracted_variables,
         substitutions=substitutions,
         operation_name=operation_name,
+        native_input=native_input,
     )

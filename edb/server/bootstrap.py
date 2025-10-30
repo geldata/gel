@@ -22,11 +22,9 @@ from typing import (
     Any,
     Callable,
     Optional,
-    TypeVar,
     Iterable,
     Mapping,
     Awaitable,
-    Sequence,
     NamedTuple,
     TYPE_CHECKING,
     cast,
@@ -106,10 +104,6 @@ class ClusterMode(enum.IntEnum):
     single_database = 3
 
 
-_T = TypeVar("_T")
-_T_Schema = TypeVar("_T_Schema", bound=s_schema.Schema)
-
-
 # A simple connection proxy that reconnects and retries queries
 # on connection errors.  Helps defeat flaky connections and/or
 # flaky Postgres servers (Digital Ocean managed instances are
@@ -154,10 +148,10 @@ class PGConnectionProxy:
         )
         self.terminate()
 
-    async def _retry_conn_errors(
+    async def _retry_conn_errors[T](
         self,
-        task: Callable[[], Awaitable[_T]],
-    ) -> _T:
+        task: Callable[[], Awaitable[T]],
+    ) -> T:
         rloop = retryloop.RetryLoop(
             backoff=retryloop.exp_backoff(),
             timeout=5.0,
@@ -244,11 +238,11 @@ async def _execute_block(conn, block: dbops.SQLBlock) -> None:
         await _execute(conn, stmt)
 
 
-def _execute_edgeql_ddl(
-    schema: s_schema.Schema_T,
+def _execute_edgeql_ddl[Schema_T: s_schema.Schema](
+    schema: Schema_T,
     ddltext: str,
     stdmode: bool = True,
-) -> s_schema.Schema_T:
+) -> Schema_T:
     context = sd.CommandContext(stdmode=stdmode)
 
     for ddl_cmd in edgeql.parse_block(ddltext):
@@ -337,6 +331,7 @@ async def _ensure_edgedb_role(
             name=role_name,
             tenant_id=backend_params.tenant_id,
             builtin=builtin,
+            branches=['*'],
         ),
     )
 
@@ -554,12 +549,14 @@ async def _store_static_json_cache(
     await _execute(ctx.conn, text)
 
 
-def _process_delta_params(
-    delta, schema: _T_Schema, params,
+def _process_delta_params[Schema_T: s_schema.Schema](
+    delta: sd.Command,
+    schema: Schema_T,
+    params: params.BackendRuntimeParams,
     stdmode: bool=True,
     **kwargs,
 ) -> tuple[
-    _T_Schema,
+    Schema_T,
     delta_cmds.MetaCommand,
     delta_cmds.CreateTrampolines,
 ]:
@@ -575,31 +572,32 @@ def _process_delta_params(
         # Canonicalize
         sd.apply(delta, schema=schema)
 
-    delta = delta_cmds.CommandMeta.adapt(delta)
+    delta_pg: delta_cmds.MetaCommand = delta_cmds.CommandMeta.adapt(delta)  # type: ignore
     context = sd.CommandContext(
         stdmode=stdmode,
         backend_runtime_params=params,
         **kwargs,
     )
-    schema = cast(
-        _T_Schema,
-        sd.apply(delta, schema=schema, context=context),
-    )
+    schema = sd.apply(delta_pg, schema=schema, context=context)
 
     if debug.flags.delta_pgsql_plan:
         debug.header('PgSQL Delta Plan')
-        debug.dump(delta, schema=schema)
+        debug.dump(delta_pg, schema=schema)
 
-    if isinstance(delta, delta_cmds.DeltaRoot):
-        out = delta.create_trampolines
+    if isinstance(delta_pg, delta_cmds.DeltaRoot):
+        out = delta_pg.create_trampolines
     else:
         out = delta_cmds.CreateTrampolines()
 
-    return schema, delta, out
+    return schema, delta_pg, out
 
 
-def _process_delta(ctx, delta, schema) -> tuple[
-    s_schema.ChainedSchema,
+def _process_delta[Schema_T: s_schema.Schema](
+    ctx: BootstrapContext,
+    delta: sd.Command,
+    schema: Schema_T,
+) -> tuple[
+    Schema_T,
     delta_cmds.MetaCommand,
     delta_cmds.CreateTrampolines,
 ]:
@@ -712,11 +710,30 @@ def prepare_repair_patch(
 PatchEntry = tuple[tuple[str, ...], tuple[str, ...], dict[str, Any]]
 
 
+async def get_existing_view_columns(
+    conn: pgcon.PGConnection | PGConnectionProxy,
+) -> dict[str, list[str]]:
+    # Find all the config views (they are pg_classes where
+    # there is also a table with the same name but "_dummy"
+    # at the end) and collect all their columns in order.
+    return json.loads(await conn.sql_fetch_val('''\
+        select json_object_agg(v.relname, (
+            select json_agg(a.attname order by a.attnum)
+            from pg_catalog.pg_attribute as a
+            where v.oid = a.attrelid
+        ))
+        from pg_catalog.pg_class as v
+        inner join pg_catalog.pg_tables as t
+        on v.relname || '_dummy' = t.tablename
+
+    '''.encode('utf-8')))
+
+
 async def gather_patch_info(
     num: int,
     kind: str,
     patch: str,
-    conn: pgcon.PGConnection,
+    conn: pgcon.PGConnection | PGConnectionProxy,
 ) -> Optional[dict[str, list[str]]]:
     """Fetch info for a patch that needs to use the connection.
 
@@ -727,56 +744,9 @@ async def gather_patch_info(
     """
 
     if '+config' in kind:
-        # Find all the config views (they are pg_classes where
-        # there is also a table with the same name but "_dummy"
-        # at the end) and collect all their columns in order.
-        return json.loads(await conn.sql_fetch_val('''\
-            select json_object_agg(v.relname, (
-                select json_agg(a.attname order by a.attnum)
-                from pg_catalog.pg_attribute as a
-                where v.oid = a.attrelid
-            ))
-            from pg_catalog.pg_class as v
-            inner join pg_catalog.pg_tables as t
-            on v.relname || '_dummy' = t.tablename
-
-        '''.encode('utf-8')))
+        return await get_existing_view_columns(conn)
     else:
         return None
-
-
-def _generate_drop_views(
-    group: Sequence[dbops.Command | trampoline.Trampoline],
-    preblock: dbops.PLBlock,
-) -> None:
-    for cv in reversed(list(group)):
-        dv: Any
-        if isinstance(cv, dbops.CreateView):
-            # We try deleting both a MATERIALIZED and not materialized
-            # version, since that allows us to switch between them
-            # more easily.
-            dv = dbops.CommandGroup()
-            dv.add_command(dbops.DropView(
-                cv.view.name,
-                conditions=[dbops.ViewExists(cv.view.name)],
-            ))
-            dv.add_command(dbops.DropView(
-                cv.view.name,
-                conditions=[dbops.ViewExists(cv.view.name, materialized=True)],
-                materialized=True,
-            ))
-        elif isinstance(cv, dbops.CreateFunction):
-            dv = dbops.DropFunction(
-                cv.function.name,
-                args=cv.function.args or (),
-                has_variadic=bool(cv.function.has_variadic),
-                if_exists=True,
-            )
-        elif isinstance(cv, trampoline.Trampoline):
-            dv = cv.drop()
-        else:
-            raise AssertionError(f'unsupported support view command {cv}')
-        dv.generate(preblock)
 
 
 def prepare_patch(
@@ -823,11 +793,21 @@ def prepare_patch(
         create.generate(block)
         return (block.to_string(), update), (), {}
 
-    if kind == 'repair':
+    if kind.startswith('repair'):
         assert not patch
         if not user_schema:
             return (update,), (), dict(is_user_update=True)
         assert global_schema
+
+        if kind.startswith('repair+user_ext'):
+            # Only run a userext update if the extension we are trying to
+            # update is installed.
+            extension_name = kind.split('|')[-1]
+            extension = user_schema.get_global(
+                s_exts.Extension, extension_name, default=None)
+
+            if not extension:
+                return (update,), (), {}
 
         # TODO: Implement the last-repair-only optimization?
         try:
@@ -971,7 +951,7 @@ def prepare_patch(
         )
         support_view_commands.generate(subblock)
 
-        _generate_drop_views(list(support_view_commands), preblock)
+        metaschema.generate_drop_views(list(support_view_commands), preblock)
 
         metadata_user_schema = reflschema
 
@@ -984,7 +964,9 @@ def prepare_patch(
         # in the public schema and to discover the new introspection
         # query.
         reflection = s_refl.generate_structure(
-            reflschema, make_funcs=False,
+            reflschema,
+            make_funcs=False,
+            patch_level=patches.get_patch_level(num),
         )
 
         reflschema, plan, tplan = _process_delta_params(
@@ -1030,7 +1012,7 @@ def prepare_patch(
         support_view_commands.add_commands(list(wrapper_views))
         trampolines = metaschema.trampoline_command(wrapper_views)
 
-        _generate_drop_views(
+        metaschema.generate_drop_views(
             tuple(support_view_commands) + tuple(trampolines),
             preblock,
         )
@@ -1292,6 +1274,12 @@ class StdlibBits(NamedTuple):
     global_schema: s_schema.Schema
     #: SQL text of the procedure to initialize `std` in Postgres.
     sqltext: str
+    #: SQL text of the procedure to create all `std` scalars for inplace
+    #: upgrades
+    inplace_upgrade_scalar_text: str
+    #: SQL text of the procedure to recreate all extension packages
+    #: for inplace upgrades.
+    inplace_upgrade_extension_packages_text: str
     #: Descriptors of all the needed trampolines
     trampolines: list[trampoline.Trampoline]
     #: A set of ids of all types in std.
@@ -1314,7 +1302,7 @@ def _make_stdlib(
     testmode: bool,
     global_ids: Mapping[str, uuid.UUID],
 ) -> StdlibBits:
-    schema: s_schema.Schema = s_schema.ChainedSchema(
+    schema: s_schema.ChainedSchema = s_schema.ChainedSchema(
         s_schema.EMPTY_SCHEMA,
         s_schema.EMPTY_SCHEMA,
         s_schema.EMPTY_SCHEMA,
@@ -1342,6 +1330,21 @@ def _make_stdlib(
     types: set[uuid.UUID] = set()
     std_plans: list[sd.Command] = []
 
+    specials = []
+
+    def _collect_special(cmd):
+        if isinstance(
+            cmd,
+            (dbops.CreateEnum, delta_cmds.CreateExtensionPackage),
+        ):
+            specials.append(cmd)
+        elif isinstance(cmd, dbops.CommandGroup):
+            for sub in cmd.commands:
+                _collect_special(sub)
+        elif isinstance(cmd, delta_cmds.MetaCommand):
+            for sub in cmd.pgops:
+                _collect_special(sub)
+
     for ddl_cmd in edgeql.parse_block(ddl_text):
         assert isinstance(ddl_cmd, qlast.DDLCommand)
         delta_command = s_ddl.delta_from_ddl(
@@ -1352,6 +1355,7 @@ def _make_stdlib(
         schema, plan, tplan = _process_delta(ctx, delta_command, schema)
         assert isinstance(plan, delta_cmds.DeltaRoot)
         std_plans.append(delta_command)
+        _collect_special(plan)
 
         types.update(plan.new_types)
         plan.generate(current_block)
@@ -1388,7 +1392,10 @@ def _make_stdlib(
         if not schema.has_object(obj.id):
             delta = sd.DeltaRoot()
             delta.add(obj.as_shell(reflschema).as_create_delta(reflschema))
-            schema = delta.apply(schema, sd.CommandContext(stdmode=True))
+            schema = cast(
+                s_schema.ChainedSchema,
+                delta.apply(schema, sd.CommandContext(stdmode=True))
+            )
     assert isinstance(schema, s_schema.ChainedSchema)
 
     assert current_block is not None
@@ -1441,11 +1448,33 @@ def _make_stdlib(
         reflection=reflection,
     )
 
+    # Sigh, we need to be able to create all std scalar types that
+    # might get added.
+    #
+    # TODO: Also collect tuple types, and generalize enum handling to
+    # be able to *add* enum fields. (Which will involve some
+    # pl/pgsql??)
+    scalar_block = dbops.PLTopBlock()
+    extension_package_block = dbops.PLTopBlock()
+    for cmd in specials:
+        if isinstance(cmd, dbops.CreateEnum):
+            ncmd = dbops.CreateEnum(
+                dbops.Enum(cmd.name, cmd.values),
+                neg_conditions=[dbops.EnumExists(cmd.name)],
+            )
+            ncmd.generate(scalar_block)
+        elif isinstance(cmd, delta_cmds.CreateExtensionPackage):
+            cmd.generate(extension_package_block)
+
+    # Got it!
     return StdlibBits(
         stdschema=schema.get_top_schema(),
         reflschema=reflschema.get_top_schema(),
         global_schema=schema.get_global_schema(),
         sqltext=sqltext,
+        inplace_upgrade_scalar_text=scalar_block.to_string(),
+        inplace_upgrade_extension_packages_text=(
+            extension_package_block.to_string()),
         trampolines=trampolines,
         types=types,
         classlayout=reflection.class_layout,
@@ -1629,6 +1658,13 @@ def cleanup_tpldbdump(tpldbdump: bytes) -> bytes:
         flags=re.MULTILINE,
     )
 
+    tpldbdump = re.sub(
+        rb'^CREATE SCHEMA ',
+        rb'CREATE SCHEMA IF NOT EXISTS ',
+        tpldbdump,
+        flags=re.MULTILINE,
+    )
+
     return tpldbdump
 
 
@@ -1650,7 +1686,7 @@ async def _init_stdlib(
     src_hash = _calculate_src_hash()
     cache_dir = _get_cache_dir()
 
-    stdlib = read_data_cache(
+    stdlib: Optional[StdlibBits] = read_data_cache(
         STDLIB_CACHE_FILE_NAME,
         pickled=True,
         src_hash=src_hash,
@@ -1662,12 +1698,14 @@ async def _init_stdlib(
         src_hash=src_hash,
         cache_dir=cache_dir,
     )
-    if args.inplace_upgrade_prepare:
-        tpldbdump = None
 
     tpldbdump, tpldbdump_inplace = None, None
     if tpldbdump_package:
         tpldbdump, tpldbdump_inplace = tpldbdump_package
+    else:
+        assert not args.inplace_upgrade_prepare, (
+            "Gel must have a valid bootstrap cache to use inplace upgrade"
+        )
 
     stdlib_was_none = stdlib is None
     if stdlib is None:
@@ -1714,9 +1752,8 @@ async def _init_stdlib(
         assert bootstrap_commands is not None
         block = dbops.PLTopBlock()
 
-        if not args.inplace_upgrade_prepare:
-            fixed_bootstrap_commands = metaschema.get_fixed_bootstrap_commands()
-            fixed_bootstrap_commands.generate(block)
+        fixed_bootstrap_commands = metaschema.get_fixed_bootstrap_commands()
+        fixed_bootstrap_commands.generate(block)
 
         bootstrap_commands.generate(block)
         await _execute_block(conn, block)
@@ -1773,8 +1810,6 @@ async def _init_stdlib(
 
             tpldbdump += b'\n' + text.encode('utf-8')
 
-            # XXX: TODO: We are going to need to deal with tuple types
-            # in edgedbpub...
             tpldbdump_inplace = await cluster.dump_database(
                 tpl_pg_db_name,
                 include_schemas=[
@@ -1784,11 +1819,10 @@ async def _init_stdlib(
                 ],
                 dump_object_owners=False,
             )
-            tpldbdump_inplace = cleanup_tpldbdump(tpldbdump_inplace)
-
-            # XXX: BE SMARTER ABOUT THIS, DON'T DO ALL THAT WORK
-            if args.inplace_upgrade_prepare:
-                tpldbdump = None
+            tpldbdump_inplace = (
+                stdlib.inplace_upgrade_scalar_text.encode('utf-8') +
+                cleanup_tpldbdump(tpldbdump_inplace)
+            )
 
             buildmeta.write_data_cache(
                 (tpldbdump, tpldbdump_inplace),
@@ -1945,6 +1979,11 @@ async def _init_stdlib(
             f'trampoline_pivot_query',
             trampoline_text,
         )
+        await _store_static_text_cache(
+            ctx,
+            f'global_schema_update_query',
+            stdlib.inplace_upgrade_extension_packages_text,
+        )
     else:
         await _execute_block(conn, block)
 
@@ -2075,6 +2114,9 @@ def compile_sys_queries(
             name,
             superuser,
             password,
+            branches,
+            all_permissions,
+            apply_access_policies_pg_default,
         };
     '''
     _, sql = compile_bootstrap_script(
@@ -2156,6 +2198,7 @@ def compile_sys_queries(
         FILTER
             NOT (.abstract ?? False)
             AND NOT (.transient ?? False)
+            AND NOT .element_type IS schema::Array
         SET {
             backend_id := sys::_get_pg_type_for_edgedb_type(
                 .id,
@@ -2565,7 +2608,10 @@ async def _bootstrap_edgedb_super_roles(ctx: BootstrapContext) -> uuid.UUID:
 async def _bootstrap(
     ctx: BootstrapContext,
     no_template: bool=False,
-) -> edbcompiler.Compiler:
+) -> tuple[
+    StdlibBits,
+    edbcompiler.Compiler
+]:
     args = ctx.args
     cluster = ctx.cluster
     backend_params = cluster.get_runtime_params()
@@ -2784,7 +2830,7 @@ async def _bootstrap(
             args.default_database_user or edbdef.EDGEDB_SUPERUSER,
         )
 
-    return compiler
+    return stdlib, compiler
 
 
 async def ensure_bootstrapped(
@@ -2806,7 +2852,7 @@ async def ensure_bootstrapped(
         mode = await _get_cluster_mode(ctx)
         ctx = dataclasses.replace(ctx, mode=mode)
         if mode == ClusterMode.pristine:
-            compiler = await _bootstrap(ctx)
+            _, compiler = await _bootstrap(ctx)
             return True, compiler
         else:
             compiler = await _start(ctx)

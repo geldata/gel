@@ -445,7 +445,7 @@ async def run_server(
     sys_queries: Mapping[str, bytes],
     report_config_typedesc: dict[defines.ProtocolVersion, bytes],
     runstate_dir: pathlib.Path,
-    internal_runstate_dir: str,
+    internal_runstate_dir: pathlib.Path,
     do_setproctitle: bool,
     compiler_state: edbcompiler.CompilerState,
 ):

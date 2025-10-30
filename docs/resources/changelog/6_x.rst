@@ -884,3 +884,145 @@ Fixes
 
 * Fix exponential time (in inheritance depth) migrations when altering things
   (:eql:gh:`#8671`)
+
+
+6.8
+===
+
+* Fix having unnecessary constraint triggers after restore
+  (:eql:gh:`#8685`)
+
+* Fix bogus warnings when using certain functions in access policies
+  (:eql:gh:`#8712`)
+
+* Re-disable doing certain UPDATEs on just INSERTed objects
+  (:eql:gh:`#8713`)
+
+* Fix ``administer schema_repair()``
+  (:eql:gh:`#8730`)
+
+* Fix ``IN`` when left hand side is a SQL NULL
+  (:eql:gh:`#8737`)
+
+* Do better multiplicity inference in nested ``FOR`` expressions
+  (:eql:gh:`#8754`)
+
+* Add json implementation for ``to_bytes`` function.
+  (:eql:gh:`#8723`)
+
+* Speed up use of globals from graphql and http endpoints via caching
+  (:eql:gh:`#8753`)
+
+* Cache param conversion in HTTP and graphql endpoints
+  (:eql:gh:`#8795`)
+
+* Fix issue with some recursive triggers
+  (:eql:gh:`#8775`)
+
+* Fix interaction between inlining, globals, and the HTTP protocols
+  (:eql:gh:`#8781`)
+
+* Fix some situations where ``__tid__`` wasn't appearing first
+  (:eql:gh:`#8783`)
+
+* Fix the command status of BEGIN in the SQL protocol, which should
+  fix JDBC connections
+  (:eql:gh:`#8794`)
+
+* Add a test case for mutation rewrites
+  (:eql:gh:`#8589`)
+
+* Fix ``FOR`` + ``UPDATE`` + rewrite interaction
+  (:eql:gh:`#8796`)
+
+* Improve system API responsiveness
+  (:eql:gh:`#8477`)
+
+* Send ``IdentityCreated`` webhook for OAuth sign up
+  (:eql:gh:`#8799`)
+
+* Use provided callback URL in OAuth code exchange
+  (:eql:gh:`#8801`)
+
+* Fix rewrites making ``UPDATE`` infer as ``ONE``
+  (:eql:gh:`#8800`)
+
+* Increase performance of array/json indexing and json to scalar casts
+  (:eql:gh:`#8804`)
+
+6.9
+===
+
+* Fix array-of-tuple parameter decoding with empty arrays from some bindings
+  (:eql:gh:`#8816`)
+
+* Improve performance of array-of-tuple query parameters
+  (:eql:gh:`#8818`)
+
+* Improve some parser error messages
+  (:eql:gh:`#8819`)
+
+
+6.10
+====
+
+* Fix casting from JSON in indexes/constraints
+  (:eql:gh:`#8920`)
+
+* Fix ISE when computed global is introspected using GraphQL.
+  (:eql:gh:`#8839`)
+
+* Fix policy object duplication in degenerate multiple inheritance cases
+  (:eql:gh:`#8881`)
+
+* Fix bad HTTP cache response when cache expires and upstream is not modified
+  (:eql:gh:`#8891`)
+
+* Fix accessing single link properties through FOR bindings
+  (:eql:gh:`#8911`)
+
+* Fix UPDATING a link table field with reference to non-link field in some cases
+  (:eql:gh:`#8912`)
+
+* Add ``administer fixup_backend_upgrade()`` command for repairing
+  certain support views after a separately managed Postgres backend
+  has been upgraded.
+  (:eql:gh:`#8926`)
+
+* pg-ext: fix bug in query reparse
+  (:eql:gh:`#8938`)
+
+* Fix updating of two single links with linkprops at once
+  (:eql:gh:`#8932`)
+
+
+6.11
+====
+
+* Improve auth email headers and alt content
+  (:eql:gh:`#8919`)
+
+* Fix SQL ``COLLATE`` clauses that require quotation
+  (:eql:gh:`#8960`)
+
+* Improve SQL adapter fallback for ``has_column_privilege``
+  (:eql:gh:`#8962`)
+
+* Fix introspection of ``cfg::AuthMethod.transports``
+  (:eql:gh:`#8971`)
+
+* Fix referencing a computed from a conversion ``USING`` expression
+  (:eql:gh:`#8981`)
+
+* Fix ``FOR`` iteration over a set of DML expressions
+  (:eql:gh:`#8994`)
+
+* Fix casting to multi-ranges accidentally aggregating
+  (:eql:gh:`#8995`)
+
+* Fix ``__default__`` when nested statements have defaults
+  (:eql:gh:`#9006`)
+
+* Bump the compatible extension version for pgvector.
+  (:eql:gh:`#9028`)
+

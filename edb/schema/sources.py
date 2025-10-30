@@ -20,7 +20,6 @@
 from __future__ import annotations
 from typing import (
     Optional,
-    TypeVar,
     Iterable,
     Sequence,
     overload,
@@ -41,10 +40,7 @@ if TYPE_CHECKING:
     from . import schema as s_schema
 
 
-Source_T = TypeVar('Source_T', bound='Source')
-
-
-class SourceCommandContext(
+class SourceCommandContext[Source_T: Source](
     sd.ObjectCommandContext[Source_T],
     indexes.IndexSourceCommandContext,
 ):
@@ -52,7 +48,9 @@ class SourceCommandContext(
     pass
 
 
-class SourceCommand(indexes.IndexSourceCommand[Source_T]):
+class SourceCommand[Source_T: Source](
+    indexes.IndexSourceCommand[Source_T]
+):
     pass
 
 
@@ -73,13 +71,13 @@ class Source(
         default=so.DEFAULT_CONSTRUCTOR)
 
     @overload
-    def maybe_get_ptr(
+    def maybe_get_ptr[Pointer_T: s_pointers.Pointer](
         self,
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: type[s_pointers.Pointer_T],
-    ) -> Optional[s_pointers.Pointer_T]:
+        type: type[Pointer_T],
+    ) -> Optional[Pointer_T]:
         ...
 
     @overload
@@ -88,7 +86,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[type[s_pointers.Pointer_T]] = None,
+        type: Optional[type[s_pointers.Pointer]] = None,
     ) -> Optional[s_pointers.Pointer]:
         ...
 
@@ -97,7 +95,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[type[s_pointers.Pointer_T]] = None,
+        type: Optional[type[s_pointers.Pointer]] = None,
     ) -> Optional[s_pointers.Pointer]:
         ptr = self.get_pointers(schema).get(schema, name, None)
         if ptr is not None and type is not None and not isinstance(ptr, type):
@@ -109,13 +107,13 @@ class Source(
         return ptr
 
     @overload
-    def getptr(
+    def getptr[Pointer_T: s_pointers.Pointer](
         self,
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: type[s_pointers.Pointer_T],
-    ) -> s_pointers.Pointer_T:
+        type: type[Pointer_T],
+    ) -> Pointer_T:
         ...
 
     @overload
@@ -124,7 +122,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[type[s_pointers.Pointer_T]] = None,
+        type: Optional[type[s_pointers.Pointer]] = None,
     ) -> s_pointers.Pointer:
         ...
 
@@ -133,7 +131,7 @@ class Source(
         schema: s_schema.Schema,
         name: sn.UnqualName,
         *,
-        type: Optional[type[s_pointers.Pointer_T]] = None,
+        type: Optional[type[s_pointers.Pointer]] = None,
     ) -> s_pointers.Pointer:
         ptr = self.maybe_get_ptr(schema, name, type=type)
         if ptr is None:

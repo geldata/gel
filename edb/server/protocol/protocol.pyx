@@ -662,10 +662,12 @@ cdef class HttpProtocol:
                 else:
                     args = path_parts[3:]
 
+                role_name = None
                 if extname != 'auth':
-                    if not await self._check_http_auth(
+                    role_name = await self._check_http_auth(
                         request, response, dbname
-                    ):
+                    )
+                    if not role_name:
                         return
 
                 db = self.tenant.maybe_get_db(dbname=dbname)
@@ -677,19 +679,20 @@ cdef class HttpProtocol:
 
                 if extname == 'graphql':
                     await graphql_ext.handle_request(
-                        request, response, db, args, self.tenant
+                        request, response, db, role_name, args, self.tenant
                     )
                 elif extname == 'notebook':
                     await notebook_ext.handle_request(
-                        request, response, db, args, self.tenant
+                        request, response, db, role_name, args, self.tenant
                     )
                 elif extname == 'edgeql_http':
                     await edgeql_ext.handle_request(
-                        request, response, db, args, self.tenant
+                        request, response, db, role_name, args, self.tenant
                     )
                 elif extname == 'ai':
                     await ai_ext.handle_request(
-                        self, request, response, db, args, self.tenant
+                        self,
+                        request, response, db, role_name, args, self.tenant
                     )
                 elif extname == 'auth':
                     netloc = (
@@ -750,7 +753,7 @@ cdef class HttpProtocol:
                 path_parts[1:],
                 self.server,
                 self.tenant,
-                self.is_tenant_host,
+                is_tenant_host=self.is_tenant_host,
             )
         elif path_parts == ['metrics'] and request.method == b'GET':
             if not await self._authenticate_for_default_conn_transport(
@@ -959,6 +962,16 @@ cdef class HttpProtocol:
                 else:
                     raise next(iter(auth_errors.values()))
 
+            role = self.tenant.get_roles().get(username)
+            if not role:
+                raise errors.AuthenticationError('authentication failed')
+            branches = role['branches']
+            if '*' not in branches and dbname not in branches:
+                raise errors.AuthenticationError(
+                    f"authentication failed: user does not have permission for "
+                    f"database branch '{dbname}'"
+                )
+
         except Exception as ex:
             if debug.flags.server:
                 markup.dump(ex)
@@ -971,9 +984,9 @@ cdef class HttpProtocol:
                     'Basic realm="edgedb", Bearer'
                 )
 
-            return False
+            return None
 
-        return True
+        return username
 
     async def _authenticate_for_default_conn_transport(
         self,

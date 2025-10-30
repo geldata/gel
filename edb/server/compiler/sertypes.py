@@ -549,7 +549,7 @@ def _describe_object_shape(
         subtypes.append(subtype_id)
         element_names.append(name)
         link_props.append(False)
-        links.append(not ptr.is_property(ctx.schema))
+        links.append(not ptr.is_property())
         cardinalities.append(cardinality_from_ptr(ptr, ctx.schema))
         ctx.schema, material_ptr = ptr.material_type(ctx.schema)
         ptr_source = material_ptr.get_source(ctx.schema)
@@ -1787,7 +1787,9 @@ class StateSerializerFactory:
 
         globals_shape = []
         global_reps = {}
-        for g in ctx.schema.get_objects(type=s_globals.Global):
+        # Only look at user_schema for globals, since system defined ones
+        # are only set by the system.
+        for g in user_schema.get_objects(type=s_globals.Global):
             if g.is_computable(ctx.schema):
                 continue
             name = str(g.get_name(ctx.schema))

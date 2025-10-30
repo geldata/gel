@@ -35,7 +35,7 @@ from . import utils as ls_utils
 
 def parse(
     doc: TextDocument,
-) -> Result[list[qlast.Base] | qlast.Schema, list[lsp_types.Diagnostic]]:
+) -> Result[qlast.Commands | qlast.Schema, list[lsp_types.Diagnostic]]:
     sdl = is_schema_file(doc.filename) if doc.filename else False
 
     start_t = qltokens.T_STARTSDLDOCUMENT if sdl else qltokens.T_STARTBLOCK
@@ -81,13 +81,13 @@ def parse(
     if sdl:
         assert isinstance(ast, qlast.Schema), ast
     else:
-        assert isinstance(ast, list), ast
+        assert isinstance(ast, qlast.Commands), ast
     return Result(ok=ast)
 
 
 def parse_and_recover(
     doc: TextDocument,
-) -> Optional[list[qlast.Base] | qlast.Schema]:
+) -> Optional[qlast.Commands | qlast.Schema]:
     sdl = is_schema_file(doc.filename) if doc.filename else False
 
     start_t = qltokens.T_STARTSDLDOCUMENT if sdl else qltokens.T_STARTBLOCK
@@ -113,7 +113,7 @@ def parse_and_recover(
     if sdl:
         assert isinstance(ast, qlast.Schema), ast
     else:
-        assert isinstance(ast, list), ast
+        assert isinstance(ast, qlast.Commands), ast
 
     return ast
 

@@ -765,15 +765,14 @@ class EQLFunctionDirective(BaseEQLDirective):
             return fullname
 
         from edb.edgeql import parser as edgeql_parser
-        from edb.edgeql.parser import grammar as edgeql_grammar
         from edb.edgeql import ast as ql_ast
         from edb.edgeql import codegen as ql_gen
         from edb.edgeql import qltypes
 
         try:
-            astnode = edgeql_parser.parse(
-                edgeql_grammar.tokens.T_STARTBLOCK,
-                f'create function {sig} using SQL function "xxx";')[0]
+            astnode = edgeql_parser.parse_block(
+                f'create function {sig} using SQL function "xxx";'
+            )[0]
         except Exception as ex:
             raise self.error(
                 f'could not parse function signature {sig!r}: '
@@ -842,13 +841,11 @@ class EQLConstraintDirective(BaseEQLDirective):
             return fullname
 
         from edb.edgeql import parser as edgeql_parser
-        from edb.edgeql.parser import grammar as edgeql_grammar
         from edb.edgeql import ast as ql_ast
         from edb.edgeql import codegen as ql_gen
 
         try:
-            astnode = edgeql_parser.parse(
-                edgeql_grammar.tokens.T_STARTBLOCK,
+            astnode = edgeql_parser.parse_block(
                 f'create abstract constraint {sig};'
             )[0]
         except Exception as ex:
@@ -899,6 +896,37 @@ class EQLConstraintDirective(BaseEQLDirective):
             f'constraint::{name}', sig, signode)
 
 
+class EQLPermissionDirective(BaseEQLDirective):
+
+    doc_field_types = [
+        INDEX_FIELD,
+    ]
+
+    def handle_signature(self, sig, signode):
+        if '::' in sig:
+            mod, name = sig.strip().rsplit('::', 1)
+        else:
+            name = sig.strip()
+            mod = 'std'
+
+        display = name.replace('-', ' ')
+        if mod != 'std':
+            display = f'{mod}::{display}'
+
+        signode['eql-module'] = mod
+        signode['eql-name'] = name
+        signode['eql-fullname'] = fullname = f'{mod}::{name}'
+
+        signode += s_nodes.desc_annotation('permission', 'permission')
+        signode += d_nodes.Text(' ')
+        signode += s_nodes.desc_name(display, display)
+        return fullname
+
+    def add_target_and_index(self, name, sig, signode):
+        return super().add_target_and_index(
+            f'permission::{name}', sig, signode)
+
+
 class EQLTypeXRef(s_roles.XRefRole):
 
     @staticmethod
@@ -938,6 +966,10 @@ class EQLOperatorDescXRef(s_roles.XRefRole):
 
 
 class EQLConstraintXRef(s_roles.XRefRole):
+    pass
+
+
+class EQLPermissionXRef(s_roles.XRefRole):
     pass
 
 
@@ -1025,6 +1057,7 @@ class EdgeQLDomain(s_domains.Domain):
         'keyword': s_domains.ObjType('keyword', 'kw'),
         'operator': s_domains.ObjType('operator', 'op', 'op-desc'),
         'statement': s_domains.ObjType('statement', 'stmt'),
+        'permission': s_domains.ObjType('permission', 'permission'),
     }
 
     _role_to_object_type = {
@@ -1038,6 +1071,7 @@ class EdgeQLDomain(s_domains.Domain):
         'type': EQLTypeDirective,
         'keyword': EQLKeywordDirective,
         'operator': EQLOperatorDirective,
+        'permission': EQLPermissionDirective,
         'synopsis': EQLSynopsisDirective,
         'struct': EQLStructElement,
 
@@ -1054,6 +1088,7 @@ class EdgeQLDomain(s_domains.Domain):
         'kw': s_roles.XRefRole(),
         'op': s_roles.XRefRole(),
         'op-desc': EQLOperatorDescXRef(),
+        'permission': EQLPermissionXRef(),
         'stmt': s_roles.XRefRole(),
 
         # TODO: Move to edb domain
@@ -1083,7 +1118,7 @@ class EdgeQLDomain(s_domains.Domain):
             targets = [f'operator::{target}']
         elif expected_type == 'statement':
             targets = [f'statement::{target}']
-        elif expected_type in {'type', 'function', 'constraint'}:
+        elif expected_type in {'type', 'function', 'constraint', 'permission'}:
             targets = [f'{expected_type}::{target}']
             if '::' not in target:
                 targets.append(f'{expected_type}::std::{target}')

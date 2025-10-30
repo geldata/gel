@@ -100,6 +100,35 @@ std::math::floor(x: std::decimal) -> std::decimal
     USING SQL 'SELECT floor("x");';
 };
 
+CREATE FUNCTION
+std::math::exp(x: std::int64) -> std::float64
+{
+    CREATE ANNOTATION std::description :=
+        'Return the exponential of the input value.';
+    SET volatility := 'Immutable';
+    USING SQL FUNCTION 'exp';
+};
+
+
+CREATE FUNCTION
+std::math::exp(x: std::float64) -> std::float64
+{
+    CREATE ANNOTATION std::description :=
+        'Return the exponential of the input value.';
+    SET volatility := 'Immutable';
+    USING SQL FUNCTION 'exp';
+};
+
+
+CREATE FUNCTION
+std::math::exp(x: std::decimal) -> std::decimal
+{
+    CREATE ANNOTATION std::description :=
+        'Return the exponential of the input value.';
+    SET volatility := 'Immutable';
+    USING SQL FUNCTION 'exp';
+};
+
 
 CREATE FUNCTION
 std::math::ln(x: std::int64) -> std::float64
@@ -413,6 +442,14 @@ std::math::pi() -> std::float64
     USING SQL FUNCTION 'pi';
 };
 
+CREATE FUNCTION
+std::math::e() -> std::float64
+{
+    CREATE ANNOTATION std::description :=
+        'Return the constant value of e.';
+    SET volatility := 'Immutable';
+    USING SQL 'SELECT exp(1);'
+};
 
 CREATE FUNCTION
 std::math::acos(x: std::float64) -> std::float64

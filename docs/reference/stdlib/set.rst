@@ -339,7 +339,8 @@ Sets
 
         # Get a set of tuples (<issue name>, <priority>)
         # for all issues.
-        select (Issue.name, Issue.priority.name ?? 'n/a');
+        for issue in Issue
+        select (issue.name, issue.priority.name ?? 'n/a');
 
     Without the coalescing operator, the above query will skip any
     ``Issue`` without priority.
@@ -543,7 +544,7 @@ Sets
 
     .. index:: cardinality, singleton
 
-    Checks that the input set contains no more than one element.
+    Checks that the input set has exactly zero or one elements.
 
     If the input set contains more than one element, ``assert_single`` raises
     a ``CardinalityViolationError``. Otherwise, this function returns the
@@ -637,10 +638,13 @@ Sets
                   std::sum(s: set of float64) -> float64
                   std::sum(s: set of bigint) -> bigint
                   std::sum(s: set of decimal) -> decimal
+                  std::sum(s: set of duration) -> duration
+                  std::sum(s: set of cal::relative_duration) -> cal::relative_duration
+                  std::sum(s: set of cal::date_duration) -> cal::date_duration
 
     .. index:: aggregate
 
-    Returns the sum of the set of numbers.
+    Return the arithmetic sum of values in a set.
 
     The result type depends on the input set type. The general rule of thumb
     is that the type of the input set is preserved (as if a simple

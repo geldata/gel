@@ -454,9 +454,10 @@ class BaseSchemaTest(BaseDocTest):
 
         # look at all SCHEMA entries and potentially create multiple modules
         schema = []
-        for name, val in cls.__dict__.items():
+        for name in dir(cls):
+            val = getattr(cls, name)
             m = re.match(r'^SCHEMA(?:_(\w+))?', name)
-            if m:
+            if m and val:
                 module_name = (m.group(1)
                                or 'default').lower().replace('_', '::')
 

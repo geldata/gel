@@ -243,6 +243,10 @@ Tested SQL tools
    https://www.postgresql.org/docs/15/ddl-system-columns.html
 
 
+For problems with COPY command, see
+:ref:`known limitations<ref_sql_adapter_copy>`.
+
+
 Gel to PostgreSQL
 =================
 
@@ -358,11 +362,25 @@ SQL adapter supports most of PostgreSQL connection settings
 
     - ``allow_user_specified_id`` (default ``false``),
 
-    - ``apply_access_policies_pg`` (default ``false``),
+    - ``apply_access_policies_pg`` (default ``true``),
 
     Note that if ``allow_user_specified_id`` or ``apply_access_policies_pg`` are
     unset, they default to configuration set by ``configure current database``
     EdgeQL command.
+
+
+.. note::
+
+    When using external tools that do not support settings, it is possible to
+    disable access policies via ``apply_access_policies_pg_default`` role
+    property:
+
+    .. code-block:: edgeql
+
+        CREATE SUPERUSER ROLE pg_connector {
+            # ...
+            SET apply_access_policies_pg_default := false;
+        }
 
 
 Introspection
@@ -461,6 +479,38 @@ Following functions are not supported:
 - ``set_config``,
 - ``pg_filenode_relation``,
 - most of system administration functions.
+
+
+COPY
+----
+
+.. _ref_sql_adapter_copy:
+
+Command ``COPY`` does not support ``FROM STDIN`` (i.e. to insert rows in bulk).
+You should use prepared ``INSERT`` statements instead.
+
+When exporting data using ``COPY ... TO STDOUT``, using query parameters or
+:ref:`global variables <ref_datamodel_globals>` is not supported.
+This includes globals of :ref:`role's permissions<ref_datamodel_permissions>`
+and accessing global trough access policies or computed properties.
+
+For example, it is not possible to ``COPY`` either ``A`` or ``B``:
+
+.. code-block:: sdl
+
+    type A {
+        access policy my_policy
+            allow select
+            using (global my_global);
+    }
+
+    type B {
+        property x := global my_global;
+    }
+
+Recommended workaround is to disable access policies either
+via ``apply_access_policies_pg`` connection setting or
+via ``apply_access_policies_pg_default`` property of roles.
 
 
 Example: gradual transition from ORMs to Gel

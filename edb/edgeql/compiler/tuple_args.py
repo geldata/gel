@@ -58,7 +58,7 @@ We will encode this into three arguments, with types `array<str>`,
 
 The encoding algorithm is straightforward: we traverse the type and
 the input data in tandem, appending data into the appropriate argument
-arrays and tracking array lengths. This is implemented our cython
+arrays and tracking array lengths. This is implemented in our cython
 protocol server, in edb.server.protocol.args_ser, and operates directly
 on the wire encodings.
 
@@ -272,7 +272,7 @@ def make_decoder(
     """
     params: list[qlast.Expr] = [
         qlast.TypeCast(
-            expr=qlast.Parameter(name=param.name),
+            expr=qlast.QueryParameter(name=param.name),
             type=_ref_to_ast(param.ir_type, ctx=ctx),
             cardinality_mod=(
                 qlast.CardinalityModifier.Optional if not param.required
@@ -287,6 +287,11 @@ def make_decoder(
             expr = params[typ.idx]
             if idx is not None:
                 expr = _index(expr, idx)
+            if typ.cast_to:
+                expr = qlast.TypeCast(
+                    expr=expr,
+                    type=_ref_to_ast(typ.cast_to, ctx=ctx),
+                )
             return expr
 
         elif isinstance(typ, irast.ParamTuple):
@@ -317,7 +322,7 @@ def make_decoder(
             # values directly from the scalar array parameter, without
             # needing to iterate over the array directly.
             # This is an optimization, and not necessary for correctness.
-            if isinstance(typ.typ, irast.ParamScalar):
+            if isinstance(typ.typ, irast.ParamScalar) and not typ.typ.cast_to:
                 sub = params[typ.typ.idx]
                 # If we are in an array, do a slice
                 if idx is not None:
@@ -329,30 +334,11 @@ def make_decoder(
 
             sub_expr = mk(typ.typ, idx=inner_idx)
 
-            # For some reason, this is much faster if force the range to
-            # be over int64 instead of int32.
-            lo = qlast.TypeCast(
-                expr=lo,
-                type=qlast.TypeName(
-                    maintype=qlast.ObjectRef(module='__std__', name='int64')
-                ),
-            )
-
             loop = qlast.ForQuery(
                 iterator_alias=inner_idx_alias,
-                # TODO: Using _gen_series would be marginally faster,
-                # but it isn't actually available in distributions
-                # iterator=qlast.FunctionCall(
-                #     func=('__std__', '_gen_series'),
-                #     args=[lo, _plus_const(hi, -1)],
-                # ),
                 iterator=qlast.FunctionCall(
-                    func=('__std__', 'range_unpack'), args=[
-                        qlast.FunctionCall(
-                            func=('__std__', 'range'),
-                            args=[lo, hi],
-                        )
-                    ]
+                    func=('__std__', '__pg_generate_series'),
+                    args=[lo, _plus_const(hi, -1)],
                 ),
                 result=sub_expr,
             )
@@ -384,6 +370,7 @@ def create_sub_params(
     required: bool,
     typeref: irast.TypeRef,
     pt: s_types.Type,
+    is_func_param: bool=False,
     *,
     ctx: context.ContextLevel,
 ) -> Optional[irast.SubParams]:
@@ -394,6 +381,7 @@ def create_sub_params(
     We do this for nested arrays as well since array<array<...> is handled
     as array<tuple<array>>.
     """
+    json_cast = ctx.env.options.json_parameters and not is_func_param
     if not (
         (
             pt.is_tuple(ctx.env.schema)
@@ -402,11 +390,21 @@ def create_sub_params(
             or pt.contains_array_of_tuples(ctx.env.schema)
         )
         and not ctx.env.options.func_params
-        and not ctx.env.options.json_parameters
-    ):
+    ) and not json_cast:
         return None
 
-    pdt, arg_typs = translate_type(typeref, schema=ctx.env.schema)
+    pdt: irast.ParamTransType
+    arg_typs: tuple[irast.TypeRef, ...]
+    if json_cast:
+        json = typegen.type_to_typeref(
+            ctx.env.get_schema_type_and_track(sn.QualName('std', 'json')),
+            env=ctx.env,
+        )
+        pdt = irast.ParamScalar(typeref=json, cast_to=typeref, idx=0)
+        arg_typs = (json,)
+    else:
+        pdt, arg_typs = translate_type(typeref, schema=ctx.env.schema)
+
     params = tuple([
         irast.Param(
             name=f'__edb_decoded_{name}_{i}__',

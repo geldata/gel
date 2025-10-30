@@ -1,4 +1,15 @@
-<% macro workflow(targets, publications, subdist="", publish_all=False) %>
+<% macro workflow_dispatch() %>
+  workflow_dispatch:
+    inputs:
+      gelpkg_ref:
+        description: "gel-pkg git ref used to build the packages"
+        default: "master"
+      metapkg_ref:
+        description: "metapkg git ref used to build the packages"
+        default: "master"
+<%- endmacro %>
+
+<% macro workflow(package, targets, publications, subdist="", publish_all=False) %>
   prep:
     runs-on: ubuntu-latest
 <% if subdist == "nightly" %>
@@ -16,7 +27,7 @@
       shell: bash
       run: |
         rev=$(git rev-parse HEAD)
-        jq_filter='.packages[] | select(.basename == "gel-server") | select(.architecture == $ARCH) | .version_details.metadata.scm_revision | . as $rev | select(($rev != null) and ($REV | startswith($rev)))'
+        jq_filter='.packages[] | select(.basename == "<< package.basename >>") | select(.architecture == $ARCH) | .version_details.metadata.scm_revision | . as $rev | select(($rev != null) and ($REV | startswith($rev)))'
 <% for tgt in targets.linux + targets.macos %>
         key="<< tgt.name >>"
         val=true
@@ -68,9 +79,9 @@
 
     steps:
     - name: Build
-      uses: edgedb/edgedb-pkg/integration/linux/build/<< plat_id >>@master
+      uses: docker://ghcr.io/geldata/gelpkg-build-<< plat_id >>:latest
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "<< package.name >>"
         SRC_REF: "${{ github.sha }}"
         PKG_REVISION: "<current-date>"
         <%- if subdist != "" %>
@@ -89,6 +100,8 @@
         PKG_PLATFORM_LIBC: "<< tgt.platform_libc >>"
         <%- endif %>
         METAPKG_GIT_CACHE: disabled
+        GEL_PKG_REF: ${{ inputs.gelpkg_ref }}
+        METAPKG_REF: ${{ inputs.metapkg_ref }}
 
     - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874  # v4.4.0
       with:
@@ -161,7 +174,7 @@
 
     - name: Build
       env:
-        PACKAGE: edgedbpkg.edgedb:Gel
+        PACKAGE: "<< package.name >>"
         SRC_REF: "${{ github.sha }}"
         <%- if subdist != "nightly" %>
         BUILD_IS_RELEASE: "true"
@@ -179,6 +192,8 @@
         BUILD_GENERIC: true
         <%- endif %>
         CMAKE_POLICY_VERSION_MINIMUM: '3.5'
+        GEL_PKG_REF: ${{ inputs.gelpkg_ref }}
+        METAPKG_REF: ${{ inputs.metapkg_ref }}
       run: |
         edgedb-pkg/integration/macos/build.sh
 
@@ -188,6 +203,7 @@
         path: artifacts/<< plat_id >>
 <%- endfor %>
 
+<%- if package.name != "edgedbpkg.edgedb_ls:EdgeDBLanguageServer" %>
 <%- for tgt in targets.linux %>
 <%- set plat_id = tgt.platform + ("{}".format(tgt.platform_libc) if tgt.platform_libc else "") + ("-{}".format(tgt.platform_version) if tgt.platform_version else "") %>
 
@@ -202,7 +218,7 @@
         path: artifacts/<< plat_id >>
 
     - name: Test
-      uses: edgedb/edgedb-pkg/integration/linux/test/<< plat_id >>@master
+      uses: docker://ghcr.io/geldata/gelpkg-test-<< plat_id >>:latest
       env:
         <%- if subdist != "" %>
         PKG_SUBDIST: "<< subdist >>"
@@ -210,6 +226,9 @@
         PKG_PLATFORM: "<< tgt.platform >>"
         PKG_PLATFORM_VERSION: "<< tgt.platform_version >>"
         PKG_PLATFORM_LIBC: "<< tgt.platform_libc >>"
+        PKG_TEST_SELECT: "<< package.test.select >>"
+        PKG_TEST_EXCLUDE: "<< package.test.exclude >>"
+        PKG_TEST_FILES: "<< package.test.files >> << tgt.test.files >>"
         # edb test with -j higher than 1 seems to result in workflow
         # jobs getting killed arbitrarily by Github.
         PKG_TEST_JOBS: << 0 if tgt.runs_on and 'self-hosted' in tgt.runs_on else 1 >>
@@ -241,10 +260,9 @@
         <%- endif %>
         PKG_PLATFORM: "<< tgt.platform >>"
         PKG_PLATFORM_VERSION: "<< tgt.platform_version >>"
-        <%- if tgt.platform_version == "x86_64" %>
-        # Run fewer tests on x86_64, since the test runner is very slow.
-        PKG_TEST_FILES: "test_dump*.py test_backend_*.py test_database.py test_server_*.py test_edgeql_ddl.py test_session.py"
-        <%- endif %>
+        PKG_TEST_SELECT: "<< package.test.select >>"
+        PKG_TEST_EXCLUDE: "<< package.test.exclude >>"
+        PKG_TEST_FILES: "<< package.test.files >> << tgt.test.files >>"
       run: |
         <%- if tgt.platform_version == "x86_64" %>
         # Bump shmmax and shmall to avoid test failures.
@@ -253,6 +271,7 @@
         <%- endif %>
         edgedb-pkg/integration/macos/test.sh
 <%- endfor %>
+<%- endif %>
 
 <%- if publish_all %>
   collect:
@@ -270,7 +289,7 @@
 <%- for publish in publications %>
 
   publish<< publish.suffix>>-<< tgt.name >>:
-    needs: [<% if publish_all %>collect<% else %>test-<< tgt.name >><% endif %>]
+    needs: [<% if publish_all %>collect<% elif package.name != "edgedbpkg.edgedb_ls:EdgeDBLanguageServer" %>test-<< tgt.name >><% else %>build-<< tgt.name >><% endif %>]
     runs-on: ubuntu-latest
 
     steps:
@@ -280,7 +299,7 @@
         path: artifacts/<< plat_id >>
 
     - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
+      uses: docker://ghcr.io/geldata/gelpkg-upload-linux-x86_64:latest
       env:
         <%- if subdist != "" %>
         PKG_SUBDIST: "<< subdist >>"
@@ -310,7 +329,7 @@
         target: << plat_id >>
 
     - name: Test Published
-      uses: edgedb/edgedb-pkg/integration/linux/testpublished/<< plat_id >>@master
+      uses: docker://ghcr.io/geldata/gelpkg-testpublished-<< plat_id >>:latest
       env:
         PKG_NAME: "${{ steps.describe.outputs.name }}"
         <%- if subdist != "" %>
@@ -336,7 +355,7 @@
 <%- set plat_id = tgt.platform + ("{}".format(tgt.platform_libc) if tgt.platform_libc else "") + ("-{}".format(tgt.platform_version) if tgt.platform_version else "") %>
 
   publish-<< tgt.name >>:
-    needs: [<% if publish_all %>collect<% else %>test-<< tgt.name >><% endif %>]
+    needs: [<% if publish_all %>collect<% elif package.name != "edgedbpkg.edgedb_ls:EdgeDBLanguageServer" %>test-<< tgt.name >><% else %>build-<< tgt.name >><% endif %>]
     runs-on: ubuntu-latest
 
     steps:
@@ -358,7 +377,7 @@
         target: << plat_id >>
 
     - name: Publish
-      uses: edgedb/edgedb-pkg/integration/linux/upload/linux-x86_64@master
+      uses: docker://ghcr.io/geldata/gelpkg-upload-linux-x86_64:latest
       env:
         <%- if subdist != "" %>
         PKG_SUBDIST: "<< subdist >>"
@@ -491,7 +510,9 @@
     <%- endif %>
     <%- for tgt in targets.linux %>
       - build-<< tgt.name >>
+    <%- if package.name != "edgedbpkg.edgedb_ls:EdgeDBLanguageServer" %>
       - test-<< tgt.name >>
+    <%- endif %>
     <%- for publish in publications %>
       - publish<< publish.suffix>>-<< tgt.name >>
       - check-published<< publish.suffix>>-<< tgt.name >>
@@ -499,7 +520,9 @@
     <%- endfor %>
     <%- for tgt in targets.macos %>
       - build-<< tgt.name >>
+    <%- if package.name != "edgedbpkg.edgedb_ls:EdgeDBLanguageServer" %>
       - test-<< tgt.name >>
+    <%- endif %>
     <%- for publish in publications %>
       - publish<< publish.suffix>>-<< tgt.name >>
     <%- endfor %>

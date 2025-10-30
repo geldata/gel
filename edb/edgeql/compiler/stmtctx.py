@@ -39,7 +39,6 @@ from edb.ir import utils as irutils
 from edb.ir import typeutils as irtyputils
 
 from edb.schema import constraints as s_constr
-from edb.schema import futures as s_futures
 from edb.schema import modules as s_mod
 from edb.schema import name as s_name
 from edb.schema import objects as s_obj
@@ -172,22 +171,7 @@ def init_context(
     ctx.implicit_limit = options.implicit_limit
     ctx.expr_exposed = context.Exposure.EXPOSED
 
-    # Resolve simple_scoping/warn_old_scoping configs.
-    # options specifies the value in the configuration system;
-    # if that is None, we rely on the presence of the future.
-    simple_scoping = options.simple_scoping
-    if simple_scoping is None:
-        simple_scoping = s_futures.future_enabled(
-            ctx.env.schema, 'simple_scoping'
-        )
-    warn_old_scoping = options.warn_old_scoping
-    if warn_old_scoping is None:
-        warn_old_scoping = s_futures.future_enabled(
-            ctx.env.schema, 'warn_old_scoping'
-        )
-
-    ctx.no_factoring = simple_scoping
-    ctx.warn_factoring = warn_old_scoping
+    ctx.no_factoring = True
 
     return ctx
 
@@ -264,6 +248,8 @@ def fini_expression(
     # Fix up weak namespaces
     _rewrite_weak_namespaces(all_exprs, ctx)
 
+    _collapse_factoring_protected(all_exprs, ctx)
+
     ctx.path_scope.validate_unique_ids()
 
     # Collect query parameters
@@ -330,6 +316,7 @@ def fini_expression(
         expr=ir,
         params=params,
         globals=list(ctx.env.query_globals.values()),
+        required_permissions=set(ctx.env.required_permissions),
         server_param_conversions=server_param_conversions,
         server_param_conversion_params=server_param_conversion_params,
         views=ctx.view_nodes,
@@ -595,6 +582,109 @@ def _rewrite_weak_namespaces(
                 ir_set.path_id = _try_namespace_fix(scope, ir_set.path_id)
 
 
+def _get_all_pathids(irs: Sequence[irast.Base]) -> set[
+    tuple[irast.PathId, irast.Set | None]
+]:
+    all_ids: set[tuple[irast.PathId, irast.Set | None]] = set()
+    for ir in irs:
+        for ir_set in ast_visitor.find_children(ir, irast.Set):
+            all_ids.add((ir_set.path_id, ir_set))
+        for arg in ast_visitor.find_children(ir, irast.CallArg):
+            if arg.expr_type_path_id:
+                all_ids.add((arg.expr_type_path_id, None))
+
+    return all_ids
+
+
+def _collapse_factoring_protected(
+    irs: Sequence[irast.Base], ctx: context.ContextLevel
+) -> None:
+    """Try to remove the Selects inserted for simple_scoping.
+
+    In simple_scoping mode, we protect certain paths by wrapping them
+    in selects so that they don't participate in path factoring.
+
+    This generates more verbose SQL in all cases and inhibits
+    important optimizations in others -- in particular, our efforts to
+    make ORDER BY clauses simple enough for postgres to optimize.
+
+    To remedy this, we try to collapse away those selects and their
+    fences in the scope tree by checking if removing them would lead
+    to any path factoring. If not, we can drop it.
+
+    Note that *some* new-school factoring may still have happened.
+    If we have `select User filter User.name = 'Elvis'`, the outer `User`
+    will be unprotected and the inner `User` will be factored out to it,
+    leaving just `User.name` in a protected inner scope.
+    That's fine, and we will see User.name doesn't have anything
+    to factor with and remove the select that was injected.
+    """
+    children = []
+    for ir in irs:
+        children += ast_visitor.find_children(
+            ir, irast.Set, lambda x: x.is_factoring_protected
+        )
+    all_ids = _get_all_pathids(irs)
+
+    for ir_set in ordered.OrderedSet(children):
+        if (
+            ir_set.path_scope_id is None
+            or not irutils.is_implicit_wrapper(ir_set.expr)
+        ):
+            continue
+
+        node = ctx.env.scope_tree_nodes[ir_set.path_scope_id]
+        if not (parent := node.parent):
+            continue
+
+        # If the underlying thing has already been factored fully, we
+        # skip it, because it might be no-factor fenced?
+        if parent.find_visible(ir_set.expr.result.path_id):
+            continue
+
+        # If collapsing this node would lead to any factoring, we
+        # obviously can't do it.
+        # We check by seeing if there are some factorable nodes
+        # *other* than the ones we are starting from.
+        if any(
+            parent.find_factorable_nodes(path_id, child_to_skip=node)
+            for path_id in node.get_all_paths()
+        ):
+            continue
+
+        # If the path is referenced at all, we can't do it.
+        # PERF: Should we build a dict with all prefixes as keys, instead
+        # of this O(n*m) loop?
+        if any(
+            x is not ir_set and path_id.startswith(ir_set.path_id)
+            for path_id, x in all_ids
+        ):
+            continue
+
+        del ctx.env.scope_tree_nodes[ir_set.path_scope_id]
+
+        # Merge the node up into its parent
+        node.optional |= parent.optional
+        parent.fuse_subtree(node, self_fenced=True, ctx=ctx)
+
+        # Mark the new path as optional if the old path was optional.
+        orig = None
+        gparent = parent.parent
+        if (
+            gparent
+            and (orig := gparent.find_child(ir_set.path_id))
+            and parent.optional
+            and orig.optional
+        ):
+            pathctx.register_set_in_scope(
+                ir_set.expr.result, optional=True, path_scope=gparent, ctx=ctx
+            )
+        if orig:
+            orig.remove()
+        # Yeeeee haw. Replace the old set with the inner one.
+        ir_set.__dict__ = ir_set.expr.result.__dict__
+
+
 def _fixup_schema_view(*, ctx: context.ContextLevel) -> None:
     """Finalize schema view types for inclusion in the real schema.
 
@@ -762,7 +852,7 @@ def compile_anchor(
     elif isinstance(anchor, qlast.Base):
         step = dispatch.compile(anchor, ctx=ctx)
 
-    elif isinstance(anchor, irast.Parameter):
+    elif isinstance(anchor, (irast.QueryParameter, irast.FunctionParameter)):
         step = setgen.ensure_set(anchor, ctx=ctx)
 
     elif isinstance(anchor, irast.PathId):
@@ -877,20 +967,20 @@ def _declare_view_from_schema(
     # We need to include "security context" things (currently just
     # access policy state) in the cache key, here.
     #
-    # FIXME: Could we do better? Sometimes we might compute a single
-    # global twice now, as a result of this. It should be possible to
-    # make some decisions based on whether the alias actually does
-    # touch any access policies...
-    key = viewcls, ctx.get_security_context()
+    # See below for an optimization in the case where polices are not
+    # used.
+    security_context = ctx.get_security_context()
+    key = viewcls, security_context
     e = ctx.env.schema_view_cache.get(key)
     if e is not None:
         return e
+
+    orig_policy_count = ctx.env.policy_use_count
 
     # N.B: This takes a context, which we need to use to create a
     # subcontext to compile in, but it should avoid depending on the
     # context, because of the cache.
     with ctx.detached() as subctx:
-        subctx.schema_factoring()
         subctx.current_schema_views += (viewcls,)
         subctx.expr_exposed = context.Exposure.UNEXPOSED
         view_expr: s_expr.Expression | None = viewcls.get_expr(ctx.env.schema)
@@ -912,6 +1002,16 @@ def _declare_view_from_schema(
         vs = subctx.aliased_views[viewcls_name]
         assert vs is not None
         vc = setgen.get_set_type(vs, ctx=ctx)
+
+        # If policies weren't actually used, see if we already
+        # compiled this global/alias with policy suppression in the
+        # other state, to avoid generating two CTEs for a cached
+        # global pointlessly.
+        if orig_policy_count == ctx.env.policy_use_count:
+            key2 = viewcls, security_context.toggle_policies()
+            if key2 in ctx.env.schema_view_cache:
+                vc, view_set = ctx.env.schema_view_cache[key2]
+
         ctx.env.schema_view_cache[key] = vc, view_set
 
     return vc, view_set
@@ -952,7 +1052,7 @@ def check_params(params: dict[str, irast.Param]) -> None:
 
 
 def throw_on_shaped_param(
-    param: qlast.Parameter, shape: qlast.Shape, ctx: context.ContextLevel
+    param: qlast.QueryParameter, shape: qlast.Shape, ctx: context.ContextLevel
 ) -> None:
     raise errors.QueryError(
         f'cannot apply a shape to the parameter',
@@ -962,7 +1062,7 @@ def throw_on_shaped_param(
 
 
 def throw_on_loose_param(
-    param: qlast.Parameter, ctx: context.ContextLevel
+    param: qlast.QueryParameter, ctx: context.ContextLevel
 ) -> None:
     if ctx.env.options.func_params is not None:
         if ctx.env.options.schema_object_context is s_constr.Constraint:
@@ -979,7 +1079,7 @@ def throw_on_loose_param(
 
 
 def preprocess_script(
-    stmts: list[qlast.Base], *, ctx: context.ContextLevel
+    stmts: Sequence[qlast.Base], *, ctx: context.ContextLevel
 ) -> irast.ScriptInfo:
     """Extract parameters from all statements in a script.
 
@@ -1008,13 +1108,22 @@ def preprocess_script(
     ]
     params = {}
     for cast, modaliases in casts:
-        assert isinstance(cast.expr, qlast.Parameter)
+        assert isinstance(cast.expr, qlast.QueryParameter)
         name = cast.expr.name
         if name in params:
             continue
         with ctx.new() as mctx:
             mctx.modaliases = modaliases
             target_stype = typegen.ql_typeexpr_to_type(cast.type, ctx=mctx)
+
+        if ctx.env.options.json_parameters:
+            # Rule check on JSON-input parameters.
+            # The actual casting of the the parameter happens in
+            if name.isdecimal():
+                raise errors.QueryError(
+                    'queries compiled to accept JSON parameters do not '
+                    'accept positional parameters',
+                    span=cast.expr.span)
 
         # for ObjectType parameters, we inject intermediate cast to uuid,
         # so parameter is uuid and then cast to ObjectType
@@ -1034,8 +1143,16 @@ def preprocess_script(
         target_typeref = typegen.type_to_typeref(target_stype, env=ctx.env)
         required = cast.cardinality_mod != qlast.CardinalityModifier.Optional
 
+        # This handles processing of tuple arguments, nested arrays, and
+        # all json-mode parameters.
         sub_params = tuple_args.create_sub_params(
-            name, required, typeref=target_typeref, pt=target_stype, ctx=ctx)
+            name,
+            required,
+            typeref=target_typeref,
+            pt=target_stype,
+            is_func_param=False,
+            ctx=ctx,
+        )
         params[name] = irast.Param(
             name=name,
             required=required,

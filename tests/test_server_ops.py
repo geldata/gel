@@ -155,7 +155,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
         # * "--bootstrap-command"
 
         cmd = [
-            sys.executable, '-m', 'edb.server.main',
+            sys.executable, '-I', '-m', 'edb.server.main',
             '--port', 'auto',
             '--testmode',
             '--temp-dir',
@@ -226,7 +226,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
         os.close(status_fd)
 
         cmd = [
-            sys.executable, '-m', 'edb.server.main',
+            sys.executable, '-I', '-m', 'edb.server.main',
             '--port', 'auto',
             '--testmode',
             '--temp-dir',
@@ -290,7 +290,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
         os.close(status_fd)
 
         cmd = [
-            sys.executable, '-m', 'edb.server.main',
+            sys.executable, '-I', '-m', 'edb.server.main',
             '--port', 'auto',
             '--testmode',
             '--log-level=debug',
@@ -820,10 +820,14 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     with self.assertChange(measure_sql_compilations(sd), 0):
                         await con.query_sql(sql)
 
-                    # TODO: this does not behave the way I thing it should
-                    # with self.assertChange(measure_compilations(sd), 1):
-                    #     con_c = con.with_config(apply_access_policies=False)
-                    #     await con_c.query(qry, 'Two')
+                    await con.execute(
+                        'configure session set apply_access_policies := false'
+                    )
+                    with self.assertChange(measure_compilations(sd), 1):
+                        await con.query(qry, 'Two')
+                    await con.execute(
+                        'configure session reset apply_access_policies'
+                    )
 
                     # Set the compilation timeout to 2ms.
                     #
@@ -872,9 +876,10 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                         await con.query_sql('select 1')
 
                     # changing globals: cache hit
+                    await con.execute('set global g := "hello"')
                     with self.assertChange(measure_sql_compilations(sd), 0):
-                        con_g = con.with_globals({'g': 'hello'})
-                        await con_g.query_sql('select 1')
+                        await con.query_sql('select 1')
+                    await con.execute('reset global g')
 
                     # normalization: pg_query_normalize is underwhelming
                     with self.assertChange(measure_sql_compilations(sd), 1):
@@ -884,11 +889,14 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                     with self.assertChange(measure_sql_compilations(sd), 0):
                         await con.query_sql('select 2')
 
-                    # TODO: this does not behave the way I though it should
-                    # changing certain config options: compiler call
-                    # with self.assertChange(measure_compilations(sd), 1):
-                    #     con_c = con.with_config(apply_access_policies=False)
-                    #     await con_c.query_sql(qry_sql)
+                    await con.execute(
+                        'configure session set apply_access_policies := false'
+                    )
+                    with self.assertChange(measure_sql_compilations(sd), 1):
+                        await con.query_sql('select 1')
+                    await con.execute(
+                        'configure session reset apply_access_policies'
+                    )
 
                     # At last, make sure recompilation switch works fine
                     await con.execute(
@@ -1727,7 +1735,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
         mtargs.reload_server()
 
         async for tr in self.try_until_fails(
-            wait_for=edgedb.AvailabilityError
+            wait_for=edgedb.AvailabilityError, timeout=30
         ):
             async with tr:
                 await self._test_server_ops_multi_tenant_1(mtargs)
@@ -1754,7 +1762,7 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
         mtargs.reload_server()
 
         async for tr in self.try_until_succeeds(
-            ignore=edgedb.AvailabilityError
+            ignore=edgedb.AvailabilityError, timeout=30
         ):
             async with tr:
                 await self._test_server_ops_multi_tenant_1(mtargs)
@@ -1907,7 +1915,9 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
         assert mtargs.srv.proc is not None
         mtargs.srv.proc.send_signal(signal.SIGHUP)
 
-        async for tr in self.try_until_succeeds(ignore=AssertionError):
+        async for tr in self.try_until_succeeds(
+            ignore=AssertionError, timeout=30
+        ):
             async with tr:
                 self.assertEqual(
                     (await mtargs.current_email_provider(1))["sender"],
@@ -1981,6 +1991,23 @@ class TestServerOps(tb.TestCaseWithHttpClient, tb.CLITestCaseMixin):
                 '\nedgedb_server_mt_tenants_current 3.0\n',
                 data,
             )
+
+    async def _test_server_ops_multi_tenant_9(self, mtargs: MultiTenantArgs):
+        sslctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        sslctx.check_hostname = False
+        sslctx.load_verify_locations(mtargs.sd.tls_cert_file)
+        self.assertEqual(
+            mtargs.sd.call_system_api(
+                "/server/status/alive", sslctx=sslctx, server_hostname=None,
+            ),
+            "OK",
+        )
+        self.assertEqual(
+            mtargs.sd.call_system_api(
+                "/server/status/ready", sslctx=sslctx, server_hostname=None,
+            ),
+            "OK",
+        )
 
 
 class MultiTenantArgs(NamedTuple):

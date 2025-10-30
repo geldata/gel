@@ -23,7 +23,7 @@ import edgedb
 from edb.testbase import server as tb
 
 
-class TestEdgeQLFunctionsInline(tb.QueryTestCase):
+class TestEdgeQLFunctionsInline(tb.DDLTestCase):
 
     async def test_edgeql_functions_inline_basic_01(self):
         await self.con.execute('''
@@ -1411,7 +1411,7 @@ class TestEdgeQLFunctionsInline(tb.QueryTestCase):
             insert Bar{a := 3};
             create function foo() -> set of tuple<int64, int64> {
                 set is_inlined := true;
-                using ((Bar.a, count(Bar)));
+                using (for Bar in Bar union (Bar.a, count(Bar)));
             };
         ''')
         await self.assert_query_result(
@@ -2002,7 +2002,7 @@ class TestEdgeQLFunctionsInline(tb.QueryTestCase):
             insert Bar{a := 3};
             create function foo() -> set of tuple<int64, int64> {
                 set is_inlined := true;
-                using ((Bar.a, count(Bar)));
+                using (for Bar in Bar union (Bar.a, count(Bar)));
             };
         ''')
         await self.assert_query_result(
@@ -4185,7 +4185,7 @@ class TestEdgeQLFunctionsInline(tb.QueryTestCase):
             insert Bar{a := 3};
             create function inner() -> set of tuple<int64, int64> {
                 set is_inlined := true;
-                using ((Bar.a, count(Bar)));
+                using (for Bar in Bar select (Bar.a, count(Bar)));
             };
             create function foo() -> set of tuple<int64, int64> {
                 set is_inlined := true;
@@ -4677,6 +4677,7 @@ class TestEdgeQLFunctionsInline(tb.QueryTestCase):
                 set is_inlined := true;
                 using (
                     with y := (select Bar{a, b := inner(x)})
+                    for y in y
                     select (y.a, y.b)
                 );
             };
@@ -11592,7 +11593,7 @@ class TestEdgeQLFunctionsInlineTransaction(tb.QueryTestCase):
     async def test_edgeql_functions_inline_transaction_dml_01(self):
         con = (
             edgedb.create_async_client(
-                **self.get_connect_args(database=self.con.dbname)
+                **self.get_connect_args()
             ).with_transaction_options(
                 edgedb.TransactionOptions(readonly=True)
             )

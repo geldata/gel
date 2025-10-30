@@ -13,7 +13,7 @@ fn add_child_module(
     name: &str,
     init_fn: fn(Python, &Bound<PyModule>) -> PyResult<()>,
 ) -> PyResult<()> {
-    let full_name = format!("{}.{}", MODULE_PREFIX, name);
+    let full_name = format!("{MODULE_PREFIX}.{name}");
     let child_module = PyModule::new(py, &full_name)?;
     init_fn(py, &child_module)?;
     parent.add(name, &child_module)?;

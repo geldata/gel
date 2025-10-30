@@ -1,0 +1,13 @@
+<% from "build.inc.yml" import workflow, workflow_dispatch -%>
+name: 'ls: Build and Publish Nightly Packages'
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  <<- workflow_dispatch() >>
+  push:
+    branches:
+      - nightly
+
+jobs:
+  <<- workflow(package, targets, publications, subdist="nightly") ->>

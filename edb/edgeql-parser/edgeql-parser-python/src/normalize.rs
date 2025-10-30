@@ -91,9 +91,9 @@ pub fn normalize(text: &str) -> Result<Entry, Error> {
         let n = counter;
         counter += 1;
         if named_args {
-            format!("$__edb_arg_{}", n)
+            format!("$__edb_arg_{n}")
         } else {
-            format!("${}", n)
+            format!("${n}")
         }
     };
     let mut last_was_set = false;
@@ -156,7 +156,7 @@ pub fn normalize(text: &str) -> Result<Entry, Error> {
             }
             Kind::Keyword(Keyword(kw))
             if (
-                matches!(kw, "configure"|"create"|"alter"|"drop"|"start"|"analyze")
+                matches!(kw, "administer"|"configure"|"create"|"alter"|"drop"|"start"|"analyze")
                 || (last_was_set && kw == "global")
             ) => {
                 let processed_source = serialize_tokens(&tokens);
@@ -215,10 +215,10 @@ fn is_operator(token: &Token) -> bool {
     use edgeql_parser::tokenizer::Kind::*;
     match token.kind {
         Assign | SubAssign | AddAssign | Arrow | Coalesce | Namespace | DoubleSplat
-        | BackwardLink | FloorDiv | Concat | GreaterEq | LessEq | NotEq | NotDistinctFrom
-        | DistinctFrom | Comma | OpenParen | CloseParen | OpenBracket | CloseBracket
-        | OpenBrace | CloseBrace | Dot | Semicolon | Colon | Add | Sub | Mul | Div | Modulo
-        | Pow | Less | Greater | Eq | Ampersand | Pipe | At => true,
+        | BackwardLink | OptionalLink | FloorDiv | Concat | GreaterEq | LessEq | NotEq
+        | NotDistinctFrom | DistinctFrom | Comma | OpenParen | CloseParen | OpenBracket
+        | CloseBracket | OpenBrace | CloseBrace | Dot | Semicolon | Colon | Add | Sub | Mul
+        | Div | Modulo | Pow | Less | Greater | Eq | Ampersand | Pipe | At => true,
         DecimalConst | FloatConst | IntConst | BigIntConst | BinStr | Parameter
         | ParameterAndType | Str | BacktickName | Keyword(_) | Ident | Substitution | EOI
         | Epsilon | StartBlock | StartExtension | StartFragment | StartMigration

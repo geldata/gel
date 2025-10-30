@@ -26,7 +26,8 @@ import dataclasses
 
 from edb.ir import statypes
 from edb.server import defines
-from edb.server.protocol import execute
+
+from . import util, errors
 
 if typing.TYPE_CHECKING:
     from edb.server import server as edbserver
@@ -52,7 +53,7 @@ class PKCEChallenge:
 
 
 async def create(db: edbtenant.dbview.Database, challenge: str) -> None:
-    await execute.parse_execute_json(
+    await util.json_query(
         db,
         """
         insert ext::auth::PKCEChallenge {
@@ -63,8 +64,6 @@ async def create(db: edbtenant.dbview.Database, challenge: str) -> None:
         variables={
             "challenge": challenge,
         },
-        cached_globally=True,
-        query_tag='gel/auth',
     )
 
 
@@ -73,7 +72,7 @@ async def link_identity_challenge(
     identity_id: str,
     challenge: str,
 ) -> str:
-    r = await execute.parse_execute_json(
+    r = await util.json_query(
         db,
         """
         update ext::auth::PKCEChallenge
@@ -84,12 +83,13 @@ async def link_identity_challenge(
             "challenge": challenge,
             "identity_id": identity_id,
         },
-        cached_globally=True,
-        query_tag='gel/auth',
     )
 
     result_json = json.loads(r.decode())
-    assert len(result_json) == 1
+    if len(result_json) != 1:
+        raise errors.PKCEVerificationFailed(
+            f"No linked PKCE session found for challenge '{challenge}'"
+        )
 
     return typing.cast(str, result_json[0]["id"])
 
@@ -101,7 +101,7 @@ async def add_provider_tokens(
     refresh_token: str | None,
     id_token: str | None,
 ) -> str:
-    r = await execute.parse_execute_json(
+    r = await util.json_query(
         db,
         """
         update ext::auth::PKCEChallenge
@@ -118,18 +118,19 @@ async def add_provider_tokens(
             "refresh_token": refresh_token,
             "id_token": id_token,
         },
-        cached_globally=True,
-        query_tag='gel/auth',
     )
 
     result_json = json.loads(r.decode())
-    assert len(result_json) == 1
+    if len(result_json) != 1:
+        raise errors.PKCEVerificationFailed(
+            f"No PKCE session found with id '{id}'"
+        )
 
     return typing.cast(str, result_json[0]["id"])
 
 
 async def get_by_id(db: edbtenant.dbview.Database, id: str) -> PKCEChallenge:
-    r = await execute.parse_execute_json(
+    r = await util.json_query(
         db,
         """
         select ext::auth::PKCEChallenge {
@@ -144,29 +145,31 @@ async def get_by_id(db: edbtenant.dbview.Database, id: str) -> PKCEChallenge:
         and (datetime_current() - .created_at) < <duration>$validity;
         """,
         variables={"id": id, "validity": VALIDITY.to_backend_str()},
-        cached_globally=True,
-        query_tag='gel/auth',
     )
 
     result_json = json.loads(r.decode())
-    assert len(result_json) == 1
+    if len(result_json) != 1:
+        raise errors.PKCEVerificationFailed(
+            f"No current PKCE session found with id '{id}'"
+        )
 
     return PKCEChallenge(**result_json[0])
 
 
 async def delete(db: edbtenant.dbview.Database, id: str) -> None:
-    r = await execute.parse_execute_json(
+    r = await util.json_query(
         db,
         """
         delete ext::auth::PKCEChallenge filter .id = <uuid>$id
         """,
         variables={"id": id},
-        cached_globally=True,
-        query_tag='gel/auth',
     )
 
     result_json = json.loads(r.decode())
-    assert len(result_json) == 1
+    if len(result_json) != 1:
+        raise errors.PKCEVerificationFailed(
+            f"No PKCE session found with id '{id}'"
+        )
 
 
 async def _delete_challenge(db: edbtenant.dbview.Database) -> None:
@@ -174,7 +177,7 @@ async def _delete_challenge(db: edbtenant.dbview.Database) -> None:
         # Don't run gc if the database is not connectable, e.g. being dropped
         return
 
-    await execute.parse_execute_json(
+    await util.json_query(
         db,
         """
         delete ext::auth::PKCEChallenge filter
@@ -183,8 +186,6 @@ async def _delete_challenge(db: edbtenant.dbview.Database) -> None:
         """,
         variables={"validity": VALIDITY.to_backend_str()},
         tx_isolation=defines.TxIsolationLevel.RepeatableRead,
-        cached_globally=True,
-        query_tag='gel/auth',
     )
 
 

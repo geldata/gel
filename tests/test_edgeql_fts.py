@@ -17,6 +17,7 @@
 #
 
 
+import json
 import os.path
 
 import edgedb
@@ -36,6 +37,68 @@ class TestEdgeQLFTSQuery(tb.QueryTestCase):
     SETUP = os.path.join(
         os.path.dirname(__file__), 'schemas', 'fts_setup.edgeql'
     )
+
+    async def _assert_index_use(self, query, *args):
+        def look(obj):
+            if (
+                isinstance(obj, dict)
+                and obj.get('plan_type') in ("IndexScan", "BitmapIndexScan")
+            ):
+                return any(
+                    prop['title'] == 'index_name'
+                    and f'fts::index' in prop['value']
+                    for prop in obj.get('properties', [])
+                )
+
+            if isinstance(obj, dict):
+                return any([look(v) for v in obj.values()])
+            elif isinstance(obj, list):
+                return any(look(v) for v in obj)
+            else:
+                return False
+
+        async with self._run_and_rollback():
+            await self.con.query_single(
+                'select _set_config("enable_seqscan", "off")'
+            )
+            plan = await self.con.query_json(f'analyze {query};', *args)
+        if not look(json.loads(plan)):
+            from edb.common import debug
+            debug.dump(json.loads(plan))
+            raise AssertionError(f'query did not use fts::index index')
+
+    async def test_edgeql_fts_index_01(self):
+        await self._assert_index_use(
+            r'''
+            select fts::search(
+                Paragraph,
+                'drink poison',
+                language := 'eng'
+            ).object {
+                number,
+                text := .text[0:10],
+            };
+            '''
+        )
+
+    async def test_edgeql_fts_index_02(self):
+        await self.con.execute('''
+            alter type Ordered
+            drop index fts::index on (());
+        ''')
+
+        await self._assert_index_use(
+            r'''
+            select fts::search(
+                Paragraph,
+                'drink poison',
+                language := 'eng'
+            ).object {
+                number,
+                text := .text[0:10],
+            };
+            '''
+        )
 
     async def test_edgeql_fts_search_01(self):
         # At least one of "drink" or "poison" should appear in text.

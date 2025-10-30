@@ -20,7 +20,7 @@
 from __future__ import annotations
 
 from typing import (
-    AbstractSet, Any, Callable, Collection, Optional, Iterable, TypeVar
+    AbstractSet, Any, Callable, Collection, Optional, Iterable
 )
 
 from edb.common import typeutils
@@ -32,21 +32,21 @@ class SkipNode(Exception):
     pass
 
 
-_T = TypeVar('_T')
-
-
-def find_children(
+def find_children[_T](
     node: base.AST | Collection[base.AST],
     type: type[_T],
     test_func: Optional[Callable[[_T], bool]] = None,
     terminate_early=False,
     extra_skips: AbstractSet[str] = frozenset(),
+    extra_skip_types: tuple[type, ...] = (),
 ) -> list[_T]:
     visited = set()
     result = []
 
     def _find_children(node):
-        if isinstance(node, (tuple, list, set, frozenset)):
+        if isinstance(node, extra_skip_types):
+            return False
+        elif isinstance(node, (tuple, list, set, frozenset)):
             for n in node:
                 if _find_children(n):
                     return True

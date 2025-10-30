@@ -241,8 +241,19 @@ def delta_schemas(
                 continue
             if schema_a and schema_a.get_referrers(pkg):
                 ext_mods.add(sn.UnqualName(modname))
+                for submod in schema_a.get_modules():
+                    submod_name = submod.get_name(schema_a)
+                    assert isinstance(submod_name, sn.UnqualName)
+                    if submod_name.name.startswith(modname + '::'):
+                        ext_mods.add(submod_name)
+
             if schema_b.get_referrers(pkg):
                 ext_mods.add(sn.UnqualName(modname))
+                for submod in schema_b.get_modules():
+                    submod_name = submod.get_name(schema_b)
+                    assert isinstance(submod_name, sn.UnqualName)
+                    if submod_name.name.startswith(modname + '::'):
+                        ext_mods.add(submod_name)
 
         for ext_mod in ext_mods:
             if ext_mod not in included_modules:

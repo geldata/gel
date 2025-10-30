@@ -30,7 +30,6 @@ from edb.ir import ast as irast
 from edb.ir import typeutils as irtyputils
 from edb.ir import utils as irutils
 
-from edb.schema import abc as s_abc
 from edb.schema import name as s_name
 from edb.schema import objtypes as s_objtypes
 from edb.schema import pointers as s_pointers
@@ -84,7 +83,7 @@ def infer_common_type(
             continue
 
         t = env.set_types[arg]
-        if isinstance(t, s_abc.Collection):
+        if isinstance(t, s_types.Collection):
             seen_coll = True
         elif isinstance(t, s_scalars.ScalarType):
             seen_scalar = True
@@ -200,7 +199,7 @@ def _ql_typeexpr_get_types(
         return (None, True, [stype])
 
     elif isinstance(ql_t, qlast.TypeOp):
-        if ql_t.op in ['|', '&']:
+        if ql_t.op in [qlast.TypeOpName.OR, qlast.TypeOpName.AND]:
             (left_op, left_leaf, left_types) = (
                 _ql_typeexpr_get_types(ql_t.left, ctx=ctx)
             )
@@ -216,13 +215,13 @@ def _ql_typeexpr_get_types(
             # "typeof" and is a list of object types anyway.
             if left_leaf and not left_types[0].is_object_type():
                 raise errors.UnsupportedFeatureError(
-                    f'cannot use type operator {ql_t.op!r} with non-object '
-                    f'type {left_types[0].get_displayname(ctx.env.schema)}',
+                    f"cannot use type operator '{ql_t.op}' with non-object "
+                    f"type {left_types[0].get_displayname(ctx.env.schema)}",
                     span=ql_t.left.span)
             if right_leaf and not right_types[0].is_object_type():
                 raise errors.UnsupportedFeatureError(
-                    f'cannot use type operator {ql_t.op!r} with non-object '
-                    f'type {right_types[0].get_displayname(ctx.env.schema)}',
+                    f"cannot use type operator '{ql_t.op}' with non-object "
+                    f"type {right_types[0].get_displayname(ctx.env.schema)}",
                     span=ql_t.right.span)
 
             # if an operand is either a single type or uses the same operator,
@@ -263,7 +262,7 @@ def _ql_typename_to_type(
         coll = s_types.Collection.get_class(ql_t.maintype.name)
         ct: s_types.Type
 
-        if issubclass(coll, s_abc.Tuple):
+        if issubclass(coll, s_types.Tuple):
             t_subtypes = {}
             named = False
             for si, st in enumerate(ql_t.subtypes):

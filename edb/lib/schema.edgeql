@@ -67,6 +67,9 @@ CREATE SCALAR TYPE schema::MigrationGeneratedBy
 CREATE SCALAR TYPE schema::IndexDeferrability
     EXTENDING enum<Prohibited, Permitted, `Required`>;
 
+CREATE SCALAR TYPE schema::SplatStrategy
+    EXTENDING enum<Default, Explicit, Implicit>;
+
 # Base type for all schema entities.
 CREATE ABSTRACT TYPE schema::Object EXTENDING std::BaseObject {
     CREATE REQUIRED PROPERTY name -> std::str;
@@ -272,6 +275,8 @@ CREATE TYPE schema::Index
     CREATE PROPERTY except_expr -> std::str;
     CREATE PROPERTY deferrability -> schema::IndexDeferrability;
     CREATE PROPERTY deferred -> std::bool;
+    CREATE PROPERTY active -> std::bool;
+    CREATE PROPERTY build_concurrently -> std::bool;
     CREATE MULTI LINK params EXTENDING schema::ordered -> schema::Parameter {
         ON TARGET DELETE ALLOW;
     };
@@ -298,6 +303,9 @@ CREATE ABSTRACT TYPE schema::Pointer
     CREATE PROPERTY default -> std::str;
     CREATE PROPERTY expr -> std::str;
     CREATE PROPERTY secret -> std::bool;
+    CREATE PROPERTY splat_strategy -> schema::SplatStrategy;
+    CREATE PROPERTY linkful -> std::bool;
+    CREATE PROPERTY protected -> std::bool;
 };
 
 
@@ -542,6 +550,12 @@ CREATE TYPE schema::Function
     CREATE REQUIRED PROPERTY language -> str;
 
     CREATE MULTI LINK used_globals EXTENDING schema::ordered -> schema::Global;
+    CREATE MULTI LINK used_permissions EXTENDING schema::ordered
+        -> schema::Permission;
+
+    CREATE MULTI LINK required_permissions EXTENDING schema::ordered
+        -> schema::Permission;
+
 };
 
 

@@ -36,6 +36,8 @@ from edb.schema import expr as s_expr
 from edb.edgeql import ast as qlast
 from edb.edgeql import qltypes
 
+from edb.ir import typeutils as irtyputils
+
 from . import astutils
 from . import context
 from . import dispatch
@@ -58,6 +60,7 @@ def should_ignore_rewrite(
     #
     # (Eventually will might do a generalization of this based on
     # RBAC ownership of schema objects.)
+    # XXX: extension modules???
     schema = ctx.env.schema
     if (
         isinstance(stype, s_objtypes.ObjectType)
@@ -109,6 +112,9 @@ def has_own_policies(
     return any(
         has_own_policies(stype=child, skip_from=stype, ctx=ctx)
         for child in stype.children(schema)
+        if not irtyputils.is_excluded_cfg_view(
+            child, ancestor=stype, schema=schema
+        )
     )
 
 
@@ -147,7 +153,6 @@ def compile_pol(
 
     # Compile it with all of the
     with ctx.newscope(fenced=True) as _, _.detached() as dctx:
-        dctx.schema_factoring()
         dctx.partial_path_prefix = ctx.partial_path_prefix
         dctx.expr_exposed = context.Exposure.UNEXPOSED
         dctx.suppress_rewrites = frozenset(descs)
@@ -404,6 +409,9 @@ def try_type_rewrite(
     children_have_policies = not skip_subtypes and any(
         has_own_policies(stype=child, skip_from=stype, ctx=ctx)
         for child in stype.children(schema)
+        if not irtyputils.is_excluded_cfg_view(
+            child, ancestor=stype, schema=schema
+        )
     )
 
     pols = get_access_policies(stype, ctx=ctx)
@@ -417,8 +425,10 @@ def try_type_rewrite(
         all_child_descs = [
             x
             for child in stype.children(schema)
-            for x in child.descendants(schema)
+            for x in [child, *child.descendants(schema)]
         ]
+
+        # Children overlap
         child_descs = set(all_child_descs)
         if len(child_descs) != len(all_child_descs):
             children_overlap = True
@@ -471,6 +481,17 @@ def try_type_rewrite(
             stype.children(schema)
             if not children_overlap
             else stype.descendants(schema)
+        )
+        # We need to explicitly exclude cfg views to prevent them from
+        # from showing up in type rewrites. Normally this happens in
+        # inheritance.get_inheritance_view, but needs to happen here
+        # when descendants are expanded.
+        children = frozenset(
+            child
+            for child in children
+            if not irtyputils.is_excluded_cfg_view(
+                child, ancestor=stype, schema=schema
+            )
         )
         sets += [
             # We need to wrap it in a type override so that unioning
@@ -587,4 +608,3 @@ def _prepare_dml_policy_context(
 
     ctx.anchors['__subject__'] = result
     ctx.partial_path_prefix = result
-    ctx.schema_factoring()

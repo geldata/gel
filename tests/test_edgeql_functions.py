@@ -24,8 +24,10 @@ import math
 import os.path
 import random
 import uuid
+from datetime import timedelta
 
 import edgedb
+import gel
 
 from edb.testbase import server as tb
 from edb.tools import test
@@ -1817,6 +1819,54 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
         await self.assert_query_result(
             r'''SELECT sum(<decimal>2) IS decimal;''',
             [True],
+        )
+
+        await self.assert_query_result(
+            r'''SELECT sum(<duration>"PT5S") IS duration;''',
+            [True],
+        )
+
+        await self.assert_query_result(
+            r'''
+                SELECT sum(<std::cal::relative_duration>"PT5S")
+                IS std::cal::relative_duration;
+            ''',
+            [True],
+        )
+
+        await self.assert_query_result(
+            r'''
+                SELECT sum(<cal::date_duration>"PT5S")
+                IS std::cal::date_duration;
+            ''',
+            [True],
+        )
+
+    async def test_edgeql_functions_sum_05(self):
+        await self.assert_query_result(
+            r'''SELECT sum({<duration>"PT5S", <duration>"PT10S"})''',
+            ["PT15S"],
+            [timedelta(seconds=15)],
+        )
+
+    async def test_edgeql_functions_sum_07(self):
+        await self.assert_query_result(
+            r'''
+                SELECT sum({<cal::relative_duration>"PT5S",
+                            <cal::relative_duration>"PT10S"})
+            ''',
+            ["PT15S"],
+            [gel.RelativeDuration(microseconds=15_000_000)],
+        )
+
+    async def test_edgeql_functions_sum_08(self):
+        await self.assert_query_result(
+            r'''
+                SELECT sum({<cal::date_duration>"5 days",
+                            <cal::date_duration>"10 days"})
+            ''',
+            ["P15D"],
+            [gel.DateDuration(days=15)]
         )
 
     async def test_edgeql_functions_unix_to_datetime_01(self):
@@ -5815,6 +5865,104 @@ class TestEdgeQLFunctions(tb.DDLTestCase):
         await self.assert_query_result(
             r'''SELECT math::floor(<decimal>2.5) IS decimal;''',
             {True},
+        )
+
+    async def test_edgeql_functions_math_exp_01(self):
+        # test math::exp basics
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(0);''',
+            {1.0},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(1);''',
+            {math.e},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(2.0);''',
+            {math.exp(2)},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<decimal>1.0);''',
+            {math.e},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp({1, 2, 3});''',
+            {math.e, math.exp(2), math.exp(3)},
+        )
+
+    async def test_edgeql_functions_math_exp_02(self):
+        # test return type of math::exp
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<int64>1) IS float64;''',
+            {True},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<float64>1.0) IS float64;''',
+            {True},
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<decimal>1.0) IS decimal;''',
+            {True},
+        )
+
+    async def test_edgeql_functions_math_exp_03(self):
+        # test math::exp edge cases
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(-1);''',
+            {1 / math.e},
+            abs_tol=1e-5,
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(-2.0);''',
+            {1 / (math.e**2)},
+            abs_tol=1e-5,
+        )
+
+        async with self.assertRaisesRegexTx(
+            edgedb.NumericOutOfRangeError, 'value out of range: overflow'
+        ):
+            await self.con.query(r'''SELECT math::exp(1000);''')
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<decimal>1000);''',
+            {
+                int(
+                    '1970071114017046993888879352243323125316937985323845789952'
+                    '8029913850638507824411934749780765630268899309638179875202'
+                    '2693598298173054461289923262783660152825232320535169584566'
+                    '7561922715676027880714224668263140068551685086534979416603'
+                    '1604536781793809290529972858013286994585647028653437590045'
+                    '6564355589156220422320260518826112288638358372248724725214'
+                    '5061504188819374941008712642322484363157605603774399306239'
+                    '59705844189509050047074217568'
+                )
+            }
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<decimal>100);''',
+            {math.e ** 100}
+        )
+
+        await self.assert_query_result(
+            r'''SELECT math::exp(<float64>'inf');''',
+            {'Infinity'},
+            {math.inf},
+        )
+        await self.assert_query_result(
+            r'''SELECT math::exp(<float64>'nan');''',
+            {'NaN'},
+            {math.nan}
         )
 
     async def test_edgeql_functions_math_log_01(self):

@@ -27,6 +27,7 @@ from typing import (
     Iterable,
     Sequence,
     cast,
+    Any
 )
 
 import functools
@@ -1772,7 +1773,8 @@ class ExtractJSONScalarFunction(trampoline.VersionedFunction):
                 ('detail', ('text',), "''"),
             ],
             returns=('text',),
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2054,7 +2056,8 @@ class ArrayIndexWithBoundsFunction(trampoline.VersionedFunction):
             returns=('anyelement',),
             # Min volatility of exception helpers and pg_typeof is 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2083,7 +2086,8 @@ class ArraySliceFunction(trampoline.VersionedFunction):
                 ("stop", ("bigint",)),
             ],
             returns=("anyarray",),
-            volatility="immutable",
+            volatility="stable",
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2121,7 +2125,8 @@ class StringIndexWithBoundsFunction(trampoline.VersionedFunction):
             returns=('text',),
             # Min volatility of exception helpers and pg_typeof is 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2158,7 +2163,8 @@ class BytesIndexWithBoundsFunction(trampoline.VersionedFunction):
             returns=('bytea',),
             # Min volatility of exception helpers and pg_typeof is 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2270,7 +2276,7 @@ class StringSliceFunction(trampoline.VersionedFunction):
                 ('stop', ('bigint',)),
             ],
             returns=('text',),
-            volatility='immutable',
+            volatility='stable',
             text=self.text)
 
 
@@ -2289,7 +2295,7 @@ class BytesSliceFunction(trampoline.VersionedFunction):
                 ('stop', ('bigint',)),
             ],
             returns=('bytea',),
-            volatility='immutable',
+            volatility='stable',
             text=self.text)
 
 
@@ -2347,7 +2353,8 @@ class JSONIndexByTextFunction(trampoline.VersionedFunction):
             returns=('jsonb',),
             # Min volatility of exception helpers 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             strict=True,
             text=self.text,
         )
@@ -2413,7 +2420,8 @@ class JSONIndexByIntFunction(trampoline.VersionedFunction):
             returns=('jsonb',),
             # Min volatility of exception helpers and pg_typeof is 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility='immutable',
+            volatility='stable',
+            wrapper_volatility='immutable',
             strict=True,
             text=self.text,
         )
@@ -2465,7 +2473,8 @@ class JSONSliceFunction(trampoline.VersionedFunction):
             returns=("jsonb",),
             # Min volatility of to_jsonb is 'stable',
             # but for all practical purposes, we can assume 'immutable'
-            volatility="immutable",
+            volatility="stable",
+            wrapper_volatility='immutable',
             text=self.text,
         )
 
@@ -2997,9 +3006,22 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
             common.maybe_versioned_schema(permissions[0]), permissions[1]
         )
 
+        branches_ptr = role_obj.getptr(
+            schema, s_name.UnqualName('branches'), type=s_props.Property
+        )
+        branches = _schema_alias_view_name(schema, branches_ptr)
+        branches = (
+            common.maybe_versioned_schema(branches[0]), branches[1]
+        )
+
         super_col = ptr_col_name(schema, role_obj, 'superuser')
         name_col = ptr_col_name(schema, role_obj, 'name')
         pass_col = ptr_col_name(schema, role_obj, 'password')
+        pg_pol_col = ptr_col_name(
+            schema,
+            role_obj,
+            'apply_access_policies_pg_default',
+        )
         qi_superuser = qlquote.quote_ident(defines.EDGEDB_SUPERUSER)
         text = f"""
             WITH RECURSIVE
@@ -3056,6 +3078,16 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
                                     )
                                 ELSE NULL END
                             ),
+                            (CASE
+                                WHEN role.{qi(pg_pol_col)} IS NOT NULL THEN
+                                    concat(
+                                        'SET apply_access_policies_pg_default ',
+                                        ':= ',
+                                        role.{qi(pg_pol_col)}::text,
+                                        '; '
+                                    )
+                                ELSE NULL END
+                            ),
                             NULLIF (
                                 concat(
                                     'SET permissions := {{ ',
@@ -3072,6 +3104,23 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
                                 ),
                                 'SET permissions := {{  }}; '
                             ),
+                            NULLIF (
+                                concat(
+                                    'SET branches := {{ ',
+                                    (
+                                        SELECT
+                                            string_agg(
+                                                quote_literal(branches.target),
+                                                ', '
+                                            )
+                                        FROM {q(*branches)} branches
+                                        WHERE branches.source = role.id
+                                    ),
+                                    ' }}; '
+                                ),
+                                'SET branches := {{ ''*'' }}; '
+                            ),
+
                             '}};'
                         ),
                         'ALTER ROLE {qi_superuser} {{ }};'
@@ -3117,6 +3166,17 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
                                         )
                                     ELSE NULL END
                                 ),
+                                (CASE
+                                    WHEN role.{qi(pg_pol_col)} IS NOT NULL THEN
+                                        concat(
+                                            'SET ',
+                                            'apply_access_policies_pg_default ',
+                                            ':= ',
+                                            role.{qi(pg_pol_col)}::text,
+                                            '; '
+                                        )
+                                    ELSE NULL END
+                                ),
                                 NULLIF (
                                     concat(
                                         'SET permissions := {{ ',
@@ -3133,6 +3193,24 @@ class DescribeRolesAsDDLFunction(trampoline.VersionedFunction):
                                     ),
                                     'SET permissions := {{  }}; '
                                 ),
+                                NULLIF (
+                                    concat(
+                                        'SET branches := {{ ',
+                                        (
+                                            SELECT
+                                                string_agg(
+                                                    quote_literal(
+                                                        branches.target),
+                                                    ', '
+                                                )
+                                            FROM {q(*branches)} branches
+                                            WHERE branches.source = role.id
+                                        ),
+                                        ' }}; '
+                                    ),
+                                    'SET branches := {{ ''*'' }}; '
+                                ),
+
                                 '}}'
                             ),
                             ' {{ }}'
@@ -3180,14 +3258,6 @@ class AllRoleMembershipsFunction(trampoline.VersionedFunction):
         member_of = role_obj.getptr(schema, s_name.UnqualName('member_of'))
         members = _schema_alias_view_name(schema, member_of)
         members = (common.maybe_versioned_schema(members[0]), members[1])
-
-        permissions_ptr = role_obj.getptr(
-            schema, s_name.UnqualName('permissions'), type=s_props.Property
-        )
-        permissions = _schema_alias_view_name(schema, permissions_ptr)
-        permissions = (
-            common.maybe_versioned_schema(permissions[0]), permissions[1]
-        )
 
         text = f"""
             WITH RECURSIVE memberships (id, member_of)
@@ -6046,6 +6116,9 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     permissions = Role.getptr(
         schema, s_name.UnqualName('permissions'), type=s_props.Property
     )
+    branches = Role.getptr(
+        schema, s_name.UnqualName('branches'), type=s_props.Property
+    )
 
     superuser = f'''
         a.rolsuper OR EXISTS (
@@ -6074,6 +6147,9 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         'builtin': "((d.description)->>'builtin')::bool",
         'internal': 'False',
         'password': "(d.description)->>'password_hash'",
+        'apply_access_policies_pg_default': (
+            "((d.description)->>'apply_access_policies_pg_default')::bool"
+        ),
     }
 
     view_query = f'''
@@ -6224,6 +6300,27 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
             AND
               (d.description)->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
     '''
+    branches_query = f'''
+        SELECT
+            ((d.description)->>'id')::uuid AS source,
+            jsonb_array_elements_text(
+                -- The coalesce is to handle inplace upgrades from versions
+                -- before the field was added. If it is lacking from the dict,
+                -- make it ['*'].
+                coalesce((d.description)->'branches', '["*"]'::jsonb)
+            )::text as target
+        FROM
+            pg_catalog.pg_roles AS a
+            CROSS JOIN LATERAL (
+                SELECT
+                    edgedb_VER.shobj_metadata(a.oid, 'pg_authid')
+                        AS description
+            ) AS d
+        WHERE
+            (d.description)->>'id' IS NOT NULL
+            AND
+              (d.description)->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
+    '''
 
     objects = {
         Role: view_query,
@@ -6233,6 +6330,7 @@ def _generate_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         annos: annos_link_query,
         int_annos: int_annos_link_query,
         permissions: permissions_query,
+        branches: branches_query,
     }
 
     views: list[dbops.View] = []
@@ -6264,6 +6362,9 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
     permissions = Role.getptr(
         schema, s_name.UnqualName('permissions'), type=s_props.Property
     )
+    branches = Role.getptr(
+        schema, s_name.UnqualName('branches'), type=s_props.Property
+    )
 
     view_query_fields = {
         'id': "(json->>'id')::uuid",
@@ -6277,6 +6378,9 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         'builtin': 'True',
         'internal': 'False',
         'password': "json->>'password_hash'",
+        'apply_access_policies_pg_default': (
+            "(json->>'pg_apply_access_policies_default')::bool"
+        ),
     }
 
     view_query = f'''
@@ -6369,6 +6473,17 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         WHERE 1 = 0
     '''
 
+    branches_query = f'''
+        SELECT
+            (json->>'id')::uuid AS source,
+            '*'::text as target
+        FROM
+            edgedbinstdata_VER.instdata
+        WHERE
+            key = 'single_role_metadata'
+            AND json->>'tenant_id' = edgedb_VER.get_backend_tenant_id()
+    '''
+
     objects = {
         Role: view_query,
         member_of: member_of_link_query,
@@ -6377,6 +6492,7 @@ def _generate_single_role_views(schema: s_schema.Schema) -> list[dbops.View]:
         annos: annos_link_query,
         int_annos: int_annos_link_query,
         permissions: permissions_query,
+        branches: branches_query,
     }
 
     views: list[dbops.View] = []
@@ -6539,7 +6655,7 @@ def _make_json_caster(
 ) -> Callable[[str], str]:
     cast_expr = qlast.TypeCast(
         expr=qlast.TypeCast(
-            expr=qlast.Parameter(name="__replaceme__"),
+            expr=qlast.FunctionParameter(name="__replaceme__"),
             type=s_utils.typeref_to_ast(schema, schema.get('std::json')),
         ),
         type=s_utils.typeref_to_ast(schema, stype),
@@ -6694,7 +6810,13 @@ def _generate_sql_information_schema(
         JOIN edgedb_VER."_SchemaModule" sm ON sm.name = at.module_name
         LEFT JOIN pg_type pt ON pt.typname = at.id::text
         WHERE schema_name not in (
-            'cfg', 'sys', 'schema', 'std', 'std::net', 'std::net::http'
+            'cfg',
+            'sys',
+            'schema',
+            'std',
+            'std::net',
+            'std::net::http',
+            'std::net::perm'
         )
         '''
     )
@@ -8478,6 +8600,8 @@ END;
             """
         ),
 
+        # pg_catalog.has_column_privilege will return NULL for computed and
+        # static columns. So we COALESCE to TRUE.
         trampoline.VersionedFunction(
             name=('edgedbsql', 'has_column_privilege'),
             args=(
@@ -8487,7 +8611,9 @@ END;
             ),
             returns=('bool',),
             text="""
+              SELECT COALESCE((
                 SELECT has_column_privilege(tbl, col, privilege)
+              ), TRUE)
             """
         ),
         trampoline.VersionedFunction(
@@ -8499,8 +8625,10 @@ END;
             ),
             returns=('bool',),
             text="""
+              SELECT COALESCE((
                 SELECT has_column_privilege(
                     edgedbsql_VER.to_regclass(tbl), col, privilege)
+              ), TRUE)
             """
         ),
         trampoline.VersionedFunction(
@@ -8512,9 +8640,11 @@ END;
             ),
             returns=('bool',),
             text="""
+              SELECT COALESCE((
                 SELECT has_column_privilege(tbl, attnum_internal, privilege)
                 FROM edgedbsql_VER.pg_attribute_ext pa
                 WHERE attrelid = tbl AND attname = col
+              ), TRUE)
             """
         ),
         trampoline.VersionedFunction(
@@ -8526,10 +8656,12 @@ END;
             ),
             returns=('bool',),
             text="""
+              SELECT COALESCE((
                 SELECT has_column_privilege(pc.oid, attnum_internal, privilege)
                 FROM edgedbsql_VER.pg_attribute_ext pa,
                 LATERAL (SELECT edgedbsql_VER.to_regclass(tbl) AS oid) pc
                 WHERE pa.attrelid = pc.oid AND pa.attname = col
+              ), TRUE)
             """
         ),
         trampoline.VersionedFunction(
@@ -8795,6 +8927,40 @@ def get_config_type_views(
     return commands
 
 
+def generate_drop_views(
+    group: Sequence[dbops.Command | trampoline.Trampoline],
+    preblock: dbops.PLBlock,
+) -> None:
+    for cv in reversed(list(group)):
+        dv: Any
+        if isinstance(cv, dbops.CreateView):
+            # We try deleting both a MATERIALIZED and not materialized
+            # version, since that allows us to switch between them
+            # more easily.
+            dv = dbops.CommandGroup()
+            dv.add_command(dbops.DropView(
+                cv.view.name,
+                conditions=[dbops.ViewExists(cv.view.name)],
+            ))
+            dv.add_command(dbops.DropView(
+                cv.view.name,
+                conditions=[dbops.ViewExists(cv.view.name, materialized=True)],
+                materialized=True,
+            ))
+        elif isinstance(cv, dbops.CreateFunction):
+            dv = dbops.DropFunction(
+                cv.function.name,
+                args=cv.function.args or (),
+                has_variadic=bool(cv.function.has_variadic),
+                if_exists=True,
+            )
+        elif isinstance(cv, trampoline.Trampoline):
+            dv = cv.drop()
+        else:
+            raise AssertionError(f'unsupported support view command {cv}')
+        dv.generate(preblock)
+
+
 def get_config_views(
     schema: s_schema.Schema,
     existing_view_columns: Optional[dict[str, list[str]]]=None,
@@ -8920,11 +9086,16 @@ def get_support_views(
         schema, s_name.UnqualName('member_of'))
     SysRole__permissions = SysRole.getptr(
         schema, s_name.UnqualName('permissions'))
+    SysRole__branches = SysRole.getptr(
+        schema, s_name.UnqualName('branches'))
     sys_alias_views.append(
         _generate_schema_alias_view(schema, SysRole__member_of)
     )
     sys_alias_views.append(
         _generate_schema_alias_view(schema, SysRole__permissions)
+    )
+    sys_alias_views.append(
+        _generate_schema_alias_view(schema, SysRole__branches)
     )
 
     for alias_view in sys_alias_views:
@@ -9595,6 +9766,8 @@ def _generate_config_type_view(
             FROM
                 {X(target_fromlist)}
         ''')
+        if where:
+            link_query += f'\nWHERE\n    {where}'
 
         views.append((tabname(schema, prop), link_query))
 
@@ -9653,9 +9826,9 @@ async def execute_sql_script(
         elif pl_func_line:
             point = ql_parser.offset_of_line(sql_text, pl_func_line)
             text = sql_text
-        assert text
 
         if point is not None:
+            assert text
             span = qlast.Span(
                 None, text, start=point, end=point, context_lines=30
             )

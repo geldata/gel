@@ -13,7 +13,7 @@ use crate::tokenizer::OpaqueToken;
 pub fn parse(
     py: Python,
     start_token_name: &Bound<PyString>,
-    tokens: PyObject,
+    tokens: Py<PyAny>,
 ) -> PyResult<(ParserResult, &'static Py<PyAny>)> {
     let start_token_name = start_token_name.to_string();
 
@@ -38,7 +38,7 @@ pub fn parse(
 pub fn suggest_next_keywords(
     py: Python,
     start_token_name: &Bound<PyString>,
-    tokens: PyObject,
+    tokens: Py<PyAny>,
 ) -> PyResult<(Py<PyList>, bool)> {
     let start_token_name = start_token_name.to_string();
 
@@ -68,7 +68,7 @@ pub struct Production {
     #[pyo3(get)]
     id: usize,
     #[pyo3(get)]
-    args: PyObject,
+    args: Py<PyAny>,
     #[pyo3(get)]
     start: Option<u64>,
     #[pyo3(get)]
@@ -80,19 +80,19 @@ pub struct Terminal {
     #[pyo3(get)]
     text: String,
     #[pyo3(get)]
-    value: PyObject,
+    value: Py<PyAny>,
     #[pyo3(get)]
     start: u64,
     #[pyo3(get)]
     end: u64,
 }
 
-static PARSER_SPECS: OnceCell<(parser::Spec, PyObject)> = OnceCell::new();
+static PARSER_SPECS: OnceCell<(parser::Spec, Py<PyAny>)> = OnceCell::new();
 
 fn downcast_tokens(
     py: Python,
     start_token_name: &str,
-    token_list: PyObject,
+    token_list: Py<PyAny>,
 ) -> PyResult<Vec<parser::Terminal>> {
     let tokens = token_list.downcast_bound::<PyList>(py)?;
 
@@ -108,7 +108,7 @@ fn downcast_tokens(
     Ok(buf)
 }
 
-fn get_spec() -> PyResult<&'static (parser::Spec, PyObject)> {
+fn get_spec() -> PyResult<&'static (parser::Spec, Py<PyAny>)> {
     if let Some(x) = PARSER_SPECS.get() {
         Ok(x)
     } else {
@@ -153,7 +153,7 @@ pub fn save_spec(spec_json: &Bound<PyString>, dst: &Bound<PyString>) -> PyResult
     Ok(())
 }
 
-fn load_productions(py: Python<'_>, spec: &parser::Spec) -> PyResult<PyObject> {
+fn load_productions(py: Python<'_>, spec: &parser::Spec) -> PyResult<Py<PyAny>> {
     let grammar_name = "edb.edgeql.parser.grammar.start";
     let grammar_mod = py.import(grammar_name)?;
     let load_productions = py

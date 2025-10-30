@@ -353,6 +353,19 @@ handle the verification flow, we implement an endpoint:
 
 .. note::
 
+   If your Email/Password provider uses the **Code** verification method, the
+   verification email contains a one-time code rather than a link. In that
+   case, prompt the user for the code and call ``POST /verify`` with:
+
+   - **provider**: ``builtin::local_emailpassword``
+   - **email** and **code**
+   - optionally a **challenge** and **redirect_to** to receive a PKCE code or a redirect upon success
+
+   The Link-based example below continues to work when the provider uses the
+   Link method.
+
+.. note::
+
    💡 If you would like to allow users to still log in, but offer limited access
    to your application, you can check the associated
    ``ext::auth::EmailPasswordFactor`` for the ``ext::auth::Identity`` to see if
@@ -510,6 +523,19 @@ To allow users to reset their password, we implement three endpoints. The first
 one sends the reset email. The second is the HTML form that is rendered when
 the user follows the link in their email. And, the final one is the endpoint
 that updates the password and logs in the user.
+
+.. note::
+
+   If your provider is configured for the **Code** method for password reset,
+   the email will contain a one-time code instead of a reset link/token. In
+   that case:
+
+   - Call ``POST /reset-password`` with **email**, **code**, **password** and
+     optionally **challenge**.
+   - If you include a **challenge**, the response will include a PKCE ``code``
+     that you can exchange at ``POST /token`` to log the user in immediately.
+   - If you omit **challenge**, the response will indicate success without a
+     PKCE code and you should ask the user to sign in.
 
 .. lint-off
 

@@ -78,6 +78,7 @@ pub enum Kind {
     Coalesce,         // ??
     Namespace,        // ::
     BackwardLink,     // .<
+    OptionalLink,     // .?>
     FloorDiv,         // //
     Concat,           // ++
     GreaterEq,        // >=
@@ -356,6 +357,16 @@ impl<'a> Tokenizer<'a> {
             },
             '.' => match iter.next() {
                 Some((_, '<')) => Ok((BackwardLink, 2)),
+                Some((_, '?')) => {
+                    if let Some((_, '>')) = iter.next() {
+                        Ok((OptionalLink, 3))
+                    } else {
+                        Err(Error::new(
+                            "`.?` is not an operator, \
+                                did you mean `.?>` ?",
+                        ))
+                    }
+                }
                 _ => Ok((Dot, 1)),
             },
             '?' => match iter.next() {
@@ -459,10 +470,9 @@ impl<'a> Tokenizer<'a> {
                                 "br" => (true, true),
                                 _ => {
                                     return Err(Error::new(format_args!(
-                                        "prefix {:?} \
+                                        "prefix {prefix:?} \
                                     is not allowed for strings, \
-                                    allowed: `b`, `r`",
-                                        prefix
+                                    allowed: `b`, `r`"
                                     )))
                                 }
                             };
@@ -471,10 +481,9 @@ impl<'a> Tokenizer<'a> {
                         Some((idx, '`')) => {
                             let prefix = &tail[..idx];
                             return Err(Error::new(format_args!(
-                                "prefix {:?} is not \
+                                "prefix {prefix:?} is not \
                                 allowed for field names, perhaps missing \
-                                comma or dot?",
-                                prefix
+                                comma or dot?"
                             )));
                         }
                         Some((_, c)) if c == '_' || c.is_alphanumeric() => continue,
@@ -501,10 +510,9 @@ impl<'a> Tokenizer<'a> {
                             Some((_, '0'..='9')) => continue,
                             Some((_, c)) if c.is_alphabetic() => {
                                 return Err(Error::new(format_args!(
-                                    "unexpected char {:?}, \
+                                    "unexpected char {c:?}, \
                                         only integers are allowed after dot \
-                                        (for tuple access)",
-                                    c
+                                        (for tuple access)"
                                 )));
                             }
                             Some((idx, _)) => break idx,
@@ -593,7 +601,7 @@ impl<'a> Tokenizer<'a> {
                                 return Err(Error::new("dollar quote supports only ascii chars"));
                             }
                             if let Some(end) =
-                                find(self.buf[self.off + msize..].as_bytes(), marker.as_bytes())
+                                find(&self.buf.as_bytes()[self.off + msize..], marker.as_bytes())
                             {
                                 let data = &self.buf[self.off + msize..][..end];
                                 for c in data.chars() {
@@ -602,8 +610,7 @@ impl<'a> Tokenizer<'a> {
                                 return Ok((Str, msize + end + msize));
                             } else {
                                 return Err(Error::new(format_args!(
-                                    "unterminated string started with {:?}",
-                                    marker
+                                    "unterminated string started with {marker:?}"
                                 )));
                             }
                         }
@@ -678,9 +685,8 @@ impl<'a> Tokenizer<'a> {
                     c if c as u32 > 0x7f => {
                         return Err(Error::new(format_args!(
                             "invalid bytes literal: character \
-                                {:?} is unexpected, only ascii chars are \
-                                allowed in bytes literals",
-                            c
+                                {c:?} is unexpected, only ascii chars are \
+                                allowed in bytes literals"
                         )));
                     }
                     c if c == open_quote => return Ok((Kind::BinStr, quote_off + idx + 1)),
@@ -702,8 +708,7 @@ impl<'a> Tokenizer<'a> {
             }
         }
         Err(Error::new(format_args!(
-            "unterminated string, quoted by `{}`",
-            open_quote
+            "unterminated string, quoted by `{open_quote}`"
         )))
     }
 
@@ -726,8 +731,7 @@ impl<'a> Tokenizer<'a> {
             }
         }
         Err(Error::new(format_args!(
-            "unterminated string with interpolations, quoted by `{}`",
-            end,
+            "unterminated string with interpolations, quoted by `{end}`",
         )))
     }
 
@@ -889,22 +893,19 @@ impl<'a> Tokenizer<'a> {
             };
             if suffix.starts_with('O') {
                 Err(Error::new(format_args!(
-                    "suffix {:?} is invalid for \
+                    "suffix {suffix:?} is invalid for \
                         numbers, perhaps mixed up letter `O` \
-                        with zero `0`?",
-                    suffix
+                        with zero `0`?"
                 )))
             } else if decimal {
                 return Err(Error::new(format_args!(
-                    "suffix {:?} is invalid for \
-                        numbers, perhaps you wanted `{}n` (decimal)?",
-                    suffix, val
+                    "suffix {suffix:?} is invalid for \
+                        numbers, perhaps you wanted `{val}n` (decimal)?"
                 )));
             } else {
                 return Err(Error::new(format_args!(
-                    "suffix {:?} is invalid for \
-                        numbers, perhaps you wanted `{}n` (bigint)?",
-                    suffix, val
+                    "suffix {suffix:?} is invalid for \
+                        numbers, perhaps you wanted `{val}n` (bigint)?"
                 )));
             }
         }
@@ -1073,6 +1074,7 @@ impl Kind {
             Ampersand => "&",
             At => "@",
             BackwardLink => ".<",
+            OptionalLink => ".?>",
             CloseBrace => "}",
             CloseBracket => "]",
             CloseParen => ")",

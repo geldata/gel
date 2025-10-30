@@ -30,7 +30,7 @@ ReflectionCache = immutables.Map[str, tuple[str, ...]]
 
 class DatabaseState(typing.NamedTuple):
     name: str
-    user_schema: schema.FlatSchema
+    user_schema: schema.Schema
     reflection_cache: ReflectionCache
     database_config: immutables.Map[str, config.SettingValue]
 

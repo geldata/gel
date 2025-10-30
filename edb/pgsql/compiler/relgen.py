@@ -28,8 +28,6 @@ from typing import (
     Iterable,
     Collection,
     NamedTuple,
-    Generic,
-    TypeVar,
     cast,
 )
 
@@ -373,17 +371,14 @@ def _get_expr_set_rvar(
     raise NotImplementedError(f'no relgen handler for {ir.__class__}')
 
 
-T_expr = TypeVar('T_expr', contravariant=True, bound=irast.Expr)
-
-
-class _GetExprRvarFunc(Protocol, Generic[T_expr]):
+class _GetExprRvarFunc[T_expr: irast.Expr](Protocol):  # noqa: UP046
     def __call__(
         self, __ir_set: irast.SetE[T_expr], *, ctx: context.CompilerContextLevel
     ) -> SetRVars:
         pass
 
 
-def register_get_rvar(
+def register_get_rvar[T_expr: irast.Expr](
     typ: type[T_expr],
 ) -> Callable[[_GetExprRvarFunc[T_expr]], _GetExprRvarFunc[T_expr]]:
     def func(f: _GetExprRvarFunc[T_expr]) -> _GetExprRvarFunc[T_expr]:
@@ -543,7 +538,7 @@ def can_omit_optional_wrapper(
             ctx=ctx,
         )
 
-    if isinstance(ir_set.expr, irast.Parameter):
+    if isinstance(ir_set.expr, irast.QueryParameter):
         return True
 
     # Our base json casts should all preserve nullity (instead of
@@ -868,7 +863,8 @@ def process_set_as_link_property_ref(
 
         if link_rvar is None:
             src_rvar = get_set_rvar(ir_source, ctx=newctx)
-            assert irutils.is_set_instance(link_prefix, irast.Pointer)
+            assert irutils.is_set_instance(link_prefix, irast.Pointer), (
+                f'projecting lprop on {link_prefix.expr}')
             link_rvar = relctx.new_pointer_rvar(
                 link_prefix, src_rvar=src_rvar,
                 link_bias=True, ctx=newctx)
@@ -1003,7 +999,7 @@ def process_set_as_path_type_intersection(
         poly_rvar = relctx.range_for_typeref(
             rptr.ptrref.out_target,
             path_id=ir_set.path_id,
-            dml_source=irutils.get_dml_sources(ir_set),
+            dml_source=irutils.get_dml_sources(ir_set, ctx.env.binding_dml),
             lateral=True,
             ctx=ctx,
         )
@@ -1113,7 +1109,11 @@ def process_set_as_path(
     rvars = []
 
     ptr_info = pg_types.get_ptrref_storage_info(
-        ptrref, resolve_type=False, link_bias=False, allow_missing=True)
+        ptrref,
+        resolve_type=False,
+        link_bias=rptr.force_link_table,
+        allow_missing=True,
+    )
 
     # Path is a link property.
     is_linkprop = ptrref.source_ptr is not None

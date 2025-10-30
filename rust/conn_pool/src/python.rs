@@ -301,7 +301,7 @@ impl ConnPool {
     ) -> PyResult<Self> {
         let level = get_python_logger_level(py, "edb.server.conn_pool")?;
         let min_idle_time_before_gc = min_idle_time_before_gc as usize;
-        let new = py.allow_threads(|| {
+        let new = py.detach(|| {
             let (txfd, rxfd) = std::sync::mpsc::channel();
             thread::spawn(move || {
                 initialize_logging_in_thread("edb.server.conn_pool", level);
@@ -362,7 +362,7 @@ impl ConnPool {
             .send_err(PythonToRustMessage::CompletedAsync(ConnHandleId(id)))
     }
 
-    fn _failed(&self, id: u64, _error: PyObject) -> PyResult<()> {
+    fn _failed(&self, id: u64, _error: Py<PyAny>) -> PyResult<()> {
         self.channel
             .send_err(PythonToRustMessage::FailedAsync(ConnHandleId(id)))
     }

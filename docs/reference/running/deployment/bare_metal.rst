@@ -13,7 +13,7 @@ package manager and systemd.
 
 
 Install the Gel Package
-==========================
+=======================
 
 The steps for installing the Gel package will be slightly different
 depending on your Linux distribution. Once you have the package installed you
@@ -35,7 +35,7 @@ Add the Gel package repository.
 
 .. code-block:: bash
 
-   $ echo deb [signed-by=/usr/local/share/keyrings/gel-keyring.gpg] \
+   $ echo deb '[signed-by=/usr/local/share/keyrings/gel-keyring.gpg]' \
        https://packages.geldata.com/apt \
        $(grep "VERSION_CODENAME=" /etc/os-release | cut -d= -f2) main \
        | sudo tee /etc/apt/sources.list.d/gel.list

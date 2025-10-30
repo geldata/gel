@@ -15,4 +15,5 @@ Changes introduced in all of the releases of |Gel| so far:
     4_x
     5_x
     6_x
+    7_x
     deprecation

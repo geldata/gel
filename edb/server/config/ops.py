@@ -25,7 +25,6 @@ from typing import (
     Any,
     Callable,
     Optional,
-    TypeVar,
     Iterable,
     Mapping,
     Collection,
@@ -78,10 +77,7 @@ if TYPE_CHECKING:
     SettingsMap = immutables.Map[str, SettingValue]
 
 
-T_type = TypeVar('T_type', bound=type)
-
-
-def _issubclass(
+def _issubclass[T_type: type](
     typ: type | types.ConfigTypeSpec, parent: T_type
 ) -> TypeGuard[T_type]:
     return isinstance(typ, type) and issubclass(typ, parent)

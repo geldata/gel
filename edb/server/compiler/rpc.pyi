@@ -25,6 +25,9 @@ from edb import edgeql
 from edb.server import defines, config
 from edb.server.compiler import sertypes, enums
 
+from edb import graphql
+from edb.pgsql import parser as pgparser
+
 class SQLParamsSource:
     types_in_out: list[tuple[list[str], list[tuple[str, str]]]]
 
@@ -42,7 +45,7 @@ class SQLParamsSource:
         ...
 
 class CompilationRequest:
-    source: edgeql.Source
+    source: edgeql.Source | graphql.Source | pgparser.Source | SQLParamsSource
     protocol_version: defines.ProtocolVersion
     input_language: enums.InputLanguage
     output_format: enums.OutputFormat
@@ -57,11 +60,12 @@ class CompilationRequest:
 
     modaliases: immutables.Map[str | None, str] | None
     session_config: immutables.Map[str, config.SettingValue] | None
+    key_params: typing.Mapping[str, object] | None = None
 
     def __init__(
         self,
         *,
-        source: edgeql.Source,
+        source: edgeql.Source | graphql.Source | pgparser.Source,
         protocol_version: defines.ProtocolVersion,
         schema_version: uuid.UUID,
         compilation_config_serializer: sertypes.CompilationConfigSerializer,
@@ -79,22 +83,8 @@ class CompilationRequest:
         system_config: typing.Mapping[str, config.SettingValue] | None = None,
         role_name: str = defines.EDGEDB_SUPERUSER,
         branch_name: str = defines.EDGEDB_SUPERUSER_DB,
+        key_params: typing.Mapping[str, object] | None = None,
     ):
-        ...
-
-    def update(
-        self,
-        source: edgeql.Source,
-        protocol_version: defines.ProtocolVersion,
-        *,
-        output_format: enums.OutputFormat = enums.OutputFormat.BINARY,
-        input_format: enums.InputFormat = enums.InputFormat.BINARY,
-        expect_one: bool = False,
-        implicit_limit: int = 0,
-        inline_typeids: bool = False,
-        inline_typenames: bool = False,
-        inline_objectids: bool = True,
-    ) -> CompilationRequest:
         ...
 
     def set_modaliases(

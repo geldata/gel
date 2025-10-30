@@ -18,6 +18,7 @@
 
 
 import os.path
+import re
 
 from edb.testbase import lang as tb
 
@@ -28,6 +29,7 @@ from edb.edgeql import parser as qlparser
 from edb.pgsql import ast as pgast
 from edb.pgsql import compiler as pg_compiler
 from edb.pgsql import codegen as pg_codegen
+from edb.pgsql import common as pg_common
 
 
 class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
@@ -116,7 +118,9 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
         ''')
 
     def test_codegen_elide_optional_wrapper_02(self):
+        # "For Issue in Issue" added when we switched to SIMPLE_SCOPING
         self.no_optional_test('''
+            FOR Issue in Issue
             SELECT (Issue.name, Issue.time_estimate ?= 60)
         ''')
 
@@ -545,11 +549,31 @@ class TestEdgeQLSQLCodegen(tb.BaseEdgeQLCompilerTest):
             }
         ''')
 
+        schema_name = pg_common.versioned_schema('edgedbstd')
         table_obj = self.schema.get("std::net::http::ScheduledRequest")
-        count = sql.count(str(table_obj.id))
+        # Search for the table with versioned schema to exclude matches from
+        # access policies.
+        pattern = schema_name + r"\.['\"]" + str(table_obj.id) + r"['\"]"
+        count = len(re.findall(pattern, sql))
+
         # The table should only be referenced once, in the INSERT.
         # If we reference it more than that, we're probably selecting it.
         self.assertEqual(
             count,
             1,
             f"ScheduledRequest selected from and not just inserted: {sql}")
+
+    SCHEMA_gcache = r'''
+        global b := true;
+        type T {
+            access policy ok allow all using (global b);
+        };
+    '''
+
+    def test_codegen_global_cache_01(self):
+        tree = self._compile_to_tree('''
+            select gcache::T filter global gcache::b
+        ''')
+        assert isinstance(tree, pgast.SelectStmt)
+        # One CTE for the global, one for the policy
+        self.assertEqual(len(tree.ctes), 2)

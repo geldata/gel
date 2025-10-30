@@ -54,47 +54,222 @@ class ListNonterm(parsing.ListNonterm, element=None, is_internal=True):
     pass
 
 
+# We have an annoying split between "simple" ExprStmt and "annoying"
+# ExprStmt. The heart of the issue is we want to allow unparenthesized
+# statements in places like function arguments, but the trailing
+# parenthesis allowed in the BY clause of GROUP conflicts with the
+# commas there.
+#
+# So instead we allow unparenthesized expressions as long as they
+# aren't GROUP (or a FOR <x> IN <whatever> GROUP ...).
 class ExprStmt(Nonterm):
     val: qlast.Query
 
-    def reduce_WithBlock_ExprStmtCore(self, *kids):
+    @parsing.inline(0)
+    def reduce_ExprStmtSimple(self, *kids):
+        pass
+
+    @parsing.inline(0)
+    def reduce_ExprStmtAnnoying(self, *kids):
+        pass
+
+
+class ExprStmtSimple(Nonterm):
+    val: qlast.Query
+
+    def reduce_WithBlock_ExprStmtSimpleCore(self, *kids):
         self.val = kids[1].val
         self.val.aliases = kids[0].val.aliases
 
     @parsing.inline(0)
-    def reduce_ExprStmtCore(self, *kids):
+    def reduce_ExprStmtSimpleCore(self, *kids):
         pass
 
 
-class ExprStmtCore(Nonterm):
+class ExprStmtAnnoying(Nonterm):
     val: qlast.Query
 
-    @parsing.inline(0)
-    def reduce_SimpleFor(self, *kids):
-        pass
+    def reduce_WithBlock_ExprStmtAnnoyingCore(self, *kids):
+        self.val = kids[1].val
+        self.val.aliases = kids[0].val.aliases
 
     @parsing.inline(0)
-    def reduce_SimpleSelect(self, *kids):
+    def reduce_ExprStmtAnnoyingCore(self, *kids):
+        pass
+
+
+class ExprStmtSimpleCore(Nonterm):
+    val: qlast.Query
+
+    def reduce_Select(self, *kids):
+        r"%reduce SELECT OptionallyAliasedExpr \
+                  OptFilterClause OptSortClause OptSelectLimit"
+
+        offset, limit = kids[4].val
+
+        if offset is not None or limit is not None:
+            subj = qlast.SelectQuery(
+                result=kids[1].val.expr,
+                result_alias=kids[1].val.alias,
+                where=kids[2].val,
+                orderby=kids[3].val,
+                implicit=True,
+                span=merge_spans((kids[0], kids[3]))
+            )
+
+            self.val = qlast.SelectQuery(
+                result=subj,
+                offset=offset,
+                limit=limit,
+            )
+        else:
+            self.val = qlast.SelectQuery(
+                result=kids[1].val.expr,
+                result_alias=kids[1].val.alias,
+                where=kids[2].val,
+                orderby=kids[3].val,
+            )
+
+    def reduce_Insert(self, *kids):
+        r'%reduce INSERT Expr OptUnlessConflictClause'
+
+        subj = kids[1].val
+        unless_conflict = kids[2].val
+
+        if isinstance(subj, qlast.Shape):
+            if not subj.expr:
+                raise errors.EdgeQLSyntaxError(
+                    "insert shape expressions must have a type name",
+                    span=subj.span
+                )
+            subj_path = subj.expr
+            shape = subj.elements
+        else:
+            subj_path = subj
+            shape = []
+
+        if isinstance(subj_path, qlast.Path) and \
+                len(subj_path.steps) == 1 and \
+                isinstance(subj_path.steps[0], qlast.ObjectRef):
+            objtype = subj_path.steps[0]
+        elif isinstance(subj_path, qlast.IfElse):
+            # Insert attempted on something that looks like a conditional
+            # expression. Aside from it being an error, it also seems that
+            # the intent was to insert something conditionally.
+            raise errors.EdgeQLSyntaxError(
+                f"INSERT only works with object types, not conditional "
+                f"expressions",
+                hint=(
+                    f"To resolve this try surrounding the INSERT branch of "
+                    f"the conditional expression with parentheses. This way "
+                    f"the INSERT will be triggered conditionally in one of "
+                    f"the branches."
+                ),
+                span=subj_path.span)
+        else:
+            raise errors.EdgeQLSyntaxError(
+                f"INSERT only works with object types, not arbitrary "
+                f"expressions",
+                hint=(
+                    f"To resolve this try to surround the entire INSERT "
+                    f"statement with parentheses in order to separate it "
+                    f"from the rest of the expression."
+                ),
+                span=subj_path.span)
+
+        self.val = qlast.InsertQuery(
+            subject=objtype,
+            shape=shape,
+            unless_conflict=unless_conflict,
+        )
+
+    def reduce_Update(self, *kids):
+        "%reduce UPDATE Expr OptFilterClause SET Shape"
+        self.val = qlast.UpdateQuery(
+            subject=kids[1].val,
+            where=kids[2].val,
+            shape=kids[4].val,
+        )
+
+    def reduce_Delete(self, *kids):
+        r"%reduce DELETE Expr \
+                  OptFilterClause OptSortClause OptSelectLimit"
+        self.val = qlast.DeleteQuery(
+            subject=kids[1].val,
+            where=kids[2].val,
+            orderby=kids[3].val,
+            offset=kids[4].val[0],
+            limit=kids[4].val[1],
+        )
+
+    def reduce_ForIn(self, *kids):
+        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr UNION Expr"
+        _, optional, iterator_alias, _, iterator, _, body = kids
+        self.val = qlast.ForQuery(
+            optional=optional.val,
+            iterator_alias=iterator_alias.val,
+            iterator=iterator.val,
+            result=body.val,
+        )
+
+    def reduce_ForInStmt(self, *kids):
+        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr ExprStmtSimple"
+        _, optional, iterator_alias, _, iterator, body = kids
+        self.val = qlast.ForQuery(
+            has_union=False,
+            optional=optional.val,
+            iterator_alias=iterator_alias.val,
+            iterator=iterator.val,
+            result=body.val,
+        )
+
+    def reduce_InternalGroup(self, *kids):
+        r"%reduce FOR GROUP OptionallyAliasedExpr \
+                  UsingClause \
+                  ByClause \
+                  IN Identifier OptGroupingAlias \
+                  UNION OptionallyAliasedExpr \
+                  OptFilterClause OptSortClause \
+        "
+        self.val = qlast.InternalGroupQuery(
+            subject=kids[2].val.expr,
+            subject_alias=kids[2].val.alias,
+            using=kids[3].val,
+            by=kids[4].val,
+            group_alias=kids[6].val,
+            grouping_alias=kids[7].val,
+            result_alias=kids[9].val.alias,
+            result=kids[9].val.expr,
+            where=kids[10].val,
+            orderby=kids[11].val,
+        )
+
+
+class ExprStmtAnnoyingCore(Nonterm):
+    @parsing.inline(0)
+    def reduce_AnnoyingFor(self, *kids):
         pass
 
     @parsing.inline(0)
     def reduce_SimpleGroup(self, *kids):
         pass
 
+
+# A "generalized expression" that can be either an expression or
+# *most* unparenthesized statements.
+#
+# (Note that a number of places that are *approximately* using this
+# instead need to spell it out more explicitly because it doesn't
+# exactly fit.)
+class GenExpr(Nonterm):
+    val: qlast.Expr
+
     @parsing.inline(0)
-    def reduce_InternalGroup(self, *kids):
+    def reduce_Expr(self, *kids):
         pass
 
     @parsing.inline(0)
-    def reduce_SimpleInsert(self, *kids):
-        pass
-
-    @parsing.inline(0)
-    def reduce_SimpleUpdate(self, *kids):
-        pass
-
-    @parsing.inline(0)
-    def reduce_SimpleDelete(self, *kids):
+    def reduce_ExprStmtSimpleCore(self, *kids):
         pass
 
 
@@ -211,21 +386,12 @@ class OptionalOptional(Nonterm):
         self.val = False
 
 
-class SimpleFor(Nonterm):
+class AnnoyingFor(Nonterm):
     val: qlast.ForQuery
 
-    def reduce_ForIn(self, *kids):
-        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr UNION Expr"
-        _, optional, iterator_alias, _, iterator, _, body = kids
-        self.val = qlast.ForQuery(
-            optional=optional.val,
-            iterator_alias=iterator_alias.val,
-            iterator=iterator.val,
-            result=body.val,
-        )
-
     def reduce_ForInStmt(self, *kids):
-        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr ExprStmt"
+        r"%reduce FOR OptionalOptional Identifier IN AtomicExpr \
+                  ExprStmtAnnoying"
         _, optional, iterator_alias, _, iterator, body = kids
         self.val = qlast.ForQuery(
             has_union=False,
@@ -234,39 +400,6 @@ class SimpleFor(Nonterm):
             iterator=iterator.val,
             result=body.val,
         )
-
-
-class SimpleSelect(Nonterm):
-    val: qlast.SelectQuery
-
-    def reduce_Select(self, *kids):
-        r"%reduce SELECT OptionallyAliasedExpr \
-                  OptFilterClause OptSortClause OptSelectLimit"
-
-        offset, limit = kids[4].val
-
-        if offset is not None or limit is not None:
-            subj = qlast.SelectQuery(
-                result=kids[1].val.expr,
-                result_alias=kids[1].val.alias,
-                where=kids[2].val,
-                orderby=kids[3].val,
-                implicit=True,
-                span=merge_spans((kids[0], kids[3]))
-            )
-
-            self.val = qlast.SelectQuery(
-                result=subj,
-                offset=offset,
-                limit=limit,
-            )
-        else:
-            self.val = qlast.SelectQuery(
-                result=kids[1].val.expr,
-                result_alias=kids[1].val.alias,
-                where=kids[2].val,
-                orderby=kids[3].val,
-            )
 
 
 class ByClause(Nonterm):
@@ -322,112 +455,20 @@ class OptGroupingAlias(Nonterm):
         self.val = None
 
 
-class InternalGroup(Nonterm):
-    val: qlast.InternalGroupQuery
-
-    def reduce_InternalGroup(self, *kids):
-        r"%reduce FOR GROUP OptionallyAliasedExpr \
-                  UsingClause \
-                  ByClause \
-                  IN Identifier OptGroupingAlias \
-                  UNION OptionallyAliasedExpr \
-                  OptFilterClause OptSortClause \
-        "
-        self.val = qlast.InternalGroupQuery(
-            subject=kids[2].val.expr,
-            subject_alias=kids[2].val.alias,
-            using=kids[3].val,
-            by=kids[4].val,
-            group_alias=kids[6].val,
-            grouping_alias=kids[7].val,
-            result_alias=kids[9].val.alias,
-            result=kids[9].val.expr,
-            where=kids[10].val,
-            orderby=kids[11].val,
-        )
+FunctionResultData = collections.namedtuple(
+    'FunctionResultData',
+    ['type_qualifier', 'result_type'],
+    module=__name__
+)
 
 
-class SimpleInsert(Nonterm):
-    val: qlast.InsertQuery
-
-    def reduce_Insert(self, *kids):
-        r'%reduce INSERT Expr OptUnlessConflictClause'
-
-        subj = kids[1].val
-        unless_conflict = kids[2].val
-
-        if isinstance(subj, qlast.Shape):
-            if not subj.expr:
-                raise errors.EdgeQLSyntaxError(
-                    "insert shape expressions must have a type name",
-                    span=subj.span
-                )
-            subj_path = subj.expr
-            shape = subj.elements
-        else:
-            subj_path = subj
-            shape = []
-
-        if isinstance(subj_path, qlast.Path) and \
-                len(subj_path.steps) == 1 and \
-                isinstance(subj_path.steps[0], qlast.ObjectRef):
-            objtype = subj_path.steps[0]
-        elif isinstance(subj_path, qlast.IfElse):
-            # Insert attempted on something that looks like a conditional
-            # expression. Aside from it being an error, it also seems that
-            # the intent was to insert something conditionally.
-            raise errors.EdgeQLSyntaxError(
-                f"INSERT only works with object types, not conditional "
-                f"expressions",
-                hint=(
-                    f"To resolve this try surrounding the INSERT branch of "
-                    f"the conditional expression with parentheses. This way "
-                    f"the INSERT will be triggered conditionally in one of "
-                    f"the branches."
-                ),
-                span=subj_path.span)
-        else:
-            raise errors.EdgeQLSyntaxError(
-                f"INSERT only works with object types, not arbitrary "
-                f"expressions",
-                hint=(
-                    f"To resolve this try to surround the entire INSERT "
-                    f"statement with parentheses in order to separate it "
-                    f"from the rest of the expression."
-                ),
-                span=subj_path.span)
-
-        self.val = qlast.InsertQuery(
-            subject=objtype,
-            shape=shape,
-            unless_conflict=unless_conflict,
-        )
-
-
-class SimpleUpdate(Nonterm):
-    val: qlast.UpdateQuery
-
-    def reduce_Update(self, *kids):
-        "%reduce UPDATE Expr OptFilterClause SET Shape"
-        self.val = qlast.UpdateQuery(
-            subject=kids[1].val,
-            where=kids[2].val,
-            shape=kids[4].val,
-        )
-
-
-class SimpleDelete(Nonterm):
-    val: qlast.DeleteQuery
-
-    def reduce_Delete(self, *kids):
-        r"%reduce DELETE Expr \
-                  OptFilterClause OptSortClause OptSelectLimit"
-        self.val = qlast.DeleteQuery(
-            subject=kids[1].val,
-            where=kids[2].val,
-            orderby=kids[3].val,
-            offset=kids[4].val[0],
-            limit=kids[4].val[1],
+class FunctionResult(Nonterm):
+    def reduce_ARROW_OptTypeQualifier_FunctionType(
+        self, _, type_qualifier, result_type
+    ):
+        self.val = FunctionResultData(
+            type_qualifier=type_qualifier.val,
+            result_type=result_type.val,
         )
 
 
@@ -458,6 +499,9 @@ class AliasDecl(Nonterm):
     @parsing.inline(0)
     def reduce_AliasedExpr(self, *kids):
         pass
+
+    def reduce_Identifier_ASSIGN_ExprStmtSimple(self, *kids):
+        self.val = qlast.AliasedExpr(alias=kids[0].val, expr=kids[2].val)
 
 
 class WithDecl(Nonterm):
@@ -872,7 +916,7 @@ class OptPtrQuals(Nonterm):
 # by a keyword).
 class ComputableShapePointer(Nonterm):
 
-    def reduce_OPTIONAL_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = False
@@ -881,7 +925,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_REQUIRED_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = True
@@ -890,7 +934,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_MULTI_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_MULTI_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.Many
@@ -899,7 +943,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_SINGLE_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_SINGLE_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.One
@@ -908,7 +952,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_OPTIONAL_MULTI_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_MULTI_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -918,7 +962,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_OPTIONAL_SINGLE_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_SINGLE_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -928,7 +972,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_MULTI_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_MULTI_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -938,7 +982,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_SINGLE_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_SINGLE_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -948,7 +992,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_SimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_SimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -956,7 +1000,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[1].span),
         )
 
-    def reduce_SimpleShapePointer_ADDASSIGN_Expr(self, *kids):
+    def reduce_SimpleShapePointer_ADDASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -964,7 +1008,7 @@ class ComputableShapePointer(Nonterm):
             span=assert_non_null(kids[1].span),
         )
 
-    def reduce_SimpleShapePointer_REMASSIGN_Expr(self, *kids):
+    def reduce_SimpleShapePointer_REMASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -976,7 +1020,7 @@ class ComputableShapePointer(Nonterm):
 # This is the same as the above ComputableShapePointer, except using
 # FreeSimpleShapePointer and not allowing +=/-=.
 class FreeComputableShapePointer(Nonterm):
-    def reduce_OPTIONAL_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = False
@@ -985,7 +1029,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_REQUIRED_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.required = True
@@ -994,7 +1038,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_MULTI_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_MULTI_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.Many
@@ -1003,7 +1047,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_SINGLE_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_SINGLE_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[1].val
         self.val.compexpr = kids[3].val
         self.val.cardinality = qltypes.SchemaCardinality.One
@@ -1012,7 +1056,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[2].span),
         )
 
-    def reduce_OPTIONAL_MULTI_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_MULTI_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -1022,7 +1068,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_OPTIONAL_SINGLE_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_OPTIONAL_SINGLE_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = False
@@ -1032,7 +1080,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_MULTI_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_MULTI_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -1042,7 +1092,9 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_REQUIRED_SINGLE_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_REQUIRED_SINGLE_FreeSimpleShapePointer_ASSIGN_GenExpr(
+        self, *kids
+    ):
         self.val = kids[2].val
         self.val.compexpr = kids[4].val
         self.val.required = True
@@ -1052,7 +1104,7 @@ class FreeComputableShapePointer(Nonterm):
             span=assert_non_null(kids[3].span),
         )
 
-    def reduce_FreeSimpleShapePointer_ASSIGN_Expr(self, *kids):
+    def reduce_FreeSimpleShapePointer_ASSIGN_GenExpr(self, *kids):
         self.val = kids[0].val
         self.val.compexpr = kids[2].val
         self.val.operation = qlast.ShapeOperation(
@@ -1095,12 +1147,16 @@ class OptUnlessConflictClause(Nonterm):
 
 
 class FilterClause(Nonterm):
+    val: qlast.Expr
+
     @parsing.inline(1)
     def reduce_FILTER_Expr(self, *kids):
         pass
 
 
 class OptFilterClause(Nonterm):
+    val: typing.Optional[qlast.Expr]
+
     @parsing.inline(0)
     def reduce_FilterClause(self, *kids):
         pass
@@ -1110,12 +1166,16 @@ class OptFilterClause(Nonterm):
 
 
 class SortClause(Nonterm):
+    val: list[qlast.SortExpr]
+
     @parsing.inline(1)
     def reduce_ORDERBY_OrderbyList(self, *kids):
         pass
 
 
 class OptSortClause(Nonterm):
+    val: list[qlast.SortExpr]
+
     @parsing.inline(0)
     def reduce_SortClause(self, *kids):
         pass
@@ -1125,6 +1185,8 @@ class OptSortClause(Nonterm):
 
 
 class OrderbyExpr(Nonterm):
+    val: qlast.SortExpr
+
     def reduce_Expr_OptDirection_OptNonesOrder(self, *kids):
         self.val = qlast.SortExpr(path=kids[0].val,
                                   direction=kids[1].val,
@@ -1133,10 +1195,12 @@ class OrderbyExpr(Nonterm):
 
 class OrderbyList(ListNonterm, element=OrderbyExpr,
                   separator=tokens.T_THEN):
-    pass
+    val: list[qlast.SortExpr]
 
 
 class OptSelectLimit(Nonterm):
+    val: tuple[typing.Optional[qlast.Expr], typing.Optional[qlast.Expr]]
+
     @parsing.inline(0)
     def reduce_SelectLimit(self, *kids):
         pass
@@ -1146,6 +1210,8 @@ class OptSelectLimit(Nonterm):
 
 
 class SelectLimit(Nonterm):
+    val: tuple[typing.Optional[qlast.Expr], typing.Optional[qlast.Expr]]
+
     def reduce_OffsetClause_LimitClause(self, *kids):
         self.val = (kids[0].val, kids[1].val)
 
@@ -1157,12 +1223,16 @@ class SelectLimit(Nonterm):
 
 
 class OffsetClause(Nonterm):
+    val: qlast.Expr
+
     @parsing.inline(1)
     def reduce_OFFSET_Expr(self, *kids):
         pass
 
 
 class LimitClause(Nonterm):
+    val: qlast.Expr
+
     @parsing.inline(1)
     def reduce_LIMIT_Expr(self, *kids):
         pass
@@ -1215,6 +1285,7 @@ class ParenExpr(Nonterm):
 
 
 class BaseAtomicExpr(Nonterm):
+    val: qlast.Expr
     # { ... } | Constant | '(' Expr ')' | FuncExpr
     # | Tuple | NamedTuple | Collection | Set
     # | '__source__' | '__subject__'
@@ -1318,6 +1389,7 @@ class BaseAtomicExpr(Nonterm):
 
 
 class Expr(Nonterm):
+    val: qlast.Expr
     # BaseAtomicExpr
     # Path | Expr { ... }
 
@@ -1593,7 +1665,7 @@ class CompareOp(Nonterm):
 
 
 class Tuple(Nonterm):
-    def reduce_LPAREN_Expr_COMMA_OptExprList_RPAREN(self, *kids):
+    def reduce_LPAREN_GenExpr_COMMA_OptExprList_RPAREN(self, *kids):
         self.val = qlast.Tuple(elements=[kids[1].val] + kids[3].val)
 
     def reduce_LPAREN_RPAREN(self, *kids):
@@ -1606,7 +1678,7 @@ class NamedTuple(Nonterm):
 
 
 class NamedTupleElement(Nonterm):
-    def reduce_ShortNodeName_ASSIGN_Expr(self, *kids):
+    def reduce_ShortNodeName_ASSIGN_GenExpr(self, *kids):
         self.val = qlast.TupleElement(
             name=qlast.Ptr(name=kids[0].val.name, span=kids[0].span),
             val=kids[2].val
@@ -1639,12 +1711,14 @@ class OptExprList(Nonterm):
         self.val = []
 
 
-class ExprList(ListNonterm, element=Expr, separator=tokens.T_COMMA,
+class ExprList(ListNonterm, element=GenExpr, separator=tokens.T_COMMA,
                allow_trailing_separator=True):
-    pass
+    val: list[qlast.Expr]
 
 
 class Constant(Nonterm):
+    val: qlast.Expr
+
     # PARAMETER
     # | BaseNumberConstant
     # | BaseStringConstant
@@ -1652,7 +1726,7 @@ class Constant(Nonterm):
     # | BaseBytesConstant
 
     def reduce_PARAMETER(self, param):
-        self.val = qlast.Parameter(name=param.val[1:])
+        self.val = qlast.QueryParameter(name=param.val[1:])
 
     def reduce_PARAMETERANDTYPE(self, param):
         assert param.val.startswith('<lit ')
@@ -1665,7 +1739,7 @@ class Constant(Nonterm):
                 ),
                 span=param.span,
             ),
-            expr=qlast.Parameter(
+            expr=qlast.QueryParameter(
                 name=param_name,
                 span=param.span,
             ),
@@ -1723,6 +1797,8 @@ class StringInterpolation(Nonterm):
 
 
 class BaseNumberConstant(Nonterm):
+    val: qlast.Constant
+
     def reduce_ICONST(self, *kids):
         self.val = qlast.Constant(
             value=kids[0].val, kind=qlast.ConstantKind.INTEGER
@@ -1745,18 +1821,22 @@ class BaseNumberConstant(Nonterm):
 
 
 class BaseStringConstant(Nonterm):
+    val: qlast.Constant
 
     def reduce_SCONST(self, token):
         self.val = qlast.Constant.string(value=token.clean_value)
 
 
 class BaseBytesConstant(Nonterm):
+    val: qlast.BaseConstant
 
     def reduce_BCONST(self, bytes_tok):
         self.val = qlast.BytesConstant(value=bytes_tok.clean_value)
 
 
 class BaseBooleanConstant(Nonterm):
+    val: qlast.Constant
+
     def reduce_TRUE(self, *kids):
         self.val = qlast.Constant.boolean(True)
 
@@ -1830,6 +1910,15 @@ class PathStep(Nonterm):
         self.val = qlast.Ptr(
             name=kids[1].val.name,
             direction=s_pointers.PointerDirection.Inbound
+        )
+
+    def reduce_DOTQ_PathStepName(self, *kids):
+        from edb.schema import pointers as s_pointers
+
+        self.val = qlast.Ptr(
+            name=kids[1].val.name,
+            direction=s_pointers.PointerDirection.Outbound,
+            type='optional',
         )
 
     def reduce_AT_PathNodeName(self, *kids):
@@ -1958,6 +2047,20 @@ class FuncCallArg(Nonterm):
                 span=merge_spans(kids),
             )
             self.val = (self.val[0], self.val[1], qry)
+
+    def reduce_ExprStmtSimple(self, *kids):
+        self.val = (
+            None,
+            None,
+            kids[0].val,
+        )
+
+    def reduce_AnyIdentifier_ASSIGN_ExprStmtSimple(self, *kids):
+        self.val = (
+            kids[0].val,
+            kids[0].span,
+            kids[2].val,
+        )
 
 
 class FuncArgList(ListNonterm, element=FuncCallArg, separator=tokens.T_COMMA,
@@ -2187,12 +2290,18 @@ class NontrivialTypeExpr(Nonterm):
         pass
 
     def reduce_TypeExpr_PIPE_TypeExpr(self, *kids):
-        self.val = qlast.TypeOp(left=kids[0].val, op='|',
-                                right=kids[2].val)
+        self.val = qlast.TypeOp(
+            left=kids[0].val,
+            op=qlast.TypeOpName.OR,
+            right=kids[2].val,
+        )
 
     def reduce_TypeExpr_AMPER_TypeExpr(self, *kids):
-        self.val = qlast.TypeOp(left=kids[0].val, op='&',
-                                right=kids[2].val)
+        self.val = qlast.TypeOp(
+            left=kids[0].val,
+            op=qlast.TypeOpName.AND,
+            right=kids[2].val,
+        )
 
 
 # This is a type expression without angle brackets, so it
@@ -2231,12 +2340,18 @@ class FullTypeExpr(Nonterm):
         pass
 
     def reduce_FullTypeExpr_PIPE_FullTypeExpr(self, *kids):
-        self.val = qlast.TypeOp(left=kids[0].val, op='|',
-                                right=kids[2].val)
+        self.val = qlast.TypeOp(
+            left=kids[0].val,
+            op=qlast.TypeOpName.OR,
+            right=kids[2].val,
+        )
 
     def reduce_FullTypeExpr_AMPER_FullTypeExpr(self, *kids):
-        self.val = qlast.TypeOp(left=kids[0].val, op='&',
-                                right=kids[2].val)
+        self.val = qlast.TypeOp(
+            left=kids[0].val,
+            op=qlast.TypeOpName.AND,
+            right=kids[2].val,
+        )
 
 
 class Subtype(Nonterm):

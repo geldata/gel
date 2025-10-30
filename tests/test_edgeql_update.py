@@ -1795,6 +1795,32 @@ class TestUpdate(tb.QueryTestCase):
             ]
         )
 
+    async def test_edgeql_update_props_11(self):
+        # Check that we can update a link property on a specific link.
+
+        # Setup some multi links
+        await self.con.execute(
+            r"""
+                UPDATE UpdateTest
+                FILTER .name = 'update-test1'
+                SET {
+                    annotated_status := (select Status limit 1),
+                    annotated_status2 := (select Status limit 1),
+                };
+            """,
+        )
+
+        await self.con.execute(
+            r"""
+                UPDATE UpdateTest
+                FILTER .name = 'update-test1'
+                SET {
+                    annotated_status := (select Status limit 1),
+                    annotated_status2 := (select Status limit 1),
+                };
+            """,
+        )
+
     async def test_edgeql_update_for_01(self):
         await self.assert_query_result(
             r"""
@@ -2852,6 +2878,29 @@ class TestUpdate(tb.QueryTestCase):
                     }
                 ) FILTER false;
             """)
+
+    async def test_edgeql_update_no_source_multi_01(self):
+        await self.con.execute("""
+            with x := assert_exists(
+                select UpdateTest filter .name = 'update-test3')
+            update x
+            set {
+                str_tags := x.comment
+            };
+        """)
+
+        await self.assert_query_result(
+            r"""
+                SELECT UpdateTest {
+                    str_tags
+                } filter .name = 'update-test3'
+            """,
+            [
+                {
+                    'str_tags': ['third'],
+                },
+            ]
+        )
 
     async def test_edgeql_update_insert_multi_required_01(self):
         await self.con.execute("""
@@ -3913,6 +3962,80 @@ class TestUpdate(tb.QueryTestCase):
             ]
         )
 
+    async def test_edgeql_update_dunder_default_03(self):
+        # update with inner stmt using __default__
+
+        await self.con.execute(r'''
+            INSERT DunderDefaultTest03_A { x := 0 };
+            INSERT DunderDefaultTest03_B { x := 0 };
+        ''')
+
+        # prop doesn't have __default
+        await self.con.execute(r'''
+            UPDATE DunderDefaultTest03_A set {
+                x := (
+                    INSERT DunderDefaultTest03_C { x := __default__ }
+                ).x
+            };
+        ''')
+        await self.assert_query_result(
+            r'''
+                SELECT DunderDefaultTest03_A { x };
+            ''',
+            [{'x': 2}]
+        )
+
+        # prop has __default
+        await self.con.execute(r'''
+            UPDATE DunderDefaultTest03_B set {
+                x := (
+                    INSERT DunderDefaultTest03_C { x := __default__ }
+                ).x
+            };
+        ''')
+        await self.assert_query_result(
+            r'''
+                SELECT DunderDefaultTest03_B { x };
+            ''',
+            [{'x': 2}]
+        )
+
+        # inner statement does not have __default
+        async with self.assertRaisesRegexTx(
+            edgedb.InvalidReferenceError,
+            r"__default__ cannot be used in this expression",
+            _hint='No default expression exists',
+        ):
+            await self.con.execute(r'''
+                UPDATE DunderDefaultTest03_B set {
+                    x := (
+                        INSERT DunderDefaultTest03_A { x := __default__ }
+                    ).x
+                };
+            ''')
+
+    async def test_edgeql_update_dunder_default_04(self):
+        await self.con.execute(r'''
+            INSERT DunderDefaultTest04_A { x := 1 };
+            INSERT DunderDefaultTest04_B { x := 2, l := {} };
+            INSERT DunderDefaultTest04_B { x := 3, l := {} };
+        ''')
+
+        await self.con.execute(r'''
+            UPDATE DunderDefaultTest04_B set {
+                l := __default__
+            };
+        ''')
+        await self.assert_query_result(
+            r'''
+                SELECT DunderDefaultTest04_B { x, l: { x } };
+            ''',
+            [
+                {'x': 2, 'l': {'x': 1}},
+                {'x': 3, 'l': {'x': 1}},
+            ]
+        )
+
     async def test_edgeql_update_empty_array_01(self):
         with self.assertRaisesRegex(
             edgedb.QueryError,
@@ -4011,7 +4134,7 @@ class TestUpdate(tb.QueryTestCase):
     async def test_edgeql_update_read_only_tx_01(self):
         con = (
             edgedb.create_async_client(
-                **self.get_connect_args(database=self.con.dbname)
+                **self.get_connect_args()
             ).with_transaction_options(
                 edgedb.TransactionOptions(readonly=True)
             )

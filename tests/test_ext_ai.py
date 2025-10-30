@@ -18,6 +18,7 @@
 
 import json
 import pathlib
+import textwrap
 import unittest
 
 import edgedb
@@ -50,24 +51,26 @@ class TestExtAI(tb.BaseHttpExtensionTest):
         )(cls.mock_api_embeddings)
 
         async def _setup():
-            await cls.con.execute(
-                f"""
-                CONFIGURE CURRENT DATABASE
-                INSERT ext::ai::CustomProviderConfig {{
-                    name := 'custom::test',
-                    secret := 'very secret',
-                    api_url := '{base_url}/v1',
-                    api_style := ext::ai::ProviderAPIStyle.OpenAI,
-                }};
-
-                CONFIGURE CURRENT DATABASE
-                    SET ext::ai::Config::indexer_naptime := <duration>'100ms';
-                """,
-            )
+            await cls.con.execute(cls.get_ai_config(base_url))
 
             await cls._wait_for_db_config('ext::ai::Config::providers')
 
         cls.loop.run_until_complete(_setup())
+
+    @staticmethod
+    def get_ai_config(base_url):
+        return textwrap.dedent(f"""\
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::ai::CustomProviderConfig {{
+                name := 'custom::test',
+                secret := 'very secret',
+                api_url := '{base_url}/v1',
+                api_style := ext::ai::ProviderAPIStyle.OpenAI,
+            }};
+
+            CONFIGURE CURRENT DATABASE
+                SET ext::ai::Config::indexer_naptime := <duration>'100ms';
+        """)
 
     @classmethod
     def tearDownClass(cls):
@@ -518,6 +521,25 @@ class TestExtAI(tb.BaseHttpExtensionTest):
             ''',
             json.dumps(qv),
         )
+
+    async def test_ext_ai_indexing_05f(self):
+        async with self._run_and_rollback():
+            await self.con.execute('''
+                alter type Astronomy
+                drop index
+                  ext::ai::index(embedding_model := 'text-embedding-test')
+                on (.content);
+            ''')
+
+            qv = [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0, 9.0, -10.0]
+
+            await self._assert_index_use(
+                f'''
+                with vector := <array<float32>>$0
+                select ext::ai::search(OnExpression, vector) limit 5;
+                ''',
+                qv,
+            )
 
     async def test_ext_ai_indexing_06(self):
         # Index on mixed inherited types
@@ -1352,7 +1374,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 [],
-                10
+                10,
+                None,
             ),
             [],
         )
@@ -1360,7 +1383,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['1', '22', '333', '4444'],
-                10
+                10,
+                None,
             ),
             [([3, 0, 1, 2], 10)],
         )
@@ -1368,7 +1392,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['1', '22', '333', '4444', '55555'],
-                10
+                10,
+                None,
             ),
             [
                 ([4, 0, 1], 8),
@@ -1379,7 +1404,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['1', '22', '333', '4444', '55555', '666666'],
-                10
+                10,
+                None,
             ),
             [
                 ([5, 0, 1], 9),
@@ -1391,7 +1417,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['1', '22', '333', '4444', '55555', '666666'],
-                10
+                10,
+                None,
             ),
             [
                 ([5, 0, 1], 9),
@@ -1403,11 +1430,35 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['1', '22', '333', '4444', '55555', '121212121212'],
-                10
+                10,
+                None,
             ),
             [
                 ([4, 0, 1], 8),
                 ([3, 2], 7),
+            ],
+        )
+        self.assertEqual(
+            ai_ext._batch_embeddings_inputs(
+                CharacterTokenizer(),
+                [
+                    '1',
+                    '22',
+                    '333',
+                    '4444',
+                    '55555',
+                    '666666',
+                    '7777777',
+                    '88888888',
+                ],
+                12,
+                3,
+            ),
+            [
+                ([7, 0, 1], 11),
+                ([6, 2], 10),
+                ([5, 3], 10),
+                ([4], 5),
             ],
         )
         # Text is alphabetically ordered to ensure consistent batching
@@ -1415,7 +1466,8 @@ class TestExtAIUtils(unittest.TestCase):
             ai_ext._batch_embeddings_inputs(
                 CharacterTokenizer(),
                 ['AAA', 'CCC', 'EEE', 'BBB', 'DDD'],
-                10
+                10,
+                None,
             ),
             [
                 ([2, 0, 3], 9),

@@ -22,7 +22,11 @@
 from __future__ import annotations
 
 
-def get_version_key(num_patches: int):
+def get_patch_level(num_patches: int) -> int:
+    return sum(p.startswith('edgeql+schema') for p, _ in PATCHES[:num_patches])
+
+
+def get_version_key(num_patches: int) -> str:
     """Produce a version key to add to instdata keys after major patches.
 
     Patches that modify the schema class layout and introspection queries
@@ -35,12 +39,11 @@ def get_version_key(num_patches: int):
     the key based on the number of schema layout patches that we can
     *see*, we still compute the right key.
     """
-    num_major = sum(
-        p.startswith('edgeql+schema') for p, _ in PATCHES[:num_patches])
-    if num_major == 0:
+    level = get_patch_level(num_patches)
+    if level == 0:
         return ''
     else:
-        return f'_v{num_major}'
+        return f'_v{level}'
 
 
 """
@@ -51,6 +54,9 @@ The current kinds are:
  * metaschema-sql - create a function from metaschema
  * edgeql - runs an edgeql DDL command
  * edgeql+schema - runs an edgeql DDL command and updates the std schemas
+ *                 NOTE: objects and fields added to the reflschema must
+ *                 have their patch_level set to the `get_patch_level` value
+ *                 for this patch.
  * edgeql+user_ext|<extname> - updates extensions installed in user databases
  *                           - should be paired with an ext-pkg patch
  * ...+config - updates config views

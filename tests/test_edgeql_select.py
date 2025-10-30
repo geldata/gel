@@ -17,6 +17,7 @@
 #
 
 
+import json
 import os.path
 
 import edgedb
@@ -26,12 +27,20 @@ from edb.tools import test
 
 
 class TestEdgeQLSelect(tb.QueryTestCase):
-    NO_FACTOR = False
     SCHEMA = os.path.join(os.path.dirname(__file__), 'schemas',
                           'issues.esdl')
 
-    SETUP = os.path.join(os.path.dirname(__file__), 'schemas',
-                         'issues_setup.edgeql')
+    SETUP = [
+        os.path.join(os.path.dirname(__file__), 'schemas',
+                     'issues_setup.edgeql'),
+        # Used by patch/upgrade testing
+        # We create it here to avoid some terrible slowdowns
+        '''
+        create function all_objects() -> SET OF BaseObject {
+            USING (BaseObject)
+        };
+        ''',
+    ]
 
     async def test_edgeql_select_unique_01(self):
         await self.assert_query_result(
@@ -1752,14 +1761,15 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             select Issue { * }
             filter .number = "1"
             ''',
-            tb.bag([
+            [
                 {
                     "number": "1",
                     "name": "Release EdgeDB",
                     "body": "Initial public release of EdgeDB.",
                     "time_estimate": 3000,
+                    "priority": None,
                 },
-            ]),
+            ],
         )
 
     async def test_edgeql_select_splat_02(self):
@@ -1890,7 +1900,6 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 "due_date": None,
                 "number": None,
                 "start_date": None,
-                "tags": None,
                 "time_estimate": None,
             },
             {
@@ -1900,7 +1909,6 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 "due_date": None,
                 "number": "1",
                 "start_date": str,
-                "tags": None,
                 "time_estimate": 3000,
             },
         ]
@@ -1992,6 +2000,38 @@ class TestEdgeQLSelect(tb.QueryTestCase):
                 {'x': {'a': 1, '@a': 2}}
             ]),
         )
+
+    async def test_edgeql_select_splat_07(self):
+        res = json.loads(await self.con.query_json(
+            r'''
+            select Issue {
+                **,
+            }
+            filter .number = "1"
+            '''
+        ))
+        # Make sure the explicit properties aren't included
+        self.assertNotIn('tags', res[0])
+        self.assertNotIn('related_to', res[0])
+        # num_watchers should be included, without the future!
+        self.assertIn('num_watchers', res[0])
+
+        await self.con.execute('''
+            create future no_linkful_computed_splats
+        ''')
+
+        res = json.loads(await self.con.query_json(
+            r'''
+            select Issue {
+                **,
+            }
+            filter .number = "1"
+            '''
+        ))
+        # With the future, none should exist
+        self.assertNotIn('tags', res[0])
+        self.assertNotIn('related_to', res[0])
+        self.assertNotIn('num_watchers', res[0])
 
     async def test_edgeql_select_id_01(self):
         # allow assigning id to a computed (#4781)
@@ -6581,9 +6621,11 @@ class TestEdgeQLSelect(tb.QueryTestCase):
         ])
 
     async def test_edgeql_partial_06(self):
-        with self.assertRaisesRegex(edgedb.QueryError,
-                                    'invalid property reference on a '
-                                    'primitive type expression'):
+        with self.assertRaisesRegex(
+            edgedb.QueryError,
+            "invalid property reference on an expression of primitive type "
+            "'default::issue_num_t'"
+        ):
             await self.con.execute('''
                 SELECT Issue.number FILTER .number > '1';
             ''')
@@ -8431,6 +8473,107 @@ class TestEdgeQLSelect(tb.QueryTestCase):
         for row in res:
             self.assertEqual(row.__tname__, "default::User")
 
+    async def test_edgeql_select_tid_position_01(self):
+        res = await self.con._fetchall("""
+            SELECT Issue {
+              *, lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        # dir(val) returns them sorted by name, but __dataclass_fields__ has
+        # them in protocol order!
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    async def test_edgeql_select_tid_position_02(self):
+        # Test that __tid__ comes first even in some weird situations
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *, lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        # dir(val) returns them sorted by name, but __dataclass_fields__ has
+        # them in protocol order!
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    async def test_edgeql_select_tid_position_03(self):
+        # Well, actually, __tname__ comes first.
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *, lol := 1, sigh := 2,
+            };
+        """, __typeids__=True, __typenames__=True)
+        val = res[0]
+        # dir(val) returns them sorted by name, but __dataclass_fields__ has
+        # them in protocol order!
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tname__')
+        self.assertEqual(ptrs[1], '__tid__')
+
+    async def test_edgeql_select_tid_position_04(self):
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *,
+              owner := issue.owner { *, test := 3 },
+              lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        owner = val.owner
+        ptrs = list(owner.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    async def test_edgeql_select_tid_position_05(self):
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              **,
+              lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        owner = val.owner
+        ptrs = list(owner.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+    @test.xerror("""
+        a linkprop related ISE!
+
+        This one is kind of screwy. *An* issue is that the FOR loop over
+        a single link is hiding the linkprop (despite our `needs_link_table`
+        based efforts).
+
+        But:
+         1. This code obviously ought to work, though you could argue
+            about whether the link property should be in the shape.
+         2. If the link prop was specified explicitly in the shape, that
+            ought to work (per our paper semantics, at least!).
+         3. It only passes the frontend for bad reasons, though!
+            If we name the field `owner2` we get a "has no property" error!!
+    """)
+    async def test_edgeql_select_tid_position_06(self):
+        res = await self.con._fetchall("""
+            FOR issue IN Issue SELECT issue {
+              *,
+              owner := (for owner in issue.owner select owner { * }),
+              lol := 1, sigh := 2,
+            };
+        """, __typeids__=True)
+        val = res[0]
+        owner = val.owner
+        ptrs = list(owner.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
+        ptrs = list(val.__dataclass_fields__.keys())
+        self.assertEqual(ptrs[0], '__tid__')
+
     async def test_edgeql_select_paths_01(self):
         # This is OK because Issue.id is a property, not a link
         await self.assert_query_result(
@@ -8607,12 +8750,3 @@ class TestEdgeQLSelect(tb.QueryTestCase):
             ''',
             __typenames__=True
         )
-
-
-class TestEdgeQLSelectNoFactor(TestEdgeQLSelect):
-    NO_FACTOR = True
-
-
-class TestEdgeQLSelectWarnFactor(TestEdgeQLSelect):
-    NO_FACTOR = False
-    WARN_FACTOR = True

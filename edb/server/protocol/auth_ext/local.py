@@ -21,8 +21,7 @@ import datetime
 import json
 
 from typing import Any, cast
-from edb.server.protocol import execute
-from . import data
+from . import data, util
 
 
 class Client:
@@ -32,7 +31,7 @@ class Client:
     async def verify_email(
         self, identity_id: str, verified_at: datetime.datetime
     ) -> data.EmailFactor | None:
-        result_bytes = await execute.parse_execute_json(
+        result_bytes = await util.json_query(
             db=self.db,
             query="""\
 with
@@ -50,8 +49,6 @@ select UPDATED {**};
                 "identity_id": identity_id,
                 "verified_at": verified_at.isoformat(),
             },
-            cached_globally=True,
-            query_tag='gel/auth',
         )
         result_json = json.loads(result_bytes.decode())
         if len(result_json) == 0:
@@ -63,14 +60,12 @@ select UPDATED {**};
     async def get_email_factor_by_identity_id(
         self, identity_id: str
     ) -> data.EmailFactor | None:
-        r = await execute.parse_execute_json(
+        r = await util.json_query(
             self.db,
             """
 select ext::auth::EmailFactor { ** } filter .identity.id = <uuid>$identity_id;
             """,
             variables={"identity_id": identity_id},
-            cached_globally=True,
-            query_tag='gel/auth',
         )
 
         result_json = json.loads(r.decode())
@@ -84,7 +79,7 @@ select ext::auth::EmailFactor { ** } filter .identity.id = <uuid>$identity_id;
         return data.EmailFactor(**factor)
 
     async def get_verified_by_identity_id(self, identity_id: str) -> str | None:
-        r = await execute.parse_execute_json(
+        r = await util.json_query(
             self.db,
             """
 select ext::auth::EmailFactor {
@@ -92,8 +87,6 @@ select ext::auth::EmailFactor {
 } filter .identity.id = <uuid>$identity_id;
             """,
             variables={"identity_id": identity_id},
-            cached_globally=True,
-            query_tag='gel/auth',
         )
 
         result_json = json.loads(r.decode())
@@ -107,7 +100,7 @@ select ext::auth::EmailFactor {
     async def get_identity_id_by_email(
         self, email: str, *, factor_type: str = 'EmailFactor'
     ) -> str | None:
-        r = await execute.parse_execute_json(
+        r = await util.json_query(
             self.db,
             f"""
 with
@@ -118,8 +111,6 @@ with
     ),
 select identity.id;""",
             variables={"email": email},
-            cached_globally=True,
-            query_tag='gel/auth',
         )
 
         result_json = json.loads(r.decode())
@@ -133,14 +124,12 @@ select identity.id;""",
     async def get_email_factor_by_email(
         self, email: str
     ) -> data.EmailFactor | None:
-        r = await execute.parse_execute_json(
+        r = await util.json_query(
             self.db,
             """
 select ext::auth::EmailFactor { ** } filter .email = <str>$email;
             """,
             variables={"email": email},
-            cached_globally=True,
-            query_tag='gel/auth',
         )
 
         result_json = json.loads(r.decode())

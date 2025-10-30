@@ -4,7 +4,7 @@ use std::{collections::HashMap, str::FromStr};
 
 pub mod edgedb;
 
-use crate::protocol::postgres::data::{ErrorResponse, NoticeResponse};
+use gel_pg_protocol::protocol::{ErrorResponse, NoticeResponse};
 
 #[macro_export]
 macro_rules! pg_error_class {
@@ -203,7 +203,7 @@ impl std::fmt::Display for PgErrorClass {
             if byte.is_ascii() {
                 write!(f, "{}", byte as char)?;
             } else {
-                write!(f, "{{{:02X}}}", byte)?;
+                write!(f, "{{{byte:02X}}}")?;
             }
         }
         Ok(())
@@ -225,7 +225,7 @@ impl std::fmt::Display for PgError {
             if byte.is_ascii() {
                 write!(f, "{}", byte as char)?;
             } else {
-                write!(f, "{{{:02X}}}", byte)?;
+                write!(f, "{{{byte:02X}}}")?;
             }
         }
         Ok(())

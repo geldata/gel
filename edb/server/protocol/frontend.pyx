@@ -26,6 +26,7 @@ from edgedb import scram
 
 from edb import errors
 from edb.common import debug
+from edb.server import defines
 from edb.server import args as srvargs, metrics
 from edb.server.pgcon import errors as pgerror
 
@@ -643,6 +644,20 @@ cdef class FrontendConnection(AbstractFrontendConnection):
                     f"all authentication methods failed: {desc}")
             else:
                 raise next(iter(auth_errors.values()))
+
+        role = self.tenant.get_roles().get(user)
+        if not role:
+            raise errors.AuthenticationError('authentication failed')
+        branches = role['branches']
+        if (
+            '*' not in branches
+            and database not in branches
+            and database != defines.EDGEDB_SYSTEM_DB
+        ):
+            raise errors.AuthenticationError(
+                f"authentication failed: user does not have permission for "
+                f"database branch '{database}'"
+            )
 
     cdef WriteBuffer _make_authentication_sasl_initial(self, list methods):
         raise NotImplementedError

@@ -36,6 +36,8 @@ from edb.schema import links as s_links
 from edb.schema import name as s_name
 from edb.schema import objtypes as s_objtypes
 from edb.schema import properties as s_props
+from edb.schema import operators as s_oper
+from edb.schema import functions as s_func
 
 from edb.testbase import lang as tb
 from edb.tools import test
@@ -1129,6 +1131,16 @@ class TestSchema(tb.BaseSchemaLoadTest):
           alias bar := global foo;
        """
 
+    def test_schema_permissions_03(self):
+        # Check tracing dependency works
+        """
+          function test() -> int64 {
+              using (1);
+              required_permissions := foo;
+          };
+          permission foo;
+       """
+
     def test_schema_hard_sorting_01(self):
         # This is hard to sort properly because we don't understand the types.
         # From #4683.
@@ -1337,7 +1349,9 @@ class TestSchema(tb.BaseSchemaLoadTest):
 
         my_scalar_t = schema.get('test::my_scalar_t')
         constr = my_scalar_t.get_constraints(schema).objects(schema)[0]
-        my_contains = schema.get_functions('test::my_contains')[0]
+        my_contains = schema.get_by_shortname(
+            s_func.Function, 'test::my_contains',
+        )[0]
         self.assertEqual(
             schema.get_referrers(my_contains),
             frozenset({
@@ -1364,9 +1378,9 @@ class TestSchema(tb.BaseSchemaLoadTest):
             type Object2 {
                 required property num -> int64 {
                     default := (
-                        SELECT Object1.num + 1
-                        ORDER BY Object1.num DESC
-                        LIMIT 1
+                       (SELECT Object1
+                         ORDER BY .num DESC
+                        LIMIT 1).num + 1
                     )
                 }
             };
@@ -1941,7 +1955,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
             "abstract constraint 'std::max_len_value'",
         )
 
-        fn = list(schema.get_functions('std::json_typeof'))[0]
+        fn = schema.get_by_shortname(s_func.Function, 'std::json_typeof')[0]
         self.assertEqual(
             fn.get_verbosename(schema),
             "function 'std::json_typeof(json: std::json)'",
@@ -1953,7 +1967,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
             "parameter 'json' of function 'std::json_typeof(json: std::json)'",
         )
 
-        op = list(schema.get_operators('std::AND'))[0]
+        op = schema.get_by_shortname(s_oper.Operator, 'std::AND')[0]
         self.assertEqual(
             op.get_verbosename(schema),
             'operator "std::bool AND std::bool"',
@@ -2139,6 +2153,56 @@ class TestSchema(tb.BaseSchemaLoadTest):
         self.assertIsNone(A_tf_d.maybe_get_ptr(schema, 'd_prop1'))
         self.assertIsNone(A_tf_d.maybe_get_ptr(schema, 'd_prop2'))
         A_tf_df.getptr(schema, s_name.UnqualName('df_prop'))
+
+    def test_schema_advanced_function_params_01(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            function get_value(x: A | B) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_02(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            function get_value(x: A & B) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_03(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A | B) | (C | D)) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_04(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A & B) & (C & D)) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_05(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A & B) | (C & D)) -> int64 using (x.value);
+        """
+
+    def test_schema_advanced_function_params_06(self):
+        """
+            type A { required value: int64 };
+            type B { required value: int64 };
+            type C { required value: int64 };
+            type D { required value: int64 };
+            function get_value(x: (A | B) & (C | D)) -> int64 using (x.value);
+        """
 
     def test_schema_ancestor_propagation_on_sdl_migration(self):
         schema = self.load_schema("""
@@ -2640,6 +2704,32 @@ class TestSchema(tb.BaseSchemaLoadTest):
 
                 property val_e := {'alice', 'billie'} except .name;
                 property val_i := {'alice', 'billie'} intersect .name;
+            }
+        """
+
+    def test_schema_computed_06(self):
+        """
+            global some_user := ((
+              select User limit 1
+            ));
+
+            type User {
+              required foo: bool;
+
+              # Bug
+              required computed_bug: bool {
+                using (
+                  .foo
+                );
+              }
+
+              # These work
+              required computed_working_1 := .foo;  # Non-extended form
+              required computed_working_2 { # No explicit type
+                using (
+                  .foo
+                );
+              }
             }
         """
 
@@ -8420,8 +8510,12 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
         """])
 
         self.assertEqual(
-            schema1.get_functions('default::f2'),
-            schema2.get_functions('default::f2'),
+            schema1._get_by_shortname(
+                s_func.Function, s_name.name_from_string('default::f2'),
+            )[0],
+            schema2._get_by_shortname(
+                s_func.Function, s_name.name_from_string('default::f2'),
+            )[0],
             "function got deleted/recreated and should have been altered",
         )
 

@@ -693,7 +693,7 @@ class DeleteStmt(DMLQuery):
 class SelectStmt(Query):
 
     # List of DISTINCT ON expressions, empty list for DISTINCT ALL
-    distinct_clause: typing.Optional[list[OutputVar]] = None
+    distinct_clause: typing.Optional[typing.Sequence[OutputVar | Star]] = None
     # The FROM clause
     from_clause: list[BaseRangeVar] = ast.field(factory=list)
     # The WHERE clause
@@ -801,7 +801,7 @@ class CollateClause(ImmutableBaseExpr):
     # Input expression
     arg: BaseExpr
     # Possibly-qualified collation name
-    collname: str
+    collname: typing.Sequence[str]
 
 
 class VariadicArgument(ImmutableBaseExpr):
@@ -843,6 +843,8 @@ class FuncCall(ImmutableBaseExpr):
     agg_star: bool
     # Arguments were labeled DISTINCT
     agg_distinct: bool
+    # arg_order is in WITHIN GROUP (...)
+    agg_within_group: bool = False
     # OVER clause, if any
     over: typing.Optional[WindowDef]
     # WITH ORDINALITY

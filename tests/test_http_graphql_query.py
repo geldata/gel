@@ -531,6 +531,7 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
 
     def test_graphql_functional_query_17(self):
         # Test unused & null variables
+        # (native proto doesn't allow these...)
         self.assert_graphql_query_result(
             r"""
                 query Person {
@@ -546,6 +547,7 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                 }],
             },
             variables={'name': None},
+            native_variables={},
         )
 
         self.assert_graphql_query_result(
@@ -2112,6 +2114,9 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                     ... on User {
                         age
                     }
+                    ... on Setting {
+                        value
+                    }
                 }
             }
         """, {
@@ -2465,7 +2470,7 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
             ]
         })
 
-    def test_graphql_functional_directives_03(self):
+    def test_graphql_functional_directives_03a(self):
         self.assert_graphql_query_result(r"""
             query {
                 User(order: {name: {dir: ASC}}) {
@@ -2484,6 +2489,22 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                 {"groups": [{"name": "upgraded"}]},
                 {"groups": [{"name": "basic"}]},
             ]
+        })
+
+    def test_graphql_functional_directives_03b(self):
+        self.assert_graphql_query_result(r"""
+            query {
+                User(filter: {name: {eq: "John"}}) {
+                    name,
+
+                    groups(filter: {name: {eq: "basic"}}) @skip(if: true) {
+                        id @skip(if: true), @include(if: false)
+                        name @skip(if: false), @include(if: true)
+                    }
+                }
+            }
+        """, {
+            "User": [{'name': 'John'}],
         })
 
     def test_graphql_functional_directives_04(self):
@@ -3146,7 +3167,19 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
             }
         """, {
             'User': [],
-        })
+            # HMMMM: Should we allow omiting?
+        }, native_variables=dict(val=None))
+
+        self.assert_graphql_query_result(r"""
+            query($val: Int = 5) {
+                User(filter: {score: {eq: $val}}) {
+                    id,
+                }
+            }
+        """, {
+            'User': [{}],
+            # HMMMM: Should we allow omiting?
+        }, native_variables=dict(val=None))
 
     def test_graphql_functional_variables_04(self):
         self.assert_graphql_query_result(r"""
@@ -3534,31 +3567,32 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                 variables={'name': 11})
 
     def test_graphql_functional_variables_34(self):
+        q = r"""
+            query($val: Boolean!, $min_age: Int64!) {
+                User(filter: {age: {gt: $min_age}}) {
+                    name @include(if: $val),
+                    age
+                }
+            }
+        """
+
         # Test multiple requests to make sure that caching works correctly
         for _ in range(2):
+            self.assert_graphql_query_result(
+                q,
+                {'User': [{'age': 27}]},
+                variables={'val': False, 'min_age': 26}
+            )
+
             for _ in range(2):
                 self.assert_graphql_query_result(
-                    r"""
-                        query($val: Boolean!, $min_age: Int64!) {
-                            User(filter: {age: {gt: $min_age}}) {
-                                name @include(if: $val),
-                                age
-                            }
-                        }
-                    """,
+                    q,
                     {'User': [{'age': 27, 'name': 'Alice'}]},
                     variables={'val': True, 'min_age': 26}
                 )
 
             self.assert_graphql_query_result(
-                r"""
-                    query($val: Boolean!, $min_age: Int64!) {
-                        User(filter: {age: {gt: $min_age}}) {
-                            name @include(if: $val),
-                            age
-                        }
-                    }
-                """,
+                q,
                 {'User': [{'age': 27}]},
                 variables={'val': False, 'min_age': 26}
             )
@@ -3688,22 +3722,22 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
     def test_graphql_functional_variables_41(self):
         with self.assertRaisesRegex(
                 edgedb.QueryError,
-                r"Variables starting with '_edb_arg__' are prohibited"):
+                r"Variables starting with '__edb_arg_' are prohibited"):
             self.graphql_query(r"""
-                query($_edb_arg__1: Int!) {
-                    User(limit: $_edb_arg__1) {
+                query($__edb_arg_1: Int!) {
+                    User(limit: $__edb_arg_1) {
                         id,
                     }
                 }
-            """, variables={'_edb_arg__1': 1})
+            """, variables={'__edb_arg_1': 1})
 
     def test_graphql_functional_variables_42(self):
         with self.assertRaisesRegex(
                 edgedb.QueryError,
-                r"Variables starting with '_edb_arg__' are prohibited"):
+                r"Variables starting with '__edb_arg_' are prohibited"):
             self.graphql_query(r"""
-                query($_edb_arg__1: Int = 1) {
-                    User(limit: $_edb_arg__1) {
+                query($__edb_arg_1: Int = 1) {
+                    User(limit: $__edb_arg_1) {
                         id,
                     }
                 }
@@ -3776,6 +3810,7 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
             },
             # JSON can only be passed as a variable.
             variables={"val": {"foo": [1, None, "bar"]}},
+            native_variables={"val": json.dumps({"foo": [1, None, "bar"]})},
         )
 
     def test_graphql_functional_variables_47(self):
@@ -4600,6 +4635,17 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                         'default::test_global_def2': 'x',
                     },
                 )
+
+    def test_graphql_introspect_01(self):
+        # Issue 8814
+        # Check that schema introspection works with computed globals
+        self.graphql_query(r"""
+            query {
+                __schema {
+                    types { name }
+                }
+            }
+        """)
 
     def test_graphql_func_01(self):
         Q = r'''query { FuncTest { fstr } }'''

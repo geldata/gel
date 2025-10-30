@@ -645,6 +645,11 @@ class CreateReferencedObject(
         refname: sn.Name,
         parent: ReferencedObject,
     ) -> qlast.ObjectDDL:
+        # N.B: If this is overloaded, then as_inherited_ref_cmd
+        # probably needs to be overloaded too.
+        # In particular, any fields that are inherited=False in the schema
+        # but actually need to be inherited (like arguments for constraints
+        # and indexes) likely should be handled there.
         nref = cls.get_inherited_ref_name(schema, context, parent, refname)
         astnode_cls = cls.referenced_astnode
         astnode = astnode_cls(name=nref)

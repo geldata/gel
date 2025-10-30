@@ -625,6 +625,155 @@ class TestEdgeQLAdvancedTypes(tb.QueryTestCase):
             ],
         )
 
+    async def test_edgeql_advtypes_complex_intersection_17(self):
+        # Type intersection on an alias which is not a type intersection
+        await self._setup_basic_data()
+
+        await self.assert_query_result(
+            r"""
+            WITH x := Ba
+            SELECT x[IS Bb]
+            {
+                tn := .__type__.name,
+                ba,
+                bb,
+                [IS Bc].bc,
+            }
+            """,
+            tb.bag([
+                {'tn': 'default::CBaBb', 'ba': 'cba2', 'bb': 2, 'bc': None},
+                {'tn': 'default::CBaBb', 'ba': 'cba3', 'bb': 3, 'bc': None},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba8', 'bb': 8, 'bc': 8.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba9', 'bb': 9, 'bc': 9.5},
+            ]),
+        )
+        await self.assert_query_result(
+            r"""
+            WITH x := Ba
+            SELECT x[IS Bb & Bc]
+            {
+                tn := .__type__.name,
+                ba,
+                bb,
+                bc,
+            }
+            """,
+            tb.bag([
+                {'tn': 'default::CBaBbBc', 'ba': 'cba8', 'bb': 8, 'bc': 8.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba9', 'bb': 9, 'bc': 9.5},
+            ]),
+        )
+        await self.assert_query_result(
+            r"""
+            WITH x := {Ba, Bc}
+            SELECT x[IS Bb]
+            {
+                tn := .__type__.name,
+                [IS Ba].ba,
+                bb,
+                [IS Bc].bc,
+            }
+            """,
+            tb.bag([
+                {'tn': 'default::CBaBb', 'ba': 'cba2', 'bb': 2, 'bc': None},
+                {'tn': 'default::CBaBb', 'ba': 'cba3', 'bb': 3, 'bc': None},
+                {'tn': 'default::CBbBc', 'ba': None, 'bb': 6, 'bc': 6.5},
+                {'tn': 'default::CBbBc', 'ba': None, 'bb': 7, 'bc': 7.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba8', 'bb': 8, 'bc': 8.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba8', 'bb': 8, 'bc': 8.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba9', 'bb': 9, 'bc': 9.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba9', 'bb': 9, 'bc': 9.5},
+            ]),
+        )
+
+        await self.assert_query_result(
+            r"""
+            WITH x := Ba
+            SELECT x[IS Bb].ba
+            """,
+            tb.bag(['cba2', 'cba3', 'cba8', 'cba9']),
+        )
+
+        await self.assert_query_result(
+            r"""
+            WITH x := (SELECT Bb FILTER .bb % 2 = 0)
+            SELECT x[IS Ba]
+            {
+                tn := .__type__.name,
+                ba,
+                bb,
+                [IS Bc].bc,
+            }
+            """,
+            tb.bag([
+                {'tn': 'default::CBaBb', 'ba': 'cba2', 'bb': 2, 'bc': None},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba8', 'bb': 8, 'bc': 8.5},
+            ]),
+        )
+
+    async def test_edgeql_advtypes_complex_intersection_18(self):
+        # Type intersection on an alias which is a type intersection
+        await self._setup_basic_data()
+
+        await self.assert_query_result(
+            r"""
+            WITH x := Ba[IS Bb]
+            SELECT x[IS Bc]
+            {
+                tn := .__type__.name,
+                ba,
+                bb,
+                [IS Bc].bc,
+            }
+            """,
+            tb.bag([
+                {'tn': 'default::CBaBbBc', 'ba': 'cba8', 'bb': 8, 'bc': 8.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba9', 'bb': 9, 'bc': 9.5},
+            ]),
+        )
+        await self.assert_query_result(
+            r"""
+            WITH x := Ba[IS Bb | Bc]
+            SELECT x[IS Bb & Bc]
+            {
+                tn := .__type__.name,
+                ba,
+                bb,
+                bc,
+            }
+            """,
+            tb.bag([
+                {'tn': 'default::CBaBbBc', 'ba': 'cba8', 'bb': 8, 'bc': 8.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba9', 'bb': 9, 'bc': 9.5},
+            ]),
+        )
+        await self.assert_query_result(
+            r"""
+            WITH x := Object[IS Ba]
+            SELECT x[IS Bb]
+            {
+                tn := .__type__.name,
+                ba,
+                bb,
+                [IS Bc].bc,
+            }
+            """,
+            tb.bag([
+                {'tn': 'default::CBaBb', 'ba': 'cba2', 'bb': 2, 'bc': None},
+                {'tn': 'default::CBaBb', 'ba': 'cba3', 'bb': 3, 'bc': None},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba8', 'bb': 8, 'bc': 8.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba9', 'bb': 9, 'bc': 9.5},
+            ]),
+        )
+
+        await self.assert_query_result(
+            r"""
+            WITH x := Ba[IS Bb]
+            SELECT x[IS Bc].ba
+            """,
+            tb.bag(['cba8', 'cba9']),
+        )
+
     async def test_edgeql_advtypes_complex_polymorphism_01(self):
         await self._setup_basic_data()
         await self.assert_query_result(
@@ -1651,6 +1800,47 @@ class TestEdgeQLAdvancedTypes(tb.QueryTestCase):
                 {'tn': 'default::CBc', 'ba': None, 'bb': None, 'bc': 0.5},
                 {'tn': 'default::CBc', 'ba': None, 'bb': None, 'bc': 1.5},
             ],
+        )
+
+    async def test_edgeql_advtypes_for_complex_intersection_01(self):
+        # Type intersection on for loop iterator
+        await self._setup_basic_data()
+
+        await self.assert_query_result(
+            r"""
+            FOR x IN Ba UNION (
+                x[IS Bb]
+                {
+                    tn := .__type__.name,
+                    ba,
+                    bb,
+                    [IS Bc].bc,
+                }
+            )
+            """,
+            tb.bag([
+                {'tn': 'default::CBaBb', 'ba': 'cba2', 'bb': 2, 'bc': None},
+                {'tn': 'default::CBaBb', 'ba': 'cba3', 'bb': 3, 'bc': None},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba8', 'bb': 8, 'bc': 8.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba9', 'bb': 9, 'bc': 9.5},
+            ]),
+        )
+        await self.assert_query_result(
+            r"""
+            SELECT (FOR x IN Ba UNION (x[IS Bb]))
+            {
+                tn := .__type__.name,
+                ba,
+                bb,
+                [IS Bc].bc,
+            }
+            """,
+            tb.bag([
+                {'tn': 'default::CBaBb', 'ba': 'cba2', 'bb': 2, 'bc': None},
+                {'tn': 'default::CBaBb', 'ba': 'cba3', 'bb': 3, 'bc': None},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba8', 'bb': 8, 'bc': 8.5},
+                {'tn': 'default::CBaBbBc', 'ba': 'cba9', 'bb': 9, 'bc': 9.5},
+            ]),
         )
 
     async def test_edgeql_advtypes_intersection_pointers_01(self):

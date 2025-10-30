@@ -120,16 +120,20 @@ class TestEdgeQLEnums(tb.QueryTestCase):
                 )
 
         with self.assertRaisesRegex(
-                edgedb.QueryError,
-                "invalid property reference on a primitive type expression"):
+            edgedb.QueryError,
+            "invalid property reference on an expression of primitive type "
+            "'default::color_enum_t'"
+        ):
             async with self._run_and_rollback():
                 await self.con.execute(
                     'SELECT color_enum_t.RED.GREEN'
                 )
 
         with self.assertRaisesRegex(
-                edgedb.QueryError,
-                "invalid property reference on a primitive type expression"):
+            edgedb.QueryError,
+            "invalid property reference on an expression of primitive type "
+            "'default::color_enum_t'"
+        ):
             async with self._run_and_rollback():
                 await self.con.execute(
                     'WITH x := color_enum_t.RED SELECT x.GREEN'

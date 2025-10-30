@@ -63,7 +63,9 @@ cdef recode_bind_args_for_script(
     # TODO: just do the simple thing if it is only one!
 
     positions = []
-    recoded_buf = recode_bind_args(dbv, compiled, bind_args, None, positions)
+    recoded_buf = recode_bind_args(
+        dbv, compiled, bind_args, None, positions
+    )
     # TODO: something with less copies
     recoded = bytes(memoryview(recoded_buf))
 
@@ -469,10 +471,13 @@ cdef _decode_tuple_args_core(
             raise errors.InputDataError("unsupported array dimensions")
         frb_read(&sub_buf, 4)  # flags
         frb_read(&sub_buf, 4)  # reserved
-        cnt = <uint32_t>hton.unpack_int32(frb_read(&sub_buf, 4))
-        val = hton.unpack_int32(frb_read(&sub_buf, 4)) # bound
-        if val != 1:
-            raise errors.InputDataError("unsupported array bound")
+        if val == 0:
+            cnt = 0
+        else:
+            cnt = <uint32_t>hton.unpack_int32(frb_read(&sub_buf, 4))
+            val = hton.unpack_int32(frb_read(&sub_buf, 4)) # bound
+            if val != 1:
+                raise errors.InputDataError("unsupported array bound")
 
         # For nested arrays, we need to produce an array containing
         # the start/end indexes in the flattened array.
@@ -559,25 +564,26 @@ cdef _inject_globals(
     query_unit_or_group: object,
     out_buf: WriteBuffer,
 ):
-    globals = query_unit_or_group.globals
-    if not globals:
-        return
+    if globals := query_unit_or_group.globals:
+        for (name, has_present_arg) in globals:
+            val, is_present = dbv.get_global_value(name)
+            if val is not None:
+                out_buf.write_int32(len(val))
+                out_buf.write_bytes(val)
+            else:
+                out_buf.write_int32(-1)
+            if has_present_arg:
+                out_buf.write_int32(1)
+                present = b'\x01' if is_present else b'\x00'
+                out_buf.write_bytes(present)
 
-    state_globals = dbv.get_globals()
-    for (name, has_present_arg) in globals:
-        val = None
-        entry = state_globals.get(name)
-        if entry:
-            val = entry.value
-        if val is not None:
-            out_buf.write_int32(len(val))
-            out_buf.write_bytes(val)
-        else:
-            out_buf.write_int32(-1)
-        if has_present_arg:
+    if permissions := query_unit_or_group.permissions:
+        superuser, available_permissions = dbv.get_permissions()
+        for permission in permissions:
             out_buf.write_int32(1)
-            present = b'\x01' if entry is not None else b'\x00'
-            out_buf.write_bytes(present)
+            out_buf.write_byte(
+                superuser or permission in available_permissions
+            )
 
 
 cdef uint64_t _count_globals(
@@ -592,6 +598,8 @@ cdef uint64_t _count_globals(
         for _, has_present_arg in query_unit.globals:
             if has_present_arg:
                 num_args += 1
+    if query_unit.permissions:
+        num_args += len(query_unit.permissions)
 
     return num_args
 

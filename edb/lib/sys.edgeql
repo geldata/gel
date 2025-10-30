@@ -20,6 +20,18 @@
 CREATE MODULE sys;
 
 
+CREATE MODULE sys::perm;
+CREATE PERMISSION sys::perm::superuser;
+CREATE PERMISSION sys::perm::data_modification;
+CREATE PERMISSION sys::perm::ddl;
+CREATE PERMISSION sys::perm::branch_config;
+CREATE PERMISSION sys::perm::sql_session_config;
+CREATE PERMISSION sys::perm::analyze;
+
+CREATE PERMISSION sys::perm::query_stats_read;
+CREATE PERMISSION sys::perm::approximate_count;
+
+
 CREATE SCALAR TYPE sys::TransactionIsolation
     EXTENDING enum<RepeatableRead, Serializable>;
 
@@ -118,6 +130,12 @@ CREATE TYPE sys::Role EXTENDING
     CREATE PROPERTY is_superuser := .superuser;
     CREATE PROPERTY password -> std::str;
     CREATE MULTI PROPERTY permissions -> std::str;
+    CREATE MULTI PROPERTY branches -> std::str;
+    CREATE PROPERTY apply_access_policies_pg_default -> std::bool;
+
+    CREATE ACCESS POLICY ap_read deny select using (
+        not global sys::perm::superuser
+    );
 };
 
 
@@ -238,6 +256,10 @@ CREATE TYPE sys::QueryStats EXTENDING sys::ExternalObject {
             ++ "for this query (fields `min_plan_time`, `max_plan_time`, "
             ++ "`min_exec_time` and `max_exec_time`).";
     };
+
+    CREATE ACCESS POLICY ap_read allow select using (
+        global sys::perm::query_stats_read
+    );
 };
 
 
@@ -262,6 +284,7 @@ sys::reset_query_stats(
         ++ 'corresponding reset was actually performed.';
     SET volatility := 'Volatile';
     USING SQL FUNCTION 'edgedb.reset_query_stats';
+    set required_permissions := { sys::perm::superuser };
 };
 
 
@@ -383,6 +406,7 @@ sys::_describe_roles_as_ddl() -> str
     SET volatility := 'Stable';
     SET internal := true;
     USING SQL FUNCTION 'edgedb._describe_roles_as_ddl';
+    set required_permissions := { sys::perm::superuser };
 };
 
 
@@ -394,6 +418,7 @@ sys::_get_all_role_memberships(r: uuid) -> array<uuid>
     SET internal := true;
     USING SQL FUNCTION 'edgedb._all_role_memberships';
     set impl_is_strict := false;
+    set required_permissions := { sys::perm::superuser };
 };
 
 
@@ -442,4 +467,36 @@ sys::approximate_count(
     SET volatility := 'Stable';
     USING SQL FUNCTION 'edgedb.approximate_count';
     set impl_is_strict := false;
+    set required_permissions := { sys::perm::approximate_count };
+};
+
+CREATE REQUIRED GLOBAL sys::current_role -> str {
+    SET default := '';
+};
+
+CREATE REQUIRED GLOBAL sys::current_permissions -> array<str> {
+    SET default := <array<str>>[];
+};
+
+# Add permissions to schema and std.
+
+# These modules are populated before sys permissions so we need to
+# add these restrictions here.
+
+ALTER TYPE schema::Migration {
+    CREATE ACCESS POLICY ap_read allow select using (
+        global sys::perm::ddl
+    );
+};
+
+ALTER FUNCTION std::sequence_reset(
+    seq: schema::ScalarType,
+    value: std::int64,
+) {
+    SET required_permissions := sys::perm::ddl;
+};
+ALTER FUNCTION std::sequence_reset(
+    seq: schema::ScalarType,
+) {
+    SET required_permissions := sys::perm::ddl;
 };

@@ -29,7 +29,6 @@ from edb.edgeql import qltypes
 
 from edb.common.typeutils import downcast
 
-from . import abc as s_abc
 from . import annos as s_anno
 from . import casts as s_casts
 from . import constraints
@@ -46,7 +45,6 @@ from . import utils as s_utils
 class ScalarType(
     s_types.InheritingType,
     constraints.ConsistencySubject,
-    s_abc.ScalarType,
     qlkind=qltypes.SchemaObjectClass.SCALAR_TYPE,
     data_safe=True,
 ):

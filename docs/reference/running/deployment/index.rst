@@ -16,6 +16,9 @@ running Gel `in Docker <https://github.com/geldata/gel-docker>`_.
     As a rule of thumb, the Gel Docker container requires 1GB RAM! Images
     with insufficient RAM may experience unexpected issues during startup.
 
+    When using an external PostgreSQL instance Gel must connect with the
+    PostgreSQL superuser.
+
 .. toctree::
     :maxdepth: 1
 

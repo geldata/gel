@@ -78,6 +78,7 @@ from edb.schema import modules as s_mod
 from edb.schema import name as sn
 from edb.schema import objects as so
 from edb.schema import objtypes as s_objtypes
+from edb.schema import permissions as s_permissions
 from edb.schema import pointers as s_pointers
 from edb.schema import schema as s_schema
 from edb.schema import types as s_types
@@ -464,6 +465,16 @@ class Pointer(Expr):
     source: Set
     ptrref: BasePointerRef
     direction: s_pointers.PointerDirection
+    # Whether to make this an optional deref (written '.?>') that
+    # suppresses any error due to looking at a required link hidden by
+    # a policy .
+    optional_deref: bool = False
+    # Whether to *always* use a link table when this pointer is
+    # accessed.  This is needed (for example) when a (possibly single)
+    # link property is being referenced in a FOR iterator, and we
+    # aren't going to have access to the Pointer when we access
+    # the iterator variable.
+    force_link_table: bool = False
 
     # If the pointer is a computed pointer (or a computed pointer
     # definition), the expression.
@@ -475,6 +486,8 @@ class Pointer(Expr):
     is_phony: bool = False
     anchor: typing.Optional[str] = None
     show_as_anchor: typing.Optional[str] = None
+
+    is_mutation: bool = False
 
     @property
     def is_inbound(self) -> bool:
@@ -551,7 +564,7 @@ T_expr_co = typing.TypeVar('T_expr_co', covariant=True, bound=Expr)
 # of expression it holds. Most code uses the Set alias below, which
 # instantiates it with Expr.
 # irutils.is_set_instance can be used to refine the type.
-class SetE(Base, typing.Generic[T_expr_co]):
+class SetE(Base, typing.Generic[T_expr_co]):  # noqa: UP046
     '''A somewhat overloaded metadata container for expressions.
 
     Its primary purpose is to be the holder for expression metadata
@@ -593,6 +606,12 @@ class SetE(Base, typing.Generic[T_expr_co]):
     # N.B: This is defined on Set and not on TypeRoot because we use the Set
     # to join against target types on links, and to ensure rvars.
     ignore_rewrites: bool = False
+
+    # Is this Set a dummy introduced by simple_scoping to protect a
+    # path from factoring? We track this because we try to collapse
+    # these extra scopes away when they are not needed, at the end of
+    # compilation.
+    is_factoring_protected: bool = False
 
     def __repr__(self) -> str:
         return f'<ir.Set \'{self.path_id}\' at 0x{id(self):x}>'
@@ -689,6 +708,8 @@ class ParamTransType:
 
 @dataclasses.dataclass(eq=False)
 class ParamScalar(ParamTransType):
+    cast_to: typing.Optional[TypeRef] = None
+
     def flatten(self) -> tuple[typing.Any, ...]:
         return (int(qltypes.TypeTag.SCALAR), self.idx)
 
@@ -723,6 +744,13 @@ class Global(Param):
 
     This is needed when a global has a default but also is optional,
     and so we need to distinguish "unset" and "set to {}".
+    """
+
+    is_permission: bool
+    """Whether this global comes from a Permission.
+
+    Permissions are injected directly by the server based on the connection
+    role.
     """
 
 
@@ -791,6 +819,7 @@ class Statement(Command):
     views: dict[sn.Name, s_types.Type]
     params: list[Param]
     globals: list[Global]
+    required_permissions: set[s_permissions.Permission]
     server_param_conversions: list[ServerParamConversion]
     server_param_conversion_params: list[Param]
     cardinality: qltypes.Cardinality
@@ -885,10 +914,11 @@ class BytesConstant(BaseConstant):
 
 class ConstantSet(ConstExpr, ImmutableExpr):
 
-    elements: tuple[BaseConstant | Parameter, ...]
+    elements: tuple[BaseConstant | BaseParameter, ...]
 
 
-class Parameter(ImmutableExpr):
+class BaseParameter(ImmutableExpr):
+    __abstract_node__ = True
 
     name: str
     required: bool
@@ -900,6 +930,14 @@ class Parameter(ImmutableExpr):
     @property
     def is_global(self) -> bool:
         return self.is_implicit_global is not None
+
+
+class QueryParameter(BaseParameter):
+    pass
+
+
+class FunctionParameter(BaseParameter):
+    pass
 
 
 class TupleElement(ImmutableBase):

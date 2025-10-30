@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Optional, TYPE_CHECKING
 
 import html
+import re
 import urllib.parse
 
 from . import util
@@ -73,8 +74,8 @@ def base_page(
     )
 
     if (
-        brand_color is None or
-        util.hex_color_regexp.fullmatch(brand_color) is None
+        brand_color is None
+        or util.hex_color_regexp.fullmatch(brand_color) is None
     ):
         brand_color = DEFAULT_BRAND_COLOR
 
@@ -119,7 +120,7 @@ def oauth_buttons(
     redirect_to_on_signup: Optional[str],
     oauth_providers: list[auth_config.OAuthProviderConfig],
     label_prefix: str,
-    collapsed: bool
+    collapsed: bool,
 ) -> str:
     if len(oauth_providers) == 0:
         return ''
@@ -180,7 +181,7 @@ def button(
     *,
     id: Optional[str] = None,
     secondary: Optional[bool] = False,
-    type: Optional[str] = 'submit'
+    type: Optional[str] = 'submit',
 ) -> str:
     classes = []
     if secondary:
@@ -228,19 +229,45 @@ divider = '''
     </div>'''
 
 
-def tabs_content(sections: list[str], selected_tab: int) -> str:
+def _slugify_label(label: str) -> str:
+    slug = label.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    slug = re.sub(r"(^-|-$)", "", slug)
+    return slug or "section"
+
+
+def tabs_content(
+    sections: list[str], selected_tab: int, labels: Optional[list[str]] = None
+) -> str:
     content = ''
 
     for i, section in enumerate(sections):
+        active = selected_tab == i
+        aria_attrs = ''
+        if labels is not None and i < len(labels):
+            slug = _slugify_label(labels[i])
+            aria_attrs = (
+                ' role="tabpanel" '
+                f'id="panel-{slug}" aria-labelledby="tab-{slug}"'
+            )
+            hidden_attrs = ' aria-hidden="true" hidden' if not active else ''
+        else:
+            hidden_attrs = '' if active else ''
+
         content += f'''
-            <div class="slider-section{' active' if selected_tab == i else ''}">
-              {section}
+            <div
+                class="slider-section{' active' if active else ''}"
+                {aria_attrs}
+                {hidden_attrs}
+            >
+                {section}
             </div>
         '''
 
     style = (
         f'style="transform: translateX({-100 * selected_tab}%)"'
-        if selected_tab > 0 else ''
+        if selected_tab > 0
+        else ''
     )
     return f'''
         <div id="slider-container" class="slider-container" {style}>
@@ -259,15 +286,26 @@ def tabs_buttons(labels: list[str], selected_tab: int) -> str:
     content = ''
 
     for i, label in enumerate(labels):
+        active = selected_tab == i
+        slug = _slugify_label(label)
+        aria_selected = 'true' if active else 'false'
+        tabindex = '0' if active else '-1'
         content += f'''
-            <div class="tab{' active' if selected_tab == i else ''}">
+            <div
+              id="tab-{slug}"
+              class="tab{' active' if active else ''}"
+              role="tab"
+              aria-selected="{aria_selected}"
+              aria-controls="panel-{slug}"
+              tabindex="{tabindex}"
+            >
               {label}
               {_tab_underline}
             </div>
         '''
 
     return f'''
-        <div id="email-provider-tabs" class="tabs">
+        <div id="email-provider-tabs" class="tabs" role="tablist">
           {content}
         </div>
     '''
@@ -277,8 +315,8 @@ def hidden_input(
     *, name: str, value: str, secondary_value: Optional[str] = None
 ) -> str:
     return f'''<input type="hidden" name="{name}" value="{value}" {
-        f'data-secondary-value="{secondary_value}"'
-        if secondary_value else ''} />'''
+        f'data-secondary-value="{secondary_value}"' if secondary_value else ''
+    } />'''
 
 
 def bottom_note(message: str, *, link: str, href: str) -> str:
@@ -331,13 +369,52 @@ def success_message(message: str) -> str:
     '''
 
 
+def code_input_form(
+    *,
+    action: str,
+    email: str,
+    provider: str,
+    label: str = "Enter verification code",
+    button_text: str = "Verify Code",
+    additional_fields: str = "",
+) -> str:
+    """Renders a code input form with auto-formatting and mobile
+    keyboard support."""
+
+    return f'''
+    <form id="code-form" method="POST" action="{action}">
+        <input type="hidden" name="email" value="{html.escape(email)}" />
+        <input type="hidden" name="provider" value="{provider}" />
+        <label for="code">{label}</label>
+        <input
+            id="code"
+            name="code"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            enterkeyhint="done"
+            pattern="[0-9]{{6}}"
+            maxlength="6"
+            required
+            spellcheck="false"
+            autocapitalize="off"
+            placeholder="123456"
+        />
+
+        {additional_fields}
+        {button(button_text)}
+    </form>
+    '''
+
+
 def base_default_email(
     *,
     content: str,
     app_name: Optional[str],
     logo_url: Optional[str],
 ) -> str:
-    logo_html = f"""
+    logo_html = (
+        f"""
       <!--[if mso | IE]><table align="center" border="0" cellpadding="0" cellspacing="0" class="" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
       <div style="margin: 0px auto; max-width: 600px">
         <table
@@ -437,7 +514,10 @@ def base_default_email(
         </table>
       </div>
       <!--[if mso | IE]></td></tr></table><table align="center" border="0" cellpadding="0" cellspacing="0" class="" style="width:600px;" width="600" ><tr><td style="line-height:0px;font-size:0px;mso-line-height-rule:exactly;"><![endif]-->
-""" if logo_url else ""  # noqa: E501
+"""  # noqa: E501
+        if logo_url
+        else ""
+    )
 
     return f"""
 <!doctype html>
@@ -595,3 +675,320 @@ def base_default_email(
   </body>
 </html>
 """  # noqa: E501
+
+
+# Form Component Helpers
+# =====================
+
+
+def get_magic_link_tab_label(verification_method: str) -> str:
+    return "Email Code" if verification_method == "Code" else "Email Link"
+
+
+def get_magic_link_button_text(verification_method: str) -> str:
+    return (
+        "Email sign in code"
+        if verification_method == "Code"
+        else "Email sign in link"
+    )
+
+
+def get_email_password_signup_redirect_url(
+    verification_method: str, base_path: str, fallback_redirect: str
+) -> str:
+    if verification_method == "Code":
+        return f"{base_path}/ui/verify?provider=builtin::local_emailpassword"
+    else:
+        return fallback_redirect
+
+
+def get_webauthn_signup_redirect_url(
+    verification_method: str, base_path: str, fallback_redirect: str
+) -> str:
+    if verification_method == "Code":
+        return f"{base_path}/ui/verify?provider=builtin::local_webauthn"
+    else:
+        return fallback_redirect
+
+
+def get_password_reset_redirect_url(
+    verification_method: str, base_path: str, challenge: str
+) -> str:
+    if verification_method == "Code":
+        return f"{base_path}/ui/reset-password"
+    else:
+        return f"{base_path}/ui/forgot-password?challenge={challenge}"
+
+
+def get_send_button_text(verification_method: str) -> str:
+    return "Send Code" if verification_method == "Code" else "Send Link"
+
+
+def get_verification_method_label(verification_method: str) -> str:
+    return "Email Code" if verification_method == "Code" else "Email Link"
+
+
+def render_base_email_form(
+    *, id: str, challenge: str, email: str | None = None
+) -> str:
+    return f"""
+        <input type="hidden" name="challenge" value="{challenge}" />
+        <label for="email">Email</label>
+        <input id="{id}" name="email" type="email" value="{email or ''}" />
+    """
+
+
+def render_password_input(
+    *, challenge: str, should_show_forgot_password: bool
+) -> str:
+    forgot_password_link = (
+        f"""
+        <a
+          id="forgot-password-link"
+          class="field-note"
+          href="forgot-password?challenge={challenge}"
+          tabindex="-1"
+        >
+            Forgot password?
+        </a>
+        """
+        if should_show_forgot_password
+        else ''
+    )
+
+    return f"""
+        <div class="field-header">
+            <label for="password">Password</label>
+            {forgot_password_link}
+        </div>
+        <input id="password" name="password" type="password" />
+    """
+
+
+def render_password_form(
+    *,
+    challenge: str,
+    email: str | None = None,
+    redirect_to: str,
+    base_path: str,
+    provider_name: str,
+) -> str:
+    return f"""
+        <form
+            method="post"
+            action="../authenticate"
+            novalidate
+        >
+            <input type="hidden" name="redirect_to" value="{redirect_to}" />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signin?selected_tab=password"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            {render_base_email_form(
+                id="password-email", challenge=challenge, email=email
+            )}
+            {render_password_input(
+                challenge=challenge,
+                should_show_forgot_password=True,
+            )}
+            {button("Sign In", id="password-signin")}
+        </form>
+    """
+
+
+def render_webauthn_form(
+    *,
+    challenge: str,
+    email: str | None = None,
+    redirect_to: str,
+    base_path: str,
+    provider_name: str,
+) -> str:
+    """Render a complete WebAuthn authentication form."""
+    return f"""
+        <form
+            id="email-factor"
+            novalidate
+        >
+            <input type="hidden" name="redirect_to" value="{redirect_to}" />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signin?selected_tab=webauthn"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            <input type="hidden" name="callback_url" value="{redirect_to}" />
+            {render_base_email_form(
+                id="webauthn-email", challenge=challenge, email=email
+            )}
+            {button("Sign In", id="webauthn-signin")}
+        </form>
+    """
+
+
+def render_magic_link_form(
+    *,
+    challenge: str,
+    email: str | None = None,
+    base_path: str,
+    provider_name: str,
+    callback_url: str | None = None,
+    verification_method: str = "Link",
+) -> str:
+    button_text = get_magic_link_button_text(verification_method)
+    callback_field = (
+        f'''
+            <input type="hidden" name="callback_url" value="{callback_url}" />
+        '''
+        if verification_method == "Link"
+        else ""
+    )
+
+    return f"""
+        <form
+            method="post"
+            action="../magic-link/email"
+            novalidate
+        >
+            <input
+                type="hidden"
+                name="redirect_to"
+                value="{base_path}/ui/magic-link-sent"
+            />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signin?selected_tab=magic_link"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            {callback_field}
+            {render_base_email_form(
+                id="magic-link-email", challenge=challenge, email=email
+            )}
+            {button(button_text, id="magic-link-signin")}
+        </form>
+    """
+
+
+# Signup-specific form helpers
+# ===========================
+
+
+def render_password_signup_form(
+    *,
+    challenge: str,
+    email: str | None = None,
+    redirect_to: str,
+    base_path: str,
+    provider_name: str,
+) -> str:
+    return f"""
+        <form
+            method="post"
+            action="../register"
+            novalidate
+        >
+            <input type="hidden" name="redirect_to" value="{redirect_to}" />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signup?selected_tab=password"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            <input
+                type="hidden"
+                name="verify_url"
+                value="{base_path}/ui/verify"
+            />
+            {render_base_email_form(
+                id="password-email", challenge=challenge, email=email
+            )}
+            {render_password_input(
+                challenge=challenge,
+                should_show_forgot_password=False,
+            )}
+            {button("Sign Up", id="password-signup")}
+        </form>
+    """
+
+
+def render_webauthn_signup_form(
+    *,
+    challenge: str,
+    email: str | None = None,
+    redirect_to: str,
+    base_path: str,
+    provider_name: str,
+) -> str:
+    """Render a complete WebAuthn signup form."""
+    return f"""
+        <form
+            id="email-factor"
+            novalidate
+        >
+            <input type="hidden" name="redirect_to" value="{redirect_to}" />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signup?selected_tab=webauthn"
+            />
+            <input type="hidden" name="provider" value="{provider_name}" />
+            <input type="hidden" name="callback_url" value="{redirect_to}" />
+            <input
+                type="hidden"
+                name="verify_url"
+                value="{base_path}/ui/verify"
+            />
+            {render_base_email_form(
+                id="webauthn-email", challenge=challenge, email=email
+            )}
+            {button("Sign Up", id="webauthn-signup")}
+        </form>
+    """
+
+
+def render_magic_link_signup_form(
+    *,
+    challenge: str,
+    email: str | None = None,
+    base_path: str,
+    provider_name: str,
+    callback_url: str | None = None,
+    verification_method: str = "Link",
+) -> str:
+    """Render a complete magic link/OTC signup form."""
+    tab_label = get_magic_link_tab_label(verification_method)
+    callback_field = (
+        f"""
+            <input type="hidden" name="callback_url" value="{callback_url}" />
+        """
+        if verification_method == "Link"
+        else ""
+    )
+
+    return f"""
+        <form
+            method="post"
+            action="../magic-link/register"
+            novalidate
+        >
+            <input type="hidden" name="provider" value="{provider_name}" />
+            <input
+                type="hidden"
+                name="redirect_to"
+                value="{base_path}/ui/magic-link-sent"
+            />
+            <input
+                type="hidden"
+                name="redirect_on_failure"
+                value="{base_path}/ui/signup?selected_tab=magic_link"
+            />
+            {callback_field}
+            {render_base_email_form(
+                id="magic-link-email", challenge=challenge, email=email
+            )}
+            {button(f"Sign Up with {tab_label}", id="magic-link-signup")}
+        </form>
+    """

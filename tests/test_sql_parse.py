@@ -1211,6 +1211,11 @@ class TestSQLParse(tb.BaseDocTest):
         SELECT (x IS NOT DISTINCT FROM y) FROM b
         """
 
+    def test_sql_parse_query_56(self):
+        """
+        SELECT dense_rank('1') WITHIN GROUP (ORDER BY 1)
+        """
+
     def test_sql_parse_lock_01(self):
         '''
         LOCK TABLE films IN ACCESS SHARE MODE

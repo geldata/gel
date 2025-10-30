@@ -1964,6 +1964,31 @@ std::max(vals: SET OF array<std::cal::date_duration>) -> OPTIONAL array<std::cal
 };
 
 
+CREATE FUNCTION
+std::sum(s: SET OF std::cal::relative_duration) -> std::cal::relative_duration
+{
+    CREATE ANNOTATION std::description :=
+        'Return the arithmetic sum of values in a set.';
+    SET volatility := 'Immutable';
+    SET initial_value := <std::cal::relative_duration>"PT0S";
+    SET force_return_cast := true;
+    USING SQL FUNCTION 'sum';
+};
+
+
+CREATE FUNCTION
+std::sum(s: SET OF std::cal::date_duration) -> std::cal::date_duration
+{
+    CREATE ANNOTATION std::description :=
+        'Return the arithmetic sum of values in a set.';
+    SET volatility := 'Immutable';
+    SET initial_value := <std::cal::date_duration>"PT0S";
+    SET force_return_cast := true;
+    USING SQL FUNCTION 'sum';
+};
+
+
+
 ## Range functions
 
 

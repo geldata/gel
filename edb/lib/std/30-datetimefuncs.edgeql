@@ -507,3 +507,17 @@ CREATE CAST FROM std::duration TO std::str {
     SELECT regexp_replace(val::text, '[[:<:]]mon(?=s?[[:>:]])', 'month');
     $$;
 };
+
+
+# std::sum
+
+CREATE FUNCTION
+std::sum(s: SET OF std::duration) -> std::duration
+{
+    CREATE ANNOTATION std::description :=
+        'Return the arithmetic sum of values in a set.';
+    SET volatility := 'Immutable';
+    SET initial_value := <std::duration>"PT0S";
+    SET force_return_cast := true;
+    USING SQL FUNCTION 'sum';
+};

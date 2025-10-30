@@ -33,9 +33,6 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
 
     SETUP = [
         '''
-            # Dropping all_objects() is no longer required for correctness,
-            # but it does still speed things up a lot.
-            drop function all_objects();
             create future warn_old_scoping;
         ''',
         os.path.join(os.path.dirname(__file__), 'schemas',
@@ -292,6 +289,42 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             await self.con.query('''
                 select Ptr.tgt.b
             ''')
+
+        # A bunch using .?> that should not fail
+        await self.assert_query_result(
+            '''
+            select Ptr { t := .?>tgt }
+            ''',
+            [{'t': None}],
+        )
+
+        await self.assert_query_result(
+            '''
+            select Ptr { z := .?>tgt.b }
+            ''',
+            [{'z': None}],
+        )
+
+        await self.assert_query_result(
+            '''
+            select Ptr { z := .?>tgt.id }
+            ''',
+            [{'z': None}],
+        )
+
+        await self.assert_query_result(
+            '''
+            select Ptr.?>tgt
+            ''',
+            [],
+        )
+
+        await self.assert_query_result(
+            '''
+            select Ptr.?>tgt.b
+            ''',
+            [],
+        )
 
         await self.con.query('''
             delete Ptr
@@ -787,6 +820,18 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             await self.con.query('''
             insert Issue {
                 name := '', body := '',
+                status := (select Status filter .name = 'Open'), number := '',
+                owner := (insert User { name := "???" }),
+            };
+            ''')
+
+        async with self.assertRaisesRegexTx(
+                edgedb.InvalidValueError,
+                r"access policy violation on insert of default::Issue"):
+            await self.con.query('''
+            insert Issue {
+                name := '', body := '',
+                watchers := {},
                 status := (select Status filter .name = 'Open'), number := '',
                 owner := (insert User { name := "???" }),
             };
@@ -1684,7 +1729,7 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             always_typenames=True,
         )
 
-    async def test_edgeql_policies_diamond_01(self):
+    async def test_edgeql_policies_inheritance_01(self):
         # Verify that selecting a type with overlapping children and
         # access policies in at least one child works
 
@@ -1710,10 +1755,66 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
             drop type T
         ''')
 
-    async def test_edgeql_policies_set_global_01(self):
+    async def test_edgeql_policies_inheritance_02(self):
         # Verify that selecting a type with overlapping children and
         # access policies in at least one child works
 
+        await self.con.execute('''
+            create type A;
+            create type B extending A;
+            create type C extending B, A { create access policy ok allow all; };
+            insert C;
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select A
+            ''',
+            [{}]
+        )
+
+        await self.con.execute('''
+            drop type C
+        ''')
+
+    async def test_edgeql_policies_inheritance_03(self):
+        # Verify that selecting a type with access policies within an indirect
+        # descendant works
+
+        await self.con.execute('''
+            create required global flag: bool {
+                set default := true;
+            };
+            create type A;
+            create type B extending A;
+            create type C extending B {
+                create access policy ok allow all using(global flag);
+            };
+            insert C;
+        ''')
+
+        await self.assert_query_result(
+            r'''
+            select A
+            ''',
+            [{}]
+        )
+
+        await self.con.execute('''
+            set global flag := false;
+        ''')
+        await self.assert_query_result(
+            r'''
+            select A
+            ''',
+            []
+        )
+
+        await self.con.execute('''
+            drop type C
+        ''')
+
+    async def test_edgeql_policies_set_global_01(self):
         await self.con.execute('''
             create global cur: uuid;
             create type T {

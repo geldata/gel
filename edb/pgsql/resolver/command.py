@@ -51,7 +51,7 @@ from edb.schema import properties as s_properties
 from edb.schema import name as sn
 from edb.schema import types as s_types
 from edb.schema import utils as s_utils
-
+from edb.server.compiler import enums
 
 from . import dispatch
 from . import context
@@ -109,6 +109,8 @@ def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
     query.ctes.extend(ctx.ctes_buffer)
     ctx.ctes_buffer.clear()
 
+    _validate_no_params(ctx)
+
     return pgast.CopyStmt(
         relation=None,
         colnames=None,
@@ -119,6 +121,38 @@ def resolve_CopyStmt(stmt: pgast.CopyStmt, *, ctx: Context) -> pgast.CopyStmt:
         # TODO: forbid some options?
         options=stmt.options,
         where_clause=where,
+    )
+
+
+def _validate_no_params(ctx: Context):
+    if len(ctx.query_params) == 0:
+        return
+    has_globals = any(
+        isinstance(p, dbstate.SQLParamGlobal) and not p.is_permission
+        for p in ctx.query_params
+    )
+    has_permissions = any(
+        isinstance(p, dbstate.SQLParamGlobal) and p.is_permission
+        for p in ctx.query_params
+    )
+    hint: str | None
+    if has_globals or has_permissions:
+        if has_globals and has_permissions:
+            offender = "globals or permissions"
+        elif has_globals:
+            offender = "globals"
+        elif has_permissions:
+            offender = "permissions"
+        offender += " in computed properties and access policies"
+        hint = "To disable policies, set apply_access_policies_pg := false"
+    else:
+        offender = "query parameters"
+        hint = None
+
+    raise errors.QueryError(
+        f"COPY cannot use {offender}",
+        pgext_code=pgerror.ERROR_FEATURE_NOT_SUPPORTED,
+        hint=hint,
     )
 
 
@@ -2206,6 +2240,7 @@ def resolve_DMLQuery(
         _resolve_conflict_update_rel(compiled_dml, subject_name, ctx=ctx)
 
     ctx.ctes_buffer.extend(compiled_dml.output_ctes)
+    ctx.env.capabilities |= enums.Capability.MODIFICATIONS
 
     return _fini_resolve_dml(stmt, compiled_dml, ctx=ctx)
 
@@ -2718,8 +2753,8 @@ def merge_params(
         # search for existing params for this global
         existing_param = next(
             (
-                i
-                for i, p in enumerate(ctx.query_params)
+                p
+                for p in ctx.query_params
                 if isinstance(p, dbstate.SQLParamGlobal)
                 and p.global_name == glob.global_name
             ),
@@ -2727,7 +2762,7 @@ def merge_params(
         )
         internal_index: int
         if existing_param is not None:
-            internal_index = existing_param
+            internal_index = existing_param.internal_index
         else:
             # append a new param
             internal_index = len(ctx.query_params) + 1
@@ -2737,7 +2772,10 @@ def merge_params(
             )
             ctx.query_params.append(
                 dbstate.SQLParamGlobal(
-                    global_name=glob.global_name, pg_type=pg_type
+                    global_name=glob.global_name,
+                    pg_type=pg_type,
+                    is_permission=glob.is_permission,
+                    internal_index=internal_index,
                 )
             )
 

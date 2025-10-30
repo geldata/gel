@@ -73,6 +73,22 @@ class Role(
         inheritable=False,
     )
 
+    branches = so.SchemaField(
+        so.MultiPropSet[str],
+        # default=so.MultiPropSet[str]('*'),
+        # default=('*',),
+        coerce=True,
+        allow_ddl_set=True,
+        inheritable=False,
+    )
+
+    apply_access_policies_pg_default = so.SchemaField(
+        bool,
+        default=None,
+        allow_ddl_set=True,
+        inheritable=True,
+    )
+
 
 class RoleCommandContext(
         sd.ObjectCommandContext[Role],
@@ -148,6 +164,23 @@ class RoleCommand(
                 span=span,
             )
 
+    def _validate_permissions(
+        self,
+        schema: s_schema.Schema,
+        context: sd.CommandContext,
+    ) -> None:
+        if (
+            self.has_attribute_value('permissions')
+            and (permissions := self.get_attribute_value('permissions'))
+        ):
+            if 'sys::perm::superuser' in permissions:
+                span = self.get_attribute_span('permissions')
+                raise errors.SchemaDefinitionError(
+                    f'Permission "sys::perm::superuser" '
+                    f'cannot be explicitly granted.',
+                    span=span,
+                )
+
 
 class CreateRole(RoleCommand, inheriting.CreateInheritingObject[Role]):
     astnode = qlast.CreateRole
@@ -164,6 +197,10 @@ class CreateRole(RoleCommand, inheriting.CreateInheritingObject[Role]):
 
         cmd.set_attribute_value('superuser', astnode.superuser)
         cls._process_role_body(cmd, schema, astnode, context)
+
+        if not cmd.has_attribute_value('branches'):
+            cmd.set_attribute_value('branches', frozenset(['*']))
+
         return cmd
 
     def get_ast_attr_for_field(
@@ -186,6 +223,7 @@ class CreateRole(RoleCommand, inheriting.CreateInheritingObject[Role]):
     ) -> None:
         super().validate_create(schema, context)
         self._validate_name(schema, context)
+        self._validate_permissions(schema, context)
 
 
 class RebaseRole(RoleCommand, inheriting.RebaseInheritingObject[Role]):
@@ -271,6 +309,7 @@ class AlterRole(RoleCommand, inheriting.AlterInheritingObject[Role]):
     ) -> None:
         super().validate_alter(schema, context)
         self._validate_name(schema, context)
+        self._validate_permissions(schema, context)
 
 
 class DeleteRole(RoleCommand, inheriting.DeleteInheritingObject[Role]):

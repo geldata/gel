@@ -33,10 +33,11 @@ import hmac
 from typing import Optional, cast
 from email.message import EmailMessage
 
-from edgedb import QueryAssertionError
+from edgedb import QueryAssertionError, ConstraintViolationError
 from edb.testbase import http as tb
 from edb.common import assert_data_shape
 from edb.server.protocol.auth_ext import jwt as auth_jwt
+from edb.server.protocol.auth_ext import otc
 from edb.server.auth import JWKSet
 
 ph = argon2.PasswordHasher()
@@ -229,6 +230,12 @@ def utcnow():
     return datetime.datetime.now(datetime.timezone.utc)
 
 
+def b64_decode_padding(s):
+    N = 4
+    extra = (N - (len(s) % N)) % N
+    return base64.b64decode(s + '=' * extra)
+
+
 SIGNING_KEY = 'a' * 32
 GITHUB_SECRET = 'b' * 32
 GOOGLE_SECRET = 'c' * 32
@@ -250,6 +257,12 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
     SETUP = [
         f"""
+        CREATE ROLE auth_user {{
+            SET password := 'secret';
+            SET permissions := {{
+                ext::auth::perm::auth_read_user,
+            }}
+        }};
         CONFIGURE CURRENT DATABASE INSERT cfg::SMTPProviderConfig {{
             name := "email_hosting_is_easy",
             sender := "{SENDER}",
@@ -438,16 +451,21 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
         return super().http_con_send_request(*args, headers=headers, **kwargs)
 
     async def get_provider_config_by_name(self, fqn: str):
-        return await self.con.query_single(
+        return await self.con.query_required_single(
             """
             SELECT assert_exists(
                 cfg::Config.extensions[is ext::auth::AuthConfig].providers {
                     *,
+                    verification_method := (
+                      [is ext::auth::EmailPasswordProviderConfig].verification_method
+                      ?? [is ext::auth::MagicLinkProviderConfig].verification_method
+                      ?? [is ext::auth::WebAuthnProviderConfig].verification_method
+                    ),
                     [is ext::auth::OAuthProviderConfig].client_id,
                     [is ext::auth::OAuthProviderConfig].additional_scope,
                 } filter .name = <str>$0
             )
-            """,
+            """,  # noqa: E501
             fqn,
         )
 
@@ -2388,6 +2406,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     parsed_query,
                     {
                         "code": [str(pkce_challenge.id)],
+                        "email": [email],
                         "provider": ["builtin::local_emailpassword"],
                     },
                 )
@@ -2726,6 +2745,7 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 json.loads(body),
                 {
                     "code": str(pkce_challenge.id),
+                    "email": email,
                     "provider": "builtin::local_emailpassword",
                 },
             )
@@ -3393,6 +3413,15 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                     refresh_token="a_refresh_token",
                     id_token="an_id_token",
                 )
+                # Some other user
+                other_user = await self.con.query_single(
+                    """
+                    insert ext::auth::Identity {
+                        issuer := "https://example.com",
+                        subject := "foobaz",
+                    }
+                    """
+                )
 
                 # Correct code, random verifier
                 (_, _, wrong_verifier_status) = self.http_con_request(
@@ -3423,16 +3452,109 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
 
                 self.assertEqual(status, 200, body)
                 body_json = json.loads(body)
+                auth_token = body_json["auth_token"]
+
                 self.assertEqual(
                     body_json,
                     {
-                        "auth_token": body_json["auth_token"],
+                        "auth_token": auth_token,
                         "identity_id": str(pkce.identity_id),
                         "provider_token": "a_provider_token",
                         "provider_refresh_token": "a_refresh_token",
                         "provider_id_token": "an_id_token",
                     },
                 )
+
+                # Check that the client_token and ClientTokenIdentity
+                # works!  I'm not sure if this is the simplest/best
+                # place to do these checks, but it seems to work
+                # (-sully)
+                await self.con.execute(
+                    '''
+                    set global ext::auth::client_token := <str>$0;
+                    ''',
+                    auth_token,
+                )
+                user = await self.con.query_single('''
+                    select global ext::auth::ClientTokenIdentity { ** }
+                ''')
+
+                identities = await self.con.query('''
+                    select ext::auth::Identity { ** }
+                ''')
+
+                await self.con.execute(
+                    '''
+                    reset global ext::auth::client_token
+                    ''',
+                )
+
+                self.assertEqual(user.subject, "abcdefg")
+                self.assertGreater(len(identities), 1)
+
+                # Turn the real auth token into a fake auth token for
+                # a different user.
+                parts = auth_token.split('.')
+                claims_bytes = b64_decode_padding(parts[1])
+                claims = json.loads(claims_bytes)
+                claims['sub'] = str(other_user.id)
+                fake_claim_str = base64.urlsafe_b64encode(
+                    json.dumps(claims).encode('utf-8')
+                ).decode('ascii')
+                parts[1] = fake_claim_str
+                fake_auth_token = '.'.join(parts)
+
+                # Try to use the fake auth token and make sure it fails!
+                await self.con.execute(
+                    '''
+                    set global ext::auth::client_token := <str>$0;
+                    ''',
+                    fake_auth_token,
+                )
+                with self.assertRaisesRegex(
+                    QueryAssertionError,
+                    "signature mismatch",
+                ):
+                    await self.con.query_single('''
+                        select global ext::auth::ClientTokenIdentity { ** }
+                    ''')
+                await self.con.execute(
+                    '''
+                    reset global ext::auth::client_token
+                    ''',
+                )
+
+                # Now try with a non-superuser connection!
+                con2 = await self.connect(
+                    user='auth_user',
+                    password='secret',
+                )
+                try:
+                    await con2.execute(
+                        '''
+                        set global ext::auth::client_token := <str>$0;
+                        ''',
+                        auth_token,
+                    )
+                    user = await con2.query_single('''
+                        select global ext::auth::ClientTokenIdentity { ** }
+                    ''')
+                    identities = await con2.query('''
+                        select ext::auth::Identity { ** }
+                    ''')
+                    await con2.execute(
+                        '''
+                        reset global ext::auth::client_token
+                        ''',
+                    )
+
+                    self.assertEqual(user.subject, "abcdefg")
+                    self.assertEqual(len(identities), 1)
+
+                finally:
+                    await con2.aclose()
+
+                # Check the webhooks
                 async for tr in self.try_until_succeeds(
                     delay=2, timeout=120, ignore=(KeyError, AssertionError)
                 ):
@@ -4502,51 +4624,131 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
                 f"{self.http_addr}/magic-link/authenticate",
             )
 
-            _, headers, status = self.http_con_request(
-                http_con,
-                method="GET",
-                path=f"magic-link/authenticate?token={token}",
+    async def test_http_auth_ext_magic_code_register(self):
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
+
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/register",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_magic_link",
+                            "email": email,
+                            # No challenge, no redirect_on_failure in Code mode
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 200, body)
+                data = json.loads(body)
+                expected_identity_id = await self.con.query_single(
+                    """
+                    with IDENTITY := (
+                      select ext::auth::MagicLinkFactor
+                      filter .email = <str>$email
+                    ).identity
+                    select IDENTITY.id;
+                    """,
+                    email=email,
+                )
+                self.assertEqual(data.get("code"), "true")
+                self.assertEqual(data.get("signup"), "true")
+                self.assertEqual(data.get("email"), email)
+                self.assertEqual(
+                    data.get("identity_id"),
+                    str(expected_identity_id)
+                )
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+            """
             )
 
-            self.assertEqual(status, 302)
-            location = headers.get("location")
-            assert location is not None
-            parsed_location = urllib.parse.urlparse(location)
-            self.assertEqual(
-                urllib.parse.urlunparse(
-                    (
-                        parsed_location.scheme,
-                        parsed_location.netloc,
-                        parsed_location.path,
-                        '',
-                        '',
-                        '',
-                    )
-                ),
-                callback_url,
-            )
+    async def test_http_auth_ext_magic_code_email(self):
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
 
-            # Sign in with the registered email without link_url
-            _, _, status = self.http_con_request(
-                http_con,
-                method="POST",
-                path="magic-link/email",
-                body=json.dumps(
-                    {
-                        "provider": "builtin::local_magic_link",
-                        "email": email,
-                        "challenge": challenge,
-                        "callback_url": callback_url,
-                        "redirect_on_failure": redirect_on_failure,
-                    }
-                ).encode(),
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-            )
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
 
-            # Get the token from email
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/register",
+                    body=json.dumps({"email": email}).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 200, body)
+
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps({"email": email}).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 200, body)
+                data = json.loads(body)
+                self.assertEqual(data.get("code"), "true")
+                self.assertEqual(data.get("email"), email)
+
+            nonexistent_email = f"nonexistent-{uuid.uuid4()}@example.com"
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps({"email": nonexistent_email}).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 200, body)
+                data = json.loads(body)
+                self.assertEqual(data.get("code"), "true")
+                self.assertEqual(data.get("email"), nonexistent_email)
+
+            # Verify that a 6-digit code email was sent
             file_name_hash = hashlib.sha256(
                 f"{SENDER}{email}".encode()
             ).hexdigest()
@@ -4556,33 +4758,121 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             )
             with open(test_file, "rb") as f:
                 email_args = pickle.load(f)
-            self.assertEqual(email_args["sender"], SENDER)
-            self.assertEqual(email_args["recipients"], email)
-            msg = cast(EmailMessage, email_args["message"]).get_body(
-                ("html",)
+            msg = cast(EmailMessage, email_args["message"])
+            html_body = msg.get_body(("html",))
+            assert html_body is not None
+            html_content = html_body.get_payload(decode=True).decode("utf-8")
+            code_match = re.search(r"(?:^|\s)(\d{6})(?:\s|$)", html_content)
+            self.assertIsNotNone(code_match, "No 6-digit code found in email")
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+            """
             )
-            assert msg is not None
-            html_email = msg.get_payload(decode=True).decode("utf-8")
-            match = re.search(
-                r'<p style="word-break: break-all">([^<]+)', html_email
-            )
-            assert match is not None
-            magic_link_url = urllib.parse.urlparse(match.group(1))
-            search_params = urllib.parse.parse_qs(magic_link_url.query)
-            token = search_params.get("token", [None])[0]
-            assert token is not None
-            self.assertEqual(
-                urllib.parse.urlunparse(
+
+    async def test_http_auth_ext_magic_link_register_missing_keys(
+        self,
+    ):
+        email = f"{uuid.uuid4()}@example.com"
+        callback_url = "https://example.com/app/auth/callback"
+        redirect_on_failure = "https://example.com/app/auth/magic-link-failure"
+        challenge = "test_challenge"
+        link_url = "https://example.com/app/magic-link/authenticate"
+
+        # All 5 keys are required, so we test all invalid combinations
+        partial_keys = [
+            {"challenge", "callback_url", "redirect_on_failure", "link_url"},
+            {"challenge", "callback_url", "redirect_on_failure"},
+            {"challenge", "callback_url", "link_url"},
+            {"challenge", "redirect_on_failure", "link_url"},
+            {"callback_url", "redirect_on_failure", "link_url"},
+            {"challenge", "callback_url"},
+            {"challenge", "redirect_on_failure"},
+            {"challenge", "link_url"},
+            {"callback_url", "redirect_on_failure"},
+            {"callback_url", "link_url"},
+            {"redirect_on_failure", "link_url"},
+        ]
+        for partial_keyset in partial_keys:
+            with self.http_con() as http_con:
+                body = {
+                    "email": email,
+                    "challenge": challenge,
+                    "callback_url": callback_url,
+                    "redirect_on_failure": redirect_on_failure,
+                    "link_url": link_url,
+                }
+                request_body = {
+                    k: v for k, v in body.items() if k in partial_keyset
+                }
+                response_body, headers, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/register",
+                    body=json.dumps(request_body).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+                expected_status = (
+                    302 if "redirect_on_failure" in partial_keyset else 400
+                )
+                self.assertEqual(
+                    status,
+                    expected_status,
                     (
-                        magic_link_url.scheme,
-                        magic_link_url.netloc,
-                        magic_link_url.path,
-                        '',
-                        '',
-                        '',
+                        f"Expected {expected_status}, got {status} "
+                        f"with body {response_body}"
+                    ),
+                )
+                if expected_status == 302:
+                    location = headers.get(
+                        "Location", headers.get("location", "")
                     )
-                ),
-                f"{self.http_addr}/magic-link/authenticate",
+                    self.assertTrue(
+                        location.startswith(redirect_on_failure),
+                        (
+                            "Expected Location to start with "
+                            f"{redirect_on_failure}, got {location}"
+                        ),
+                    )
+
+    async def test_http_auth_ext_magic_code_missing_email(self):
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
+
+        try:
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps({}).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 400, body)
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+            """
             )
 
     async def test_http_auth_ext_identity_delete_cascade_01(self):
@@ -4715,3 +5005,1497 @@ class TestHttpExtAuth(tb.ExtAuthTestCase):
             ''',
             [{'name': 'auth_signing_key'}],
         )
+
+    async def test_http_auth_ext_otc_00(self):
+        """Test that the schema migration additions work correctly.
+
+        This test verifies that the new OneTimeCode and AuthenticationAttempt
+        types can be created and function properly. It tests the
+        verification_method property on provider configs, ensures OneTimeCode
+        constraints work (code_hash exclusivity), and validates that
+        AuthenticationAttempts track events correctly in an event-based design
+        that allows multiple attempts per factor.
+        """
+
+        email_config = await self.get_builtin_provider_config_by_name(
+            "local_emailpassword"
+        )
+        self.assertEqual(str(email_config.verification_method), 'Link')
+
+        magic_link_config = await self.get_builtin_provider_config_by_name(
+            "local_magic_link"
+        )
+        self.assertEqual(str(magic_link_config.verification_method), 'Link')
+
+        result = await self.con.query_single(
+            """
+            INSERT ext::auth::LocalIdentity {
+                issuer := "test",
+                subject := "test_user_123",
+            };
+        """
+        )
+
+        identity_id = result.id
+
+        email_factor = await self.con.query_single(
+            """
+            INSERT ext::auth::EmailFactor {
+                identity := <ext::auth::LocalIdentity><uuid>$identity_id,
+                email := "test@example.com",
+            };
+        """,
+            identity_id=identity_id,
+        )
+
+        expires_at = utcnow() + datetime.timedelta(minutes=10)
+        otc = await self.con.query_single(
+            """
+            with
+                plaintext_code := b"test_hash_123",
+                code_hash := ext::pgcrypto::digest(plaintext_code, 'sha256'),
+                ONE_TIME_CODE := (
+                    INSERT ext::auth::OneTimeCode {
+                        code_hash := code_hash,
+                        expires_at := <datetime>$expires_at,
+                        factor := <ext::auth::Factor><uuid>$factor_id,
+                    }
+                ),
+            select ONE_TIME_CODE { ** };
+        """,
+            expires_at=expires_at,
+            factor_id=email_factor.id,
+        )
+
+        expected_hash = hashlib.sha256(b"test_hash_123").digest()
+        self.assertEqual(otc.code_hash, expected_hash)
+
+        auth_attempt = await self.con.query_single(
+            """
+            with
+                ATTEMPT := (
+                    INSERT ext::auth::AuthenticationAttempt {
+                        factor := <ext::auth::Factor><uuid>$factor_id,
+                        attempt_type :=
+                            ext::auth::AuthenticationAttemptType.OneTimeCode,
+                        successful := false,
+                    }
+                ),
+            select ATTEMPT { * };
+        """,
+            factor_id=email_factor.id,
+        )
+
+        self.assertEqual(str(auth_attempt.attempt_type), "OneTimeCode")
+        self.assertFalse(auth_attempt.successful)
+        self.assertIsNotNone(auth_attempt.created_at)
+        self.assertIsNotNone(auth_attempt.modified_at)
+
+        with self.assertRaises(ConstraintViolationError):
+            await self.con.query(
+                """
+                with
+                    plaintext_code := b"test_hash_123",
+                    code_hash :=
+                        ext::pgcrypto::digest(plaintext_code, 'sha256'),
+                    ONE_TIME_CODE := (
+                        INSERT ext::auth::OneTimeCode {
+                            code_hash := code_hash,
+                            expires_at := <datetime>$expires_at,
+                            factor := <ext::auth::Factor><uuid>$factor_id,
+                        }
+                    ),
+                select ONE_TIME_CODE { ** };
+                """,
+                expires_at=expires_at,
+                factor_id=email_factor.id,
+            )
+
+        await self.con.query_single(
+            """
+            with
+                ATTEMPT := (
+                    INSERT ext::auth::AuthenticationAttempt {
+                        factor := <ext::auth::Factor><uuid>$factor_id,
+                        attempt_type :=
+                            ext::auth::AuthenticationAttemptType.OneTimeCode,
+                        successful := true,
+                    }
+                ),
+            select ATTEMPT { * };
+        """,
+            factor_id=email_factor.id,
+        )
+
+        all_attempts = await self.con.query(
+            """
+            SELECT ext::auth::AuthenticationAttempt { * }
+            FILTER .factor.id = <uuid>$factor_id
+            ORDER BY .created_at;
+        """,
+            factor_id=email_factor.id,
+        )
+
+        self.assertEqual(len(all_attempts), 2)
+        self.assertFalse(all_attempts[0].successful)
+        self.assertTrue(all_attempts[1].successful)
+
+    async def test_http_auth_ext_otc_06(self):
+        """Test verification with expired code.
+
+        Validates that expired OTCs are properly rejected and cleaned up during
+        verification attempts. This tests the TTL enforcement and ensures
+        expired codes cannot be used for authentication, maintaining security.
+        """
+        identity = await self.con.query_single(
+            """
+            INSERT ext::auth::LocalIdentity {
+                issuer := "test",
+                subject := "test_user_otc_expired",
+            };
+        """
+        )
+
+        email_factor = await self.con.query_single(
+            """
+            INSERT ext::auth::EmailFactor {
+                identity := <ext::auth::LocalIdentity><uuid>$identity_id,
+                email := "test_otc_expired@example.com",
+            };
+        """,
+            identity_id=identity.id,
+        )
+
+        expired_time = utcnow() - datetime.timedelta(minutes=5)
+        code_hash = otc.hash_code("123456")
+
+        expired_otc = await self.con.query_single(
+            """
+            INSERT ext::auth::OneTimeCode {
+                factor := <ext::auth::Factor><uuid>$factor_id,
+                code_hash := <bytes>$code_hash,
+                expires_at := <datetime>$expires_at,
+            };
+        """,
+            factor_id=email_factor.id,
+            code_hash=code_hash,
+            expires_at=expired_time,
+        )
+
+        with self.http_con() as http_con:
+            form_data = {
+                "email": "test_otc_expired@example.com",
+                "code": "123456",
+                "challenge": "test_challenge_expired",
+                "callback_url": "https://example.com/app/auth/callback",
+            }
+            form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+            auth_body, auth_headers, auth_status = self.http_con_request(
+                http_con,
+                method="POST",
+                path="magic-link/authenticate",
+                body=form_data_encoded,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        self.assertEqual(
+            auth_status, 400, f"Expected 400, got {auth_status}: {auth_body}"
+        )
+        error_data = json.loads(auth_body)
+        self.assertEqual(error_data.get("error"), "Code has expired")
+
+        deleted_otc = await self.con.query_single(
+            "SELECT ext::auth::OneTimeCode { ** } FILTER .id = <uuid>$otc_id",
+            otc_id=expired_otc.id,
+        )
+        self.assertIsNone(deleted_otc)
+
+    async def test_http_auth_ext_otc_magic_link_00(self):
+        """Test complete Magic Link OTC flow: register -> email with code ->
+        authenticate.
+
+        Tests the full Magic Link authentication flow when configured for OTC
+        mode. Validates that registration sends an email with a 6-digit code
+        instead of a magic link, the code can be extracted and used for
+        authentication, and the complete PKCE flow works with the OTC
+        verification method.
+        """
+
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
+
+        base_url = self.mock_net_server.get_base_url().rstrip("/")
+        webhook_url = f"{base_url}/otc-webhook"
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::WebhookConfig {
+                url := <str>$url,
+                events := {
+                    ext::auth::WebhookEvent.OneTimeCodeRequested,
+                    ext::auth::WebhookEvent.OneTimeCodeVerified,
+                    ext::auth::WebhookEvent.IdentityCreated,
+                    ext::auth::WebhookEvent.EmailFactorCreated,
+                },
+            };
+            """,
+            url=webhook_url,
+        )
+
+        webhook_request = (
+            "POST",
+            base_url,
+            "/otc-webhook",
+        )
+        self.mock_net_server.register_route_handler(*webhook_request)(("", 204))
+
+        await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
+
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+            nonexistent_email = f"nonexistent-{uuid.uuid4()}@example.com"
+            verifier, challenge = self.generate_pkce_pair()
+            callback_url = "https://example.com/app/auth/callback"
+
+            with self.http_con() as http_con:
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps(
+                        {
+                            "email": nonexistent_email,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 200, body)
+
+                response_data = json.loads(body)
+                self.assertEqual(response_data.get("email"), nonexistent_email)
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/register",
+                    body=json.dumps(
+                        {
+                            "email": email,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(
+                    status, 200, f"POST /magic-link/register: {status} {body}"
+                )
+
+                response_data = json.loads(body)
+                self.assertIn(
+                    email,
+                    response_data.get("email", ""),
+                    f"Email not found in response: {response_data}",
+                )
+
+                file_name_hash = hashlib.sha256(
+                    f"{SENDER}{email}".encode()
+                ).hexdigest()
+                test_file = os.environ.get(
+                    "EDGEDB_TEST_EMAIL_FILE",
+                    f"/tmp/edb-test-email-{file_name_hash}.pickle",
+                )
+                with open(test_file, "rb") as f:
+                    email_args = pickle.load(f)
+
+                msg = cast(EmailMessage, email_args["message"])
+                html_body = msg.get_body(('html',))
+                html_content = html_body.get_payload(decode=True).decode(
+                    'utf-8'
+                )
+
+                code_match = re.search(r'(?:^|\s)(\d{6})(?:\s|$)', html_content)
+                self.assertIsNotNone(
+                    code_match, "No 6-digit code found in email"
+                )
+                otc_code = code_match.group(1)
+                self.assertEqual(len(otc_code), 6)
+
+                form_data = {
+                    "email": email,
+                    "code": otc_code,
+                    "challenge": challenge,
+                    "callback_url": callback_url,
+                }
+                form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+                auth_body, auth_headers, auth_status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/authenticate",
+                    body=form_data_encoded,
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                )
+
+                self.assertEqual(auth_status, 302, auth_body)
+
+                location = auth_headers.get("location", "")
+                self.assertTrue(location.startswith(callback_url))
+
+                parsed_url = urllib.parse.urlparse(location)
+                query_params = urllib.parse.parse_qs(parsed_url.query)
+                auth_code = query_params.get("code", [None])[0]
+                self.assertIsNotNone(auth_code)
+
+                token_body, token_headers, token_status = self.http_con_request(
+                    http_con,
+                    params={
+                        "code": auth_code,
+                        "verifier": verifier,
+                    },
+                    method="GET",
+                    path="token",
+                    headers={"Content-Type": "application/json"},
+                )
+
+                self.assertEqual(
+                    token_status,
+                    200,
+                    f"POST /token: {token_status} {token_body}",
+                )
+                token_data = json.loads(token_body)
+                self.assertIn("auth_token", token_data)
+
+                async for tr in self.try_until_succeeds(
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
+                ):
+                    async with tr:
+                        requests_for_webhook = self.mock_net_server.requests[
+                            webhook_request
+                        ]
+                        self.assertEqual(len(requests_for_webhook), 4)
+
+                event_types: dict[str, dict | None] = {
+                    "IdentityCreated": None,
+                    "EmailFactorCreated": None,
+                    "OneTimeCodeRequested": None,
+                    "OneTimeCodeVerified": None,
+                }
+
+                for request in requests_for_webhook:
+                    assert request.body is not None
+                    event_data = json.loads(request.body)
+                    event_type = event_data["event_type"]
+                    self.assertIn(event_type, event_types)
+                    event_types[event_type] = event_data
+
+                self.assertTrue(
+                    all(value is not None for value in event_types.values())
+                )
+
+                otc_requested = cast(dict, event_types["OneTimeCodeRequested"])
+                self.assertIn("identity_id", otc_requested)
+                self.assertIn("email_factor_id", otc_requested)
+                self.assertIn("otc_id", otc_requested)
+                self.assertIn("one_time_code", otc_requested)
+                self.assertIn("event_id", otc_requested)
+                self.assertIn("timestamp", otc_requested)
+                self.assertEqual(len(otc_requested["one_time_code"]), 6)
+                self.assertTrue(otc_requested["one_time_code"].isdigit())
+
+                otc_verified = cast(dict, event_types["OneTimeCodeVerified"])
+                self.assertIn("identity_id", otc_verified)
+                self.assertIn("email_factor_id", otc_verified)
+                self.assertIn("otc_id", otc_verified)
+                self.assertIn("event_id", otc_verified)
+                self.assertIn("timestamp", otc_verified)
+
+                self.assertEqual(
+                    otc_requested["identity_id"], otc_verified["identity_id"]
+                )
+                self.assertEqual(
+                    otc_requested["email_factor_id"],
+                    otc_verified["email_factor_id"],
+                )
+
+        finally:
+            await self.con.query(
+                "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
+            )
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+            """
+            )
+
+    async def test_http_auth_ext_otc_email_password_00(self):
+        """Test Email+Password OTC flow: register -> email with code -> verify.
+
+        Tests the complete Email+Password registration and verification flow
+        when configured for OTC mode. Validates that registration sends
+        verification codes instead of links, codes can be extracted and used for
+        verification, and successful verification allows subsequent
+        authentication.
+        """
+
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::EmailPasswordProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::EmailPasswordProviderConfig {
+                require_verification := true,
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
+
+        base_url = self.mock_net_server.get_base_url().rstrip("/")
+        webhook_url = f"{base_url}/email-otc-webhook"
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::WebhookConfig {
+                url := <str>$url,
+                events := {
+                    ext::auth::WebhookEvent.OneTimeCodeRequested,
+                    ext::auth::WebhookEvent.OneTimeCodeVerified,
+                    ext::auth::WebhookEvent.IdentityCreated,
+                    ext::auth::WebhookEvent.EmailFactorCreated,
+                    ext::auth::WebhookEvent.EmailVerified,
+                },
+            };
+            """,
+            url=webhook_url,
+        )
+
+        webhook_request = (
+            "POST",
+            base_url,
+            "/email-otc-webhook",
+        )
+        self.mock_net_server.register_route_handler(*webhook_request)(("", 204))
+
+        await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
+
+        email = f"{uuid.uuid4()}@example.com"
+        password = "test_password_otc_123"
+        verifier, challenge = self.generate_pkce_pair()
+
+        try:
+            with self.http_con() as http_con:
+                form_data = {
+                    "provider": "builtin::local_emailpassword",
+                    "email": email,
+                    "password": password,
+                    "challenge": challenge,
+                }
+                form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+                body, headers, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="register",
+                    body=form_data_encoded,
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                )
+
+                self.assertEqual(status, 201, body)
+
+                file_name_hash = hashlib.sha256(
+                    f"{SENDER}{email}".encode()
+                ).hexdigest()
+                test_file = os.environ.get(
+                    "EDGEDB_TEST_EMAIL_FILE",
+                    f"/tmp/edb-test-email-{file_name_hash}.pickle",
+                )
+                with open(test_file, "rb") as f:
+                    email_args = pickle.load(f)
+
+                msg = cast(EmailMessage, email_args["message"])
+                html_content = (
+                    msg.get_body(('html',))
+                    .get_payload(decode=True)
+                    .decode('utf-8')
+                )
+
+                code_match = re.search(r'(?:^|\s)(\d{6})(?:\s|$)', html_content)
+                self.assertIsNotNone(
+                    code_match, "No 6-digit code found in verification email"
+                )
+                otc_code = code_match.group(1)
+
+                verify_body, verify_headers, verify_status = (
+                    self.http_con_request(
+                        http_con,
+                        method="POST",
+                        path="verify",
+                        body=json.dumps(
+                            {
+                                "provider": "builtin::local_emailpassword",
+                                "email": email,
+                                "code": otc_code,
+                                "challenge": challenge,
+                            }
+                        ).encode(),
+                        headers={"Content-Type": "application/json"},
+                    )
+                )
+
+                self.assertEqual(verify_status, 200, verify_body)
+
+                verify_data = json.loads(verify_body)
+                self.assertIsNotNone(
+                    verify_data.get("code"), "No 'code' in JSON response"
+                )
+
+                auth_body, auth_headers, auth_status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="authenticate",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_emailpassword",
+                            "email": email,
+                            "password": password,
+                            "challenge": challenge,
+                        }
+                    ).encode(),
+                    headers={"Content-Type": "application/json"},
+                )
+
+                self.assertEqual(auth_status, 200, auth_body)
+                auth_data = json.loads(auth_body)
+                code = auth_data.get("code")
+
+                token_body, token_headers, token_status = self.http_con_request(
+                    http_con,
+                    params={
+                        "code": code,
+                        "verifier": verifier,
+                    },
+                    method="GET",
+                    path="token",
+                )
+                self.assertEqual(token_status, 200, token_body)
+                token_data = json.loads(token_body)
+                self.assertIn("auth_token", token_data)
+
+                async for tr in self.try_until_succeeds(
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
+                ):
+                    async with tr:
+                        requests_for_webhook = self.mock_net_server.requests[
+                            webhook_request
+                        ]
+                        self.assertEqual(len(requests_for_webhook), 5)
+
+                event_types: dict[str, dict | None] = {
+                    "IdentityCreated": None,
+                    "EmailFactorCreated": None,
+                    "OneTimeCodeRequested": None,
+                    "OneTimeCodeVerified": None,
+                    "EmailVerified": None,
+                }
+
+                for request in requests_for_webhook:
+                    assert request.body is not None
+                    event_data = json.loads(request.body)
+                    event_type = event_data["event_type"]
+                    self.assertIn(event_type, event_types)
+                    event_types[event_type] = event_data
+
+                self.assertTrue(
+                    all(value is not None for value in event_types.values())
+                )
+
+                otc_requested = cast(dict, event_types["OneTimeCodeRequested"])
+                self.assertIn("identity_id", otc_requested)
+                self.assertIn("email_factor_id", otc_requested)
+                self.assertIn("otc_id", otc_requested)
+                self.assertIn("one_time_code", otc_requested)
+                self.assertEqual(len(otc_requested["one_time_code"]), 6)
+                self.assertTrue(otc_requested["one_time_code"].isdigit())
+
+                otc_verified = cast(dict, event_types["OneTimeCodeVerified"])
+                self.assertIn("identity_id", otc_verified)
+                self.assertIn("email_factor_id", otc_verified)
+                self.assertIn("otc_id", otc_verified)
+
+                email_verified = cast(dict, event_types["EmailVerified"])
+                self.assertIn("identity_id", email_verified)
+                self.assertIn("email_factor_id", email_verified)
+
+                self.assertEqual(
+                    otc_requested["identity_id"], otc_verified["identity_id"]
+                )
+                self.assertEqual(
+                    otc_verified["identity_id"], email_verified["identity_id"]
+                )
+
+        finally:
+            await self.con.query(
+                "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
+            )
+
+    async def test_http_auth_ext_otc_email_password_01(self):
+        """Test Email+Password OTC verification with invalid code.
+
+        Ensures that Email+Password verification properly rejects invalid codes
+        and returns appropriate error responses. This tests the security aspect
+        of preventing unauthorized account verification through invalid codes.
+        """
+
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::EmailPasswordProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::EmailPasswordProviderConfig {
+                require_verification := true,
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
+
+        email = f"{uuid.uuid4()}@example.com"
+        password = "test_password_invalid"
+
+        with self.http_con() as http_con:
+            form_data = {
+                "provider": "builtin::local_emailpassword",
+                "email": email,
+                "password": password,
+                "challenge": str(uuid.uuid4()),
+            }
+            form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+            self.http_con_request(
+                http_con,
+                method="POST",
+                path="register",
+                body=form_data_encoded,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            verify_body, verify_headers, verify_status = self.http_con_request(
+                http_con,
+                method="POST",
+                path="verify",
+                body=json.dumps(
+                    {
+                        "provider": "builtin::local_emailpassword",
+                        "email": email,
+                        "code": "000000",
+                    }
+                ).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+
+            self.assertEqual(verify_status, 400, verify_body)
+            verify_data = json.loads(verify_body)
+            self.assertIn("error", verify_data)
+
+    async def test_http_auth_ext_otc_webhook_failure_events(self):
+        """Test that webhook events are properly sent/not sent during OTC
+        failures.
+
+        Verifies that OneTimeCodeRequested is sent during registration, but
+        OneTimeCodeVerified is NOT sent when verification fails with invalid
+        codes. This ensures webhook consistency and proper failure handling.
+        """
+
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::EmailPasswordProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::EmailPasswordProviderConfig {
+                require_verification := true,
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
+
+        base_url = self.mock_net_server.get_base_url().rstrip("/")
+        webhook_url = f"{base_url}/failure-webhook"
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::WebhookConfig {
+                url := <str>$url,
+                events := {
+                    ext::auth::WebhookEvent.OneTimeCodeRequested,
+                    ext::auth::WebhookEvent.OneTimeCodeVerified,
+                    ext::auth::WebhookEvent.IdentityCreated,
+                    ext::auth::WebhookEvent.EmailFactorCreated,
+                },
+            };
+            """,
+            url=webhook_url,
+        )
+
+        webhook_request = (
+            "POST",
+            base_url,
+            "/failure-webhook",
+        )
+        self.mock_net_server.register_route_handler(*webhook_request)(("", 204))
+
+        await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
+
+        email = f"{uuid.uuid4()}@example.com"
+        password = "test_password_failure"
+
+        try:
+            with self.http_con() as http_con:
+                form_data = {
+                    "provider": "builtin::local_emailpassword",
+                    "email": email,
+                    "password": password,
+                    "challenge": str(uuid.uuid4()),
+                }
+                form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+                body, headers, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="register",
+                    body=form_data_encoded,
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                )
+                self.assertEqual(status, 201, body)
+
+                verify_body, verify_headers, verify_status = (
+                    self.http_con_request(
+                        http_con,
+                        method="POST",
+                        path="verify",
+                        body=json.dumps(
+                            {
+                                "provider": "builtin::local_emailpassword",
+                                "email": email,
+                                "code": "000000",
+                            }
+                        ).encode(),
+                        headers={"Content-Type": "application/json"},
+                    )
+                )
+                self.assertEqual(verify_status, 400, verify_body)
+
+                async for tr in self.try_until_succeeds(
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
+                ):
+                    async with tr:
+                        requests_for_webhook = self.mock_net_server.requests[
+                            webhook_request
+                        ]
+                        self.assertEqual(len(requests_for_webhook), 3)
+
+                received_event_types = set()
+                for request in requests_for_webhook:
+                    assert request.body is not None
+                    event_data = json.loads(request.body)
+                    event_type = event_data["event_type"]
+                    received_event_types.add(event_type)
+
+                expected_events = {
+                    "IdentityCreated",
+                    "EmailFactorCreated",
+                    "OneTimeCodeRequested",
+                }
+                self.assertEqual(received_event_types, expected_events)
+
+                self.assertNotIn("OneTimeCodeVerified", received_event_types)
+
+        finally:
+            await self.con.query(
+                "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
+            )
+
+    async def test_http_auth_ext_otc_email_password_02(self):
+        """Test that Email+Password still works with verification_method=Link
+
+        Validates backward compatibility by ensuring Email+Password
+        authentication continues to work with traditional link-based
+        verification. This ensures that existing implementations using
+        verification links continue to function without modification when the
+        OTC feature is added.
+        """
+
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::EmailPasswordProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::EmailPasswordProviderConfig {
+                require_verification := true,
+                verification_method := ext::auth::VerificationMethod.Link,
+            };
+        """
+        )
+
+        email = f"{uuid.uuid4()}@example.com"
+        password = "test_password_link_mode"
+
+        with self.http_con() as http_con:
+            form_data = {
+                "provider": "builtin::local_emailpassword",
+                "email": email,
+                "password": password,
+                "challenge": str(uuid.uuid4()),
+            }
+            form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+            body, headers, status = self.http_con_request(
+                http_con,
+                method="POST",
+                path="register",
+                body=form_data_encoded,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            self.assertEqual(status, 201, body)
+
+            file_name_hash = hashlib.sha256(
+                f"{SENDER}{email}".encode()
+            ).hexdigest()
+            test_file = os.environ.get(
+                "EDGEDB_TEST_EMAIL_FILE",
+                f"/tmp/edb-test-email-{file_name_hash}.pickle",
+            )
+            with open(test_file, "rb") as f:
+                email_args = pickle.load(f)
+
+            msg = cast(EmailMessage, email_args["message"])
+            html_content = (
+                msg.get_body(('html',)).get_payload(decode=True).decode('utf-8')
+            )
+
+            link_match = re.search(
+                r'<p style="word-break: break-all">([^<]+)', html_content
+            )
+            self.assertIsNotNone(
+                link_match, "No verification link found in email"
+            )
+            verify_url = urllib.parse.urlparse(link_match.group(1))
+            search_params = urllib.parse.parse_qs(verify_url.query)
+            verification_token = search_params.get(
+                "verification_token", [None]
+            )[0]
+            self.assertIsNotNone(verification_token)
+
+            code_match = re.search(r'(?:^|\s)(\d{6})(?:\s|$)', html_content)
+            self.assertIsNone(
+                code_match, "Unexpected OTC found in Link mode email"
+            )
+
+    async def test_http_auth_ext_otc_12(self):
+        """Test that expired OTCs are cleaned up during any verification
+        attempt.
+
+        Validates that the verification process automatically removes expired
+        OTCs from the database during any verification attempt, not just
+        successful ones. This prevents database bloat and maintains clean state
+        even when users attempt to verify with invalid or expired codes.
+        """
+
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
+
+        email = f"{uuid.uuid4()}@example.com"
+        callback_url = "https://example.com/app/auth/callback"
+        error_url = "https://example.com/app/auth/error"
+        verifier, challenge = self.generate_pkce_pair()
+
+        with self.http_con() as http_con:
+            register_body, register_headers, register_status = (
+                self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/register",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_magic_link",
+                            "email": email,
+                            "challenge": challenge,
+                            "callback_url": callback_url,
+                            "redirect_on_failure": error_url,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+            )
+            self.assertEqual(register_status, 200, register_body)
+
+            factor = await self.con.query_required_single(
+                """
+                select assert_exists((
+                    SELECT ext::auth::EmailFactor { id }
+                    FILTER .email = <str>$email
+                    limit 1
+                ))
+                """,
+                email=email,
+            )
+
+            expired_time = utcnow() - datetime.timedelta(minutes=5)
+            for i in range(3):
+                await self.con.query(
+                    """
+                    INSERT ext::auth::OneTimeCode {
+                        factor := <ext::auth::Factor><uuid>$factor_id,
+                        code_hash := <bytes>$code_hash,
+                        expires_at := <datetime>$expires_at,
+                    };
+                """,
+                    factor_id=factor.id,
+                    code_hash=otc.hash_code(f"12345{i}"),
+                    expires_at=expired_time,
+                )
+
+            expired_codes_query = """
+                SELECT count(
+                    SELECT ext::auth::OneTimeCode
+                    FILTER .factor.id = <uuid>$factor_id
+                )
+            """
+            expired_count = await self.con.query_single(
+                expired_codes_query,
+                factor_id=factor.id,
+            )
+            self.assertEqual(expired_count, 4)
+
+            form_data = {
+                "email": email,
+                "code": "999999",
+                "challenge": challenge,
+                "callback_url": callback_url,
+            }
+            form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+            self.http_con_request(
+                http_con,
+                method="POST",
+                path="magic-link/authenticate",
+                body=form_data_encoded,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            remaining_count = await self.con.query_single(
+                expired_codes_query,
+                factor_id=factor.id,
+            )
+            self.assertEqual(remaining_count, 1)
+
+    async def test_http_auth_ext_otc_13(self):
+        """Test that rate limiting works across different OTC verification
+        attempts.
+
+        Ensures that rate limiting is properly enforced across multiple failed
+        verification attempts and that the system blocks further attempts after
+        reaching the limit. This tests the security mechanism that prevents
+        brute force attacks on OTC verification endpoints.
+        """
+
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+        """
+        )
+
+        email = f"{uuid.uuid4()}@example.com"
+        callback_url = "https://example.com/app/auth/callback"
+        error_url = "https://example.com/app/auth/error"
+        verifier, challenge = self.generate_pkce_pair()
+
+        with self.http_con() as http_con:
+            register_body, register_headers, register_status = (
+                self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/register",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_magic_link",
+                            "email": email,
+                            "callback_url": callback_url,
+                            "redirect_on_failure": error_url,
+                            "challenge": challenge,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+            )
+            self.assertEqual(register_status, 200, register_body)
+
+            for i in range(5):
+                form_data = {
+                    "email": email,
+                    "code": f"00000{i}",
+                    "challenge": challenge,
+                    "callback_url": callback_url,
+                }
+                form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+                body, headers, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/authenticate",
+                    body=form_data_encoded,
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Accept": "application/json",
+                    },
+                )
+                self.assertEqual(status, 400, body)
+                self.assertIn("invalid code", body.decode().lower())
+
+            form_data = {
+                "email": email,
+                "code": "000006",
+                "challenge": challenge,
+                "callback_url": callback_url,
+            }
+            form_data_encoded = urllib.parse.urlencode(form_data).encode()
+
+            body, headers, status = self.http_con_request(
+                http_con,
+                method="POST",
+                path="magic-link/authenticate",
+                body=form_data_encoded,
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json",
+                },
+            )
+            self.assertEqual(status, 400, body)
+            self.assertIn("attempts exceeded", body.decode().lower())
+
+    async def test_http_auth_ext_magic_link_auto_signup_00(self):
+        """Test Magic Link auto-signup flow: email request for non-existent user
+        creates account when auto_signup is enabled.
+
+        Tests the complete Magic Link auto-signup flow where a user requests a
+        magic link for an email that doesn't exist in the system. With
+        auto_signup enabled, this should automatically create a new identity
+        and email factor, send appropriate webhooks, and proceed with the
+        normal magic link authentication flow.
+        """
+
+        # Configure MagicLinkProviderConfig with auto_signup enabled
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                auto_signup := true,
+            };
+            """
+        )
+
+        # Set up webhooks to verify events are sent
+        base_url = self.mock_net_server.get_base_url().rstrip("/")
+        webhook_url = f"{base_url}/auto-signup-webhook"
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::WebhookConfig {
+                url := <str>$url,
+                events := {
+                    ext::auth::WebhookEvent.IdentityCreated,
+                    ext::auth::WebhookEvent.EmailFactorCreated,
+                    ext::auth::WebhookEvent.MagicLinkRequested,
+                },
+            };
+            """,
+            url=webhook_url,
+        )
+
+        webhook_request = (
+            "POST",
+            base_url,
+            "/auto-signup-webhook",
+        )
+        self.mock_net_server.register_route_handler(*webhook_request)(("", 204))
+
+        await self._wait_for_db_config("ext::auth::AuthConfig::webhooks")
+
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+            challenge = "test_auto_signup_challenge"
+            callback_url = "https://example.com/app/auth/callback"
+            redirect_on_failure = "https://example.com/app/auth/magic-link-failure"
+
+            # Verify user doesn't exist initially
+            existing_factor = await self.con.query(
+                """
+                SELECT ext::auth::EmailFactor
+                FILTER .email = <str>$email
+                """,
+                email=email,
+            )
+            self.assertEqual(len(existing_factor), 0)
+
+            with self.http_con() as http_con:
+                # Request magic link for non-existent user
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_magic_link",
+                            "email": email,
+                            "challenge": challenge,
+                            "callback_url": callback_url,
+                            "redirect_on_failure": redirect_on_failure,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+
+                # Should succeed and indicate signup occurred
+                self.assertEqual(status, 200, body)
+                response_data = json.loads(body)
+                self.assertEqual(response_data.get("email_sent"), email)
+                self.assertEqual(response_data.get("signup"), "true")
+
+                # Verify magic link email was sent
+                file_name_hash = hashlib.sha256(
+                    f"{SENDER}{email}".encode()
+                ).hexdigest()
+                test_file = os.environ.get(
+                    "EDGEDB_TEST_EMAIL_FILE",
+                    f"/tmp/edb-test-email-{file_name_hash}.pickle",
+                )
+                with open(test_file, "rb") as f:
+                    email_args = pickle.load(f)
+                self.assertEqual(email_args["sender"], SENDER)
+                self.assertEqual(email_args["recipients"], email)
+
+                msg = cast(EmailMessage, email_args["message"]).get_body(
+                    ("html",)
+                )
+                assert msg is not None
+                html_email = msg.get_payload(decode=True).decode("utf-8")
+                match = re.search(
+                    r'<p style="word-break: break-all">([^<]+)', html_email
+                )
+                assert match is not None
+                magic_link_url = urllib.parse.urlparse(match.group(1))
+                search_params = urllib.parse.parse_qs(magic_link_url.query)
+                token = search_params.get("token", [None])[0]
+                assert token is not None
+
+                # Authenticate using the magic link token
+                _, headers, status = self.http_con_request(
+                    http_con,
+                    method="GET",
+                    path=f"magic-link/authenticate?token={token}",
+                )
+
+                self.assertEqual(status, 302)
+                location = headers.get("location")
+                assert location is not None
+                parsed_location = urllib.parse.urlparse(location)
+                self.assertEqual(
+                    urllib.parse.urlunparse(
+                        (
+                            parsed_location.scheme,
+                            parsed_location.netloc,
+                            parsed_location.path,
+                            '',
+                            '',
+                            '',
+                        )
+                    ),
+                    callback_url,
+                )
+
+                # Verify webhooks were sent
+                async for tr in self.try_until_succeeds(
+                    delay=2, timeout=120, ignore=(KeyError, AssertionError)
+                ):
+                    async with tr:
+                        requests_for_webhook = self.mock_net_server.requests[
+                            webhook_request
+                        ]
+                        self.assertEqual(len(requests_for_webhook), 3)
+
+                event_types: dict[str, dict | None] = {
+                    "IdentityCreated": None,
+                    "EmailFactorCreated": None,
+                    "MagicLinkRequested": None,
+                }
+
+                for request in requests_for_webhook:
+                    assert request.body is not None
+                    event_data = json.loads(request.body)
+                    event_type = event_data["event_type"]
+                    self.assertIn(event_type, event_types)
+                    event_types[event_type] = event_data
+
+                self.assertTrue(
+                    all(value is not None for value in event_types.values())
+                )
+
+        finally:
+            await self.con.query(
+                "CONFIGURE CURRENT DATABASE RESET ext::auth::WebhookConfig"
+            )
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+                """
+            )
+
+    async def test_http_auth_ext_magic_link_auto_signup_disabled_00(self):
+        """Test Magic Link email request for non-existent user with auto_signup
+        disabled.
+
+        Tests that when auto_signup is disabled (default behavior), requesting
+        a magic link for a non-existent email address does not create a new
+        account and instead sends a fake email while maintaining user privacy.
+        """
+
+        # Configure MagicLinkProviderConfig with auto_signup disabled (default)
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                auto_signup := false,
+            };
+            """
+        )
+
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+            challenge = "test_no_auto_signup_challenge"
+            callback_url = "https://example.com/app/auth/callback"
+            redirect_on_failure = "https://example.com/app/auth/magic-link-failure"
+
+            # Verify user doesn't exist initially
+            existing_factor = await self.con.query(
+                """
+                SELECT ext::auth::EmailFactor
+                FILTER .email = <str>$email
+                """,
+                email=email,
+            )
+            self.assertEqual(len(existing_factor), 0)
+
+            with self.http_con() as http_con:
+                # Request magic link for non-existent user
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_magic_link",
+                            "email": email,
+                            "challenge": challenge,
+                            "callback_url": callback_url,
+                            "redirect_on_failure": redirect_on_failure,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+
+                # Should succeed but not indicate signup
+                self.assertEqual(status, 200, body)
+                response_data = json.loads(body)
+                self.assertEqual(response_data.get("email_sent"), email)
+                self.assertNotIn("signup", response_data)
+
+                # Verify user was NOT created
+                still_no_factor = await self.con.query(
+                    """
+                    SELECT ext::auth::EmailFactor
+                    FILTER .email = <str>$email
+                    """,
+                    email=email,
+                )
+                self.assertEqual(len(still_no_factor), 0)
+
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+                """
+            )
+
+    async def test_http_auth_ext_magic_code_auto_signup_00(self):
+        """Test Magic Link OTC auto-signup flow: code request for non-existent
+        user creates account when auto_signup is enabled and verification_method
+        is Code.
+
+        Tests the complete Magic Link OTC auto-signup flow where a user requests
+        a verification code for an email that doesn't exist in the system. With
+        auto_signup enabled and verification_method set to Code, this should
+        automatically create a new identity and email factor, send a code email,
+        and allow subsequent verification.
+        """
+
+        await self.con.query(
+            """
+            CONFIGURE CURRENT DATABASE
+            RESET ext::auth::MagicLinkProviderConfig;
+
+            CONFIGURE CURRENT DATABASE
+            INSERT ext::auth::MagicLinkProviderConfig {
+                auto_signup := true,
+                verification_method := ext::auth::VerificationMethod.Code,
+            };
+            """
+        )
+
+        try:
+            email = f"{uuid.uuid4()}@example.com"
+
+            # Verify user doesn't exist initially
+            existing_factor = await self.con.query(
+                """
+                SELECT ext::auth::EmailFactor
+                FILTER .email = <str>$email
+                """,
+                email=email,
+            )
+            self.assertEqual(len(existing_factor), 0)
+
+            with self.http_con() as http_con:
+                # Request magic link code for non-existent user
+                body, _, status = self.http_con_request(
+                    http_con,
+                    method="POST",
+                    path="magic-link/email",
+                    body=json.dumps(
+                        {
+                            "provider": "builtin::local_magic_link",
+                            "email": email,
+                        }
+                    ).encode(),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+
+                # Should succeed and indicate signup and code mode
+                self.assertEqual(status, 200, body)
+                response_data = json.loads(body)
+                self.assertEqual(response_data.get("code"), "true")
+                self.assertEqual(response_data.get("signup"), "true")
+                self.assertEqual(response_data.get("email"), email)
+                expected_identity_id = await self.con.query_single(
+                    """
+                    with IDENTITY := (
+                      select ext::auth::MagicLinkFactor
+                      filter .email = <str>$email
+                    ).identity
+                    select IDENTITY.id;
+                    """,
+                    email=email,
+                )
+                self.assertEqual(
+                    response_data.get("identity_id"),
+                    str(expected_identity_id)
+                )
+
+                # Verify that a 6-digit code email was sent
+                file_name_hash = hashlib.sha256(
+                    f"{SENDER}{email}".encode()
+                ).hexdigest()
+                test_file = os.environ.get(
+                    "EDGEDB_TEST_EMAIL_FILE",
+                    f"/tmp/edb-test-email-{file_name_hash}.pickle",
+                )
+                with open(test_file, "rb") as f:
+                    email_args = pickle.load(f)
+                self.assertEqual(email_args["sender"], SENDER)
+                self.assertEqual(email_args["recipients"], email)
+
+                msg = cast(EmailMessage, email_args["message"])
+                html_body = msg.get_body(("html",))
+                assert html_body is not None
+                html_content = html_body.get_payload(decode=True).decode(
+                    "utf-8"
+                )
+                code_match = re.search(r"(?:^|\s)(\d{6})(?:\s|$)", html_content)
+                self.assertIsNotNone(
+                    code_match, "No 6-digit code found in email"
+                )
+
+        finally:
+            await self.con.query(
+                """
+                CONFIGURE CURRENT DATABASE
+                RESET ext::auth::MagicLinkProviderConfig;
+                CONFIGURE CURRENT DATABASE
+                INSERT ext::auth::MagicLinkProviderConfig {};
+                """
+            )

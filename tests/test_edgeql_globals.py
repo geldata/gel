@@ -24,7 +24,6 @@ import unittest
 import edgedb
 
 from edb.testbase import server as tb
-from edb.tools import test
 
 
 class TestEdgeQLGlobals(tb.QueryTestCase):
@@ -54,6 +53,11 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
 
             create global CurUser := (
                 select User filter .name = global cur_user);
+
+            create alias DumbAlias := {
+                cur_user := global cur_user,
+                cur_card := global cur_card,
+            };
 
             create function get_current_user() -> OPTIONAL User using (
                 select User filter .name = global cur_user
@@ -436,7 +440,28 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             )
 
     async def test_edgeql_globals_14(self):
-        with self.assertRaisesRegex(
+        async with self.assertRaisesRegexTx(
+            edgedb.ConfigurationError,
+            "system global 'sys::current_role' may not be explicitly specified"
+        ):
+            await self.con.execute(
+                '''
+                set global sys::current_role := 'yay!'
+                ''',
+            )
+
+        async with self.assertRaisesRegexTx(
+            edgedb.ConfigurationError,
+            "system global 'sys::current_permissions' may not be explicitly "
+            "specified"
+        ):
+            await self.con.execute(
+                '''
+                set global sys::current_permissions := ['yay!']
+                ''',
+            )
+
+        async with self.assertRaisesRegexTx(
             edgedb.ConfigurationError,
             "global 'def_cur_user_excited' is computed from an expression "
             "and cannot be modified",
@@ -492,9 +517,6 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ],
         )
 
-    @test.skip(
-        "cannot resolve backend oid for type first created by computed global"
-    )
     async def test_edgeql_globals_18(self):
         await self.con.execute('''
             CREATE GLOBAL foo := ([(f := 1)]);
@@ -512,7 +534,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
 
     async def test_edgeql_globals_client_01(self):
         con = edgedb.create_async_client(
-            **self.get_connect_args(database=self.con.dbname)
+            **self.get_connect_args()
         )
         try:
             globs = dict(
@@ -529,7 +551,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
 
     async def test_edgeql_globals_client_02(self):
         con = edgedb.create_async_client(
-            **self.get_connect_args(database=self.con.dbname)
+            **self.get_connect_args()
         )
         try:
             globs = dict(
@@ -549,7 +571,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
 
     async def test_edgeql_globals_client_03(self):
         con = edgedb.create_async_client(
-            **self.get_connect_args(database=self.con.dbname)
+            **self.get_connect_args()
         )
         try:
             globs = dict(
@@ -571,7 +593,7 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
 
     async def test_edgeql_globals_client_04(self):
         con = edgedb.create_async_client(
-            **self.get_connect_args(database=self.con.dbname)
+            **self.get_connect_args()
         )
         try:
             globs = dict(
@@ -585,6 +607,44 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ):
                 await scon.query_single(
                     f'select {{ imaginary := global imaginary }}'
+                )
+        finally:
+            await con.aclose()
+
+    async def test_edgeql_globals_client_05(self):
+        con = edgedb.create_async_client(
+            **self.get_connect_args()
+        )
+        try:
+            globs = {
+                'sys::current_role': 'lol'
+            }
+            scon = con.with_globals(**globs)
+            with self.assertRaisesRegex(
+                edgedb.QueryArgumentError,
+                r"got {'sys::current_role'}, "
+                r"extra {'sys::current_role'}",
+            ):
+                await scon.query_single('select global sys::current_role')
+        finally:
+            await con.aclose()
+
+    async def test_edgeql_globals_client_06(self):
+        con = edgedb.create_async_client(
+            **self.get_connect_args()
+        )
+        try:
+            globs = {
+                'sys::current_permissions': ['lol']
+            }
+            scon = con.with_globals(**globs)
+            with self.assertRaisesRegex(
+                edgedb.QueryArgumentError,
+                r"got {'sys::current_permissions'}, "
+                r"extra {'sys::current_permissions'}",
+            ):
+                await scon.query_single(
+                    'select global sys::current_permissions'
                 )
         finally:
             await con.aclose()
@@ -609,14 +669,10 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
     async def test_edgeql_globals_composite(self):
         # Test various composite global variables.
 
-        # HACK: Using with_globals on testbase.Connection doesn't
-        # work, and I timed out on understanding why; I got the state
-        # plumbed into the real client library code, where the state
-        # codec was not encoding it.
-        # It isn't actually important for that to work, so for now
-        # we create a connection with the real honest client library.
+        # with_globals isn't supported in the testbase client, so use
+        # the stock client instead
         con = edgedb.create_async_client(
-            **self.get_connect_args(database=self.con.dbname)
+            **self.get_connect_args()
         )
         try:
             globs = dict(
@@ -863,3 +919,12 @@ class TestEdgeQLGlobals(tb.QueryTestCase):
             ''',
             []
         )
+
+    async def test_edgeql_globals_unused_01(self):
+        # Make sure it works when selecting something
+        # that has "unused" optional globals with a default.
+        # (There previously was a bug where we'd choke because
+        # of confusion about the "present" argument.)
+        await self.con.query('''
+            select DumbAlias { cur_user }
+        ''')

@@ -350,12 +350,12 @@ class ExprDependency(Dependency):
 
 class FunctionDependency(ExprDependency):
 
-    params: Mapping[str, s_name.QualName]
+    params: Mapping[str, qlast.TypeExpr]
 
     def __init__(
         self,
         expr: qlast.Expr,
-        params: Mapping[str, s_name.QualName],
+        params: Mapping[str, qlast.TypeExpr],
     ) -> None:
         super().__init__(expr=expr)
         self.params = params
@@ -649,7 +649,7 @@ def _trace_item_layout(
                     for pn, p in base_pointers.items(ctx.schema):
                         PointerType = (
                             qltracer.Property
-                            if p.is_property(ctx.schema) else
+                            if p.is_property() else
                             qltracer.Link
                         )
                         base_obj.pointers[pn] = PointerType(
@@ -673,7 +673,7 @@ def _trace_item_layout(
             target_expr: Optional[qlast.Expr]
             if isinstance(decl.target, qlast.TypeExpr):
                 target = _resolve_type_expr(decl.target, ctx=ctx)
-                target_expr = None
+                target_expr = _get_expr_field(decl)
             else:
                 target = None
                 target_expr = decl.target
@@ -868,11 +868,8 @@ def trace_ConcreteConstraint(
     if node.except_expr:
         exprs.append(ExprDependency(expr=node.except_expr))
 
-    for cmd in node.commands:
-        if isinstance(cmd, qlast.SetField) and cmd.name == "expr":
-            assert cmd.value, "sdl SetField should always have value"
-            assert isinstance(cmd.value, qlast.Expr)
-            exprs.append(ExprDependency(expr=cmd.value))
+    if (expr := _get_expr_field(node)):
+        exprs.append(ExprDependency(expr=expr))
 
     loop_control: Optional[s_name.QualName]
     if isinstance(ctx.depstack[-1][0], qlast.AlterScalarType):
@@ -1006,6 +1003,9 @@ def trace_ConcretePointer(
         raise AssertionError(
             f'unexpected CreateConcretePointer.target: {node.target!r}')
 
+    if (target_expr := _get_expr_field(node)):
+        deps.append(ExprDependency(expr=target_expr))
+
     _register_item(
         node,
         hard_dep_exprs=deps,
@@ -1022,12 +1022,8 @@ def trace_Alias(
 ) -> None:
     hard_dep_exprs = []
 
-    for cmd in node.commands:
-        if isinstance(cmd, qlast.SetField) and cmd.name == "expr":
-            assert cmd.value, "sdl SetField should always have value"
-            assert isinstance(cmd.value, qlast.Expr)
-            hard_dep_exprs.append(ExprDependency(expr=cmd.value))
-            break
+    if (expr := _get_expr_field(node)):
+        hard_dep_exprs.append(ExprDependency(expr=expr))
 
     _register_item(node, hard_dep_exprs=hard_dep_exprs, ctx=ctx)
 
@@ -1089,14 +1085,9 @@ def trace_Function(
     deps.extend(TypeDependency(texpr=param.type) for param in node.params)
     deps.append(TypeDependency(texpr=node.returning))
 
-    params = {}
+    params: dict[str, qlast.TypeExpr] = {}
     for param in node.params:
-        assert isinstance(param.type, qlast.TypeName)
-        if not param.type.subtypes:
-            param_t = ctx.get_ref_name(param.type.maintype)
-            params[param.name] = param_t
-        else:
-            params[param.name] = s_name.QualName('std', 'BaseObject')
+        params[param.name] = param.type
 
     if node.nativecode is not None:
         deps.append(FunctionDependency(expr=node.nativecode, params=params))
@@ -1247,6 +1238,11 @@ def _register_item(
                 alter_cmd.subjectexpr = decl.subjectexpr
                 alter_cmd.args = decl.args
 
+            # functions need to preserve arguments
+            if isinstance(decl, qlast.CreateFunction):
+                assert isinstance(alter_cmd, qlast.FunctionCommand)
+                alter_cmd.params = decl.params
+
             if not ctx.depstack:
                 alter_cmd.aliases = [
                     qlast.ModuleAliasDecl(alias=None, module=ctx.module)
@@ -1276,6 +1272,7 @@ def _register_item(
                 deps |= _get_hard_deps(expr.texpr, ctx=ctx)
             elif isinstance(expr, ExprDependency):
                 qlexpr = expr.expr
+                params: Mapping[str, qlast.TypeExpr]
                 if isinstance(expr, FunctionDependency):
                     params = expr.params
                 else:
@@ -1514,8 +1511,14 @@ def _resolve_type_expr(
 
     elif isinstance(texpr, qlast.TypeOp):
 
-        if texpr.op == '|':
+        if texpr.op == qlast.TypeOpName.OR:
             return qltracer.UnionType([
+                _resolve_type_expr(texpr.left, ctx=ctx),
+                _resolve_type_expr(texpr.right, ctx=ctx),
+            ])
+
+        if texpr.op == qlast.TypeOpName.AND:
+            return qltracer.IntersectionType([
                 _resolve_type_expr(texpr.left, ctx=ctx),
                 _resolve_type_expr(texpr.right, ctx=ctx),
             ])
@@ -1674,3 +1677,12 @@ def _resolve_schema_ref(
             span=span,
         )
         raise
+
+
+def _get_expr_field(decl: qlast.DDLOperation) -> Optional[qlast.Expr]:
+    for cmd in decl.commands:
+        if isinstance(cmd, qlast.SetField) and cmd.name == "expr":
+            assert cmd.value, "sdl SetField should always have value"
+            assert isinstance(cmd.value, qlast.Expr)
+            return cmd.value
+    return None
