@@ -27,7 +27,7 @@ from . import base, data, errors
 class DiscordProvider(base.BaseProvider):
     def __init__(
             self,
-            always_show_consent_form: bool,
+            prompt: str,
             *args: Any,
             **kwargs: Any
     ):
@@ -40,7 +40,7 @@ class DiscordProvider(base.BaseProvider):
         self.api_client = functools.partial(
             self.http_factory, base_url=self.api_domain
         )
-        self.always_show_consent_form = always_show_consent_form
+        self.prompt = prompt
 
     async def get_code_url(
         self, state: str, redirect_uri: str, additional_scope: str
@@ -51,7 +51,7 @@ class DiscordProvider(base.BaseProvider):
             "state": state,
             "redirect_uri": redirect_uri,
             "response_type": "code",
-            "prompt": "consent" if self.always_show_consent_form else "none"
+            "prompt": self.prompt,
         }
         encoded = urllib.parse.urlencode(params)
         return f"{self.auth_domain}/oauth2/authorize?{encoded}"

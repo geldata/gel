@@ -58,7 +58,11 @@ class OAuthProviderConfig(ProviderConfig):
     additional_scope: Optional[str]
     issuer_url: Optional[str]
     logo_url: Optional[str]
-    always_show_consent_form: Optional[bool]
+
+
+@dataclass
+class DiscordOAuthProviderConfig(OAuthProviderConfig):
+    prompt: str
 
 
 class WebAuthnProviderConfig(ProviderConfig):

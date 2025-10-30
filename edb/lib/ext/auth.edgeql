@@ -289,8 +289,16 @@ CREATE EXTENSION PACKAGE auth VERSION '1.0' {
             set default := 'Discord';
         };
 
-        create required property always_show_consent_form: std::bool {
-            set default := true;
+        create required property prompt: std::str {
+            create annotation std::description :=
+                "Controls how the authorization flow handles existing authorizations. \
+                If a user has previously authorized your application with the \
+                requested scopes and prompt is set to consent, it will request them \
+                to reapprove their authorization. If set to none, it will skip the \
+                authorization screen and redirect them back to your redirect URI \
+                without requesting their authorization. For passthrough scopes, like \
+                bot and webhook.incoming, authorization is always required.";
+            set default := 'consent';
         };
     };
 
