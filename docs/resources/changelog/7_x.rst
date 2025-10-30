@@ -1,6 +1,6 @@
-===========
-v7.0 beta 1
-===========
+====
+v7.0
+====
 
 :edb-alt-title: Gel v7
 
@@ -10,7 +10,7 @@ automatically suggested:
 
 .. code-block:: bash
 
-  $ gel project init --server-version 7.0-beta.1
+  $ gel project init --server-version 7.0-rc.3
 
 
 Upgrading
@@ -119,6 +119,14 @@ override this:
 
 Third-party SQL tools can use the pg_connector role and access
 policies will be disable.
+
+
+Session configuration for GraphQL and EdgeQL HTTP interfaces
+------------------------------------------------------------
+
+The :ref:`GraphQL <ref_graphql_protocol>` and :ref:`EdgeQL HTTP <ref_edgeql_protocol>` interfaces now support passing in session configuration variables.
+
+If you are exposing HTTP/GraphQL endpoints to users and relying on them not being able to perform configuration, you will need to instead have them use roles that have not been given permission to modify sensitive configs.
 
 
 Simpler scoping rules deprecation warnings

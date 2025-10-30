@@ -86,7 +86,7 @@ example showing how you might send the query ``select Person {*};`` using cURL:
 
 .. lint-on
 
-.. _ref_edgeqlql_protocol:
+.. _ref_edgeql_protocol:
 
 Querying
 ========
