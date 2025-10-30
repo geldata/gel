@@ -78,7 +78,7 @@ HTTP
 ----
 
 - :ref:`Overview <ref_edgeql_http>`
-- :ref:`ref_edgeqlql_protocol`
+- :ref:`ref_edgeql_protocol`
 - :ref:`ref_edgeql_http_health_checks`
 
 

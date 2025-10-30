@@ -168,12 +168,19 @@ function get_glob_inline() -> optional str {
   volatility := 'Modifying';
 };
 
+type Missing {
+    access policy no allow all using (false);
+    access policy innsert allow insert;
+};
+
 alias GlobalTest := {
     gstr := global test_global_str,
     garray := global test_global_array,
     gid := global test_global_id,
     gdef := global test_global_def,
     gdef2 := global test_global_def2,
+    transaction_isolation := <str>sys::get_transaction_isolation(),
+    access_policies := not (exists Missing),
 };
 
 function id_func(s: str) -> str using (s);

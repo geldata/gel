@@ -254,3 +254,5 @@ insert NotEditable {
 insert other::deep::NestedMod {
     val := 'in nested module'
 };
+
+insert Missing;
