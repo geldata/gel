@@ -75,7 +75,10 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
         await self.con.query('''
             CREATE ROLE foo {
                 SET password := 'secret';
-                SET permissions := default::perm_a;
+                SET permissions := {
+                    default::perm_a,
+                    cfg::perm::configure_allow_user_specified_id,
+                };
             };
             CREATE PERMISSION default::perm_a;
             CREATE PERMISSION default::perm_b;
@@ -103,6 +106,26 @@ class TestServerPermissions(tb.EdgeQLTestCase, server_tb.CLITestCaseMixin):
                 password='secret',
             )
             self.assert_data_shape(result, [[False, True, False]])
+
+            # Check that we reject configuring apply_access_policies
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'to configure session config variable apply_access_policies',
+            ):
+                self.edgeql_query(
+                    qry,
+                    user='foo',
+                    password='secret',
+                    config=dict(apply_access_policies=False),
+                )
+
+            # This one we said is OK though.
+            self.edgeql_query(
+                qry,
+                user='foo',
+                password='secret',
+                config=dict(allow_user_specified_id=False),
+            )
 
         finally:
             await conn.aclose()
@@ -2044,7 +2067,10 @@ class TestServerPermissionsGraphql(tb.GraphQLTestCase):
         await self.con.query('''
             CREATE ROLE foo {
                 SET password := 'secret';
-                SET permissions := default::perm_a;
+                SET permissions := {
+                    default::perm_a,
+                    cfg::perm::configure_allow_user_specified_id,
+                };
             };
             CREATE PERMISSION default::perm_a;
             CREATE PERMISSION default::perm_b;
@@ -2076,6 +2102,26 @@ class TestServerPermissionsGraphql(tb.GraphQLTestCase):
                     perm_b=False,
                     role='foo',
                 )]),
+            )
+
+            # Check that we reject configuring apply_access_policies
+            with self.assertRaisesRegex(
+                edgedb.DisabledCapabilityError,
+                'to configure session config variable apply_access_policies',
+            ):
+                self.graphql_query(
+                    qry,
+                    user='foo',
+                    password='secret',
+                    config=dict(apply_access_policies=False),
+                )
+
+            # This one we said is OK though.
+            self.graphql_query(
+                qry,
+                user='foo',
+                password='secret',
+                config=dict(allow_user_specified_id=False),
             )
 
         finally:
