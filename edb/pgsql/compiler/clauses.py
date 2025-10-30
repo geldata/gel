@@ -547,6 +547,12 @@ def fini_toplevel(
                     name=pg_types.pg_type_from_ir_typeref(param.ir_type)
                 )
             )))
+            if isinstance(param, irast.Global) and param.has_present_arg:
+                targets.append(pgast.ResTarget(val=pgast.TypeCast(
+                    arg=pgast.ParamRef(number=pgparam.index + 1),
+                    type_name=pgast.TypeName(name=('bool',)),
+                )))
+
         if targets:
             stmt.append_cte(
                 pgast.CommonTableExpr(
