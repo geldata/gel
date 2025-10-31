@@ -140,7 +140,14 @@ class Router:
         )
 
         try:
-            request.load_cookies()
+            try:
+                request.load_cookies()
+            except Exception as ex:
+                response.custom_headers["Clear-Site-Data"] = '"cookies"'
+                logger.exception(f"Failed to load cookie headers: {ex}")
+                raise errors.InvalidData(
+                    "Invalid cookies header. Clear your cookies and try again."
+                )
 
             match args:
                 # PKCE token exchange route
