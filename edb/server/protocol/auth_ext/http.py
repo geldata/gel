@@ -144,9 +144,9 @@ class Router:
                 request.load_cookies()
             except Exception as ex:
                 response.custom_headers["Clear-Site-Data"] = '"cookies"'
+                logger.exception(f"Failed to load cookie headers: {ex}")
                 raise errors.InvalidData(
-                    f'invalid cookies header: {ex}, '
-                    f'try clearing cookies and trying again'
+                    "Invalid cookies header. Clear your cookies and try again."
                 )
 
             match args:
