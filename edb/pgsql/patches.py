@@ -228,4 +228,21 @@ PATCHES: list[tuple[str, str]] = [
     # 7.0rc4 or 7.0-final
     ('repair+user_ext|ai', ''),  # For #9073
     ('edgeql+schema', ''),  # For #9074
+
+    # For #9111
+    ('edgeql+user_ext|auth', '''
+  alter type ext::auth::DiscordOAuthProvider {
+    create required property prompt: std::str {
+      create annotation std::description :=
+        "Controls how the authorization flow handles existing authorizations. \
+        If a user has previously authorized your application with the \
+        requested scopes and prompt is set to consent, it will request them \
+        to reapprove their authorization. If set to none, it will skip the \
+        authorization screen and redirect them back to your redirect URI \
+        without requesting their authorization. For passthrough scopes, like \
+        bot and webhook.incoming, authorization is always required.";
+      set default := 'consent';
+    };
+  };
+    '''),
 ]
