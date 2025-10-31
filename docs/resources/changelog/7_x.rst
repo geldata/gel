@@ -261,7 +261,14 @@ Other features
 * One-time code implementation for ``ext::auth``
   (:eql:gh:`#8905`)
 
+* Add ``math::exp`` and ``math::e``
+  (:eql:gh:`#8982`)
 
+* Support ``FOR OPTIONAL`` as a "semi-undocumented" feature
+  (:eql:gh:`#8991`)
+
+* Add support for max batch size to AI embedding models.
+  (:eql:gh:`#9040`)
 
 Additional changes
 ==================
@@ -307,12 +314,41 @@ Fixes
 * Add ``std::identifier`` annotations to abstract operators
   (:eql:gh:`#8862`)
 
+* Fix modifying and dropping inherited AI indexes
+  (:eql:gh:`#9041`)
+
+* Fix some issues with overloading AI and FTS indexes
+  (:eql:gh:`#9049`)
+
+* Fix /rag on subtypes
+  (:eql:gh:`#9044`)
+
+* Make SET REQUIRED USING (...) work on link properties
+  (:eql:gh:`#9015`)
+
+* Fix OTC flow for built-in auth UI
+  (:eql:gh:`#8913`)
+
+* Loosen Magic Code register/email data requirements
+  (:eql:gh:`#9000`)
+
+* Fix missing return_data in no email found case
+  (:eql:gh:`#9004`)
+
+* Fix inplace upgrade when ``auth`` is being used
+  (:eql:gh:`#9008`)
+
+* Allow Magic Link sign in to register new user
+  (:eql:gh:`#9007`)
+
+* Return json from magic code authenticate endpoint if no callback_url is given
+  (:eql:gh:`#9012`)
+
+* Return identity_id when registering new Magic Link
+  (:eql:gh:`#9039`)
 
 Other
 -----
-
-* Warn on START MIGRATION if no scoping future is present
-  (:eql:gh:`#8896`)
 
 * Add ``apply_access_policies_pg_default`` flag to ``Role``
   (:eql:gh:`#8918`)
