@@ -142,7 +142,8 @@ class Router:
         try:
             try:
                 request.load_cookies()
-            except http.cookies.CookieError as ex:
+            except Exception as ex:
+                response.custom_headers["Clear-Site-Data"] = '"cookies"'
                 raise errors.InvalidData(
                     f'invalid cookies header: {ex}, '
                     f'try clearing cookies and trying again'
