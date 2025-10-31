@@ -87,9 +87,9 @@ class Client:
                     *provider_args,
                     **provider_kwargs,
                 )
-            case (prov_name, issuer_url) if isinstance(issuer_url, str):
+            case (provider_name, str(issuer_url)):
                 self.provider = base.OpenIDConnectProvider(
-                    prov_name,
+                    provider_name,
                     issuer_url,
                     *provider_args,
                     **provider_kwargs,
