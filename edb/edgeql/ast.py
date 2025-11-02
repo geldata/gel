@@ -406,7 +406,9 @@ class TypeIntersection(Base):
 class Ptr(Base):
     name: str
     direction: typing.Optional[str] = None
-    type: typing.Optional[str] = None
+    # @ptr has type 'property'
+    # .?>ptr has type 'optional'
+    type: typing.Optional[typing.Literal['optional', 'property']] = None
 
 
 class Splat(Base):
@@ -1442,7 +1444,7 @@ class DropRewrite(DropObject, RewriteCommand):
 
 class Language(s_enum.StrEnum):
     SQL = 'SQL'
-    EdgeQL = 'EDGEQL'
+    EdgeQL = 'EdgeQL'
 
 
 class FunctionCode(DDL):

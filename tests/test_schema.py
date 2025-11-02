@@ -36,6 +36,8 @@ from edb.schema import links as s_links
 from edb.schema import name as s_name
 from edb.schema import objtypes as s_objtypes
 from edb.schema import properties as s_props
+from edb.schema import operators as s_oper
+from edb.schema import functions as s_func
 
 from edb.testbase import lang as tb
 from edb.tools import test
@@ -1347,7 +1349,9 @@ class TestSchema(tb.BaseSchemaLoadTest):
 
         my_scalar_t = schema.get('test::my_scalar_t')
         constr = my_scalar_t.get_constraints(schema).objects(schema)[0]
-        my_contains = schema.get_functions('test::my_contains')[0]
+        my_contains = schema.get_by_shortname(
+            s_func.Function, 'test::my_contains',
+        )[0]
         self.assertEqual(
             schema.get_referrers(my_contains),
             frozenset({
@@ -1951,7 +1955,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
             "abstract constraint 'std::max_len_value'",
         )
 
-        fn = list(schema.get_functions('std::json_typeof'))[0]
+        fn = schema.get_by_shortname(s_func.Function, 'std::json_typeof')[0]
         self.assertEqual(
             fn.get_verbosename(schema),
             "function 'std::json_typeof(json: std::json)'",
@@ -1963,7 +1967,7 @@ class TestSchema(tb.BaseSchemaLoadTest):
             "parameter 'json' of function 'std::json_typeof(json: std::json)'",
         )
 
-        op = list(schema.get_operators('std::AND'))[0]
+        op = schema.get_by_shortname(s_oper.Operator, 'std::AND')[0]
         self.assertEqual(
             op.get_verbosename(schema),
             'operator "std::bool AND std::bool"',
@@ -8506,8 +8510,12 @@ class TestGetMigration(tb.BaseSchemaLoadTest):
         """])
 
         self.assertEqual(
-            schema1.get_functions('default::f2'),
-            schema2.get_functions('default::f2'),
+            schema1._get_by_shortname(
+                s_func.Function, s_name.name_from_string('default::f2'),
+            )[0],
+            schema2._get_by_shortname(
+                s_func.Function, s_name.name_from_string('default::f2'),
+            )[0],
             "function got deleted/recreated and should have been altered",
         )
 

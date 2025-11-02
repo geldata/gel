@@ -166,12 +166,12 @@ async def describe(
     query_tag: str | None = None,
     role_name: str,
 ) -> sertypes.TypeDesc:
-    _, compiled, dbv = await _parse(
-        db,
+    dbv = await _get_transient_dbv(db, role_name=role_name)
+    _, compiled = await _parse(
+        dbv,
         query,
         query_cache_enabled=query_cache_enabled,
         allow_capabilities=allow_capabilities,
-        role_name=role_name,
     )
     if query_tag:
         compiled.tag = query_tag
@@ -187,21 +187,12 @@ async def describe(
     return desc
 
 
-async def _parse(
+async def _get_transient_dbv(
     db: dbview.Database,
-    query: str,
     *,
-    input_format: compiler.InputFormat = compiler.InputFormat.BINARY,
-    output_format: compiler.OutputFormat = compiler.OutputFormat.BINARY,
-    allow_capabilities: compiler.Capability = compiler.Capability.MODIFICATIONS,
-    use_metrics: bool = True,
-    cached_globally: bool = False,
     query_cache_enabled: Optional[bool] = None,
     role_name: str,
-) -> tuple[
-    rpc.CompilationRequest,
-    dbview.CompiledQuery,
-    dbview.DatabaseConnectionView]:
+) -> dbview.DatabaseConnectionView:
     if query_cache_enabled is None:
         query_cache_enabled = not (
             debug.flags.disable_qcache or debug.flags.edgeql_compile)
@@ -214,6 +205,27 @@ async def _parse(
         role_name=role_name,
     )
     dbv.is_transient = True
+
+    return dbv
+
+
+async def _parse(
+    dbv: dbview.DatabaseConnectionView,
+    query: str,
+    *,
+    input_format: compiler.InputFormat = compiler.InputFormat.BINARY,
+    output_format: compiler.OutputFormat = compiler.OutputFormat.BINARY,
+    allow_capabilities: compiler.Capability = compiler.Capability.MODIFICATIONS,
+    use_metrics: bool = True,
+    cached_globally: bool = False,
+    query_cache_enabled: Optional[bool] = None,
+) -> tuple[
+    rpc.CompilationRequest,
+    dbview.CompiledQuery,
+]:
+    db = dbv._db
+    tenant = db.tenant
+
     if use_metrics:
         metrics.query_size.observe(
             len(query.encode('utf-8')), tenant.get_instance_name(), 'edgeql'
@@ -226,7 +238,10 @@ async def _parse(
         compilation_config_serializer=db.server.compilation_config_serializer,
         input_format=input_format,
         output_format=output_format,
-        role_name=role_name,
+        session_config=dbv.get_session_config(),
+        database_config=dbv.get_database_config(),
+        system_config=dbv.get_compilation_system_config(),
+        role_name=dbv._role_name,
     )
 
     compiled = await dbv.parse(
@@ -236,7 +251,7 @@ async def _parse(
         allow_capabilities=allow_capabilities,
     )
 
-    return query_req, compiled, dbv
+    return query_req, compiled
 
 
 # TODO: can we merge execute and execute_script?
@@ -999,8 +1014,14 @@ async def parse_execute_json(
     *,
     variables: Mapping[str, Any] = immutables.Map(),
     globals_: Optional[Mapping[str, Any]] = None,
+    session_config: Optional[Mapping[str, Any]] = None,
     output_format: compiler.OutputFormat = compiler.OutputFormat.JSON,
     query_cache_enabled: Optional[bool] = None,
+    # WARNING: only set cached_globally to True when the query is
+    # strictly referring to only shared stable objects in user schema
+    # or anything from std schema, for example:
+    #     YES:  select ext::auth::UIConfig { ... }
+    #     NO:   select default::User { ... }
     cached_globally: bool = False,
     use_metrics: bool = True,
     tx_isolation: edbdef.TxIsolationLevel | None = None,
@@ -1010,21 +1031,20 @@ async def parse_execute_json(
     if role_name is None:
         role_name = edbdef.EDGEDB_SUPERUSER
 
-    # WARNING: only set cached_globally to True when the query is
-    # strictly referring to only shared stable objects in user schema
-    # or anything from std schema, for example:
-    #     YES:  select ext::auth::UIConfig { ... }
-    #     NO:   select default::User { ... }
-    query_req, compiled, dbv = await _parse(
+    dbv: dbview.DatabaseConnectionView = await _get_transient_dbv(
         db,
+        query_cache_enabled=query_cache_enabled,
+        role_name=role_name,
+    )
+    dbv.decode_json_session_config(session_config)
+    query_req, compiled = await _parse(
+        dbv,
         query,
         input_format=compiler.InputFormat.JSON,
         output_format=output_format,
         allow_capabilities=compiler.Capability.MODIFICATIONS,
         use_metrics=use_metrics,
         cached_globally=cached_globally,
-        query_cache_enabled=query_cache_enabled,
-        role_name=role_name,
     )
     if query_tag:
         compiled.tag = query_tag

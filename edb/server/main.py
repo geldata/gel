@@ -499,7 +499,6 @@ async def run_server(
 
     if debug.flags.pydebug_listen:
         import debugpy
-
         debugpy.listen(38782)
 
     _init_parsers()

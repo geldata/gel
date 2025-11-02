@@ -674,7 +674,7 @@ class Tenant(ha_base.ClusterProtocol):
         compilerctx = edbcompiler.new_compiler_context(
             compiler_state=compiler.state,
             global_schema=global_schema,
-            user_schema=s_schema.FlatSchema(),
+            user_schema=s_schema.EMPTY_SCHEMA,
             internal_schema_mode=True,
             # Extension installation only works if stdmode or testmode is
             # set.  Force testmode to be set, since we don't want to set

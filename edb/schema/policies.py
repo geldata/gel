@@ -223,6 +223,7 @@ class AccessPolicyCommand(
                     path_prefix_anchor='__subject__',
                     singletons=frozenset({source}),
                     apply_query_rewrites=not context.stdmode,
+                    apply_user_access_policies=False,
                     track_schema_ref_exprs=track_schema_ref_exprs,
                     in_ddl_context_name=in_ddl_context_name,
                     detached=True,

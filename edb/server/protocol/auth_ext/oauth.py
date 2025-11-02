@@ -74,8 +74,11 @@ class Client:
                     *provider_args,
                     **provider_kwargs,
                 )
-            case ("builtin::oauth_discord", _):
+            case ("builtin::oauth_discord", _) if isinstance(
+                provider_config, config.DiscordOAuthProviderConfig
+            ):
                 self.provider = discord.DiscordProvider(
+                    provider_config.prompt,
                     *provider_args,
                     **provider_kwargs,
                 )
@@ -154,23 +157,33 @@ select {
 
     def _get_provider_config(
         self, provider_name: str
-    ) -> config.OAuthProviderConfig:
+    ) -> config.OAuthProviderConfig | config.DiscordOAuthProviderConfig:
         provider_client_config = util.get_config(
             self.db, "ext::auth::AuthConfig::providers", frozenset
         )
         for cfg in provider_client_config:
             if cfg.name == provider_name:
                 cfg = cast(config.OAuthProviderConfig, cfg)
+                if provider_name == "builtin::oauth_discord":
+                    return config.DiscordOAuthProviderConfig(
+                        name=cfg.name,
+                        display_name=cfg.display_name,
+                        client_id=cfg.client_id,
+                        secret=cfg.secret,
+                        additional_scope=getattr(cfg, "additional_scope", None),
+                        issuer_url=getattr(cfg, "issuer_url", None),
+                        logo_url=getattr(cfg, "logo_url", None),
+                        prompt=getattr(cfg, "prompt", "consent"),
+                    )
                 return config.OAuthProviderConfig(
                     name=cfg.name,
                     display_name=cfg.display_name,
                     client_id=cfg.client_id,
                     secret=cfg.secret,
-                    additional_scope=cfg.additional_scope,
-                    issuer_url=getattr(cfg, 'issuer_url', None),
-                    logo_url=getattr(cfg, 'logo_url', None),
+                    additional_scope=getattr(cfg, "additional_scope", None),
+                    issuer_url=getattr(cfg, "issuer_url", None),
+                    logo_url=getattr(cfg, "logo_url", None),
                 )
-
         raise errors.MissingConfiguration(
             provider_name, "Provider is not configured"
         )
