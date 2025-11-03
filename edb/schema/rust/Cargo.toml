@@ -13,7 +13,7 @@ python_extension = ["pyo3/extension-module"]
 default = ["python_extension"]
 
 [dependencies]
-gel-schema = { git = "https://github.com/geldata/gel-rust.git", rev = "e162dbbf22d05b785aaa31e03cbbe78296cdbe1e" }
+gel-schema = { git = "https://github.com/geldata/gel-rust.git", rev = "05032c45444b8786cc455cfd45a9797283123021" }
 # gel-schema = { path = "/home/aljaz/Gel/gel-rust/gel-schema" }
 
 pyo3 = { workspace = true, features = ["uuid"] }

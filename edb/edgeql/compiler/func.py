@@ -172,6 +172,7 @@ def compile_FunctionCall(
         elif len(alts) == 1:
             hint = f'Did you want "{alts[0]}"?'
         else:  # Multiple alternatives
+            alts.sort()
             hint = (
                 f'Did you want one of the following functions instead:\n' +
                 ('\n'.join(alts))

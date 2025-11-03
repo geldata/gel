@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use gel_schema::{
     Class, Container, ContainerTy, EnumTy, Expression, ObjectDict, ObjectIndex, ObjectIndexTy,
@@ -21,7 +21,7 @@ pub fn _schema(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-#[pyclass(frozen, unsendable, module = "edb.schema._schema")]
+#[pyclass(frozen, module = "edb.schema._schema")]
 #[derive(Clone, Default)]
 struct Schema {
     inner: gel_schema::Schema,
@@ -646,7 +646,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
         return Ok(Value::Float(val.extract()?));
     }
     if let Ok(val) = val.cast_exact::<PyString>() {
-        return Ok(Value::Str(Rc::new(val.to_string())));
+        return Ok(Value::Str(Arc::new(val.to_string())));
     }
     if let Ok(uuid) = val.extract() {
         return Ok(Value::Uuid(uuid));
@@ -655,12 +655,12 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     if val.is_exact_instance(imports::QualName(py)?)
         || val.is_exact_instance(imports::UnqualName(py)?)
     {
-        return Ok(Value::Name(Rc::new(name_from_py(val)?)));
+        return Ok(Value::Name(Arc::new(name_from_py(val)?)));
     }
 
     let span = imports::Span(py)?;
     if val.is_instance(span)? {
-        return Ok(Value::Span(Rc::new(gel_schema::Span {
+        return Ok(Value::Span(Arc::new(gel_schema::Span {
             filename: val.getattr("filename")?.extract()?,
             start: val.getattr("start")?.extract()?,
             end: val.getattr("end")?.extract()?,
@@ -680,7 +680,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
 
     let func_param_list = imports::FuncParameterList(py)?;
     if val.is_exact_instance(func_param_list) {
-        return Ok(Value::ObjectList(Rc::new(ObjectList {
+        return Ok(Value::ObjectList(Arc::new(ObjectList {
             ty: ObjectListTy::FuncParameterList,
             value_ty: None,
             values: uuids_from_py(val.getattr("_ids")?)?,
@@ -697,9 +697,9 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             let Value::Expression(expr) = value_from_py(py, item)? else {
                 panic!()
             };
-            exprs.push(Rc::into_inner(expr).unwrap());
+            exprs.push(Arc::into_inner(expr).unwrap());
         }
-        return Ok(Value::ExpressionList(Rc::new(exprs)));
+        return Ok(Value::ExpressionList(Arc::new(exprs)));
     }
 
     let expr_dict = imports::ExpressionDict(py)?;
@@ -713,9 +713,9 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             let Value::Expression(expr) = value_from_py(py, val)? else {
                 panic!()
             };
-            map.insert(key, Rc::into_inner(expr).unwrap());
+            map.insert(key, Arc::into_inner(expr).unwrap());
         }
-        return Ok(Value::ExpressionDict(Rc::new(map)));
+        return Ok(Value::ExpressionDict(Arc::new(map)));
     }
 
     if val.is_exact_instance(imports::Expression(py)?)
@@ -729,7 +729,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             uuids_from_py(refs_object_set.getattr("_ids")?)?
         };
         let origin = opt_str_from_py(val.getattr("origin")?)?;
-        return Ok(Value::Expression(Rc::new(Expression {
+        return Ok(Value::Expression(Arc::new(Expression {
             text,
             refs,
             origin,
@@ -745,7 +745,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
 
     let object_list = imports::ObjectList(py)?;
     if ty_base_0.as_ref().is_some_and(|t| t.is(object_list)) {
-        return Ok(Value::ObjectList(Rc::new(ObjectList {
+        return Ok(Value::ObjectList(Arc::new(ObjectList {
             ty: ObjectListTy::ObjectList,
             value_ty: parametric_arg_from_py(&val)?,
             values: uuids_from_py(val.getattr("_ids")?)?,
@@ -754,7 +754,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
 
     let object_set = imports::ObjectSet(py)?;
     if ty_base_0.as_ref().is_some_and(|t| t.is(object_set)) {
-        return Ok(Value::ObjectSet(Rc::new(ObjectSet {
+        return Ok(Value::ObjectSet(Arc::new(ObjectSet {
             value_ty: parametric_arg_from_py(&val)?,
             values: uuids_from_py(val.getattr("_ids")?)?,
         })));
@@ -775,7 +775,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             .map(|x| x.to_string())
             .collect();
 
-        return Ok(Value::ObjectDict(Rc::new(ObjectDict {
+        return Ok(Value::ObjectDict(Arc::new(ObjectDict {
             keys,
             values,
             value_ty,
@@ -817,7 +817,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             )
         };
 
-        return Ok(Value::ObjectIndex(Rc::new(ObjectIndex {
+        return Ok(Value::ObjectIndex(Arc::new(ObjectIndex {
             ty: object_index_ty,
             value_ty,
             values,
@@ -828,7 +828,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
     // weird: this shouldn't be necessary, because nothing is reduced as a list
     // nevertheless Object.bases, is sometimes reduced to a list of uuids
     if let Ok(val) = val.cast_exact::<PyList>() {
-        return Ok(Value::ObjectList(Rc::new(ObjectList {
+        return Ok(Value::ObjectList(Arc::new(ObjectList {
             ty: ObjectListTy::ObjectList,
             value_ty: Some("InheritingObject".into()),
             values: val
@@ -852,7 +852,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             values.push(value_from_py(py, item)?);
         }
 
-        return Ok(Value::Container(Rc::new(Container {
+        return Ok(Value::Container(Arc::new(Container {
             ty,
             values,
             value_ty,
@@ -870,7 +870,7 @@ fn value_from_py<'p>(py: Python<'p>, val: Bound<'p, PyAny>) -> PyResult<Value> {
             values.push(value_from_py(py, item)?);
         }
 
-        return Ok(Value::Container(Rc::new(Container {
+        return Ok(Value::Container(Arc::new(Container {
             ty: gel_schema::ContainerTy::FrozenCheckedSet,
             values,
             value_ty,
