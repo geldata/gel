@@ -245,4 +245,17 @@ PATCHES: list[tuple[str, str]] = [
     };
   };
     '''),
+
+    # For #9104
+    ('edgeql+schema+config', '''
+    ALTER TYPE cfg::AbstractConfig {
+        CREATE PROPERTY query_cache_size -> std::int32 {
+            SET default := 1000;
+            CREATE ANNOTATION cfg::system := 'true';
+            CREATE ANNOTATION cfg::requires_restart := 'true';
+            CREATE ANNOTATION std::description :=
+                'Maximum number of queries to cache in the query cache';
+        };
+    };
+    '''),
 ]
