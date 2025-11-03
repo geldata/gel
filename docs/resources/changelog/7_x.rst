@@ -276,7 +276,7 @@ Other features
 * Configurable query cache size
   (:eql:gh:`#9104`)
 
-* Add Discord OAuth `prompt` parameter with default
+* Add Discord OAuth ``prompt`` parameter with default
   (:eql:gh:`#9111`)
 
 * Support specifying session configs in http and graphql endpoints
