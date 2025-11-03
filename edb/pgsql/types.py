@@ -476,7 +476,10 @@ def _source_table_info(
         catenate=False, versioned=versioned,
     )
     ptr_name = pointer.get_shortname(schema).name
-    col_name = _column_name_of_pointer(pointer.id, ptr_name)
+    if ptr_name.startswith('__') or ptr_name == 'id':
+        col_name = ptr_name
+    else:
+        col_name = str(pointer.id)
     table_type = 'ObjectType'
 
     return table, table_type, col_name
@@ -725,7 +728,11 @@ def _get_ptrref_storage_info(
                 versioned=versioned,
 
             )
-            col_name = _column_name_of_pointer(ptrref.id, ptrref.shortname.name)
+            ptrname = ptrref.shortname.name
+            if ptrname.startswith('__') or ptrname == 'id':
+                col_name = ptrname
+            else:
+                col_name = str(ptrref.id)
             table_type = 'ObjectType'
 
         elif _ptrref_storable_in_pointer(ptrref):
@@ -775,16 +782,6 @@ def _ptrref_storable_in_pointer(ptrref: irast.BasePointerRef) -> bool:
             ptrref.out_cardinality.is_multi()
             or ptrref.has_properties
         )
-
-
-def _column_name_of_pointer(ptr_id: uuid.UUID, ptr_name: str) -> str:
-    if (
-        (ptr_name.startswith('__') and ptr_name.endswith('__'))
-        or ptr_name == 'id'
-    ):
-        return ptr_name
-    else:
-        return str(ptr_id)
 
 
 def has_table(

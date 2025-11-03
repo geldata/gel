@@ -20132,16 +20132,6 @@ DDLStatement);
             };
         """)
 
-    async def test_edgeql_ddl_half_dunder_00(self):
-        await self.con.execute(r"""
-            create type Example { create property s: str; };
-            alter type Example { alter property s { rename to __s; }; };
-        """)
-        await self.assert_query_result(
-            'select Example { __s }',
-            [],
-        )
-
 
 class TestDDLNonIsolated(tb.DDLTestCase):
     TRANSACTION_ISOLATION = False
