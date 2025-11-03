@@ -270,7 +270,7 @@ Other features
 * Add support for max batch size to AI embedding models.
   (:eql:gh:`#9040`)
 
-* Add a `.?>link` operator to dereference link while suppressing "hidden by policy"
+* Add a ``.?>link`` operator to dereference link while suppressing "hidden by policy"
   (:eql:gh:`#9101`)
 
 * Configurable query cache size
