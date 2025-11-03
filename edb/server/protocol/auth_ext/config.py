@@ -60,6 +60,11 @@ class OAuthProviderConfig(ProviderConfig):
     logo_url: Optional[str]
 
 
+@dataclass
+class DiscordOAuthProviderConfig(OAuthProviderConfig):
+    prompt: str
+
+
 class WebAuthnProviderConfig(ProviderConfig):
     relying_party_origin: str
     require_verification: bool

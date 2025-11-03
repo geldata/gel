@@ -104,13 +104,16 @@ Requests can contain the following fields:
 - ``variables`` - a JSON object containing a set of variables. **Optional**
   If the GraphQL query string contains variables, the ``variables`` object is
   required.
-- ``globals`` - a JSON object containing global variables. **Optional**. The
+- ``variables["__globals__"]`` - a JSON object containing global variables.
+  **Optional**. The
   keys must be the fully qualified names of the globals to set (e.g.,
   ``default::current_user`` for the global ``current_user`` in the ``default``
   module).
+- ``variables["__config__"]`` - a JSON object containing session configuration values. **Optional**.  **Added in 7.0.**
 - ``operationName`` - the name of the operation that must be
   executed. **Optional** If the GraphQL query contains several named
   operations, it is required.
+- ``globals`` - **Deprecated** and non-standard synonym for ``variables["__globals__"]``.
 
 .. note::
 
@@ -132,7 +135,7 @@ submit the following JSON-encoded form with the necessary fields.
   $ curl \
       -H "Content-Type: application/json" \
       -X POST http://localhost:10787/branch/main/graphql \
-      -d '{ "query": "query getMovie($title: String!) { Movie(filter: {title:{eq: $title}}) { id title }}", "variables": { "title": "The Batman" }, "globals": {"default::current_user": "04e52807-6835-4eaa-999b-952804ab40a5"}}'
+      -d '{ "query": "query getMovie($title: String!) { Movie(filter: {title:{eq: $title}}) { id title }}", "variables": { "title": "The Batman" , "__globals__": {"default::current_user": "04e52807-6835-4eaa-999b-952804ab40a5"}}}'
   {"data": {...}}
 
 .. lint-on

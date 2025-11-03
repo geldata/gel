@@ -290,6 +290,42 @@ class TestEdgeQLPolicies(tb.DDLTestCase):
                 select Ptr.tgt.b
             ''')
 
+        # A bunch using .?> that should not fail
+        await self.assert_query_result(
+            '''
+            select Ptr { t := .?>tgt }
+            ''',
+            [{'t': None}],
+        )
+
+        await self.assert_query_result(
+            '''
+            select Ptr { z := .?>tgt.b }
+            ''',
+            [{'z': None}],
+        )
+
+        await self.assert_query_result(
+            '''
+            select Ptr { z := .?>tgt.id }
+            ''',
+            [{'z': None}],
+        )
+
+        await self.assert_query_result(
+            '''
+            select Ptr.?>tgt
+            ''',
+            [],
+        )
+
+        await self.assert_query_result(
+            '''
+            select Ptr.?>tgt.b
+            ''',
+            [],
+        )
+
         await self.con.query('''
             delete Ptr
         ''')

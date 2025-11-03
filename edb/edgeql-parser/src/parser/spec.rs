@@ -67,6 +67,7 @@ pub(super) fn get_token_kind(token_name: &str) -> Kind {
         "&" => Ampersand,
         "@" => At,
         ".<" => BackwardLink,
+        ".?>" => OptionalLink,
         "}" => CloseBrace,
         "]" => CloseBracket,
         ")" => CloseParen,

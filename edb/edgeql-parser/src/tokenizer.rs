@@ -78,6 +78,7 @@ pub enum Kind {
     Coalesce,         // ??
     Namespace,        // ::
     BackwardLink,     // .<
+    OptionalLink,     // .?>
     FloorDiv,         // //
     Concat,           // ++
     GreaterEq,        // >=
@@ -356,6 +357,16 @@ impl<'a> Tokenizer<'a> {
             },
             '.' => match iter.next() {
                 Some((_, '<')) => Ok((BackwardLink, 2)),
+                Some((_, '?')) => {
+                    if let Some((_, '>')) = iter.next() {
+                        Ok((OptionalLink, 3))
+                    } else {
+                        Err(Error::new(
+                            "`.?` is not an operator, \
+                                did you mean `.?>` ?",
+                        ))
+                    }
+                }
                 _ => Ok((Dot, 1)),
             },
             '?' => match iter.next() {
@@ -1063,6 +1074,7 @@ impl Kind {
             Ampersand => "&",
             At => "@",
             BackwardLink => ".<",
+            OptionalLink => ".?>",
             CloseBrace => "}",
             CloseBracket => "]",
             CloseParen => ")",

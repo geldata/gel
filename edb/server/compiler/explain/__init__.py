@@ -67,7 +67,7 @@ class AnalyzeContext:
 def analyze_explain_output(
     query_asts_pickled: bytes,
     data: list[list[bytes]],
-    std_schema: s_schema.FlatSchema,
+    std_schema: s_schema.Schema,
 ) -> bytes:
     if debug.flags.edgeql_explain:
         debug.header('Explain')

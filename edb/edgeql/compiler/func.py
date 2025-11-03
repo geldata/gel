@@ -99,9 +99,10 @@ def compile_FunctionCall(
         funcname = sn.QualName(*expr.func)
 
     try:
-        funcs = env.schema.get_functions(
+        funcs = s_func.lookup_functions(
             funcname,
             module_aliases=ctx.modaliases,
+            schema=env.schema,
         )
     except errors.InvalidReferenceError as e:
         s_utils.enrich_schema_lookup_error(
@@ -633,7 +634,9 @@ def compile_operator(
 
     env = ctx.env
     schema = env.schema
-    opers = schema.get_operators(op_name, module_aliases=ctx.modaliases)
+    opers = s_oper.lookup_operators(
+        op_name, module_aliases=ctx.modaliases, schema=schema
+    )
 
     if opers is None:
         raise errors.QueryError(
@@ -680,7 +683,7 @@ def compile_operator(
                 span=qlarg.span)
 
         derivative_op = opers[0]
-        opers = schema.get_operators(origin_op)
+        opers = s_oper.lookup_operators(origin_op, schema=schema)
         if not opers:
             raise errors.InternalServerError(
                 f'cannot find the origin operator for {op_name}',
@@ -1282,8 +1285,8 @@ def compile_ext_ai_search(
             case _:
                 raise RuntimeError(f"unsupported distance_function: {df}")
 
-        distance_func = schema.get_functions(
-            sn.QualName("ext::pgvector", distance_fname),
+        distance_func = schema.get_by_shortname(
+            s_func.Function, sn.QualName("ext::pgvector", distance_fname)
         )[0]
 
         index_metadata[typeref] = {

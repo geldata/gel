@@ -4636,6 +4636,36 @@ class TestGraphQLFunctional(tb.GraphQLTestCase):
                     },
                 )
 
+    def test_graphql_config_01(self):
+        Q = r'''query { GlobalTest { transaction_isolation } }'''
+
+        for val in ['RepeatableRead', 'Serializable']:
+            for use_http_post in [True, False]:
+                self.assert_graphql_query_result(
+                    Q,
+                    {
+                        "GlobalTest": [{
+                            'transaction_isolation': val
+                        }],
+                    },
+                    use_http_post=use_http_post,
+                    config={"default_transaction_isolation": val},
+                )
+
+    def test_graphql_config_02(self):
+        Q = r'''query { GlobalTest { access_policies } }'''
+
+        for val in [True, False, True]:
+            for use_http_post in [True, False]:
+                self.assert_graphql_query_result(
+                    Q,
+                    {
+                        "GlobalTest": [{'access_policies': val}],
+                    },
+                    use_http_post=use_http_post,
+                    config={"apply_access_policies": val},
+                )
+
     def test_graphql_introspect_01(self):
         # Issue 8814
         # Check that schema introspection works with computed globals

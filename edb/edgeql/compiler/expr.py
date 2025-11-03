@@ -913,23 +913,29 @@ def _infer_type_introspection(
     span: Optional[parsing.Span]=None,
 ) -> s_types.Type:
     if irtyputils.is_scalar(typeref):
-        return cast(s_objtypes.ObjectType,
-                    env.schema.get('schema::ScalarType'))
+        return env.schema.get_by_name(
+            'schema::ScalarType', type=s_objtypes.ObjectType
+        )
     elif irtyputils.is_object(typeref):
-        return cast(s_objtypes.ObjectType,
-                    env.schema.get('schema::ObjectType'))
+        return env.schema.get_by_name(
+            'schema::ObjectType', type=s_objtypes.ObjectType
+        )
     elif irtyputils.is_array(typeref):
-        return cast(s_objtypes.ObjectType,
-                    env.schema.get('schema::Array'))
+        return env.schema.get_by_name(
+            'schema::Array', type=s_objtypes.ObjectType
+        )
     elif irtyputils.is_tuple(typeref):
-        return cast(s_objtypes.ObjectType,
-                    env.schema.get('schema::Tuple'))
+        return env.schema.get_by_name(
+            'schema::Tuple', type=s_objtypes.ObjectType
+        )
     elif irtyputils.is_range(typeref):
-        return cast(s_objtypes.ObjectType,
-                    env.schema.get('schema::Range'))
+        return env.schema.get_by_name(
+            'schema::Range', type=s_objtypes.ObjectType
+        )
     elif irtyputils.is_multirange(typeref):
-        return cast(s_objtypes.ObjectType,
-                    env.schema.get('schema::MultiRange'))
+        return env.schema.get_by_name(
+            'schema::MultiRange', type=s_objtypes.ObjectType
+        )
     else:
         raise errors.QueryError(
             'unexpected type in INTROSPECT', span=span)
@@ -945,9 +951,8 @@ def compile_Introspect(
         typeref = typeref.material_type
     if typeref.is_opaque_union:
         typeref = typegen.type_to_typeref(
-            cast(
-                s_objtypes.ObjectType,
-                ctx.env.schema.get('std::BaseObject'),
+            ctx.env.schema.get_by_name(
+                'std::BaseObject', type=s_objtypes.ObjectType
             ),
             env=ctx.env,
         )
@@ -984,10 +989,10 @@ def _infer_index_type(
     node_type = setgen.get_expr_type(expr, ctx=ctx)
     index_type = setgen.get_set_type(index, ctx=ctx)
 
-    str_t = env.schema.get('std::str', type=s_scalars.ScalarType)
-    bytes_t = env.schema.get('std::bytes', type=s_scalars.ScalarType)
-    int_t = env.schema.get('std::int64', type=s_scalars.ScalarType)
-    json_t = env.schema.get('std::json', type=s_scalars.ScalarType)
+    str_t = env.schema.get_by_name('std::str', type=s_scalars.ScalarType)
+    bytes_t = env.schema.get_by_name('std::bytes', type=s_scalars.ScalarType)
+    int_t = env.schema.get_by_name('std::int64', type=s_scalars.ScalarType)
+    json_t = env.schema.get_by_name('std::json', type=s_scalars.ScalarType)
 
     result: s_types.Type
 
@@ -1063,10 +1068,10 @@ def _infer_slice_type(
     env = ctx.env
     node_type = setgen.get_set_type(expr, ctx=ctx)
 
-    str_t = env.schema.get('std::str', type=s_scalars.ScalarType)
-    int_t = env.schema.get('std::int64', type=s_scalars.ScalarType)
-    json_t = env.schema.get('std::json', type=s_scalars.ScalarType)
-    bytes_t = env.schema.get('std::bytes', type=s_scalars.ScalarType)
+    str_t = env.schema.get_by_name('std::str', type=s_scalars.ScalarType)
+    int_t = env.schema.get_by_name('std::int64', type=s_scalars.ScalarType)
+    json_t = env.schema.get_by_name('std::json', type=s_scalars.ScalarType)
+    bytes_t = env.schema.get_by_name('std::bytes', type=s_scalars.ScalarType)
 
     if node_type.issubclass(env.schema, str_t):
         base_name = 'string'
@@ -1177,7 +1182,7 @@ def compile_type_check_op(
         result = ltype.issubclass(ctx.env.schema, test_type)
 
     output_typeref = typegen.type_to_typeref(
-        ctx.env.schema.get('std::bool', type=s_types.Type),
+        ctx.env.schema.get_by_name('std::bool', type=s_types.Type),
         env=ctx.env,
     )
 

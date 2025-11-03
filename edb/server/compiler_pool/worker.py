@@ -18,7 +18,7 @@
 
 
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 import pickle
 
@@ -44,8 +44,8 @@ BACKEND_RUNTIME_PARAMS: pgparams.BackendRuntimeParams = \
 COMPILER: compiler.Compiler
 LAST_STATE: Optional[compiler.dbstate.CompilerConnectionState] = None
 LAST_STATE_PICKLE: Optional[bytes] = None
-STD_SCHEMA: s_schema.FlatSchema
-GLOBAL_SCHEMA: s_schema.FlatSchema
+STD_SCHEMA: s_schema.Schema
+GLOBAL_SCHEMA: s_schema.Schema
 INSTANCE_CONFIG: immutables.Map[str, config.SettingValue]
 
 
@@ -262,6 +262,7 @@ def compile_graphql(
     global_schema: Optional[bytes],
     database_config: Optional[bytes],
     system_config: Optional[bytes],
+    session_config: Mapping[str, Any],
     *compile_args: Any,
     **compile_kwargs: Any,
 ) -> tuple[compiler.QueryUnitGroup, graphql.TranspiledOperation]:
@@ -303,7 +304,7 @@ def compile_graphql(
         inline_typenames=False,
         inline_objectids=False,
         modaliases=None,
-        session_config=None,
+        session_config=session_config,
     )
 
     unit_group, _ = COMPILER.compile(

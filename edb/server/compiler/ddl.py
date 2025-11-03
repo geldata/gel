@@ -1987,22 +1987,21 @@ def administer_concurrent_index_build(
         debug.dump_code(sql, lexer='sql')
 
     assert isinstance(nschema, s_schema.ChainedSchema)
-    assert isinstance(nschema._top_schema, s_schema.FlatSchema)
 
     return dbstate.DDLQuery(
         early_non_tx_sql=(index_command.encode('utf-8'),),
         sql=sql,
         is_transactional=False,
         feature_used_metrics=None,
-        user_schema=nschema._top_schema,
+        user_schema=nschema.get_top_schema(),
     )
 
 
 def validate_schema_equivalence(
     state: compiler.CompilerState,
-    schema_a: s_schema.FlatSchema,
-    schema_b: s_schema.FlatSchema,
-    global_schema: s_schema.FlatSchema,
+    schema_a: s_schema.Schema,
+    schema_b: s_schema.Schema,
+    global_schema: s_schema.Schema,
 ) -> None:
     schema_a_full = s_schema.ChainedSchema(
         state.std_schema,

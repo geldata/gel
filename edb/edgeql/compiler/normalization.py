@@ -39,6 +39,7 @@ from edb.edgeql import parser as qlparser
 
 from edb.schema import name as sn
 from edb.schema import schema as s_schema
+from edb.schema import functions as s_func
 from edb.schema import utils as s_utils
 
 
@@ -399,8 +400,9 @@ def normalize_FunctionCall(
             sn.UnqualName(node.func) if isinstance(node.func, str)
             else sn.QualName(*node.func)
         )
-        funcs = schema.get_functions(
-            name, default=tuple(), module_aliases=modaliases)
+        funcs = s_func.lookup_functions(
+            name, default=tuple(), module_aliases=modaliases, schema=schema,
+        )
         if funcs:
             # As long as we found some functions, they will be from
             # the same module (the first valid resolved module for the
@@ -421,14 +423,7 @@ def normalize_FunctionCall(
             # module default {
             #     alias query := (with A as module B select A::foo() );
             # }
-            current_module = (
-                modaliases[None]
-                if modaliases and None in modaliases else
-                None
-            )
-            _, module = s_schema.apply_module_aliases(
-                name.module, modaliases, current_module,
-            )
+            module = s_schema.apply_module_aliases(name.module, modaliases)
             if module is not None:
                 node.func = (module, name.name)
 

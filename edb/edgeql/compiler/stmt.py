@@ -979,18 +979,16 @@ def compile_DescribeStmt(
                         # handled separately because they allow multiple
                         # matches for the same name.
                         if (itemclass is None or is_function):
-                            try:
-                                funcs: tuple[s_func.Function, ...] = (
-                                    newctx.env.schema.get_functions(
-                                        name,
-                                        module_aliases=aliases)
+                            funcs = s_func.lookup_functions(
+                                name,
+                                tuple(),
+                                module_aliases=aliases,
+                                schema=newctx.env.schema,
+                            )
+                            for func in funcs:
+                                items[f'function_{modname}'].append(
+                                    func.get_name(newctx.env.schema)
                                 )
-                            except errors.InvalidReferenceError:
-                                pass
-                            else:
-                                for func in funcs:
-                                    items[f'function_{modname}'].append(
-                                        func.get_name(newctx.env.schema))
 
                         # Also find an object matching the name as long as
                         # it's not a function we're looking for specifically.

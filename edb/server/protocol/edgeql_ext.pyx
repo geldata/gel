@@ -60,6 +60,7 @@ async def handle_request(
     variables = None
     globals_ = None
     query = None
+    config = None
 
     try:
         if request.method == b'POST':
@@ -71,6 +72,7 @@ async def handle_request(
                 query = body.get('query')
                 variables = body.get('variables')
                 globals_ = body.get('globals')
+                config = body.get('config')
             else:
                 raise TypeError(
                     'unable to interpret EdgeQL POST request')
@@ -99,6 +101,13 @@ async def handle_request(
                     except Exception:
                         raise TypeError(
                             '"globals" must be a JSON object')
+                config = qs.get('config')
+                if config is not None:
+                    try:
+                        config = json.loads(config[0])
+                    except Exception:
+                        raise TypeError(
+                            '"config" must be a JSON object')
 
         else:
             raise TypeError('expected a GET or a POST request')
@@ -111,6 +120,9 @@ async def handle_request(
 
         if globals_ is not None and not isinstance(globals_, dict):
             raise TypeError('"globals" must be a JSON object')
+
+        if config is not None and not isinstance(config, dict):
+            raise TypeError('"config" must be a JSON object')
 
     except Exception as ex:
         if debug.flags.server:
@@ -130,6 +142,7 @@ async def handle_request(
             role_name=role_name,
             variables=variables or {},
             globals_=globals_,
+            session_config=config,
         )
     except Exception as ex:
         if debug.flags.server:

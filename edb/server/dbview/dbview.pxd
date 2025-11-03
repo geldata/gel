@@ -253,7 +253,9 @@ cdef class DatabaseConnectionView:
     cdef bint is_state_desc_changed(self)
     cdef describe_state(self)
     cdef encode_state(self)
+    cdef check_session_config_perms(self, keys)
     cdef decode_state(self, type_id, data)
+    cdef decode_json_session_config(self, json_session_config)
     cdef bint needs_commit_after_state_sync(self)
 
     cdef check_capabilities(

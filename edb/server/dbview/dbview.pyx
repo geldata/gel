@@ -976,6 +976,21 @@ cdef class DatabaseConnectionView:
             state['globals'] = {k: v.value for k, v in globals_.items()}
         return serializer.type_id, serializer.encode(state)
 
+    cdef check_session_config_perms(self, keys):
+        is_superuser, permissions = self.get_permissions()
+        if not is_superuser:
+            settings = self.get_config_spec()
+            for k in keys:
+                setting = settings[k]
+                if setting.session_restricted and not (
+                    setting.session_permission
+                    and setting.session_permission in permissions
+                ):
+                    raise errors.DisabledCapabilityError(
+                        f'role {self._role_name} does not have permission to '
+                        f'configure session config variable {k}'
+                    )
+
     cdef decode_state(self, type_id, data):
         serializer = self.get_state_serializer()
         self._command_state_serializer = serializer
@@ -1003,27 +1018,15 @@ cdef class DatabaseConnectionView:
         aliases[None] = state.get('module', defines.DEFAULT_MODULE_ALIAS)
         aliases = immutables.Map(aliases)
 
-        is_superuser, permissions = self.get_permissions()
-        if not is_superuser:
-            settings = self.get_config_spec()
-            for k in state.get('config', ()):
-                setting = settings[k]
-                if setting.session_restricted and not (
-                    setting.session_permission
-                    and setting.session_permission in permissions
-                ):
-                    raise errors.DisabledCapabilityError(
-                        f'role {self._role_name} does not have permission to '
-                        f'configure session config variable {k}'
-                    )
-
+        config_obj = state.get('config', {})
+        self.check_session_config_perms(config_obj)
         session_config = immutables.Map({
             k: config.SettingValue(
                 name=k,
                 value=v,
                 source='session',
                 scope=qltypes.ConfigScope.SESSION,
-            ) for k, v in state.get('config', {}).items()
+            ) for k, v in config_obj.items()
         })
         globals_ = immutables.Map({
             k: config.SettingValue(
@@ -1039,6 +1042,25 @@ cdef class DatabaseConnectionView:
         self._session_state_cache = (
             aliases, session_config, globals_, type_id, data
         )
+
+    cdef decode_json_session_config(self, json_session_config):
+        if not json_session_config:
+            return
+
+        settings = self.get_config_spec()
+
+        self.check_session_config_perms(json_session_config)
+
+        session_config = self.get_session_config()
+        for k, v in json_session_config.items():
+            op = config.Operation(
+                config.OpCode.CONFIG_SET,
+                qltypes.ConfigScope.SESSION,
+                k,
+                v,
+            )
+            session_config = op.apply(settings, session_config)
+        self.set_session_config(session_config)
 
     cdef bint needs_commit_after_state_sync(self):
         return any(
@@ -1404,25 +1426,14 @@ cdef class DatabaseConnectionView:
 
         for op in ops:
             if op.scope is config.ConfigScope.INSTANCE:
+                assert conn is not None
                 await self._db._index.apply_system_config_op(conn, op)
             elif op.scope is config.ConfigScope.DATABASE:
                 self.set_database_config(
                     op.apply(settings, self.get_database_config()),
                 )
             elif op.scope is config.ConfigScope.SESSION:
-                is_superuser, permissions = self.get_permissions()
-                if not is_superuser:
-                    setting = op.get_setting(settings)
-                    if setting.session_restricted and not (
-                        setting.session_permission
-                        and setting.session_permission in permissions
-                    ):
-                        raise errors.DisabledCapabilityError(
-                            f'role {self._role_name} does not have permission '
-                            f'to configure session config variable '
-                            f'{setting.name}'
-                        )
-
+                self.check_session_config_perms([op.setting_name])
                 self.set_session_config(
                     op.apply(settings, self.get_session_config()),
                 )

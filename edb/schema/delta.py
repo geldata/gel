@@ -3079,7 +3079,8 @@ class CreateObject[Object_T: so.Object](ObjectCommand[Object_T]):
         # Check if functions by this name exist
         obj_name = self.get_attribute_value('name')
         if obj_name is not None and not sn.is_fullname(str(obj_name)):
-            funcs = schema.get_functions(obj_name, tuple())
+            from . import functions as s_func
+            funcs = s_func.lookup_functions(obj_name, tuple(), schema=schema)
             if funcs:
                 raise errors.SchemaError(
                     f'{funcs[0].get_verbosename(schema)} already exists')
@@ -4688,12 +4689,12 @@ def get_object_command_id(key: CommandKey) -> str:
     return f'{cmdclass_name} {qlcls} {name}{extra}'
 
 
-def apply(
+def apply[S: s_schema.Schema](
     delta: Command,
     *,
-    schema: s_schema.Schema,
+    schema: S,
     context: Optional[CommandContext] = None,
-) -> s_schema.Schema:
+) -> S:
     if context is None:
         context = CommandContext()
 
@@ -4703,4 +4704,4 @@ def apply(
     else:
         root = delta
 
-    return root.apply(schema, context)
+    return cast(S, root.apply(schema, context))

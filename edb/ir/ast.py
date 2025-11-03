@@ -465,6 +465,10 @@ class Pointer(Expr):
     source: Set
     ptrref: BasePointerRef
     direction: s_pointers.PointerDirection
+    # Whether to make this an optional deref (written '.?>') that
+    # suppresses any error due to looking at a required link hidden by
+    # a policy .
+    optional_deref: bool = False
     # Whether to *always* use a link table when this pointer is
     # accessed.  This is needed (for example) when a (possibly single)
     # link property is being referenced in a FOR iterator, and we
