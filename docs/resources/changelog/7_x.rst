@@ -270,6 +270,19 @@ Other features
 * Add support for max batch size to AI embedding models.
   (:eql:gh:`#9040`)
 
+* Add a `.?>link` operator to dereference link while suppressing "hidden by policy"
+  (:eql:gh:`#9101`)
+
+* Configurable query cache size
+  (:eql:gh:`#9104`)
+
+* Add Discord OAuth `prompt` parameter with default
+  (:eql:gh:`#9111`)
+
+* Support specifying session configs in http and graphql endpoints
+  (:eql:gh:`#9110`)
+
+
 Additional changes
 ==================
 
@@ -347,14 +360,40 @@ Fixes
 * Return identity_id when registering new Magic Link
   (:eql:gh:`#9039`)
 
+* Fix in-place upgrade repairs
+  (:eql:gh:`#9073`)
+
+* Fix creating branch when a schema has nested arrays
+  (:eql:gh:`#9074`)
+
+* Check for explicit id write presence in a slightly more resilient way
+  (:eql:gh:`#9090`)
+
+* Fix work_mem setting over SQL adapter
+  (:eql:gh:`#9094`)
+
+* Fix applying type intersection to aliases and iterators
+  (:eql:gh:`#9096`)
+
+* Fix an interaction between aliases and optional globals with a default
+  (:eql:gh:`#9109`)
+
+* Fix half-dunder pointer names
+  (:eql:gh:`#9100`)
+
+
 Other
 -----
 
 * Add ``apply_access_policies_pg_default`` flag to ``Role``
   (:eql:gh:`#8918`)
 
-* Expose 'protected' on schema::Property
+* Expose ``protected`` on ``schema::Property``
   (:eql:gh:`#8930`)
 
 * Retry serialization errors that occur internal to the auth extension.
   (:eql:gh:`#8942`)
+
+* Make indexes get hit more when ordering by something with exclusive constraint
+  (:eql:gh:`#9080`)
+
