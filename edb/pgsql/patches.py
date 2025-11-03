@@ -230,7 +230,8 @@ PATCHES: list[tuple[str, str]] = [
     ('edgeql+schema', ''),  # For #9074
 
     # For #9111
-    ('edgeql+user_ext|auth', '''
+    ('ext-pkg', 'auth'),  # For #8953, #8964
+    ('edgeql+user_ext+config|auth', '''
   alter type ext::auth::DiscordOAuthProvider {
     create required property prompt: std::str {
       create annotation std::description :=
