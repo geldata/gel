@@ -10,7 +10,7 @@ automatically suggested:
 
 .. code-block:: bash
 
-  $ gel project init --server-version 7.0-rc.3
+  $ gel project init --server-version 7.0
 
 
 Upgrading
@@ -378,9 +378,6 @@ Fixes
 * Fix an interaction between aliases and optional globals with a default
   (:eql:gh:`#9109`)
 
-* Fix half-dunder pointer names
-  (:eql:gh:`#9100`)
-
 
 Other
 -----
@@ -396,4 +393,3 @@ Other
 
 * Make indexes get hit more when ordering by something with exclusive constraint
   (:eql:gh:`#9080`)
-
