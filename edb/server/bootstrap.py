@@ -713,7 +713,8 @@ async def get_existing_view_columns(
     # Find all the config views (they are pg_classes where
     # there is also a table with the same name but "_dummy"
     # at the end) and collect all their columns in order.
-    return json.loads(await conn.sql_fetch_val('''\
+    schema = pg_common.versioned_schema("edgedbstd")
+    return json.loads(await conn.sql_fetch_val(f'''\
         select json_object_agg(v.relname, (
             select json_agg(a.attname order by a.attnum)
             from pg_catalog.pg_attribute as a
@@ -722,6 +723,10 @@ async def get_existing_view_columns(
         from pg_catalog.pg_class as v
         inner join pg_catalog.pg_tables as t
         on v.relname || '_dummy' = t.tablename
+        -- Filter for just our namespace!
+        inner join pg_catalog.pg_namespace as ns
+        on v.relnamespace = ns.oid
+        where ns.nspname = '{schema}' OR ns.nspname = 'edgedbpub'
 
     '''.encode('utf-8')))
 
