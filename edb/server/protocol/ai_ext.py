@@ -1270,7 +1270,7 @@ async def _generate_embeddings(
         )
     elif provider.api_style == ApiStyle.VoyageAI:
         return await _generate_voyageai_embeddings(
-            provider, model_name, inputs, http_client
+            provider, model_name, inputs, shortening, http_client
         )
     elif provider.api_style == ApiStyle.Ollama:
         result = await _generate_ollama_embeddings(
@@ -1345,6 +1345,7 @@ async def _generate_voyageai_embeddings(
     provider: ProviderConfig,
     model_name: str,
     inputs: list[str],
+    shortening: Optional[int],
     http_client: http.HttpClient,
 ) -> EmbeddingsResult:
 
@@ -1374,6 +1375,10 @@ async def _generate_voyageai_embeddings(
             "model": model_name,
         }
         endpoint = "/embeddings"
+
+    # Add output_dimension parameter if shortening is specified
+    if shortening is not None:
+        params["output_dimension"] = shortening
 
     result = await client.post(
         endpoint,
