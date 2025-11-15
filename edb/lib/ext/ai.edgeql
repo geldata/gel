@@ -655,6 +655,8 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
     create abstract type ext::ai::Voyage3EmbedModel
         extending ext::ai::EmbeddingModel
     {
+        create annotation std::deprecated :=
+            "This model is noted as a legacy model in the VoyageAI docs. Consider using voyage-3.5 instead.";
         alter annotation
             ext::ai::model_name := "voyage-3";
         alter annotation
@@ -670,6 +672,8 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
     create abstract type ext::ai::Voyage3LiteEmbedModel
         extending ext::ai::EmbeddingModel
     {
+        create annotation std::deprecated :=
+            "This model is noted as a legacy model in the VoyageAI docs. Consider using voyage-3.5-lite instead.";
         alter annotation
             ext::ai::model_name := "voyage-3-lite";
         alter annotation
@@ -685,6 +689,8 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
     create abstract type ext::ai::VoyageFinance2EmbedModel
         extending ext::ai::EmbeddingModel
     {
+        create annotation std::deprecated :=
+            "This model is noted as a legacy model in the VoyageAI docs.";
         alter annotation
             ext::ai::model_name := "voyage-finance-2";
         alter annotation
@@ -700,6 +706,8 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
     create abstract type ext::ai::VoyageLaw2EmbedModel
         extending ext::ai::EmbeddingModel
     {
+        create annotation std::deprecated :=
+            "This model is noted as a legacy model in the VoyageAI docs.";
         alter annotation
             ext::ai::model_name := "voyage-law-2";
         alter annotation
@@ -715,6 +723,8 @@ CREATE EXTENSION PACKAGE ai VERSION '1.0' {
     create abstract type ext::ai::VoyageCode2EmbedModel
         extending ext::ai::EmbeddingModel
     {
+        create annotation std::deprecated :=
+            "This model is noted as a legacy model in the VoyageAI docs. Consider using voyage-code-3 instead.";
         alter annotation
             ext::ai::model_name := "voyage-code-2";
         alter annotation
