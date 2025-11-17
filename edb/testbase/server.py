@@ -999,16 +999,18 @@ class ConnectedTestCase(ClusterTestCase):
 
     @contextlib.contextmanager
     def ignore_warnings(self, warning_message=None):
-        with self.con.capture_warnings() as warnings:
+        old = self.con._capture_warnings
+        warnings = []
+        self.con._capture_warnings = warnings
+        try:
             yield
+        finally:
+            self.con._capture_warnings = old
 
         if warning_message is not None:
             for warning in warnings:
-                # If it doesn't match the re, send it back to the con.
-                # It might get raised or it might get captured by an
-                # enclosing call to capture_warnings/ignore_warnings.
-                if not re.search(warning_message, str(warning)):
-                    self.con._get_warning_handler()([warning], None)
+                with self.assertRaisesRegex(Exception, warning_message):
+                    raise warning
 
     @classmethod
     async def setup_and_connect(cls):
@@ -1432,8 +1434,7 @@ class DatabaseTestCase(ConnectedTestCase):
         if class_set_up != 'skip':
             script = cls.get_setup_script()
             if script:
-                with cls.con.ignore_warnings():
-                    await cls.con.execute(script)
+                await cls.con.execute(script)
 
     @staticmethod
     def get_set_up():
@@ -1594,15 +1595,13 @@ class DatabaseTestCase(ConnectedTestCase):
                     {migration}
                 }}
             """
-
-        with self.ignore_warnings('Non-simple_scoping will be removed'):
-            await self.con.execute(f"""
-                START MIGRATION TO {{
-                    {migration}
-                }};
-                POPULATE MIGRATION;
-                COMMIT MIGRATION;
-            """)
+        await self.con.execute(f"""
+            START MIGRATION TO {{
+                {migration}
+            }};
+            POPULATE MIGRATION;
+            COMMIT MIGRATION;
+        """)
 
 
 class Error:
@@ -1942,10 +1941,7 @@ class StableDumpTestCase(QueryTestCase, CLITestCaseMixin):
             # compare the new branch schema to the original. We expect there
             # to be no difference and therefore a new migration to the
             # original schema should have the "complete" status right away.
-            with self.ignore_warnings():
-                await self.con.execute(
-                    f'start migration to {{ {orig_schema} }}'
-                )
+            await self.con.execute(f'start migration to {{ {orig_schema} }}')
             mig_status = json.loads(
                 await self.con.query_single_json(
                     'describe current migration as json'
@@ -2304,8 +2300,7 @@ async def _setup_database(
         if setup_script:
             async for tx in dbconn.retrying_transaction():
                 async with tx:
-                    with dbconn.capture_warnings():
-                        await dbconn.execute(setup_script)
+                    await dbconn.execute(setup_script)
     except Exception as ex:
         raise RuntimeError(
             f'exception during initialization of {dbname!r} test DB: '
