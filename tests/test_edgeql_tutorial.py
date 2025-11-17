@@ -33,7 +33,6 @@ class TestEdgeQLTutorial(tb.QueryTestCase):
     async def test_edgeql_tutorial(self):
         await self.con.execute(r'''
             START MIGRATION TO {
-                using future simple_scoping;
                 module default {
                     type Movie {
                         required property title -> str;
@@ -208,7 +207,6 @@ class TestEdgeQLTutorial(tb.QueryTestCase):
 
         await self.con.execute(r'''
             START MIGRATION TO {
-                using future simple_scoping;
                 module default {
                     type Movie {
                         required property title -> str;

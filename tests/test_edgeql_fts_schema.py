@@ -85,17 +85,23 @@ class TestEdgeQLFTSSchema(tb.DDLTestCase):
 
     async def test_edgeql_fts_schema_language_03(self):
         # Test adding an index to existing schema
-        await self.migrate(
+        await self.con.execute(
             r"""
-                type Text {
-                    required text0: str;
-                    required text1: str;
-                    required text2: str;
-                    required text3: str;
-                    required text4: str;
-                    required text5: str;
-                    required text6: str;
+            start migration to {
+                module default {
+                    type Text {
+                        required text0: str;
+                        required text1: str;
+                        required text2: str;
+                        required text3: str;
+                        required text4: str;
+                        required text5: str;
+                        required text6: str;
+                    }
                 }
+            };
+            populate migration;
+            commit migration;
             """
         )
 
@@ -212,7 +218,6 @@ class TestEdgeQLFTSSchema(tb.DDLTestCase):
 
             # move the property to a Base type
             start migration to {
-                using future simple_scoping;
                 module default {
                     abstract type Base {
                         required property x -> str;

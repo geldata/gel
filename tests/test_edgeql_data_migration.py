@@ -48,17 +48,6 @@ class EdgeQLDataMigrationTestCase(tb.DDLTestCase):
 
     DEFAULT_MODULE = 'test'
 
-    def setUp(self):
-        super().setUp()
-        self._ignore = self.ignore_warnings(
-            'Non-simple_scoping will be removed'
-        )
-        self._ignore.__enter__()
-
-    def tearDown(self):
-        super().tearDown()
-        self._ignore.__exit__(None, None, None)
-
     def normalize_statement(self, s: str) -> str:
         re_filter = re.compile(r'[\s]+|(#.*?(\n|$))|(,(?=\s*[})]))')
         stripped = textwrap.dedent(s.lstrip('\n')).rstrip('\n')
@@ -12405,8 +12394,7 @@ class TestEdgeQLDataMigrationNonisolated(EdgeQLDataMigrationTestCase):
     async def test_edgeql_migration_recovery_commit_fail(self):
         con2 = await self.connect()
         try:
-            with con2.capture_warnings():
-                await con2.execute('START MIGRATION TO {}')
+            await con2.execute('START MIGRATION TO {}')
             await con2.execute('POPULATE MIGRATION')
 
             await self.migrate("type Base;")

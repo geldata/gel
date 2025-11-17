@@ -28,7 +28,6 @@ import typing
 
 import abc
 import asyncio
-import contextlib
 import enum
 import functools
 import random
@@ -405,16 +404,6 @@ class Connection(options._OptionsMixin, _Executor):
 
     def _get_annotations(self) -> dict[str, str]:
         return self._options.annotations
-
-    @contextlib.contextmanager
-    def capture_warnings(self) -> typing.Iterator[list[errors.EdgeDBError]]:
-        old = self._capture_warnings
-        warnings: list[errors.EdgeDBError] = []
-        self._capture_warnings = warnings
-        try:
-            yield warnings
-        finally:
-            self._capture_warnings = old
 
     def _warning_handler(self, warnings, res):
         if self._capture_warnings is not None:
