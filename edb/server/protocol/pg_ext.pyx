@@ -1932,12 +1932,15 @@ cdef bytes remap_arguments(
         if arg_offset_external < offset:
             buf.write_bytes(data[arg_offset_external:offset])
 
-        # write non-external args
-        extracted_consts = list(source.variables().values())
-        for (e, param) in enumerate(params[param_count_external:]):
-            if isinstance(param, dbstate.SQLParamExtractedConst):
-                buf.write_len_prefixed_bytes(extracted_consts[e])
-            elif isinstance(param, dbstate.SQLParamGlobal):
+        # Write extracted consts from extra_blobs. The blob already contains
+        # all len-prefixed values in param order (matching args_ser.pyx pattern).
+        extra_blobs = source.extra_blobs()
+        if extra_blobs:
+            buf.write_bytes(extra_blobs[0])
+
+        # Write globals
+        for param in params[param_count_external:]:
+            if isinstance(param, dbstate.SQLParamGlobal):
                 name = param.global_name
                 if param.is_permission:
                     buf.write_int32(1)
