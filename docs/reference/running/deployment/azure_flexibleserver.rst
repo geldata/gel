@@ -13,6 +13,8 @@ Flexible Server
 <https://docs.microsoft.com/en-us/azure/postgresql/flexible-server>`_ as the
 backend.
 
+.. include:: ./note_cloud_reset_password.rst
+
 Prerequisites
 =============
 

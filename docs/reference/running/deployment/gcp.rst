@@ -11,6 +11,8 @@ Kubernetes.
 
 .. include:: ./note_cloud.rst
 
+.. include:: ./note_cloud_reset_password.rst
+
 Prerequisites
 =============
 

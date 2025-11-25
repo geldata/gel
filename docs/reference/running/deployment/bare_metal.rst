@@ -11,6 +11,7 @@ package manager and systemd.
 
 .. include:: ./note_cloud.rst
 
+.. include:: ./note_cloud_reset_password.rst
 
 Install the Gel Package
 =======================

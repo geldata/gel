@@ -12,6 +12,7 @@ running Postgres and the other running Gel.
 
 .. include:: ./note_cloud.rst
 
+.. include:: ./note_cloud_reset_password.rst
 
 Prerequisites
 =============

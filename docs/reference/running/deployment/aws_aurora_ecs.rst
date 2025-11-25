@@ -11,6 +11,8 @@ AWS
 In this guide we show how to deploy Gel on AWS using Amazon Aurora and
 Elastic Container Service.
 
+.. include:: ./note_cloud_reset_password.rst
+
 Prerequisites
 =============
 

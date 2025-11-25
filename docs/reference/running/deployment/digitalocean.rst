@@ -13,6 +13,8 @@ database as the backend.
 
 .. include:: ./note_cloud.rst
 
+.. include:: ./note_cloud_reset_password.rst
+
 One-click Deploy
 ++++++++++++++++
 
