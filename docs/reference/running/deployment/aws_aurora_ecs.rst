@@ -6,6 +6,15 @@ AWS
 
 :edb-alt-title:  Deploying Gel to AWS
 
+.. note::
+
+   We recomend using our `helm chart <helm-chart_>` to deploy gel on AWS.  The
+   CloudFormation guide below does not configure TLS certificates correctly.
+
+.. _helm-chart:
+   https://github.com/geldata/helm-charts/blob/main
+   /charts/gel-server/README.md
+
 .. include:: ./note_cloud.rst
 
 In this guide we show how to deploy Gel on AWS using Amazon Aurora and
