@@ -8,7 +8,7 @@ AWS
 
 .. note::
 
-   We recomend using our `helm chart <helm-chart_>`_ to deploy gel on AWS.  The
+   We recomend using our `helm chart <helm-chart_>`_ to deploy gel on AWS EKS.  The
    CloudFormation guide below does not configure TLS certificates correctly.
 
 .. _helm-chart:
