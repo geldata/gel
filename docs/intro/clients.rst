@@ -12,8 +12,8 @@ with Gel. These libraries provide a common set of functionality.
 - *Resolving connections.* All client libraries implement a standard protocol
   for determining how to connect to your database. In most cases, this will
   involve checking for special environment variables like :gelenv:`DSN` or, in
-  the case of Gel Cloud instances, :gelenv:`INSTANCE` and
-  :gelenv:`SECRET_KEY`.
+  the case of legacy Gel Cloud instances, :gelenv:`INSTANCE` and
+  :gelenv:`SECRET_KEY` (see the note on the discontinued service below).
   (More on this in :ref:`the Connection section below
   <ref_intro_clients_connection>`.)
 - *Executing queries.* A ``Client`` will provide some methods for executing
@@ -305,19 +305,14 @@ Using environment variables
 
 .. _ref_intro_clients_connection_cloud:
 
-For Gel Cloud
-^^^^^^^^^^^^^
+For legacy hosted instances
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In production, connection information can be securely passed to the client
-library via environment variables. For Gel Cloud instances, the recommended
-variables to set are :gelenv:`INSTANCE` and :gelenv:`SECRET_KEY`.
-
-Set :gelenv:`INSTANCE` to ``<org-name>/<instance-name>`` where
-``<instance-name>`` is the name you set when you created the Gel Cloud
-instance.
-
-If you have not yet created a secret key, you can do so in the Gel Cloud UI
-or by running :ref:`ref_cli_gel_cloud_secretkey_create` via the CLI.
+Gel Cloud is shutting down and is no longer creating new instances. Existing
+hosted instances can still be accessed so you can export your data. Use
+:gelenv:`INSTANCE` (``<org-name>/<instance-name>``) and :gelenv:`SECRET_KEY`
+for those migrations and dumps. If you still need a secret key for export
+automation, generate one with :ref:`ref_cli_gel_cloud_secretkey_create`.
 
 For self-hosted instances
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -415,13 +410,8 @@ Other mechanisms
       "tls_cert_data": "-----BEGIN CERTIFICATE-----\nabcdef..."
     }
 
-:gelenv:`INSTANCE` (local/Gel Cloud only)
-  The name of an instance. Useful only for local or Gel Cloud instances.
-
-  .. note::
-
-      For more on Gel Cloud instances, see the :ref:`Gel Cloud instance
-      connection section <ref_intro_clients_connection_cloud>` above.
+:gelenv:`INSTANCE` (local only)
+  The name of a local instance.
 
 Reference
 ---------

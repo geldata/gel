@@ -12,19 +12,20 @@ Jupyter Notebook
 2. Install the Gel Python library with ``pip install gel``
 
 3. Set the appropriate :ref:`connection environment variables
-   <ref_reference_connection>` required for your
-   Gel instance
+   <ref_reference_connection>` required for your Gel instance
 
-   **For Gel Cloud instances**
+   **For legacy hosted instances**
+
+   Gel Cloud is winding down and no longer accepts new users. If you're
+   exporting data from an existing hosted instance, use:
 
    - :gelenv:`INSTANCE`- your instance name (``<org-name>/<instance-name>``)
    - :gelenv:`SECRET_KEY`- a secret key with permissions for the selected instance.
 
      .. note::
 
-         You may create a secret key with the CLI by running :gelcmd:`cloud
-         secretkey create` or in the `Gel Cloud UI
-         <https://cloud.geldata.com/>`__.
+         Generate a secret key with :gelcmd:`cloud secretkey create` if you
+         need one to complete your export.
 
    **For other remote instances**
 

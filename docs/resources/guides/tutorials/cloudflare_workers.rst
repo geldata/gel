@@ -69,11 +69,9 @@ project on Cloudflare, you can run ``npx wrangler deploy`` to push it.
 Configure Gel
 =============
 
-You can use `Gel Cloud`_ for a managed service or run Gel locally.
+Run Gel locally or on your own infrastructure.
 
-.. _`Gel Cloud`: https://www.geldata.com/cloud
-
-**Local Gel Setup (Optional for Gel Cloud Users)**
+**Local Gel Setup**
 
 If you're running Gel locally, you can use the following command
 to create a new instance:
@@ -181,37 +179,6 @@ To interact with your **local Gel instance**, use the following code:
     The :code:`tlsSecurity` option is set to :code:`insecure` to allow
     connections to a local Gel instance. This lets you test your
     Cloudflare Worker locally. **Don't use this option in production.**
-
-**Client Setup with Gel Cloud**
-
-If you're using Gel Cloud, you can instead use the following code to
-set up the client:
-
-.. code-block:: typescript
-
-   const client = gel.createHttpClient({
-     instanceName: env.GEL_INSTANCE,
-     secretKey: env.GEL_SECRET_KEY,
-   });
-
-.. note:: Environment variables
-
-    You can obtain :gelenv:`INSTANCE` and :gelenv:`SECRET_KEY`
-    values from the Gel Cloud dashboard.
-
-You will need to set the :gelenv:`INSTANCE` and :gelenv:`SECRET_KEY`
-environment variables in your Cloudflare Worker project.
-
-Add the following to your :code:`wrangler.toml` file:
-
-.. code-block:: toml
-
-    [vars]
-    GEL_INSTANCE = "your-gel-instance"
-    GEL_SECRET_KEY = "your-gel-secret-key"
-
-Next, you can run :code:`wrangler types` to generate the types for your
-environment variables.
 
 **Running the Worker**
 

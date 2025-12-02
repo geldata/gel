@@ -97,15 +97,6 @@ Upgrading instances
 
 To take advantage of the new features in Gel v6, you'll need to upgrade your instances to the latest version.
 
-Cloud instances
----------------
-
-If you're using a hosted instance on Gel Cloud, you can upgrade your instance by clicking on the "Upgrade" button in the Gel Cloud console, or with the CLI.
-
-.. code-block:: bash
-
-  $ gel instance upgrade <my-org/my-instance-name> --to-latest
-
 Local instances
 ---------------
 
@@ -121,6 +112,12 @@ Remote instances
 ----------------
 
 To upgrade a remote instance, we recommend the following dump-and-restore process:
+
+.. note:: Legacy hosted instances
+
+   Gel Cloud is shutting down and is no longer accepting upgrades or new
+   instances. Existing hosted users should dump their data and restore it to a
+   self-managed deployment using the process below.
 
 1. Gel v6.0 supports PostgreSQL 14 or above. Verify your PostgreSQL version before upgrading Gel. If you're using Postgres 13 or below, upgrade Postgres first.
 
