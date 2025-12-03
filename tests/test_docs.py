@@ -316,6 +316,7 @@ class TestDocSnippets(unittest.TestCase):
             lang = block.lang
             expect_invalid = False
 
+            code = []
             if lang.endswith('-repl'):
                 lang = lang.rpartition('-')[0]
                 code = self.extract_snippets_from_repl(block.code)
