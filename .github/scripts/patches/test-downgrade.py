@@ -7,7 +7,7 @@ import json
 
 version = os.getenv('EDGEDB_VERSION')
 cmd = [
-    f'edgedb-server-{version}/bin/edgedb-server', '-D' 'test-dir',
+    f'gel-server-{version}/bin/edgedb-server', '-D' 'test-dir',
     '--testmode', '--security', 'insecure_dev_mode', '--port', '10000',
 ]
 proc = subprocess.Popen(cmd)
