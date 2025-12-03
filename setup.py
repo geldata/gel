@@ -345,10 +345,16 @@ def _compile_pgvector(pg_config, build_temp):
     cflags = os.environ.get("CFLAGS", "")
     cflags = f"{cflags} {' '.join(SAFE_EXT_CFLAGS)} -std=gnu99"
 
+    args = [
+        f'PG_CONFIG={pg_config}',
+        # By default pgvector tries -march=native, which causes grief
+        'OPT_FLAGS=',
+    ]
+
     subprocess.run(
         [
             'make',
-            f'PG_CONFIG={pg_config}',
+            *args,
         ],
         cwd=pgv_root,
         check=True,
@@ -358,7 +364,7 @@ def _compile_pgvector(pg_config, build_temp):
         [
             'make',
             'install',
-            f'PG_CONFIG={pg_config}',
+            *args,
         ],
         cwd=pgv_root,
         check=True,
@@ -499,7 +505,7 @@ def _get_pg_source_stamp():
         ],
     )
     edbss = binascii.hexlify(edbss_hash).decode()
-    stamp_list = [revision, PGVECTOR_COMMIT, edbss]
+    stamp_list = [revision, PGVECTOR_COMMIT + '_v3', edbss]
     if os.environ.get('EDGEDB_DEBUG'):
         stamp_list += ['debug']
     source_stamp = '+'.join(stamp_list)
