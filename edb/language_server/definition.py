@@ -19,7 +19,6 @@
 from typing import Optional
 
 from lsprotocol import types as lsp_types
-import pygls
 import pygls.workspace
 
 from edb.common import span as edb_span

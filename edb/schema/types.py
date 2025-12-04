@@ -1262,7 +1262,6 @@ class Collection(Type):
         )
 
 
-Dimensions = checked.FrozenCheckedList[int]
 Array_T = typing.TypeVar("Array_T", bound="Array")
 Array_T_co = typing.TypeVar("Array_T_co", bound="Array", covariant=True)
 
@@ -1332,7 +1331,7 @@ class Array(
     )
 
     dimensions = so.SchemaField(
-        Dimensions,
+        checked.FrozenCheckedList[int],
         coerce=True,
         # We want a low compcoef so that array types are *never* altered.
         compcoef=0,

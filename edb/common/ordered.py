@@ -27,7 +27,6 @@ from typing import (
     MutableSet,
 )
 
-import collections
 import collections.abc
 
 
