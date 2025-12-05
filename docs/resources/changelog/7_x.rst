@@ -129,19 +129,6 @@ The :ref:`GraphQL <ref_graphql_protocol>` and :ref:`EdgeQL HTTP <ref_edgeql_prot
 If you are exposing HTTP/GraphQL endpoints to users and relying on them not being able to perform configuration, you will need to instead have them use roles that have not been given permission to modify sensitive configs.
 
 
-Simpler scoping rules deprecation warnings
-------------------------------------------
-
-In 6.0, we began simplifying our scoping rules. See `our RFC 1027 outlining the
-changes
-<https://github.com/geldata/rfcs/blob/master/text/1027-no-factoring.rst>`_.
-
-In 7.0, we emit a warning when creating a migration if the schema does
-not contain ``using simple_scoping;`` or ``using warn_old_scoping;``.
-
-We plan to remove the old scoping in 8.0.
-
-
 New features
 ============
 
@@ -393,3 +380,14 @@ Other
 
 * Make indexes get hit more when ordering by something with exclusive constraint
   (:eql:gh:`#9080`)
+
+* In 7.0, we emit a warning when creating a migration if the schema does
+  not contain ``using simple_scoping;`` or ``using warn_old_scoping;``.
+  We originally planned to remove the old scoping in 8.0.
+
+
+7.1
+===
+
+* Remove the deprecated scoping warning for not using ``simple_scoping``
+  that was present in 7.0.
