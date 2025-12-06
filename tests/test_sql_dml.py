@@ -2545,3 +2545,28 @@ class TestSQLDataModificationLanguage(tb.SQLQueryTestCase):
             '''SELECT COUNT(*) FROM "Child.tags"'''
         )
         self.assertEqual(res, [[1]])
+
+    async def test_sql_dml_date_trunc_group_by(self):
+        # Regression test for DATE_TRUNC with GROUP BY
+        await self.scon.execute(
+            '''
+            INSERT INTO "Post" (title, created_at) VALUES
+            ('Post 1', '2024-01-15 10:00:00+00'),
+            ('Post 2', '2024-01-20 15:30:00+00'),
+            ('Post 3', '2024-02-10 09:00:00+00')
+            '''
+        )
+
+        res = await self.squery_values(
+            '''
+            SELECT
+                DATE_TRUNC('month', p.created_at) as log_date,
+                COUNT(*) as log_count
+            FROM "Post" p
+            GROUP BY DATE_TRUNC('month', p.created_at)
+            ORDER BY log_date
+            '''
+        )
+        self.assertEqual(len(res), 2)
+        self.assertEqual(res[0][1], 2)  # January count
+        self.assertEqual(res[1][1], 1)  # February count
