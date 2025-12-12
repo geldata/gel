@@ -9,8 +9,6 @@ Bare Metal
 In this guide we show how to deploy Gel to bare metal using your system's
 package manager and systemd.
 
-.. include:: ./note_cloud.rst
-
 .. include:: ./note_cloud_reset_password.rst
 
 Install the Gel Package

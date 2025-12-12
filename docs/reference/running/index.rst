@@ -28,8 +28,6 @@ While running local project instances with the CLI is low maintenance and easy t
 
 These configuration mechanisms allow you to tailor your Gel deployment to your specific needs. Operations teams can control everything from memory usage, connection limits, to TLS and network settings, ensuring your Gel deployment aligns with organizational policies and infrastructure constraints while maintaining optimal performance.
 
-.. include:: ./deployment/note_cloud.rst
-
 And keep it humming
 ===================
 

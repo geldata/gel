@@ -6,8 +6,6 @@ Azure
 
 :edb-alt-title: Deploying Gel to Azure
 
-.. include:: ./note_cloud.rst
-
 In this guide we show how to deploy Gel using Azure's `Postgres
 Flexible Server
 <https://docs.microsoft.com/en-us/azure/postgresql/flexible-server>`_ as the

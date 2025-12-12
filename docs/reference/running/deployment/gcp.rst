@@ -9,8 +9,6 @@ Google Cloud
 In this guide we show how to deploy Gel on GCP using Cloud SQL and
 Kubernetes.
 
-.. include:: ./note_cloud.rst
-
 .. include:: ./note_cloud_reset_password.rst
 
 Prerequisites

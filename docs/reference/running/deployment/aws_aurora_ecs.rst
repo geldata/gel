@@ -15,8 +15,6 @@ AWS
    https://github.com/geldata/helm-charts/blob/main
    /charts/gel-server/README.md
 
-.. include:: ./note_cloud.rst
-
 In this guide we show how to deploy Gel on AWS using Amazon Aurora and
 Elastic Container Service.
 
