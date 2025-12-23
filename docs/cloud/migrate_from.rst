@@ -109,11 +109,13 @@ file first is safer.
 
 .. code-block:: bash
 
-    # 1. Dump to file
-    $ gel dump --instance <org-name>/<instance-name> --all my_database_backup.gel
+    # 1. Dump from Gel Cloud to directory
+    $ gel dump --instance <org-name>/<instance-name> \
+      --all --format=dir \
+      production_dump
 
-    # 2. Restore from file
-    $ gel restore --dsn <new_self_hosted_dsn> --all my_database_backup.gel
+    # 2. Restore to self-hosted from dump
+    $ gel restore --dsn <new_self_hosted_dsn> --all production_dump
 
 
 Phase 3: Verification and Go-Live
