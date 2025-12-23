@@ -82,31 +82,6 @@ the dump.
 You can use the |Gel| CLI to move data directly from your Cloud instance to
 your new self-hosted instance.
 
-.. note::
-
-    If your self-hosted instance uses a self-signed TLS certificate, you may
-    need to add ``--tls-security insecure`` to the restore command, or first
-    retrieve the TLS certificate and set it via :gelenv:`TLS_CA`.
-
-Option A: Streaming (Recommended)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-You can pipe the output of :gelcmd:`dump` directly into :gelcmd:`restore`.
-This is the fastest method as it doesn't require saving a large file to your
-local disk.
-
-.. code-block:: bash
-
-    # Set your Gel Cloud instance as the source and the new DSN as the target
-    $ gel dump --instance <org-name>/<instance-name> --all \
-        | gel restore --dsn <new_self_hosted_dsn> --all
-
-Option B: File-based (Safer for large DBs)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-If you have a very large database or a shaky internet connection, saving to a
-file first is safer.
-
 .. code-block:: bash
 
     # 1. Dump from Gel Cloud to directory
@@ -116,6 +91,12 @@ file first is safer.
 
     # 2. Restore to self-hosted from dump
     $ gel restore --dsn <new_self_hosted_dsn> --all production_dump
+
+.. note::
+
+    If your self-hosted instance uses a self-signed TLS certificate, you may
+    need to add ``--tls-security insecure`` to the restore command, or first
+    retrieve the TLS certificate and set it via :gelenv:`TLS_CA`.
 
 
 Phase 3: Verification and Go-Live
