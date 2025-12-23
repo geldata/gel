@@ -19,6 +19,7 @@ Cloud
     deploy/fly
     deploy/render
     deploy/railway
+    migrate_from
 
 
 |Gel| Cloud is a fully managed, effortless cloud database service,
