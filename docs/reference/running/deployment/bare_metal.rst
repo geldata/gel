@@ -189,6 +189,67 @@ This allows connecting to the instance with its name.
    $ gel -I bare_metal_instance
 
 
+Connecting your application
+===========================
+
+To connect your application to the Gel instance, you'll need to provide
+connection parameters. Gel client libraries can be configured using either
+a DSN (connection string) or individual environment variables.
+
+Obtaining connection parameters
+-------------------------------
+
+Your connection requires the following components:
+
+- **Host**: The IP address or hostname of your server (e.g., ``localhost``,
+  ``192.168.1.100``, or ``gel.example.com``)
+- **Port**: ``5656`` by default, or the custom port if you changed it with
+  ``CONFIGURE INSTANCE SET listen_port``
+- **Username**: |admin| (the default superuser)
+- **Password**: The password you set with ``ALTER ROLE admin SET password``
+- **Branch**: |main| (the default branch)
+
+Construct the DSN using these values:
+
+.. code-block:: bash
+
+    $ GEL_DSN="gel://admin:<password>@<hostname>:5656"
+
+Obtaining the TLS certificate
+-----------------------------
+
+If you configured Gel with ``GEL_SERVER_TLS_CERT_MODE=generate_self_signed``,
+your application needs the certificate to connect securely.
+
+The generated certificate is stored in the data directory. You can find it at:
+
+.. code-block:: bash
+
+    $ cat /var/lib/gel/6/data/edbtlscert.pem
+
+Alternatively, retrieve it using the Gel CLI:
+
+.. code-block:: bash
+
+    $ gel --dsn $GEL_DSN --tls-security insecure \
+        query "SELECT sys::get_tls_certificate()"
+
+Using in your application
+-------------------------
+
+Set these environment variables where you deploy your application:
+
+.. code-block:: bash
+
+    GEL_DSN="gel://admin:<password>@<hostname>:5656"
+    # For self-signed certificates, provide the CA cert:
+    GEL_TLS_CA_FILE="/path/to/edbtlscert.pem"
+    # Or embed the certificate content directly:
+    GEL_TLS_CA="<certificate content>"
+
+Gel's client libraries will automatically read these environment variables.
+
+
 Upgrading Gel
 =============
 

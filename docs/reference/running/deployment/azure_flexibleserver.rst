@@ -210,6 +210,80 @@ You can now connect to your instance.
 
    $ gel -I azure
 
+
+Connecting your application
+===========================
+
+To connect your application to the Gel instance, you'll need to provide
+connection parameters. Gel client libraries can be configured using either
+a DSN (connection string) or individual environment variables.
+
+Obtaining connection parameters
+-------------------------------
+
+Your connection requires the following components:
+
+- **Host**: The FQDN of your Azure container instance. Retrieve it with:
+
+  .. code-block:: bash
+
+      $ az container list \
+          --resource-group $GROUP \
+          --query "[?name=='gel-container-group'].ipAddress.fqdn | [0]" \
+          --output tsv
+
+- **Port**: ``5656`` (the default Gel port)
+- **Username**: |admin| (the default superuser)
+- **Password**: The password you set in the ``$PASSWORD`` variable
+- **Branch**: |main| (the default branch)
+
+Construct the DSN using these values:
+
+.. code-block:: bash
+
+    $ GEL_HOST=$(az container list \
+        --resource-group $GROUP \
+        --query "[?name=='gel-container-group'].ipAddress.fqdn | [0]" \
+        --output tsv)
+    $ GEL_DSN="gel://admin:$PASSWORD@$GEL_HOST:5656"
+
+Obtaining the TLS certificate
+-----------------------------
+
+Since we configured Gel with a self-signed TLS certificate, your application
+needs the certificate to connect securely. Retrieve it from the container:
+
+.. code-block:: bash
+
+    $ az container exec \
+        --resource-group $GROUP \
+        --name gel-container-group \
+        --exec-command "cat /tmp/gel/edbtlscert.pem" \
+      | tr -d "\r" > gel-tls-cert.pem
+
+Alternatively, you can retrieve it using the Gel CLI:
+
+.. code-block:: bash
+
+    $ gel --dsn $GEL_DSN --tls-security insecure \
+        query "SELECT sys::get_tls_certificate()" > gel-tls-cert.pem
+
+Using in your application
+-------------------------
+
+Set these environment variables where you deploy your application:
+
+.. code-block:: bash
+
+    GEL_DSN="gel://admin:<password>@<hostname>:5656"
+    # For self-signed certificates, either trust the cert:
+    GEL_TLS_CA_FILE="/path/to/gel-tls-cert.pem"
+    # Or (for development only) disable TLS verification:
+    GEL_CLIENT_TLS_SECURITY=insecure
+
+Gel's client libraries will automatically read these environment variables.
+
+
 Health Checks
 =============
 

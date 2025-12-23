@@ -143,6 +143,70 @@ your terminal:
    /AWSCloudFormation/latest/UserGuide/cfn-whatis-howdoesitwork.html
 .. _docker-tags: https://hub.docker.com/r/geldata/gel/tags
 
+
+Connecting your application
+===========================
+
+To connect your application to the Gel instance, you'll need to provide
+connection parameters. Gel client libraries can be configured using either
+a DSN (connection string) or individual environment variables.
+
+Obtaining connection parameters
+-------------------------------
+
+Your connection requires the following components:
+
+- **Host**: The ``PublicHostname`` value from the CloudFormation Stack's
+  ``Outputs`` tab.
+- **Port**: ``5656`` (the default Gel port)
+- **Username**: |admin| (the default superuser)
+- **Password**: The ``SuperUserPassword`` you specified during deployment
+- **Branch**: |main| (the default branch)
+
+Construct the DSN using these values:
+
+.. code-block:: bash
+
+    $ GEL_DSN="gel://admin:<password>@<hostname>:5656"
+
+Obtaining the TLS certificate
+-----------------------------
+
+.. warning::
+
+    The CloudFormation template does not configure TLS certificates correctly.
+    We recommend using ``--tls-security insecure`` for testing, but for
+    production you should use our `helm chart <helm-chart_>`_ or configure
+    TLS manually.
+
+To connect securely, your application needs the server's TLS certificate.
+For self-signed certificates, you can retrieve the certificate by connecting
+to the instance and extracting it:
+
+.. code-block:: bash
+
+    $ gel --dsn $GEL_DSN --tls-security insecure \
+        query "SELECT sys::get_tls_certificate()"
+
+Store this certificate and provide it to your application via the
+:gelenv:`TLS_CA` or :gelenv:`TLS_CA_FILE` environment variable.
+
+Using in your application
+-------------------------
+
+Set these environment variables where you deploy your application:
+
+.. code-block:: bash
+
+    GEL_DSN="gel://admin:<password>@<hostname>:5656"
+    # For self-signed certificates:
+    GEL_CLIENT_TLS_SECURITY=insecure
+    # Or with a proper TLS certificate:
+    GEL_TLS_CA="<certificate content>"
+
+Gel's client libraries will automatically read these environment variables.
+
+
 Health Checks
 =============
 
