@@ -1,8 +1,8 @@
 .. _ref_migrate_from:
 
-==========================================
+=======================================
 Migrating from Gel Cloud to Self-Hosted
-==========================================
+=======================================
 
 :edb-alt-title: Migrating from Gel Cloud to Self-Hosted Gel
 
@@ -123,29 +123,14 @@ Phase 3: Verification and Go-Live
 -------------------------------------------
 
 Update your application's configuration to point to the new instance. Replace
-your :gelenv:`INSTANCE` and :gelenv:`SECRET_KEY` variables with the new
-connection details:
+the Gel Cloud specific connection environment variables :gelenv:`INSTANCE` and
+:gelenv:`SECRET_KEY` variables with the new connection details:
 
 * :gelenv:`DSN`: ``gel://user:password@host:port/branch``
 * :gelenv:`TLS_CA`: The TLS certificate content (if your instance uses a
   self-signed certificate)
 * :gelenv:`CLIENT_TLS_SECURITY`: Set to ``insecure`` if you need to skip TLS
   verification (not recommended for production)
-
-For local development, you can use :ref:`gel instance link
-<ref_cli_gel_instance_link>` to create a named alias for your self-hosted
-instance:
-
-.. code-block:: bash
-
-    $ gel instance link \
-        --dsn <new_self_hosted_dsn> \
-        --trust-tls-cert \
-        --non-interactive \
-        my_instance
-
-This allows you to connect using :gelcmd:`-I my_instance` instead of specifying
-the full DSN each time.
 
 2. Sanity check
 ---------------
