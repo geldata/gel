@@ -327,10 +327,10 @@ You can securely obtain the certificate content by running:
     $ flyctl ssh console -a $EDB_APP \
         -C "gel-show-secrets.sh --format=raw GEL_SERVER_TLS_CERT"
 
-From your local machine
------------------------
+Local development with the CLI
+------------------------------
 
-To access the Gel instance from local development machine/laptop, install
+To access the Gel instance from your local development machine, install
 the Wireguard `VPN <vpn_>`_ and create a tunnel, as described on Fly's
 `Private Networking
 <https://fly.io/docs/reference/private-networking/#private-network-vpn>`_
@@ -339,20 +339,6 @@ docs.
 Once it's up and running, use :gelcmd:`instance link` to create a local
 alias to the remote instance.
 
-.. code-block:: bash
-
-    $ gel instance link \
-        --trust-tls-cert \
-        --dsn $DSN \
-        --non-interactive \
-        fly
-    Authenticating to gel://admin@myorg-gel.internal:5656/main
-    Successfully linked to remote instance. To connect run:
-      gel -I fly
-
-You can now run CLI commands against this instance by specifying it by name
-with ``-I fly``; for example, to apply migrations:
-
 .. note::
 
    The command groups :gelcmd:`instance` and :gelcmd:`project` are not
@@ -360,9 +346,33 @@ with ``-I fly``; for example, to apply migrations:
 
 .. code-block:: bash
 
-   $ gel -I fly migrate
+    $ gel instance link \
+        --dsn $GEL_DSN \
+        --non-interactive \
+        --trust-tls-cert \
+        my_fly_instance
+    Authenticating to gel://admin@myorg-gel.internal:8080/main
+    Successfully linked to remote instance. To connect run:
+      gel -I my_fly_instance
+
+You can now refer to the remote instance using the alias ``my_fly_instance``.
+Use this alias wherever an instance name is expected:
+
+.. code-block:: bash
+
+    $ gel -I my_fly_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
+
+Or apply migrations:
+
+.. code-block:: bash
+
+    $ gel -I my_fly_instance migrate
 
 .. _vpn: https://fly.io/docs/reference/private-networking/#private-network-vpn
+
 
 Health Checks
 =============

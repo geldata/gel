@@ -165,30 +165,6 @@ You may need to restart the server after changing the listen port or addresses.
    $ sudo systemctl restart gel-server-6
 
 
-Link the instance with the CLI
-==============================
-
-The following is an example of linking a bare metal instance that is running on
-``localhost``. This command assigns a name to the instance, to make it more
-convenient to refer to when running CLI commands.
-
-.. code-block:: bash
-
-   $ gel instance link \
-      --host localhost \
-      --port 5656 \
-      --user admin \
-      --branch main \
-      --trust-tls-cert \
-      bare_metal_instance
-
-This allows connecting to the instance with its name.
-
-.. code-block:: bash
-
-   $ gel -I bare_metal_instance
-
-
 Connecting your application
 ===========================
 
@@ -249,14 +225,44 @@ Set these environment variables where you deploy your application:
 
 Gel's client libraries will automatically read these environment variables.
 
+Local development with the CLI
+------------------------------
 
-Upgrading Gel
-=============
+To make your instance easier to work with during local development,
+create an alias using :gelcmd:`instance link`.
 
 .. note::
 
    The command groups :gelcmd:`instance` and :gelcmd:`project` are not
    intended to manage production instances.
+
+.. code-block:: bash
+
+    $ gel instance link \
+        --dsn $GEL_DSN \
+        --non-interactive \
+        --trust-tls-cert \
+        my_bare_metal_instance
+
+You can now refer to the instance using the alias ``my_bare_metal_instance``.
+Use this alias wherever an instance name is expected:
+
+.. code-block:: bash
+
+    $ gel -I my_bare_metal_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
+
+Or apply migrations:
+
+.. code-block:: bash
+
+    $ gel -I my_bare_metal_instance migrate
+
+
+Upgrading Gel
+=============
 
 When you want to upgrade to the newest point release upgrade the package and
 restart the ``gel-server-6`` unit.

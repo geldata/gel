@@ -183,34 +183,6 @@ or reboots copy the certificate files and use their contents in the
          "GEL_SERVER_TLS_CERT=$cert"
 
 
-To access the Gel instance you've just provisioned on Azure from your local
-machine link the instance.
-
-.. code-block:: bash
-
-   $ printf $PASSWORD | gel instance link \
-       --password-from-stdin \
-       --non-interactive \
-       --trust-tls-cert \
-       --host $( \
-         az container list \
-           --resource-group $GROUP \
-           --query "[?name=='gel-container-group'].ipAddress.fqdn | [0]" \
-           --output tsv ) \
-       azure
-
-.. note::
-
-   The command groups :gelcmd:`instance` and :gelcmd:`project` are not
-   intended to manage production instances.
-
-You can now connect to your instance.
-
-.. code-block:: bash
-
-   $ gel -I azure
-
-
 Connecting your application
 ===========================
 
@@ -282,6 +254,42 @@ Set these environment variables where you deploy your application:
     GEL_CLIENT_TLS_SECURITY=insecure
 
 Gel's client libraries will automatically read these environment variables.
+
+Local development with the CLI
+------------------------------
+
+To make your remote instance easier to work with during local development,
+create an alias using :gelcmd:`instance link`.
+
+.. note::
+
+   The command groups :gelcmd:`instance` and :gelcmd:`project` are not
+   intended to manage production instances.
+
+.. code-block:: bash
+
+    $ printf $PASSWORD | gel instance link \
+        --dsn $GEL_DSN \
+        --password-from-stdin \
+        --non-interactive \
+        --trust-tls-cert \
+        my_azure_instance
+
+You can now refer to the remote instance using the alias ``my_azure_instance``.
+Use this alias wherever an instance name is expected:
+
+.. code-block:: bash
+
+    $ gel -I my_azure_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
+
+Or apply migrations:
+
+.. code-block:: bash
+
+    $ gel -I my_azure_instance migrate
 
 
 Health Checks

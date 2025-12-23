@@ -373,6 +373,43 @@ disabling TLS verification:
 
 Gel's client libraries will automatically read these environment variables.
 
+Local development with the CLI
+------------------------------
+
+To make your Gel container easier to work with during local development,
+create an alias using :gelcmd:`instance link`.
+
+.. note::
+
+   The command groups :gelcmd:`instance` and :gelcmd:`project` are not
+   intended to manage production instances.
+
+From your host machine, link to the container:
+
+.. code-block:: bash
+
+    $ gel instance link \
+        --dsn gel://admin:secret@localhost:5656 \
+        --non-interactive \
+        --trust-tls-cert \
+        my_docker_instance
+
+You can now refer to the instance using the alias ``my_docker_instance``.
+Use this alias wherever an instance name is expected:
+
+.. code-block:: bash
+
+    $ gel -I my_docker_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
+
+Or apply migrations:
+
+.. code-block:: bash
+
+    $ gel -I my_docker_instance migrate
+
 
 Health Checks
 =============

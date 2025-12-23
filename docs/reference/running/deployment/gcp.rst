@@ -268,11 +268,11 @@ Test your connection by opening a REPL:
     Type \help for help, \quit to quit.
     gel> select "hello world!";
 
-In development
---------------
+Local development with the CLI
+------------------------------
 
-To make this instance easier to work with during local development, create an
-alias using :gelcmd:`instance link`.
+To make your remote instance easier to work with during local development,
+create an alias using :gelcmd:`instance link`.
 
 .. note::
 
@@ -286,24 +286,26 @@ alias using :gelcmd:`instance link`.
         --password-from-stdin \
         --non-interactive \
         --trust-tls-cert \
-        gcp_instance
+        my_gcp_instance
 
-You can now refer to the remote instance using the alias instance on your
-machine called ``gcp_instance``. You can use this alias wherever an instance
-name is expected; for instance, you can open a REPL:
+You can now refer to the remote instance using the alias ``my_gcp_instance``.
+Use this alias wherever an instance name is expected:
 
 .. code-block:: bash
 
-   $ gel -I gcp_instance
+    $ gel -I my_gcp_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
 
 Or apply migrations:
 
 .. code-block:: bash
 
-   $ gel -I gcp_instance migrate
+    $ gel -I my_gcp_instance migrate
 
-In production
--------------
+Using in your application
+-------------------------
 
 Set these environment variables where you deploy your application:
 

@@ -79,32 +79,6 @@ has been assigned to your Gel instance:
 
 .. lint-on
 
-It's often convenient to create an alias for the remote instance using
-:gelcmd:`instance link`.
-
-.. code-block:: bash
-
-   $ gel instance link \
-        --trust-tls-cert \
-        --dsn gel://admin:<password>@<hostname> \
-        my_aws_instance
-
-This aliases the remote instance to ``my_aws_instance`` (this name can be
-anything). You can now use the ``-I my_aws_instance`` flag to run CLI commands
-against this instance, as with local instances.
-
-.. note::
-
-   The command groups :gelcmd:`instance` and :gelcmd:`project` are not
-   intended to manage production instances.
-
-.. code-block:: bash
-
-  $ gel -I my_aws_instance
-  Gel x.x
-  Type \help for help, \quit to quit.
-  gel>
-
 To make changes to your Gel deployment like upgrading the Gel version or
 enabling the UI you can follow the CloudFormation
 `Updating a stack <stack-update_>`_ instructions. Search for
@@ -205,6 +179,41 @@ Set these environment variables where you deploy your application:
     GEL_TLS_CA="<certificate content>"
 
 Gel's client libraries will automatically read these environment variables.
+
+Local development with the CLI
+------------------------------
+
+To make your remote instance easier to work with during local development,
+create an alias using :gelcmd:`instance link`.
+
+.. note::
+
+   The command groups :gelcmd:`instance` and :gelcmd:`project` are not
+   intended to manage production instances.
+
+.. code-block:: bash
+
+    $ gel instance link \
+        --dsn $GEL_DSN \
+        --non-interactive \
+        --trust-tls-cert \
+        my_aws_instance
+
+You can now refer to the remote instance using the alias ``my_aws_instance``.
+Use this alias wherever an instance name is expected:
+
+.. code-block:: bash
+
+    $ gel -I my_aws_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
+
+Or apply migrations:
+
+.. code-block:: bash
+
+    $ gel -I my_aws_instance migrate
 
 
 Health Checks
