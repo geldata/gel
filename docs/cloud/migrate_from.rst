@@ -128,7 +128,7 @@ Update your application's configuration to point to the new instance. Replace
 the Gel Cloud specific connection environment variables :gelenv:`INSTANCE` and
 :gelenv:`SECRET_KEY` variables with the new connection details:
 
-* :gelenv:`DSN`: ``gel://user:password@host:port/branch``
+* :gelenv:`DSN`: :geluri:`user:password@host:port/branch`
 * :gelenv:`TLS_CA`: The TLS certificate content (if your instance uses a
   self-signed certificate)
 * :gelenv:`CLIENT_TLS_SECURITY`: Set to ``insecure`` if you need to skip TLS
