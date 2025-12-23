@@ -79,32 +79,6 @@ has been assigned to your Gel instance:
 
 .. lint-on
 
-It's often convenient to create an alias for the remote instance using
-:gelcmd:`instance link`.
-
-.. code-block:: bash
-
-   $ gel instance link \
-        --trust-tls-cert \
-        --dsn gel://admin:<password>@<hostname> \
-        my_aws_instance
-
-This aliases the remote instance to ``my_aws_instance`` (this name can be
-anything). You can now use the ``-I my_aws_instance`` flag to run CLI commands
-against this instance, as with local instances.
-
-.. note::
-
-   The command groups :gelcmd:`instance` and :gelcmd:`project` are not
-   intended to manage production instances.
-
-.. code-block:: bash
-
-  $ gel -I my_aws_instance
-  Gel x.x
-  Type \help for help, \quit to quit.
-  gel>
-
 To make changes to your Gel deployment like upgrading the Gel version or
 enabling the UI you can follow the CloudFormation
 `Updating a stack <stack-update_>`_ instructions. Search for
@@ -142,6 +116,105 @@ your terminal:
    https://docs.aws.amazon.com
    /AWSCloudFormation/latest/UserGuide/cfn-whatis-howdoesitwork.html
 .. _docker-tags: https://hub.docker.com/r/geldata/gel/tags
+
+
+Connecting your application
+===========================
+
+To connect your application to the Gel instance, you'll need to provide
+connection parameters. Gel client libraries can be configured using either
+a DSN (connection string) or individual environment variables.
+
+Obtaining connection parameters
+-------------------------------
+
+Your connection requires the following components:
+
+- **Host**: The ``PublicHostname`` value from the CloudFormation Stack's
+  ``Outputs`` tab.
+- **Port**: ``5656`` (the default Gel port)
+- **Username**: |admin| (the default superuser)
+- **Password**: The ``SuperUserPassword`` you specified during deployment
+- **Branch**: |main| (the default branch)
+
+Construct the DSN using these values:
+
+.. code-block:: bash
+
+    $ GEL_DSN="gel://admin:<password>@<hostname>:5656"
+
+Obtaining the TLS certificate
+-----------------------------
+
+.. warning::
+
+    The CloudFormation template does not configure TLS certificates correctly.
+    We recommend using ``--tls-security insecure`` for testing, but for
+    production you should use our `helm chart <helm-chart_>`_ or configure
+    TLS manually.
+
+To connect securely, your application needs the server's TLS certificate.
+For self-signed certificates, you can retrieve the certificate by connecting
+to the instance and extracting it:
+
+.. code-block:: bash
+
+    $ gel --dsn $GEL_DSN --tls-security insecure \
+        query "SELECT sys::get_tls_certificate()"
+
+Store this certificate and provide it to your application via the
+:gelenv:`TLS_CA` or :gelenv:`TLS_CA_FILE` environment variable.
+
+Using in your application
+-------------------------
+
+Set these environment variables where you deploy your application:
+
+.. code-block:: bash
+
+    GEL_DSN="gel://admin:<password>@<hostname>:5656"
+    # For self-signed certificates:
+    GEL_CLIENT_TLS_SECURITY=insecure
+    # Or with a proper TLS certificate:
+    GEL_TLS_CA="<certificate content>"
+
+Gel's client libraries will automatically read these environment variables.
+
+Local development with the CLI
+------------------------------
+
+To make your remote instance easier to work with during local development,
+create an alias using :gelcmd:`instance link`.
+
+.. note::
+
+   The command groups :gelcmd:`instance` and :gelcmd:`project` are not
+   intended to manage production instances.
+
+.. code-block:: bash
+
+    $ gel instance link \
+        --dsn $GEL_DSN \
+        --non-interactive \
+        --trust-tls-cert \
+        my_aws_instance
+
+You can now refer to the remote instance using the alias ``my_aws_instance``.
+Use this alias wherever an instance name is expected:
+
+.. code-block:: bash
+
+    $ gel -I my_aws_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
+
+Or apply migrations:
+
+.. code-block:: bash
+
+    $ gel -I my_aws_instance migrate
+
 
 Health Checks
 =============

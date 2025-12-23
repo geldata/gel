@@ -206,27 +206,32 @@ skip this step).
       | tr -d '\r' | flyctl secrets import --app $EDB_APP
 
 
-Connecting to the instance
-==========================
+Connecting your application
+===========================
 
-Let's construct the DSN (AKA "connection string") for our instance. DSNs have
-the following format: :geluri:`<username>:<password>@<hostname>:<port>`. We
-can construct the DSN with the following components:
+To connect your application to the Gel instance, you'll need to provide
+connection parameters. Gel client libraries can be configured using either
+a DSN (connection string) or individual environment variables.
 
-- ``<username>``: the default value — |admin|
-- ``<password>``: the value we assigned to ``$PASSWORD``
-- ``<hostname>``: the name of your Gel app (stored in the
-  ``$EDB_APP`` environment variable) suffixed with ``.internal``. Fly uses this
-  synthetic TLD to simplify inter-app communication. Ex:
-  ``myorg-gel.internal``.
-- ``<port>``: ``8080``, which we configured earlier
+Obtaining connection parameters
+-------------------------------
 
-We can construct this value and assign it to a new environment variable called
-``DSN``.
+Your connection requires the following components:
+
+- **Host (internal)**: ``$EDB_APP.internal`` — Fly uses this synthetic TLD
+  for inter-app communication (e.g., ``myorg-gel.internal``)
+- **Host (external)**: ``$EDB_APP.fly.dev`` — for connections from outside
+  Fly.io (requires exposing the port, see below)
+- **Port**: ``8080``, which we configured earlier with :gelenv:`SERVER_PORT`
+- **Username**: |admin| (the default superuser)
+- **Password**: The value you assigned to ``$PASSWORD``
+- **Branch**: |main| (the default branch)
+
+Construct the DSN for internal Fly.io connections:
 
 .. code-block:: bash
 
-    $ DSN=gel://admin:$PASSWORD@$EDB_APP.internal:8080
+    $ GEL_DSN=gel://admin:$PASSWORD@$EDB_APP.internal:8080
 
 Consider writing it to a file to ensure the DSN looks correct. Remember to
 delete the file after you're done. (Printing this value to the terminal with
@@ -234,9 +239,22 @@ delete the file after you're done. (Printing this value to the terminal with
 
 .. code-block:: bash
 
-    $ echo $DSN > dsn.txt
+    $ echo $GEL_DSN > dsn.txt
     $ open dsn.txt
     $ rm dsn.txt
+
+Obtaining the TLS certificate
+-----------------------------
+
+If you need secure TLS connections (required for external access), retrieve
+the server's TLS certificate:
+
+.. code-block:: bash
+
+    $ flyctl ssh console -a $EDB_APP \
+        -C "gel-show-secrets.sh --format=raw GEL_SERVER_TLS_CERT"
+
+Save this to a file or set it as a secret in your application.
 
 From a Fly.io app
 -----------------
@@ -309,10 +327,10 @@ You can securely obtain the certificate content by running:
     $ flyctl ssh console -a $EDB_APP \
         -C "gel-show-secrets.sh --format=raw GEL_SERVER_TLS_CERT"
 
-From your local machine
------------------------
+Local development with the CLI
+------------------------------
 
-To access the Gel instance from local development machine/laptop, install
+To access the Gel instance from your local development machine, install
 the Wireguard `VPN <vpn_>`_ and create a tunnel, as described on Fly's
 `Private Networking
 <https://fly.io/docs/reference/private-networking/#private-network-vpn>`_
@@ -321,20 +339,6 @@ docs.
 Once it's up and running, use :gelcmd:`instance link` to create a local
 alias to the remote instance.
 
-.. code-block:: bash
-
-    $ gel instance link \
-        --trust-tls-cert \
-        --dsn $DSN \
-        --non-interactive \
-        fly
-    Authenticating to gel://admin@myorg-gel.internal:5656/main
-    Successfully linked to remote instance. To connect run:
-      gel -I fly
-
-You can now run CLI commands against this instance by specifying it by name
-with ``-I fly``; for example, to apply migrations:
-
 .. note::
 
    The command groups :gelcmd:`instance` and :gelcmd:`project` are not
@@ -342,9 +346,33 @@ with ``-I fly``; for example, to apply migrations:
 
 .. code-block:: bash
 
-   $ gel -I fly migrate
+    $ gel instance link \
+        --dsn $GEL_DSN \
+        --non-interactive \
+        --trust-tls-cert \
+        my_fly_instance
+    Authenticating to gel://admin@myorg-gel.internal:8080/main
+    Successfully linked to remote instance. To connect run:
+      gel -I my_fly_instance
+
+You can now refer to the remote instance using the alias ``my_fly_instance``.
+Use this alias wherever an instance name is expected:
+
+.. code-block:: bash
+
+    $ gel -I my_fly_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
+
+Or apply migrations:
+
+.. code-block:: bash
+
+    $ gel -I my_fly_instance migrate
 
 .. _vpn: https://fly.io/docs/reference/private-networking/#private-network-vpn
+
 
 Health Checks
 =============

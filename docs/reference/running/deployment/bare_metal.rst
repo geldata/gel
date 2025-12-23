@@ -165,37 +165,104 @@ You may need to restart the server after changing the listen port or addresses.
    $ sudo systemctl restart gel-server-6
 
 
-Link the instance with the CLI
-==============================
+Connecting your application
+===========================
 
-The following is an example of linking a bare metal instance that is running on
-``localhost``. This command assigns a name to the instance, to make it more
-convenient to refer to when running CLI commands.
+To connect your application to the Gel instance, you'll need to provide
+connection parameters. Gel client libraries can be configured using either
+a DSN (connection string) or individual environment variables.
+
+Obtaining connection parameters
+-------------------------------
+
+Your connection requires the following components:
+
+- **Host**: The IP address or hostname of your server (e.g., ``localhost``,
+  ``192.168.1.100``, or ``gel.example.com``)
+- **Port**: ``5656`` by default, or the custom port if you changed it with
+  ``CONFIGURE INSTANCE SET listen_port``
+- **Username**: |admin| (the default superuser)
+- **Password**: The password you set with ``ALTER ROLE admin SET password``
+- **Branch**: |main| (the default branch)
+
+Construct the DSN using these values:
 
 .. code-block:: bash
 
-   $ gel instance link \
-      --host localhost \
-      --port 5656 \
-      --user admin \
-      --branch main \
-      --trust-tls-cert \
-      bare_metal_instance
+    $ GEL_DSN="gel://admin:<password>@<hostname>:5656"
 
-This allows connecting to the instance with its name.
+Obtaining the TLS certificate
+-----------------------------
+
+If you configured Gel with ``GEL_SERVER_TLS_CERT_MODE=generate_self_signed``,
+your application needs the certificate to connect securely.
+
+The generated certificate is stored in the data directory. You can find it at:
 
 .. code-block:: bash
 
-   $ gel -I bare_metal_instance
+    $ cat /var/lib/gel/6/data/edbtlscert.pem
 
+Alternatively, retrieve it using the Gel CLI:
 
-Upgrading Gel
-=============
+.. code-block:: bash
+
+    $ gel --dsn $GEL_DSN --tls-security insecure \
+        query "SELECT sys::get_tls_certificate()"
+
+Using in your application
+-------------------------
+
+Set these environment variables where you deploy your application:
+
+.. code-block:: bash
+
+    GEL_DSN="gel://admin:<password>@<hostname>:5656"
+    # For self-signed certificates, provide the CA cert:
+    GEL_TLS_CA_FILE="/path/to/edbtlscert.pem"
+    # Or embed the certificate content directly:
+    GEL_TLS_CA="<certificate content>"
+
+Gel's client libraries will automatically read these environment variables.
+
+Local development with the CLI
+------------------------------
+
+To make your instance easier to work with during local development,
+create an alias using :gelcmd:`instance link`.
 
 .. note::
 
    The command groups :gelcmd:`instance` and :gelcmd:`project` are not
    intended to manage production instances.
+
+.. code-block:: bash
+
+    $ gel instance link \
+        --dsn $GEL_DSN \
+        --non-interactive \
+        --trust-tls-cert \
+        my_bare_metal_instance
+
+You can now refer to the instance using the alias ``my_bare_metal_instance``.
+Use this alias wherever an instance name is expected:
+
+.. code-block:: bash
+
+    $ gel -I my_bare_metal_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
+
+Or apply migrations:
+
+.. code-block:: bash
+
+    $ gel -I my_bare_metal_instance migrate
+
+
+Upgrading Gel
+=============
 
 When you want to upgrade to the newest point release upgrade the package and
 restart the ``gel-server-6`` unit.

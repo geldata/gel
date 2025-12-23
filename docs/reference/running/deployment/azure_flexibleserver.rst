@@ -183,32 +183,114 @@ or reboots copy the certificate files and use their contents in the
          "GEL_SERVER_TLS_CERT=$cert"
 
 
-To access the Gel instance you've just provisioned on Azure from your local
-machine link the instance.
+Connecting your application
+===========================
+
+To connect your application to the Gel instance, you'll need to provide
+connection parameters. Gel client libraries can be configured using either
+a DSN (connection string) or individual environment variables.
+
+Obtaining connection parameters
+-------------------------------
+
+Your connection requires the following components:
+
+- **Host**: The FQDN of your Azure container instance. Retrieve it with:
+
+  .. code-block:: bash
+
+      $ az container list \
+          --resource-group $GROUP \
+          --query "[?name=='gel-container-group'].ipAddress.fqdn | [0]" \
+          --output tsv
+
+- **Port**: ``5656`` (the default Gel port)
+- **Username**: |admin| (the default superuser)
+- **Password**: The password you set in the ``$PASSWORD`` variable
+- **Branch**: |main| (the default branch)
+
+Construct the DSN using these values:
 
 .. code-block:: bash
 
-   $ printf $PASSWORD | gel instance link \
-       --password-from-stdin \
-       --non-interactive \
-       --trust-tls-cert \
-       --host $( \
-         az container list \
-           --resource-group $GROUP \
-           --query "[?name=='gel-container-group'].ipAddress.fqdn | [0]" \
-           --output tsv ) \
-       azure
+    $ GEL_HOST=$(az container list \
+        --resource-group $GROUP \
+        --query "[?name=='gel-container-group'].ipAddress.fqdn | [0]" \
+        --output tsv)
+    $ GEL_DSN="gel://admin:$PASSWORD@$GEL_HOST:5656"
+
+Obtaining the TLS certificate
+-----------------------------
+
+Since we configured Gel with a self-signed TLS certificate, your application
+needs the certificate to connect securely. Retrieve it from the container:
+
+.. code-block:: bash
+
+    $ az container exec \
+        --resource-group $GROUP \
+        --name gel-container-group \
+        --exec-command "cat /tmp/gel/edbtlscert.pem" \
+      | tr -d "\r" > gel-tls-cert.pem
+
+Alternatively, you can retrieve it using the Gel CLI:
+
+.. code-block:: bash
+
+    $ gel --dsn $GEL_DSN --tls-security insecure \
+        query "SELECT sys::get_tls_certificate()" > gel-tls-cert.pem
+
+Using in your application
+-------------------------
+
+Set these environment variables where you deploy your application:
+
+.. code-block:: bash
+
+    GEL_DSN="gel://admin:<password>@<hostname>:5656"
+    # For self-signed certificates, either trust the cert:
+    GEL_TLS_CA_FILE="/path/to/gel-tls-cert.pem"
+    # Or (for development only) disable TLS verification:
+    GEL_CLIENT_TLS_SECURITY=insecure
+
+Gel's client libraries will automatically read these environment variables.
+
+Local development with the CLI
+------------------------------
+
+To make your remote instance easier to work with during local development,
+create an alias using :gelcmd:`instance link`.
 
 .. note::
 
    The command groups :gelcmd:`instance` and :gelcmd:`project` are not
    intended to manage production instances.
 
-You can now connect to your instance.
+.. code-block:: bash
+
+    $ printf $PASSWORD | gel instance link \
+        --dsn $GEL_DSN \
+        --password-from-stdin \
+        --non-interactive \
+        --trust-tls-cert \
+        my_azure_instance
+
+You can now refer to the remote instance using the alias ``my_azure_instance``.
+Use this alias wherever an instance name is expected:
 
 .. code-block:: bash
 
-   $ gel -I azure
+    $ gel -I my_azure_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
+
+Or apply migrations:
+
+.. code-block:: bash
+
+    $ gel -I my_azure_instance migrate
+
 
 Health Checks
 =============

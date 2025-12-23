@@ -276,6 +276,141 @@ been applied.
     script files to run on bootstrap is to prepend the filenames with ``01-``,
     ``02-``, and so on to indicate your desired order of execution.
 
+
+Connecting your application
+===========================
+
+To connect your application to the Gel instance, you'll need to provide
+connection parameters. Gel client libraries can be configured using either
+a DSN (connection string) or individual environment variables.
+
+Obtaining connection parameters
+-------------------------------
+
+Your connection requires the following components:
+
+- **Host**: The container hostname or IP address. In Docker Compose, this is
+  the service name (e.g., ``gel``). For standalone containers, use
+  ``localhost`` if on the same host, or the container's IP/hostname.
+- **Port**: ``5656`` (the default Gel port, unless remapped with ``-p``)
+- **Username**: |admin| (the default superuser)
+- **Password**: The value of :gelenv:`SERVER_PASSWORD` you set when starting
+  the container
+- **Branch**: |main| (the default branch)
+
+Construct the DSN using these values:
+
+.. code-block:: bash
+
+    $ GEL_DSN="gel://admin:<password>@<hostname>:5656"
+
+For a Docker Compose setup with the service named ``gel``:
+
+.. code-block:: bash
+
+    $ GEL_DSN="gel://admin:secret@gel:5656"
+
+Obtaining the TLS certificate
+-----------------------------
+
+If you configured Gel with ``GEL_SERVER_TLS_CERT_MODE=generate_self_signed``,
+your application needs the certificate to connect securely.
+
+Retrieve the certificate from the running container:
+
+.. code-block:: bash
+
+    $ docker exec <container-name> cat /var/lib/gel/data/edbtlscert.pem
+
+Or using the Gel utility script:
+
+.. code-block:: bash
+
+    $ docker exec <container-name> \
+        gel-show-secrets.sh --format=raw GEL_SERVER_TLS_CERT
+
+Alternatively, retrieve it using the Gel CLI:
+
+.. code-block:: bash
+
+    $ gel --dsn $GEL_DSN --tls-security insecure \
+        query "SELECT sys::get_tls_certificate()"
+
+If you mounted a persistent volume at :gelenv:`SERVER_DATADIR`, the
+certificate is also available at ``<volume-path>/edbtlscert.pem``.
+
+Using in your application
+-------------------------
+
+Set these environment variables in your application container:
+
+.. code-block:: yaml
+
+    # docker-compose.yaml example
+    services:
+      app:
+        image: your-app
+        environment:
+          GEL_DSN: "gel://admin:secret@gel:5656"
+          # For self-signed certificates:
+          GEL_CLIENT_TLS_SECURITY: "insecure"
+          # Or provide the CA certificate:
+          # GEL_TLS_CA: "<certificate content>"
+
+For production, we recommend providing the TLS certificate rather than
+disabling TLS verification:
+
+.. code-block:: yaml
+
+    services:
+      app:
+        image: your-app
+        environment:
+          GEL_DSN: "gel://admin:${GEL_PASSWORD}@gel:5656"
+          GEL_TLS_CA_FILE: "/certs/gel-ca.pem"
+        volumes:
+          - ./certs:/certs:ro
+
+Gel's client libraries will automatically read these environment variables.
+
+Local development with the CLI
+------------------------------
+
+To make your Gel container easier to work with during local development,
+create an alias using :gelcmd:`instance link`.
+
+.. note::
+
+   The command groups :gelcmd:`instance` and :gelcmd:`project` are not
+   intended to manage production instances.
+
+From your host machine, link to the container:
+
+.. code-block:: bash
+
+    $ gel instance link \
+        --dsn gel://admin:secret@localhost:5656 \
+        --non-interactive \
+        --trust-tls-cert \
+        my_docker_instance
+
+You can now refer to the instance using the alias ``my_docker_instance``.
+Use this alias wherever an instance name is expected:
+
+.. code-block:: bash
+
+    $ gel -I my_docker_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
+
+Or apply migrations:
+
+.. code-block:: bash
+
+    $ gel -I my_docker_instance migrate
+
+
 Health Checks
 =============
 

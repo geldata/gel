@@ -198,10 +198,25 @@ Expose Gel
    $ kubectl expose deploy/gel --type LoadBalancer
 
 
-Get your instance's DSN
-=======================
+Connecting your application
+===========================
 
-Get the public-facing IP address of your database.
+To connect your application to the Gel instance, you'll need to provide
+connection parameters. Gel client libraries can be configured using either
+a DSN (connection string) or individual environment variables.
+
+Obtaining connection parameters
+-------------------------------
+
+Your connection requires the following components:
+
+- **Host**: The ``EXTERNAL-IP`` of the LoadBalancer service
+- **Port**: ``5656`` (the default Gel port)
+- **Username**: |admin| (the default superuser)
+- **Password**: The value you assigned to ``$PASSWORD``
+- **Branch**: |main| (the default branch)
+
+Get the public-facing IP address of your database:
 
 .. code-block:: bash
 
@@ -209,10 +224,8 @@ Get the public-facing IP address of your database.
     NAME         TYPE           CLUSTER-IP  EXTERNAL-IP   PORT(S)
     gel          LoadBalancer   <ip>        <ip>          5656:30841/TCP
 
-
-Copy and paste the ``EXTERNAL-IP`` associated with the service named
-``gel``. With this IP address, you can construct your instance's :ref:`DSN
-<ref_dsn>`:
+Copy the ``EXTERNAL-IP`` associated with the ``gel`` service and construct
+your instance's :ref:`DSN <ref_dsn>`:
 
 .. code-block:: bash
 
@@ -227,8 +240,26 @@ environment.
 
     $ echo $GEL_DSN
 
-The resuling DSN can be used to connect to your instance.
-To test it, try opening a REPL:
+Obtaining the TLS certificate
+-----------------------------
+
+Since we configured Gel with a self-signed TLS certificate, your application
+needs the certificate to connect securely. Retrieve it from the running pod:
+
+.. code-block:: bash
+
+    $ kubectl exec deploy/gel -c=gel -- \
+        gel-show-secrets.sh --format=raw GEL_SERVER_TLS_CERT \
+        > gel-tls-cert.pem
+
+Alternatively, retrieve it using the Gel CLI:
+
+.. code-block:: bash
+
+    $ gel --dsn $GEL_DSN --tls-security insecure \
+        query "SELECT sys::get_tls_certificate()" > gel-tls-cert.pem
+
+Test your connection by opening a REPL:
 
 .. code-block:: bash
 
@@ -237,11 +268,11 @@ To test it, try opening a REPL:
     Type \help for help, \quit to quit.
     gel> select "hello world!";
 
-In development
---------------
+Local development with the CLI
+------------------------------
 
-To make this instance easier to work with during local development, create an
-alias using :gelcmd:`instance link`.
+To make your remote instance easier to work with during local development,
+create an alias using :gelcmd:`instance link`.
 
 .. note::
 
@@ -255,29 +286,41 @@ alias using :gelcmd:`instance link`.
         --password-from-stdin \
         --non-interactive \
         --trust-tls-cert \
-        gcp_instance
+        my_gcp_instance
 
-You can now refer to the remote instance using the alias instance on your
-machine called ``gcp_instance``. You can use this alias wherever an instance
-name is expected; for instance, you can open a REPL:
+You can now refer to the remote instance using the alias ``my_gcp_instance``.
+Use this alias wherever an instance name is expected:
 
 .. code-block:: bash
 
-   $ gel -I gcp_instance
+    $ gel -I my_gcp_instance
+    Gel x.x
+    Type \help for help, \quit to quit.
+    gel>
 
 Or apply migrations:
 
 .. code-block:: bash
 
-   $ gel -I gcp_instance migrate
+    $ gel -I my_gcp_instance migrate
 
-In production
--------------
+Using in your application
+-------------------------
 
-To connect to this instance in production, set the :gelenv:`DSN` environment
-variable wherever you deploy your application server; Gel's client
-libraries read the value of this variable to know how to connect to your
-instance.
+Set these environment variables where you deploy your application:
+
+.. code-block:: bash
+
+    GEL_DSN="gel://admin:<password>@<external-ip>:5656"
+    # For self-signed certificates, provide the CA cert:
+    GEL_TLS_CA_FILE="/path/to/gel-tls-cert.pem"
+    # Or embed the certificate content directly:
+    GEL_TLS_CA="<certificate content>"
+    # Or (for development only) disable TLS verification:
+    # GEL_CLIENT_TLS_SECURITY=insecure
+
+Gel's client libraries will automatically read these environment variables.
+
 
 Health Checks
 =============
