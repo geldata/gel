@@ -154,7 +154,7 @@ Initial configuration
 ---------------------
 
 When a Gel container starts on the specified data directory or remote
-Postgres cluster for the first time, initial instance setup is performed. This
+PostgreSQL cluster for the first time, initial instance setup is performed. This
 is called the *bootstrap phase*.
 
 The following environment variables affect the bootstrap only and have no
@@ -417,3 +417,19 @@ Health Checks
 Using an HTTP client, you can perform health checks to monitor the status of
 your Gel instance. Learn how to use them with our :ref:`health checks guide
 <ref_guide_deployment_health_checks>`.
+
+
+External PostgreSQL instance
+============================
+
+By default, docker container will contain |gel-server| alongside a PostgreSQL
+instance.
+This can be changed to instead connect to an external PostgreSQL *backend*.
+
+To do that, provide :gelenv:`SERVER_BACKEND_DSN` URL string and make sure that
+:gelenv:`SERVER_DATADIR` is not set.
+
+Additionally, it is possible to use multiple |gel-server| instances with a
+single PostgreSQL instance.
+In such configuration, each |gel-server| instance must have
+:gelenv:`SERVER_TENANT_ID` set to a unique value.
