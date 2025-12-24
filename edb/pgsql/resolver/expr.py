@@ -632,6 +632,8 @@ funcs_with_text_args: set[str] = {
     'jsonb_object_agg_unique',
     'json_object_agg_unique_strict',
     'jsonb_object_agg_unique_strict',
+    'date_trunc',
+    'date_part',
 }
 
 
