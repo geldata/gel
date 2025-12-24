@@ -28,7 +28,8 @@ DDL commands
 
 These are low-level commands that are used to create, alter, and drop branches.
 You can use them when experimenting in REPL, of if you want to create your own
-tools to manage Gel branches.
+tools to manage Gel branches. Branch names containing special characters must 
+be quoted with `` ` ``.
 
 
 Create empty branch
@@ -121,13 +122,14 @@ Remove a branch.
 
 .. eql:synopsis::
 
-    drop branch <name> ;
+    drop branch <name> [ force ] ;
 
 Description
 ^^^^^^^^^^^
 
 The command ``drop branch`` removes an existing branch. It cannot be executed
-while there are existing connections to the target branch.
+while there are existing connections to the target branch unless ``force`` is
+passed.
 
 .. warning::
 
