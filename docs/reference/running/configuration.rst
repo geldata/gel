@@ -302,6 +302,22 @@ The ``_FILE`` and ``_ENV`` variants are also supported.
 .. _URI format:
    https://www.postgresql.org/docs/13/libpq-connect.html#id-1.7.3.8.3.6
 
+GEL_SERVER_BACKEND_ADAPTIVE_HA_UNHEALTHY_MIN_TIME
+-------------------------------------------------
+
+Specifies the minimum amount of time (in seconds) that the :ref:`adaptive HA <ref_backend_ha>` state machine must remain in the ``Unhealthy`` state before transitioning to ``Failover``. This helps avoid unnecessary failovers due to brief or transient network issues.
+
+Default is ``30`` seconds.
+
+
+GEL_SERVER_BACKEND_ADAPTIVE_HA_DISCONNECT_PERCENT
+-------------------------------------------------
+
+Specifies the percentage of backend connections that must be unexpectedly disconnected while in the :ref:`adaptive HA <ref_backend_ha>` ``Unhealthy`` state to trigger a failover.  The value is an integer percent from 0 to 100.
+
+Default is ``60`` (i.e., more than 60% of connections).
+
+
 GEL_SERVER_MAX_BACKEND_CONNECTIONS
 ----------------------------------
 
