@@ -40,6 +40,9 @@ class HttpRequest:
     forwarded: dict[bytes, bytes]
     cookies: http.cookies.SimpleCookie
 
+    def load_cookies(self) -> None:
+        ...
+
 class HttpResponse:
     status: http.HTTPStatus
     close_connection: bool
