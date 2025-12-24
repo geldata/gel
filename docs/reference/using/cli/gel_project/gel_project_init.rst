@@ -15,11 +15,19 @@ Setup a new project.
 Description
 ===========
 
-This command sets up a new project, creating an instance, a schema directory,
-and an :ref:`gel.toml <ref_reference_gel_toml>` file. It can also be used
-to convert an existing directory to a project directory, connecting the
-existing instance to the project. Typically this tool will prompt for specific
-details about how the project should be setup.
+A "project" is:
+
+- A set of files, notably |gel.toml|, the schema directory, and any migrations.
+- A running Gel server instance, either a local, Gel Cloud, or remote instance.
+- A set of credentials that link together this particular directory on your
+  local machine, to a Gel server instance.
+
+This :gelcmd:`project init` command will:
+
+- **A directory with no |gel.toml|**: Create a new instance, or link to an existing
+  one, create the |gel.toml|, create a schema directory, and run any migrations.
+- **A directory with |gel.toml|**: Create a new instance, or link to an existing one,
+  and run any migrations.
 
 
 Gel Cloud
@@ -31,8 +39,8 @@ logging in using :ref:`ref_cli_gel_cloud_login`.
 To create a Cloud instance, your instance name should be in the format
 ``<org-name>/<instance-name>``. Cloud instance names may contain alphanumeric
 characters and hyphens (i.e., ``-``). You can provide this Cloud instance name
-through the interactive project initiation by running :gelcmd:`project init`
-or by providing it via the ``--server-instance`` option.
+through the interactive project initiation by providing the ``--interactive``
+option or by providing it via the ``--server-instance`` option.
 
 .. note::
 
@@ -65,8 +73,13 @@ Options
        with existing data.
     2. To initialize a new instance but then restore dump to it.
 
+:cli:synopsis:`--interactive`
+    Present the caller with a list of questions to configure the project
+    instance, such as the instance name, server version, and default branch
+
 :cli:synopsis:`--non-interactive`
-    Run in non-interactive mode (accepting all defaults).
+    Run in non-interactive mode (accepting all defaults). This is the default
+    behavior, so you do not need to normally specify this.
 
 :cli:synopsis:`--project-dir=<project-dir>`
     The project directory can be specified explicitly. Defaults to the
@@ -77,8 +90,7 @@ Options
     project.
 
 :cli:synopsis:`--server-version=<server-version>`
-    Specifies the Gel server instance to be associated with the
-    project.
+    Specifies the Gel server instance to be associated with the project.
 
     By default, when you specify a version, the CLI will use the latest release
     in the major version specified. This command, for example, will install the
