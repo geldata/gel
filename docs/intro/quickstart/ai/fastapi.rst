@@ -113,9 +113,9 @@ Using the built-in RAG
     .. code-block:: edgeql-repl
 
         db> configure current database
-            insert ext::ai::OpenAIProviderConfig {
-                secret := 'sk-....',
-            };
+        ... insert ext::ai::OpenAIProviderConfig {
+        ...     secret := 'sk-....',
+        ... };
 
 
 .. edb:split-section::
@@ -349,3 +349,5 @@ Make sure to check out the :ref:`Reference manual
 <ref_ai_python_reference>`, or build an LLM-powered search bot from the
 ground up with the :ref:`FastAPI Gel AI tutorial
 <ref_guide_fastapi_gelai_searchbot>`.
+
+
