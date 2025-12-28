@@ -2480,6 +2480,851 @@ class TestEdgeQLDataMigration(EdgeQLDataMigrationTestCase):
             },
         })
 
+    async def test_edgeql_migration_describe_function_inline_01(self):
+        # Migration that drops optional property in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { property x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := 1 }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo;
+                    function insert_foo() -> Foo using (
+                        insert Foo
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you drop property 'x' of object type 'default::Foo'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_02(self):
+        # Migration that drops required property in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := 1 }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo;
+                    function insert_foo() -> Foo using (
+                        insert Foo
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you drop property 'x' of object type 'default::Foo'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_03(self):
+        # Migration that changes property from optional to required in inserted
+        # type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { property x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := 1 }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you make property 'x' of object type 'default::Foo' "
+                    "required?",
+                    "y",
+                    "1",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_04(self):
+        # Migration that changes property from required to optional in inserted
+        # type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := 1 }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { property x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you make property 'x' of object type 'default::Foo' "
+                    "optional?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_05(self):
+        # Migration that renames optional property in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { property x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := 1 }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { property y: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { y := 1 }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you rename property 'x' of object type 'default::Foo' "
+                    "to 'y'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_06(self):
+        # Migration that renames required property in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := 1 }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required y: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { y := 1 }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you rename property 'x' of object type 'default::Foo' "
+                    "to 'y'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_07(self):
+        # Migration that changes type of optional property in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { property x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := 1 }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { property x: str; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := '1' }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you alter the type of property 'x' of object type "
+                    "'default::Foo'?",
+                    "y",
+                    "<std::str>.x",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_08(self):
+        # Migration that changes type of required property in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := 1 }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: str; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := '1' }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you alter the type of property 'x' of object type "
+                    "'default::Foo'?",
+                    "y",
+                    "<std::str>.x",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_09(self):
+        # Migration that drops optional link in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { link x: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo;
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you drop link 'x' of object type 'default::Foo'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_10(self):
+        # Migration that drops required link in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { link x: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo;
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you drop link 'x' of object type 'default::Foo'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_11(self):
+        # Migration that changes link from optional to required in inserted
+        # type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { link x: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you make link 'x' of object type 'default::Foo' "
+                    "required?",
+                    "y",
+                    "(insert Bar)",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_12(self):
+        # Migration that changes link from required to optional in inserted
+        # type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { link x: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you make link 'x' of object type 'default::Foo' "
+                    "optional?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_13(self):
+        # Migration that renames optional link in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { link x: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { link y: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo { y := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you rename link 'x' of object type 'default::Foo' "
+                    "to 'y'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_14(self):
+        # Migration that renames required link in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required y: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo { y := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you rename link 'x' of object type 'default::Foo' "
+                    "to 'y'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_15(self):
+        # Migration that changes type of optional link in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { link x: Bar; };
+                    type Bar;
+                    type Baz;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { link x: Baz; };
+                    type Bar;
+                    type Baz;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Baz) }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you alter the type of link 'x' of object type "
+                    "'default::Foo'?",
+                    "y",
+                    "(<Baz>{})",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_16(self):
+        # Migration that changes type of required link in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: Bar; };
+                    type Bar;
+                    type Baz;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: Baz; };
+                    type Bar;
+                    type Baz;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Baz) }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you alter the type of link 'x' of object type "
+                    "'default::Foo'?",
+                    "y",
+                    "assert_exists((select Baz limit 1))",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_17(self):
+        # Migration that renames type of optional link in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { link x: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { link x: Baz; };
+                    type Baz;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Baz) }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you rename object type 'default::Bar' to "
+                    "'default::Baz'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_18(self):
+        # Migration that changes type of required link in inserted type.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: Bar; };
+                    type Bar;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Bar) }
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { required x: Baz; };
+                    type Baz;
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := (insert Baz) }
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you rename object type 'default::Bar' to "
+                    "'default::Baz'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_19(self):
+        # Migration that drops optional property in inserted type.
+        # With nested DML functions.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { property x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := 1 }
+                    );
+                    function insert_foo_2() -> Foo using (
+                        insert_foo()
+                    );
+                    function insert_foo_3() -> Foo using (
+                        insert_foo_2()
+                    );
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo;
+                    function insert_foo() -> Foo using (
+                        insert Foo
+                    );
+                    function insert_foo_2() -> Foo using (
+                        insert_foo()
+                    );
+                    function insert_foo_3() -> Foo using (
+                        insert_foo_2()
+                    );
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                ("did you drop function 'default::insert_foo_3'?", "y"),
+                ("did you drop function 'default::insert_foo_2'?", "y"),
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you drop property 'x' of object type 'default::Foo'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+                ("did you create function 'default::insert_foo_2'?", "y"),
+                ("did you create function 'default::insert_foo_3'?", "y"),
+            ],
+            check_complete=True,
+        )
+
+    async def test_edgeql_migration_describe_function_inline_20(self):
+        # Migration that drops optional property in inserted type.
+        # DML function referenced in trigger.
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo { property x: int64; };
+                    function insert_foo() -> Foo using (
+                        insert Foo { x := 1 }
+                    );
+                    type Bar {
+                        trigger foo after insert for each do (
+                            select insert_foo()
+                        )
+                    }
+                };
+            };
+        ''')
+        # Auto-complete migration
+        await self.fast_forward_describe_migration()
+
+        await self.con.execute('''
+            START MIGRATION TO {
+                module default {
+                    type Foo;
+                    function insert_foo() -> Foo using (
+                        insert Foo
+                    );
+                    type Bar {
+                        trigger foo after insert for each do (
+                            select insert_foo()
+                        )
+                    }
+                };
+            };
+        ''')
+
+        await self.interact(
+            [
+                (
+                    "did you drop trigger 'foo' of object type 'default::Bar'?",
+                    "y",
+                ),
+                ("did you drop function 'default::insert_foo'?", "y"),
+                (
+                    "did you drop property 'x' of object type 'default::Foo'?",
+                    "y",
+                ),
+                ("did you create function 'default::insert_foo'?", "y"),
+                (
+                    "did you create trigger 'foo' of object type "
+                    "'default::Bar'?",
+                    "y",
+                ),
+            ],
+            check_complete=True,
+        )
+
     async def test_edgeql_migration_function_01(self):
         await self.migrate('''
             type Note {

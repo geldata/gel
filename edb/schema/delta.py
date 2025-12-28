@@ -54,6 +54,7 @@ from edb.common import ordered
 from edb.common import parsing
 from edb.common import struct
 from edb.common import topological
+from edb.common import typeutils
 from edb.common import typing_inspect
 from edb.common import verutils
 
@@ -213,6 +214,9 @@ def delta_objects(
     alters = []
     alter_pairs = []
 
+    # Alters which need to be processed as a paired delete/create
+    paired_creates: dict[so.Object, sn.Name] = {}
+
     if comparison_map:
         if issubclass(sclass, so.InheritingObject):
             # Generate the diff from the top of the inheritance
@@ -242,6 +246,44 @@ def delta_objects(
                 )
                 or x_name in renames_x
             ):
+                from . import functions as s_func
+
+                if (
+                    isinstance(x, s_func.Function)
+                    and isinstance(y, s_func.Function)
+                ):
+                    # Treat altering a DML function as a paired delete/create
+                    # See CreateObject.paired_delete for more details.
+
+                    from edb.edgeql.compiler import astutils as ql_astutils
+                    from edb.edgeql.compiler import stmtctx as ql_stmtctx
+
+                    new_nativecode = typeutils.not_none(
+                        x.get_nativecode(new_schema)
+                    )
+                    old_nativecode = typeutils.not_none(
+                        y.get_nativecode(old_schema)
+                    )
+
+                    new_contains_dml = ql_astutils.contains_dml(
+                        new_nativecode.parse(),
+                        ctx=ql_stmtctx.init_context(
+                            schema=new_schema,
+                            options=qlcompiler.CompilerOptions(),
+                        )
+                    )
+                    old_contains_dml = ql_astutils.contains_dml(
+                        old_nativecode.parse(),
+                        ctx=ql_stmtctx.init_context(
+                            schema=old_schema,
+                            options=qlcompiler.CompilerOptions(),
+                        )
+                    )
+
+                    if new_contains_dml or old_contains_dml:
+                        paired_creates[x] = y_name
+                        continue
+
                 alter_pairs.append((x, y))
 
                 alter = y.as_alter_delta(
@@ -283,6 +325,8 @@ def delta_objects(
             else:
                 confidence = 1.0
             create.set_annotation('confidence', confidence)
+            if x in paired_creates:
+                create.paired_delete = paired_creates[x]
             delta.add(create)
 
     delta.update(alters)
@@ -3011,6 +3055,34 @@ class CreateObject[Object_T: so.Object](ObjectCommand[Object_T]):
 
     # If the command is conditioned with IF NOT EXISTS
     if_not_exists = struct.Field(bool, default=False)
+
+    # A paired CreateObject depends on all commands which depend on its paired
+    # DeleteObject.
+    #
+    # Given the following schema:
+    #   type Foo { required a: int64 }
+    #   function insert_foo() using ( insert Foo { a := 1 } )
+    #
+    # being migrated to:
+    #   type Foo {}
+    #   function insert_foo() using ( insert Foo {} )
+    #
+    # Suppose this is done using 2 commands:
+    #   Command A: delete property `Foo.a`
+    #   Command B: alter function `insert_foo`
+    #
+    # If Command A is applied first, then it is invalid because it attempts to
+    # insert `Foo` with an unknown property `a`. If Command B is applied first,
+    # then that is also invalid since required property `a` is missing.
+    #
+    # To resolve this, the alter function is split into two commands, thus:
+    #   Command A: delete property `Foo.a`
+    #   Command B: delete function `insert_foo`
+    #   Command C: create function `insert_foo`
+    #
+    # In linearize_delta, to ensure that the commands are ordered [B, A, C] and
+    # not [B, C, A], Command C is made to depend on Command A.
+    paired_delete = struct.Field(sn.Name, default=None)
 
     def is_data_safe(self) -> bool:
         # Creations are always data-safe.

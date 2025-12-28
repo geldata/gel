@@ -93,6 +93,15 @@ def linearize_delta(
     for op in _get_sorted_subcommands(delta):
         _break_down(opmap, strongrefs, [delta, op])
 
+    paired_create_deletes: dict[sn.Name, sn.Name] = {
+        create_op.classname: create_op.paired_delete
+        for create_op in opmap
+        if (
+            isinstance(create_op, sd.CreateObject)
+            and create_op.paired_delete is not None
+        )
+    }
+
     depgraph: DepGraph = {}
     renames: dict[sn.Name, sn.Name] = {}
     renames_r: dict[sn.Name, sn.Name] = {}
@@ -109,8 +118,33 @@ def linearize_delta(
         if isinstance(op, sd.AlterObject) and not op.get_subcommands():
             continue
 
-        _trace_op(op, opbranch, depgraph, renames,
-                  renames_r, strongrefs, old_schema, new_schema)
+        _trace_op(
+            op,
+            opbranch,
+            depgraph,
+            renames,
+            renames_r,
+            strongrefs,
+            old_schema,
+            new_schema,
+            paired_create_deletes,
+        )
+
+    # Ensure that intermediate commands happen between paired delete/create.
+    # If a command depends on the delete, make create depend on it in turn.
+    for create_name, delete_name in paired_create_deletes.items():
+
+        create_key = ('create', str(create_name))
+        delete_key = ('delete', str(delete_name))
+
+        create_dep_entry = depgraph[create_key]
+
+        for other_key, other_entry in depgraph.items():
+            if other_key == create_key:
+                continue
+
+            if delete_key in other_entry.deps:
+                create_dep_entry.deps.add(other_key)
 
     depgraph = dict(filter(lambda i: i[1].item != (), depgraph.items()))
     everything = set(depgraph)
@@ -504,6 +538,7 @@ def _trace_op(
     strongrefs: dict[sn.Name, sn.Name],
     old_schema: Optional[s_schema.Schema],
     new_schema: s_schema.Schema,
+    paired_create_deletes: dict[sn.Name, sn.Name],
 ) -> None:
     def get_deps(key: DepGraphKey) -> DepGraphEntry:
         try:
@@ -826,6 +861,17 @@ def _trace_op(
             old_obj = get_object(old_schema, op, op.classname)
             for ref in _get_referrers(old_schema, old_obj, strongrefs):
                 deps.add(('delete', str(ref.get_name(old_schema))))
+
+        if tag == 'alter':
+            # If there is a paired create/delete which refers something being
+            # altered, make sure that that something happens between the delete
+            # and create.
+            assert old_schema
+            old_obj = get_object(old_schema, op, op.classname)
+            for ref in _get_referrers(old_schema, old_obj, strongrefs):
+                ref_name = ref.get_name(old_schema)
+                if ref_name in paired_create_deletes.values():
+                    deps.add(('delete', str(ref_name)))
 
         refs = _get_referrers(new_schema, obj, strongrefs)
         for ref in refs:
