@@ -152,6 +152,7 @@ class Pool[C: typing.Hashable]:
 
     def __del__(self) -> None:
         if self._task:
+            logger.warn("Connection pool deleted while still running")
             self._task.cancel()
             self._task = None
 
@@ -172,6 +173,8 @@ class Pool[C: typing.Hashable]:
                 pass
             self._pool = None
             logger.info("Closed connection pool")
+
+        await self._loop.create_task(self._prune_all_connections())
 
     async def _boot(
         self,
@@ -195,7 +198,12 @@ class Pool[C: typing.Hashable]:
             if f := self._acquires.pop(msg[1], None):
                 f.set_result(msg[2])
             else:
-                logger.warning(f"Duplicate result for acquire {msg[1]}")
+                # Perform a pseudo-release to ensure that the connection is
+                # returned to the pool.
+                logger.warn(f"Acquire cancelled for {msg[1]}, releasing"
+                            "fresh connection")
+                if self._pool:
+                    self._pool._release(msg[1])
         elif msg[0] == 1:
             self._loop.create_task(self._perform_connect(msg[1], msg[2]))
         elif msg[0] == 2:
@@ -211,7 +219,8 @@ class Pool[C: typing.Hashable]:
                 if f := self._acquires.pop(msg[1], None):
                     f.set_exception(error)
                 else:
-                    logger.warning(f"Duplicate exception for acquire {msg[1]}")
+                    logger.warning(f"Failed acquire cancelled for {msg[1]},"
+                                   f"swallowing error {error}")
         elif msg[0] == 6:
             # Pickled metrics
             self._counts = pickle.loads(msg[1])
@@ -230,6 +239,7 @@ class Pool[C: typing.Hashable]:
             if self._pool:
                 self._pool._completed(id)
         except Exception as e:
+            self._cur_capacity -= 1
             self._errors[id] = e
             if self._pool:
                 self._pool._failed(id, e)
@@ -292,12 +302,13 @@ class Pool[C: typing.Hashable]:
                 c = self._conns[conn]
                 self._conns_held[c] = id
                 return c
+            except asyncio.CancelledError:
+                # If someone cancels the connection acquisition, we will just
+                # toss it back to the pool when it eventually completes.
+                self._acquires.pop(id, None)
+                logger.warn(f"Connection acquisition cancelled for {dbname}")
+                raise
             except Exception as e:
-                # 3D000 - INVALID CATALOG NAME, database does not exist
-                # Skip retry and propagate the error immediately
-                if getattr(e, 'fields', {}).get('C') == '3D000':
-                    raise
-
                 # Allow the final exception to escape
                 if i == config.CONNECT_FAILURE_RETRIES:
                     logger.exception(
@@ -306,6 +317,16 @@ class Pool[C: typing.Hashable]:
                         'active)'
                     )
                     raise
+                # 3D000 - INVALID CATALOG NAME, database does not exist
+                # Skip retry and propagate the error immediately
+                if getattr(e, 'fields', {}).get('C') == '3D000':
+                    raise
+                # 53300 - TOO MANY CONNECTIONS, retry after a short delay
+                if getattr(e, 'fields', {}).get('C') == '53300':
+                    logger.warn(f"Too many connections, retrying {dbname}"
+                                f"({self._cur_capacity} active)")
+                    await asyncio.sleep(i + 1)
+                    continue
                 logger.exception(
                     'Failed to acquire connection, will retry: '
                     f'{dbname} ({self._cur_capacity} active)'
@@ -329,10 +350,15 @@ class Pool[C: typing.Hashable]:
         self._next_conn_id += 1
         self._prunes[id] = asyncio.Future()
         self._pool._prune(id, dbname)
-        await self._prunes[id]
-        del self._prunes[id]
+        try:
+            await self._prunes[id]
+        finally:
+            del self._prunes[id]
 
     async def prune_all_connections(self) -> None:
+        await self._loop.create_task(self._prune_all_connections())
+
+    async def _prune_all_connections(self) -> None:
         # Brutally close all connections. This is used by HA failover.
         coros = []
         for conn in self._conns.values():
