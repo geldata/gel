@@ -94,8 +94,8 @@ MAX_SUGGESTED_CLIENT_POOL_SIZE = 100
 _TLS_CERT_RELOAD_MAX_RETRIES = 5
 _TLS_CERT_RELOAD_EXP_INTERVAL = 0.1
 
-PGEXT_POSTGRES_VERSION = 13.9
-PGEXT_POSTGRES_VERSION_NUM = 130009
+PGEXT_POSTGRES_VERSION = 14.17
+PGEXT_POSTGRES_VERSION_NUM = 140017
 
 # The time in seconds the Gel server will wait for a tenant to be gracefully
 # shutdown when removed from a multi-tenant host.
