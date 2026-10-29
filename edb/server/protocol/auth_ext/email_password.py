@@ -20,6 +20,7 @@ import argon2
 import json
 import hashlib
 import base64
+import hmac
 import dataclasses
 
 from typing import Any, Optional
@@ -196,7 +197,7 @@ filter .identity.id = identity_id;""",
             hashlib.sha256(password_cred['password_hash'].encode()).digest()
         ).decode()
 
-        return local_identity if secret == current_secret else None
+        return local_identity if hmac.compare_digest(secret, current_secret) else None
 
     async def update_password(
         self, identity_id: str, secret: str, password: str
