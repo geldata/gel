@@ -1247,7 +1247,7 @@ receive support for a year and a half after their initial release.
   It's always a bug, and that should be made clear to users.
   (:eql:gh:`#6314`)
 
-* Make edgedb+http tunneled protocol not leak db existance before auth
+* Make edgedb+http tunneled protocol not leak db existence before auth
   (:eql:gh:`#6350`)
 
 * Substantially speed up restoring of dumps with large schemas
