@@ -469,7 +469,7 @@ def __infer_oper_call(
         return UNIQUE
     elif op_name in ('std::++', 'std::+'):
         # Operators known to be injective.
-        # Basically just done to avoid breaking backward compatability
+        # Basically just done to avoid breaking backward compatibility
         # more than was necessary, because we used to *always* use this
         # path, which was wrong.
         result = _max_multiplicity(mult)
